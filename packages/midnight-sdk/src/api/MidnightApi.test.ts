@@ -630,6 +630,17 @@ describe("MidnightApi.fetchBooks", () => {
     expect(call.init?.method).toBe("GET");
     expect(call.init?.body).toBeUndefined();
   });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the marketIds filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [{ ...apiBook, market_id: SECOND_MARKET_ID }],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ marketIds: [MARKET_ID], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
 });
 
 describe("MidnightApi.fetchBook", () => {
@@ -651,6 +662,18 @@ describe("MidnightApi.fetchBook", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}`);
     expect(url.searchParams.get("depth")).toBe("100");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("error: InvalidMidnightApiResponseError when the API returns a foreign market", async () => {
+    // SDKS-60: a hostile/compromised API must not substitute a coherent foreign
+    // market for the requested id and have it flow downstream unbound.
+    const { fetch } = createJsonFetch({
+      data: { ...apiBook, market_id: SECOND_MARKET_ID },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 });
 

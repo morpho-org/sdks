@@ -142,6 +142,37 @@ export function mapBookMarket(
   };
 }
 
+/** @internal Maps a book market, binding its id to the requested market. */
+export function mapBoundBookMarket(
+  book: ApiBookMarketResponse,
+  requestedMarketId: Hash,
+): MidnightApiBookMarket {
+  if (!isHexEqual(book.market_id, requestedMarketId)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API book market_id "${book.market_id}" does not match requested market "${requestedMarketId}".`,
+    );
+  }
+  return mapBookMarket(book);
+}
+
+/** @internal Maps listed book markets, binding each to the requested market_ids filter when present. */
+export function mapBoundBooks(
+  books: readonly ApiBookMarketResponse[],
+  marketIds?: readonly Hash[],
+): MidnightApiBookMarket[] {
+  if (marketIds == null || marketIds.length === 0) {
+    return books.map(mapBookMarket);
+  }
+  return books.map((book) => {
+    if (!marketIds.some((marketId) => isHexEqual(marketId, book.market_id))) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${book.market_id}" is outside the requested market_ids filter.`,
+      );
+    }
+    return mapBookMarket(book);
+  });
+}
+
 /** @internal Maps a collateral API payload to the SDK response shape. */
 export function mapCollateral(
   collateral: ApiCollateralResponse,

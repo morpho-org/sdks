@@ -4,7 +4,8 @@ import { TickLib } from "../math/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
   buildBookPath,
-  mapBookMarket,
+  mapBoundBookMarket,
+  mapBoundBooks,
   mapBoundTakeableOffers,
   mapPriceLevel,
   parseValidationResponse,
@@ -186,7 +187,7 @@ export class MidnightApi {
 
     return {
       cursor: response.cursor,
-      data: response.data.map(mapBookMarket),
+      data: mapBoundBooks(response.data, input.marketIds),
     };
   }
 
@@ -227,7 +228,7 @@ export class MidnightApi {
     });
 
     return {
-      data: mapBookMarket(response.data),
+      data: mapBoundBookMarket(response.data, input.marketId),
     };
   }
 
