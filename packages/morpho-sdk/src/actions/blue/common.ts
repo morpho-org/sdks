@@ -7,7 +7,6 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   type Address,
   compactSignatureToSignature,
-  encodeAbiParameters,
   type Hex,
   isAddressEqual,
   parseCompactSignature,
@@ -26,27 +25,25 @@ import {
   AmbiguousRequirementSignaturesError,
   type AuthorizationRequirementSignature,
   type BaseAction,
-  BlueBundlesV1RequirementSignatureMismatchError,
-  type BlueBundlesV1TokenRequirementSignature,
-  DepositAmountMismatchError,
-  DepositAssetMismatchError,
+  BundlesRequirementSignatureMismatchError,
+  type BundlesTokenRequirementSignature,
   DepositOwnerMismatchError,
-  DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
-  InputExceedsMaxError,
   type Metadata,
-  MissingReferralFeeRecipientError,
   NativeFundingAmountMismatchError,
   NegativeInputError,
-  NonPositiveInputError,
   ReallocationLoanTokenMismatchError,
   type RequirementSignature,
   selectRequirementSignatures,
-  type TokenRequirementSignature,
   type Transaction,
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import {
+  type BundlesTokenPermit,
+  getBundlesTokenPermit,
+  normalizeBundlesCommonParams,
+} from "../bundles/index.js";
 
 /** @internal */
 export interface BlueBundlesV1CommonParams {
@@ -64,18 +61,13 @@ export interface NormalizedBlueBundlesV1CommonParams {
   referralFeeRecipient: Address;
 }
 
-interface BlueBundlesV1TokenPermit {
-  kind: 0 | 1 | 2;
-  data: Hex;
-}
+type BlueBundlesV1TokenPermit = BundlesTokenPermit;
 
 interface BlueBundlesV1SignedAuthorization {
   signature: { v: number; r: Hex; s: Hex };
   nonce: bigint;
   deadline: bigint;
 }
-
-const EMPTY_TOKEN_PERMIT: BlueBundlesV1TokenPermit = { kind: 0, data: "0x" };
 
 const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
   signature: { v: 0, r: zeroHash, s: zeroHash },
@@ -87,30 +79,10 @@ const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
 export const normalizeBlueBundlesV1CommonParams = (
   params: BlueBundlesV1CommonParams,
 ): NormalizedBlueBundlesV1CommonParams => {
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  const referralFeePct = params.referralFeePct ?? 0n;
-  if (referralFeePct < 0n) {
-    throw new NegativeInputError("referralFeePct", referralFeePct);
-  }
-  if (referralFeePct >= MathLib.WAD) {
-    throw new InputExceedsMaxError({
-      field: "referralFeePct",
-      value: referralFeePct,
-      max: MathLib.WAD - 1n,
-    });
-  }
-  if (
-    referralFeePct > 0n &&
-    (params.referralFeeRecipient == null ||
-      isAddressEqual(params.referralFeeRecipient, zeroAddress))
-  ) {
-    throw new MissingReferralFeeRecipientError();
-  }
+  const normalized = normalizeBundlesCommonParams(params);
   return {
-    referralFeePct,
-    referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
+    referralFeePct: normalized.referralFeePct,
+    referralFeeRecipient: normalized.referralFeeRecipient,
   };
 };
 
@@ -120,7 +92,7 @@ export const validateBlueBundlesV1NativeFunding = (params: {
   token: Address;
   fundedAmount: bigint;
   nativeAmount?: bigint;
-  requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+  requirementSignature?: BundlesTokenRequirementSignature;
 }): bigint => {
   const nativeAmount = params.nativeAmount ?? 0n;
   if (nativeAmount < 0n) {
@@ -137,8 +109,8 @@ export const validateBlueBundlesV1NativeFunding = (params: {
   }
   if (params.requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(
-      params.requirementSignature.action.type === "permit2TransferFrom"
-        ? "permit2TransferFrom"
+      params.requirementSignature.action.type === "permit2SignatureTransfer"
+        ? "permit2SignatureTransfer"
         : "permit",
     );
   }
@@ -151,117 +123,15 @@ export const getBlueBundlesV1TokenPermit = (params: {
   userAddress: Address;
   token: Address;
   amount: bigint;
-  requirementSignature?: TokenRequirementSignature;
+  requirementSignature?: BundlesTokenRequirementSignature;
 }): BlueBundlesV1TokenPermit => {
-  const { requirementSignature } = params;
-  if (requirementSignature == null) return EMPTY_TOKEN_PERMIT;
-
-  const spender = getChainAddress(params.chainId, "bundles.blueBundlesV1");
-  if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
-    throw new DepositOwnerMismatchError(
-      params.userAddress,
-      requirementSignature.args.owner,
-    );
-  }
-  if (!isAddressEqual(requirementSignature.args.asset, params.token)) {
-    throw new DepositAssetMismatchError(
-      params.token,
-      requirementSignature.args.asset,
-    );
-  }
-  if (requirementSignature.args.amount !== params.amount) {
-    throw new DepositAmountMismatchError(
-      params.amount,
-      requirementSignature.args.amount,
-    );
-  }
-  if (!isAddressEqual(requirementSignature.action.args.spender, spender)) {
-    throw new DepositSpenderMismatchError(
-      spender,
-      requirementSignature.action.args.spender,
-    );
-  }
-  if (requirementSignature.action.args.amount !== params.amount) {
-    throw new DepositAmountMismatchError(
-      params.amount,
-      requirementSignature.action.args.amount,
-    );
-  }
-  if (
-    requirementSignature.action.args.deadline !==
-    requirementSignature.args.deadline
-  ) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "deadline",
-      expected: String(requirementSignature.args.deadline),
-      actual: String(requirementSignature.action.args.deadline),
-    });
-  }
-
-  if (requirementSignature.action.type === "permit2TransferFrom") {
-    return {
-      kind: 2,
-      data: encodeAbiParameters(
-        [
-          { type: "uint256", name: "nonce" },
-          { type: "uint256", name: "deadline" },
-          { type: "bytes", name: "signature" },
-        ],
-        [
-          requirementSignature.args.nonce,
-          requirementSignature.args.deadline,
-          requirementSignature.args.signature,
-        ],
-      ),
-    };
-  }
-  if (requirementSignature.action.type !== "permit") {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "type",
-      expected: "permit or permit2TransferFrom",
-      actual: requirementSignature.action.type,
-    });
-  }
-
-  const serializedSignature = requirementSignature.args.signature;
-  let parsed: Signature;
-  try {
-    parsed =
-      size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-  } catch (cause) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
-      actual: serializedSignature,
-      cause,
-    });
-  }
-  const v =
-    parsed.v ??
-    (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
-  if (v == null) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: serializedSignature,
-    });
-  }
-  return {
-    kind: 1,
-    data: encodeAbiParameters(
-      [
-        { type: "uint256", name: "deadline" },
-        { type: "uint8", name: "v" },
-        { type: "bytes32", name: "r" },
-        { type: "bytes32", name: "s" },
-      ],
-      [requirementSignature.args.deadline, Number(v), parsed.r, parsed.s],
-    ),
-  };
+  return getBundlesTokenPermit({
+    userAddress: params.userAddress,
+    token: params.token,
+    spender: getChainAddress(params.chainId, "bundles.blueBundlesV1"),
+    amount: params.amount,
+    requirementSignature: params.requirementSignature,
+  });
 };
 
 /** @internal */
@@ -281,7 +151,7 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     );
   }
   if (!isAddressEqual(authorizationSignature.args.authorized, authorized)) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "authorized",
       expected: authorized,
       actual: authorizationSignature.args.authorized,
@@ -290,21 +160,21 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
   if (
     !isAddressEqual(authorizationSignature.action.args.authorized, authorized)
   ) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "authorized",
       expected: authorized,
       actual: authorizationSignature.action.args.authorized,
     });
   }
   if (!authorizationSignature.args.isAuthorized) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "isAuthorized",
       expected: "true",
       actual: String(authorizationSignature.args.isAuthorized),
     });
   }
   if (!authorizationSignature.action.args.isAuthorized) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "isAuthorized",
       expected: "true",
       actual: String(authorizationSignature.action.args.isAuthorized),
@@ -314,7 +184,7 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     authorizationSignature.action.args.deadline !==
     authorizationSignature.args.deadline
   ) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "deadline",
       expected: String(authorizationSignature.args.deadline),
       actual: String(authorizationSignature.action.args.deadline),
@@ -331,7 +201,7 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
           )
         : parseSignature(serializedSignature);
   } catch (cause) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "signature",
       expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
       actual: serializedSignature,
@@ -342,7 +212,7 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     parsed.v ??
     (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
   if (v == null) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "signature",
       expected: "a signature containing v or yParity",
       actual: serializedSignature,
@@ -424,29 +294,29 @@ export const selectBlueBundlesV1RequirementSignatures = (
   signatures: readonly RequirementSignature[] | undefined,
   accepts: { token?: boolean; authorization?: boolean },
 ): {
-  token?: BlueBundlesV1TokenRequirementSignature;
+  token?: BundlesTokenRequirementSignature;
   authorization?: AuthorizationRequirementSignature;
 } => {
-  const { permit, permit2TransferFrom, authorization } =
+  const { permit, permit2SignatureTransfer, authorization } =
     selectRequirementSignatures(signatures, {
       permit: accepts.token,
-      permit2TransferFrom: accepts.token,
+      permit2SignatureTransfer: accepts.token,
       authorization: accepts.authorization,
     });
   if (permit?.action.type === "permit2") {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
+    throw new BundlesRequirementSignatureMismatchError({
       field: "type",
-      expected: "permit or permit2TransferFrom",
+      expected: "permit or permit2SignatureTransfer",
       actual: permit.action.type,
     });
   }
-  if (permit != null && permit2TransferFrom != null) {
+  if (permit != null && permit2SignatureTransfer != null) {
     throw new AmbiguousRequirementSignaturesError("permit", 2);
   }
   return {
     token:
       (permit as Erc2612RequirementSignature | undefined) ??
-      permit2TransferFrom,
+      permit2SignatureTransfer,
     authorization,
   };
 };

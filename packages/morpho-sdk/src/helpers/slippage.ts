@@ -1,9 +1,16 @@
-import { type Market, MathLib } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  AccrualVaultV2,
+  type Market,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import {
   ExcessiveSlippageToleranceError,
+  NonPositiveInputError,
   ShareDivideByZeroError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
+import { validateSlippageTolerance } from "./validate.js";
 
 /**
  * Computes the minimum borrow share price (in RAY, 1e27) for slippage protection.
@@ -206,3 +213,125 @@ export function computeMinWithdrawSharePrice(params: {
     shares,
   );
 }
+
+/**
+ * Computes the RAY-scaled maximum share price for a VaultBundlesV1 deposit leg.
+ *
+ * Accrues the supplied Vault V1 or Vault V2 snapshot through the bundles execution deadline before
+ * previewing shares.
+ *
+ * @param params - Vault snapshot, bundles execution deadline, net assets, and slippage.
+ * @returns The capped maximum share price enforced by VaultBundlesV1.
+ * @throws {NonPositiveInputError} when `assets` or the previewed shares are not positive.
+ * @throws {NegativeInputError} when `slippageTolerance` is negative.
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+ * import { computeVaultMaxSharePrice } from "@morpho-org/morpho-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const vaultData = await fetchAccrualVault(
+ *   "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+ *   client,
+ * );
+ * const { timestamp } = await client.getBlock();
+ * const maxSharePrice = computeVaultMaxSharePrice({
+ *   vaultData,
+ *   deadline: timestamp + 7_200n,
+ *   assets: 1_000_000n,
+ *   slippageTolerance: 500_000_000_000_000n,
+ * });
+ * // maxSharePrice satisfies bigint
+ * ```
+ */
+export const computeVaultMaxSharePrice = (params: {
+  readonly vaultData: AccrualVault | AccrualVaultV2;
+  readonly deadline: bigint;
+  readonly assets: bigint;
+  readonly slippageTolerance: bigint;
+}): bigint => {
+  if (params.assets <= 0n) {
+    throw new NonPositiveInputError("assets", params.assets);
+  }
+  validateSlippageTolerance(params.slippageTolerance);
+  const accrualTimestamp =
+    params.vaultData instanceof AccrualVaultV2
+      ? MathLib.max(params.deadline, params.vaultData.lastUpdate)
+      : params.deadline;
+  const accruedVault =
+    params.vaultData instanceof AccrualVaultV2
+      ? params.vaultData.accrueInterest(accrualTimestamp).vault
+      : params.vaultData.accrueInterest(accrualTimestamp);
+  const shares = accruedVault.toShares(params.assets);
+  if (shares <= 0n) {
+    throw new NonPositiveInputError("shares", shares);
+  }
+  return MathLib.min(
+    MathLib.mulDivUp(
+      params.assets,
+      MathLib.wToRay(MathLib.WAD + params.slippageTolerance),
+      shares,
+    ),
+    MAX_ABSOLUTE_SHARE_PRICE,
+  );
+};
+
+/**
+ * Computes the exact vault-share authorization cap for an asset-denominated exit.
+ *
+ * The cap covers both the current and deadline-accrued preview. Vault V2 and MetaMorpho 1.0 add
+ * the caller's loss/slippage buffer because their share price can fall before inclusion;
+ * MetaMorpho 1.1's `lostAssets` clamp keeps that preview upper-bounded without widening it.
+ *
+ * @param params - Vault snapshot, execution deadline, asset amount, and WAD-scaled slippage.
+ * @returns The maximum shares the prepared operation may burn.
+ * @throws {NonPositiveInputError} when `assets` or the computed share cap is not positive.
+ * @throws {NegativeInputError} when `slippageTolerance` is negative.
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { computeVaultMaxShareAllowance } from "@morpho-org/morpho-sdk";
+ *
+ * const shares = computeVaultMaxShareAllowance({
+ *   vaultData,
+ *   deadline: 1_900_000_000n,
+ *   assets: 1_000_000n,
+ *   slippageTolerance: 500_000_000_000_000n,
+ * });
+ * // shares is the exact allowance or permit value for the prepared exit.
+ * ```
+ */
+export const computeVaultMaxShareAllowance = (params: {
+  readonly vaultData: AccrualVault | AccrualVaultV2;
+  readonly deadline: bigint;
+  readonly assets: bigint;
+  readonly slippageTolerance: bigint;
+}): bigint => {
+  if (params.assets <= 0n) {
+    throw new NonPositiveInputError("assets", params.assets);
+  }
+  validateSlippageTolerance(params.slippageTolerance);
+  const isVaultV2 = params.vaultData instanceof AccrualVaultV2;
+  const accruedVault = isVaultV2
+    ? params.vaultData.accrueInterest(
+        MathLib.max(params.deadline, params.vaultData.lastUpdate),
+      ).vault
+    : params.vaultData.accrueInterest(params.deadline);
+  const previewedShares = MathLib.max(
+    params.vaultData.toShares(params.assets, "Up"),
+    accruedVault.toShares(params.assets, "Up"),
+  );
+  if (previewedShares <= 0n) {
+    throw new NonPositiveInputError("shares", previewedShares);
+  }
+  const needsLossBuffer =
+    isVaultV2 ||
+    !("lostAssets" in params.vaultData) ||
+    params.vaultData.lostAssets == null;
+  return needsLossBuffer
+    ? MathLib.wMulUp(previewedShares, MathLib.WAD + params.slippageTolerance)
+    : previewedShares;
+};

@@ -15,7 +15,7 @@ import { describe, expect, test } from "vitest";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   BlueBundlesV1RequirementSignatureMismatchError,
-  type BlueBundlesV1TokenRequirementSignature,
+  type BundlesTokenRequirementSignature,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   DepositOwnerMismatchError,
@@ -192,7 +192,7 @@ describe("blueSupply", () => {
         type: "permit",
         args: { spender: blueBundlesV1, amount: 5n, deadline: 123n },
       },
-    } satisfies BlueBundlesV1TokenRequirementSignature;
+    } satisfies BundlesTokenRequirementSignature;
     const permit2 = {
       args: {
         owner: userAddress,
@@ -203,10 +203,10 @@ describe("blueSupply", () => {
         deadline: 789n,
       },
       action: {
-        type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 5n, deadline: 789n },
+        type: "permit2SignatureTransfer",
+        args: { spender: blueBundlesV1, amount: 5n, nonce: 9n, deadline: 789n },
       },
-    } satisfies BlueBundlesV1TokenRequirementSignature;
+    } satisfies BundlesTokenRequirementSignature;
 
     const erc2612Decoded = decodeFunctionData({
       abi: blueBundlesV1Abi,
@@ -295,10 +295,10 @@ describe("blueSupply", () => {
                 expiration: 999n,
               },
             },
-          } as unknown as BlueBundlesV1TokenRequirementSignature,
+          } as unknown as BundlesTokenRequirementSignature,
         },
       }),
-    ).toThrow(BlueBundlesV1RequirementSignatureMismatchError);
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("error: binds every token signature field", () => {
@@ -321,7 +321,7 @@ describe("blueSupply", () => {
         type: "permit",
         args: { spender: blueBundlesV1, amount: 5n, deadline },
       },
-    } satisfies BlueBundlesV1TokenRequirementSignature;
+    } satisfies BundlesTokenRequirementSignature;
     const otherAddress = getAddress(
       "0x00000000000000000000000000000000000000B1",
     );
@@ -402,10 +402,10 @@ describe("blueSupply", () => {
         deadline,
       },
       action: {
-        type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 2n, deadline },
+        type: "permit2SignatureTransfer",
+        args: { spender: blueBundlesV1, amount: 2n, nonce: 1n, deadline },
       },
-    } satisfies BlueBundlesV1TokenRequirementSignature;
+    } satisfies BundlesTokenRequirementSignature;
 
     expect(
       blueSupply({

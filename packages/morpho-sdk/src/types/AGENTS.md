@@ -9,7 +9,8 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `Requirement` / `RequirementSignature` — prerequisite signing flow for permit/permit2 and Midnight offer roots.
 - `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
-- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.
+- `DepositAmountArgs` — legacy additive token/native funding shape retained by low-level Bundler3 paths.
+- `BundlesFundingArgs` — exclusive `{ amount } | { nativeAmount }` funding used by fixed BlueBundlesV1 and VaultBundlesV1 calls.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
 - `RepayAmountArgs` / `RepayActionAmountArgs` — repay funding shapes (native-aware). `RepayAmountArgs` (entity surface) is a union `DepositAmountArgs | { shares }`; the entity derives every amount from live market state. `RepayActionAmountArgs` (action surface) is a **flat, pre-resolved** interface `{ amount?, shares?, nativeAmount?, transferAmount }` — the action does no amount arithmetic. Mode is discriminated on `shares`: assets mode is additive like supply (`transferAmount = amount + nativeAmount`, ERC-20 pulled = `amount`); shares mode repays exact shares (ERC-20 pulled = `transferAmount`, already net of native).
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).

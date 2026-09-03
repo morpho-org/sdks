@@ -264,11 +264,11 @@ describe("BlueBundlesV1 Blue writes", () => {
     const requirements = await action.getRequirements({ permit2Nonce });
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
-    ).toEqual(["erc20Approval", "permit2TransferFrom", "authorization"]);
+    ).toEqual(["erc20Approval", "permit2SignatureTransfer", "authorization"]);
     const signatures = await satisfyRequirements(client, { requirements });
     expect(signatures).toMatchObject([
       {
-        action: { type: "permit2TransferFrom" },
+        action: { type: "permit2SignatureTransfer" },
         args: { nonce: permit2Nonce },
       },
       { action: { type: "authorization" } },

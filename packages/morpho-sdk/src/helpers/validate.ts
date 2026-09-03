@@ -29,6 +29,7 @@ import {
   MissingMarketPriceError,
   MixedReallocationVersionsError,
   NativeAmountOnNonWNativeAssetError,
+  NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
@@ -224,6 +225,20 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
   }
   if (!isAddressEqual(asset, wNative)) {
     throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
+  }
+};
+
+/** @internal Validates native funding against a vault's wrapped-native asset. */
+export const validateNativeVaultAsset = (
+  chainId: number,
+  vaultAsset: Address,
+): void => {
+  const { wNative } = getChainAddresses(chainId);
+  if (!isDefined(wNative)) {
+    throw new ChainWNativeMissingError(chainId);
+  }
+  if (!isAddressEqual(vaultAsset, wNative)) {
+    throw new NativeAmountOnNonWNativeVaultError(vaultAsset, wNative);
   }
 };
 
