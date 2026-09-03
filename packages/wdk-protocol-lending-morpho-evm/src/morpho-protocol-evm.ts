@@ -5,15 +5,17 @@ import {
 } from "@morpho-org/blue-sdk";
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
+  type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
+  type BlueBundlesV1TokenRequirementSignature,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
   morphoViemExtension,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
   type Transaction,
-  type VaultReallocation,
   type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import type {
@@ -45,6 +47,7 @@ import {
   http,
   isAddress,
   isAddressEqual,
+  maxUint256,
   type PublicActions,
   publicActions,
   type Transport,
@@ -104,18 +107,48 @@ export type Erc4337TransactionConfig = Partial<
   | EvmErc4337WalletNativeCoinsConfig
 >;
 
-export type RequirementApproval = Transaction<ERC20ApprovalAction>;
-export type RequirementAuthorization = Transaction<BlueAuthorizationAction>;
-export type RequirementSignatureRequest = Requirement;
+/** An ERC-20 approval transaction returned before a token-funded action. */
+export type RequirementApproval = Readonly<Transaction<ERC20ApprovalAction>>;
+/** A Morpho authorization transaction returned before an operator action. */
+export type RequirementAuthorization = Readonly<
+  Transaction<BlueAuthorizationAction>
+>;
+/** A signable Morpho SDK requirement that resolves to the selected signature kind. */
+export type RequirementSignatureRequest<
+  TSignature extends RequirementSignature = RequirementSignature,
+> = Requirement<TSignature>;
+/** A vault token approval or ERC-2612/Permit2 AllowanceTransfer request. */
 export type ApprovalOrSignatureRequirement =
   | RequirementApproval
-  | RequirementSignatureRequest;
+  | RequirementSignatureRequest<PermitRequirementSignature>;
+/** A BlueBundlesV1 token approval or ERC-2612/Permit2 SignatureTransfer request. */
+export type BlueApprovalOrSignatureRequirement =
+  | RequirementApproval
+  | RequirementSignatureRequest<BlueBundlesV1TokenRequirementSignature>;
+/** A Blue authorization transaction or authorization-signature request. */
+export type AuthorizationOrSignatureRequirement =
+  | RequirementAuthorization
+  | RequirementSignatureRequest<AuthorizationRequirementSignature>;
 
+/** Thrown when Blue collateral funding mixes ERC-20 and native amounts. */
+export class MixedBlueCollateralFundingError extends Error {
+  constructor() {
+    super(
+      "Morpho Blue collateral supply accepts either 'amount' or 'nativeAmount', not both.",
+    );
+    this.name = "MixedBlueCollateralFundingError";
+  }
+}
+
+/** Controls token requirements generated for a BlueBundlesV1 action. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   useSimplePermit?: boolean;
+  /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
+  permit2Nonce?: bigint;
 }
 
+/** Options for an ERC-20-funded Morpho Vault supply. */
 export interface MorphoErc20SupplyOptions {
   /** The ERC-20 token address to supply. */
   token: string;
@@ -126,11 +159,12 @@ export interface MorphoErc20SupplyOptions {
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
 
+/** Options for a native-funded or mixed-funded Morpho Vault supply. */
 export interface MorphoNativeSupplyOptions {
   /** The wrapped-native token address expected by the configured vault or market. */
   token: string;
@@ -141,61 +175,77 @@ export interface MorphoNativeSupplyOptions {
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
 
+/** Morpho Vault supply options funded by ERC-20 assets, native assets, or both. */
 export type MorphoSupplyOptions =
   | MorphoErc20SupplyOptions
   | MorphoNativeSupplyOptions;
 
+/** Blue collateral supply options with mutually exclusive ERC-20 and native funding. */
+export type MorphoCollateralSupplyOptions =
+  | Readonly<
+      Omit<
+        MorphoErc20SupplyOptions,
+        "nativeAmount" | "requirementSignature" | "slippageTolerance"
+      > & {
+        nativeAmount?: never;
+        requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+        slippageTolerance?: never;
+      }
+    >
+  | Readonly<
+      Omit<
+        MorphoNativeSupplyOptions,
+        "amount" | "requirementSignature" | "slippageTolerance"
+      > & {
+        amount?: never;
+        requirementSignature?: never;
+        slippageTolerance?: never;
+      }
+    >;
+
+/** Options for borrowing through BlueBundlesV1 with optional Vault V2 reallocations. */
 export interface MorphoBorrowOptions {
   /** The address of the token to borrow. */
-  token: string;
+  readonly token: string;
   /** The amount of tokens to borrow, in base units. */
-  amount: number | bigint;
+  readonly amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
-  /** Optional Vault V1 PublicAllocator reallocations to include in the borrow action. */
-  reallocations?: readonly VaultReallocation[];
-  /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
-  requirementSignature?: RequirementSignature;
-  /** Optional Morpho SDK slippage tolerance in WAD precision. */
-  slippageTolerance?: bigint;
+  readonly onBehalfOf?: string;
+  /** Optional Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
+  readonly reallocations?: readonly VaultV2BlueReallocation[];
+  /** Signature returned by a Morpho SDK BlueBundlesV1 authorization requirement. */
+  readonly requirementSignature?: AuthorizationRequirementSignature;
+}
+
+/** Options for an exact or full-share BlueBundlesV1 repayment. */
+export interface MorphoRepayOptions {
+  /** The address of the token to repay. */
+  readonly token: string;
+  /** The repayment amount, in base units, or `"max"` to repay all current borrow shares. */
+  readonly amount: number | bigint | "max";
+  /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
+  readonly onBehalfOf?: string;
+  /** Signature returned by a Morpho SDK approval requirement. */
+  readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
 }
 
 /**
- * Borrow options that opt into Vault V2 BluePublicAllocator reallocations.
+ * Options for withdrawing collateral through Morpho BlueBundlesV1.
  *
- * Passing this type widens {@link MorphoProtocolEvm.getBorrowRequirements} to
- * include the loan-token approval that a Vault V2 penalty may require. Legacy
- * {@link MorphoBorrowOptions} callers retain the authorization-only result.
+ * Extends WDK's withdraw options with the authorization signature returned by
+ * {@link MorphoProtocolEvm.getWithdrawCollateralRequirements}.
  */
-export type MorphoBorrowWithVaultV2ReallocationsOptions = Omit<
-  MorphoBorrowOptions,
-  "reallocations"
-> & {
-  /** Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
-  readonly reallocations: readonly VaultV2BlueReallocation[];
-};
-
-type MorphoBorrowInput =
-  | MorphoBorrowOptions
-  | MorphoBorrowWithVaultV2ReallocationsOptions;
-
-export interface MorphoRepayOptions {
-  /** The address of the token to repay. */
-  token: string;
-  /** The repayment amount, in base units, or `"max"` to repay all current borrow shares. */
-  amount: number | bigint | "max";
-  /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
-  /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
-  /** Optional Morpho SDK slippage tolerance in WAD precision. */
-  slippageTolerance?: bigint;
-}
+export type MorphoWithdrawCollateralOptions = Readonly<
+  WithdrawOptions & {
+    /** Signature returned by a Morpho SDK authorization requirement. */
+    requirementSignature?: AuthorizationRequirementSignature;
+  }
+>;
 
 export interface Presets {
   /** Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`. */
@@ -256,7 +306,7 @@ export interface MorphoProtocolOptions {
   presets?: Presets;
   /** Required when explicit Morpho targets are used; guards against wallet chain switches. */
   chainId?: number | bigint;
-  /** Optional Morpho SDK slippage tolerance in WAD precision. */
+  /** Optional Morpho SDK slippage tolerance in WAD precision for vault flows. */
   slippageTolerance?: bigint;
   /** Enable Morpho SDK permit/permit2 requirements (default: false). */
   supportSignature?: boolean;
@@ -301,6 +351,19 @@ const SUPPORTED_CHAINS: Record<number, Chain> = {
 };
 
 const MARKET_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
+const BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS = 7_200n;
+
+function getBlueBundlesV1Deadline(
+  signature?:
+    | BlueBundlesV1TokenRequirementSignature
+    | AuthorizationRequirementSignature,
+): bigint {
+  return (
+    signature?.args.deadline ??
+    BigInt(Math.floor(Date.now() / 1_000)) +
+      BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS
+  );
+}
 
 function isNonZeroAddress(address: string): address is Address {
   return isAddress(address) && !isAddressEqual(address as Address, zeroAddress);
@@ -515,7 +578,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   async getSupplyRequirements(
     options: MorphoSupplyOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<ApprovalOrSignatureRequirement[]> {
+  ): Promise<readonly ApprovalOrSignatureRequirement[]> {
     const action = await this._getSupplyAction(options);
 
     return await action.getRequirements(requirementOptions);
@@ -661,20 +724,45 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Borrows assets from the configured Morpho Blue market.
    *
    * Call `getBorrowRequirements(options)` first and satisfy every returned
-   * requirement. Vault V2 reallocations with a nonzero penalty may require a
-   * loan-token approval in addition to GeneralAdapter1 authorization. When
+   * requirement. When
    * offchain signatures are enabled (`supportSignature: true`), sign the returned
    * authorization requirement and pass it via `options.requirementSignature` to
-   * fold `setAuthorizationWithSig` into the bundle; otherwise submit the returned
-   * authorization transaction separately first.
+   * fold `setAuthorizationWithSig` into the BlueBundlesV1 call; otherwise submit
+   * the returned authorization transaction separately first.
    *
-   * @param options - The borrow options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The borrow result.
-   * @throws {Error} If the options are invalid, GeneralAdapter1 is not authorized, or the transaction fails.
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Loan-token amount to borrow, in base units.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization returned by
+   *   {@link getBorrowRequirements}.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK borrow result, including the submitted transaction hash and fee data.
+   * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
+   * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
+   * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
+   * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function borrowUsdt(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const result = await morpho.borrow({ token: market.loanToken, amount: 1_000_000n });
+   *   // result satisfies BorrowResult
+   *   return result;
+   * }
+   * ```
    */
   async borrow(
-    options: MorphoBorrowInput,
+    options: MorphoBorrowOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<BorrowResult> {
     this._assertWritable("borrow(options)");
@@ -685,43 +773,47 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   /**
-   * Returns Morpho SDK authorization requirements for a borrow without Vault V2 reallocations.
+   * Returns Morpho SDK authorization requirements for a BlueBundlesV1 borrow.
    *
-   * @param options - The borrow options.
-   * @returns Authorization requirements. When offchain signatures are enabled
-   *   (`supportSignature: true`), the authorization may instead be returned as a signable
-   *   `RequirementSignatureRequest` to fold into the bundle via `setAuthorizationWithSig`.
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Loan-token amount to borrow, in base units.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.requirementSignature - Optional previously signed authorization whose deadline
+   *   is reused while resolving a fresh requirement set.
+   * @returns A readonly list containing a BlueBundlesV1 authorization transaction or signable
+   *   authorization requirement when one is needed.
+   * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
+   * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
+   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} when a market, position, or authorization read fails.
+   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function getBorrowRequirements(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const requirements = await morpho.getBorrowRequirements({
+   *     token: market.loanToken,
+   *     amount: 1_000_000n,
+   *   });
+   *   // requirements satisfies readonly AuthorizationOrSignatureRequirement[]
+   *   return requirements;
+   * }
+   * ```
    */
-  public getBorrowRequirements(
+  getBorrowRequirements(
     options: MorphoBorrowOptions,
-  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>;
-  /**
-   * Returns Morpho SDK requirements for a borrow with Vault V2 reallocations.
-   *
-   * @param options - The Vault V2 reallocation borrow options.
-   * @returns Authorization requirements and any loan-token approval required for the public
-   *   allocator penalty donation. When offchain signatures are enabled (`supportSignature: true`),
-   *   the authorization may instead be returned as a signable `RequirementSignatureRequest` to
-   *   fold into the bundle via `setAuthorizationWithSig`.
-   */
-  public getBorrowRequirements(
-    options: MorphoBorrowWithVaultV2ReallocationsOptions,
-  ): Promise<
-    (
-      | RequirementApproval
-      | RequirementAuthorization
-      | RequirementSignatureRequest
-    )[]
-  >;
-  public async getBorrowRequirements(
-    options: MorphoBorrowInput,
-  ): Promise<
-    (
-      | RequirementApproval
-      | RequirementAuthorization
-      | RequirementSignatureRequest
-    )[]
-  > {
+  ): Promise<readonly AuthorizationOrSignatureRequirement[]>;
+  async getBorrowRequirements(options: MorphoBorrowOptions) {
     const action = await this._getBorrowAction(options);
 
     return await action.getRequirements();
@@ -730,12 +822,37 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Quotes the cost of a borrow transaction.
    *
-   * @param options - The borrow options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The fee quote.
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Loan-token amount to borrow, in base units.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.reallocations - Optional Vault V2 BluePublicAllocator reallocations.
+   * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK borrow fee quote without a transaction hash.
+   * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
+   * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
+   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteBorrowUsdt(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const quote = await morpho.quoteBorrow({ token: market.loanToken, amount: 1_000_000n });
+   *   // quote satisfies Omit<BorrowResult, "hash">
+   *   return quote;
+   * }
+   * ```
    */
   async quoteBorrow(
-    options: MorphoBorrowInput,
+    options: MorphoBorrowOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<BorrowResult, "hash">> {
     const tx = await this._getBorrowTransaction(options);
@@ -747,9 +864,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     token,
     amount,
     onBehalfOf,
-    slippageTolerance,
     reallocations,
-  }: MorphoBorrowInput) {
+    requirementSignature,
+  }: MorphoBorrowOptions) {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
@@ -766,16 +883,16 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const positionData = await market.entity.getPositionData(userAddress);
 
     return market.entity.borrow({
-      amount: normalizedAmount,
       userAddress,
+      borrowAssets: normalizedAmount,
       positionData,
-      slippageTolerance: slippageTolerance ?? this._options.slippageTolerance,
       reallocations,
+      deadline: getBlueBundlesV1Deadline(requirementSignature),
     });
   }
 
   private async _getBorrowTransaction(
-    options: MorphoBorrowInput,
+    options: MorphoBorrowOptions,
   ): Promise<WdkTransaction> {
     const action = await this._getBorrowAction(options);
 
@@ -791,12 +908,36 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Repays assets to the configured Morpho Blue market.
    *
-   * Pass `amount: "max"` to repay all current borrow shares.
+   * Pass `amount: "max"` to use BlueBundlesV1's saturated full-repay mode.
    *
-   * @param options - The repay options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The repay result.
-   * @throws {Error} If the options are invalid, the account lacks funds, or the transaction fails.
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature returned by
+   *   {@link getRepayRequirements}.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK repay result, including the submitted transaction hash and fee data.
+   * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
+   * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function repayUsdt(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const result = await morpho.repay({ token: market.loanToken, amount: 1_000_000n });
+   *   // result satisfies RepayResult
+   *   return result;
+   * }
+   * ```
    */
   async repay(
     options: MorphoRepayOptions,
@@ -818,14 +959,52 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * @param options - The repay options.
-   * @param requirementOptions - Optional Morpho SDK requirement options.
-   * @returns Approval/signature requirements.
+   * A max repay without signature support may return the token's reusable maximum approval so
+   * rebuilding the bounded debt quote before submission cannot make the prior allowance insufficient.
+   *
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional previously signed token requirement whose
+   *   deadline is reused while resolving a fresh requirement set.
+   * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
+   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
+   * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
+   * @throws {Permit2TransferFromNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
+   * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
+   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function getRepayRequirements(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const requirements = await morpho.getRepayRequirements({
+   *     token: market.loanToken,
+   *     amount: 1_000_000n,
+   *   });
+   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   return requirements;
+   * }
+   * ```
    */
+  getRepayRequirements(
+    options: MorphoRepayOptions,
+    requirementOptions?: RequirementOptions,
+  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
   async getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<ApprovalOrSignatureRequirement[]> {
+  ) {
     const action = await this._getRepayAction(options);
 
     return await action.getRequirements(requirementOptions);
@@ -834,9 +1013,33 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Quotes the cost of a repay transaction.
    *
-   * @param options - The repay options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The fee quote.
+   * @param options.token - Address of the configured market's loan token.
+   * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK repay fee quote without a transaction hash.
+   * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
+   * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteRepayUsdt(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const quote = await morpho.quoteRepay({ token: market.loanToken, amount: 1_000_000n });
+   *   // quote satisfies Omit<RepayResult, "hash">
+   *   return quote;
+   * }
+   * ```
    */
   async quoteRepay(
     options: MorphoRepayOptions,
@@ -848,7 +1051,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getRepayAction(
-    { token, amount, onBehalfOf, slippageTolerance }: MorphoRepayOptions,
+    { token, amount, onBehalfOf, requirementSignature }: MorphoRepayOptions,
     normalizedAmount: "max" | bigint = amount === "max"
       ? "max"
       : normalizeAmount(amount),
@@ -868,14 +1071,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const positionData = await market.entity.getPositionData(userAddress);
     const repayAmount =
       normalizedAmount === "max"
-        ? { shares: positionData.borrowShares }
-        : { amount: normalizedAmount };
+        ? { repayShares: maxUint256 }
+        : { repayAssets: normalizedAmount };
 
     return market.entity.repay({
       ...repayAmount,
       userAddress,
       positionData,
-      slippageTolerance: slippageTolerance ?? this._options.slippageTolerance,
+      deadline: getBlueBundlesV1Deadline(requirementSignature),
     });
   }
 
@@ -898,18 +1101,48 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Supplies collateral to the configured Morpho Blue market.
    *
    * Use `getSupplyCollateralRequirements(options)` first if the account has
-   * not approved the required Morpho bundler spender.
+   * not approved BlueBundlesV1 as the required spender.
    *
    * For direct ERC-20 approvals, use `WalletAccountEvm#approve` or
    * `WalletAccountEvmErc4337#approve` before calling this method.
+   * BlueBundlesV1 collateral funding is either ERC-20 or native, not both.
    *
-   * @param options - The collateral supply options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The supply collateral result.
-   * @throws {Error} If the options are invalid, the token does not match the configured market collateral, the account lacks funds, or the transaction fails.
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - ERC-20 collateral amount, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native collateral amount, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature returned by
+   *   {@link getSupplyCollateralRequirements}; unavailable for native funding.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK collateral-supply result, including the transaction hash and fee data.
+   * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
+   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
+   * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
+   * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function supplyWstEthCollateral(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const result = await morpho.supplyCollateral({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 18n,
+   *   });
+   *   // result satisfies SupplyResult
+   *   return result;
+   * }
+   * ```
    */
   async supplyCollateral(
-    options: MorphoSupplyOptions,
+    options: MorphoCollateralSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
     this._assertWritable("supplyCollateral(options)");
@@ -931,14 +1164,51 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for supplying collateral.
    *
-   * @param options - The collateral supply options.
-   * @param requirementOptions - Optional Morpho SDK requirement options.
-   * @returns Approval/signature requirements.
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - ERC-20 collateral amount, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native collateral amount, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional previously signed token requirement whose
+   *   deadline is reused while resolving a fresh requirement set.
+   * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
+   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
+   *   native funding returns an empty list.
+   * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
+   * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
+   * @throws {Permit2TransferFromNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
+   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function getCollateralRequirements(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const requirements = await morpho.getSupplyCollateralRequirements({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 18n,
+   *   });
+   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   return requirements;
+   * }
+   * ```
    */
-  async getSupplyCollateralRequirements(
-    options: MorphoSupplyOptions,
+  getSupplyCollateralRequirements(
+    options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<ApprovalOrSignatureRequirement[]> {
+  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
+  async getSupplyCollateralRequirements(
+    options: MorphoCollateralSupplyOptions,
+    requirementOptions?: RequirementOptions,
+  ) {
     const action = await this._getSupplyCollateralAction(options);
 
     return await action.getRequirements(requirementOptions);
@@ -947,12 +1217,40 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Quotes the cost of supplying collateral.
    *
-   * @param options - The collateral supply options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The fee quote.
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - ERC-20 collateral amount, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native collateral amount, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK collateral-supply fee quote without a transaction hash.
+   * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
+   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
+   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteWstEthCollateral(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const quote = await morpho.quoteSupplyCollateral({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 18n,
+   *   });
+   *   // quote satisfies Omit<SupplyResult, "hash">
+   *   return quote;
+   * }
+   * ```
    */
   async quoteSupplyCollateral(
-    options: MorphoSupplyOptions,
+    options: MorphoCollateralSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
     const tx = await this._getSupplyCollateralTransaction(options);
@@ -961,7 +1259,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getSupplyCollateralAction(
-    { token, amount, nativeAmount, onBehalfOf }: MorphoSupplyOptions,
+    {
+      token,
+      amount,
+      nativeAmount,
+      onBehalfOf,
+      requirementSignature,
+    }: MorphoCollateralSupplyOptions,
     depositAmounts: NormalizedDepositAmounts = normalizeDepositAmounts({
       amount,
       nativeAmount,
@@ -979,15 +1283,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       );
     }
 
+    const normalizedNativeAmount = depositAmounts.nativeAmount ?? 0n;
+    if (depositAmounts.amount > 0n && normalizedNativeAmount > 0n) {
+      throw new MixedBlueCollateralFundingError();
+    }
+
     return market.entity.supplyCollateral({
-      amount: depositAmounts.amount,
+      collateralAssets:
+        normalizedNativeAmount > 0n
+          ? normalizedNativeAmount
+          : depositAmounts.amount,
       nativeAmount: depositAmounts.nativeAmount,
       userAddress,
+      deadline: getBlueBundlesV1Deadline(requirementSignature),
     });
   }
 
   private async _getSupplyCollateralTransaction(
-    options: MorphoSupplyOptions,
+    options: MorphoCollateralSupplyOptions,
     depositAmounts?: NormalizedDepositAmounts,
   ): Promise<WdkTransaction> {
     const action = await this._getSupplyCollateralAction(
@@ -1007,43 +1320,166 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Withdraws collateral from the configured Morpho Blue market.
    *
-   * @param options - The collateral withdraw options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The withdraw collateral result.
-   * @throws {Error} If the options are invalid, the token does not match the configured market collateral, or the transaction fails.
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - Collateral amount to withdraw, in base units.
+   * @param options.to - Optional recipient; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization returned by
+   *   {@link getWithdrawCollateralRequirements}.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK collateral-withdrawal result, including the transaction hash and fee data.
+   * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
+   * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
+   * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
+   * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function withdrawWstEthCollateral(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const result = await morpho.withdrawCollateral({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 17n,
+   *   });
+   *   // result satisfies WithdrawResult
+   *   return result;
+   * }
+   * ```
    */
   async withdrawCollateral(
-    options: WithdrawOptions,
+    options: MorphoWithdrawCollateralOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdrawCollateral(options)");
 
-    const tx = await this._getWithdrawCollateralTransaction(options);
+    const action = await this._getWithdrawCollateralAction(options);
+    const tx = toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
 
     return await this._sendTransaction(tx, config);
   }
 
   /**
+   * Returns Morpho SDK authorization requirements for withdrawing collateral.
+   *
+   * Submit a returned authorization transaction before withdrawing, or sign a
+   * returned signature request and pass it as `requirementSignature`.
+   *
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - Collateral amount to withdraw, in base units.
+   * @param options.to - Optional recipient; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional previously signed authorization whose deadline
+   *   is reused while resolving a fresh requirement set.
+   * @returns A readonly list containing a BlueBundlesV1 authorization transaction or signable
+   *   authorization requirement when one is needed.
+   * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
+   * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
+   * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
+   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} when a position or authorization read fails.
+   * @throws {Error} when an address, target token, or account configuration is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function getCollateralWithdrawalRequirements(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const requirements = await morpho.getWithdrawCollateralRequirements({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 17n,
+   *   });
+   *   // requirements satisfies readonly AuthorizationOrSignatureRequirement[]
+   *   return requirements;
+   * }
+   * ```
+   */
+  getWithdrawCollateralRequirements(
+    options: MorphoWithdrawCollateralOptions,
+  ): Promise<readonly AuthorizationOrSignatureRequirement[]>;
+  async getWithdrawCollateralRequirements(
+    options: MorphoWithdrawCollateralOptions,
+  ) {
+    const action = await this._getWithdrawCollateralAction(options);
+
+    return await action.getRequirements();
+  }
+
+  /**
    * Quotes the cost of withdrawing collateral.
    *
-   * @param options - The collateral withdraw options.
-   * @param config - ERC-4337 transaction config override.
-   * @returns The fee quote.
+   * @param options.token - Address of the configured market's collateral token.
+   * @param options.amount - Collateral amount to withdraw, in base units.
+   * @param options.to - Optional recipient; when set, it must equal the wallet address.
+   * @param options.requirementSignature - Optional signed BlueBundlesV1 authorization.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The WDK collateral-withdrawal fee quote without a transaction hash.
+   * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
+   * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
+   * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
+   * @throws {Error} when an address, target token, account, or quote request is invalid.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteWstEthWithdrawal(account: WalletAccountEvm) {
+   *   const market = markets[mainnet.id].usdt_wstEth;
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     borrowMarketParams: market,
+   *     chainId: mainnet.id,
+   *   });
+   *   const quote = await morpho.quoteWithdrawCollateral({
+   *     token: market.collateralToken,
+   *     amount: 10n ** 17n,
+   *   });
+   *   // quote satisfies Omit<WithdrawResult, "hash">
+   *   return quote;
+   * }
+   * ```
    */
   async quoteWithdrawCollateral(
-    options: WithdrawOptions,
+    options: MorphoWithdrawCollateralOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const tx = await this._getWithdrawCollateralTransaction(options);
+    const action = await this._getWithdrawCollateralAction(options);
+    const tx = toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
 
     return await this._quoteTransaction(tx, config);
   }
 
-  private async _getWithdrawCollateralTransaction({
+  private async _getWithdrawCollateralAction({
     token,
     amount,
     to,
-  }: WithdrawOptions): Promise<WdkTransaction> {
+    requirementSignature,
+  }: MorphoWithdrawCollateralOptions) {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("to", to);
@@ -1065,15 +1501,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const positionData = await market.entity.getPositionData(userAddress);
 
-    return toWdkTransaction(
-      market.entity
-        .withdrawCollateral({
-          amount: normalizedAmount,
-          userAddress,
-          positionData,
-        })
-        .buildTx(),
-    );
+    return market.entity.withdrawCollateral({
+      userAddress,
+      positionData,
+      collateralAssets: normalizedAmount,
+      deadline: getBlueBundlesV1Deadline(requirementSignature),
+    });
   }
 
   /**

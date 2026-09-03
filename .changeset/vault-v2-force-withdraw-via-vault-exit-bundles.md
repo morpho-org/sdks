@@ -61,8 +61,9 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   planning core.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
   adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
-  `VaultV2UnsupportedLiquidityAdapterError`, `VaultV2UndecodableLiquidityDataError`, and
-  `MissingReferralFeeRecipientError`. `VaultV2UndecodableLiquidityDataError` reports a
+  `VaultV2UnsupportedLiquidityAdapterError`, and `VaultV2UndecodableLiquidityDataError`. The
+  referral-fee guard reuses the `MissingReferralFeeRecipientError` this major also introduces for the
+  direct BlueBundlesV1 writes. `VaultV2UndecodableLiquidityDataError` reports a
   `liquidityData` blob that does not decode as `MarketParams` — the case the contract's `abi.decode`
   reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
   liquidity adapter that is not the vault's sole adapter.

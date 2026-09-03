@@ -1400,6 +1400,8 @@ export namespace BundlerAction {
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns Encoded Bundler3 calls.
    * @throws {BundlerErrors.UnexpectedAction} when the PublicAllocator is unavailable on the chain.
+   * @deprecated Vault V1 PublicAllocator composition will be removed in the next major. Use
+   * `vaultV2BluePublicAllocatorReallocate` or `vaultV2BluePublicAllocatorAllocateFromIdle`.
    *
    * @example
    * ```ts
@@ -1459,8 +1461,8 @@ export namespace BundlerAction {
   /**
    * Encodes a Vault V2 Blue Public Allocator market-to-market reallocation.
    *
-   * @remarks Bundler3 must already hold the computed penalty assets. The
-   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
+   * @remarks Bundler3 must already hold the computed penalty assets. Explicit low-level
+   * composition must add the corresponding GeneralAdapter1 transfer.
    *
    * @param chainId - Chain whose canonical Blue Public Allocator is called.
    * @param vault - Vault whose liquidity is reallocated.
@@ -1591,8 +1593,8 @@ export namespace BundlerAction {
   /**
    * Encodes a Vault V2 Blue Public Allocator allocation from vault idle liquidity.
    *
-   * @remarks Bundler3 must already hold the computed penalty assets. The
-   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
+   * @remarks Bundler3 must already hold the computed penalty assets. Explicit low-level
+   * composition must add the corresponding GeneralAdapter1 transfer.
    *
    * @param chainId - Chain whose canonical Blue Public Allocator is called.
    * @param vault - Vault whose idle liquidity is allocated.

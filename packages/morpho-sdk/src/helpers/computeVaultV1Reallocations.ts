@@ -107,6 +107,8 @@ const capVaultWithdrawals = (
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
  * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets` — the on-chain call would revert regardless of reallocations.
  * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
  * @example
  * ```ts
  * import { createPublicClient, http, parseUnits } from "viem";
@@ -122,7 +124,6 @@ const capVaultWithdrawals = (
  *   transport: http(),
  * }).extend(morphoViemExtension());
  *
- * const userAddress = "0x000000000000000000000000000000000000dEaD";
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
@@ -138,14 +139,9 @@ const capVaultWithdrawals = (
  *   amount: borrowAmount,
  *   options: { timestamp: block.timestamp },
  * });
- * const positionData = await market.getPositionData(userAddress);
- * const borrow = market.borrow({
- *   userAddress,
- *   amount: borrowAmount,
- *   positionData,
- *   reallocations,
- * });
- * // borrow.buildTx() includes any required PublicAllocator reallocations.
+ * // Encode `reallocations` explicitly with
+ * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // High-level Blue writes accept Vault V2 reallocations only.
  * ```
  */
 export const computeVaultV1Reallocations = ({
@@ -318,6 +314,7 @@ export const computeVaultV1Reallocations = ({
 /**
  * Deprecated name for the Vault V1 amount-aware reallocation planner.
  *
- * @deprecated Use {@link computeVaultV1Reallocations} instead.
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
  */
 export const computeReallocations = computeVaultV1Reallocations;

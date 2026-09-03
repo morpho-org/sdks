@@ -1,13 +1,14 @@
-import { MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  InputExceedsMaxError,
+  validateDeadline,
+  validateReferralFee,
+  validateUint256Field,
+} from "../../helpers/validate.js";
+import {
   type Metadata,
-  MissingReferralFeeRecipientError,
-  NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
@@ -95,44 +96,14 @@ export const vaultV2ForceWithdraw = ({
 > => {
   if (args.exitAssets <= 0n)
     throw new NonPositiveInputError("exitAssets", args.exitAssets);
-  if (args.exitAssets > MathLib.MAX_UINT_256)
-    throw new InputExceedsMaxError({
-      field: "exitAssets",
-      value: args.exitAssets,
-      max: MathLib.MAX_UINT_256,
-    });
-  if (args.deadline <= 0n)
-    throw new NonPositiveInputError("deadline", args.deadline);
-  if (args.deadline > MathLib.MAX_UINT_256)
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: args.deadline,
-      max: MathLib.MAX_UINT_256,
-    });
+  validateUint256Field("exitAssets", args.exitAssets);
+  validateDeadline(args.deadline);
   // `0n` stays valid — it is the intentional "no on-chain bound" opt-out — but a value the uint256
   // slot cannot hold must fail with a dedicated error instead of viem's `IntegerOutOfRangeError`.
   // The entity never emits these (it forbids a non-positive override); this guards direct callers.
-  if (args.minSharePriceE27 < 0n)
-    throw new NegativeInputError("minSharePriceE27", args.minSharePriceE27);
-  if (args.minSharePriceE27 > MathLib.MAX_UINT_256)
-    throw new InputExceedsMaxError({
-      field: "minSharePriceE27",
-      value: args.minSharePriceE27,
-      max: MathLib.MAX_UINT_256,
-    });
+  validateUint256Field("minSharePriceE27", args.minSharePriceE27);
 
-  const referralFeePct = args.referralFeePct ?? 0n;
-  const referralFeeRecipient = args.referralFeeRecipient ?? zeroAddress;
-  if (referralFeePct < 0n)
-    throw new NegativeInputError("referralFeePct", referralFeePct);
-  if (referralFeePct >= MathLib.WAD)
-    throw new InputExceedsMaxError({
-      field: "referralFeePct",
-      value: referralFeePct,
-      max: MathLib.WAD - 1n,
-    });
-  if (referralFeePct > 0n && referralFeeRecipient === zeroAddress)
-    throw new MissingReferralFeeRecipientError(referralFeePct);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(args);
 
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const sharesPermit = getVaultExitBundlesV1PermitStruct({

@@ -3,11 +3,13 @@ import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { validateDeadline } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ChainIdMismatchError,
+  type Erc2612RequirementSignature,
+  ExpiredDeadlineError,
   type PermitAction,
-  type PermitRequirementSignature,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -19,6 +21,7 @@ interface EncodeErc20PermitParams {
   chainId: number;
   nonce: bigint;
   supportDeployless?: boolean;
+  deadline?: bigint;
 }
 
 /**
@@ -27,20 +30,28 @@ interface EncodeErc20PermitParams {
  *
  * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
- * the bundler action helpers can consume. Deadline defaults to two hours from `Time.timestamp()`.
+ * the selected transaction route can consume. Deadline defaults to two hours from
+ * `Time.timestamp()`.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
- * @param params.spender - Permit spender. Must be GeneralAdapter1 or MidnightBundles for the chain.
+ * @param params.spender - Permit spender. Must be GeneralAdapter1, MidnightBundles, or
+ *   BlueBundlesV1 for the chain.
  * @param params.amount - Permit allowance amount.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
+ * @param params.deadline - Signature expiration timestamp. Defaults to two hours from now.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1 or
- *   MidnightBundles for `chainId`.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1,
+ *   MidnightBundles, or BlueBundlesV1 for `chainId`.
+ * @throws {NonPositiveInputError} when an explicit `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when an explicit `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when an explicit `deadline` is positive but not in the future.
+ * @throws {viem.BaseError} when the token metadata read fails with no fallback left.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
@@ -64,7 +75,7 @@ interface EncodeErc20PermitParams {
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
-): Promise<Requirement<PermitRequirementSignature>> => {
+): Promise<Requirement<Erc2612RequirementSignature>> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
   if (viemClient.chain?.id !== chainId) {
@@ -73,11 +84,20 @@ export const encodeErc20Permit = async (
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: ["generalAdapter1", "midnightBundles"],
+    allowed: ["generalAdapter1", "midnightBundles", "blueBundlesV1"],
   });
 
   const now = Time.timestamp();
-  const deadline = now + Time.s.from.h(2n);
+  // Validate an explicit deadline before the token-metadata read: this exported encoder can be
+  // called independently of the BlueBundlesV1 resolver, and an out-of-range or already-expired
+  // deadline otherwise surfaces only as a downstream wallet typed-data error or an on-chain revert.
+  if (params.deadline != null) {
+    validateDeadline(params.deadline);
+    if (params.deadline <= now) {
+      throw new ExpiredDeadlineError(params.deadline, now);
+    }
+  }
+  const deadline = params.deadline ?? now + Time.s.from.h(2n);
 
   const tokenData = await fetchToken(token, viemClient, {
     deployless: supportDeployless,

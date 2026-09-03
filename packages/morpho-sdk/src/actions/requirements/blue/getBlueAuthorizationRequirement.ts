@@ -1,52 +1,70 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
-import { type Address, encodeFunctionData, publicActions } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  publicActions,
+} from "viem";
+import { validateDeadline } from "../../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
   type Requirement,
   type Transaction,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
 
 /**
- * Resolves whether `GeneralAdapter1` needs Blue authorization for the given user, and returns
+ * Resolves whether a supported operator needs Blue authorization for the given user, and returns
  * the requirement to satisfy it when it does.
  *
- * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
- * any bundled Blue path that operates on behalf of the user (`borrow`, `withdraw`,
- * `supplyCollateralBorrow`, `repayWithdrawCollateral`, `refinance`).
+ * Reads `Morpho.isAuthorized(userAddress, authorized)` on the target chain.
  *
  * - When `supportSignature` is falsy (default), returns the
- *   `setAuthorization(generalAdapter1, true)` transaction the user submits before the bundle.
+ *   `setAuthorization(authorized, true)` transaction the user submits before the operation.
  * - When `supportSignature` is `true`, reads the user's Morpho `nonce` and returns a signable
- *   `Requirement`; the signed authorization is folded into the bundle via
- *   `setAuthorizationWithSig`, removing the standalone transaction.
+ *   `Requirement`. The selected route consumes the result: Bundler3 emits
+ *   `setAuthorizationWithSig`, while BlueBundlesV1 embeds its signed-authorization struct.
  *
  * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
- * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
- * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
+ * @param params.chainId - Target chain id used to resolve Morpho and the default GeneralAdapter1.
+ * @param params.userAddress - The user granting authorization.
+ * @param params.authorized - Operator to authorize. Defaults to GeneralAdapter1; direct Blue
+ *   writes pass the registered BlueBundlesV1 deployment. Must be the chain's registered
+ *   GeneralAdapter1 or BlueBundlesV1 operator.
+ * @param params.deadline - Optional signature deadline forwarded to the authorization encoder.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
- *   transaction so authorization can be bundled via `setAuthorizationWithSig`.
+ *   transaction so the destination route can consume the signed authorization.
  * @returns A deep-frozen `Transaction<BlueAuthorizationAction>`, a signable authorization
  *   `Requirement` (when `supportSignature` is `true`), or `null` when authorization is already in
  *   place.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is neither the chain's
+ *   GeneralAdapter1 nor its BlueBundlesV1 operator.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example
  * ```ts
- * import { createPublicClient, http } from "viem";
+ * import { createPublicClient, http, zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
  * import { getBlueAuthorizationRequirement } from "@morpho-org/morpho-sdk";
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
  * const requirement = await getBlueAuthorizationRequirement({
  *   viemClient: client,
- *   chainId: 1,
- *   userAddress: borrower,
+ *   chainId: mainnet.id,
+ *   userAddress: zeroAddress,
  *   supportSignature: true,
+ *   authorized: blueBundlesV1,
+ *   deadline: 1_900_000_000n,
  * });
  * // requirement is null when already authorized, a Requirement when supportSignature is true,
  * // otherwise Readonly<Transaction<BlueAuthorizationAction>>
@@ -57,6 +75,8 @@ export const getBlueAuthorizationRequirement = async (params: {
   chainId: number;
   userAddress: Address;
   supportSignature?: boolean;
+  authorized?: Address;
+  deadline?: bigint;
 }): Promise<
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>
@@ -71,11 +91,35 @@ export const getBlueAuthorizationRequirement = async (params: {
   const {
     morpho,
     bundler3: { generalAdapter1 },
+    bundles,
   } = getChainAddresses(chainId);
 
+  const authorized = params.authorized ?? generalAdapter1;
+  // The SDK only ever authorizes the chain's registered GeneralAdapter1 or BlueBundlesV1 operator;
+  // reject any other override so a misconfigured `authorized` cannot grant an arbitrary address
+  // control over the user's Morpho positions.
+  const supportedOperators: Address[] = [generalAdapter1];
+  if (bundles?.blueBundlesV1 != null) {
+    supportedOperators.push(bundles.blueBundlesV1);
+  }
+  if (
+    !supportedOperators.some((operator) => isAddressEqual(operator, authorized))
+  ) {
+    throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
+  }
   const pc = viemClient.extend(publicActions);
 
   if (supportSignature) {
+    // The forwarded deadline is only consumed on the signable path; reject an invalid or expired
+    // one before the RPC reads so the caller never signs an authorization that cannot be encoded
+    // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
+    if (params.deadline != null) {
+      validateDeadline(params.deadline);
+      const timestamp = Time.timestamp();
+      if (params.deadline <= timestamp) {
+        throw new ExpiredDeadlineError(params.deadline, timestamp);
+      }
+    }
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of
@@ -85,7 +129,7 @@ export const getBlueAuthorizationRequirement = async (params: {
         address: morpho,
         abi: blueAbi,
         functionName: "isAuthorized",
-        args: [userAddress, generalAdapter1],
+        args: [userAddress, authorized],
       }),
       pc.readContract({
         address: morpho,
@@ -100,9 +144,10 @@ export const getBlueAuthorizationRequirement = async (params: {
     }
 
     return encodeBlueSignatureAuthorization(viemClient, {
-      authorized: generalAdapter1,
+      authorized,
       chainId,
       nonce,
+      deadline: params.deadline,
     });
   }
 
@@ -110,7 +155,7 @@ export const getBlueAuthorizationRequirement = async (params: {
     address: morpho,
     abi: blueAbi,
     functionName: "isAuthorized",
-    args: [userAddress, generalAdapter1],
+    args: [userAddress, authorized],
   });
 
   if (isAuthorized) {
@@ -122,13 +167,13 @@ export const getBlueAuthorizationRequirement = async (params: {
     data: encodeFunctionData({
       abi: blueAbi,
       functionName: "setAuthorization",
-      args: [generalAdapter1, true],
+      args: [authorized, true],
     }),
     value: 0n,
     action: {
       type: "blueAuthorization" as const,
       args: {
-        authorized: generalAdapter1,
+        authorized,
         isAuthorized: true,
       },
     },

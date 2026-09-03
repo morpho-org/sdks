@@ -9,7 +9,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual, zeroAddress } from "viem";
+import { type Address, erc20Abi, isAddressEqual } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -30,6 +30,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { validateReferralFee } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -44,9 +45,7 @@ import {
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
   InKindRedeemZeroDeallocationError,
-  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
-  MissingReferralFeeRecipientError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
@@ -800,22 +799,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     if (exitAssets <= 0n)
       throw new NonPositiveInputError("exitAssets", exitAssets);
     validateSlippageTolerance(slippageTolerance);
-    if (referralFeePct < 0n)
-      throw new NegativeInputError("referralFeePct", referralFeePct);
-    if (referralFeePct >= MathLib.WAD) {
-      throw new InputExceedsMaxError({
-        field: "referralFeePct",
-        value: referralFeePct,
-        max: MathLib.WAD - 1n,
-      });
-    }
-    if (
-      referralFeePct > 0n &&
-      (referralFeeRecipient == null ||
-        isAddressEqual(referralFeeRecipient, zeroAddress))
-    ) {
-      throw new MissingReferralFeeRecipientError(referralFeePct);
-    }
+    // Called for its throws only: the raw pair is forwarded to the action, which normalizes it
+    // again on the encode path so a direct action caller gets the same guarantees.
+    validateReferralFee({ referralFeePct, referralFeeRecipient });
     // An unbounded override reopens the exact hole this path closes: the contract reads
     // `minSharePriceE27 == 0` as "no bound".
     if (minSharePriceE27Override != null && minSharePriceE27Override <= 0n) {
