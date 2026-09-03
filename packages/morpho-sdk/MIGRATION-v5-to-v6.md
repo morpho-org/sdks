@@ -1,5 +1,43 @@
 # Migrating morpho-sdk v5 to v6
 
+## Vault V1 and Vault V2 deposits
+
+`MorphoVaultV1.deposit`, `MorphoVaultV2.deposit`, `vaultV1Deposit`, and `vaultV2Deposit` keep their
+names but now route through the chain's registered VaultBundlesV1 contract instead of Bundler3 and
+GeneralAdapter1.
+
+Update deposit inputs as follows:
+
+| v5 | v6 |
+| --- | --- |
+| `amount` plus optional additive `nativeAmount` | Choose exactly one positive `amount` or `nativeAmount`. |
+| Low-level `args.recipient` | Remove it. VaultBundlesV1 mints shares to `msg.sender`; `userAddress` must be the signing and submitting account. |
+| Optional Bundler3 `PermitRequirementSignature` | Use an ERC-2612 or Permit2 SignatureTransfer requirement returned by the prepared entity handle. |
+| No deadline or referral fee | Entity methods accept an optional `deadline` that defaults to two hours from preparation; low-level builders require it. Both surfaces accept optional `referralFeePct` and `referralFeeRecipient`. |
+
+For ERC-20 funding, approvals and ERC-2612 permits now name VaultBundlesV1 as spender. Permit2
+keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTransfer payload names
+VaultBundlesV1. Resolve requirements and build from the same prepared handle so its captured nonce,
+deadline, asset, owner, amount, and spender remain consistent:
+
+```ts
+const deposit = vault.deposit({
+  amount: 1_000_000n,
+  userAddress,
+  vaultData,
+  referralFeePct,
+  referralFeeRecipient,
+});
+
+const requirements = await deposit.getRequirements({ permit2Nonce });
+// Submit approval transactions or sign the returned token requirement first.
+const tx = deposit.buildTx(requirementSignature ? [requirementSignature] : undefined);
+```
+
+Deposit action metadata no longer contains `recipient`. It now reports the gross `amount`, optional
+`nativeAmount`, `maxSharePrice`, `referralFeePct`, `referralFeeRecipient`, exact
+`referralFeeAssets`, resulting `netAssets`, and `deadline`.
+
 ## Vault V2-only Blue write reallocations
 
 High-level `borrow`, `withdraw`, `supplyCollateralBorrow`, and `refinance` inputs now accept only

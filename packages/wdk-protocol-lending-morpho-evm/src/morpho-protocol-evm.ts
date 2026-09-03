@@ -570,7 +570,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     supportSignature: true,
    *   });
    *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
-   *   const requirements = await prepared.getRequirements({ useSimplePermit: true });
+   *   // Keep this explicit nonce unique and unused for the owner. USDT falls back to Permit2.
+   *   const requirements = await prepared.getRequirements({
+   *     useSimplePermit: true,
+   *     permit2Nonce: 42n,
+   *   });
    *
    *   let signature: BundlesTokenRequirementSignature | undefined;
    *   for (const requirement of requirements) {
