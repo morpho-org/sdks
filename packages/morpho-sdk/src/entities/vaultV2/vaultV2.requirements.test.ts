@@ -1,6 +1,12 @@
+import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
+import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc20Abi } from "viem";
+import {
+  createMockClient,
+  expectReadCall,
+  mockRead,
+} from "@morpho-org/test/mock";
+import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -10,10 +16,16 @@ import {
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { isRequirementApproval } from "../../types/index.js";
+import {
+  type BundlesTokenRequirementSignature,
+  isRequirementApproval,
+  isRequirementSignature,
+} from "../../types/index.js";
 
 const amount = 100n;
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(address,address)
+const MUTATED_ASSET = "0x0000000000000000000000000000000000002001";
+const MUTATED_USER = "0x0000000000000000000000000000000000002002";
 
 const countAllowanceReads = (
   handle: ReturnType<typeof createMockClient>,
@@ -79,5 +91,72 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
     });
 
     expect(await deposit.getRequirements()).toEqual([]);
+  });
+
+  test("behavior: snapshots the owner and asset used by the prepared handle", async () => {
+    const handle = createMockClient(mainnet);
+    const { permit2 } = getChainAddresses(mainnet.id);
+    if (permit2 == null) throw new Error("Permit2 is not registered");
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "nonceBitmap",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const params: {
+      amount: bigint;
+      userAddress: Address;
+      vaultData: AccrualVaultV2;
+    } = {
+      amount,
+      userAddress: IN_KIND_USER,
+      vaultData: inKindVaultV2Data(),
+    };
+    const deposit = vault.deposit(params);
+
+    params.userAddress = MUTATED_USER;
+    expect(Reflect.set(params.vaultData, "asset", MUTATED_ASSET)).toBe(true);
+
+    const requirements = await deposit.getRequirements({ permit2Nonce: 0n });
+    const signatureRequirement = requirements.find(isRequirementSignature);
+    if (signatureRequirement?.action.type !== "permit2SignatureTransfer") {
+      throw new Error("Permit2 SignatureTransfer requirement not found");
+    }
+    expect(
+      expectReadCall(handle, {
+        address: IN_KIND_ASSET,
+        abi: erc20Abi,
+        functionName: "allowance",
+      })[0]?.args,
+    ).toEqual([IN_KIND_USER, permit2]);
+
+    const requirementSignature = {
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_ASSET,
+        amount,
+        nonce: signatureRequirement.action.args.nonce,
+        deadline: signatureRequirement.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+      action: signatureRequirement.action,
+    } satisfies BundlesTokenRequirementSignature;
+
+    expect(deposit.buildTx([requirementSignature]).action.type).toBe(
+      "vaultV2Deposit",
+    );
   });
 });
