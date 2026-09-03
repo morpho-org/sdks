@@ -29,14 +29,18 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
-## Native wrapping (canonical statement)
+## Native funding (canonical statement)
 
-Only valid for assets/collateral configured as wNative. Vault deposit bundles prepend
-`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value`. Direct
-BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is exclusive with an ERC-20
+Native funding is valid only for assets/collateral configured as wNative; reject it on any other
+asset with the dedicated error. On **Bundler3 paths**, `nativeAmount > 0` prepends
+`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value` from those
+value-carrying calls. On direct **VaultBundlesV1 vault deposits**, encode the gross native amount as
+the deposit assets and send that same amount as `tx.value` to `vaultBundlesV1Deposit`; the
+standalone contract wraps the value internally, so these paths do not add Bundler3 actions or a
+token permit.
+Direct BlueBundlesV1 funding sends the native amount as `tx.value`; it is exclusive with an ERC-20
 token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
-position and takes no native funding. Reject native amounts on non-wNative assets with the dedicated
-error.
+position and takes no native funding.
 
 ## Shared liquidity / reallocations (canonical statement)
 
