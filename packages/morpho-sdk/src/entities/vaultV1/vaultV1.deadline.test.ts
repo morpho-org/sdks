@@ -1,5 +1,6 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { createPublicClient, http } from "viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import { createPublicClient, erc20Abi, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -10,6 +11,7 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { ExpiredDeadlineError } from "../../types/index.js";
 
 const TARGET_VAULT = "0x0000000000000000000000000000000000001012";
 
@@ -64,5 +66,71 @@ describe("MorphoVaultV1 bundles deadlines", () => {
     );
 
     expect(accrueInterest).toHaveBeenCalledWith(deadline);
+  });
+
+  test("error: redeem re-checks the deadline before returning cached requirements", async () => {
+    const now = 1_800_000_000n;
+    const deadline = now + Time.s.from.h(1n);
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = withChainTimestamp(now, () => inKindVaultV1Data());
+    vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const redemption = withChainTimestamp(now, () =>
+      vault.redeem({ shares: 10n, userAddress: IN_KIND_USER, deadline }),
+    );
+
+    const requirements = await withChainTimestamp(now, () =>
+      redemption.getRequirements(),
+    );
+
+    expect(requirements).toHaveLength(1);
+    await expect(
+      withChainTimestamp(deadline + 1n, () => redemption.getRequirements()),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+  });
+
+  test("error: migration re-checks the deadline before returning cached requirements", async () => {
+    const now = 1_800_000_000n;
+    const deadline = now + Time.s.from.h(1n);
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const sourceVault = withChainTimestamp(now, () => inKindVaultV1Data());
+    const targetVault = withChainTimestamp(now, () =>
+      inKindVaultV2Data({ address: TARGET_VAULT }),
+    );
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const migration = withChainTimestamp(now, () =>
+      vault.migrateToV2({
+        shares: 10n,
+        sourceVault,
+        targetVault,
+        userAddress: IN_KIND_USER,
+        deadline,
+      }),
+    );
+
+    const requirements = await withChainTimestamp(now, () =>
+      migration.getRequirements(),
+    );
+
+    expect(requirements).toHaveLength(1);
+    await expect(
+      withChainTimestamp(deadline + 1n, () => migration.getRequirements()),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 });

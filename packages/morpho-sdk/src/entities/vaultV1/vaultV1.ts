@@ -498,6 +498,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
         if (resolvedRequirements != null) return resolvedRequirements;
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
@@ -802,6 +804,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
         if (resolvedRequirements != null) return resolvedRequirements;
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
