@@ -3,6 +3,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
+  isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
@@ -125,6 +126,64 @@ describe("Withdraw VaultV1", () => {
     );
     expect(finalState.morphoAssetBalance).toEqual(
       initialState.morphoAssetBalance - totalWithdrawn,
+    );
+  });
+
+  test("should withdraw 1K assets with a signed shares permit", async ({
+    client,
+  }) => {
+    const shares = parseUnits("1000", 18);
+    const assets = parseUnits("1000", 6);
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: shares,
+    });
+
+    const {
+      vaults: {
+        SteakhouseUsdcVaultV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        vaults: { SteakhouseUsdcVaultV1 },
+      },
+      actionFn: async () => {
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
+        const vaultV1 = morpho.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
+        const withdraw = vaultV1.withdraw({
+          userAddress: client.account.address,
+          amount: assets,
+        });
+        const requirements = await withdraw.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const permitRequirement = requirements[0];
+        if (!isRequirementSignature(permitRequirement)) {
+          throw new Error("VaultBundlesV1 shares permit requirement not found");
+        }
+        const permit = await permitRequirement.sign(
+          client,
+          client.account.address,
+        );
+
+        // Proves VaultBundlesV1 accepts the signed permit: no approval is sent here.
+        await client.sendTransaction(withdraw.buildTx([permit]));
+      },
+    });
+
+    expect(finalState.userSharesBalance).toBeLessThan(
+      initialState.userSharesBalance,
+    );
+    expect(finalState.userAssetBalance).toEqual(
+      initialState.userAssetBalance + assets,
+    );
+    expect(finalState.morphoAssetBalance).toEqual(
+      initialState.morphoAssetBalance - assets,
     );
   });
 });

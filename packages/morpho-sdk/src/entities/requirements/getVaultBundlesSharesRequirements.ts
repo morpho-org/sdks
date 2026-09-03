@@ -17,9 +17,14 @@ import {
 /**
  * Resolves the exact vault-share approval or ERC-2612 requirement for a VaultBundlesV1 exit.
  *
+ * The exit burns however many shares the vault prices at execution time, so the share allowance is
+ * the only cap on that burn. A leftover allowance above `requiredShareAllowance` therefore does not
+ * satisfy the requirement: it is replaced by an approval or permit for exactly the computed cap.
+ *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, exact allowance, and deadline values.
- * @returns No requirement when allowance is sufficient, otherwise one permit or approval.
+ * @returns No requirement when the allowance already equals `requiredShareAllowance`, otherwise one
+ *   permit or approval that sets it to exactly that cap.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
  * @throws {viem.BaseError} when an allowance or nonce read fails.
  */
@@ -47,7 +52,10 @@ export const getVaultBundlesSharesRequirements = async (
     functionName: "allowance",
     args: [params.owner, spender],
   });
-  if (allowance >= params.requiredShareAllowance) return [];
+  // Asset-mode withdrawals carry no onchain share cap, so the allowance itself is the cap. A
+  // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`,
+  // so only an exact match skips the approval or permit that resets it to the computed cap.
+  if (allowance === params.requiredShareAllowance) return [];
   if (params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,
