@@ -259,6 +259,17 @@ jobs:
             entries="$(tar -tzf "$tgz")"
             # Count-based checks (not `grep -q`) so behaviour is identical across
             # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
+            #
+            # Reject non-canonical entry paths first: pacote normalizes `.`/`..`
+            # segments and `//` before resolving the manifest, so an entry like
+            # `package/./package.json` aliases onto the root `package.json` after
+            # the leading component is stripped — it would be published while the
+            # exact-path checks below still read the benign `package/package.json`.
+            noncanon="$(printf '%s\n' "$entries" | grep -cE '(^|/)\.\.?(/|$)|//' || true)"
+            if [ "$noncanon" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${noncanon} non-canonical path(s) (., .., //); refusing to publish."
+              exit 1
+            fi
             outside="$(printf '%s\n' "$entries" | grep -cvE '^package(/|$)' || true)"
             if [ "$outside" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} has ${outside} entr(y/ies) outside package/; refusing to publish."
