@@ -47,6 +47,9 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is neither the chain's
  *   GeneralAdapter1 nor its BlueBundlesV1 operator.
+ * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example

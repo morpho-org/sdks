@@ -205,7 +205,7 @@ implementation:
   covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
   permits.
 
-Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongits siblings, and
+Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongside its siblings, and
 `previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`.
 
 ### The simulation

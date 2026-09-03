@@ -119,7 +119,7 @@ BlueBundlesV1 writes because they have a different spender.
   `minSharePrice`/`maxSharePrice` bound, so callers must weigh share-price movement between
   transaction construction and inclusion.
 
-### Force deallocation and force withdrawal are not Bundler3
+## Force deallocation and force withdrawal are not Bundler3
 
 `vaultV2ForceRedeem` uses the native `multicall` on the VaultV2 contract. `vaultV2ForceWithdraw`
 instead calls the standalone **VaultExitBundlesV1** periphery, which computes its own

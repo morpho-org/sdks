@@ -15,10 +15,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
   composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
   authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
-  for VaultExitBundlesV1. All of them split their serialized signature through the `@internal`
-  `normalizeEcdsaSignature(serialized, onInvalid)` — one place owns the 64-byte EIP-2098 / 65-byte
-  parse and the `yParity` → `v` widening, and each caller passes the factory for its own typed
-  mismatch error.
+  for VaultExitBundlesV1. The two that must split a signature into a `(v, r, s)` ABI tuple — the
+  BlueBundlesV1 permit/authorization encoders and `getVaultExitBundlesV1PermitStruct` — go through
+  the `@internal` `normalizeEcdsaSignature(serialized, onInvalid)`, so one place owns the 64-byte
+  EIP-2098 / 65-byte parse and the `yParity` → `v` widening while each caller passes the factory for
+  its own typed mismatch error. The Bundler3 helpers need none of this: they forward the serialized
+  signature verbatim into the bundler action args.
 
 ## Common builder pattern
 

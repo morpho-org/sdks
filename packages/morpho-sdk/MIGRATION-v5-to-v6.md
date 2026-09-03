@@ -218,20 +218,22 @@ Migration steps:
   `VaultExitBundlesV1`, and make sure the vault's `receiveAssetsGate` allows that periphery.
 - Update `VaultV2ForceWithdrawAction` decoding: `deallocations` and `withdraw` are gone; `adapter`,
   `exitAssets`, `minSharePriceE27`, `referralFeePct`, `referralFeeRecipient`, and `deadline` are new.
+- Stop batching exits: only one VaultExitBundlesV1 call can execute per transaction, because its
+  `initiator` guard is transient and never cleared.
 - `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are deprecated aliases
   of `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`; `instanceof` keeps
   working for both names.
 
-See the `vault-v2-force-withdraw-via-vault-exit-bundles` changeset and
-`docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full record.
+See the [`TIB-2026-08-28-vault-exit-force-withdraw`](https://github.com/morpho-org/sdks/blob/main/docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md)
+decision record for the full rationale.
 
 ## Upgrade checklist
 
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
-- Update transaction decoding, simulation fixtures, and action metadata fields; discriminator
-  names remain stable, including `VaultV2ForceWithdrawAction`.
+- Update transaction decoding, simulation fixtures, and action metadata fields; the `type`
+  discriminators remain stable, including `"vaultV2ForceWithdraw"`.
 - Test native funding, full repay, and full-position migration paths used by the application.
 - Migrate Vault V2 `forceWithdraw` to the penalty-inclusive `exitAssets` + `vaultData` shape,
   resolve its new `getRequirements()`, and authorize vault shares to `VaultExitBundlesV1`.

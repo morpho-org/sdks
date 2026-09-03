@@ -68,7 +68,7 @@ The action verbs available to vault flows and advanced low-level Bundler3 compos
   becomes a signable `Requirement`; the destination action consumes the signed authorization.
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
-- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
+- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before a redeem. Only `forceRedeem` composes these; `forceWithdraw` moved to VaultExitBundlesV1, which derives its own deallocations on-chain.
 - **`reallocateTo`** — deprecated PublicAllocator V1 call that shifts liquidity from sorted
   source markets into the target market; it will be removed from the SDK in the next major.
 - **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — low-level Bundler3 actions that move one market source or vault idle liquidity into a target market. Both target the chain's registered allocator, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata. The direct BlueBundlesV1 route instead carries equivalent allocator inputs in its fixed call.
