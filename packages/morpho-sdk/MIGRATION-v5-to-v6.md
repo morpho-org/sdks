@@ -16,6 +16,15 @@ extension or automatic fallback to the v5 route.
 Version 6 also preserves the Vault V1 and Vault V2 method and builder names while routing `deposit`,
 `withdraw`, and `redeem` through VaultBundlesV1. Vault V1 `migrateToV2` uses the same fixed route.
 
+> **Chain availability.** The VaultBundlesV1 route requires the `bundles.vaultBundlesV1` deployment
+> on the target chain. On a registered chain without it (Celo, for example, still registers
+> MetaMorpho and Vault V2 deployments), **every** routed vault write — Vault V1 `deposit`,
+> `withdraw`, `redeem`, and `migrateToV2`, and Vault V2 `deposit`, `withdraw`, and `redeem` — throws
+> `UnknownAddressError` synchronously at handle creation, where v5 built a direct vault or Bundler3
+> call. Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Vault `inKindRedeem` is unaffected:
+> it already routed through `bundles.vaultExitBundlesV1` in v5, and its chain coverage is unchanged.
+
 ## Update Vault V1 and Vault V2 methods
 
 | Stable method | v5 input/workflow | v6 input/workflow |
@@ -44,6 +53,13 @@ Pure builder names remain stable, but their `args` objects change:
 | `vaultV1Withdraw` | `amount`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
 | `vaultV1Redeem` | `shares`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
 | `vaultV1MigrateToV2` | Exclusive `assets`/`shares`, `targetVault`, `targetAsset`, `maxSharePriceVaultV2`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Deposit` | Exclusive `amount`/`nativeAmount`, `maxSharePrice`, `userAddress`, optional bundles token `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Withdraw` | `amount`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Redeem` | `shares`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+
+Every vault builder replaces v5's `recipient` and `onBehalf` with a single `userAddress` that must be
+the eventual `msg.sender`, and `vault` now takes `{ chainId, address }` (plus `asset` on the deposit
+and migration builders) so the builder can resolve the VaultBundlesV1 address for the target chain.
 
 Vault V1 deposit and migration destination bounds are forecast through the selected deadline, so an
 explicit deadline beyond the two-hour default remains covered by the computed maximum share price.
