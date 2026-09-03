@@ -26,14 +26,12 @@ import {
 import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
-  getGeneralAdapterRequirements,
   vaultV1Deposit,
   vaultV1InKindRedeem,
   vaultV1MigrateToV2,
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "../../actions/index.js";
-import { MAX_ABSOLUTE_SHARE_PRICE } from "../../helpers/constant.js";
 import {
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
@@ -45,11 +43,11 @@ import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
   type ActionRequirement,
+  AmountAndSharesExclusiveError,
   type BundlesFundingArgs,
   type BundlesTokenRequirementsOptions,
   ChainIdMismatchError,
   EmptyMarketParamsListError,
-  type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
   InsufficientBlueBalanceForInKindRedeemError,
@@ -58,11 +56,9 @@ import {
   NonPositiveInputError,
   type Permit2SignatureTransferAction,
   type PermitAction,
-  type PermitRequirementSignature,
-  type Requirement,
   type RequirementSignature,
+  SameVaultMigrationError,
   selectRequirementSignatures,
-  type Transaction,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
   VaultIsBlueFeeRecipientError,
@@ -70,6 +66,7 @@ import {
   type VaultV1DepositAction,
   type VaultV1InKindRedeemAction,
   type VaultV1MigrateToV2Action,
+  type VaultV1MigrateToV2AmountArgs,
   type VaultV1RedeemAction,
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
@@ -146,12 +143,23 @@ export interface VaultV1Actions {
    *
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Amount of shares to redeem.
-   * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} Object with `buildTx`.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV1RedeemAction>>;
-  };
+  redeem: (params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV1RedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares an illiquid Vault V1 exit into the vault's Morpho Blue supply positions.
    *
@@ -229,34 +237,36 @@ export interface VaultV1Actions {
   /**
    * Prepares a full migration from VaultV1 to VaultV2.
    *
-   * Redeems all V1 shares and atomically deposits the resulting assets into V2
-   * via bundler3. Computes slippage-protected share prices for both legs.
+   * Exits V1 by assets or shares and atomically deposits the resulting assets into V2 through
+   * VaultBundlesV1. Only the destination deposit has an onchain share-price bound.
    *
    * @param {Object} params - The migration parameters.
-   * @param {Address} params.userAddress - User address initiating the migration.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 migrates `msg.sender`'s shares into shares owned by `msg.sender`.
    * @param {AccrualVault} params.sourceVault - Pre-fetched V1 vault data.
    * @param {AccrualVaultV2} params.targetVault - Pre-fetched V2 vault data.
-   * @param {bigint} params.shares - User's V1 share balance to migrate.
+   * @param {bigint} [params.shares] - Exact V1 shares to migrate; exclusive with `assets`.
+   * @param {bigint} [params.assets] - Exact V1 assets to withdraw and migrate; exclusive with `shares`.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from source-vault proceeds.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @returns Lazy exact source-share requirements and a synchronous transaction builder.
    */
-  migrateToV2: (params: {
-    userAddress: Address;
-    sourceVault: AccrualVault;
-    targetVault: AccrualVaultV2;
-    shares: bigint;
-    slippageTolerance?: bigint;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  migrateToV2: (
+    params: {
+      readonly userAddress: Address;
+      readonly sourceVault: AccrualVault;
+      readonly targetVault: AccrualVaultV2;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & VaultV1MigrateToV2AmountArgs,
+  ) => ActionOutput<
+    VaultV1MigrateToV2Action,
+    readonly RequirementSignature[],
+    undefined
+  >;
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
@@ -467,26 +477,66 @@ export class MorphoVaultV1 implements VaultV1Actions {
     });
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
-
-    return {
-      buildTx: () =>
-        vaultV1Redeem({
-          vault: { address: this.vault },
+  redeem(params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (params.shares <= 0n)
+      throw new NonPositiveInputError("shares", params.shares);
+    const deadline = this.getBundlesDeadline(params.deadline);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        if (resolvedRequirements != null) return resolvedRequirements;
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData: await this.getData(),
+            version: "vaultV1",
+            owner: params.userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance: params.shares,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
+          },
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (signatureRequirement?.action.type === "permit") {
+          expectedRequirement = signatureRequirement.action;
+        }
+        resolvedRequirements = requirements;
+        return resolvedRequirements;
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance: params.shares,
+          expectedRequirement,
+        });
+        return vaultV1Redeem({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
-            shares,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            shares: params.shares,
+            userAddress: params.userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   /** {@inheritDoc VaultV1Actions.inKindRedeem} */
@@ -679,100 +729,124 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
-  migrateToV2({
-    userAddress,
-    sourceVault,
-    targetVault,
-    shares,
-    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
-  }: {
-    userAddress: Address;
-    sourceVault: AccrualVault;
-    targetVault: AccrualVaultV2;
-    shares: bigint;
-    slippageTolerance?: bigint;
-  }) {
+  migrateToV2(
+    params: {
+      readonly userAddress: Address;
+      readonly sourceVault: AccrualVault;
+      readonly targetVault: AccrualVaultV2;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & VaultV1MigrateToV2AmountArgs,
+  ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    if (!isAddressEqual(sourceVault.address, this.vault)) {
-      throw new VaultAddressMismatchError(this.vault, sourceVault.address);
+    if (!isAddressEqual(params.sourceVault.address, this.vault)) {
+      throw new VaultAddressMismatchError(
+        this.vault,
+        params.sourceVault.address,
+      );
     }
-
-    if (!isAddressEqual(sourceVault.asset, targetVault.asset)) {
-      throw new VaultAssetMismatchError(sourceVault.asset, targetVault.asset);
+    if (!isAddressEqual(params.sourceVault.asset, params.targetVault.asset)) {
+      throw new VaultAssetMismatchError(
+        params.sourceVault.asset,
+        params.targetVault.asset,
+      );
     }
-
-    if (shares <= 0n) {
-      throw new NonPositiveInputError("shares", shares);
+    if (isAddressEqual(this.vault, params.targetVault.address)) {
+      throw new SameVaultMigrationError(this.vault);
     }
-
+    const assets = "assets" in params ? params.assets : undefined;
+    const shares = "shares" in params ? params.shares : undefined;
+    if ((assets == null) === (shares == null)) {
+      throw new AmountAndSharesExclusiveError();
+    }
+    const selectedAmount = assets ?? shares ?? 0n;
+    if (selectedAmount <= 0n) {
+      throw new NonPositiveInputError(
+        assets != null ? "assets" : "shares",
+        selectedAmount,
+      );
+    }
+    const slippageTolerance =
+      params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
-
-    // Compute minSharePriceVaultV1 for V1 redeem (slippage downward)
-    const v1RefAssets = sourceVault.toAssets(shares);
-    const minSharePriceVaultV1 = MathLib.mulDivDown(
-      v1RefAssets,
-      MathLib.wToRay(MathLib.WAD - slippageTolerance),
-      shares,
+    const deadline = this.getBundlesDeadline(params.deadline);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const grossAssets =
+      assets ?? params.sourceVault.toAssets(shares ?? 0n, "Down");
+    const referralFeeAssets = getBundlesReferralFeeAssets(
+      grossAssets,
+      common.referralFeePct,
     );
-
-    // Compute maxSharePriceVaultV2 for V2 deposit (slippage upward).
-    // Accrue VaultV2 interest forward to bound the on-chain share price at execution.
-    const targetAccrualTimestamp =
-      MathLib.max(Time.timestamp(), targetVault.lastUpdate) + Time.s.from.h(2n);
-    const { vault: accruedTargetVault } = targetVault.accrueInterest(
-      targetAccrualTimestamp,
-    );
-    const v2RefShares = accruedTargetVault.toShares(v1RefAssets);
-    if (v2RefShares <= 0n) {
-      throw new NonPositiveInputError("targetVaultShares", v2RefShares);
-    }
-    const maxSharePriceVaultV2 = MathLib.min(
-      MathLib.mulDivUp(
-        v1RefAssets,
-        MathLib.wToRay(MathLib.WAD + slippageTolerance),
-        v2RefShares,
-      ),
-      MAX_ABSOLUTE_SHARE_PRICE,
-    );
-    return {
-      getRequirements: () =>
-        getGeneralAdapterRequirements(this.client.viemClient, {
-          address: this.vault,
-          chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
-          // V1 shares always implement EIP-2612.
-          useSimplePermit: true,
-          args: {
-            amount: shares,
-            from: userAddress,
+    const maxSharePriceVaultV2 = computeVaultMaxSharePrice({
+      vaultData: params.targetVault,
+      deadline,
+      assets: grossAssets - referralFeeAssets,
+      slippageTolerance,
+    });
+    const requiredShareAllowance =
+      shares ??
+      computeVaultMaxShareAllowance({
+        vaultData: params.sourceVault,
+        deadline,
+        assets: assets ?? 0n,
+        slippageTolerance,
+      });
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        if (resolvedRequirements != null) return resolvedRequirements;
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData: params.sourceVault,
+            version: "vaultV1",
+            owner: params.userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
           },
-        }),
-
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (signatureRequirement?.action.type === "permit") {
+          expectedRequirement = signatureRequirement.action;
+        }
+        resolvedRequirements = requirements;
+        return resolvedRequirements;
+      },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance,
+          expectedRequirement,
         });
-
         return vaultV1MigrateToV2({
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: sourceVault.asset,
+            asset: params.sourceVault.asset,
           },
           args: {
-            targetVault: targetVault.address,
-            targetAsset: targetVault.asset,
-            shares,
-            minSharePriceVaultV1,
+            targetVault: params.targetVault.address,
+            targetAsset: params.targetVault.asset,
+            ...(assets != null ? { assets } : { shares: shares ?? 0n }),
             maxSharePriceVaultV2,
-            recipient: userAddress,
+            userAddress: params.userAddress,
             requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 }

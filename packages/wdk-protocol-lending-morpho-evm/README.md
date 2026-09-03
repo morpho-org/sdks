@@ -47,17 +47,15 @@ const morpho = new MorphoProtocolEvm(account, {
   }
 })
 
-// Send approval requirements first when returned by the Morpho SDK.
-const requirements = await morpho.getSupplyRequirements({
+// Prepare once, then resolve requirements and submit through the same handle.
+const prepared = await morpho.prepareSupply({
   token: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   amount: 1000000n
 })
+const requirements = await prepared.getRequirements()
 
 // Then send the vault deposit transaction.
-await morpho.supply({
-  token: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-  amount: 1000000n
-})
+await prepared.submit()
 ```
 
 ## Configuration
@@ -79,16 +77,19 @@ Options:
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
 
-Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods accept `MorphoCollateralSupplyOptions`, whose type requires exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
+Vault deposits accept `MorphoExclusiveSupplyOptions`, and Blue collateral methods accept
+`MorphoCollateralSupplyOptions`. Both require exactly one of `amount` or `nativeAmount`.
+`nativeAmount` is only valid when the configured asset is the wrapped native token for the chain.
 
 ## Methods
 
 | Method | Description |
 |---|---|
 | `supply(options, config?)` | Deposit assets into the configured vault |
-| `getSupplyRequirements(options)` | Return SDK requirements for vault deposit |
+| `prepareSupply(options)` | Prepare one vault deposit handle for requirements, quote, and submission |
 | `quoteSupply(options, config?)` | Quote vault deposit |
 | `withdraw(options, config?)` | Withdraw assets from the configured vault |
+| `prepareWithdraw(options)` | Prepare one vault withdrawal handle for requirements, quote, and submission |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |

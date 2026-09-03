@@ -141,13 +141,20 @@ export interface VaultV2Actions {
    *
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
-  };
+  redeem: (params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2RedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares an illiquid Vault V2 exit into idle assets and Morpho Blue supply positions.
    *
@@ -490,26 +497,66 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
-
-    return {
-      buildTx: () =>
-        vaultV2Redeem({
-          vault: { address: this.vault },
+  redeem(params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (params.shares <= 0n)
+      throw new NonPositiveInputError("shares", params.shares);
+    const deadline = this.getBundlesDeadline(params.deadline);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        if (resolvedRequirements != null) return resolvedRequirements;
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData: await this.getData(),
+            version: "vaultV2",
+            owner: params.userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance: params.shares,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
+          },
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (signatureRequirement?.action.type === "permit") {
+          expectedRequirement = signatureRequirement.action;
+        }
+        resolvedRequirements = requirements;
+        return resolvedRequirements;
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance: params.shares,
+          expectedRequirement,
+        });
+        return vaultV2Redeem({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
-            shares,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            shares: params.shares,
+            userAddress: params.userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   /** {@inheritDoc VaultV2Actions.inKindRedeem} */
