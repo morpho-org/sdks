@@ -142,11 +142,48 @@ export function mapBookMarket(
   };
 }
 
-/** @internal Maps a book market, binding its id to the requested market. */
+/**
+ * @internal Recomputes the Midnight market id from a book payload's own market
+ * params, mirroring the takeable-offers derivation. This is the single source of
+ * truth for the derivation so both bound-book paths reject the same substitution.
+ */
+function deriveBookMarketId(book: ApiBookMarketResponse): Hash {
+  return MarketUtils.toId({
+    chainId: book.chain_id,
+    midnight: book.midnight,
+    loanToken: book.loan_token,
+    collateralParams: book.collaterals.map((collateral) => ({
+      token: collateral.token,
+      lltv: collateral.lltv,
+      liquidationCursor: collateral.liquidation_cursor,
+      oracle: collateral.oracle,
+    })),
+    maturity: book.maturity,
+    rcfThreshold: book.rcf_threshold,
+    enterGate: book.enter_gate,
+    liquidatorGate: book.liquidator_gate,
+  });
+}
+
+/**
+ * @internal Rejects a book whose advertised `market_id` does not hash from its own
+ * market params, so a hostile API cannot pair a trusted id with foreign metadata.
+ */
+function assertBookMarketIdIntegrity(book: ApiBookMarketResponse): void {
+  const derivedMarketId = deriveBookMarketId(book);
+  if (!isHexEqual(derivedMarketId, book.market_id)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API book market_id "${book.market_id}" does not match the id "${derivedMarketId}" derived from its market params.`,
+    );
+  }
+}
+
+/** @internal Maps a book market, binding its id to its own params and the requested market. */
 export function mapBoundBookMarket(
   book: ApiBookMarketResponse,
   requestedMarketId: Hash,
 ): MidnightApiBookMarket {
+  assertBookMarketIdIntegrity(book);
   if (!isHexEqual(book.market_id, requestedMarketId)) {
     throw new InvalidMidnightApiResponseError(
       `Midnight API book market_id "${book.market_id}" does not match requested market "${requestedMarketId}".`,
@@ -155,16 +192,18 @@ export function mapBoundBookMarket(
   return mapBookMarket(book);
 }
 
-/** @internal Maps listed book markets, binding each to the requested market_ids filter when present. */
+/** @internal Maps listed book markets, binding each to its own params and the requested market_ids filter when present. */
 export function mapBoundBooks(
   books: readonly ApiBookMarketResponse[],
   marketIds?: readonly Hash[],
 ): MidnightApiBookMarket[] {
-  if (marketIds == null || marketIds.length === 0) {
-    return books.map(mapBookMarket);
-  }
   return books.map((book) => {
-    if (!marketIds.some((marketId) => isHexEqual(marketId, book.market_id))) {
+    assertBookMarketIdIntegrity(book);
+    if (
+      marketIds != null &&
+      marketIds.length > 0 &&
+      !marketIds.some((marketId) => isHexEqual(marketId, book.market_id))
+    ) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API book market_id "${book.market_id}" is outside the requested market_ids filter.`,
       );
