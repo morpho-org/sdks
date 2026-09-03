@@ -128,6 +128,8 @@ export interface VaultV1Actions {
    * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
    * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   at any `getRequirements()` call, including calls served from the cached requirement set.
    */
   withdraw: (params: {
     readonly amount: bigint;
@@ -419,6 +421,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
         if (resolvedRequirements != null) return resolvedRequirements;
         const vaultData = await this.getData();
         requiredShareAllowance ??= computeVaultMaxShareAllowance({

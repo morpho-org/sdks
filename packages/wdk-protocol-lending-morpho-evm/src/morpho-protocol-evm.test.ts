@@ -475,9 +475,30 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        slippageTolerance: undefined,
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
       expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+    });
+
+    test("behavior: forwards the configured slippage tolerance", async () => {
+      const configured = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+
+      await configured.withdraw({ token: TOKEN, amount: 100_000n });
+
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
+        amount: 100_000n,
+        userAddress: ADDRESS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
     });
 
     test("should expose and consume vault-share requirements", async () => {

@@ -659,6 +659,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Withdraws assets from the configured Morpho vault.
    *
+   * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares, so it
+   * needs a share allowance equal to the derived share cap. This method submits immediately and
+   * therefore only succeeds when that exact allowance is already in place. Use
+   * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
+   * prepared-operation handle.
+   *
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
@@ -717,6 +723,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return vault.entity.withdraw({
       amount: normalizedAmount,
       userAddress,
+      slippageTolerance: this._options.slippageTolerance,
     });
   }
 
@@ -737,7 +744,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * export async function prepareWithdrawal(account: WalletAccountEvm) {
    *   const vault = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
-   *   const usdc = "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+   *   const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
    *   const morpho = new MorphoProtocolEvm(account, {
    *     earnVaultAddress: vault,
    *     chainId: mainnet.id,

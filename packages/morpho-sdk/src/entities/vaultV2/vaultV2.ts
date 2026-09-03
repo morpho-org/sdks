@@ -121,6 +121,8 @@ export interface VaultV2Actions {
    * @param {bigint} params.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   at any `getRequirements()` call, including calls served from the cached requirement set.
    */
   withdraw: (params: {
     readonly amount: bigint;
@@ -442,6 +444,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
         if (resolvedRequirements != null) return resolvedRequirements;
         const vaultData = await this.getData();
         requiredShareAllowance ??= computeVaultMaxShareAllowance({

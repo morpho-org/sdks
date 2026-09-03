@@ -88,7 +88,8 @@ Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods
 | `supply(options, config?)` | Deposit assets into the configured vault |
 | `getSupplyRequirements(options)` | Return SDK requirements for vault deposit |
 | `quoteSupply(options, config?)` | Quote vault deposit |
-| `withdraw(options, config?)` | Withdraw assets from the configured vault |
+| `withdraw(options, config?)` | Withdraw assets from the configured vault; submits immediately, so it needs the VaultBundlesV1 share allowance already in place |
+| `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
@@ -139,6 +140,7 @@ Requirement entries are one of:
 - Approval transaction: send the returned transaction before the final action.
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
 - Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `supply`, `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call.
+- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.

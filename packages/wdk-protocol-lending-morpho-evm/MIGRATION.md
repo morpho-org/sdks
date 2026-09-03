@@ -1,6 +1,6 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3. Vault V2 earn flows are unchanged.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3, and Morpho vault withdrawals through `VaultBundlesV1` instead of a direct vault call.
 
 ## Required changes
 
@@ -8,6 +8,9 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
 - Replace `MorphoBorrowWithVaultV2ReallocationsOptions` with `MorphoBorrowOptions`. The specialized opt-in type and the package's Vault V1 reallocation re-exports were removed.
 - Remove `slippageTolerance` from `MorphoBorrowOptions`, `MorphoRepayOptions`, and Blue collateral-supply inputs. Constructor-level and vault-supply slippage settings now apply only to Morpho Vault V2 flows because BlueBundlesV1 has no Bundler3 share-price bounds.
 - Call `getWithdrawCollateralRequirements` before `withdrawCollateral`. Send the returned authorization transaction, or sign the requirement and pass its result as `requirementSignature`.
+- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` still submits immediately and therefore only succeeds when that exact allowance is already in place.
+- Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance that does not equal the derived cap — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
+- Constructor-level `slippageTolerance` now also bounds vault withdrawals: it widens the derived share cap the same way it widens the vault-deposit share-price bound.
 - Use `MorphoCollateralSupplyOptions` for Blue collateral methods. Its type accepts either `amount` or `nativeAmount`, not both; vault deposits still use additive `MorphoSupplyOptions`.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls when selecting Permit2 SignatureTransfer.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
@@ -57,6 +60,34 @@ const options = {
   reallocations,
 } satisfies MorphoBorrowOptions;
 ```
+
+## Vault withdrawal share requirements
+
+```ts
+const prepared = await morpho.prepareWithdraw({ token, amount: 1_000_000n });
+const requirements = await prepared.getRequirements();
+
+const requirement = requirements[0];
+if (requirement && "sign" in requirement) {
+  const requirementSignature = await requirement.sign(walletClient, userAddress);
+  await prepared.submit(requirementSignature);
+} else {
+  for (const transaction of requirements) {
+    if ("to" in transaction) {
+      const result = await account.sendTransaction({
+        to: transaction.to,
+        value: transaction.value,
+        data: transaction.data,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: result.hash });
+    }
+  }
+  await prepared.submit();
+}
+```
+
+`getRequirements()` re-validates the withdrawal deadline on every call, so a prepared withdrawal
+reused after its deadline throws `ExpiredDeadlineError` instead of returning stale prerequisites.
 
 ## Collateral withdrawal authorization
 

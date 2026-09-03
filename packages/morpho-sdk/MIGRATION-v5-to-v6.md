@@ -26,6 +26,32 @@ also targets BlueBundlesV1, and proceeds always return to the transaction sender
 Permit2 uses SignatureTransfer for these direct token pulls: its ERC-20 prerequisite still targets
 canonical Permit2, while the signed payload names BlueBundlesV1 as spender.
 
+## Vault V1 and V2 withdrawals
+
+The established `withdraw` methods and the `vaultV1Withdraw` / `vaultV2Withdraw` builder names stay
+stable, but now encode one direct VaultBundlesV1 call instead of a direct vault call.
+
+| Flow | v5 input | v6 input |
+| --- | --- | --- |
+| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
+
+`withdraw` now returns `{ buildTx, getRequirements }` instead of `{ buildTx }`. VaultBundlesV1 spends
+the caller's vault shares, so the withdrawal needs a vault-share allowance for VaultBundlesV1 — a
+prerequisite v5 withdrawals did not have. Await `getRequirements()` and satisfy it before calling
+`buildTx()`, or the withdrawal reverts:
+
+- Without signature support, it returns one ERC-20 approval transaction to send first.
+- With `supportSignature: true`, it returns one signable ERC-2612 shares permit; pass the signature
+  to `buildTx([sharesPermit])` and it is folded into the VaultBundlesV1 call.
+
+The allowance is the only cap on the burn, since asset-mode calldata carries no maximum-shares
+argument. `getRequirements()` therefore derives an exact cap from the vault snapshot, the deadline,
+and `slippageTolerance` (default 0.03%), and returns an approval or permit for exactly that amount
+whenever the current allowance differs — including when a larger leftover approval already exists.
+
+`getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
+its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
+
 ## Blue collateral, borrow, repay, and collateral withdrawal
 
 The six established methods below now map to the two BlueBundlesV1 combined entrypoints. Simple
