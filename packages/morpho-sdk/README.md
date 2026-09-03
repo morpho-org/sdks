@@ -25,11 +25,14 @@ Blue writes call BlueBundlesV1 directly; the remaining rows identify their direc
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler3 → GeneralAdapter1 |
-| | `withdraw`, `redeem` | Direct call |
+| **VaultV1** (MetaMorpho) | `deposit` | VaultBundlesV1 |
+| | `migrateToV2` | Bundler3 → GeneralAdapter1 |
+| | `withdraw` | VaultBundlesV1 |
+| | `redeem` | Direct call |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **VaultV2** | `deposit` | Bundler3 → GeneralAdapter1 |
-| | `withdraw`, `redeem` | Direct call |
+| **VaultV2** | `deposit` | VaultBundlesV1 |
+| | `withdraw` | VaultBundlesV1 |
+| | `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
@@ -46,9 +49,12 @@ Robinhood Chain. Custom deployments can still be configured with `registerCustom
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
 writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault
 `inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
-and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
-RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
-`forceRedeem` — have no prerequisites and return only `{ buildTx }`.
+and share authorization before invoking `buildTx()`. Vault `withdraw` uses it too: VaultBundlesV1
+burns `msg.sender`'s shares, so it needs a vault-share allowance equal to the derived share cap —
+an approval, or an ERC-2612 shares permit folded into the call when `supportSignature` is enabled.
+Calling `buildTx()` directly skips those RPC-backed pre-flight checks. The remaining direct calls —
+vault `redeem`, `forceWithdraw` / `forceRedeem` — have no
+prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -114,14 +120,18 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw is a direct vault call with no requirements:
+Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the exact share
+allowance returned by `getRequirements()`:
 
 ```typescript
-const { buildTx } = vault.withdraw({
+const { buildTx, getRequirements } = vault.withdraw({
   amount: 500000000000000000n,
   userAddress: "0xUser...",
 });
-const tx = buildTx();
+// One approval transaction to send, or one shares permit to sign when
+// `supportSignature: true`.
+const requirements = await getRequirements();
+const tx = buildTx([sharesPermitSignature]);
 ```
 
 For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).

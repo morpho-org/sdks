@@ -1,6 +1,6 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault deposits through `VaultBundlesV1`, both instead of Bundler3.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault deposits through `VaultBundlesV1`, both instead of Bundler3. Vault withdrawals also route through VaultBundlesV1 instead of a direct vault call.
 
 ## Required changes
 
@@ -13,6 +13,9 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault dep
 - Recreate cached vault-asset approvals. Their spender is now `VaultBundlesV1` instead of GeneralAdapter1.
 - Vault deposits now expire after two hours and enforce the same deadline as the signed permit; `slippageTolerance` still bounds the deposit's `maxSharePrice`.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls, and to the prepared deposit's `getRequirements`, when selecting Permit2 SignatureTransfer.
+- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` still submits immediately and therefore only succeeds when that exact allowance is already in place.
+- Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance that does not equal the derived cap — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
+- Constructor-level `slippageTolerance` now also bounds vault withdrawals: it widens the derived share cap the same way it widens the vault-deposit share-price bound.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
 - Blue writes now expire after two hours instead of using an unbounded deadline; signed calls preserve the requirement signature's deadline.
 - With signatures disabled, `getRepayRequirements({ amount: "max" })` may return the token's
@@ -59,6 +62,34 @@ const options = {
   reallocations,
 } satisfies MorphoBorrowOptions;
 ```
+
+## Vault withdrawal share requirements
+
+```ts
+const prepared = await morpho.prepareWithdraw({ token, amount: 1_000_000n });
+const requirements = await prepared.getRequirements();
+
+const requirement = requirements[0];
+if (requirement && "sign" in requirement) {
+  const requirementSignature = await requirement.sign(walletClient, userAddress);
+  await prepared.submit(requirementSignature);
+} else {
+  for (const transaction of requirements) {
+    if ("to" in transaction) {
+      const result = await account.sendTransaction({
+        to: transaction.to,
+        value: transaction.value,
+        data: transaction.data,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: result.hash });
+    }
+  }
+  await prepared.submit();
+}
+```
+
+`getRequirements()` re-validates the withdrawal deadline on every call, so a prepared withdrawal
+reused after its deadline throws `ExpiredDeadlineError` instead of returning stale prerequisites.
 
 ## Collateral withdrawal authorization
 

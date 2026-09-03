@@ -22,7 +22,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
 2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Blue write paths** encode
    one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Other **direct calls** (vault `withdraw` / `redeem`,
+   `MidnightBundles` function call directly. Vault deposits and withdrawals encode one `VaultBundlesV1` call. Withdrawals require the exact
+   share allowance resolved by `getRequirements()` or an embedded shares permit. Other
+   **direct calls** (vault `redeem`,
    Midnight collateral supply / redeem / offer cancellation) encode their target contract call
    directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
    Bundler3 bundle.
