@@ -474,6 +474,12 @@ describe("DepositVaultV1", () => {
           amount: amount,
         });
 
+        for (const requirement of await withdraw.getRequirements()) {
+          if (!isRequirementApproval(requirement)) {
+            throw new Error("Withdraw approval requirement not found");
+          }
+          await client.sendTransaction(requirement);
+        }
         const withdrawTx = withdraw.buildTx();
 
         await client.sendTransaction(withdrawTx);
