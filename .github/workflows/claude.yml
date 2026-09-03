@@ -59,6 +59,10 @@ jobs:
       - name: Snapshot trusted review instructions
         run: cp -R .agents "$RUNNER_TEMP/trusted-agents"
 
+      # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap).
+      - name: Install bubblewrap
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
       # Codex reviews automatically on open / ready-for-review; re-request it on every push.
       - name: Request Codex re-review
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
