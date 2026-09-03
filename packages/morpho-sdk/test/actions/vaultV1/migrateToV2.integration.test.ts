@@ -166,4 +166,84 @@ describe("MigrateToV2 VaultV1", () => {
     // User's underlying asset balance should be unchanged
     expect(v1Final.userAssetBalance).toEqual(v1Initial.userAssetBalance);
   });
+
+  test("should migrate an exact USDC amount from V1 to V2", async ({
+    client,
+  }) => {
+    const shares = parseUnits("2000", 18);
+    const assets = parseUnits("1000", 6);
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: shares,
+    });
+
+    const {
+      vaults: {
+        SteakhouseUsdcVaultV1: { initialState: v1Initial, finalState: v1Final },
+        KeyrockUsdcVaultV2: { initialState: v2Initial, finalState: v2Final },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
+      },
+      actionFn: async () => {
+        const morpho = client.extend(morphoViemExtension()).morpho;
+        const vaultV1 = morpho.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
+        const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+        const sourceVault = await vaultV1.getData();
+        const targetVault = await vaultV2.getData();
+
+        const migrate = vaultV1.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          assets,
+        });
+
+        const requirements = await migrate.getRequirements();
+
+        expect(requirements.length).toBe(1);
+
+        const approveTx = requirements[0];
+        if (!approveTx) {
+          throw new Error("Approve transaction not found");
+        }
+        if (!isRequirementApproval(approveTx)) {
+          throw new Error("Approve transaction is not an approval transaction");
+        }
+
+        // The deadline-adjusted share allowance must cover the on-chain burn,
+        // otherwise `vaultBundlesV1Migrate` reverts on the source withdrawal.
+        await client.sendTransaction(approveTx);
+
+        const tx = migrate.buildTx();
+        await client.sendTransaction(tx);
+      },
+    });
+
+    // Assets-mode migration moves exactly the requested assets, so the source
+    // position shrinks without being drained.
+    const minimumMoved = (assets * 9_999n) / 10_000n;
+    expect(v1Final.userSharesBalance).toBeLessThan(v1Initial.userSharesBalance);
+    expect(v1Final.userSharesBalance).toBeGreaterThan(0n);
+    expect(
+      v1Initial.userSharesBalanceInAssets - v1Final.userSharesBalanceInAssets,
+    ).toBeGreaterThan(minimumMoved);
+
+    // V2: the migrated assets landed as destination shares.
+    expect(v2Final.userSharesBalance).toBeGreaterThan(
+      v2Initial.userSharesBalance,
+    );
+    expect(
+      v2Final.userSharesBalanceInAssets - v2Initial.userSharesBalanceInAssets,
+    ).toBeGreaterThan(minimumMoved);
+
+    // Assets moved vault-to-vault, never through the user's wallet.
+    expect(v1Final.userAssetBalance).toEqual(v1Initial.userAssetBalance);
+  });
 });
