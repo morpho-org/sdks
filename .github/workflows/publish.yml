@@ -87,9 +87,10 @@ jobs:
           # Pack every non-private workspace package. `pnpm pack` performs the
           # workspace-protocol replacement (workspace:^ -> ^x.y.z) exactly like
           # `changeset publish` would. The `lib/` shipped is the one built by the
-          # step above; pnpm 11 runs no rebuild here (packages define only the
-          # legacy `prepublish` hook, which pnpm pack does not run) and strips
-          # lifecycle scripts from the packed manifest by default.
+          # step above: no package defines a `prepack` or `prepare` hook (the
+          # lifecycle scripts `pnpm pack` would actually run), and the legacy
+          # `prepublish` hook is not run by `pnpm pack`, so nothing rebuilds here.
+          # `pnpm pack` strips lifecycle scripts from the packed manifest.
           while IFS= read -r -d '' manifest; do
             dir="$(dirname "$manifest")"
             is_private="$(cd "$dir" && node -p "require('./package.json').private === true")"
@@ -121,10 +122,10 @@ jobs:
   # ---------------------------------------------------------------------------
   # Privileged publish-only job. It carries `id-token: write` (npm trusted
   # publishing) and `contents: write` (package tags), but runs NO untrusted
-  # code: it does a fresh checkout of github.sha, installs only a pinned npm
-  # (with scripts disabled) needed for trusted publishing, consumes ONLY the
-  # tarball artifact from the unprivileged job, verifies its digests with
-  # first-party tooling, and confirms `.git/hooks/` holds only samples before
+  # code: it does a fresh checkout of github.sha, uses the npm bundled with the
+  # pinned Node for trusted publishing (nothing is fetched at run time),
+  # consumes ONLY the tarball artifact from the unprivileged job, verifies its
+  # digests with first-party tooling, and confirms `.git/hooks/` holds only samples before
   # any credentialed operation. There is no `pnpm install` of the dependency
   # tree, no dependency lifecycle scripts, no `tsc` rebuild, and no Changesets
   # CLI here — so nothing that could be swapped by a supply-chain compromise
@@ -174,10 +175,25 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 
-      # Trusted publishing requires npm >= 11.5.1. Pin a known-good npm 11 and
-      # disable its install scripts: this is the only executable fetched into
-      # the privileged job, and it never runs a lifecycle hook.
-      - run: npm install -g --ignore-scripts npm@11.11.0
+      # Trusted publishing (OIDC provenance) requires npm >= 11.5.1. Use the npm
+      # bundled with the pinned Node (.nvmrc) instead of fetching one at run time
+      # into this credentialed job — otherwise an unpinned registry tarball would
+      # become the npm binary that performs the OIDC exchange. Fail closed if the
+      # bundled npm is too old.
+      - name: Assert bundled npm supports trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="$(npm --version)"
+          node -e '
+            const [a, b, c] = process.argv[1].split(".").map(Number);
+            const ok = a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1)));
+            if (!ok) {
+              console.error(`::error::npm ${process.argv[1]} < 11.5.1; trusted publishing unavailable`);
+              process.exit(1);
+            }
+          ' "$ver"
+          echo "Using bundled npm $ver"
 
       - name: Download release tarballs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -223,10 +239,42 @@ jobs:
 
           # Inventory the received tarballs by reading name/version from inside
           # each, rejecting duplicates.
+          #
+          # npm's manifest reader (pacote) strips the leading path component of
+          # every tar entry, so a tarball smuggling a second top-level directory
+          # (e.g. `zzz/package.json`) can make `npm publish` ship a different
+          # name/version than a naive read of `package/package.json` — defeating
+          # the allowlist below. We close that structurally: reject any tarball
+          # that is not a single-rooted `package/` archive with exactly one
+          # `package/package.json` and no symlink/hardlink/device entries. Once
+          # that invariant holds there is exactly one manifest in the archive, so
+          # the literal read below is the same manifest npm will publish. (A
+          # registry-aware `npm publish --dry-run` cannot be used for this: it
+          # errors on versions already on the registry, which the idempotent
+          # rerun path relies on being publishable-or-skippable.)
           declare -A received_version
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
+            entries="$(tar -tzf "$tgz")"
+            # Count-based checks (not `grep -q`) so behaviour is identical across
+            # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
+            outside="$(printf '%s\n' "$entries" | grep -cvE '^package(/|$)' || true)"
+            if [ "$outside" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${outside} entr(y/ies) outside package/; refusing to publish."
+              exit 1
+            fi
+            pj_count="$(printf '%s\n' "$entries" | grep -cxE 'package/package\.json' || true)"
+            if [ "$pj_count" != "1" ]; then
+              echo "::error::Tarball ${tgz##*/} must contain exactly one package/package.json (found ${pj_count}); refusing to publish."
+              exit 1
+            fi
+            irregular="$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)"
+            if [ "$irregular" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} contains ${irregular} non-regular entr(y/ies) (symlink/hardlink/device); refusing to publish."
+              exit 1
+            fi
+
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
             name="$(node -p "require('${tmpd}/package/package.json').name")"
@@ -266,13 +314,23 @@ jobs:
             version="${received_version[$name]}"
             tgz="${received_tarball[$name]}"
 
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            if npm view "${name}@${version}" version \
+              --registry https://registry.npmjs.org >/dev/null 2>&1; then
               echo "Already on registry: ${name}@${version} — skipping."
               continue
             fi
 
+            # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
+            # publishes explicit and future-proof; `--registry` overrides any
+            # `publishConfig.registry` in the packed manifest so a tampered pack
+            # job cannot redirect the OIDC audience away from npmjs.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
-            npm publish "$tgz" --provenance --access public --tag "$publish_tag"
+            npm publish "$tgz" \
+              --provenance \
+              --access public \
+              --tag "$publish_tag" \
+              --ignore-scripts \
+              --registry https://registry.npmjs.org
             published=$((published + 1))
           done
           echo "Published ${published} package(s)."
