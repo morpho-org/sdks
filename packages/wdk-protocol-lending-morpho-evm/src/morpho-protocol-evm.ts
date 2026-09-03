@@ -569,21 +569,82 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Prepares a vault deposit once for requirement discovery, signing, quoting, and submission.
    *
-   * @param options - The supply options.
+   * The handle snapshots the validated token and funding amounts, so mutating `options` after this
+   * method resolves cannot retarget the balance check or the built transaction.
+   *
+   * @param options.token - Address of the configured vault's asset.
+   * @param options.amount - ERC-20 amount to deposit, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native amount to wrap and deposit, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
+   * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
+   * @throws {NonPositiveInputError} when neither `amount` nor `nativeAmount` is supplied.
+   * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {Error} when the token, amount, vault, or account configuration is invalid.
    * @example
    * ```ts
-   * const prepared = await morpho.prepareSupply({ token, amount: 1_000_000n });
-   * const requirements = await prepared.getRequirements({ permit2Nonce: 42n });
-   * const signature = await requirements.find((item) => "sign" in item)?.sign(wallet, user);
-   * const result = await prepared.submit(signature);
+   * import type { BundlesTokenRequirementSignature } from "@morpho-org/morpho-sdk";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import { createPublicClient, createWalletClient, custom, http, type Address } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const USDT: Address = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *
+   * export async function depositUsdt(
+   *   account: WalletAccountEvm,
+   *   provider: { request(args: { method: string; params?: readonly unknown[] }): Promise<unknown> },
+   * ) {
+   *   const userAddress = (await account.getAddress()) as Address;
+   *   const publicClient = createPublicClient({ chain: mainnet, transport: http() });
+   *   const walletClient = createWalletClient({
+   *     account: userAddress,
+   *     chain: mainnet,
+   *     transport: custom(provider),
+   *   });
+   *
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: true,
+   *   });
+   *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
+   *   // Keep this explicit nonce unique and unused for the owner. USDT falls back to Permit2.
+   *   const requirements = await prepared.getRequirements({
+   *     useSimplePermit: true,
+   *     permit2Nonce: 42n,
+   *   });
+   *
+   *   let signature: BundlesTokenRequirementSignature | undefined;
+   *   for (const requirement of requirements) {
+   *     if ("sign" in requirement) {
+   *       // Signable permit: folded into the deposit call instead of a separate transaction.
+   *       signature = await requirement.sign(walletClient, userAddress);
+   *     } else {
+   *       // Plain approval: it must land on-chain before the deposit is submitted.
+   *       const { hash } = await account.sendTransaction({
+   *         to: requirement.to,
+   *         value: requirement.value,
+   *         data: requirement.data,
+   *       });
+   *       await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
+   *     }
+   *   }
+   *
+   *   const result = await prepared.submit(signature);
+   *   // result satisfies SupplyResult
+   *   return result;
+   * }
    * ```
    */
   async prepareSupply(
     options: MorphoExclusiveSupplyOptions,
   ): Promise<PreparedMorphoSupply> {
     const depositAmounts = normalizeDepositAmounts(options);
+    // Snapshot the token before returning: the handle outlives this call, and rereading
+    // `options.token` at submission time would let a caller mutating its own options
+    // object check the balance of one token while the action deposits another.
+    const { token } = options;
     const action = await this._getSupplyAction(options, depositAmounts);
     return Object.freeze({
       getRequirements: async (requirementOptions?: RequirementOptions) =>
@@ -596,9 +657,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       ) => {
         this._assertWritable("preparedSupply.submit()");
         if (depositAmounts.amount != null) {
-          await this._assertTokenBalance(options.token, depositAmounts.amount);
-        } else {
-          this._assertAddress("token", options.token);
+          await this._assertTokenBalance(token, depositAmounts.amount);
         }
         return await this._sendTransaction(
           toWdkTransaction(

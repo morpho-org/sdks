@@ -16,7 +16,15 @@ import { getRequirementsApproval } from "../requirements/getRequirementsApproval
 export type BundlesTokenRequirementsState =
   | {
       readonly type: "approval";
+      /** Current allowance of the funding token for `spender`. */
       readonly allowance: bigint;
+      /**
+       * Allowance level the caller must reach, at least `amount`.
+       *
+       * Callers raise it above `amount` when the eventual pull can grow past the quoted amount
+       * between `getRequirements()` and submission — a saturated share repay accruing interest, for
+       * example. The allowance is therefore compared against this target, not against `amount`.
+       */
       readonly approvalAmount: bigint;
     }
   | {
@@ -81,6 +89,8 @@ export const resolveBundlesTokenRequirements = (params: {
       address: params.token,
       chainId: params.chainId,
       args: {
+        // The approval target, not `amount`, is the level the allowance must reach: a caller that
+        // raised it did so because the pull can grow past `amount` before submission.
         spender: params.spender,
         spendAmount: params.state.approvalAmount,
         approvalAmount: params.state.approvalAmount,

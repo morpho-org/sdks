@@ -44,8 +44,21 @@ export interface VaultV2DepositParams {
  * @param params - Vault, exclusive funding, deadline, fee, and optional token permit values.
  * @returns A deep-frozen VaultBundlesV1 deposit transaction.
  * @throws {MixedBundlesFundingError} when ERC-20/native funding is mixed or native funding carries a token permit.
+ * @throws {NegativeInputError} when the selected funding amount or `referralFeePct` is negative.
  * @throws {NonPositiveInputError} when funding, `maxSharePrice`, or `deadline` is not positive.
+ * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
  * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
+ *   {@link InputExceedsMaxError}, so either class catches it.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+ * @throws {UnexpectedRequirementSignatureError} when a Permit2 AllowanceTransfer signature is supplied.
+ * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from the gross funding amount.
+ * @throws {DepositSpenderMismatchError} when the signed spender is not VaultBundlesV1.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature deadline, nonce, or encoding is invalid.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
  * @example
  * ```ts
  * import { vaultV2Deposit } from "@morpho-org/morpho-sdk";
