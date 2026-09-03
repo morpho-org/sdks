@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {

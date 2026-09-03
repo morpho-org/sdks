@@ -59,7 +59,7 @@
     "undici": "^8.9.0",
     "viem": "2.55.10",
     "vite": "8.2.0",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
