@@ -7,9 +7,12 @@ import {
 } from "./error.js";
 
 /**
- * Serves as the discriminated-union base for every transaction action. Each
- * concrete action narrows {@link BaseAction} on its literal `type` tag and
- * carries an operation-specific `args` record surfaced for calldata tracing.
+ * Serves as the common discriminated action-metadata base shared by both
+ * {@link TransactionAction} (actions that carry encoded calldata) and
+ * {@link SignatureRequirementAction} (signature requirements whose metadata is
+ * exposed before any calldata exists). Each concrete action narrows
+ * {@link BaseAction} on its literal `type` tag and carries an
+ * operation-specific `args` record surfaced for tracing.
  *
  * @typeParam TType - Literal discriminator identifying the action.
  * @typeParam TArgs - The action's argument record.

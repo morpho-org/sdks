@@ -85,8 +85,9 @@ export const validateMidnightMarketChainId = (
  * the provided user address.
  *
  * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
- * backs the permit, Permit2, and Blue authorization signature flows) and by
- * `encodeVaultSharesPermit`, to enforce builder = signer: the signing flow is
+ * backs the permit, Permit2, Blue authorization, and Midnight offer-root
+ * signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
+ * signer: the signing flow is
  * the only path where an account/address mismatch is a real security concern
  * (rather than just an integrator footgun).
  *
@@ -104,11 +105,23 @@ export const validateMidnightMarketChainId = (
  *   `userAddress`.
  * @example
  * ```ts
+ * import { createWalletClient, custom } from "viem";
+ * import { mainnet } from "viem/chains";
  * import { validateUserAddress } from "@morpho-org/morpho-sdk";
+ *
+ * const [userAddress] = (await window.ethereum.request({
+ *   method: "eth_requestAccounts",
+ * })) as [`0x${string}`];
+ * const walletClient = createWalletClient({
+ *   account: userAddress,
+ *   chain: mainnet,
+ *   transport: custom(window.ethereum),
+ * });
  *
  * // Inside a `sign()` flow, before producing a typed-data signature:
  * validateUserAddress(walletClient.account?.address, userAddress);
- * // Throws if the wallet has no account or signs for a different address.
+ * // Passes when the connected account equals the expected signer;
+ * // throws if the wallet has no account or signs for a different address.
  * ```
  */
 export function validateUserAddress(
