@@ -312,7 +312,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
     });
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let resolvedRequirements: Promise<readonly ActionRequirement[]> | undefined;
     let expectedRequirement:
       | PermitAction
       | Permit2SignatureTransferAction
@@ -323,31 +323,47 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ) => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return resolvedRequirements;
-        const requirements =
-          funding.value > 0n
-            ? []
-            : await getBundlesTokenRequirements(this.client.viemClient, {
-                token: params.vaultData.asset,
-                spender,
-                amount: funding.assets,
-                owner: params.userAddress,
-                chainId: this.chainId,
-                deadline,
-                supportSignature: this.client.options.supportSignature,
-                supportDeployless: this.client.options.supportDeployless,
-                useSimplePermit: requirementOptions?.useSimplePermit,
-                permit2Nonce: requirementOptions?.permit2Nonce,
-              });
-        const signatureRequirement = requirements.find(isRequirementSignature);
-        if (
-          signatureRequirement?.action.type === "permit" ||
-          signatureRequirement?.action.type === "permit2SignatureTransfer"
-        ) {
-          expectedRequirement = signatureRequirement.action;
+        if (resolvedRequirements != null) return await resolvedRequirements;
+        // Memoize the in-flight promise, not just its result: concurrent callers
+        // requesting different routes would otherwise both resolve requirements and
+        // the slower one would overwrite `expectedRequirement`, making `buildTx()`
+        // reject the signature returned by the other call.
+        const pending = (async () => {
+          const requirements =
+            funding.value > 0n
+              ? []
+              : await getBundlesTokenRequirements(this.client.viemClient, {
+                  token: params.vaultData.asset,
+                  spender,
+                  amount: funding.assets,
+                  owner: params.userAddress,
+                  chainId: this.chainId,
+                  deadline,
+                  supportSignature: this.client.options.supportSignature,
+                  supportDeployless: this.client.options.supportDeployless,
+                  useSimplePermit: requirementOptions?.useSimplePermit,
+                  permit2Nonce: requirementOptions?.permit2Nonce,
+                });
+          const signatureRequirement = requirements.find(
+            isRequirementSignature,
+          );
+          if (
+            signatureRequirement?.action.type === "permit" ||
+            signatureRequirement?.action.type === "permit2SignatureTransfer"
+          ) {
+            expectedRequirement = signatureRequirement.action;
+          }
+          return requirements;
+        })();
+        resolvedRequirements = pending;
+        try {
+          return await pending;
+        } catch (error) {
+          // Drop the failed attempt so a caller can retry resolution.
+          if (resolvedRequirements === pending)
+            resolvedRequirements = undefined;
+          throw error;
         }
-        resolvedRequirements = requirements;
-        return resolvedRequirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const requirementSignature = selectBundlesTokenRequirementSignature(

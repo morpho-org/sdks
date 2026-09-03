@@ -264,6 +264,28 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
     });
 
+    test("behavior: prepared supply checks the balance of the token it was prepared with", async () => {
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+      } as { token: string; amount: bigint };
+
+      const prepared = await protocol.prepareSupply(options);
+
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
+
+      // A caller reusing its own options object must not retarget the balance check
+      // away from the asset the prepared action actually deposits.
+      options.token = COLLATERAL;
+
+      await prepared.submit();
+
+      expect(account.getTokenBalance).toHaveBeenCalledWith(TOKEN);
+    });
+
     test("should use vaultV2 when an explicit vault is configured", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
