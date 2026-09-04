@@ -489,17 +489,95 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     expect(result.calls[1]!.returnData).toBe("0x2222");
   });
 
-  it("nets assetChanges per account across all bundle steps", async () => {
+  it("behavior: cumulative bundle results are counted once", async () => {
+    const logs = [
+      { raw: { address: USDC, topics: ["0x1111" as Hex], data: "0x" } },
+      { raw: { address: USDC, topics: ["0x2222" as Hex], data: "0x" } },
+    ];
+    const assetChanges = [
+      assetChange({
+        token: VAULT,
+        from: zeroAddress,
+        to: USER,
+        rawAmount: "0x3e8",
+        symbol: "VAULT",
+        decimals: 18,
+      }),
+      assetChange({
+        token: USDC,
+        from: USER,
+        to: VAULT,
+        rawAmount: "0x1f4",
+      }),
+    ];
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope([
+          successResult({ logs, assetChanges, gasUsed: "0x2af8" }),
+          successResult({ logs, assetChanges, gasUsed: "0x55f0" }),
+        ]),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1, TX2],
+    });
+
+    expect(result.assetChanges).toEqual([
+      {
+        account: zeroAddress,
+        changes: [
+          {
+            token: VAULT,
+            symbol: "VAULT",
+            decimals: 18,
+            diff: -1000n,
+          },
+        ],
+      },
+      {
+        account: USER,
+        changes: [
+          {
+            token: VAULT,
+            symbol: "VAULT",
+            decimals: 18,
+            diff: 1000n,
+          },
+          { token: USDC, symbol: "USDC", decimals: 6, diff: -500n },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 500n }],
+      },
+    ]);
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[0]!.logs).toEqual([]);
+    expect(result.calls[1]!.logs).toHaveLength(logs.length);
+    expect(result.calls[0]!.gasUsed).toBe(0x2af8n);
+    expect(result.calls[1]!.gasUsed).toBe(0x55f0n);
+  });
+
+  it("behavior: distinct per-tx results are still aggregated", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>
         envelope([
           successResult({
+            logs: [
+              { raw: { address: USDC, topics: ["0x1111" as Hex], data: "0x" } },
+            ],
             assetChanges: [
               assetChange({ token: USDC, to: USER, rawAmount: "0x3" }),
             ],
           }),
           successResult({
+            logs: [
+              { raw: { address: USDC, topics: ["0x2222" as Hex], data: "0x" } },
+            ],
             assetChanges: [
               assetChange({ token: USDC, from: USER, rawAmount: "0x1" }),
               assetChange({ token: USDC, to: VAULT, rawAmount: "0x9" }),
@@ -524,6 +602,26 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
         changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 9n }],
       },
     ]);
+  });
+
+  it("behavior: two empty results are not treated as cumulative", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope([
+          successResult({ logs: [], assetChanges: [] }),
+          successResult({ logs: [], assetChanges: [] }),
+        ]),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1, TX2],
+    });
+
+    expect(result.assetChanges).toEqual([]);
+    expect(result.calls).toHaveLength(2);
   });
 
   it("throws SimulationRevertedError when a bundle step has status=false", async () => {
