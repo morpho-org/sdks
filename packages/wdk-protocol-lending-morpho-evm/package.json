@@ -62,9 +62,9 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "access": "public",
