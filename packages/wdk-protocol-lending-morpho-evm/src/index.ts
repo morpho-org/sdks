@@ -38,7 +38,9 @@ export type {
   MorphoProtocolOptions,
   MorphoRepayOptions,
   MorphoWithdrawCollateralOptions,
+  MorphoWithdrawOptions,
   PreparedMorphoSupply,
+  PreparedMorphoWithdraw,
   Presets,
   RequirementApproval,
   RequirementAuthorization,
@@ -50,4 +52,5 @@ export {
   default,
   default as MorphoProtocolEvm,
   MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
 } from "./morpho-protocol-evm.js";

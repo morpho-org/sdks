@@ -41,9 +41,13 @@ export interface VaultV2WithdrawAction
   extends BaseAction<
     "vaultV2Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -113,9 +117,13 @@ export interface VaultV1WithdrawAction
   extends BaseAction<
     "vaultV1Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 

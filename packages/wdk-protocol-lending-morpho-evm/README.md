@@ -96,7 +96,8 @@ Vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collateral methods
 | `supply(options, config?)` | Deposit assets into the configured vault |
 | `prepareSupply(options)` | Prepare one vault deposit handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteSupply(options, config?)` | Quote vault deposit |
-| `withdraw(options, config?)` | Withdraw assets from the configured vault |
+| `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
+| `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
@@ -136,7 +137,7 @@ Borrow presets target Ethereum mainnet USDT loan markets:
 
 ## Morpho SDK Requirements
 
-Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
+Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits and withdrawals, through the `prepareSupply` and `prepareWithdraw` handles' own `getRequirements` — rather than reimplementing allowance or authorization logic.
 
 When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupplyCollateralRequirements` selects Permit2 SignatureTransfer, pass an unused explicit `permit2Nonce` in the optional `RequirementOptions` argument. The adapter forwards that nonce to the Morpho SDK; it does not choose one implicitly.
 
@@ -146,7 +147,8 @@ Requirement entries are one of:
 
 - Approval transaction: send the returned transaction before the final action.
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
-- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Vault deposits take theirs on the prepared handle's own `submit(requirementSignature)` or `quote(requirementSignature)`, never on `supply` options.
+- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Vault deposits and withdrawals take theirs on the prepared handle's own `submit(requirementSignature)` or `quote(requirementSignature)`, never on `supply` or `withdraw` options.
+- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
