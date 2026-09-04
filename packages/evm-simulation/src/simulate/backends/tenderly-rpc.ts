@@ -164,9 +164,15 @@ export async function simulateTenderlyRpc(params: {
       signal,
     });
     const results = unwrapResult(bundleEnvelope.parse(json));
+    const cumulative = isCumulativeBundle(results);
+    const lastResult = results[results.length - 1]!;
     return {
-      calls: results.map(toRawCall),
-      assetChanges: toAssetChanges(results),
+      calls: results.map((result, index) => {
+        const call = toRawCall(result);
+        if (cumulative && index < results.length - 1) call.logs = [];
+        return call;
+      }),
+      assetChanges: toAssetChanges(cumulative ? [lastResult] : results),
     };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
@@ -176,6 +182,25 @@ export async function simulateTenderlyRpc(params: {
       { cause: error },
     );
   }
+}
+
+/**
+ * Tenderly documents per-tx results, but the gateway has been observed returning
+ * bundle-cumulative logs and asset changes on every entry. Identical non-empty
+ * arrays across distinct txs are treated as that mode and attributed to the
+ * final tx, so `transfers[k].txIdx` points there.
+ */
+function isCumulativeBundle(results: SimResult[]): boolean {
+  if (results.length <= 1) return false;
+  const last = results[results.length - 1]!;
+  const logs = JSON.stringify(last.logs ?? []);
+  const assetChanges = JSON.stringify(last.assetChanges ?? []);
+  if (logs === "[]" && assetChanges === "[]") return false;
+  return results.every(
+    (result) =>
+      JSON.stringify(result.logs ?? []) === logs &&
+      JSON.stringify(result.assetChanges ?? []) === assetChanges,
+  );
 }
 
 async function rpcRequest(params: {
