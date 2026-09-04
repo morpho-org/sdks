@@ -9,12 +9,26 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+
+# One automatic review per PR at a time; a new push supersedes the in-flight review.
+# @claude-triggered events get their own group so they are never queued/cancelled against each other.
+concurrency:
+  group: claude-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   claude:
     # Humans must have write access; bots fall through to the action's allowed_bots check.
+    # pull_request events auto-review every non-draft same-repo PR (fork and Dependabot PRs have no secrets; use @claude).
     if: |
       (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.login != 'dependabot[bot]'
+      ) || (
         github.event.sender.type == 'Bot' ||
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association || github.event.issue.author_association)
       ) && (
@@ -47,6 +61,26 @@ jobs:
       - name: Snapshot trusted review instructions
         run: cp -R .agents "$RUNNER_TEMP/trusted-agents"
 
+      # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
+      # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
+      - name: Install sandbox dependencies
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # Fail fast: a non-functional sandbox would otherwise surface only as per-tool errors inside Claude.
+      - name: Verify sandbox works
+        run: bwrap --ro-bind / / --dev /dev --proc /proc true || { echo "::error::bwrap cannot create sandboxes on this runner"; exit 1; }
+
+      # Codex reviews automatically on open / ready-for-review; re-request it on every push.
+      - name: Request Codex re-review
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@codex review' || echo "::warning::Failed to request Codex re-review for PR #$PR_NUMBER"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1
@@ -58,6 +92,9 @@ jobs:
           # Explicit job token instead of the Claude GitHub App token: it is bounded by the `permissions:`
           # block above, expires with the job, and needs no `id-token: write`.
           github_token: ${{ github.token }}
+          # pull_request events run in agent mode with a fixed prompt; other events stay in @claude tag mode.
+          prompt: ${{ github.event_name == 'pull_request' && format('Review pull request number {0} in {1} by following the trusted pr-review-ci instructions.', github.event.pull_request.number, github.repository) || '' }}
+          track_progress: ${{ github.event_name == 'pull_request' }}
           allowed_bots: 'morpho-apps-git-bot,prime-monorepo-git-bot,devin-ai-integration,prd-carapulse,cursor'
           claude_args: |
             --model fable
