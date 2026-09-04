@@ -5,6 +5,7 @@ import {
   ExcessiveSlippageToleranceError,
   NonPositiveInputError,
   ShareDivideByZeroError,
+  VaultV2ForceWithdrawZeroSharePriceError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
 import {
@@ -421,6 +422,30 @@ describe("computeMinForceWithdrawSharePrice", () => {
         slippageTolerance: slippage03,
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  // Security invariant (root AGENTS.md §5): the contract reads `minSharePriceE27 == 0` as "no
+  // bound", so a floor that rounds down to zero must fail loudly rather than ship an unbounded exit.
+  test("error: VaultV2ForceWithdrawZeroSharePriceError when the floor rounds down to zero", () => {
+    // One wei withdrawn against a burn larger than RAY cannot price above zero at 1e27 scale.
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1n,
+        sharesBurnt: MathLib.RAY,
+        slippageTolerance: slippage03,
+      }),
+    ).toThrow(VaultV2ForceWithdrawZeroSharePriceError);
+  });
+
+  test("behavior: the smallest non-zero floor is returned rather than rejected", () => {
+    // Same shape as above, one wei less burn: the ratio now survives rounding.
+    expect(
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1n,
+        sharesBurnt: MathLib.wToRay(MathLib.WAD - slippage03),
+        slippageTolerance: slippage03,
+      }),
+    ).toBe(1n);
   });
 
   test("error: ExcessiveSlippageToleranceError when slippage reaches WAD", () => {

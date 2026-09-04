@@ -30,7 +30,10 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
-import { validateReferralFee } from "../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateReferralFee,
+} from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -178,6 +181,7 @@ export interface VaultV2Actions {
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
    *   penalty-adjusted amount rounds to zero deallocated assets.
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have one adapter.
@@ -282,6 +286,8 @@ export interface VaultV2Actions {
    * @throws {NonPositiveInputError} when `exitAssets` or a supplied `minSharePriceE27` is not
    *   positive.
    * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`, or when `referralFeePct` is
+   *   not below WAD.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
@@ -295,7 +301,8 @@ export interface VaultV2Actions {
    * @throws {VaultV2ForceWithdrawZeroWithdrawalError} when the exit would withdraw nothing.
    * @throws {VaultV2ForceWithdrawCoverageError} when the adapter's markets cannot cover the exit,
    *   which would overrun the contract's unbounded loop.
-   * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD.
+   * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
+   *   to zero, which the contract would read as no bound at all.
    * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -576,6 +583,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    // Reject the same bounds the action enforces, before `getRequirements()` can walk the caller
+    // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
+    validateDeadline(deadline);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
     if (vaultData.accrualAdapters.length !== 1) {
       throw new VaultV2SingleAdapterRequiredError(
@@ -813,6 +823,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    // Reject the same bounds the action enforces, before `getRequirements()` can walk the caller
+    // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
+    validateDeadline(deadline);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
 
     const eligibility = resolveVaultV2ForceWithdrawEligibility(

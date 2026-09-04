@@ -3,6 +3,7 @@ import {
   ExcessiveSlippageToleranceError,
   NonPositiveInputError,
   ShareDivideByZeroError,
+  VaultV2ForceWithdrawZeroSharePriceError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
 
@@ -170,6 +171,8 @@ export function computeMaxSupplySharePrice(params: {
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance >= WAD`.
  * @throws {NonPositiveInputError} when `sharesBurnt` or `withdrawnAssets` is not positive, which
  *   would silently nullify the on-chain bound.
+ * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the ratio itself rounds down to zero, which
+ *   would nullify the bound just as a non-positive input would.
  * @example
  * ```ts
  * import { computeMinForceWithdrawSharePrice } from "@morpho-org/morpho-sdk";
@@ -199,11 +202,23 @@ export function computeMinForceWithdrawSharePrice(params: {
     throw new NonPositiveInputError("sharesBurnt", sharesBurnt);
   }
 
-  return MathLib.mulDivDown(
+  const minSharePriceE27 = MathLib.mulDivDown(
     withdrawnAssets,
     MathLib.wToRay(MathLib.WAD - slippageTolerance),
     sharesBurnt,
   );
+  // Positive inputs are not enough: the ratio itself can round down to zero once the burn exceeds
+  // what the withdrawn assets can price at RAY scale, which would reintroduce the very opt-out the
+  // guards above exist to prevent.
+  if (minSharePriceE27 === 0n) {
+    throw new VaultV2ForceWithdrawZeroSharePriceError({
+      withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance,
+    });
+  }
+
+  return minSharePriceE27;
 }
 
 /**

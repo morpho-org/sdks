@@ -2,7 +2,7 @@ import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
-import { erc20Abi, zeroAddress } from "viem";
+import { erc20Abi, maxUint256, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -495,6 +495,22 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           }),
         ),
       ).toThrow(ExpiredDeadlineError);
+    });
+
+    // The action rejects an out-of-`uint256` deadline, so the handle must too — otherwise
+    // `getRequirements()` walks the caller through an approval or permit that `buildTx()` cannot
+    // encode.
+    test("error: InputExceedsMaxError for a deadline above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          deadline: maxUint256 + 1n,
+        }),
+      ).toThrow(InputExceedsMaxError);
     });
 
     test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {

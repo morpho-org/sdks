@@ -433,6 +433,56 @@ export class VaultV2ForceWithdrawZeroWithdrawalError extends Error {
   }
 }
 
+/**
+ * Thrown when a Vault V2 force withdrawal's derived share-price floor rounds down to zero.
+ *
+ * VaultExitBundlesV1 reads `minSharePriceE27 == 0` as "no bound at all", so emitting a rounded-down
+ * zero would silently ship an exit with none of the slippage protection this path exists to add.
+ * Reaching it means the exit burns more shares than `withdrawnAssets` can price at RAY scale — a
+ * vault whose share price has collapsed below `1e-27` assets per share, or a dust exit against one.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawZeroSharePriceError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets, vaultData, userAddress });
+ * } catch (error) {
+ *   if (error instanceof VaultV2ForceWithdrawZeroSharePriceError) {
+ *     console.error(error.withdrawnAssets, error.sharesBurnt);
+ *   }
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
+  /** Assets the exit withdraws in total, before the referral fee. */
+  public readonly withdrawnAssets: bigint;
+  /** Upper bound of the vault shares the exit burns. */
+  public readonly sharesBurnt: bigint;
+  /** WAD-scaled slippage tolerance applied to the floor. */
+  public readonly slippageTolerance: bigint;
+
+  /**
+   * @param params - Values whose ratio rounded down to a zero share-price floor.
+   * @param params.withdrawnAssets - Assets the exit withdraws in total, before the referral fee.
+   * @param params.sharesBurnt - Upper bound of the vault shares the exit burns.
+   * @param params.slippageTolerance - WAD-scaled slippage tolerance applied to the floor.
+   */
+  public constructor(params: {
+    readonly withdrawnAssets: bigint;
+    readonly sharesBurnt: bigint;
+    readonly slippageTolerance: bigint;
+  }) {
+    super(
+      `Force-withdraw share-price floor rounds to zero: withdrawnAssets "${params.withdrawnAssets}" over sharesBurnt "${params.sharesBurnt}" at slippageTolerance "${params.slippageTolerance}". The contract reads a zero floor as no bound at all, so this exit cannot be built safely — increase exitAssets or use another exit path.`,
+    );
+    this.withdrawnAssets = params.withdrawnAssets;
+    this.sharesBurnt = params.sharesBurnt;
+    this.slippageTolerance = params.slippageTolerance;
+    this.name = "VaultV2ForceWithdrawZeroSharePriceError";
+  }
+}
+
 /** Thrown when a Vault V2 in-kind redemption rounds to no deallocated assets. */
 export class InKindRedeemZeroDeallocationError extends Error {
   /**
