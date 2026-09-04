@@ -19,8 +19,12 @@ without the answer.
 
 **TIB = what + why. Code and Linear tickets = how.**
 
-A TIB is not an implementation manual. Once accepted it is **never changed**, so anything a routine
-refactor could make false must stay out of it. That split also dictates where each artifact lives:
+A TIB is not an implementation manual. Once accepted its **decision content is frozen** — the
+decision, interface, behavior, invariants, and rationale are never rewritten — so anything a routine
+refactor could make false must stay out of it. The TIB stays frozen **except** for two sanctioned,
+non-substantive edits: relationship metadata (`Supersedes` / `Superseded by`) when a later TIB
+replaces it, and dated operational **addenda** that clarify how the decision is applied without
+changing it. That split also dictates where each artifact lives:
 
 - The **TIB lives in the repo** — frozen, zero maintenance, the decision record sits next to the
   code.
@@ -89,11 +93,17 @@ AUTHOR="@$(gh api user --jq .login 2>/dev/null)" || AUTHOR=$(git config user.nam
 ```
 
 - **TITLE** — from `$ARGUMENTS`, verbatim in the H1.
-- **DATE** — today, `YYYY-MM-DD`. The TIB identifier is CalVer on the date it was **first drafted**;
-  later edits never re-date it.
+- **DATE** — today, `YYYY-MM-DD`, the date the TIB is **created**. This is the TIB's only date: it
+  feeds the identifier, filename, and H1, and later edits never re-date it. There is no separate
+  acceptance or merge date — even when documenting a past decision, use today's creation date.
 - **AUTHOR** — GitHub `@handle` when available, else `git config user.name`.
 - **SLUG** — kebab-case from the title (lowercase, alphanumerics + hyphens, ≤ 60 chars).
 - **PATH** — `docs/tibs/TIB-<DATE>-<SLUG>.md`.
+- **ID** — `TIB-<DATE>-<SLUG>`, the filename stem. This is the TIB's **canonical, unique
+  identifier**: cite it this way from other TIBs and fill `Supersedes` / `Superseded by` with the
+  full slugged ID, never the date alone — two TIBs drafted the same day share a `<DATE>` and would
+  otherwise collide. The H1 stays `TIB-<DATE>: <TITLE>` for readability; the slug in the ID is what
+  disambiguates.
 - **SCOPE** — the packages and target versions the decision binds (e.g. `morpho-sdk 6.0.0, WDK
   2.0.0`). If you cannot derive it from the repo, this is a legitimate Step 3 question.
 
@@ -200,8 +210,12 @@ Write `PATH` from the `## Canonical template` below.
 
 - **Drop every optional section you have no content for.** Delete the heading — never leave an empty
   placeholder, a `TBD`, or an `N/A`.
-- **Context: 5–15 lines.** Explain the force, not the solution. If the decision is being recorded
-  retroactively, use the date it was originally accepted and say so here.
+- **`Public Interface`, `Behavior`, and `Invariants` are mandatory for any decision that touches a
+  public API, an observable runtime behavior, or a runtime invariant** — i.e. nearly every SDK TIB;
+  do not skip them there. Drop them (heading and all, like an optional section) **only** for a pure
+  process, tooling, or documentation decision that has none of those surfaces. Never keep them as
+  empty or `N/A` headings.
+- **Context: 5–15 lines.** Explain the force, not the solution.
 - **Decision states the rule, not the mechanics.** A reader must be able to recite it in three
   sentences without knowing a single internal type.
 - **Behavior is a list of observable "if X then Y" rules.** Only the edge cases that change the
@@ -228,8 +242,10 @@ Run this against the draft and fix what fails:
       honors the decision? For extra confidence, hand the draft to a subagent with repo access, ask
       it to state the decision back and name what it cannot determine. Anything it cannot determine
       that is *not* an internal mechanic is a gap: fill it, or take it back to Step 3.
-- [ ] Every invariant is covered by an Acceptance Criteria line that must fail if the invariant is
-      removed (`AGENTS.md` §5 — security invariants are tests).
+- [ ] Every invariant **that can be expressed as a test** — at minimum the security invariants of
+      `AGENTS.md` §5 (security invariants are tests) — is covered by an Acceptance Criteria line that
+      must fail if the invariant is removed. Non-testable invariants (release ordering, external
+      assumptions) are stated but need no such test.
 - [ ] Non-goals actually preempt the plausible-but-wrong PRs surfaced in Step 2.
 - [ ] Nothing in the draft would read as false after a routine refactor.
 - [ ] No empty section, no placeholder heading, no `TBD` outside `Open Questions`.
@@ -254,6 +270,9 @@ Run this against the draft and fix what fails:
 
 Sections in this order. Optional sections (Current Solution, Rejected alternatives, Breaking Changes
 & Migration, Consequences, Open Questions, References, Addenda) appear only when they carry content.
+`Public Interface`, `Behavior`, and `Invariants` are mandatory whenever the decision touches a public
+API, observable runtime behavior, or a runtime invariant, and may be dropped only for a pure process,
+tooling, or documentation decision that has none of those surfaces.
 
 ```markdown
 # TIB-<DATE>: <TITLE>
@@ -263,8 +282,8 @@ Sections in this order. Optional sections (Current Solution, Rejected alternativ
 | **Date**          | <DATE>                                       |
 | **Author**        | <AUTHOR>                                     |
 | **Scope**         | <packages and target versions>               |
-| **Supersedes**    | TIB-YYYY-MM-DD _(remove if not applicable)_  |
-| **Superseded by** | TIB-YYYY-MM-DD _(remove if not applicable)_  |
+| **Supersedes**    | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
+| **Superseded by** | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 
 ## Context
 
@@ -292,20 +311,24 @@ The chosen behavior, stated concretely. The load-bearing section: the rule, not 
 
 ## Public Interface
 
-The signatures that change — new and changed functions and types, input & output shapes,
+_Required when the decision touches a public API; omit only for a pure process / tooling / doc
+decision._ The signatures that change — new and changed functions and types, input & output shapes,
 deprecations. Signatures and semantics only, never internal mechanics.
 
 ## Behavior
 
-The observable rules — the "if X then Y" list: rounding direction, refund handling, what a zero or
-max input means, which authorizations are required.
+_Required when the decision has observable runtime behavior; omit only for a pure process / tooling /
+doc decision._ The observable rules — the "if X then Y" list: rounding direction, refund handling,
+what a zero or max input means, which authorizations are required.
 
 - If X, then Y.
 
 ## Invariants
 
-The properties that must hold no matter how the code is written — security, rounding, atomicity,
-ordering, protocol limits, backward-compatibility — plus the assumptions the decision depends on.
+_Required when the decision has a runtime invariant; omit only for a pure process / tooling / doc
+decision._ The properties that must hold no matter how the code is written — security, rounding,
+atomicity, ordering, protocol limits, backward-compatibility — plus the assumptions the decision
+depends on.
 
 - Invariant, phrased so it survives any refactor.
 
