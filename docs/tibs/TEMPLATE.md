@@ -11,10 +11,12 @@ on both); an operational clarification gets a dated addendum.
 Sections appear in the order below. Optional sections (Current Solution, Rejected
 alternatives, Breaking Changes & Migration, Consequences, Open Questions, References,
 Addenda) appear only when they carry content — delete the heading otherwise. Public
-Interface, Behavior, and Invariants are mandatory whenever the decision touches a public
-API, observable runtime behavior, or a runtime invariant, and may be dropped only for a pure
-process, tooling, or documentation decision. Never leave an empty placeholder, a `TBD`, or
-an `N/A`.
+Interface, Behavior, and Invariants are each gated on their own surface: keep Public
+Interface only when the decision changes a public API, Behavior only when it has observable
+runtime behavior, and Invariants only when it has a runtime invariant. Each is mandatory
+when its surface applies and dropped when it does not, so a decision may keep one and drop
+another; a pure process, tooling, or documentation decision drops all three. Never leave an
+empty placeholder, a `TBD`, or an `N/A`.
 -->
 
 # TIB-<DATE>: <TITLE>
@@ -53,22 +55,22 @@ The chosen behavior, stated concretely. The load-bearing section: the rule, not 
 
 ## Public Interface
 
-_Required when the decision touches a public API; omit only for a pure process / tooling / doc
-decision._ The signatures that change — new and changed functions and types, input & output shapes,
+_Required when the decision changes a public API; drop the section when it does not._ The signatures
+that change — new and changed functions and types, input & output shapes,
 deprecations. Signatures and semantics only, never internal mechanics.
 
 ## Behavior
 
-_Required when the decision has observable runtime behavior; omit only for a pure process / tooling /
-doc decision._ The observable rules — the "if X then Y" list: rounding direction, refund handling,
+_Required when the decision has observable runtime behavior; drop the section when it does not._ The
+observable rules — the "if X then Y" list: rounding direction, refund handling,
 what a zero or max input means, which authorizations are required.
 
 - If X, then Y.
 
 ## Invariants
 
-_Required when the decision has a runtime invariant; omit only for a pure process / tooling / doc
-decision._ The properties that must hold no matter how the code is written — security, rounding,
+_Required when the decision has a runtime invariant; drop the section when it does not._ The
+properties that must hold no matter how the code is written — security, rounding,
 atomicity, ordering, protocol limits, backward-compatibility — plus the assumptions the decision
 depends on.
 
