@@ -286,7 +286,8 @@ sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)
 nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
                               sharesBurnt(nowVaultData))              // now-accrued burn
-allowance        = mulDivUp(exitAssets, RAY, minSharePriceE27)        // largest burn the price check accepts
+allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27),   // largest burn the price check accepts
+                       maxUint256)                                     // ...saturated to the ABI slot
 ```
 
 `withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, so a
@@ -304,7 +305,11 @@ realized price stays at or above `minSharePriceE27`, so it can burn at most
 `mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn ≤ exitAssets` and
 `withdrawn / burnt ≥ minSharePriceE27`. This one expression is a mechanics-independent ceiling: it
 dominates the burn at every accrual endpoint *and* covers the within-tolerance price drop the floor
-deliberately permits. Sizing the allowance to the snapshot plan alone would instead revert on
+deliberately permits. It is saturated at `maxUint256`, because a very small accepted floor scales it
+past the ABI slot: the approval encoder clamps what it emits, so an uncapped requirement would sit
+permanently above any grantable allowance and `getRequirements()` would keep re-emitting the same
+approval. Saturating loses nothing real — `totalSharesBurnt ≤ totalSupply ≤ maxUint256`, so the clamp
+still dominates every burn that can physically occur. Sizing the allowance to the snapshot plan alone would instead revert on
 allowance for exactly that permitted drop — clearest on a no-fee vault, where the accrual endpoints
 collapse to the snapshot burn — silently nullifying the advertised `slippageTolerance`.
 
@@ -470,7 +475,9 @@ the in-kind TIB, so no downstream peer-range audit is required.
 - **The allowance is bounded** to the largest burn the on-chain price check can accept —
   `mulDivUp(exitAssets, RAY, minSharePriceE27)` — rather than granting an unlimited approval to the
   periphery. Deriving it from the floor (not the snapshot plan) keeps a within-tolerance price drop
-  from reverting on allowance and nullifying the slippage guard.
+  from reverting on allowance and nullifying the slippage guard. The one regime where it does reach
+  `maxUint256` is the deliberate saturation above, which only triggers for a floor so small that no
+  smaller allowance could satisfy the exit anyway.
 - **The coverage check removes the only opaque revert** in the flow. The fork suite asserts the
   SDK-side direction — `maxExitAssets + 1` is rejected before submission with
   `VaultV2ForceWithdrawCoverageError`. The matching on-chain `0x32` panic is *not* asserted, because
