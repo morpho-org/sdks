@@ -14,6 +14,7 @@ import {
 } from "../../errors.js";
 import { makeTransferLog } from "../../test-helpers/index.js";
 import type { SimulationTransaction } from "../../types.js";
+import { DEFAULT_SIMULATION_GAS_PRICE } from "../fee-context.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
 type MockSimulateCalls = (args: SimulateCallsParameters) => Promise<unknown>;
@@ -175,6 +176,56 @@ describe.sequential("simulateV1", () => {
     expect(callArgs.stateOverrides).toEqual([
       { address: USER, balance: maxUint256 / 2n },
     ]);
+  });
+
+  it("serializes a non-zero default gas price when the caller sets none (Cantina 1631)", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    const call = mockSimulateCalls.mock.calls[0]![0].calls[0] as {
+      gasPrice?: bigint;
+      maxFeePerGas?: bigint;
+    };
+    expect(call.gasPrice).toBe(DEFAULT_SIMULATION_GAS_PRICE);
+    expect(call.maxFeePerGas).toBeUndefined();
+  });
+
+  it("forwards a caller-provided EIP-1559 fee and omits the default", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [
+        {
+          ...BASIC_TX,
+          maxFeePerGas: 5_000000000n,
+          maxPriorityFeePerGas: 1_000000000n,
+        },
+      ],
+    });
+
+    const call = mockSimulateCalls.mock.calls[0]![0].calls[0] as {
+      gasPrice?: bigint;
+      maxFeePerGas?: bigint;
+      maxPriorityFeePerGas?: bigint;
+    };
+    expect(call.gasPrice).toBeUndefined();
+    expect(call.maxFeePerGas).toBe(5_000000000n);
+    expect(call.maxPriorityFeePerGas).toBe(1_000000000n);
   });
 
   it("passes blockNumber as bigint when provided", async () => {

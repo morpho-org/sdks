@@ -18,6 +18,7 @@ import type {
   Transfer,
 } from "../../types.js";
 import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import { resolveFeeContext } from "../fee-context.js";
 import { parseTransfers } from "../parsing/index.js";
 
 /**
@@ -69,10 +70,16 @@ export async function simulateV1(params: {
     );
   }
 
+  // Serialize a fee context (default `DEFAULT_SIMULATION_GAS_PRICE` when the
+  // caller sets none) so the `GASPRICE` opcode is realistic. A zero gas price
+  // never occurs on-chain and would hide a fee-sensitive revert (Cantina 1631).
+  // viem's `Call` type omits fee fields, but `simulateBlocks` forwards them
+  // verbatim through `formatTransactionRequest`.
   const calls = transactions.map((tx) => ({
     to: tx.to,
     data: tx.data,
     value: tx.value,
+    ...resolveFeeContext(tx),
   }));
 
   const blockParam =
