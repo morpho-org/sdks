@@ -1,6 +1,6 @@
 import type {
   AuthorizationRequirementSignature,
-  BlueBundlesV1TokenRequirementSignature,
+  BundlesTokenRequirementSignature,
   PermitRequirementSignature,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
@@ -737,7 +737,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       const requirementSignature = {
         args: { deadline: SIGNATURE_DEADLINE },
         action: { type: "permit2TransferFrom" },
-      } as unknown as BlueBundlesV1TokenRequirementSignature;
+      } as unknown as BundlesTokenRequirementSignature;
 
       await protocol.repay({
         token: TOKEN,
