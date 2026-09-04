@@ -319,13 +319,13 @@ importers:
   packages/wdk-protocol-lending-morpho-evm:
     dependencies:
       '@morpho-org/blue-sdk':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../blue-sdk
       '@morpho-org/blue-sdk-viem':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../blue-sdk-viem
       '@morpho-org/morpho-sdk':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../morpho-sdk
       '@tetherto/wdk-wallet':
         specifier: 1.0.0-beta.15
