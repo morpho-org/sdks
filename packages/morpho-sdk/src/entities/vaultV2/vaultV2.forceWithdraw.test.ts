@@ -513,6 +513,21 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(InputExceedsMaxError);
     });
 
+    // Same eager-rejection reason as the deadline: the action bounds the override, so the handle
+    // must too, or `getRequirements()` asks for an approval against an unencodable floor.
+    test("error: InputExceedsMaxError for a minSharePriceE27 override above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: maxUint256 + 1n,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
     test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {
       const handle = createMockClient(mainnet);
 

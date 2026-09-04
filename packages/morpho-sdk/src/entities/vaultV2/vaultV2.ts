@@ -33,6 +33,7 @@ import {
 import {
   validateDeadline,
   validateReferralFee,
+  validateUint256Field,
 } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -812,13 +813,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // Called for its throws only: the raw pair is forwarded to the action, which normalizes it
     // again on the encode path so a direct action caller gets the same guarantees.
     validateReferralFee({ referralFeePct, referralFeeRecipient });
-    // An unbounded override reopens the exact hole this path closes: the contract reads
-    // `minSharePriceE27 == 0` as "no bound".
-    if (minSharePriceE27Override != null && minSharePriceE27Override <= 0n) {
-      throw new NonPositiveInputError(
-        "minSharePriceE27",
-        minSharePriceE27Override,
-      );
+    if (minSharePriceE27Override != null) {
+      // An unbounded override reopens the exact hole this path closes: the contract reads
+      // `minSharePriceE27 == 0` as "no bound".
+      if (minSharePriceE27Override <= 0n) {
+        throw new NonPositiveInputError(
+          "minSharePriceE27",
+          minSharePriceE27Override,
+        );
+      }
+      // And an override the uint256 slot cannot hold must fail here rather than after
+      // `getRequirements()` has already asked for an approval or a permit signature.
+      validateUint256Field("minSharePriceE27", minSharePriceE27Override);
     }
 
     const now = Time.timestamp();

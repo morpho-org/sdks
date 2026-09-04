@@ -58,7 +58,13 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   penalty, referral fee, net payout, and `maxExitAssets`, with no RPC.
 - `resolveVaultV2ForceWithdrawEligibility`, `computeVaultV2ForceWithdrawPlan`,
   `computeVaultV2ForceWithdrawSharesBurnt`, and `computeMinForceWithdrawSharePrice` expose the pure
-  planning core.
+  planning core. The share-burn bound charges one share per *additional* withdrawal leg that moves a
+  positive amount, rather than one per call: a zero-amount leg burns `toShares(0, "Up") == 0` and
+  rounds nothing, and since this value is the slippage denominator, counting it would widen the price
+  drop the bound accepts — worst on a dust exit, where phantom shares dominate the real burn. For the
+  same reason `penaltyAssets` carries no per-leg rounding slack at a zero penalty, where every chunk
+  charges exactly nothing. `maxExitAssets` reports `0` for a snapshot with no exitable capacity
+  instead of rounding up to `1`, which is not actually exitable.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
   adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
   `VaultV2ForceWithdrawZeroSharePriceError`, `VaultV2UnsupportedLiquidityAdapterError`, and

@@ -306,6 +306,23 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
     ).toBe(coveredAssets);
   });
 
+  // `maxExitAssets` is what the entity's coverage error tells a caller to reduce to, so it has to be
+  // an amount the exit actually accepts. Without the zero-capacity special case the inversion rounds
+  // up to `1n` at a positive penalty, and `1n` withdraws nothing — sending the caller from a
+  // coverage error straight into a zero-withdrawal error.
+  test("behavior: maxExitAssets is zero when the snapshot has no exitable capacity", () => {
+    // No idle and a fully borrowed market: nothing is withdrawable and nothing is deallocatable.
+    const vaultData = vaultV2ExitData({
+      assetBalance: 0n,
+      marketTotalBorrowAssets: 1_000n,
+      penalty: TWO_PERCENT,
+    });
+    const plan = planFor({ vaultData, exitAssets: 1n });
+
+    expect(plan.coveredAssets).toBe(0n);
+    expect(plan.maxExitAssets).toBe(0n);
+  });
+
   test("behavior: dust exitAssets round to no withdrawal under a penalty", () => {
     const plan = planFor({
       vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
@@ -377,14 +394,66 @@ describe("computeVaultV2ForceWithdrawSharesBurnt", () => {
       vaultData.lastUpdate,
     );
 
-    // Share price is 1 in the fixture: 50 withdrawn plus 1 penalty, plus 3 legs of dust.
+    // Share price is 1 in the fixture: 50 deallocated plus 1 penalty asset. Two legs move a
+    // positive amount (the penalty burn and the deallocated leg), and converting the aggregate
+    // already spent one ceiling, so exactly one extra share of slack is owed.
+    expect(plan).toMatchObject({ assetsToWithdraw: 0n, penaltyLegs: 1 });
     expect(
       computeVaultV2ForceWithdrawSharesBurnt({
         vaultData,
         deadlineVaultData,
         plan,
       }),
-    ).toBe(51n + 3n);
+    ).toBe(51n + 1n);
+  });
+
+  // The bound is the slippage denominator, so slack for a leg that moves nothing widens the price
+  // drop the exit accepts. Worst on a dust exit, where phantom shares dominate the real burn.
+  test("behavior: adds no slack when only one leg moves a positive amount", () => {
+    // Idle covers the whole exit: no deallocation, no penalty burn, one positive withdrawal.
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1_000n,
+      penalty: TWO_PERCENT,
+    });
+    const plan = planFor({ vaultData, exitAssets: 100n });
+    const { vault: deadlineVaultData } = vaultData.accrueInterest(
+      vaultData.lastUpdate,
+    );
+
+    expect(plan).toMatchObject({ assetsToDeallocate: 0n, penaltyLegs: 0 });
+    expect(
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData,
+        plan,
+      }),
+    ).toBe(vaultData.toShares(plan.withdrawnAssets, "Up"));
+  });
+
+  test("behavior: a zero penalty owes no per-forceDeallocate slack", () => {
+    const vaultData = vaultV2ExitData({
+      additionalMarket: true,
+      marketTotalBorrowAssets: 0n,
+      secondMarketTotalBorrowAssets: 0n,
+      penalty: 0n,
+    });
+    const plan = planFor({ vaultData, exitAssets: 1_400n });
+    const { vault: deadlineVaultData } = vaultData.accrueInterest(
+      vaultData.lastUpdate,
+    );
+
+    // `forceDeallocate` burns nothing at a zero penalty, so those legs round nothing either, and
+    // with no idle the deallocated leg is the only positive withdrawal.
+    expect(plan.penaltyLegs).toBeGreaterThan(0);
+    expect(plan.penaltyAssets).toBe(0n);
+    expect(plan.assetsToWithdraw).toBe(0n);
+    expect(
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData,
+        plan,
+      }),
+    ).toBe(vaultData.toShares(plan.withdrawnAssets, "Up"));
   });
 
   test("behavior: bounds every separately rounded withdrawal leg", () => {
@@ -406,11 +475,16 @@ describe("computeVaultV2ForceWithdrawSharesBurnt", () => {
     });
 
     expect(plan.penaltyLegs).toBe(2);
-    // Two penalty legs plus the two asset legs each round up independently.
-    expect(sharesBurnt).toBe(
-      vaultData.toShares(plan.withdrawnAssets + plan.penaltyAssets, "Up") +
-        BigInt(plan.penaltyLegs + 2),
+    // Positive legs here are the two penalty burns and the deallocated leg; the penalty-free leg
+    // moves nothing. The aggregate conversion spends one ceiling, so two extra shares are owed —
+    // strictly fewer than the `penaltyLegs + 2` a per-call count would charge.
+    expect(plan.assetsToWithdraw).toBe(0n);
+    const base = vaultData.toShares(
+      plan.withdrawnAssets + plan.penaltyAssets,
+      "Up",
     );
+    expect(sharesBurnt).toBe(base + 2n);
+    expect(sharesBurnt).toBeLessThan(base + BigInt(plan.penaltyLegs + 2));
   });
 
   test("behavior: takes the worse of the snapshot and deadline previews", () => {
@@ -435,10 +509,7 @@ describe("computeVaultV2ForceWithdrawSharesBurnt", () => {
         deadlineVaultData,
         plan,
       }),
-    ).toBe(
-      deadlineVaultData.toShares(grossDebited, "Up") +
-        BigInt(plan.penaltyLegs + 2),
-    );
+    ).toBe(deadlineVaultData.toShares(grossDebited, "Up") + 1n);
   });
 
   test("behavior: exceeds the shares the pure asset legs alone would burn", () => {

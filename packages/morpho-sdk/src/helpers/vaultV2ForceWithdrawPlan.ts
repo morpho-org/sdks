@@ -288,17 +288,26 @@ export function computeVaultV2ForceWithdrawPlan(params: {
     penalty,
     assetsToWithdraw,
     assetsToDeallocate,
-    // `sum(ceil(assetsᵢ·penalty/WAD)) <= ceil(sum(assetsᵢ)·penalty/WAD) + legs - 1`.
+    // `sum(ceil(assetsᵢ·penalty/WAD)) <= ceil(sum(assetsᵢ)·penalty/WAD) + legs - 1`. The per-leg
+    // slack only exists because each chunk rounds its own charge up; at a zero penalty every chunk
+    // charges exactly nothing, so carrying the slack would invent penalty assets the contract never
+    // debits — inflating the share-burn denominator and weakening the derived bound.
     penaltyAssets:
-      penaltyLegs === 0
+      penaltyLegs === 0 || penalty === 0n
         ? 0n
         : MathLib.wMulUp(assetsToDeallocate, penalty) + BigInt(penaltyLegs - 1),
     withdrawnAssets: assetsToWithdraw + assetsToDeallocate,
     coveredAssets,
+    // A vault with nothing to give has a ceiling of zero, stated explicitly: the inversion below
+    // would round up to `1n` at a positive penalty, and `1n` is not actually exitable (it withdraws
+    // nothing, which the entity rejects). Reporting it would send a caller told to "reduce to
+    // maxExitAssets" straight into a second, different error.
     maxExitAssets:
-      withdrawableAssets +
-      MathLib.wMulUp(saturatedCoveredAssets + 1n, MathLib.WAD + penalty) -
-      1n,
+      withdrawableAssets === 0n && saturatedCoveredAssets === 0n
+        ? 0n
+        : withdrawableAssets +
+          MathLib.wMulUp(saturatedCoveredAssets + 1n, MathLib.WAD + penalty) -
+          1n,
     penaltyLegs,
   };
 }
@@ -306,9 +315,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
 /**
  * Upper-bounds the vault shares a Vault V2 force withdrawal burns.
  *
- * The contract performs `penaltyLegs + 2` separate `VaultV2.withdraw` calls (the penalty-free leg,
- * one per `forceDeallocate`, and the final deallocated leg). Each rounds its share burn up, so the
- * bound adds one share per leg on top of the penalty-inclusive asset total.
+ * The contract splits the burn across up to `penaltyLegs + 2` separate `VaultV2.withdraw` calls (the
+ * penalty-free leg, one per `forceDeallocate`, and the final deallocated leg), each rounding its own
+ * share burn up. Converting the aggregate already spends one ceiling, so the bound adds one share
+ * per *additional* leg that moves a positive amount — a zero-amount leg burns `toShares(0, "Up")`
+ * and rounds nothing.
  *
  * The result is the **denominator of {@link computeMinForceWithdrawSharePrice}** — the largest share
  * burn the realized exit price is measured against. It takes the max over the two supplied snapshots
@@ -355,10 +366,24 @@ export function computeVaultV2ForceWithdrawSharesBurnt(params: {
   // penalty-inclusive amount debited from the user's position.
   const grossDebited = plan.withdrawnAssets + plan.penaltyAssets;
 
+  // Only withdrawals that move a positive amount round anything: `toShares(0, "Up")` is `0`. So the
+  // penalty-free leg counts only when it pays out, the `forceDeallocate` burns count only at a
+  // positive penalty, and the deallocated leg counts only when the loop deallocated something.
+  const positiveLegs =
+    (plan.assetsToWithdraw > 0n ? 1 : 0) +
+    (plan.penalty > 0n ? plan.penaltyLegs : 0) +
+    (plan.assetsToDeallocate > 0n ? 1 : 0);
+
   return (
     MathLib.max(
       vaultData.toShares(grossDebited, "Up"),
       deadlineVaultData.toShares(grossDebited, "Up"),
-    ) + BigInt(plan.penaltyLegs + 2)
+    ) +
+    // `sum(ceil(sharesᵢ)) <= ceil(sum(sharesᵢ)) + (positiveLegs - 1)`: the aggregate conversion above
+    // already spends one ceiling, so only the *additional* positive legs can each cost one more
+    // share. A fixed `penaltyLegs + 2` overcounts every zero-amount leg, and because this value is
+    // the slippage denominator an overcount silently widens the price drop the bound accepts —
+    // worst on a dust exit, where two phantom shares can dominate the real burn.
+    BigInt(positiveLegs > 0 ? positiveLegs - 1 : 0)
   );
 }
