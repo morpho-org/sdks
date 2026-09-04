@@ -51,7 +51,6 @@ import {
 } from "./constant.js";
 import {
   validateAccrualPosition,
-  validateAndNormalizeVaultV2BlueReallocations,
   validateChainId,
   validateMidnightMarketChainId,
   validateNativeAsset,
@@ -586,28 +585,6 @@ describe("reallocation validation", () => {
         targetMarketId,
       ),
     ).not.toThrow();
-  });
-
-  test("behavior: materializes a Vault V2-only high-level plan", () => {
-    const result = validateAndNormalizeVaultV2BlueReallocations({
-      reallocations: new Set([validBluePublicAllocatorReallocation]).values(),
-      targetMarketId,
-      chainId: mainnet.id,
-    });
-
-    expect(result).toEqual([validBluePublicAllocatorReallocation]);
-  });
-
-  test("error: rejects a Vault V1 plan on the V2-only high-level path", () => {
-    expect(() =>
-      validateAndNormalizeVaultV2BlueReallocations({
-        reallocations: [
-          validReallocation,
-        ] as unknown as Iterable<VaultV2BlueReallocation>,
-        targetMarketId,
-        chainId: mainnet.id,
-      }),
-    ).toThrow(InvalidReallocationShapeError);
   });
 
   test.each([

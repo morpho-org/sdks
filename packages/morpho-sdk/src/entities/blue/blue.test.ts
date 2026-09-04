@@ -32,6 +32,7 @@ import {
   NegativeInputError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
@@ -103,6 +104,10 @@ const getCommonWriteCalls = (
   } = { deadline: maxUint256 },
 ) => {
   const positionData = makePosition(marketParams);
+  const destinationPositionData = makePosition(destinationMarketParams, {
+    borrowShares: 0n,
+    collateral: 0n,
+  });
 
   return [
     ["supply", () => entity.supply({ userAddress, assets: 1n, ...common })],
@@ -137,6 +142,19 @@ const getCommonWriteCalls = (
           positionData,
           repayAssets: 1n,
           collateralAssets: 0n,
+          ...common,
+        }),
+    ],
+    [
+      "refinance",
+      () =>
+        entity.refinance({
+          userAddress,
+          positionData,
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: destinationPositionData,
+          },
           ...common,
         }),
     ],
@@ -180,6 +198,22 @@ const getPositionWriteCalls = (
           deadline: maxUint256,
         }),
     ],
+    [
+      "refinance",
+      () =>
+        entity.refinance({
+          userAddress,
+          positionData,
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: makePosition(destinationMarketParams, {
+              borrowShares: 0n,
+              collateral: 0n,
+            }),
+          },
+          deadline: maxUint256,
+        }),
+    ],
   ] as const;
 
 describe("MorphoBlue write surface", () => {
@@ -217,6 +251,10 @@ describe("MorphoBlue write surface", () => {
       .client.extend(morphoViemExtension())
       .morpho.blue(marketParams, mainnet.id);
     const positionData = makePosition(marketParams);
+    const destinationPositionData = makePosition(destinationMarketParams, {
+      borrowShares: 0n,
+      collateral: 0n,
+    });
     const bufferedLtv = marketParams.lltv - DEFAULT_LLTV_BUFFER;
 
     const pureCollateral = entity
@@ -250,6 +288,18 @@ describe("MorphoBlue write surface", () => {
         deadline: maxUint256,
       })
       .buildTx();
+    const migration = entity
+      .refinance({
+        userAddress,
+        positionData,
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: destinationPositionData,
+        },
+        deadline: maxUint256,
+      })
+      .buildTx();
+
     expect(pureCollateral.action.args.maxLtv).toBe(maxUint256);
     expect(pureCollateral.action.type).toBe("blueSupplyCollateral");
     expect(pureCollateral.action.args.borrowAssets).toBe(0n);
@@ -263,26 +313,124 @@ describe("MorphoBlue write surface", () => {
     expect(collateralWithdrawal.action.type).toBe("blueWithdrawCollateral");
     expect(collateralWithdrawal.action.args.repayAssets).toBe(0n);
     expect(collateralWithdrawal.action.args.repayShares).toBe(0n);
+    expect(migration.action.args.maxLtv).toBe(
+      destinationMarketParams.lltv - DEFAULT_LLTV_BUFFER,
+    );
   });
 
-  test("preserves the legacy Bundler3 refinance input", () => {
-    const transaction = makeEntity()
-      .refinance({
-        userAddress,
-        positionData: makePosition(marketParams),
-        target: {
-          marketParams: destinationMarketParams,
-          positionData: makePosition(destinationMarketParams, {
-            borrowShares: 0n,
-            collateral: 0n,
-          }),
-        },
-        collateralAmount: 1n,
-        targetReallocations: [],
-      })
-      .buildTx();
+  test("target BlueBundlesV1 for token approval and Morpho authorization", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: getChainAddress(mainnet.id, "morpho"),
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
 
-    expect(transaction.action.type).toBe("blueRefinance");
+    const tokenRequirements = await entity
+      .supply({
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    const authorizationRequirements = await entity
+      .withdraw({
+        userAddress,
+        positionData: makePosition(marketParams, {
+          borrowShares: 0n,
+          supplyShares: 10n ** 18n,
+        }),
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+
+    expect(tokenRequirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1 },
+        },
+      },
+    ]);
+    expect(authorizationRequirements).toMatchObject([
+      {
+        action: {
+          type: "blueAuthorization",
+          args: { authorized: blueBundlesV1, isAuthorized: true },
+        },
+      },
+    ]);
+  });
+
+  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supply({ assets: 1n, userAddress, deadline: maxUint256 })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
+  test("supply funds a wrapped-native market with tx value and no requirements", async () => {
+    const nativeMarketParams = new MarketParams({
+      loanToken: getChainAddress(mainnet.id, "wNative"),
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    });
+    const market = createMockClient(mainnet)
+      .client.extend(morphoViemExtension())
+      .morpho.blue(nativeMarketParams, mainnet.id);
+
+    const assets = 10n ** 18n;
+    const action = market.supply({
+      userAddress,
+      assets,
+      nativeAmount: assets,
+      deadline: maxUint256,
+    });
+
+    // The native branch short-circuits before any on-chain read: it emits no
+    // token approval/permit (and no Morpho authorization), rides the funded
+    // amount as `tx.value`, and leaves the encoded token permit empty. A
+    // regression that dropped the branch would demand a token requirement or
+    // omit the value, and would revert on-chain rather than fail here.
+    expect(await action.getRequirements()).toEqual([]);
+    const tx = action.buildTx();
+    expect(tx.value).toBe(assets);
+    expect(tx.action.args.nativeAmount).toBe(assets);
+    expect(tx.action.args.assets).toBe(assets);
   });
 
   test("target BlueBundlesV1 for token approval and Morpho authorization", async () => {
@@ -526,6 +674,18 @@ describe("MorphoBlue position validation", () => {
     )) {
       expect(call, method).toThrow(MarketIdMismatchError);
     }
+
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: makePosition(marketParams),
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: makePosition(marketParams),
+        },
+        deadline: maxUint256,
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 
   test("error: AccrualPositionUserMismatchError across position-backed methods", () => {
@@ -536,6 +696,20 @@ describe("MorphoBlue position validation", () => {
     )) {
       expect(call, method).toThrow(AccrualPositionUserMismatchError);
     }
+
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: makePosition(marketParams),
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: makePosition(destinationMarketParams, {
+            user: otherUserAddress,
+          }),
+        },
+        deadline: maxUint256,
+      }),
+    ).toThrow(AccrualPositionUserMismatchError);
   });
 
   test("error: MissingAccrualPositionError across position-backed methods", () => {
@@ -546,6 +720,18 @@ describe("MorphoBlue position validation", () => {
     )) {
       expect(call, method).toThrow(MissingAccrualPositionError);
     }
+
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: makePosition(marketParams),
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: undefined as never,
+        },
+        deadline: maxUint256,
+      }),
+    ).toThrow(MissingAccrualPositionError);
   });
 
   test("error: supply, debt, and collateral bounds", () => {
@@ -598,15 +784,94 @@ describe("MorphoBlue position validation", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("error: BorrowExceedsSafeLtvError on borrow", () => {
+  test("error: BorrowExceedsSafeLtvError on borrow and fee-bearing migration", () => {
+    const entity = makeEntity();
     expect(() =>
-      makeEntity().borrow({
+      entity.borrow({
         userAddress,
         positionData: makePosition(marketParams),
         borrowAssets: 10n ** 24n,
         deadline: maxUint256,
       }),
     ).toThrow(BorrowExceedsSafeLtvError);
+
+    const sourcePosition = makePosition(marketParams, {
+      collateral: 2n * 10n ** 18n,
+    });
+    const destinationPosition = makePosition(destinationMarketParams, {
+      borrowShares: 0n,
+      collateral: 0n,
+    });
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: sourcePosition,
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: destinationPosition,
+        },
+        deadline: maxUint256,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: sourcePosition,
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: destinationPosition,
+        },
+        deadline: maxUint256,
+        referralFeePct: MathLib.WAD / 2n,
+        referralFeeRecipient: otherUserAddress,
+      }),
+    ).toThrow(BorrowExceedsSafeLtvError);
+  });
+
+  test("error: InputExceedsMaxError when the migration penalty exceeds current source debt", () => {
+    const now = 1_800_000_000n;
+    const entity = makeEntity();
+    // Interest-bearing source: the current quoted debt is strictly below the `now + 2h` health
+    // projection the method uses elsewhere, so a penalty just above the current debt lands between
+    // the two figures. The cap must bind against the current quote, not the forecast, to reject it.
+    const sourcePosition = makePosition(marketParams, {
+      lastUpdate: now - 5n * 24n * 3_600n,
+      rateAtTarget: 3_170_979_198n,
+      collateral: 10n ** 24n,
+    });
+    const destinationPosition = makePosition(destinationMarketParams, {
+      borrowShares: 0n,
+      collateral: 0n,
+    });
+    const currentDebt = sourcePosition.borrowAssets;
+    const forecastDebt = sourcePosition.accrueInterest(
+      now + 7_200n,
+    ).borrowAssets;
+    // Guard the fixture: the penalty sits in the (current, forecast] gap the bug would have missed.
+    expect(forecastDebt).toBeGreaterThan(currentDebt + 1n);
+    // penaltyAssets = ceil(assets × penalty / WAD) = currentDebt + 1n with penalty = 100%.
+    const reallocation = {
+      vault: "0x0000000000000000000000000000000000000031",
+      from: { type: "idle" },
+      to: { adapter: "0x0000000000000000000000000000000000000032" },
+      assets: currentDebt + 1n,
+      penalty: MathLib.WAD,
+    } satisfies VaultV2BlueReallocation;
+
+    expect(() =>
+      withChainTimestamp(now, () =>
+        entity.refinance({
+          userAddress,
+          positionData: sourcePosition,
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: destinationPosition,
+          },
+          reallocations: [reallocation],
+          deadline: maxUint256,
+        }),
+      ),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: WithdrawMakesPositionUnhealthyError after collateral withdrawal", () => {
@@ -665,6 +930,66 @@ describe("MorphoBlue position validation", () => {
         }),
       ),
     ).toThrow(WithdrawMakesPositionUnhealthyError);
+  });
+
+  test("error: migration health accrues source and destination debt", () => {
+    const now = 1_800_000_000n;
+    const quoteTimestamp = now + 7_200n;
+    const marketOverrides = {
+      lastUpdate: now - 5n * 24n * 3_600n,
+      rateAtTarget: 3_170_979_198n,
+    };
+    const baseSourcePosition = makePosition(marketParams, marketOverrides);
+    const destinationPosition = makePosition(destinationMarketParams, {
+      ...marketOverrides,
+      collateral: 0n,
+    });
+    const sourcePosition = makePosition(marketParams, {
+      ...marketOverrides,
+      collateral: getMinimumSafeCollateral(
+        baseSourcePosition.borrowAssets + destinationPosition.borrowAssets + 1n,
+      ),
+    });
+    const validationParams = {
+      additionalCollateral: sourcePosition.collateral,
+      marketId: destinationMarketParams.id,
+      lltv: destinationMarketParams.lltv,
+    };
+
+    expect(() =>
+      validatePositionHealth({
+        ...validationParams,
+        positionData: destinationPosition,
+        borrowAmount: sourcePosition.borrowAssets,
+      }),
+    ).not.toThrow();
+    expect(
+      sourcePosition.accrueInterest(quoteTimestamp).borrowAssets,
+    ).toBeGreaterThan(sourcePosition.borrowAssets);
+    expect(
+      destinationPosition.accrueInterest(quoteTimestamp).borrowAssets,
+    ).toBeGreaterThan(destinationPosition.borrowAssets);
+    expect(() =>
+      validatePositionHealth({
+        ...validationParams,
+        positionData: destinationPosition.accrueInterest(quoteTimestamp),
+        borrowAmount:
+          sourcePosition.accrueInterest(quoteTimestamp).borrowAssets,
+      }),
+    ).toThrow(BorrowExceedsSafeLtvError);
+    expect(() =>
+      withChainTimestamp(now, () =>
+        makeEntity().refinance({
+          userAddress,
+          positionData: sourcePosition,
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: destinationPosition,
+          },
+          deadline: maxUint256,
+        }),
+      ),
+    ).toThrow(BorrowExceedsSafeLtvError);
   });
 
   test("error: borrow health uses forward-accrued debt", () => {
