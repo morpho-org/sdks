@@ -112,6 +112,22 @@ interface AssertNoBundlerRetentionParams {
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
  * `assetChanges` derived from it — native transfer logs are only used as a
  * fallback for bundler addresses that carry no native `assetChanges` entry.
+ *
+ * @internal Internal pipeline stage, composed by `simulate`; not part of the
+ *   package's public API (only re-exported from the internal pipeline barrel).
+ * @param params.chainId - Chain whose blue-sdk `bundler3` and `bundles`
+ *   registries define the restricted address set. Chains cataloging neither are
+ *   skipped (a `logger.warn` records the skip).
+ * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
+ *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
+ * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
+ *   source of truth for native value stuck in a restricted contract.
+ * @param params.logger - Optional logger. Receives retention-check skip warnings
+ *   and pre-existing-balance sweep telemetry (net-negative flow).
+ * @returns Nothing. Returns silently when no restricted contract retains value
+ *   above `DUST_THRESHOLD`; otherwise throws.
+ * @throws {BlacklistViolationError} when net inbound flow to a restricted
+ *   `bundler3` or `bundles` contract exceeds `DUST_THRESHOLD` for any token.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
@@ -168,7 +184,7 @@ export function assertNoBundlerRetention(
   const drained = entries.filter((e) => e.netChange < -DUST_THRESHOLD);
   if (drained.length > 0) {
     logger?.warn(
-      "Simulation detected pre-existing bundler balance being swept",
+      "Simulation detected pre-existing balance being swept from a restricted bundler or bundles contract",
       {
         changes: drained.map((e) => ({
           address: e.address,

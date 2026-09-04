@@ -257,7 +257,7 @@ describe("assertNoBundlerRetention", () => {
       }),
     ).not.toThrow();
     expect(logger.warn).toHaveBeenCalledWith(
-      "Simulation detected pre-existing bundler balance being swept",
+      "Simulation detected pre-existing balance being swept from a restricted bundler or bundles contract",
       {
         changes: [
           {
