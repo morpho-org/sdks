@@ -28,41 +28,6 @@ interface BundlerEntry {
   netChange: bigint;
 }
 
-function getBundlerAddresses(
-  chainId: number,
-  logger?: SimulationLogger,
-): Set<Address> {
-  try {
-    const addresses = getChainAddresses(chainId);
-    if (!addresses.bundler3) {
-      // blue-sdk knows the chain but didn't catalog a bundler3 for it.
-      // Treat the same as UnsupportedChainIdError — retention check skipped.
-      logger?.warn(
-        "Chain known to blue-sdk but has no bundler3 config, retention check skipped",
-        {
-          chainId,
-        },
-      );
-      return new Set();
-    }
-    return new Set(
-      Object.values(addresses.bundler3)
-        .filter(isDefined)
-        .map((addr) => getAddress(addr)),
-    );
-  } catch (error) {
-    if (error instanceof UnsupportedChainIdError) {
-      // Loud warn: this disables a "never bypassable" check for the chain.
-      // Consumers relying on the guarantee must handle this signal.
-      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
-        chainId,
-      });
-      return new Set();
-    }
-    throw error;
-  }
-}
-
 interface AssertNoBundlerRetentionParams {
   chainId: number;
   transfers: Transfer[];
@@ -71,15 +36,17 @@ interface AssertNoBundlerRetentionParams {
 }
 
 /**
- * Assert that no value is retained by bundler3 contract addresses.
+ * Assert that no value is retained by restricted contract addresses — the
+ * `bundler3` executor and adapters, plus the standalone `bundles` periphery
+ * contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`).
  *
- * Uses net flow (inbound minus outbound) per (bundler address, token) pair.
- * Bundler3 legitimately receives tokens as an intermediary (user → bundler3 →
- * vault), so gross inbound would fire false positives. We only block positive
- * net flow above `DUST_THRESHOLD` — value stuck in a bundler address. Negative
- * net flow means the simulated bundle sweeps a pre-existing or state-overridden
- * bundler balance. That is useful telemetry, but not current-bundle retention,
- * so it is warned instead of raising a blacklist violation.
+ * Uses net flow (inbound minus outbound) per (restricted address, token) pair.
+ * These contracts legitimately receive tokens as an intermediary (user →
+ * bundler → vault), so gross inbound would fire false positives. We only block
+ * positive net flow above `DUST_THRESHOLD` — value stuck in a restricted
+ * address. Negative net flow means the simulated bundle sweeps a pre-existing or
+ * state-overridden balance. That is useful telemetry, but not current-bundle
+ * retention, so it is warned instead of raising a blacklist violation.
  *
  * **Two flow sources, one per asset class.** ERC20 / WETH9 retention is read
  * from parsed `transfers` (log-derived, identical across backends). Native ETH
@@ -95,15 +62,68 @@ interface AssertNoBundlerRetentionParams {
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
  * `assetChanges` derived from it — native transfer logs are only used as a
  * fallback for bundler addresses that carry no native `assetChanges` entry.
+ *
+ * @internal Internal pipeline stage, composed by `simulate`; not part of the
+ *   package's public API (only re-exported from the internal pipeline barrel).
+ * @param params.chainId - Chain whose blue-sdk `bundler3` and `bundles`
+ *   registries define the restricted address set. Chains cataloging neither are
+ *   skipped (a `logger.warn` records the skip).
+ * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
+ *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
+ * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
+ *   source of truth for native value stuck in a restricted contract.
+ * @param params.logger - Optional logger. Receives retention-check skip warnings
+ *   and pre-existing-balance sweep telemetry (net-negative flow).
+ * @returns Nothing. Returns silently when no restricted contract retains value
+ *   above `DUST_THRESHOLD`; otherwise throws.
+ * @throws {BlacklistViolationError} when net inbound flow to a restricted
+ *   `bundler3` or `bundles` contract exceeds `DUST_THRESHOLD` for any token.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
 ): void {
   const { chainId, transfers, assetChanges, logger } = params;
-  const bundlerAddresses = getBundlerAddresses(chainId, logger);
-  if (bundlerAddresses.size === 0) return;
 
-  // Map keyed by (bundler, token) → structured entry. Avoids string parse-back.
+  // Restricted address set: the full `bundler3` sub-registry (executor + every
+  // adapter) plus the standalone `bundles` periphery contracts
+  // (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`). Both families are
+  // transient intermediaries that route user value and must never retain it, so
+  // both are guarded identically.
+  let addresses: ReturnType<typeof getChainAddresses>;
+  try {
+    addresses = getChainAddresses(chainId);
+  } catch (error) {
+    if (error instanceof UnsupportedChainIdError) {
+      // Loud warn: this disables a "never bypassable" check for the chain.
+      // Consumers relying on the guarantee must handle this signal.
+      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
+        chainId,
+      });
+      return;
+    }
+    throw error;
+  }
+
+  const restrictedAddresses = new Set<Address>();
+  if (addresses.bundler3) {
+    for (const addr of Object.values(addresses.bundler3).filter(isDefined))
+      restrictedAddresses.add(getAddress(addr));
+  }
+  if (addresses.bundles) {
+    for (const addr of Object.values(addresses.bundles).filter(isDefined))
+      restrictedAddresses.add(getAddress(addr));
+  }
+  if (restrictedAddresses.size === 0) {
+    // blue-sdk knows the chain but cataloged neither bundler3 nor bundles for
+    // it. Treat the same as UnsupportedChainIdError — retention check skipped.
+    logger?.warn(
+      "Chain known to blue-sdk but has no bundler3 or bundles config, retention check skipped",
+      { chainId },
+    );
+    return;
+  }
+
+  // Map keyed by (address, token) → structured entry. Avoids string parse-back.
   const flow = new Map<string, BundlerEntry>();
 
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
@@ -126,7 +146,7 @@ export function assertNoBundlerRetention(
   // does not re-add the same native move on `eth_simulateV1`.
   const nativeFromAssetChanges = new Set<string>();
   for (const { account, changes } of assetChanges) {
-    if (!bundlerAddresses.has(account)) continue;
+    if (!restrictedAddresses.has(account)) continue;
     for (const change of changes) {
       if (change.token !== ethAddress) continue;
       recordFlow(account, ethAddress, change.diff);
@@ -141,9 +161,9 @@ export function assertNoBundlerRetention(
   const usesAssetChangeNative = (t: Transfer, addr: Address): boolean =>
     t.token === ethAddress && nativeFromAssetChanges.has(addr.toLowerCase());
   for (const t of transfers) {
-    if (bundlerAddresses.has(t.to) && !usesAssetChangeNative(t, t.to))
+    if (restrictedAddresses.has(t.to) && !usesAssetChangeNative(t, t.to))
       recordFlow(t.to, t.token, t.amount);
-    if (bundlerAddresses.has(t.from) && !usesAssetChangeNative(t, t.from))
+    if (restrictedAddresses.has(t.from) && !usesAssetChangeNative(t, t.from))
       recordFlow(t.from, t.token, -t.amount);
   }
 
@@ -151,7 +171,7 @@ export function assertNoBundlerRetention(
   const drained = entries.filter((e) => e.netChange < -DUST_THRESHOLD);
   if (drained.length > 0) {
     logger?.warn(
-      "Simulation detected pre-existing bundler balance being swept",
+      "Simulation detected pre-existing balance being swept from a restricted bundler or bundles contract",
       {
         changes: drained.map((e) => ({
           address: e.address,
@@ -166,7 +186,7 @@ export function assertNoBundlerRetention(
 
   if (retained.length > 0) {
     throw new BlacklistViolationError(
-      "Simulation detected asset transfers retained by restricted bundler contracts",
+      "Simulation detected asset transfers retained by restricted bundler or bundles contracts",
       retained.map((e) => ({
         address: e.address,
         token: e.token,
