@@ -187,6 +187,7 @@ describe("getBundlesTokenRequirements", () => {
     await expect(
       getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: maxUint256 + 1n,
         owner: account.address,
         chainId: mainnet.id,

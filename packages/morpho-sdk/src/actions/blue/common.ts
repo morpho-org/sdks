@@ -9,7 +9,6 @@ import {
   compactSignatureToSignature,
   type Hex,
   isAddressEqual,
-  maxUint256,
   parseCompactSignature,
   parseSignature,
   type Signature,

@@ -32,7 +32,7 @@ const permitSignature: Erc2612RequirementSignature = {
   },
   action: {
     type: "permit",
-    args: { spender: SPENDER, amount: AMOUNT, deadline: DEADLINE },
+    args: { spender: SPENDER, amount: AMOUNT, nonce: 0n, deadline: DEADLINE },
   },
 };
 
@@ -130,7 +130,7 @@ describe("getTokenRequirementActions", () => {
       },
       action: {
         type: "permit2SignatureTransfer",
-        args: { spender: SPENDER, amount: AMOUNT, deadline: DEADLINE },
+        args: { spender: SPENDER, amount: AMOUNT, nonce: 0n, deadline: DEADLINE },
       },
     };
 

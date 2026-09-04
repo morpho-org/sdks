@@ -57,7 +57,7 @@ const permit2SignatureTransfer = {
   },
   action: {
     type: "permit2SignatureTransfer",
-    args: { spender, amount: 5n, deadline: 123n },
+    args: { spender, amount: 5n, nonce: 2n, deadline: 123n },
   },
 } satisfies BundlesTokenRequirementSignature;
 
@@ -150,6 +150,7 @@ const permit2SignatureTransferPermit = (
   action: {
     type: "permit2SignatureTransfer",
     args: {
+      nonce: argsOverrides.nonce ?? 9n,
       spender: blueBundlesV1,
       amount: permitAmount,
       deadline: permitDeadline,
@@ -363,7 +364,7 @@ describe("getBlueBundlesV1TokenPermit", () => {
         userAddress: owner,
         token: asset,
         amount: permitAmount,
-        requirementSignature: permit2Allowance,
+        requirementSignature: permit2Allowance as unknown as BundlesTokenRequirementSignature,
       });
     } catch (error) {
       thrown = error;
