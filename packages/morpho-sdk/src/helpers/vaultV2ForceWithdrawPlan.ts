@@ -6,7 +6,7 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { type Hex, isAddressEqual, zeroAddress } from "viem";
+import { type Hex, isAddressEqual, maxUint256, zeroAddress } from "viem";
 import { NonPositiveInputError } from "../types/index.js";
 
 /**
@@ -129,7 +129,9 @@ export interface VaultV2ForceWithdrawPlan {
   /**
    * Largest penalty-inclusive `exitAssets` the snapshot supports.
    *
-   * Independent of the requested `exitAssets`, so it is safe to use as an input ceiling.
+   * Independent of the requested `exitAssets`, so it is safe to use as an input ceiling. Always an
+   * amount the exit actually accepts: `0n` when nothing is exitable, and saturated at `maxUint256`
+   * rather than grossing up past the ABI slot.
    */
   readonly maxExitAssets: bigint;
   /** Upper bound of the `forceDeallocate` calls the contract's loop performs. */
@@ -298,16 +300,23 @@ export function computeVaultV2ForceWithdrawPlan(params: {
         : MathLib.wMulUp(assetsToDeallocate, penalty) + BigInt(penaltyLegs - 1),
     withdrawnAssets: assetsToWithdraw + assetsToDeallocate,
     coveredAssets,
-    // A vault with nothing to give has a ceiling of zero, stated explicitly: the inversion below
-    // would round up to `1n` at a positive penalty, and `1n` is not actually exitable (it withdraws
-    // nothing, which the entity rejects). Reporting it would send a caller told to "reduce to
-    // maxExitAssets" straight into a second, different error.
+    // Both bounds keep the ceiling *actionable*, since callers cap an input field with it and the
+    // coverage error tells them to reduce to it. A vault with nothing to give reports zero: the
+    // inversion rounds up to `1n` at a positive penalty, and `1n` withdraws nothing, which the
+    // entity rejects. And the gross-up can exceed the ABI slot on an enormous snapshot, which the
+    // entity also rejects — so it saturates rather than advertising an unusable amount.
     maxExitAssets:
       withdrawableAssets === 0n && saturatedCoveredAssets === 0n
         ? 0n
-        : withdrawableAssets +
-          MathLib.wMulUp(saturatedCoveredAssets + 1n, MathLib.WAD + penalty) -
-          1n,
+        : MathLib.min(
+            withdrawableAssets +
+              MathLib.wMulUp(
+                saturatedCoveredAssets + 1n,
+                MathLib.WAD + penalty,
+              ) -
+              1n,
+            maxUint256,
+          ),
     penaltyLegs,
   };
 }

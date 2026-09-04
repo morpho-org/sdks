@@ -235,7 +235,9 @@ require              coveredAssets >= assetsToDeallocate
 saturatedCovered   = Σ available(id) over id ≠ liquidityMarketId
 maxExitAssets      = withdrawableAssets == 0 && saturatedCovered == 0
                        ? 0n                                             // nothing is exitable
-                       : withdrawableAssets + wMulUp(saturatedCovered + 1n, WAD + penalty) - 1n
+                       : min(withdrawableAssets
+                               + wMulUp(saturatedCovered + 1n, WAD + penalty) - 1n,
+                             maxUint256)                                // ...and fits the ABI slot
 ```
 
 `maxExitAssets` deliberately sums `saturatedCovered`, not the request-dependent `coveredAssets`: at
@@ -243,10 +245,12 @@ the ceiling the penalty-free leg always drains the liquidity market completely, 
 contributes nothing to the force-deallocation loop, whereas a small request leaves part of it behind
 and a `coveredAssets`-based ceiling would overstate the largest exit the snapshot supports.
 
-Zero total capacity is special-cased because the inversion is exact but not *actionable* there: at a
-positive penalty `wMulUp(1n, WAD + penalty) - 1n` rounds up to `1n`, and `1n` withdraws nothing. Since
-this value is what `VaultV2ForceWithdrawCoverageError` tells a caller to reduce to, reporting `1n`
-would send them from a coverage error straight into `VaultV2ForceWithdrawZeroWithdrawalError`.
+Both bounds exist because the ceiling has to be *actionable*, not merely the exact inverse of the
+coverage guard: callers cap an input field with it, and `VaultV2ForceWithdrawCoverageError` tells them
+to reduce to it. At zero total capacity the inversion rounds up to `1n` at a positive penalty, and
+`1n` withdraws nothing — reporting it would send a caller from a coverage error straight into
+`VaultV2ForceWithdrawZeroWithdrawalError`. At the other end the gross-up can pass `uint256` on an
+enormous snapshot, which the entity rejects outright, so it saturates instead.
 
 Two decisions inside this worth recording.
 

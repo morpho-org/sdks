@@ -4,6 +4,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_ADAPTER,
@@ -321,6 +322,19 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
 
     expect(plan.coveredAssets).toBe(0n);
     expect(plan.maxExitAssets).toBe(0n);
+  });
+
+  // The entity now rejects an `exitAssets` above uint256, and `previewVaultV2ForceWithdraw` hands
+  // its capped `exitAssets` straight to `forceWithdraw()`. An un-saturated ceiling would therefore
+  // advertise an amount the entity refuses.
+  test("behavior: maxExitAssets saturates at uint256 rather than grossing up past it", () => {
+    const vaultData = vaultV2ExitData({
+      assetBalance: maxUint256,
+      penalty: TWO_PERCENT,
+    });
+    const plan = planFor({ vaultData, exitAssets: 1n });
+
+    expect(plan.maxExitAssets).toBe(maxUint256);
   });
 
   test("behavior: dust exitAssets round to no withdrawal under a penalty", () => {
