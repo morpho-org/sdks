@@ -161,13 +161,25 @@ keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the 
 Each chain must have a registered VaultBundlesV1 deployment; missing deployments throw
 `UnknownAddressError`. Check the [migration guide](./MIGRATION-v5-to-v6.md) for chain availability.
 
-### Withdrawals and Redeems: Direct vault calls
+### Withdrawals: VaultBundlesV1; Redeems: Direct vault calls
 
-Withdraw and redeem operations are **direct calls** to the vault contract. No bundler, no
-general adapter. The user calls `withdraw(assets, recipient, onBehalf)` or
-`redeem(shares, recipient, onBehalf)` directly on the vault.
+**Withdraw (V1 & V2)** routes through the chain's registered **VaultBundlesV1** periphery
+contract — not the vault directly, and not through Bundler3/the general adapter. VaultBundlesV1
+burns `msg.sender`'s vault shares and pays out the requested `assets`, minus an optional referral
+fee. Because asset-mode calldata carries no maximum-shares argument, the vault-share allowance
+_is_ the only cap on that burn: `getRequirements()` derives the exact allowance from the vault
+snapshot, deadline, and slippage tolerance, and returns an approval — or an ERC-2612 shares permit
+folded into the call when `supportSignature` is enabled — for exactly that amount. An allowance
+that does not equal the derived cap, including a larger leftover approval, is replaced rather than
+reused, so the cap holds on every withdrawal.
 
-**Why no bundler?** Withdrawals burn the user's shares in exchange for assets. There is no token transfer from the user to the vault, so there is no inflation attack surface. Direct calls avoid the overhead and approval complexity of the bundler.
+**Redeem (V1 & V2)** remains a **direct call** to the vault contract: the user calls
+`redeem(shares, recipient, onBehalf)` directly. No bundler, no VaultBundlesV1, no approval.
+
+**Why no bundler?** Neither operation transfers tokens _from_ the user to the vault, so neither has
+an inflation attack surface. Redeem needs no approval at all; withdraw's exact share allowance
+bounds the burn against share-price loss without requiring the full Bundler3/general-adapter
+composition.
 
 ### Force Withdrawals and Force Redeems (V2 only): VaultV2 multicall
 
@@ -191,7 +203,7 @@ GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound
 | Operation                             | Route                      | Why                                                                                                        |
 | ------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Deposit (V1 & V2)                     | VaultBundlesV1 | `maxSharePrice` enforcement, exclusive ERC-20/native funding, referral fee, and deadline. |
-| Withdraw (V1 & V2)                    | Direct vault call          | No attack surface, no approval needed                                                                      |
+| Withdraw (V1 & V2)                    | VaultBundlesV1 | No inflation-attack surface; exact vault-share allowance caps the burn against share-price loss. |
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
