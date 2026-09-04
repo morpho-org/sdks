@@ -528,6 +528,42 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(InputExceedsMaxError);
     });
 
+    test("error: InputExceedsMaxError for exitAssets above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: maxUint256 + 1n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
+    // The allowance is `mulDivUp(exitAssets, RAY, minSharePriceE27)`, so a floor of `1n` scales it
+    // past the ABI slot. The approval encoder clamps what it emits, so an uncapped requirement would
+    // sit permanently above any grantable allowance and `getRequirements()` would never converge.
+    test("behavior: saturates the derived share allowance at uint256", async () => {
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { allowance: maxUint256 });
+      // `mulDivUp(exitAssets, RAY, 1n)` overflows uint256 once `exitAssets > maxUint256 / RAY`, so
+      // give the vault enough idle to cover an exit that large penalty-free.
+      const exitAssets = (maxUint256 / MathLib.RAY) * 2n;
+
+      const requirements = await vaultFor(handle)
+        .forceWithdraw({
+          exitAssets,
+          vaultData: vaultV2ExitData({ assetBalance: exitAssets * 2n }),
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: 1n,
+        })
+        .getRequirements();
+
+      // Uncapped this would demand ~2e77 shares, which no allowance can satisfy — so
+      // `getRequirements()` would keep emitting the same approval forever.
+      expect(requirements).toHaveLength(0);
+    });
+
     test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {
       const handle = createMockClient(mainnet);
 

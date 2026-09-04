@@ -9,7 +9,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual } from "viem";
+import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -287,8 +287,9 @@ export interface VaultV2Actions {
    * @throws {NonPositiveInputError} when `exitAssets`, `deadline`, or a supplied
    *   `minSharePriceE27` is not positive.
    * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
-   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`, or when `referralFeePct` is
-   *   not below WAD.
+   * @throws {InputExceedsMaxError} when `exitAssets`, `deadline`, or the effective
+   *   `minSharePriceE27` (supplied or derived) exceeds `uint256`, or when `referralFeePct` is not
+   *   below WAD.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
@@ -809,6 +810,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
     if (exitAssets <= 0n)
       throw new NonPositiveInputError("exitAssets", exitAssets);
+    validateUint256Field("exitAssets", exitAssets);
     validateSlippageTolerance(slippageTolerance);
     // Called for its throws only: the raw pair is forwarded to the action, which normalizes it
     // again on the encode path so a direct action caller gets the same guarantees.
@@ -911,6 +913,15 @@ export class MorphoVaultV2 implements VaultV2Actions {
         sharesBurnt: sharesBurntNow,
         slippageTolerance,
       });
+    // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
+    // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
+    // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
+    // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
+    //
+    // It still has to fit the ABI slot though. Defense-in-depth rather than a reachable input error:
+    // with `exitAssets` bounded above, the derived floor only exceeds `uint256` on a vault whose
+    // share price passed ~1e50 assets/share, which no fixture here can construct.
+    validateUint256Field("minSharePriceE27", minSharePriceE27);
     // Size the allowance to the price floor, not to the snapshot burn. The on-chain check accepts
     // any exit whose realized price stays at or above `minSharePriceE27`, so it can burn up to
     // `mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn <= exitAssets` and
@@ -918,10 +929,13 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // allowance for exactly the within-tolerance price drop the floor is meant to permit (clearest
     // on a no-fee vault, where every accrual endpoint collapses to the snapshot burn), nullifying
     // `slippageTolerance`. This ceiling covers every accepted burn, including fee-share accrual.
-    const requiredShareAllowance = MathLib.mulDivUp(
-      exitAssets,
-      MathLib.RAY,
-      minSharePriceE27,
+    // Saturated at `maxUint256`: a tiny accepted floor scales this above the ABI slot, and the
+    // approval encoder clamps what it emits — so an uncapped requirement would sit permanently above
+    // any allowance the user can actually grant and `getRequirements()` would return the same
+    // approval forever. No account can hold or burn more shares than that anyway.
+    const requiredShareAllowance = MathLib.min(
+      MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27),
+      maxUint256,
     );
 
     const vaultExitBundlesV1 = getChainAddress(

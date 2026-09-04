@@ -150,9 +150,10 @@ Three further facts from `vault-v2/src/VaultV2.sol` that shape the SDK's checks:
 - `exit()` requires `canSendShares(onBehalf)` **and** `canReceiveAssets(receiver)`. The receiver is
   now VaultExitBundlesV1, so the vault's `receiveAssetsGate` must allow it — a precondition the
   multicall path never had, because the receiver was the user.
-- `previewWithdraw` rounds shares **up**, and the exit performs `penaltyLegs + 2` separate
-  withdrawals, so the total burn exceeds a single preview of the summed amount by up to one share
-  per leg.
+- `previewWithdraw` rounds shares **up**, and the exit splits the burn across up to
+  `penaltyLegs + 2` separate withdrawals, so the total burn exceeds a single preview of the summed
+  amount by up to one share per *additional* leg that moves a positive amount. A zero-amount leg
+  burns `toShares(0, "Up") == 0` and rounds nothing.
 
 `setLiquidityAdapterAndData` does not check `isAdapter`; combined with `adaptersLength() == 1`, the
 only liquidity configurations the contract can actually resolve are unset or the vault's sole
@@ -232,13 +233,20 @@ require              coveredAssets >= assetsToDeallocate
 
 // saturated: excludes the liquidity market outright, so the ceiling is request-independent
 saturatedCovered   = Σ available(id) over id ≠ liquidityMarketId
-maxExitAssets      = withdrawableAssets + wMulUp(saturatedCovered + 1n, WAD + penalty) - 1n
+maxExitAssets      = withdrawableAssets == 0 && saturatedCovered == 0
+                       ? 0n                                             // nothing is exitable
+                       : withdrawableAssets + wMulUp(saturatedCovered + 1n, WAD + penalty) - 1n
 ```
 
 `maxExitAssets` deliberately sums `saturatedCovered`, not the request-dependent `coveredAssets`: at
 the ceiling the penalty-free leg always drains the liquidity market completely, so that market
 contributes nothing to the force-deallocation loop, whereas a small request leaves part of it behind
 and a `coveredAssets`-based ceiling would overstate the largest exit the snapshot supports.
+
+Zero total capacity is special-cased because the inversion is exact but not *actionable* there: at a
+positive penalty `wMulUp(1n, WAD + penalty) - 1n` rounds up to `1n`, and `1n` withdraws nothing. Since
+this value is what `VaultV2ForceWithdrawCoverageError` tells a caller to reduce to, reporting `1n`
+would send them from a coverage error straight into `VaultV2ForceWithdrawZeroWithdrawalError`.
 
 Two decisions inside this worth recording.
 
@@ -271,7 +279,9 @@ The bound is built from the plan, pessimistically on both sides:
 
 ```
 grossDebited     = withdrawnAssets + penaltyAssets                    // penaltyAssets is an upper bound
-sharesBurnt(v)   = v.toShares(grossDebited, "Up") + (penaltyLegs + 2)  // one ceil per withdrawal leg
+positiveLegs     = (assetsToWithdraw > 0) + (penalty > 0 ? penaltyLegs : 0)
+                   + (assetsToDeallocate > 0)                          // legs that actually round
+sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)
 
 nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
@@ -302,10 +312,16 @@ collapse to the snapshot burn — silently nullifying the advertised `slippageTo
 `wMulUp(assetsToDeallocate, penalty) + (penaltyLegs − 1)`, using
 `Σ ceil(aᵢ) ≤ ceil(Σ aᵢ) + (n − 1)`. `penaltyLegs` is the tight order-independent worst case: sort
 the non-empty market capacities ascending and count how many are needed to reach
-`assetsToDeallocate`.
+`assetsToDeallocate`. At a **zero penalty** every chunk charges exactly nothing, so the per-leg slack
+is dropped entirely rather than carried as `penaltyLegs − 1`.
 
-The `+ (penaltyLegs + 2)` dust term generalizes the `+ 2` in the contract's own
-`testForceWithdrawTightPriceBound` from two withdrawal legs to `penaltyLegs + 2`.
+The dust term applies the same `Σ ceil(aᵢ) ≤ ceil(Σ aᵢ) + (n − 1)` inequality to the share burn,
+generalizing the `+ 2` in the contract's own `testForceWithdrawTightPriceBound`. It counts `n` as the
+legs that move a **positive** amount, not the calls the loop can make: converting `grossDebited`
+already spends one ceiling, and a zero-amount leg rounds nothing. Counting calls instead would inflate
+the denominator — an idle-only exit would carry two phantom shares — and because a larger denominator
+lowers the floor, that silently widens the price drop the bound accepts. The effect is worst on a dust
+exit, where phantom shares dominate the real burn.
 
 **What the bound protects against**, and this is why it is worth the arithmetic:
 
