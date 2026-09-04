@@ -38,13 +38,23 @@ pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test
 
 ```javascript
 import MorphoProtocolEvm from '@morpho-org/wdk-protocol-lending-morpho-evm'
+import { createPublicClient, createWalletClient, custom, http } from 'viem'
+import { mainnet } from 'viem/chains'
 
-// Use any WDK-compatible EVM wallet account instance.
+// Use any WDK-compatible EVM wallet account and its EIP-1193 provider.
+const userAddress = await account.getAddress()
+const publicClient = createPublicClient({ chain: mainnet, transport: http() })
+const walletClient = createWalletClient({
+  account: userAddress,
+  chain: mainnet,
+  transport: custom(provider)
+})
 const morpho = new MorphoProtocolEvm(account, {
   presets: {
     earn: 'sky-money-usdt-savings',
     borrow: 'wsteth'
-  }
+  },
+  supportSignature: true
 })
 
 // Prepare the deposit once, then reuse the same handle for requirements and submission.
@@ -53,19 +63,24 @@ const prepared = await morpho.prepareSupply({
   amount: 1000000n
 })
 
-// Send every approval requirement returned by the Morpho SDK.
-for (const requirement of await prepared.getRequirements()) {
-  if ('to' in requirement) {
-    await account.sendTransaction({
+// Send approvals and retain any permit/Permit2 signature for this prepared handle.
+// Keep the explicit Permit2 nonce unique and unused for this owner.
+let requirementSignature
+for (const requirement of await prepared.getRequirements({ permit2Nonce: 42n })) {
+  if ('sign' in requirement) {
+    requirementSignature = await requirement.sign(walletClient, userAddress)
+  } else {
+    const { hash } = await account.sendTransaction({
       to: requirement.to,
       value: requirement.value,
       data: requirement.data
     })
+    await publicClient.waitForTransactionReceipt({ hash })
   }
 }
 
-// Then submit the vault deposit through the same prepared handle.
-await prepared.submit()
+// Submit through the same handle so its captured requirement matches the signature.
+await prepared.submit(requirementSignature)
 ```
 
 ## Configuration

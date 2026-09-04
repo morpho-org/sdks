@@ -193,15 +193,64 @@ export interface VaultV1Actions {
     undefined
   >;
   /**
-   * Prepares a redeem from a VaultV1 (MetaMorpho) contract.
+   * Prepares an exact-shares Vault V1 redemption through VaultBundlesV1.
    *
-   * @param {Object} params - The redeem parameters.
-   * @param {bigint} params.shares - Amount of shares to redeem.
-   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
-   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets.
-   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
-   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
+   * `buildTx()`; the requirement is resolved once and re-checked against the deadline on every call.
+   *
+   * @param params.shares - Exact vault shares to burn.
+   * @param params.userAddress - Account that signs and submits the transaction; VaultBundlesV1
+   *   burns and pays `msg.sender`.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted from the
+   *   redeemed assets.
+   * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
+   * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
+   *   to two hours from handle creation.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {NonPositiveInputError} when `shares` is not positive.
+   * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {NegativeInputError} when `referralFeePct` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance or permit-nonce read fails.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permit signatures are supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit does not match
+   *   the resolved share amount, spender, owner, nonce, or deadline.
+   * @example
+   * ```ts
+   * import { vaults } from "@morpho-org/morpho-test";
+   * import { isRequirementSignature, morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createWalletClient, http, publicActions, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createWalletClient({
+   *   account: zeroAddress,
+   *   chain: mainnet,
+   *   transport: http(),
+   * })
+   *   .extend(publicActions)
+   *   .extend(morphoViemExtension({ supportSignature: true }));
+   * const vault = client.morpho.vaultV1(
+   *   vaults[mainnet.id].steakUsdc.address,
+   *   mainnet.id,
+   * );
+   * const redemption = vault.redeem({ shares: 1_000_000n, userAddress: zeroAddress });
+   * const signatures = [];
+   * for (const requirement of await redemption.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(client, zeroAddress));
+   *   } else {
+   *     const hash = await client.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = redemption.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV1RedeemAction>>
+   * ```
    */
   redeem: (params: {
     readonly shares: bigint;
@@ -289,22 +338,86 @@ export interface VaultV1Actions {
     undefined
   >;
   /**
-   * Prepares a full migration from VaultV1 to VaultV2.
+   * Prepares a Vault V1-to-Vault V2 migration through VaultBundlesV1.
    *
    * Exits V1 by assets or shares and atomically deposits the resulting assets into V2 through
-   * VaultBundlesV1. Only the destination deposit has an onchain share-price bound.
+   * VaultBundlesV1. Only the destination deposit has an onchain share-price bound. The caller must
+   * satisfy the exact source-vault share requirement before building the transaction.
    *
-   * @param {Object} params - The migration parameters.
-   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 migrates `msg.sender`'s shares into shares owned by `msg.sender`.
-   * @param {AccrualVault} params.sourceVault - Pre-fetched V1 vault data.
-   * @param {AccrualVaultV2} params.targetVault - Pre-fetched V2 vault data.
-   * @param {bigint} [params.shares] - Exact V1 shares to migrate; exclusive with `assets`.
-   * @param {bigint} [params.assets] - Exact V1 assets to withdraw and migrate; exclusive with `shares`.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from source-vault proceeds.
-   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
-   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @param params.userAddress - Account that signs and submits the transaction; VaultBundlesV1
+   *   burns and mints shares for `msg.sender`.
+   * @param params.sourceVault - Pre-fetched Vault V1 snapshot used for source conversion and the
+   *   share-authorization cap.
+   * @param params.targetVault - Pre-fetched Vault V2 snapshot used for the destination share-price
+   *   bound.
+   * @param params.shares - Optional exact Vault V1 shares to migrate; exclusive with `assets`.
+   * @param params.assets - Optional exact Vault V1 assets to withdraw and migrate; exclusive with
+   *   `shares`.
+   * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to an assets-mode share
+   *   cap and the destination bound; defaults to 0.03% and cannot exceed 10%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted from the
+   *   source-vault proceeds.
+   * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
+   * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
+   *   to two hours from handle creation.
    * @returns Lazy exact source-share requirements and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
+   * @throws {VaultAssetMismatchError} when the source and destination vault assets differ.
+   * @throws {SameVaultMigrationError} when the source and destination vault addresses are equal.
+   * @throws {AmountAndSharesExclusiveError} when both amount modes or neither are supplied.
+   * @throws {NonPositiveInputError} when the selected amount or a computed share value is not positive.
+   * @throws {NegativeInputError} when slippage tolerance or `referralFeePct` is negative.
+   * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
+   * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance or permit-nonce read fails.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permit signatures are supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit does not match
+   *   the prepared source share cap, spender, owner, nonce, or deadline.
+   * @example
+   * ```ts
+   * import { vaults } from "@morpho-org/morpho-test";
+   * import { isRequirementSignature, morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createWalletClient, http, publicActions, type Address, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const keyrockUsdcVaultV2 =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const client = createWalletClient({
+   *   account: zeroAddress,
+   *   chain: mainnet,
+   *   transport: http(),
+   * })
+   *   .extend(publicActions)
+   *   .extend(morphoViemExtension({ supportSignature: true }));
+   * const source = client.morpho.vaultV1(
+   *   vaults[mainnet.id].steakUsdc.address,
+   *   mainnet.id,
+   * );
+   * const target = client.morpho.vaultV2(keyrockUsdcVaultV2, mainnet.id);
+   * const migration = source.migrateToV2({
+   *   assets: 1_000_000n,
+   *   userAddress: zeroAddress,
+   *   sourceVault: await source.getData(),
+   *   targetVault: await target.getData(),
+   * });
+   * const signatures = [];
+   * for (const requirement of await migration.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(client, zeroAddress));
+   *   } else {
+   *     const hash = await client.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = migration.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
+   * ```
    */
   migrateToV2: (
     params: {
