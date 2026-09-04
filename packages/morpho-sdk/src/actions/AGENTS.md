@@ -15,7 +15,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
   composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
   authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
-  for VaultExitBundlesV1.
+  for VaultExitBundlesV1. The two that must split a signature into a `(v, r, s)` ABI tuple — the
+  BlueBundlesV1 permit/authorization encoders and `getVaultExitBundlesV1PermitStruct` — go through
+  the `@internal` `normalizeEcdsaSignature(serialized, onInvalid)`, so one place owns the 64-byte
+  EIP-2098 / 65-byte parse and the `yParity` → `v` widening while each caller passes the factory for
+  its own typed mismatch error. The Bundler3 helpers need none of this: they forward the serialized
+  signature verbatim into the bundler action args.
 
 ## Common builder pattern
 
@@ -24,8 +29,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
    one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
    `MidnightBundles` function call directly. Other **direct calls** (vault `withdraw` / `redeem`,
    Midnight collateral supply / redeem / offer cancellation) encode their target contract call
-   directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
-   Bundler3 bundle.
+   directly. Vault `inKindRedeem` and `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1
+   rather than composing a Bundler3 bundle; `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 

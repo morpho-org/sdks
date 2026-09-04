@@ -30,7 +30,8 @@ Blue writes call BlueBundlesV1 directly; the remaining rows identify their direc
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **VaultV2** | `deposit` | Bundler3 → GeneralAdapter1 |
 | | `withdraw`, `redeem` | Direct call |
-| | `forceWithdraw`, `forceRedeem` | Vault multicall |
+| | `forceWithdraw` | VaultExitBundlesV1 |
+| | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
@@ -45,10 +46,11 @@ Robinhood Chain. Custom deployments can still be configured with `registerCustom
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
 writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault
-`inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
-and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
-RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
-`forceRedeem` — have no prerequisites and return only `{ buildTx }`.
+`inKindRedeem` and `forceWithdraw` use it so callers can await `getRequirements()` to check share
+authorization to VaultExitBundlesV1 — and, for `inKindRedeem`, live Blue liquidity — before invoking
+`buildTx()`. Calling `buildTx()` directly skips those RPC-backed pre-flight checks. Other direct
+calls — vault `withdraw` / `redeem` and `forceRedeem` — have no prerequisites and return only
+`{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -235,7 +237,7 @@ graph LR
         V2W -->|direct call| V2C[VaultV2 Contract]
         V2R -->|direct call| V2C
         V2IKR -->|direct call| VEB
-        V2FW -->|multicall| V2C
+        V2FW -->|direct call| VEB
         V2FR -->|multicall| V2C
     end
 

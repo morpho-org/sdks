@@ -1,15 +1,14 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, maxUint256, type WalletClient } from "viem";
+import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { validateDeadline } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
   ExpiredDeadlineError,
-  InputExceedsMaxError,
-  NonPositiveInputError,
   type PermitAction,
   type Requirement,
 } from "../../../types/index.js";
@@ -93,16 +92,7 @@ export const encodeErc20Permit = async (
   // called independently of the BlueBundlesV1 resolver, and an out-of-range or already-expired
   // deadline otherwise surfaces only as a downstream wallet typed-data error or an on-chain revert.
   if (params.deadline != null) {
-    if (params.deadline <= 0n) {
-      throw new NonPositiveInputError("deadline", params.deadline);
-    }
-    if (params.deadline > maxUint256) {
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: params.deadline,
-        max: maxUint256,
-      });
-    }
+    validateDeadline(params.deadline);
     if (params.deadline <= now) {
       throw new ExpiredDeadlineError(params.deadline, now);
     }

@@ -6,16 +6,14 @@ import {
   type Address,
   encodeFunctionData,
   isAddressEqual,
-  maxUint256,
   publicActions,
 } from "viem";
+import { validateDeadline } from "../../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ChainIdMismatchError,
   ExpiredDeadlineError,
-  InputExceedsMaxError,
-  NonPositiveInputError,
   type Requirement,
   type Transaction,
   UnsupportedAuthorizationOperatorError,
@@ -49,6 +47,9 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is neither the chain's
  *   GeneralAdapter1 nor its BlueBundlesV1 operator.
+ * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example
@@ -116,16 +117,7 @@ export const getBlueAuthorizationRequirement = async (params: {
     // one before the RPC reads so the caller never signs an authorization that cannot be encoded
     // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
     if (params.deadline != null) {
-      if (params.deadline <= 0n) {
-        throw new NonPositiveInputError("deadline", params.deadline);
-      }
-      if (params.deadline > maxUint256) {
-        throw new InputExceedsMaxError({
-          field: "deadline",
-          value: params.deadline,
-          max: maxUint256,
-        });
-      }
+      validateDeadline(params.deadline);
       const timestamp = Time.timestamp();
       if (params.deadline <= timestamp) {
         throw new ExpiredDeadlineError(params.deadline, timestamp);

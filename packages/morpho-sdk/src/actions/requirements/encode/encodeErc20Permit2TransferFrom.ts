@@ -1,14 +1,15 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { maxUint256, type WalletClient } from "viem";
+import type { WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import { validateUint256Field } from "../../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateUint256Field,
+} from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ExpiredDeadlineError,
-  InputExceedsMaxError,
-  NonPositiveInputError,
   type Permit2TransferFromAction,
   type Permit2TransferFromRequirementSignature,
   type Requirement,
@@ -83,16 +84,7 @@ export const encodeErc20Permit2TransferFrom = (
   // this public encoder must reject the same out-of-range inputs itself.
   validateUint256Field("amount", amount);
   validateUint256Field("nonce", nonce);
-  if (deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", deadline);
-  }
-  if (deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: deadline,
-      max: maxUint256,
-    });
-  }
+  validateDeadline(deadline);
   // Reject an already-expired deadline before signing so a direct caller is never walked through a
   // wallet EIP-712 prompt for a SignatureTransfer that Permit2 would revert with `SignatureExpired`.
   // The sibling encodeErc20Permit and the token-requirement resolver enforce the same guard.

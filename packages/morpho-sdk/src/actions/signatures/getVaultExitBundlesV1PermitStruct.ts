@@ -1,17 +1,9 @@
-import {
-  type Address,
-  compactSignatureToSignature,
-  type Hex,
-  isAddressEqual,
-  parseCompactSignature,
-  parseSignature,
-  size,
-  zeroHash,
-} from "viem";
+import { type Address, type Hex, isAddressEqual, zeroHash } from "viem";
 import {
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
+import { normalizeEcdsaSignature } from "./normalizeEcdsaSignature.js";
 
 /** Permit tuple consumed by VaultExitBundlesV1. */
 export interface VaultExitBundlesV1PermitStruct {
@@ -93,38 +85,21 @@ export const getVaultExitBundlesV1PermitStruct = (
       actual: requirementSignature.args.asset,
     });
   }
-  const signature = (() => {
-    try {
-      const serializedSignature = requirementSignature.args.signature;
-      return size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-    } catch (cause) {
-      throw new VaultExitBundlesV1PermitMismatchError({
+  const { v, r, s } = normalizeEcdsaSignature(
+    requirementSignature.args.signature,
+    ({ expected, cause }) =>
+      new VaultExitBundlesV1PermitMismatchError({
         field: "signature",
-        expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
+        expected,
         actual: requirementSignature.args.signature,
         cause,
-      });
-    }
-  })();
-
-  const { r, s, v, yParity } = signature;
-  const normalizedV = v ?? (yParity == null ? undefined : BigInt(yParity + 27));
-  if (normalizedV == null) {
-    throw new VaultExitBundlesV1PermitMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: requirementSignature.args.signature,
-    });
-  }
+      }),
+  );
   return {
     value: requirementSignature.args.amount,
     nonce: requirementSignature.args.nonce,
     deadline: requirementSignature.args.deadline,
-    v: Number(normalizedV),
+    v,
     r,
     s,
   };

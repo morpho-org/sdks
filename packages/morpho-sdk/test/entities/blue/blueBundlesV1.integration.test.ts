@@ -201,7 +201,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     const amount = parseUnits("1000", 6);
     const referralFeePct = MathLib.WAD / 100n;
     const referralFeeRecipient = getAddress(
-      "0x000000000000000000000000000000000000dead",
+      "0x000000000000000000000000000000000000dEaD",
     );
     await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
 
@@ -364,7 +364,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     const supplied = parseUnits("1000", 6);
     const referralFeePct = MathLib.WAD / 100n;
     const referralFeeRecipient = getAddress(
-      "0x000000000000000000000000000000000000dead",
+      "0x000000000000000000000000000000000000dEaD",
     );
     await supplyLoan({
       client,

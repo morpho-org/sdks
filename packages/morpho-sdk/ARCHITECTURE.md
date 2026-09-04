@@ -167,11 +167,24 @@ general adapter. The user calls `withdraw(assets, recipient, onBehalf)` or
 
 **Why no bundler?** Withdrawals burn the user's shares in exchange for assets. There is no token transfer from the user to the vault, so there is no inflation attack surface. Direct calls avoid the overhead and approval complexity of the bundler.
 
-### Force Withdrawals and Force Redeems (V2 only): VaultV2 multicall
+### Force Withdrawals (V2 only): VaultExitBundlesV1
 
-Force operations use the VaultV2 contract's native `multicall` — not the bundler. The multicall
-bundles N `forceDeallocate` calls + 1 `withdraw`/`redeem` into a single atomic transaction
-on the vault contract itself.
+`forceWithdraw` calls the standalone **VaultExitBundlesV1** periphery — not the bundler, and no
+longer the vault's own `multicall`. The contract computes its own `forceDeallocate` sequence by
+walking the sole adapter's market list, withdraws idle assets and liquidity-adapter liquidity
+penalty-free first, and bounds the realized exit share price with `minSharePriceE27`. The caller
+supplies an amount, not a plan.
+
+**New prerequisite:** because the periphery burns the user's shares rather than `msg.sender`'s own,
+`forceWithdraw` requires a vault-share allowance or ERC-2612 permit to VaultExitBundlesV1 (bounded to
+the exit's full burn), and the vault's `receiveAssetsGate` must allow that periphery as an asset
+recipient. `tx.to` is VaultExitBundlesV1, not the vault.
+
+### Force Redeems (V2 only): VaultV2 multicall
+
+`forceRedeem` uses the VaultV2 contract's native `multicall` — not the bundler. The multicall bundles
+N caller-supplied `forceDeallocate` calls + 1 `redeem` into a single atomic transaction on the vault
+contract itself. It has no on-chain share-price bound, and the caller plans the deallocations.
 
 ### Blue writes: direct BlueBundlesV1 calls
 
@@ -191,7 +204,7 @@ GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound
 | Deposit (V1 & V2)                     | Bundler3 (general adapter) | `maxSharePrice` enforcement prevents inflation attacks. Optional native token wrapping for wNative vaults. |
 | Withdraw (V1 & V2)                    | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
-| Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
+| Force Withdraw (V2)                   | VaultExitBundlesV1         | Contract-computed deallocations + `minSharePriceE27` bound. Needs a vault-share allowance or permit.       |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
 | `supply` (Blue)                        | BlueBundlesV1             | Pull or wrap loan assets, charge an optional fee, and supply the remainder.                                |
 | `supplyCollateral`, `borrow`, `supplyCollateralBorrow` (Blue) | BlueBundlesV1 | Execute either leg or both; optional Vault V2 allocations on borrow; buffered LLTV on borrow. |

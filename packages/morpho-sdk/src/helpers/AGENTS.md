@@ -7,10 +7,17 @@ Per-function contracts (arguments, return shapes, behavior) live as JSDoc on eac
 ## Categories
 
 - **Encoders** (ABI encoding plus input validation, no I/O) — e.g. `encodeForceDeallocateCall(deallocation, onBehalf)`. ABI-encodes a single `VaultV2.forceDeallocate` calldata entry and throws `NonPositiveInputError` on a non-positive `amount`. The `data` field carries ABI-encoded `MarketParams` for the Morpho Market V1 adapter, or empty bytes otherwise. Internal sub-helpers (e.g. `encodeDeallocateData`) are not exported.
-- **Validators** (pure, throw typed errors) — `validateReallocations(...)`, `validateSlippageTolerance(...)`, `validatePositionHealth(...)`. Each enforces a public-API invariant: see the `error.ts` exports for the full list of error classes a caller may pattern-match on.
+- **Validators** (pure, throw typed errors) — `validateReallocations(...)`, `validateSlippageTolerance(...)`, `validatePositionHealth(...)`. Each enforces a public-API invariant: see the `error.ts` exports for the full list of error classes a caller may pattern-match on. Guards that more than one periphery shares live here as `@internal` non-barrel exports rather than per-call-site copies: `validateUint256Field(field, value)` for the ABI bound, `validateDeadline(deadline)` for the positive-`uint256` deadline every periphery requires (clock-free, so transaction builders can call it; callers needing freshness layer their own `ExpiredDeadlineError`), and `validateReferralFee({ referralFeePct, referralFeeRecipient })`, which returns the normalized pair both BlueBundlesV1 and VaultExitBundlesV1 encode.
 - **Math / share-price helpers** — helpers for vault share-price bounds and public low-level
-  composition use `MAX_SLIPPAGE_TOLERANCE` and cap at `MAX_ABSOLUTE_SHARE_PRICE`. The
-  high-level Blue write methods do not use these helpers or accept slippage inputs.
+  composition use `MAX_SLIPPAGE_TOLERANCE`. Only the `computeMax*SharePrice` helpers cap at
+  `MAX_ABSOLUTE_SHARE_PRICE`: capping relaxes an upper bound, so it is safe there, whereas capping a
+  `computeMin*SharePrice` floor would *lower* it and weaken the guard for any vault or market whose
+  share price grew past the cap. The high-level Blue write methods do not use these helpers or accept
+  slippage inputs.
+  `computeMinForceWithdrawSharePrice` bounds a Vault V2 force withdrawal's realized exit price; it
+  takes the plan's withdrawn assets and share-burn upper bound rather than a market, because the
+  force-deallocation penalty puts the realized price structurally below the vault share price.
+- **Vault V2 exit planning** — `resolveVaultV2ForceWithdrawEligibility` returns a discriminated verdict on VaultExitBundlesV1's four force-withdraw preconditions; `computeVaultV2ForceWithdrawPlan` derives every amount (penalty-free leg, penalised leg, penalty bound, market coverage, `maxExitAssets`, penalty-leg count) from a `getData()` snapshot with zero extra RPC; `computeVaultV2ForceWithdrawSharesBurnt` upper-bounds the share burn and serves as the slippage bound's denominator. The coverage sum is deliberately order-independent — the contract's loop visits every market taking `min(available, remaining)`, and a drained market is removed from the adapter's list mid-loop. `previewVaultV2ForceWithdraw` is the frontend-facing wrapper: it returns `undefined` for an ineligible vault instead of throwing, which is why the throwing path lives in the entity.
 - **Shared-liquidity** — `computeVaultV1Reallocations` builds PublicAllocator V1 reallocations for
   low-level composition. It, its compatibility alias `computeReallocations`, the PublicAllocator V1
   validator, and the other Vault V1 planning and low-level composition helpers are deprecated and

@@ -6,15 +6,9 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   type Address,
-  compactSignatureToSignature,
   encodeAbiParameters,
   type Hex,
   isAddressEqual,
-  maxUint256,
-  parseCompactSignature,
-  parseSignature,
-  type Signature,
-  size,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -22,7 +16,11 @@ import {
   addTransactionMetadata,
   validateNativeAsset,
 } from "../../helpers/index.js";
-import { validateVaultV2BlueReallocations } from "../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateReferralFee,
+  validateVaultV2BlueReallocations,
+} from "../../helpers/validate.js";
 import {
   AmbiguousRequirementSignaturesError,
   type AuthorizationRequirementSignature,
@@ -34,12 +32,9 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
-  InputExceedsMaxError,
   type Metadata,
-  MissingReferralFeeRecipientError,
   NativeFundingAmountMismatchError,
   NegativeInputError,
-  NonPositiveInputError,
   ReallocationLoanTokenMismatchError,
   type RequirementSignature,
   selectRequirementSignatures,
@@ -48,6 +43,10 @@ import {
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import {
+  type NormalizedEcdsaSignature,
+  normalizeEcdsaSignature,
+} from "../signatures/normalizeEcdsaSignature.js";
 
 /** @internal */
 export interface BlueBundlesV1CommonParams {
@@ -83,7 +82,7 @@ interface BlueBundlesV1TokenPermit {
 }
 
 interface BlueBundlesV1SignedAuthorization {
-  signature: { v: number; r: Hex; s: Hex };
+  signature: NormalizedEcdsaSignature;
   nonce: bigint;
   deadline: bigint;
 }
@@ -103,38 +102,8 @@ const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
 export const normalizeBlueBundlesV1CommonParams = (
   params: BlueBundlesV1CommonParams,
 ): NormalizedBlueBundlesV1CommonParams => {
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  if (params.deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: params.deadline,
-      max: maxUint256,
-    });
-  }
-  const referralFeePct = params.referralFeePct ?? 0n;
-  if (referralFeePct < 0n) {
-    throw new NegativeInputError("referralFeePct", referralFeePct);
-  }
-  if (referralFeePct >= MathLib.WAD) {
-    throw new InputExceedsMaxError({
-      field: "referralFeePct",
-      value: referralFeePct,
-      max: MathLib.WAD - 1n,
-    });
-  }
-  if (
-    referralFeePct > 0n &&
-    (params.referralFeeRecipient == null ||
-      isAddressEqual(params.referralFeeRecipient, zeroAddress))
-  ) {
-    throw new MissingReferralFeeRecipientError();
-  }
-  return {
-    referralFeePct,
-    referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
-  };
+  validateDeadline(params.deadline);
+  return validateReferralFee(params);
 };
 
 /** @internal */
@@ -244,33 +213,16 @@ export const getBlueBundlesV1TokenPermit = (params: {
     });
   }
 
-  const serializedSignature = requirementSignature.args.signature;
-  let parsed: Signature;
-  try {
-    parsed =
-      size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-  } catch (cause) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
-      actual: serializedSignature,
-      cause,
-    });
-  }
-  const v =
-    parsed.v ??
-    (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
-  if (v == null) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: serializedSignature,
-    });
-  }
+  const { v, r, s } = normalizeEcdsaSignature(
+    requirementSignature.args.signature,
+    ({ expected, cause }) =>
+      new BlueBundlesV1RequirementSignatureMismatchError({
+        field: "signature",
+        expected,
+        actual: requirementSignature.args.signature,
+        cause,
+      }),
+  );
   return {
     kind: BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND.erc2612,
     data: encodeAbiParameters(
@@ -280,7 +232,7 @@ export const getBlueBundlesV1TokenPermit = (params: {
         { type: "bytes32", name: "r" },
         { type: "bytes32", name: "s" },
       ],
-      [requirementSignature.args.deadline, Number(v), parsed.r, parsed.s],
+      [requirementSignature.args.deadline, v, r, s],
     ),
   };
 };
@@ -342,35 +294,18 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     });
   }
 
-  const serializedSignature = authorizationSignature.args.signature;
-  let parsed: Signature;
-  try {
-    parsed =
-      size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-  } catch (cause) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
-      actual: serializedSignature,
-      cause,
-    });
-  }
-  const v =
-    parsed.v ??
-    (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
-  if (v == null) {
-    throw new BlueBundlesV1RequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: serializedSignature,
-    });
-  }
+  const signature = normalizeEcdsaSignature(
+    authorizationSignature.args.signature,
+    ({ expected, cause }) =>
+      new BlueBundlesV1RequirementSignatureMismatchError({
+        field: "signature",
+        expected,
+        actual: authorizationSignature.args.signature,
+        cause,
+      }),
+  );
   return {
-    signature: { v: Number(v), r: parsed.r, s: parsed.s },
+    signature,
     nonce: authorizationSignature.args.nonce,
     deadline: authorizationSignature.args.deadline,
   };

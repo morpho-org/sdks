@@ -8,7 +8,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 ## Routing summary
 
-- **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem. VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone VaultExitBundlesV1 periphery directly. Their optional RPC-backed pre-flight checks run only when the caller awaits `getRequirements()`; the pure actions and `buildTx()` remain synchronous and can encode without those reads.
+- **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceRedeem` uses `multicall` with caller-supplied `forceDeallocate` calls before the final redeem. VaultV2 `forceWithdraw` and VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone VaultExitBundlesV1 periphery directly; `forceWithdraw` additionally derives its own `minSharePriceE27` bound and needs no caller-supplied deallocations. Their optional RPC-backed pre-flight checks run only when the caller awaits `getRequirements()`; the pure actions and `buildTx()` remain synchronous and can encode without those reads.
 - **Blue writes** stay on `client.morpho.blue(marketParams, chainId)` and preserve the established
   high-level methods: `supply`, `withdraw`, `supplyCollateral`, `borrow`,
   `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, and
@@ -46,7 +46,7 @@ Protocol terms used across this package's docs and JSDoc:
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
 - **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Its data and low-level helpers remain public, but v6 high-level Blue writes do not accept V1 reallocations.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
-- **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
+- **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions. Its `vaultExitBundlesV1ForceWithdrawVaultV2` entry point additionally force-withdraws into the underlying asset, computing its own deallocations, bounding the realized exit share price with `minSharePriceE27`, and optionally routing a referral fee.
 - **Shared-liquidity migration** — every PublicAllocator V1 planning, data, input, validation, and
   Bundler3-composition symbol is deprecated and will be removed in the next major. The successor is
   `MorphoBlue.getVaultV2BlueReallocationData` plus
@@ -68,7 +68,7 @@ The action verbs available to vault flows and advanced low-level Bundler3 compos
   becomes a signable `Requirement`; the destination action consumes the signed authorization.
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
-- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
+- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before a redeem. Only `forceRedeem` composes these; `forceWithdraw` moved to VaultExitBundlesV1, which derives its own deallocations on-chain.
 - **`reallocateTo`** — deprecated PublicAllocator V1 call that shifts liquidity from sorted
   source markets into the target market; it will be removed from the SDK in the next major.
 - **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — low-level Bundler3 actions that move one market source or vault idle liquidity into a target market. Both target the chain's registered allocator, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata. The direct BlueBundlesV1 route instead carries equivalent allocator inputs in its fixed call.

@@ -30,8 +30,8 @@ import {
   selectBlueBundlesV1RequirementSignatures,
 } from "./common.js";
 
-const owner = getAddress("0x00000000000000000000000000000000000000a1");
-const spender = getAddress("0x00000000000000000000000000000000000000b1");
+const owner = getAddress("0x00000000000000000000000000000000000000A1");
+const spender = getAddress("0x00000000000000000000000000000000000000B1");
 const asset = getAddress("0x0000000000000000000000000000000000000011");
 
 const permit = {

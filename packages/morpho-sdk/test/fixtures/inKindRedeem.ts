@@ -7,6 +7,7 @@ import {
   getChainAddress,
   Market,
   MarketParams,
+  marketParamsAbi,
 } from "@morpho-org/blue-sdk";
 import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { type MockClientHandle, mockRead } from "@morpho-org/test/mock";
@@ -17,6 +18,7 @@ import {
   type ContractFunctionName,
   type ContractFunctionReturnType,
   type EncodeFunctionResultParameters,
+  encodeAbiParameters,
   encodeFunctionResult,
   type Hex,
   multicall3Abi,
@@ -150,19 +152,38 @@ export const inKindVaultV1Data = (params?: {
   );
 };
 
+/** Foreign liquidity adapter used to exercise the unresolvable-liquidity-adapter rejection. */
+export const IN_KIND_FOREIGN_ADAPTER =
+  "0x0000000000000000000000000000000000001005" as const;
+
 export const inKindVaultV2Data = (params?: {
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
   readonly assetBalance?: bigint;
   readonly totalAssets?: bigint;
+  /**
+   * Vault share supply. Defaults to `totalAssets` for a ~1:1 share price; raise it so each
+   * withdraw leg's `toShares(_, "Up")` rounds up independently.
+   */
+  readonly totalSupply?: bigint;
   readonly marketTotalAssets?: bigint;
+  readonly marketTotalBorrowAssets?: bigint;
   readonly marketTotalSupplyShares?: bigint;
+  readonly secondMarketTotalBorrowAssets?: bigint;
   readonly rateAtTarget?: bigint;
   readonly maxRate?: bigint;
   readonly managementFee?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";
   readonly additionalMarket?: boolean;
+  /**
+   * Liquidity routing: `"none"` leaves it unset, `"sole"` routes through the vault's own adapter
+   * and first market, `"foreign"` points at an unrelated adapter, `"undecodable"` keeps the sole
+   * adapter but stores `liquidityData` the contract cannot ABI-decode as `MarketParams`.
+   */
+  readonly liquidityAdapter?: "none" | "sole" | "foreign" | "undecodable";
+  /** Market the `"sole"` liquidity adapter routes through. Defaults to the first market. */
+  readonly liquidityMarket?: "first" | "second";
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
   const marketTotalAssets = params?.marketTotalAssets ?? 1_000n;
@@ -171,7 +192,8 @@ export const inKindVaultV2Data = (params?: {
   const market = new Market({
     params: inKindMarketParams,
     totalSupplyAssets: marketTotalAssets,
-    totalBorrowAssets: (marketTotalAssets * 9n) / 10n,
+    totalBorrowAssets:
+      params?.marketTotalBorrowAssets ?? (marketTotalAssets * 9n) / 10n,
     totalSupplyShares: marketTotalSupplyShares,
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
@@ -181,7 +203,7 @@ export const inKindVaultV2Data = (params?: {
   const secondMarket = new Market({
     params: secondInKindMarketParams,
     totalSupplyAssets: 500n,
-    totalBorrowAssets: 450n,
+    totalBorrowAssets: params?.secondMarketTotalBorrowAssets ?? 450n,
     totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
@@ -231,6 +253,28 @@ export const inKindVaultV2Data = (params?: {
       ? []
       : [params?.adapters === "legacy" ? legacyAdapter : adapter];
 
+  const liquidityMarketParams =
+    params?.liquidityMarket === "second"
+      ? secondInKindMarketParams
+      : inKindMarketParams;
+  // Encoded the way Vault V2 stores `liquidityData`.
+  const liquidityMarketData = encodeAbiParameters(
+    [marketParamsAbi],
+    [liquidityMarketParams],
+  );
+  const [liquidityAdapter, liquidityData] = ((): [Address, Hex] => {
+    switch (params?.liquidityAdapter) {
+      case "sole":
+        return [IN_KIND_ADAPTER, liquidityMarketData];
+      case "foreign":
+        return [IN_KIND_FOREIGN_ADAPTER, liquidityMarketData];
+      case "undecodable":
+        return [IN_KIND_ADAPTER, "0xdead"];
+      default:
+        return [ZERO_ADDRESS, "0x"];
+    }
+  })();
+
   return new AccrualVaultV2(
     {
       address,
@@ -239,24 +283,32 @@ export const inKindVaultV2Data = (params?: {
       decimals: 18,
       asset: IN_KIND_ASSET,
       _totalAssets: totalAssets,
-      totalSupply: totalAssets,
+      totalSupply: params?.totalSupply ?? totalAssets,
       virtualShares: 0n,
       maxRate: params?.maxRate ?? 0n,
       lastUpdate: snapshotTimestamp(),
-      liquidityAdapter: ZERO_ADDRESS,
-      liquidityData: "0x",
+      liquidityAdapter,
+      liquidityData,
       liquidityAllocations: undefined,
       performanceFee: 0n,
       managementFee: params?.managementFee ?? 0n,
       performanceFeeRecipient: IN_KIND_USER,
       managementFeeRecipient: IN_KIND_USER,
     },
-    undefined,
+    params?.liquidityAdapter === "sole" ? adapter : undefined,
     adapters,
     params?.assetBalance ?? 0n,
     { [IN_KIND_ADAPTER]: params?.penalty ?? 0n },
   );
 };
+
+/**
+ * Vault V2 snapshot fixture for VaultExitBundlesV1 exits.
+ *
+ * Same shape for in-kind redemption and force withdrawal; the force-withdraw tests use this name
+ * because the fixture is not in-kind-specific.
+ */
+export const vaultV2ExitData = inKindVaultV2Data;
 
 export const encodeReadResult = <
   const abi extends Abi,

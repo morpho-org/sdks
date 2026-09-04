@@ -11,14 +11,15 @@ import {
 import { readContract } from "viem/actions";
 import { validateChainId } from "../../../helpers/index.js";
 import {
+  validateDeadline,
+  validateUint256Field,
+} from "../../../helpers/validate.js";
+import {
   ApprovalAmountLessThanSpendAmountError,
   type BlueBundlesV1TokenSignatureRequirement,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
-  InputExceedsMaxError,
   MissingPermit2TransferFromNonceError,
-  NegativeInputError,
-  NonPositiveInputError,
   Permit2TransferFromNonceAlreadyUsedError,
   type Transaction,
 } from "../../../types/index.js";
@@ -114,28 +115,10 @@ export const getBlueBundlesV1TokenRequirements = async (
   )[]
 > => {
   validateChainId(viemClient.chain?.id, params.chainId);
-  if (params.amount < 0n) {
-    throw new NegativeInputError("amount", params.amount);
-  }
-  // Reject oversized inputs before any RPC read so this resolver never asks the user to sign or
+  // Reject out-of-range inputs before any RPC read so this resolver never asks the user to sign or
   // submit an approval/permit that the eventual BlueBundlesV1 call (uint256 ABI) would reject.
-  if (params.amount > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "amount",
-      value: params.amount,
-      max: maxUint256,
-    });
-  }
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  if (params.deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: params.deadline,
-      max: maxUint256,
-    });
-  }
+  validateUint256Field("amount", params.amount);
+  validateDeadline(params.deadline);
   // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
   // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
   // this too, but the exported resolver must guard its own callers.
@@ -180,16 +163,7 @@ export const getBlueBundlesV1TokenRequirements = async (
       if (params.permit2Nonce == null) {
         throw new MissingPermit2TransferFromNonceError();
       }
-      if (params.permit2Nonce < 0n) {
-        throw new NegativeInputError("permit2Nonce", params.permit2Nonce);
-      }
-      if (params.permit2Nonce > maxUint256) {
-        throw new InputExceedsMaxError({
-          field: "permit2Nonce",
-          value: params.permit2Nonce,
-          max: maxUint256,
-        });
-      }
+      validateUint256Field("permit2Nonce", params.permit2Nonce);
       const wordPosition = params.permit2Nonce >> 8n;
       const bitPosition = params.permit2Nonce & 255n;
       const [allowance, nonceBitmap] = await Promise.all([

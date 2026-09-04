@@ -14,6 +14,7 @@ import {
   isAddressEqual,
   maxUint128,
   maxUint256,
+  zeroAddress,
 } from "viem";
 import {
   AccrualPositionUserMismatchError,
@@ -31,6 +32,7 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
+  MissingReferralFeeRecipientError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
@@ -78,6 +80,69 @@ export const validateUint256Field = (field: string, value: bigint): void => {
   if (value > maxUint256) {
     throw new InputExceedsMaxError({ field, value, max: maxUint256 });
   }
+};
+
+/**
+ * Rejects a deadline that no periphery can honour: the contracts read `0` as "unset" and the ABI
+ * slot is a `uint256`. Callers that also need the deadline to be in the future layer their own
+ * `ExpiredDeadlineError` on top — this check stays clock-free so transaction builders can use it.
+ *
+ * @param deadline - Candidate deadline, in seconds.
+ * @returns Nothing when `deadline` is a positive `uint256`.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds `maxUint256`.
+ * @internal
+ */
+export const validateDeadline = (deadline: bigint): void => {
+  if (deadline <= 0n) throw new NonPositiveInputError("deadline", deadline);
+  validateUint256Field("deadline", deadline);
+};
+
+/**
+ * Validates an optional referral fee and returns the pair every referral-fee-bearing periphery
+ * encodes. Shared by the direct BlueBundlesV1 writes and the VaultExitBundlesV1 force withdrawal,
+ * whose contracts apply the same `[0, WAD)` bound and both transfer the fee unconditionally.
+ *
+ * @param params - Referral fee inputs.
+ * @param params.referralFeePct - Optional WAD-scaled fee share. Defaults to `0n`.
+ * @param params.referralFeeRecipient - Optional fee recipient. Defaults to the zero address, which
+ *   is only valid alongside a zero `referralFeePct`.
+ * @returns The normalized `{ referralFeePct, referralFeeRecipient }` pair.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contracts reject it
+ *   with `PctExceeded`).
+ * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
+ * @internal
+ */
+export const validateReferralFee = (params: {
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+}): {
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+} => {
+  const referralFeePct = params.referralFeePct ?? 0n;
+  if (referralFeePct < 0n) {
+    throw new NegativeInputError("referralFeePct", referralFeePct);
+  }
+  if (referralFeePct >= MathLib.WAD) {
+    throw new InputExceedsMaxError({
+      field: "referralFeePct",
+      value: referralFeePct,
+      max: MathLib.WAD - 1n,
+    });
+  }
+  if (
+    referralFeePct > 0n &&
+    (params.referralFeeRecipient == null ||
+      isAddressEqual(params.referralFeeRecipient, zeroAddress))
+  ) {
+    throw new MissingReferralFeeRecipientError(referralFeePct);
+  }
+  return {
+    referralFeePct,
+    referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
+  };
 };
 
 /**
