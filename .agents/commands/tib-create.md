@@ -47,7 +47,8 @@ Most of the time and effort behind significant technical work should go into the
 | --------------------------------------------------------------- | --------------------------------------------- |
 | Public function signatures — input & output types               | How an encoder is structured internally       |
 | Observable behavior: "if X then Y"                              | Private helper signatures, variable names     |
-| Invariants: rounding, ordering, atomicity, backward-compat      | The literal constant used to achieve behavior |
+| Invariants: rounding, ordering, atomicity, backward-compat      | A private constant used to achieve behavior   |
+| Exact public / protocol values: exported constants, caps, rates | A private helper's internal threshold         |
 | Semver deltas: what is added, removed, deprecated               | List of files to touch, order of edits        |
 | Which contract / target a transaction hits                      | Pseudo-code of each function                  |
 | Release ordering, when it changes what ships                    | Test file names and individual cases          |
@@ -116,12 +117,17 @@ dated file and fill `Supersedes` / `Superseded by` on both.
 You are not allowed to ask about anything you could have read. Before drafting:
 
 - `git log --oneline -20` and the diff of any branch work already related to the decision.
-- The packages named in the title: their `src/index.ts` public surface, their `AGENTS.md`.
+- Every package the decision implicates — not only those named literally in the title. When the
+  title is conceptual (e.g. "Add permit support"), search the repo for the packages it touches, then
+  read their `src/index.ts` public surface and their `AGENTS.md`.
 - The root `AGENTS.md` sections the decision touches — layering (§1), forbidden patterns (§2),
   public API and packaging (§4), testing and security invariants (§5), releases and the deprecation
   flow (§7).
-- `ls docs/tibs/` — prior, superseded, and adjacent TIBs. Read the two most recent for house style
-  and for decisions this one must not contradict.
+- `ls docs/tibs/` — prior, superseded, and adjacent TIBs. Read the two most recent for house style,
+  and search TIB titles and contents for every brief this decision relates to or supersedes — read
+  each of those in full, however old, so the draft cannot contradict an accepted decision or miss a
+  required supersession. The two-most-recent rule is for house style only, never a substitute for
+  reading the governing TIB.
 
 **Structure comes from this command's `## Canonical template`, not from older files.** TIBs in
 `docs/tibs/` that predate this rulebook are read for prior decisions and house style — never copied
@@ -154,8 +160,10 @@ not bundle it as a rider on a legitimate question.
 - Which files to touch, or in what order.
 - Private / non-exported signatures, internal helper structure, variable names.
 - Pseudo-code or "call Y then Z" sequences.
-- The literal constant used to achieve a behavior — ask about the **behavior**, then leave the
-  constant to the code.
+- A **private implementation** constant used to achieve a behavior — ask about the **behavior**,
+  then leave the constant to the code. This does **not** cover exact public or protocol values: an
+  exported constant, a public cap, or a fixed rate is itself part of the semver-protected contract —
+  capture that literal in `Public Interface` or `Behavior`, and ask for it if it is unclear.
 - Test file names or individual test cases — Acceptance Criteria states *what must be true*, never
   *which test asserts it*.
 - Anything that would read as false after a routine refactor.
@@ -181,10 +189,14 @@ entries that clear the admission test become questions.
 
 #### How to ask
 
-- **Batch, do not drip.** One round, at most 5 questions, ordered by how much of the brief each
-  unblocks. Use `AskUserQuestion` with concrete options.
+- **Batch, do not drip.** One round, at most 4 questions (the `AskUserQuestion` tool accepts no
+  more per call), ordered by how much of the brief each unblocks. If the coverage sweep yields more
+  than four, keep the four that unblock the most and route the rest through the follow-up round or
+  the `## Open Questions` handling below. Use `AskUserQuestion` with concrete options.
 - **Propose the answer the repo implies, first.** You have read the code; a closed question with a
-  recommended default beats an open one, and makes silence a usable input.
+  recommended default beats an open one, and lowers the effort of answering. A recommendation only
+  speeds the reply — it never converts silence into an answer: an absent response is always handled
+  under _When an answer does not come_ below, never adopted as the recommended option.
 - **Show the stake.** Each question names the section it feeds and what changes depending on the
   answer — one clause is enough: _"Behavior — decides whether a zero-amount leg is a no-op or a
   revert."_ If you cannot write that clause, the question failed admission test 1. Drop it.
@@ -212,11 +224,15 @@ Write `PATH` from the `## Canonical template` below.
   placeholder, a `TBD`, or an `N/A`.
 - **`Public Interface`, `Behavior`, and `Invariants` are gated independently, each on its own
   surface** — include `Public Interface` when the decision changes a public API, `Behavior` when it
-  has observable runtime behavior, `Invariants` when it has a runtime invariant. Each is mandatory
-  when its own surface applies (which is nearly every SDK TIB) and dropped — heading and all, like an
-  optional section — when that surface does not. A decision may keep one and drop another: a pure type
-  rename keeps `Public Interface` and drops the other two; a pure process, tooling, or documentation
-  decision drops all three. Never keep any of them as an empty or `N/A` heading.
+  has observable runtime behavior, and `Invariants` when it has **any binding invariant** — a runtime
+  one (rounding, atomicity, authorization) *or* a non-runtime one (release ordering, approval gating,
+  an external assumption the decision depends on). Each is mandatory when its own surface applies
+  (which is nearly every SDK TIB) and dropped — heading and all, like an optional section — when that
+  surface does not. A decision may keep one and drop another: a pure type rename keeps
+  `Public Interface` and drops `Behavior`; a process or tooling decision drops `Public Interface` and
+  `Behavior` but keeps `Invariants` when its binding property is a release-ordering or external
+  assumption. Only a decision with no binding invariant at all drops `Invariants`. Never keep any of
+  them as an empty or `N/A` heading.
 - **Context: 5–15 lines.** Explain the force, not the solution.
 - **Decision states the rule, not the mechanics.** A reader must be able to recite it in three
   sentences without knowing a single internal type.
@@ -235,9 +251,13 @@ line in a frozen document is exactly the kind of detail that rots.
 
 Run this against the draft and fix what fails:
 
-- [ ] Every line is observable / contractual, or is the decision itself.
+- [ ] Every line is observable / contractual, is the decision itself, or is the rationale the
+      decision rests on — the contextual force and the reason each alternative was rejected. Keep the
+      "why"; it is what `Context` and `Rejected alternatives` exist to carry. Cut only internal
+      mechanics, not justification.
 - [ ] Cheat-sheet sweep (below) finds nothing: no file lists, no private signatures, no pseudo-code,
-      no variable names, no literal constant standing in for a behavior, no test names or cases.
+      no variable names, no private constant standing in for a behavior, no test names or cases.
+      (Exact public or protocol values — exported constants, caps, rates — stay: they are contract.)
 - [ ] **Compression test** on each paragraph — would removing it only produce two equally correct
       internal implementations? Then cut it.
 - [ ] **Agent acceptance test** — given only this TIB + the repo, can a reviewer decide whether a PR
@@ -258,10 +278,15 @@ Run this against the draft and fix what fails:
    one developer review** before it is accepted.
 2. **No changeset.** A TIB is documentation, not a change to published package source
    (`AGENTS.md` §7).
-3. **Then plan.** Once accepted, run `/extract-plan docs/tibs/TIB-<DATE>-<SLUG>.md "<project name>"`
+3. **Codify a rule change first.** If the accepted TIB evolves an engineering principle — any rule
+   in a root or scoped `AGENTS.md` — the implementation PR must update that rule's wording and its
+   review-persona backlink (`AGENTS.md` §10), or the PR is still measured against the superseded
+   rule. Note this in the TIB's `Breaking Changes & Migration` or `Acceptance Criteria` so the
+   planning step carries it; the edit itself lands in the implementation PR, not the TIB PR.
+4. **Then plan.** Once accepted, run `/extract-plan docs/tibs/TIB-<DATE>-<SLUG>.md "<project name>"`
    to generate the Linear tickets that carry the implementation detail. Those details live in the
    tickets — never back in the TIB.
-4. **Then leave it alone.** A changed decision gets a new superseding TIB, with `Supersedes` /
+5. **Then leave it alone.** A changed decision gets a new superseding TIB, with `Supersedes` /
    `Superseded by` filled on both. An operational clarification gets a dated addendum. Recurring
    mechanical addenda mean the line was drawn in the wrong place — move the detail out of the brief
    rather than amending it again (`AGENTS.md` §6).
@@ -274,9 +299,11 @@ Sections in this order. Optional sections (Current Solution, Rejected alternativ
 & Migration, Consequences, Open Questions, References, Addenda) appear only when they carry content.
 `Public Interface`, `Behavior`, and `Invariants` are each gated on their own surface: include
 `Public Interface` only when the decision changes a public API, `Behavior` only when it has
-observable runtime behavior, and `Invariants` only when it has a runtime invariant. Each is mandatory
-when its surface applies and dropped when it does not, so a decision may keep one and drop another; a
-pure process, tooling, or documentation decision drops all three.
+observable runtime behavior, and `Invariants` when it has any binding invariant — runtime (rounding,
+ordering, atomicity, backward-compat) or non-runtime (release ordering, an external assumption). Each
+is mandatory when its surface applies and dropped when it does not, so a decision may keep one and
+drop another; a process or tooling decision drops `Public Interface` and `Behavior` but keeps
+`Invariants` when it has a binding release-ordering or external-assumption invariant.
 
 ```markdown
 # TIB-<DATE>: <TITLE>
@@ -329,10 +356,10 @@ what a zero or max input means, which authorizations are required.
 
 ## Invariants
 
-_Required when the decision has a runtime invariant; drop the section when it does not._ The
-properties that must hold no matter how the code is written — security, rounding,
-atomicity, ordering, protocol limits, backward-compatibility — plus the assumptions the decision
-depends on.
+_Required when the decision has any binding invariant — runtime or not; drop the section only when it
+has none._ The properties that must hold no matter how the code is written — security, rounding,
+atomicity, ordering, protocol limits, backward-compatibility, and non-runtime invariants such as
+release ordering or an external assumption — plus the assumptions the decision depends on.
 
 - Invariant, phrased so it survives any refactor.
 

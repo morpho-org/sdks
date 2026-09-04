@@ -13,10 +13,12 @@ alternatives, Breaking Changes & Migration, Consequences, Open Questions, Refere
 Addenda) appear only when they carry content — delete the heading otherwise. Public
 Interface, Behavior, and Invariants are each gated on their own surface: keep Public
 Interface only when the decision changes a public API, Behavior only when it has observable
-runtime behavior, and Invariants only when it has a runtime invariant. Each is mandatory
-when its surface applies and dropped when it does not, so a decision may keep one and drop
-another; a pure process, tooling, or documentation decision drops all three. Never leave an
-empty placeholder, a `TBD`, or an `N/A`.
+runtime behavior, and Invariants when it has any binding invariant — runtime (rounding,
+ordering, atomicity, backward-compat) or non-runtime (release ordering, an external
+assumption). Each is mandatory when its surface applies and dropped when it does not, so a
+decision may keep one and drop another; a process or tooling decision drops Public Interface
+and Behavior but keeps Invariants when it has a binding release-ordering or external-assumption
+invariant. Never leave an empty placeholder, a `TBD`, or an `N/A`.
 -->
 
 # TIB-<DATE>: <TITLE>
@@ -69,10 +71,10 @@ what a zero or max input means, which authorizations are required.
 
 ## Invariants
 
-_Required when the decision has a runtime invariant; drop the section when it does not._ The
-properties that must hold no matter how the code is written — security, rounding,
-atomicity, ordering, protocol limits, backward-compatibility — plus the assumptions the decision
-depends on.
+_Required when the decision has any binding invariant — runtime or not; drop the section only when it
+has none._ The properties that must hold no matter how the code is written — security, rounding,
+atomicity, ordering, protocol limits, backward-compatibility, and non-runtime invariants such as
+release ordering or an external assumption — plus the assumptions the decision depends on.
 
 - Invariant, phrased so it survives any refactor.
 
