@@ -88,6 +88,7 @@ describe("MorphoBlue validation", () => {
         assets: 1n,
         userAddress: USER,
         positionData: makePosition({ supplyShares: 10n ** 18n }),
+        deadline: maxUint256,
       })
       .getRequirements();
 

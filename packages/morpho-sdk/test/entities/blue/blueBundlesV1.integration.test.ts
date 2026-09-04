@@ -16,6 +16,7 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import {
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
   maxUint128,
   maxUint256,
   parseUnits,
@@ -26,7 +27,7 @@ import {
   isRequirementBlueAuthorization,
   morphoViemExtension,
 } from "../../../src/index.js";
-import { WethUsdsBlue } from "../../fixtures/blue.js";
+import { CbbtcUsdcBlue, WethUsdsBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import {
   satisfyBlueBundlesV1Requirements,
@@ -85,6 +86,325 @@ const getBlueBundlesBalances = async (
 };
 
 describe("BlueBundlesV1 Blue writes", () => {
+  test("supply: executes with ERC-2612 without retaining assets", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      deadline: maxUint256,
+    });
+
+    const requirements = await action.getRequirements({
+      useSimplePermit: true,
+    });
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["permit"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("supply: executes with Permit2 SignatureTransfer without retaining assets", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      deadline: maxUint256,
+    });
+
+    // No `useSimplePermit`: the default signature path selects Permit2
+    // SignatureTransfer, which needs an explicit unused nonce. It emits a
+    // one-time ERC-20 approval to canonical Permit2 plus the signed transfer
+    // naming BlueBundlesV1 as spender — verifying the deployed contract
+    // interprets the `kind: 2` permit payload.
+    const requirements = await action.getRequirements({ permit2Nonce: 0n });
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["erc20Approval", "permit2TransferFrom"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("supply: carves the referral fee to the recipient", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const referralFeePct = MathLib.WAD / 100n;
+    const referralFeeRecipient = getAddress(
+      "0x000000000000000000000000000000000000dead",
+    );
+    await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const recipientBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: referralFeeRecipient,
+    });
+    // Positive referral fee: BlueBundlesV1 carves it out of the funded `assets`,
+    // credits the recipient, and supplies the remainder — accounting that
+    // calldata-only unit tests cannot verify against the deployed contract.
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      referralFeePct,
+      referralFeeRecipient,
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await action.getRequirements({ useSimplePermit: true }),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    // BlueBundlesV1 carves `fee = mulDivDown(assets, pct, WAD)` from the funded
+    // `assets` and pays it to the recipient in loan tokens. `1%` of `1000e6`
+    // divides evenly, so the expected fee is exact regardless of the contract's
+    // rounding direction — a wrong base (net, or `pct/(WAD-pct)`) would not match.
+    const expectedFee = MathLib.mulDivDown(amount, referralFeePct, MathLib.WAD);
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(
+      (await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: referralFeeRecipient,
+      })) - recipientBefore,
+    ).toBe(expectedFee);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("withdraw: executes with signed BlueBundles authorization", async ({
+    client,
+  }) => {
+    const supplied = parseUnits("1000", 6);
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+      supplyAmount: supplied,
+    });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const action = market.withdraw({
+      userAddress: client.account.address,
+      positionData,
+      assets: supplied / 2n,
+      deadline: maxUint256,
+    });
+
+    const requirements = await action.getRequirements();
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["authorization"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeLessThan(positionData.supplyShares);
+    expect(
+      await client.readContract({
+        address: getChainAddress(mainnet.id, "morpho"),
+        abi: blueAbi,
+        functionName: "isAuthorized",
+        args: [
+          client.account.address,
+          getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
+        ],
+      }),
+    ).toBe(true);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("withdraw: closes the full position by shares and returns proceeds", async ({
+    client,
+  }) => {
+    const supplied = parseUnits("1000", 6);
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+      supplyAmount: supplied,
+    });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const userBalanceBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: client.account.address,
+    });
+    // Full-close by shares: burns every supply share and verifies the deployed
+    // contract's shares-to-assets conversion, full burn, and returned proceeds,
+    // which the assets-mode fork case above cannot exercise.
+    const action = market.withdraw({
+      userAddress: client.account.address,
+      positionData,
+      shares: positionData.supplyShares,
+      deadline: maxUint256,
+    });
+
+    const requirements = await action.getRequirements();
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["authorization"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBe(0n);
+    expect(
+      await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: client.account.address,
+      }),
+    ).toBeGreaterThan(userBalanceBefore);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("withdraw: carves the referral fee from proceeds to the recipient", async ({
+    client,
+  }) => {
+    const supplied = parseUnits("1000", 6);
+    const referralFeePct = MathLib.WAD / 100n;
+    const referralFeeRecipient = getAddress(
+      "0x000000000000000000000000000000000000dead",
+    );
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+      supplyAmount: supplied,
+    });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const withdrawAssets = supplied / 2n;
+    const recipientBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: referralFeeRecipient,
+    });
+    const userBalanceBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: client.account.address,
+    });
+    // Positive referral fee: BlueBundlesV1 deducts it from withdrawal proceeds
+    // and credits the recipient — accounting distinct from the supply route.
+    const action = market.withdraw({
+      userAddress: client.account.address,
+      positionData,
+      assets: withdrawAssets,
+      referralFeePct,
+      referralFeeRecipient,
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await action.getRequirements(),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    // No reallocations ⇒ zero penalty, so BlueBundlesV1 withdraws exactly
+    // `withdrawAssets`, pays `fee = mulDivDown(withdrawAssets, pct, WAD)` to the
+    // recipient, and returns the remainder to the user. `1%` of `500e6` divides
+    // evenly, so both deltas are exact regardless of the contract's rounding.
+    const expectedFee = MathLib.mulDivDown(
+      withdrawAssets,
+      referralFeePct,
+      MathLib.WAD,
+    );
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeLessThan(positionData.supplyShares);
+    expect(
+      (await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: referralFeeRecipient,
+      })) - recipientBefore,
+    ).toBe(expectedFee);
+    expect(
+      (await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: client.account.address,
+      })) - userBalanceBefore,
+    ).toBe(withdrawAssets - expectedFee);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
   test("supplyCollateralBorrow: executes with explicit-nonce SignatureTransfer", async ({
     client,
   }) => {
