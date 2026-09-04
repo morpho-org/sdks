@@ -180,8 +180,11 @@ export interface VaultV1Actions {
    * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
    * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
+   *   satisfied between calls stops being reported, while the derived share cap stays pinned to
+   *   the first resolution.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
-   *   at any `getRequirements()` call, including calls served from the cached requirement set.
+   *   at any `getRequirements()` call.
    */
   withdraw: (params: {
     readonly amount: bigint;
@@ -488,14 +491,20 @@ export class MorphoVaultV1 implements VaultV1Actions {
     validateSlippageTolerance(slippageTolerance);
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     let requiredShareAllowance: bigint | undefined;
-    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let vaultSnapshot: AccrualVault | undefined;
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return resolvedRequirements;
-        const vaultData = await this.getData();
+        // Re-read the live share allowance on every call instead of caching the resolved
+        // requirements: the allowance is the sole cap on the burn, so a caller that executed the
+        // returned approval must see it satisfied on the next call, and an allowance revoked or
+        // raised afterwards must resurface as an outstanding requirement. Only the vault snapshot
+        // and the cap derived from it are pinned, so re-reading cannot move the cap this handle
+        // already committed to; the snapshot is used for immutable identity and permit-domain
+        // fields only.
+        const vaultData = (vaultSnapshot ??= await this.getData());
         requiredShareAllowance ??= computeVaultMaxShareAllowance({
           vaultData,
           deadline,
@@ -518,8 +527,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
         if (signatureRequirement?.action.type === "permit") {
           expectedRequirement = signatureRequirement.action;
         }
-        resolvedRequirements = requirements;
-        return resolvedRequirements;
+        return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesRequirementSignature(signatures, {
