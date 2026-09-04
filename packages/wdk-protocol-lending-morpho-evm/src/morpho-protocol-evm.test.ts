@@ -561,6 +561,39 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledTimes(1);
     });
 
+    test("should submit a prepared withdrawal without a signature once the allowance matches", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
+      const prepared = await protocol.prepareWithdraw({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+
+      const result = await prepared.submit();
+
+      expect(withdrawAction.buildTx).toHaveBeenCalledWith(undefined);
+      expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
+      expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+    });
+
+    test("error: UnresolvedVaultWithdrawRequirementsError on prepared submit without a signature", async () => {
+      const prepared = await protocol.prepareWithdraw({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      account.sendTransaction = vi.fn();
+
+      // Never awaits prepared.getRequirements() first — submit() must re-resolve the allowance
+      // itself rather than building against a stale, possibly oversized leftover approval.
+      await expect(prepared.submit()).rejects.toBeInstanceOf(
+        UnresolvedVaultWithdrawRequirementsError,
+      );
+      expect(withdrawAction.buildTx).not.toHaveBeenCalled();
+      expect(account.sendTransaction).not.toHaveBeenCalled();
+    });
+
     test("should throw if 'to' is not the wallet address", async () => {
       await expect(
         protocol.withdraw({
