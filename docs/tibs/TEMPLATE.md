@@ -1,163 +1,126 @@
-# TIB-YYYY-MM-DD: [Decision Title]
+<!--
+This template mirrors the `## Canonical template` in `.agents/commands/tib-create.md`,
+which is the single source of truth for TIB structure. Prefer running
+`/tib-create "<decision title>"` — it resolves metadata, applies the full rulebook, and
+drafts the brief for you. Keep this file in sync whenever that canonical template changes.
 
-| Field             | Value                                              |
-| ----------------- | -------------------------------------------------- |
-| **Status**        | Proposed \| Accepted \| Deprecated \| Superseded   |
-| **Date**          | YYYY-MM-DD                                         |
-| **Author**        | @username                                          |
-| **Scope**         | Repo-wide \| App: [name] \| Package: [name]        |
-| **Supersedes**    | TIB-YYYY-MM-DD _(if applicable, otherwise remove)_ |
-| **Superseded by** | TIB-YYYY-MM-DD _(if applicable, otherwise remove)_ |
+TIB = what + why. Code and Linear tickets = how. Once accepted a TIB is never substantively
+changed: a changed decision gets a new superseding TIB (fill `Supersedes` / `Superseded by`
+on both); an operational clarification gets a dated addendum.
 
----
+Sections appear in the order below. Optional sections (Current Solution, Rejected
+alternatives, Breaking Changes & Migration, Consequences, Open Questions, References,
+Addenda) appear only when they carry content — delete the heading otherwise. Public
+Interface, Behavior, and Invariants are each gated on their own surface: keep Public
+Interface only when the decision changes a public API, Behavior only when it has observable
+runtime behavior, and Invariants when it has any binding invariant — runtime (rounding,
+ordering, atomicity, backward-compat) or non-runtime (release ordering, an external
+assumption). Each is mandatory when its surface applies and dropped when it does not, so a
+decision may keep one and drop another; a process or tooling decision drops Public Interface
+and Behavior but keeps Invariants when it has a binding release-ordering or external-assumption
+invariant. Never leave an empty placeholder, a `TBD`, or an `N/A`.
+-->
+
+# TIB-<DATE>: <TITLE>
+
+| Field             | Value                                        |
+| ----------------- | -------------------------------------------- |
+| **Date**          | <DATE>                                       |
+| **Author**        | <AUTHOR>                                     |
+| **Scope**         | <packages and target versions>               |
+| **Supersedes**    | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
+| **Superseded by** | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 
 ## Context
 
-What is the issue that motivates this decision? Describe the forces at play (technical, business,
-social, project constraints) and any prior decisions the reader needs to understand the rest of
-the document. Keep this scoped to "what made this decision necessary" — not the decision itself.
-
-> If documenting a decision retroactively, use the date the decision was originally accepted and
-> note here that this is a retrospective record (e.g., "This TIB retroactively documents a decision
-> made in [month/year].").
+The problem that forces a decision: the forces at play — technical, product, constraints — and any
+prior decision the reader needs. 5–15 lines. Scope it to "what made this necessary", not to the
+decision itself.
 
 ## Goals / Non-Goals
 
-What this TIB is trying to achieve and what it explicitly is **not** trying to achieve.
-Non-goals are as important as goals: they bound the decision and prevent scope creep in
-implementation.
-
 **Goals**
 
-- Goal 1
-- Goal 2
+- What this decision must achieve.
 
 **Non-Goals**
 
-- Non-goal 1
-- Non-goal 2
+- What it explicitly will not do. Each non-goal preempts a plausible-but-wrong PR.
 
 ## Current Solution
 
-_Optional — remove this section if there is no existing solution._
+_Optional._ What exists today, or what would happen by default if we did nothing.
 
-What exists today (or what would happen by default if we did nothing). Briefly describe the
-relevant parts of the current system.
+## Decision
 
-## Proposed Solution
+The chosen behavior, stated concretely. The load-bearing section: the rule, not the mechanics.
 
-The decision. State it clearly and concretely. Use diagrams, code excerpts, and interface sketches
-where they help. This is the load-bearing section.
+## Public Interface
 
-### Implementation Phases
+_Required when the decision changes a public API; drop the section when it does not._ The signatures
+that change — new and changed functions and types, input & output shapes,
+deprecations. Signatures and semantics only, never internal mechanics.
 
-_Optional — remove this sub-section if the solution does not require phased delivery._
+## Behavior
 
-If the solution has a meaningful order of operations, outline the high-level phases here. Each
-phase should have a clear goal and a rough indication of what lands in it. The point is to let
-reviewers chime in on sequencing, dependencies, and gotchas _before_ execution begins — and to
-give the `/extract-plan` workflow a starting point for Linear milestones.
+_Required when the decision has observable runtime behavior; drop the section when it does not._ The
+observable rules — the "if X then Y" list: rounding direction, refund handling,
+what a zero or max input means, which authorizations are required.
 
-- **Phase 1 — [name]:** What lands in this phase and why it comes first.
-- **Phase 2 — [name]:** …
-- **Phase 3 — [name]:** …
+- If X, then Y.
 
-## Considered Alternatives
+## Invariants
 
-Other approaches the author seriously evaluated, with the reason each was rejected. The point is
-not exhaustive enumeration; it is to record _why_ the chosen approach won, so future readers do
-not relitigate settled debates.
+_Required when the decision has any binding invariant — runtime or not; drop the section only when it
+has none._ The properties that must hold no matter how the code is written — security, rounding,
+atomicity, ordering, protocol limits, backward-compatibility, and non-runtime invariants such as
+release ordering or an external assumption — plus the assumptions the decision depends on.
 
-### Alternative 1: [Name]
+- Invariant, phrased so it survives any refactor.
 
-Description of the alternative.
+## Rejected alternatives
 
-**Why rejected:** Reason
+_Optional._ Approaches seriously evaluated, each with why it was rejected. Not an exhaustive survey
+— the ones a smart person would actually propose.
 
-### Alternative 2: [Name]
+- **<Alternative>.** Rejected: <reason>.
 
-Description of the alternative.
+## Breaking Changes & Migration
 
-**Why rejected:** Reason
+_When the decision breaks compat._ Which packages bump and by how much, what callers must change,
+the ordering of releases, and migration guidance.
 
-## Assumptions & Constraints
+## Acceptance Criteria
 
-Conditions the proposed solution depends on (technical, organisational, regulatory). If an
-assumption breaks, the decision may need to be revisited.
+How anyone objectively knows the implementation honors the decision — a checklist a reviewer or an
+agent can run against a PR. Reference which invariants must have a failing-if-removed test, not
+which test asserts them.
 
-- Assumption / constraint 1
-- Assumption / constraint 2
+- [ ] <What must be true.>
 
-## Dependencies
+## Consequences
 
-_Optional — remove this section if not applicable._
-
-External systems, packages, services, or other TIBs the proposed solution depends on. Include
-version constraints if relevant.
-
-## Observability
-
-_Optional — remove this section if not applicable._
-
-What needs to be measured, logged, traced, or alerted on for this decision to be operable in
-production? Call out new metrics, log fields, traces, dashboards, or alerts the implementation
-should produce, and which existing observability surfaces will be affected.
-
-## Security
-
-_Optional — remove this section if not applicable._
-
-What security considerations does this decision introduce or change? Cover threat model deltas,
-sensitive data handling, trust boundaries, and any review the change should go through (e.g.,
-dependency audit, secrets handling, on-chain assumptions). Skip if the decision has no security
-surface.
-
-## Future Considerations
-
-_Optional — remove this section if not applicable._
-
-Known follow-ups, possible extensions, or conditions that would trigger a reassessment. Distinct
-from Open Questions: these are things deferred deliberately, not things still being decided.
+_Optional._ Deliberate debt, deferred follow-ups, reassessment triggers — things decided to defer,
+not things still undecided.
 
 ## Open Questions
 
-_Optional — remove this section if there are none at acceptance time._
-
-Things the author has not yet resolved but does not want to block acceptance.
+_Optional, and must be empty before merge._ Unresolved questions that block the implementation,
+each with what it blocks.
 
 ## References
 
+_Optional._
+
 - [Related TIB or doc](url)
-- [Linear epic](url)
-- [Discussion thread](url)
-- [Granola — discussion call](url) _(link to the Granola recording from step 5)_
 
 ## Addenda
 
-_Optional — remove this section if there are none._
+_Optional._ The only sanctioned way to update an accepted TIB, strictly for **operational**
+clarifications — never a change of decision.
 
-Addenda record material updates to the operational interpretation of this TIB **without changing
-the original decision**. Use an addendum when a new team, role, tool, or process is introduced
-that affects how the TIB is applied in practice, but does not alter the architectural direction
-or require a new TIB.
-
-Each addendum should include the date, author, and a concise description of what changed and why.
-
-### YYYY-MM-DD — [Title]
+### YYYY-MM-DD — <Title>
 
 **Author:** @username
 
-Description of the change and its rationale.
-
-<!--
-TIB conventions:
-- Once accepted, do not substantively edit this TIB. If the decision needs to change,
-  create a new TIB that supersedes this one and update the Status/Superseded by fields.
-- Addenda may be appended to record operational updates that affect
-  how the TIB is applied without changing the decision itself.
-- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
-- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
-  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
-  not override it.
--->
+What changed in the operational interpretation, and why.
