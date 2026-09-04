@@ -205,6 +205,28 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     );
   }
 
+  /**
+   * Returns a new adapter whose underlying positions (and their markets) have
+   * been accrued up to the given timestamp.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to each position's market `lastUpdate`.
+   * @returns A new `AccrualVaultV2MorphoMarketV1Adapter` with every position
+   * accrued to `timestamp`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a
+   * position's market `lastUpdate`.
+   * @example
+   * ```ts
+   * const accrued = adapter.accrueInterest(adapter.positions[0]!.market.lastUpdate);
+   * // accrued.positions[0]!.market.lastUpdate === the passed timestamp
+   * ```
+   */
+  accrueInterest(timestamp: BigIntish) {
+    return new AccrualVaultV2MorphoMarketV1Adapter(
+      this,
+      this.positions.map((position) => position.accrueInterest(timestamp)),
+    );
+  }
+
   maxDeposit(_data: Hex, assets: BigIntish) {
     return {
       value: BigInt(assets),
