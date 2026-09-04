@@ -275,7 +275,14 @@ export interface PreparedMorphoWithdraw {
   readonly getRequirements: () => Promise<
     readonly ApprovalOrSignatureRequirement[]
   >;
-  /** Submits this prepared withdrawal with its optional signed share permit. */
+  /**
+   * Submits this prepared withdrawal with its optional signed share permit. When no signature is
+   * given, re-resolves the current VaultBundlesV1 share allowance and rejects rather than
+   * submitting against a stale or oversized leftover allowance.
+   *
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
+   *   share allowance does not exactly match the prepared cap.
+   */
   readonly submit: (
     requirementSignature?: Erc2612RequirementSignature,
     config?: Erc4337TransactionConfig,
@@ -845,6 +852,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         config?: Erc4337TransactionConfig,
       ) => {
         this._assertWritable("preparedWithdraw.submit()");
+        if (requirementSignature == null) {
+          const requirements = await action.getRequirements();
+          if (requirements.length > 0) {
+            throw new UnresolvedVaultWithdrawRequirementsError(
+              requirements.length,
+            );
+          }
+        }
         return await this._sendTransaction(
           toWdkTransaction(
             action.buildTx(

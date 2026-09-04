@@ -21,6 +21,8 @@ import {
  * the only cap on that burn. A leftover allowance above `requiredShareAllowance` therefore does not
  * satisfy the requirement: it is replaced by an approval or permit for exactly the computed cap.
  *
+ * @internal
+ *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, exact allowance, and deadline values.
  * @returns No requirement when the allowance already equals `requiredShareAllowance`, otherwise one
