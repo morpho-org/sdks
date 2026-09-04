@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -6,7 +7,10 @@ import {
   isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
-import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import {
+  SteakhouseUsdcVaultV1,
+  YearnUsdcVaultV1,
+} from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
@@ -56,6 +60,78 @@ describe("Withdraw VaultV1", () => {
     );
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance + assets,
+    );
+    expect(finalState.morphoAssetBalance).toEqual(
+      initialState.morphoAssetBalance - assets,
+    );
+  });
+
+  test("behavior: pays the exact referral fee and returns net assets", async ({
+    client,
+  }) => {
+    const shares = parseUnits("1000", 18);
+    const assets = parseUnits("1000", 6);
+    const referralFeePct = MathLib.WAD / 10n;
+    const referralFeeAssets = MathLib.mulDivDown(
+      assets,
+      referralFeePct,
+      MathLib.WAD,
+    );
+    const netAssets = assets - referralFeeAssets;
+    const referralFeeRecipient = YearnUsdcVaultV1.address;
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: shares,
+    });
+    const initialReferralBalance = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.asset,
+      owner: referralFeeRecipient,
+    });
+
+    const {
+      vaults: {
+        SteakhouseUsdcVaultV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        vaults: { SteakhouseUsdcVaultV1 },
+      },
+      actionFn: async () => {
+        const morpho = client.extend(morphoViemExtension()).morpho;
+        const vaultV1 = morpho.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
+        const withdraw = vaultV1.withdraw({
+          userAddress: client.account.address,
+          amount: assets,
+          referralFeePct,
+          referralFeeRecipient,
+        });
+        const requirements = await withdraw.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
+        await client.sendTransaction(withdraw.buildTx());
+      },
+    });
+    const finalReferralBalance = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.asset,
+      owner: referralFeeRecipient,
+    });
+
+    expect(finalReferralBalance - initialReferralBalance).toBe(
+      referralFeeAssets,
+    );
+    expect(finalState.userSharesBalance).toBeLessThan(
+      initialState.userSharesBalance,
+    );
+    expect(finalState.userAssetBalance).toEqual(
+      initialState.userAssetBalance + netAssets,
     );
     expect(finalState.morphoAssetBalance).toEqual(
       initialState.morphoAssetBalance - assets,
