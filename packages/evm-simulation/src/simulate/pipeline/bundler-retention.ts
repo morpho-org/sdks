@@ -28,56 +28,6 @@ interface BundlerEntry {
   netChange: bigint;
 }
 
-/**
- * Collect every restricted contract address the retention check guards against:
- * the full `bundler3` sub-registry (executor + every adapter) and the standalone
- * `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`,
- * `BlueBundlesV1`). Both families are transient intermediaries that route user
- * value; neither should ever retain it, so both are treated identically.
- *
- * Returns an empty set — skipping the check — when the chain is unknown to
- * blue-sdk, or known but cataloging neither a `bundler3` nor a `bundles` config.
- */
-function getRestrictedAddresses(
-  chainId: number,
-  logger?: SimulationLogger,
-): Set<Address> {
-  let addresses: ReturnType<typeof getChainAddresses>;
-  try {
-    addresses = getChainAddresses(chainId);
-  } catch (error) {
-    if (error instanceof UnsupportedChainIdError) {
-      // Loud warn: this disables a "never bypassable" check for the chain.
-      // Consumers relying on the guarantee must handle this signal.
-      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
-        chainId,
-      });
-      return new Set();
-    }
-    throw error;
-  }
-
-  const restricted = new Set<Address>();
-  if (addresses.bundler3) {
-    for (const addr of Object.values(addresses.bundler3).filter(isDefined))
-      restricted.add(getAddress(addr));
-  }
-  if (addresses.bundles) {
-    for (const addr of Object.values(addresses.bundles).filter(isDefined))
-      restricted.add(getAddress(addr));
-  }
-
-  if (restricted.size === 0) {
-    // blue-sdk knows the chain but cataloged neither bundler3 nor bundles for
-    // it. Treat the same as UnsupportedChainIdError — retention check skipped.
-    logger?.warn(
-      "Chain known to blue-sdk but has no bundler3 or bundles config, retention check skipped",
-      { chainId },
-    );
-  }
-  return restricted;
-}
-
 interface AssertNoBundlerRetentionParams {
   chainId: number;
   transfers: Transfer[];
@@ -133,8 +83,45 @@ export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
 ): void {
   const { chainId, transfers, assetChanges, logger } = params;
-  const restrictedAddresses = getRestrictedAddresses(chainId, logger);
-  if (restrictedAddresses.size === 0) return;
+
+  // Restricted address set: the full `bundler3` sub-registry (executor + every
+  // adapter) plus the standalone `bundles` periphery contracts
+  // (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`). Both families are
+  // transient intermediaries that route user value and must never retain it, so
+  // both are guarded identically.
+  let addresses: ReturnType<typeof getChainAddresses>;
+  try {
+    addresses = getChainAddresses(chainId);
+  } catch (error) {
+    if (error instanceof UnsupportedChainIdError) {
+      // Loud warn: this disables a "never bypassable" check for the chain.
+      // Consumers relying on the guarantee must handle this signal.
+      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
+        chainId,
+      });
+      return;
+    }
+    throw error;
+  }
+
+  const restrictedAddresses = new Set<Address>();
+  if (addresses.bundler3) {
+    for (const addr of Object.values(addresses.bundler3).filter(isDefined))
+      restrictedAddresses.add(getAddress(addr));
+  }
+  if (addresses.bundles) {
+    for (const addr of Object.values(addresses.bundles).filter(isDefined))
+      restrictedAddresses.add(getAddress(addr));
+  }
+  if (restrictedAddresses.size === 0) {
+    // blue-sdk knows the chain but cataloged neither bundler3 nor bundles for
+    // it. Treat the same as UnsupportedChainIdError — retention check skipped.
+    logger?.warn(
+      "Chain known to blue-sdk but has no bundler3 or bundles config, retention check skipped",
+      { chainId },
+    );
+    return;
+  }
 
   // Map keyed by (address, token) → structured entry. Avoids string parse-back.
   const flow = new Map<string, BundlerEntry>();
