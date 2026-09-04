@@ -7,7 +7,7 @@ import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
-  type BlueBundlesV1TokenRequirementSignature,
+  type BundlesTokenRequirementSignature,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
@@ -124,7 +124,7 @@ export type ApprovalOrSignatureRequirement =
 /** A BlueBundlesV1 token approval or ERC-2612/Permit2 SignatureTransfer request. */
 export type BlueApprovalOrSignatureRequirement =
   | RequirementApproval
-  | RequirementSignatureRequest<BlueBundlesV1TokenRequirementSignature>;
+  | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
 /** A Blue authorization transaction or authorization-signature request. */
 export type AuthorizationOrSignatureRequirement =
   | RequirementAuthorization
@@ -192,7 +192,7 @@ export type MorphoCollateralSupplyOptions =
       "nativeAmount" | "requirementSignature" | "slippageTolerance"
     > & {
       nativeAmount?: never;
-      requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+      requirementSignature?: BundlesTokenRequirementSignature;
       slippageTolerance?: never;
     })
   | (Omit<
@@ -227,7 +227,7 @@ export interface MorphoRepayOptions {
   /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+  requirementSignature?: BundlesTokenRequirementSignature;
 }
 
 /**
@@ -349,7 +349,7 @@ const BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS = 7_200n;
 
 function getBlueBundlesV1Deadline(
   signature?:
-    | BlueBundlesV1TokenRequirementSignature
+    | BundlesTokenRequirementSignature
     | AuthorizationRequirementSignature,
 ): bigint {
   return (
@@ -964,8 +964,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
@@ -1169,8 +1169,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
