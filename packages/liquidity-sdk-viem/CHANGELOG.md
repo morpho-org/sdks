@@ -1,5 +1,25 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 4.2.0-next.0
+
+### Minor Changes
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
+  Vault V1 planners and explicit low-level Bundler3 composition remain available. Update the WDK
+  borrow input and widen liquidity-sdk-viem's morpho-sdk peer range for the next major.
+
+  Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
+  `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
+  native allocator fees, which high-level writes no longer emit; V2 penalties are reported via
+  `reallocationPenaltyAssets`). Remove the now-unused `BlueReallocationPlan` type.
+
+### Patch Changes
+
+- Updated dependencies [[`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`ceb5083`](https://github.com/morpho-org/sdks/commit/ceb5083f8800b5b890958abe10bee7df4c53e3e2), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.0
+  - @morpho-org/morpho-ts@2.11.1-next.0
+  - @morpho-org/blue-sdk-viem@5.4.1-next.0
+
 ## 4.1.2
 
 ### Patch Changes

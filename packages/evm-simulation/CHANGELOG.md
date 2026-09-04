@@ -1,5 +1,12 @@
 # @morpho-org/evm-simulation
 
+## 4.1.6-next.0
+
+### Patch Changes
+
+- Updated dependencies [[`ceb5083`](https://github.com/morpho-org/sdks/commit/ceb5083f8800b5b890958abe10bee7df4c53e3e2)]:
+  - @morpho-org/morpho-ts@2.11.1-next.0
+
 ## 4.1.5
 
 ### Patch Changes

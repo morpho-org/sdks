@@ -1,0 +1,27 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@morpho-org/blue-sdk": "6.7.0",
+    "@morpho-org/blue-sdk-viem": "5.4.0",
+    "@morpho-org/evm-simulation": "4.1.5",
+    "@morpho-org/liquidity-sdk-viem": "4.1.2",
+    "@morpho-org/midnight-sdk": "1.3.0",
+    "@morpho-org/morpho-sdk": "5.8.0",
+    "@morpho-org/morpho-test": "4.0.3",
+    "@morpho-org/morpho-ts": "2.11.0",
+    "@morpho-org/test": "2.10.0",
+    "@morpho-org/wdk-protocol-lending-morpho-evm": "1.1.0"
+  },
+  "changesets": [
+    "blue-authorization-deadline-guard",
+    "blue-bundles-permit2-guards",
+    "blue-bundles-position-actions",
+    "blue-bundles-supply-withdraw",
+    "blue-v2-only-reallocations",
+    "dedupe-vault-chainid-guards",
+    "deprecate-v1-blue-reallocations",
+    "fix-arc-explorer-url",
+    "permit2-signature-transfer-uint256"
+  ]
+}

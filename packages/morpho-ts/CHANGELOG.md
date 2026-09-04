@@ -1,5 +1,11 @@
 # @morpho-org/morpho-ts
 
+## 2.11.1-next.0
+
+### Patch Changes
+
+- [#987](https://github.com/morpho-org/sdks/pull/987) [`ceb5083`](https://github.com/morpho-org/sdks/commit/ceb5083f8800b5b890958abe10bee7df4c53e3e2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix malformed `explorerUrl` values in `ChainUtils.CHAIN_METADATA`. Arc mainnet (5042) pointed at `http://explorer.arc.io/`, the only non-HTTPS explorer of the 43 registered chains, so every link built from it was an insecure navigation out of an HTTPS app. It is now `https://explorer.arc.io`. The trailing slash is also dropped from Tac, Celo, Abstract and Soneium so all 43 entries match the bare-origin convention and consumers concatenating `/tx/<hash>` or `/address/<addr>` no longer produce a double slash.
+
 ## 2.11.0
 
 ### Minor Changes
