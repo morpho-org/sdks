@@ -177,7 +177,7 @@ export interface VaultV2Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `amount` is not positive.
+   * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
    *   penalty-adjusted amount rounds to zero deallocated assets.
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
@@ -283,8 +283,8 @@ export interface VaultV2Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `exitAssets` or a supplied `minSharePriceE27` is not
-   *   positive.
+   * @throws {NonPositiveInputError} when `exitAssets`, `deadline`, or a supplied
+   *   `minSharePriceE27` is not positive.
    * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
    * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`, or when `referralFeePct` is
    *   not below WAD.

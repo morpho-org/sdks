@@ -438,7 +438,8 @@ describe("computeMinForceWithdrawSharePrice", () => {
   });
 
   test("behavior: the smallest non-zero floor is returned rather than rejected", () => {
-    // Same shape as above, one wei less burn: the ratio now survives rounding.
+    // The largest burn one withdrawn wei can still price above zero at 1e27 scale; one wei more
+    // rounds the floor to zero, which is the case the test above pins.
     expect(
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: 1n,
