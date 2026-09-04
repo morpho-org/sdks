@@ -22,7 +22,7 @@ import {
   RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
-  type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 
 const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -559,21 +559,13 @@ describe("MorphoBlue.refinance", () => {
       user: USER,
     });
 
-    const reallocSource = new MarketParams({
-      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
-      loanToken: USDC,
-      oracle: "0x3333333333333333333333333333333333333333",
-      irm: IRM,
-      lltv: parseUnits("0.86", 18),
-    });
-    const fee = parseUnits("0.005", 18);
-    const targetReallocations: readonly VaultReallocation[] = [
+    const targetReallocations: readonly VaultV2BlueReallocation[] = [
       {
         vault: "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4",
-        fee,
-        withdrawals: [
-          { marketParams: reallocSource, amount: parseUnits("1000", 6) },
-        ],
+        from: { type: "idle" },
+        to: { adapter: "0x0000000000000000000000000000000000000012" },
+        assets: parseUnits("1000", 6),
+        penalty: 0n,
       },
     ];
 
@@ -587,7 +579,6 @@ describe("MorphoBlue.refinance", () => {
     });
 
     const tx = refi.buildTx();
-    expect(tx.value).toBe(fee);
-    expect(tx.action.args.reallocationFee).toBe(fee);
+    expect(tx.value).toBe(0n);
   });
 });

@@ -8,11 +8,16 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
+import {
+  type Address,
+  isAddress,
+  isAddressEqual,
+  maxUint128,
+  maxUint256,
+} from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
-  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
   BundlerErrors,
   ChainIdMismatchError,
@@ -27,7 +32,6 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MixedReallocationVersionsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
@@ -56,6 +60,25 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   if (normalizedIdA > normalizedIdB) return 1;
   if (normalizedIdA < normalizedIdB) return -1;
   return 0;
+};
+
+/**
+ * Rejects a `bigint` field that falls outside the unsigned 256-bit ABI range so a direct caller
+ * gets the SDK's typed error instead of viem's `IntegerOutOfRangeError` at encode time. `maxUint256`
+ * stays valid — it is the accepted `maxLtv` / full-repay `repayShares` sentinel.
+ *
+ * @param field - Field name surfaced in the thrown error.
+ * @param value - Candidate value; must be in `[0, maxUint256]`.
+ * @returns Nothing when `value` is within range.
+ * @throws {NegativeInputError} when `value` is negative.
+ * @throws {InputExceedsMaxError} when `value` exceeds `maxUint256`.
+ * @internal
+ */
+export const validateUint256Field = (field: string, value: bigint): void => {
+  if (value < 0n) throw new NegativeInputError(field, value);
+  if (value > maxUint256) {
+    throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+  }
 };
 
 /**
@@ -347,6 +370,8 @@ export const validateRepayShares = (params: {
  * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
+ * @deprecated Vault V1 PublicAllocator validation will be removed in the next major. Use Vault V2
+ * reallocations for new integrations.
  * @example
  * ```ts
  * import type { BlueMarketId } from "@morpho-org/morpho-sdk/types";
@@ -403,6 +428,17 @@ export const validateVaultV2BlueReallocations = (
   const penaltyByVault = new Map<string, bigint>();
 
   for (const reallocation of reallocations) {
+    // Reject non-object entries and Vault V1-shaped entries (which carry
+    // `withdrawals`/`fee`) with a typed, instructive error instead of a raw
+    // TypeError or a misleading `to.adapter` address error.
+    if (
+      typeof reallocation !== "object" ||
+      reallocation === null ||
+      "withdrawals" in reallocation ||
+      "fee" in reallocation
+    ) {
+      throw new InvalidReallocationShapeError();
+    }
     if (
       typeof reallocation.vault !== "string" ||
       !isAddress(reallocation.vault)
@@ -496,63 +532,41 @@ export const validateVaultV2BlueReallocations = (
 };
 
 /**
- * Validates and normalizes a homogeneous Blue reallocation plan.
+ * Validates and materializes optional Vault V2 reallocations for a high-level Blue write.
  *
  * @param params - Validation parameters.
- * @param params.reallocations - Optional Vault V1 or Vault V2 reallocation plan.
+ * @param params.reallocations - Optional Vault V2 reallocations.
  * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
- * @param params.chainId - Chain whose allocator deployment is required for a V2 plan.
- * @returns The validated plan tagged with its allocator version.
- * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+ * @param params.chainId - Chain whose allocator deployment is required.
+ * @returns The validated reallocations as a reusable readonly array.
+ * @throws {BundlerErrors.UnexpectedAction} when Vault V2 reallocations are unsupported on the chain.
  * @internal
  */
-export const validateAndNormalizeReallocations = ({
+export const validateAndNormalizeVaultV2BlueReallocations = ({
   reallocations,
   targetMarketId,
   chainId,
 }: {
-  readonly reallocations: BlueReallocationPlan | undefined;
+  readonly reallocations: Iterable<VaultV2BlueReallocation> | undefined;
   readonly targetMarketId: MarketId;
   readonly chainId: number;
-}) => {
-  const vaultV1Reallocations: VaultV1Reallocation[] = [];
-  const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
+}): readonly VaultV2BlueReallocation[] => {
+  const normalized = [...(reallocations ?? [])];
+  validateVaultV2BlueReallocations(normalized, targetMarketId);
 
-  for (const reallocation of reallocations ?? []) {
-    if (typeof reallocation !== "object" || reallocation === null) {
-      throw new InvalidReallocationShapeError();
-    }
-    if ("from" in reallocation === "withdrawals" in reallocation) {
-      throw new InvalidReallocationShapeError();
-    }
-    if ("withdrawals" in reallocation) {
-      vaultV1Reallocations.push(reallocation);
-    } else {
-      vaultV2Reallocations.push(reallocation);
-    }
+  if (
+    normalized.length > 0 &&
+    getChainAddresses(chainId).vaultV2BluePublicAllocator == null
+  ) {
+    throw new BundlerErrors.UnexpectedAction(
+      normalized[0]?.from.type === "market"
+        ? "vaultV2BluePublicAllocatorReallocate"
+        : "vaultV2BluePublicAllocatorAllocateFromIdle",
+      chainId,
+    );
   }
 
-  if (vaultV1Reallocations.length > 0 && vaultV2Reallocations.length > 0) {
-    throw new MixedReallocationVersionsError();
-  }
-  if (vaultV2Reallocations.length > 0) {
-    validateVaultV2BlueReallocations(vaultV2Reallocations, targetMarketId);
-    if (getChainAddresses(chainId).vaultV2BluePublicAllocator == null) {
-      throw new BundlerErrors.UnexpectedAction(
-        vaultV2Reallocations[0]?.from.type === "market"
-          ? "vaultV2BluePublicAllocatorReallocate"
-          : "vaultV2BluePublicAllocatorAllocateFromIdle",
-        chainId,
-      );
-    }
-    return {
-      type: "vaultV2Blue" as const,
-      reallocations: vaultV2Reallocations,
-    };
-  }
-
-  validateReallocations(vaultV1Reallocations, targetMarketId);
-  return { type: "vaultV1" as const, reallocations: vaultV1Reallocations };
+  return normalized;
 };
 
 /**
