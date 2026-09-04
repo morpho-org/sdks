@@ -251,11 +251,11 @@ export interface BlueActions {
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {ExpiredDeadlineError} when the deadline is not in the future at creation or requirement resolution.
    * @throws {NonPositiveInputError} when `assets` is not positive.
-   * @throws {NegativeInputError} when native funding or the referral fee is negative.
+   * @throws {NegativeInputError} when native funding or the referral fee is negative, or from `getRequirements()` when an explicit `permit2Nonce` is negative.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
+   * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
    * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
