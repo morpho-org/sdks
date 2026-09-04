@@ -1,11 +1,4 @@
-import {
-  type Address,
-  ethAddress,
-  getAddress,
-  type Hex,
-  zeroAddress,
-  zeroHash,
-} from "viem";
+import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
 
 import type {
   RawCall,
@@ -13,6 +6,7 @@ import type {
   SimulationLogger,
   Transfer,
 } from "../../types.js";
+import { normalizeAssetToken } from "../asset-changes.js";
 
 // keccak256("Transfer(address,address,uint256)") — ERC-20 transfer event
 export const TRANSFER_TOPIC =
@@ -186,7 +180,7 @@ export function parseTransfers(
             }
 
             transfers.push({
-              token: normalizeTransferToken(log.address),
+              token: normalizeAssetToken(log.address),
               from: getAddress(`0x${fromTopic.slice(26)}`),
               to: getAddress(`0x${toTopic.slice(26)}`),
               amount: BigInt(log.data),
@@ -209,22 +203,6 @@ export function parseTransfers(
   }
 
   return sortTransfers(transfers);
-}
-
-/**
- * Normalize a `Transfer` log's emitting address into a transfer `token`.
- *
- * `eth_simulateV1` with `traceTransfers` enabled synthesizes native-ETH moves
- * (including internal calls) as `Transfer` events emitted from the native
- * sentinel `0xeee…eee`. The rest of the SDK keys native ETH by viem's
- * `ethAddress` constant, so we collapse the sentinel to that exact value rather
- * than the checksummed form `getAddress` would produce — keeping native deltas
- * on a single map key across backends. Real ERC20 tokens are checksummed.
- */
-function normalizeTransferToken(address: Hex): Address {
-  return address.toLowerCase() === ethAddress
-    ? ethAddress
-    : getAddress(address);
 }
 
 function isTopicHex(value: Hex | undefined): value is Hex {

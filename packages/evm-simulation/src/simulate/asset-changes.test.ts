@@ -1,9 +1,29 @@
-import { type Address, ethAddress, zeroAddress } from "viem";
-import { groupAssetChanges } from "./asset-changes.js";
+import { type Address, ethAddress, getAddress, zeroAddress } from "viem";
+import { groupAssetChanges, normalizeAssetToken } from "./asset-changes.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
+describe("normalizeAssetToken", () => {
+  test("default", () => {
+    // A real token address is checksummed regardless of input casing.
+    expect(normalizeAssetToken(USDC.toLowerCase() as Address)).toBe(USDC);
+  });
+
+  test("behavior: collapses the lowercase native sentinel to ethAddress", () => {
+    expect(normalizeAssetToken(ethAddress)).toBe(ethAddress);
+  });
+
+  test("behavior: collapses the checksummed native sentinel to ethAddress", () => {
+    // Security invariant (SDKS-102/46): a checksummed sentinel must still key
+    // native ETH by the exact `ethAddress` constant, otherwise a Bundler3 native
+    // residual lands on a separate map key and escapes `assertNoBundlerRetention`.
+    const checksummed = getAddress(ethAddress);
+    expect(checksummed).not.toBe(ethAddress);
+    expect(normalizeAssetToken(checksummed)).toBe(ethAddress);
+  });
+});
 
 describe("groupAssetChanges", () => {
   test("default", () => {

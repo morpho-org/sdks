@@ -2,7 +2,6 @@ import {
   type Address,
   type BlockTag,
   ethAddress,
-  getAddress,
   type Hex,
   isAddress,
   isHex,
@@ -23,7 +22,11 @@ import type {
   SimulationTransaction,
   TenderlyRpcConfig,
 } from "../../types.js";
-import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import {
+  type AssetChangeEntry,
+  groupAssetChanges,
+  normalizeAssetToken,
+} from "../asset-changes.js";
 
 interface TenderlyRpcCall {
   from: Address;
@@ -283,7 +286,7 @@ function toAssetChanges(results: SimResult[]): AccountAssetChanges[] {
     for (const change of result.assetChanges ?? []) {
       const amount = BigInt(change.rawAmount);
       const token = change.assetInfo.contractAddress
-        ? getAddress(change.assetInfo.contractAddress)
+        ? normalizeAssetToken(change.assetInfo.contractAddress)
         : ethAddress;
       const { symbol, decimals } = change.assetInfo;
       if (change.to)
