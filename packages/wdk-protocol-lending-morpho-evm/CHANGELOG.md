@@ -1,5 +1,51 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0-next.0
+
+### Major Changes
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route Blue collateral supply, borrow, repay, and collateral withdrawal flows through the compatible
+  BlueBundlesV1 combined entrypoints. Preserve established names and migrate the WDK adapter.
+
+  Normalize token addresses to their EIP-55 checksum before resolving the per-token approval cap, so a
+  differently-cased loan token still caps the `MAX_TOKEN_APPROVALS` tokens (UNI/ONDO/COMP/FLUID) at
+  `uint96` instead of emitting a `maxUint256` approval those tokens reject. Reject oversized (`> uint256`)
+  and inconsistent withdrawal-only funding inputs in the combined builders with the SDK's typed
+  `InputExceedsMaxError`. Forward a caller-supplied reusable `approvalAmount` from
+  `getRequirements(...)` on the Blue collateral-supply and repay prerequisite paths (previously
+  dropped), while keeping the saturated-repay token cap. Mark the new Blue action argument shapes, the
+  combined-builder parameter interfaces, the `BlueActions` entity write-method parameter shapes (and
+  the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` and
+  `GetBlueBundlesV1TokenRequirementsParams` prerequisite options, the `Erc2612RequirementSignature`
+  and `Permit2AllowanceRequirementSignature` signed-requirement shapes, and the WDK Blue-write option
+  types `readonly`.
+
+  The `@morpho-org/liquidity-sdk-viem` dependent bump for this `morpho-sdk` major — a `minor` that
+  widens its `morpho-sdk` peer range to `^5.4.0 || ^6.0.0` — is declared in the
+  `blue-v2-only-reallocations` changeset that performs the widening.
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
+  Vault V1 planners and explicit low-level Bundler3 composition remain available. Update the WDK
+  borrow input and widen liquidity-sdk-viem's morpho-sdk peer range for the next major.
+
+  Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
+  `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
+  native allocator fees, which high-level writes no longer emit; V2 penalties are reported via
+  `reallocationPenaltyAssets`). Remove the now-unused `BlueReallocationPlan` type.
+
+### Minor Changes
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Publish the pinned BlueBundlesV1 ABI and deprecate all Vault V1 shared-liquidity algorithm and
+  Bundler3 composition surfaces in Morpho SDK, plus the WDK Vault V1 borrow input. Use Vault V2
+  BluePublicAllocator reallocations for new integrations; all deprecated Vault V1 surfaces will be
+  removed in the next major.
+
+### Patch Changes
+
+- Updated dependencies [[`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.0
+  - @morpho-org/blue-sdk-viem@5.4.1-next.0
+
 ## 1.1.0
 
 ### Minor Changes
