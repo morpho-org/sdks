@@ -1,8 +1,10 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermit2SignatureTransferSignature,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -13,15 +15,12 @@ import {
   Re7UsdtVaultV2,
 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 import { createVaultV2 } from "../../helpers/vaultV2.js";
-import { test } from "../../setup.js";
 
 describe("Permit2", () => {
-  const {
-    dai,
-    permit2,
-    bundler3: { generalAdapter1 },
-  } = addressesRegistry[mainnet.id];
+  const { dai, permit2 } = addressesRegistry[mainnet.id];
+  const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 
   test("should deposit USDT with permit2 with prior reset", async ({
     client,
@@ -58,7 +57,9 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await deposit.getRequirements({
+          permit2Nonce: 0n,
+        });
 
         // USDT may require two signature requirements (reset approval permit2 + approve permit2 + set allowance)
         expect(requirements.length).toBe(3);
@@ -77,7 +78,7 @@ describe("Permit2", () => {
         expect(approvalResetPermit2.action.args.spender).toBe(permit2);
         expect(approvalResetPermit2.action.args.amount).toBe(0n);
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
 
         await client.sendTransaction(approvalResetPermit2);
         await client.sendTransaction(approvalPermit2);
@@ -93,10 +94,14 @@ describe("Permit2", () => {
           client.account.address,
         );
 
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
+
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.action.args.spender).toBe(generalAdapter1);
+        expect(requirementSignature.action.args.spender).toBe(vaultBundlesV1);
         expect(requirementSignature.args.deadline).toBeGreaterThan(
           BigInt(Math.floor(Date.now() / 1000)),
         );
@@ -110,8 +115,8 @@ describe("Permit2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance - amount,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + amount,
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toEqual(
+      initialState.vaultBalance + initialState.morphoAssetBalance + amount,
     );
     expect(finalState.userSharesBalance).toBeGreaterThan(
       initialState.userSharesBalance,
@@ -148,7 +153,9 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await deposit.getRequirements({
+          permit2Nonce: 0n,
+        });
 
         // USDT may require two signature requirements (approve permit2 + set allowance)
         expect(requirements.length).toBe(2);
@@ -172,6 +179,10 @@ describe("Permit2", () => {
           client.account.address,
         );
 
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
+
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
@@ -188,15 +199,15 @@ describe("Permit2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance - amount,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + amount,
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toEqual(
+      initialState.vaultBalance + initialState.morphoAssetBalance + amount,
     );
     expect(finalState.userSharesBalance).toBeGreaterThan(
       initialState.userSharesBalance,
     );
   });
 
-  test("should deposit WETH with pre-existing general adapter approval through permit2", async ({
+  test("should deposit WETH with pre-existing bundles approval through permit2", async ({
     client,
   }) => {
     const { wNative } = addressesRegistry[mainnet.id];
@@ -209,7 +220,7 @@ describe("Permit2", () => {
 
     await client.approve({
       address: wNative,
-      args: [generalAdapter1, MathLib.MAX_UINT_256],
+      args: [vaultBundlesV1, MathLib.MAX_UINT_256],
     });
 
     const {
@@ -233,7 +244,9 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await deposit.getRequirements({
+          permit2Nonce: 0n,
+        });
 
         expect(requirements.length).toBe(2);
 
@@ -243,7 +256,7 @@ describe("Permit2", () => {
         }
 
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
         expect(approvalPermit2.action.type).toBe("erc20Approval");
 
         await client.sendTransaction(approvalPermit2);
@@ -254,14 +267,21 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2");
-        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
+        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+          throw new Error("Unexpected requirement type");
+        }
+        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
         expect(permit2Requirement.action.args.amount).toBe(amount);
 
         const requirementSignature = await permit2Requirement.sign(
           client,
           client.account.address,
         );
+
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
@@ -326,7 +346,9 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await deposit.getRequirements({
+          permit2Nonce: 0n,
+        });
 
         expect(requirements.length).toBe(2);
 
@@ -336,7 +358,7 @@ describe("Permit2", () => {
         }
 
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
         expect(approvalPermit2.action.type).toBe("erc20Approval");
 
         await client.sendTransaction(approvalPermit2);
@@ -347,14 +369,21 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2");
-        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
+        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+          throw new Error("Unexpected requirement type");
+        }
+        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
         expect(permit2Requirement.action.args.amount).toBe(amount);
 
         const requirementSignature = await permit2Requirement.sign(
           client,
           client.account.address,
         );
+
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
@@ -413,6 +442,7 @@ describe("Permit2", () => {
 
         const requirements = await deposit.getRequirements({
           useSimplePermit: false,
+          permit2Nonce: 0n,
         });
 
         expect(requirements.length).toBe(2);
@@ -423,7 +453,7 @@ describe("Permit2", () => {
         }
 
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
         expect(approvalPermit2.action.type).toBe("erc20Approval");
 
         await client.sendTransaction(approvalPermit2);
@@ -434,14 +464,21 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2");
-        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
+        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+          throw new Error("Unexpected requirement type");
+        }
+        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
         expect(permit2Requirement.action.args.amount).toBe(amount);
 
         const requirementSignature = await permit2Requirement.sign(
           client,
           client.account.address,
         );
+
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);

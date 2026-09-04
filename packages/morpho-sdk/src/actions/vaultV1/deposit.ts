@@ -1,186 +1,141 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { deepFreeze, isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
-import { type Action, BundlerAction } from "../../bundler/index.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData } from "viem";
+import { vaultBundlesV1Abi } from "../../abis.js";
+import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import {
-  ChainWNativeMissingError,
-  type DepositAmountArgs,
+  type BundlesFundingArgs,
+  type BundlesTokenRequirementSignature,
   type Metadata,
-  NativeAmountOnNonWNativeVaultError,
-  NegativeInputError,
+  MixedBundlesFundingError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
   type Transaction,
   type VaultV1DepositAction,
 } from "../../types/index.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import {
+  finalizeVaultBundlesV1Transaction,
+  getBundlesReferralFeeAssets,
+  getBundlesTokenPermit,
+  normalizeBundlesCommonParams,
+  resolveBundlesFunding,
+} from "../bundles/index.js";
 
 /** Parameters for {@link vaultV1Deposit}. */
 export interface VaultV1DepositParams {
-  vault: {
-    chainId: number;
-    address: Address;
-    asset: Address;
+  readonly vault: {
+    readonly chainId: number;
+    readonly address: Address;
+    readonly asset: Address;
   };
-  args: DepositAmountArgs & {
-    maxSharePrice: bigint;
-    recipient: Address;
-    requirementSignature?: PermitRequirementSignature;
+  readonly args: BundlesFundingArgs & {
+    readonly maxSharePrice: bigint;
+    readonly userAddress: Address;
+    readonly recipient?: never;
+    readonly requirementSignature?: BundlesTokenRequirementSignature;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline: bigint;
   };
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
- * Prepares a deposit transaction for a VaultV1 (MetaMorpho) contract.
+ * Encodes a Vault V1 deposit through the registered VaultBundlesV1 contract.
  *
- * Routed through bundler3 to atomically execute the asset transfer and vault deposit. The
- * `GeneralAdapter1` enforces `maxSharePrice` on-chain to prevent inflation attacks. Never bypass
- * the general adapter.
- *
- * When `nativeAmount > 0`, that amount of native ETH is sent as `msg.value` to the bundler3
- * multicall and wrapped into wNative via `GeneralAdapter1.wrapNative()`. The vault's underlying
- * asset must be the chain's wrapped native token.
- *
- * @param params.vault.chainId - The chain the vault lives on.
- * @param params.vault.address - The VaultV1 (MetaMorpho) address.
- * @param params.vault.asset - The vault's underlying ERC-20 asset.
- * @param params.args.amount - Amount of ERC-20 assets to deposit. At least one of `amount` or
- *   `nativeAmount` must be positive. Defaults to `0n`.
- * @param params.args.maxSharePrice - Maximum acceptable share price (in RAY, slippage
- *   protection enforced on-chain by `GeneralAdapter1`).
- * @param params.args.recipient - Address that receives the minted vault shares.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
- * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
- *   deposit. Requires the vault asset to be the chain's wNative.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<VaultV1DepositAction>` with `to`, `value`, `data`, and the
- *   typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `amount < 0n` or `nativeAmount < 0n`.
- * @throws {NonPositiveInputError} when `maxSharePrice <= 0n`, or when both `amount` and
- *   `nativeAmount` resolve to zero.
- * @throws {ChainWNativeMissingError} when `nativeAmount` is provided but the chain has no
- *   configured wNative.
- * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
- *   asset is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
- *   `requirementSignature` is provided and the signed asset differs from `vault.asset`. The
- *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
- *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when `amount > 0n` and a
- *   Permit2 requirement signature is missing its expiration.
+ * @param params - Vault, exclusive funding, deadline, fee, and optional token permit values.
+ * @returns A deep-frozen VaultBundlesV1 deposit transaction.
+ * @throws {MixedBundlesFundingError} when ERC-20/native funding is mixed or native funding carries a token permit.
+ * @throws {NegativeInputError} when the selected funding amount or `referralFeePct` is negative.
+ * @throws {NonPositiveInputError} when funding, `maxSharePrice`, or `deadline` is not positive.
+ * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
+ * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
+ *   {@link InputExceedsMaxError}, so either class catches it.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+ * @throws {UnexpectedRequirementSignatureError} when a Permit2 AllowanceTransfer signature is supplied.
+ * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from the gross funding amount.
+ * @throws {DepositSpenderMismatchError} when the signed spender is not VaultBundlesV1.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature deadline, nonce, or encoding is invalid.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
  * @example
  * ```ts
  * import { vaultV1Deposit } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress } from "viem";
  *
  * const tx = vaultV1Deposit({
- *   vault: { chainId: 1, address: vaultAddress, asset: USDC },
+ *   vault: { chainId: 1, address: zeroAddress, asset: zeroAddress },
  *   args: {
  *     amount: 1_000_000n,
- *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
- *     recipient: depositor,
+ *     maxSharePrice: 1_000_000_000_000_000_000_000_000_000n,
+ *     userAddress: zeroAddress,
+ *     deadline: 1_900_000_000n,
  *   },
  * });
- * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
+ * // tx.action.type === "vaultV1Deposit"
  * ```
  */
-export const vaultV1Deposit = ({
-  vault: { chainId, address: vaultAddress, asset },
-  args: {
-    amount = 0n,
-    maxSharePrice,
-    recipient,
-    requirementSignature,
-    nativeAmount,
-  },
-  metadata,
-}: VaultV1DepositParams): Readonly<Transaction<VaultV1DepositAction>> => {
-  if (amount < 0n) {
-    throw new NegativeInputError("amount", amount);
+export const vaultV1Deposit = (
+  params: VaultV1DepositParams,
+): Readonly<Transaction<VaultV1DepositAction>> => {
+  const funding = resolveBundlesFunding(params.args);
+  if (params.args.maxSharePrice <= 0n) {
+    throw new NonPositiveInputError("maxSharePrice", params.args.maxSharePrice);
   }
-
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveInputError("maxSharePrice", maxSharePrice);
-  }
-
-  const actions: Action[] = [];
-
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-    wNative,
-  } = getChainAddresses(chainId);
-
-  if (nativeAmount) {
-    if (nativeAmount < 0n) {
-      throw new NegativeInputError("nativeAmount", nativeAmount);
+  if (funding.value > 0n) {
+    validateNativeVaultAsset(params.vault.chainId, params.vault.asset);
+    if (params.args.requirementSignature != null) {
+      throw new MixedBundlesFundingError();
     }
-
-    if (!isDefined(wNative)) {
-      throw new ChainWNativeMissingError(chainId);
-    }
-    if (!isAddressEqual(asset, wNative)) {
-      throw new NativeAmountOnNonWNativeVaultError(asset, wNative);
-    }
-
-    actions.push(
-      // Transfers native token from Bundler3 to GeneralAdapter1 for wrapping.
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false /* skipRevert */],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false /* skipRevert */],
-      },
-    );
   }
-
-  if (amount > 0n) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset,
-        amount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  }
-
-  const totalAssets = amount + (nativeAmount ?? 0n);
-
-  if (totalAssets === 0n) {
-    throw new NonPositiveInputError("totalAssets", totalAssets);
-  }
-
-  actions.push({
-    type: "erc4626Deposit",
-    args: [
-      vaultAddress,
-      totalAssets,
-      maxSharePrice,
-      recipient,
-      false /* skipRevert */,
-    ],
+  const common = normalizeBundlesCommonParams(params.args);
+  const referralFeeAssets = getBundlesReferralFeeAssets(
+    funding.assets,
+    common.referralFeePct,
+  );
+  const netAssets = funding.assets - referralFeeAssets;
+  const spender = getChainAddress(
+    params.vault.chainId,
+    "bundles.vaultBundlesV1",
+  );
+  const tokenPermit = getBundlesTokenPermit({
+    userAddress: params.args.userAddress,
+    token: params.vault.asset,
+    spender,
+    amount: funding.assets,
+    requirementSignature: params.args.requirementSignature,
   });
-
-  let tx = BundlerAction.encodeBundle(chainId, actions);
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
-  }
-
-  return deepFreeze({
-    ...tx,
+  return finalizeVaultBundlesV1Transaction({
+    chainId: params.vault.chainId,
+    value: funding.value,
+    data: encodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      functionName: "vaultBundlesV1Deposit",
+      args: [
+        params.vault.address,
+        funding.assets,
+        params.args.maxSharePrice,
+        tokenPermit,
+        common.referralFeePct,
+        common.referralFeeRecipient,
+        common.deadline,
+      ],
+    }),
     action: {
       type: "vaultV1Deposit",
       args: {
-        vault: vaultAddress,
-        amount,
-        maxSharePrice,
-        recipient,
-        nativeAmount,
+        vault: params.vault.address,
+        amount: funding.assets,
+        maxSharePrice: params.args.maxSharePrice,
+        nativeAmount: funding.value || undefined,
+        referralFeePct: common.referralFeePct,
+        referralFeeRecipient: common.referralFeeRecipient,
+        referralFeeAssets,
+        netAssets,
+        deadline: common.deadline,
       },
     },
+    metadata: params.metadata,
   });
 };
