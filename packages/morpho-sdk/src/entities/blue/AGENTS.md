@@ -20,10 +20,17 @@
 
 `getRequirements` returns:
 
-- ERC-20 approval for **GeneralAdapter1** on the collateral token (any path that supplies collateral) or the loan token (`supply`, `repay`, `repayWithdrawCollateral`). The approved amount is the **ERC-20 portion actually pulled**, not the total: for a native-funded repay it is `amount` (assets mode) or `max(0, toBorrowAssets(shares) − nativeAmount)` (shares mode — clamped at 0 so a `nativeAmount` that covers or exceeds the borrow assets pulls nothing). A fully-native repay pulls no ERC-20, so no approval requirement is emitted; in shares mode any wrapped native beyond the on-chain repay is skimmed back to the receiver.
-- A classic ERC-20 approval for **GeneralAdapter1** on the loan token when `borrow`, `withdraw`, or `refinance` includes BluePublicAllocator reallocations with a non-zero penalty. `supplyCollateralBorrow` does the same when the collateral and loan tokens differ; when they are identical, it adds the penalty to the single collateral approval or permit and emits no separate penalty requirement. The approved amount is the sum of each call's independently rounded `ceil(assets × penalty / WAD)` donation. The separate-token path deliberately does not return a permit signature, so it can coexist with a collateral-token permit.
-- `morpho.setAuthorization(generalAdapter1, true)` when authorization is not yet set on Morpho — read via `publicActions`. Required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
+- Token funding authorization for **BlueBundlesV1**. Classic approval and ERC-2612 name the
+  registered fixed contract directly. Permit2 SignatureTransfer first ensures the token allowance
+  to canonical Permit2, then returns a one-time signature requirement naming BlueBundlesV1.
+- `morpho.setAuthorization(blueBundlesV1, true)` when the fixed contract is not yet authorized on
+  Morpho. With signature support, the prepared call consumes the signed authorization directly.
+- No separate user funding requirement for BluePublicAllocator penalties; BlueBundlesV1 accounts
+  for them within the fixed operation.
 
-When `supportSignature` is enabled on the client, the authorization requirement is returned as a signable `Requirement` instead of a transaction; signing it produces an `AuthorizationRequirementSignature` that `buildTx` consumes and folds into the bundle as a `setAuthorizationWithSig` call, so no standalone authorization transaction is needed. `buildTx` accepts a `readonly RequirementSignature[]` and splits permit vs. authorization signatures via `isPermitSignature` / `isAuthorizationSignature`.
+When `supportSignature` is enabled on the client, the authorization requirement is returned as a
+signable `Requirement` instead of a transaction. `buildTx` accepts the resulting token and Morpho
+authorization signatures and encodes them into the direct BlueBundlesV1 call.
 
-`withdrawCollateral` has no requirements. `repay` and `supply` need only loan-token approval (native wrapping requires the loan token to be the chain's wNative). Without V2 reallocations, loan-asset `withdraw` needs only the Morpho authorization.
+Native funding is valid only for the chain's configured wNative token and emits no ERC-20 funding
+requirement.

@@ -466,23 +466,41 @@ export type DepositAmountArgs =
   | { amount: bigint; nativeAmount?: bigint }
   | { nativeAmount: bigint; amount?: bigint };
 
+/** Mutually exclusive ERC-20 or native funding accepted by fixed bundles entrypoints. */
+export type BundlesFundingArgs =
+  | { readonly amount: bigint; readonly nativeAmount?: never }
+  | { readonly nativeAmount: bigint; readonly amount?: never };
+
+/** Controls token requirements generated for a bundles-funded action. */
+export interface BundlesTokenRequirementsOptions {
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  readonly useSimplePermit?: boolean;
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  readonly permit2Nonce?: bigint;
+}
+
+/** Mutually exclusive source amount accepted by a Vault V1 to Vault V2 migration. */
+export type VaultV1MigrateToV2AmountArgs =
+  | { readonly shares: bigint; readonly assets?: never }
+  | { readonly assets: bigint; readonly shares?: never };
+
 export interface PermitArgs {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
 }
 
 export interface Permit2Args {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
-  expiration: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
+  readonly expiration: bigint;
 }
 
 /**
@@ -516,7 +534,13 @@ export interface MidnightOfferRootSignatureArgs {
 export interface PermitAction
   extends BaseAction<
     "permit",
-    { spender: Address; amount: bigint; deadline: bigint }
+    {
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
+      /** Permit nonce captured by a prepared requirement, when available. */
+      readonly nonce?: bigint;
+    }
   > {}
 
 export interface Permit2Action
@@ -525,14 +549,15 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {}
 
-/** Signable Permit2 SignatureTransfer requirement for a direct BlueBundlesV1 pull. */
-export interface Permit2TransferFromAction
+/** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
+export interface Permit2SignatureTransferAction
   extends BaseAction<
-    "permit2TransferFrom",
+    "permit2SignatureTransfer",
     {
-      spender: Address;
-      amount: bigint;
-      deadline: bigint;
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly nonce: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -561,7 +586,7 @@ export interface MidnightOfferRootSignatureAction
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
-  | Permit2TransferFromAction
+  | Permit2SignatureTransferAction
   | AuthorizationAction
   | MidnightOfferRootSignatureAction;
 
@@ -589,10 +614,10 @@ export type PermitRequirementSignature =
   | Erc2612RequirementSignature
   | Permit2AllowanceRequirementSignature;
 
-/** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
-export interface Permit2TransferFromRequirementSignature {
-  args: PermitArgs;
-  action: Permit2TransferFromAction;
+/** A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts. */
+export interface Permit2SignatureTransferRequirementSignature {
+  readonly args: PermitArgs;
+  readonly action: Permit2SignatureTransferAction;
 }
 
 /** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */
@@ -609,8 +634,8 @@ export interface MidnightOfferRootSignature {
 
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
- * `"permit"` / `"permit2"` carry token-approval args, `"permit2TransferFrom"` carries a
- * BlueBundlesV1 SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
+ * `"permit"` / `"permit2"` carry token-approval args, `"permit2SignatureTransfer"` carries a
+ * bundles SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
  * and Midnight adds `"midnightOfferRootSignature"`.
  */
 export type RequirementSignature<
@@ -625,7 +650,7 @@ export type RequirementSignature<
     : never
   :
       | PermitRequirementSignature
-      | Permit2TransferFromRequirementSignature
+      | Permit2SignatureTransferRequirementSignature
       | AuthorizationRequirementSignature
       | MidnightOfferRootSignature;
 
@@ -665,9 +690,9 @@ export interface Requirement<
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
 
-/** BlueBundlesV1 ERC-2612 or Permit2 SignatureTransfer requirement. */
-export type BlueBundlesV1TokenSignatureRequirement =
-  Requirement<BlueBundlesV1TokenRequirementSignature>;
+/** ERC-2612 or Permit2 SignatureTransfer requirement consumed by a fixed bundles contract. */
+export type BundlesTokenSignatureRequirement =
+  Requirement<BundlesTokenRequirementSignature>;
 
 /** Midnight Ecrecover offer-root signature requirement. */
 export type MidnightOfferRootRequirement = Requirement<
@@ -678,20 +703,20 @@ export type MidnightOfferRootRequirement = Requirement<
 /** Any token signature requirement supported by an SDK transaction route. */
 export type TokenSignatureRequirement =
   | Bundler3TokenSignatureRequirement
-  | BlueBundlesV1TokenSignatureRequirement;
+  | BundlesTokenSignatureRequirement;
 
 /** Bundler3 token signature result. */
 export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 
-/** BlueBundlesV1 token signature result. */
-export type BlueBundlesV1TokenRequirementSignature =
+/** Token signature result consumed by a fixed bundles contract. */
+export type BundlesTokenRequirementSignature =
   | Erc2612RequirementSignature
-  | Permit2TransferFromRequirementSignature;
+  | Permit2SignatureTransferRequirementSignature;
 
 /** Any token signature result supported by an SDK transaction route. */
 export type TokenRequirementSignature =
   | Bundler3TokenRequirementSignature
-  | BlueBundlesV1TokenRequirementSignature;
+  | BundlesTokenRequirementSignature;
 
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
@@ -817,22 +842,22 @@ export function isPermitSignature(
  * Narrows a {@link RequirementSignature} to a Permit2 SignatureTransfer result.
  *
  * @param signature - The signed requirement to test.
- * @returns `true` when `signature.action.type` is `"permit2TransferFrom"`.
+ * @returns `true` when `signature.action.type` is `"permit2SignatureTransfer"`.
  * @example
  * ```ts
  * import {
- *   isPermit2TransferFromSignature,
+ *   isPermit2SignatureTransferSignature,
  *   type RequirementSignature,
  * } from "@morpho-org/morpho-sdk";
  *
  * const getPermit2Nonce = (signature: RequirementSignature): bigint | undefined =>
- *   isPermit2TransferFromSignature(signature) ? signature.args.nonce : undefined;
+ *   isPermit2SignatureTransferSignature(signature) ? signature.args.nonce : undefined;
  * ```
  */
-export function isPermit2TransferFromSignature(
+export function isPermit2SignatureTransferSignature(
   signature: RequirementSignature,
-): signature is Permit2TransferFromRequirementSignature {
-  return signature.action.type === "permit2TransferFrom";
+): signature is Permit2SignatureTransferRequirementSignature {
+  return signature.action.type === "permit2SignatureTransfer";
 }
 
 /**
@@ -862,13 +887,13 @@ export function isMidnightOfferRootSignature(
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
-  permit?: PermitRequirementSignature;
+  readonly permit?: PermitRequirementSignature;
   /** The single Permit2 SignatureTransfer signature, when present. */
-  permit2TransferFrom?: Permit2TransferFromRequirementSignature;
+  readonly permit2SignatureTransfer?: Permit2SignatureTransferRequirementSignature;
   /** The single Morpho authorization signature, when present. */
-  authorization?: AuthorizationRequirementSignature;
+  readonly authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
-  midnightOfferRoot?: MidnightOfferRootSignature;
+  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
@@ -883,7 +908,7 @@ export interface SelectedRequirementSignatures {
  * @param signatures - The signatures passed to `buildTx`.
  * @param accepts - Which signature kinds this operation consumes.
  * @param accepts.permit - Whether an ERC-2612 or Permit2 AllowanceTransfer signature is consumed.
- * @param accepts.permit2TransferFrom - Whether a Permit2 SignatureTransfer is consumed.
+ * @param accepts.permit2SignatureTransfer - Whether a Permit2 SignatureTransfer is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
  * @returns The accepted signature in each typed slot, when present.
@@ -902,23 +927,25 @@ export interface SelectedRequirementSignatures {
 export function selectRequirementSignatures(
   signatures: readonly RequirementSignature[] | undefined,
   accepts: {
-    permit?: boolean;
-    permit2TransferFrom?: boolean;
-    authorization?: boolean;
-    midnightOfferRoot?: boolean;
+    readonly permit?: boolean;
+    readonly permit2SignatureTransfer?: boolean;
+    readonly authorization?: boolean;
+    readonly midnightOfferRoot?: boolean;
   },
 ): SelectedRequirementSignatures {
   if (signatures == null) return {};
 
   const permits = signatures.filter(isPermitSignature);
-  const permit2Transfers = signatures.filter(isPermit2TransferFromSignature);
+  const permit2Transfers = signatures.filter(
+    isPermit2SignatureTransferSignature,
+  );
   const authorizations = signatures.filter(isAuthorizationSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");
-  if (!accepts.permit2TransferFrom && permit2Transfers.length > 0)
-    throw new UnexpectedRequirementSignatureError("permit2TransferFrom");
+  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
   if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
@@ -927,7 +954,7 @@ export function selectRequirementSignatures(
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
   if (permit2Transfers.length > 1)
     throw new AmbiguousRequirementSignaturesError(
-      "permit2TransferFrom",
+      "permit2SignatureTransfer",
       permit2Transfers.length,
     );
   if (authorizations.length > 1)
@@ -943,7 +970,7 @@ export function selectRequirementSignatures(
 
   return {
     permit: permits[0],
-    permit2TransferFrom: permit2Transfers[0],
+    permit2SignatureTransfer: permit2Transfers[0],
     authorization: authorizations[0],
     midnightOfferRoot: midnightOfferRoots[0],
   };

@@ -20,8 +20,8 @@ import {
 } from "../../helpers/index.js";
 import {
   AccrualPositionUserMismatchError,
-  type BlueBundlesV1TokenRequirementSignature,
   BorrowExceedsSafeLtvError,
+  type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
@@ -30,6 +30,7 @@ import {
   MissingAccrualPositionError,
   MissingReferralFeeRecipientError,
   NegativeInputError,
+  ReferralFeePctExceededError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   WithdrawExceedsCollateralError,
@@ -422,6 +423,9 @@ describe("MorphoBlue common write validation", () => {
       referralFeePct: MathLib.WAD,
       referralFeeRecipient: otherUserAddress,
     })) {
+      expect(call, method).toThrow(ReferralFeePctExceededError);
+      // The Blue JSDoc has always promised InputExceedsMaxError here; the shared
+      // bundles normalizer must not break integrators pattern-matching it.
       expect(call, method).toThrow(InputExceedsMaxError);
     }
   });
@@ -825,14 +829,15 @@ describe("MorphoBlue position validation", () => {
           deadline,
         },
         action: {
-          type: "permit2TransferFrom",
+          type: "permit2SignatureTransfer",
           args: {
             spender: getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
             amount,
+            nonce: 1n,
             deadline,
           },
         },
-      }) satisfies BlueBundlesV1TokenRequirementSignature;
+      }) satisfies BundlesTokenRequirementSignature;
 
     expect(
       action.buildTx([signature(minimum + 1n)]).action.args.maxRepayAssets,

@@ -2,8 +2,8 @@ import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueSupplyAction,
+  BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
@@ -38,7 +38,7 @@ export interface BlueSupplyParams {
     /** Recipient required when `referralFeePct` is positive. */
     referralFeeRecipient?: Address;
     /** Optional ERC-2612 or Permit2 SignatureTransfer requirement result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    requirementSignature?: BundlesTokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
   metadata?: Metadata;
@@ -75,7 +75,7 @@ export interface BlueSupplyParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `assets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when the signature kind or encoding is invalid.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature kind or encoding is invalid.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example

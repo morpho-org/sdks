@@ -15,7 +15,7 @@ import { describe, expect, test } from "vitest";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueBundlesV1TokenRequirementSignature,
+  type BundlesTokenRequirementSignature,
   InputExceedsMaxError,
   NativeFundingAmountMismatchError,
   NegativeInputError,
@@ -392,10 +392,10 @@ describe("blueSupplyCollateralBorrow", () => {
         deadline,
       },
       action: {
-        type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 5n, deadline },
+        type: "permit2SignatureTransfer",
+        args: { spender: blueBundlesV1, amount: 5n, nonce: 1n, deadline },
       },
-    } satisfies BlueBundlesV1TokenRequirementSignature;
+    } satisfies BundlesTokenRequirementSignature;
     const authorizationSignature = {
       args: {
         owner: userAddress,

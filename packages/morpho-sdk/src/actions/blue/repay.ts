@@ -2,8 +2,8 @@ import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueRepayAction,
+  BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
@@ -35,7 +35,7 @@ export interface BlueRepayParams {
     /** Recipient required when `referralFeePct` is positive. */
     referralFeeRecipient?: Address;
     /** Optional loan-token ERC-2612 or Permit2 SignatureTransfer result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    requirementSignature?: BundlesTokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
   metadata?: Metadata;
@@ -74,7 +74,7 @@ export interface BlueRepayParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `maxRepayAssets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be encoded safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be encoded safely.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
  * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
