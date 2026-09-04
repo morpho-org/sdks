@@ -48,8 +48,10 @@ Concretely, `blueSupplyCollateralBorrow` is not a new contract: it is simply the
 | Blue `refinance`                    | Bundler3 → GeneralAdapter1   | _(opt)_ target allocator reallocations → `morphoSupplyCollateral` with the borrow/repay/withdraw callback                |
 | Blue `repay`                        | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` (by `assets` or by `shares`)                                                         |
 | Blue `repayWithdrawCollateral`      | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` → `morphoWithdrawCollateral` _(repay **before** withdraw, order is critical)_        |
-| VaultV1 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
-| VaultV2 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
+| VaultV1 `withdraw`                      | **VaultBundlesV1 call**      | _(no bundler, no adapter — VaultBundlesV1 pulls the exact capped share allowance, optionally via an embedded ERC-2612 permit)_ |
+| VaultV2 `withdraw`                      | **VaultBundlesV1 call**      | same as VaultV1                                                                                                          |
+| VaultV1 `redeem`                        | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
+| VaultV2 `redeem`                        | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
 | Blue `withdrawCollateral`           | **Direct Morpho Blue call**  | _(no bundler, no GA1 auth required — `msg.sender` = `onBehalf`)_                                                         |
 | VaultV2 `forceWithdraw` / `forceRedeem` | VaultV2 `multicall` (native) | `forceDeallocate`×N + `withdraw` / `redeem` — **on the vault contract itself**, not through Bundler3                     |
 
@@ -95,21 +97,32 @@ Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `
 
 ### Withdraw / redeem do NOT go through Bundler3
 
-This is the main design caveat. For the following operations the SDK emits a **direct call to the target contract** (the vault):
+This is the main design caveat. For the following operations the SDK emits a **direct call to the target contract**:
 
-| Operation                           | Direct target    |
-| ----------------------------------- | ---------------- |
-| `vaultV1Withdraw` / `vaultV1Redeem` | MetaMorpho vault |
-| `vaultV2Withdraw` / `vaultV2Redeem` | VaultV2          |
+| Operation                                 | Direct target    |
+| ----------------------------------------- | ---------------- |
+| `vaultV1Withdraw` / `vaultV2Withdraw`     | VaultBundlesV1   |
+| `vaultV1Redeem`                           | MetaMorpho vault |
+| `vaultV2Redeem`                           | VaultV2          |
 | `blueWithdrawCollateral`        | Morpho Blue      |
 
 **Consequences:**
 
-- **No on-chain share-price check.** There is no equivalent of `maxSharePrice` / `minSharePrice` passed to the ERC-4626. A share price manipulated between transaction construction and inclusion can adversely impact the number of assets received (withdraw by shares) or shares burned (withdraw by assets), **without the transaction reverting**.
+- **No on-chain share-price check.** There is no equivalent of `maxSharePrice` / `minSharePrice` passed to the ERC-4626. A share price manipulated between transaction construction and inclusion can adversely impact the number of assets received (withdraw by shares) or shares burned (withdraw by assets), **without the transaction reverting** — except for vault `withdraw`, whose share burn is capped by the VaultBundlesV1 share allowance described below.
 - **No automatic LLTV guard** on the adapter side. `blueWithdrawCollateral` validates position health SDK-side (LLTV buffer) _before_ building the tx, but that check is _off-chain_ — if on-chain state moves between simulation and inclusion (oracle price, interest, other borrows), nothing stops the transaction. It is up to the caller to ensure data freshness.
 - **No cross-action atomicity.** A `withdraw` cannot be composed with another call inside the same bundle using the standard flow — by definition it steps out of bundler composition.
 
-**Design rationale** (cf. [ARCHITECTURE.md](ARCHITECTURE.md#withdrawals-and-redeems-direct-vault-calls)): a withdraw does not transfer tokens _from_ the user to the protocol, it burns shares. There is therefore no _inflation_ attack surface to close, and no approval to grant to GA1 — hence the direct call, simpler from a UX standpoint. **But the trade-off is real**: the absence of an on-chain share-price check still leaves the caller exposed to share-price manipulation, to be weighed case by case.
+**Design rationale** (cf. [ARCHITECTURE.md](ARCHITECTURE.md#withdrawals-and-redeems-direct-vault-calls)): a withdraw does not transfer tokens _from_ the user to the protocol, it burns shares. There is therefore no _inflation_ attack surface to close — hence the single direct call, simpler from a UX standpoint. **But the trade-off is real**: the absence of an on-chain share-price check still leaves the caller exposed to share-price manipulation, to be weighed case by case.
+
+**Vault withdrawals bound that exposure through their share allowance.** `vaultV1Withdraw` and
+`vaultV2Withdraw` burn `msg.sender`'s shares from VaultBundlesV1, so they need a vault-share
+allowance for VaultBundlesV1 — the exact spender, not GeneralAdapter1. Because asset-mode calldata
+carries no maximum-shares argument, that allowance _is_ the cap on the burn:
+`getRequirements()` derives it from the vault snapshot, the deadline, and `slippageTolerance`, and
+returns an approval (or an ERC-2612 shares permit folded into the call when `supportSignature` is
+enabled) for exactly that amount. An allowance that does not equal the derived cap — including a
+larger leftover approval — is replaced rather than reused, so the cap holds on every withdrawal.
+Callers must therefore await `getRequirements()` and satisfy it before `buildTx()`.
 
 ### Force deallocation: also not Bundler3
 

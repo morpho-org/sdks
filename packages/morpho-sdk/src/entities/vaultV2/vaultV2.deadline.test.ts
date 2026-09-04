@@ -13,6 +13,35 @@ import { morphoViemExtension } from "../../client/index.js";
 import { ExpiredDeadlineError } from "../../types/index.js";
 
 describe("MorphoVaultV2 bundles deadlines", () => {
+  test("error: cached withdrawal requirements expire with their deadline", async () => {
+    const now = Time.timestamp();
+    const deadline = now + Time.s.from.h(1n);
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(
+      withChainTimestamp(now, () => inKindVaultV2Data()),
+    );
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+
+    const withdraw = vault.withdraw({
+      amount: 100n,
+      userAddress: IN_KIND_USER,
+      deadline,
+    });
+
+    expect(await withdraw.getRequirements()).toHaveLength(1);
+    await expect(
+      withChainTimestamp(deadline + 1n, () => withdraw.getRequirements()),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+  });
+
   test("error: redeem re-checks the deadline before returning cached requirements", async () => {
     const now = 1_800_000_000n;
     const deadline = now + Time.s.from.h(1n);

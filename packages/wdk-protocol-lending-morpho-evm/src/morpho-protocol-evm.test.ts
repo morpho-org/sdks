@@ -179,8 +179,11 @@ const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import(
 const { WalletAccountEvmErc4337 } = await import(
   "@tetherto/wdk-wallet-evm-erc-4337"
 );
-const { default: MorphoProtocolEvm, MixedBlueCollateralFundingError } =
-  await import("./morpho-protocol-evm.js");
+const {
+  default: MorphoProtocolEvm,
+  MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
+} = await import("./morpho-protocol-evm.js");
 
 describe.sequential("MorphoProtocolEvm", () => {
   let account: InstanceType<typeof WalletAccountEvm>;
@@ -267,6 +270,28 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementOptions,
       );
       expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
+    });
+
+    test("behavior: prepared supply checks the balance of the token it was prepared with", async () => {
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+      } as { token: string; amount: bigint };
+
+      const prepared = await protocol.prepareSupply(options);
+
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
+
+      // A caller reusing its own options object must not retarget the balance check
+      // away from the asset the prepared action actually deposits.
+      options.token = COLLATERAL;
+
+      await prepared.submit();
+
+      expect(account.getTokenBalance).toHaveBeenCalledWith(TOKEN);
     });
 
     test("should use vaultV2 when an explicit vault is configured", async () => {
@@ -462,7 +487,16 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("withdraw", () => {
+    beforeEach(() => {
+      // `vi.clearAllMocks()` keeps implementations, so restore the shared default here and let
+      // individual tests opt into an already-satisfied allowance.
+      withdrawAction.getRequirements.mockResolvedValue([
+        { action: { type: "erc20Approval" } },
+      ]);
+    });
+
     test("should build a vault withdraw with morpho-sdk and send it", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
       account.sendTransaction = vi
         .fn()
         .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
@@ -475,9 +509,31 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        slippageTolerance: undefined,
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
       expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+    });
+
+    test("behavior: forwards the configured slippage tolerance", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
+      const configured = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+
+      await configured.withdraw({ token: TOKEN, amount: 100_000n });
+
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
+        amount: 100_000n,
+        userAddress: ADDRESS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
     });
 
     test("should expose and consume vault-share requirements", async () => {
@@ -515,6 +571,17 @@ describe.sequential("MorphoProtocolEvm", () => {
       ).rejects.toThrow(
         "'to' must equal the wallet account address for Morpho vault withdrawals.",
       );
+    });
+
+    test("error: UnresolvedVaultWithdrawRequirementsError", async () => {
+      account.sendTransaction = vi.fn();
+
+      await expect(
+        protocol.withdraw({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(UnresolvedVaultWithdrawRequirementsError);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+      expect(withdrawAction.buildTx).not.toHaveBeenCalled();
+      expect(account.sendTransaction).not.toHaveBeenCalled();
     });
   });
 

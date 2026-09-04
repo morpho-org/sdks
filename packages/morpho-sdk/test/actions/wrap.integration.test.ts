@@ -63,6 +63,15 @@ describe("VaultBundlesV1 native funding", () => {
         initialState.morphoAssetBalance +
         nativeAmount,
     );
+    // The balance checks above only prove the native value left the user and reached
+    // the vault; these prove VaultBundlesV1 minted the resulting shares to the user
+    // instead of stranding the wrapped assets.
+    expect(finalState.userSharesBalance).toBeGreaterThan(
+      initialState.userSharesBalance,
+    );
+    expect(finalState.userSharesBalanceInAssets).toBeGreaterThan(
+      initialState.userSharesBalanceInAssets,
+    );
   });
 
   test("Vault V2 deposits native ETH into a wNative vault", async ({
@@ -105,6 +114,15 @@ describe("VaultBundlesV1 native funding", () => {
       initialState.vaultBalance +
         initialState.morphoAssetBalance +
         nativeAmount,
+    );
+    // The balance checks above only prove the native value left the user and reached
+    // the vault; these prove VaultBundlesV1 minted the resulting shares to the user
+    // instead of stranding the wrapped assets.
+    expect(finalState.userSharesBalance).toBeGreaterThan(
+      initialState.userSharesBalance,
+    );
+    expect(finalState.userSharesBalanceInAssets).toBeGreaterThan(
+      initialState.userSharesBalanceInAssets,
     );
   });
 

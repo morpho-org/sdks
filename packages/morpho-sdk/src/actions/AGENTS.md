@@ -23,12 +23,13 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
 2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 and Vault V2
-   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths** encode one
-   registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
-   redeem / offer cancellation) encode their target contract
-   call directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
-   Bundler3 bundle.
+   write paths** encode one registered `VaultBundlesV1` entrypoint directly; share-spending paths
+   (`withdraw`, `redeem`, `migrateToV2`) carry an optional embedded shares permit and otherwise
+   require the exact share allowance resolved by the entity's `getRequirements()`. **Blue write
+   paths** encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths**
+   encode one `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral
+   supply / redeem / offer cancellation) encode their target contract call directly. Vault
+   `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 

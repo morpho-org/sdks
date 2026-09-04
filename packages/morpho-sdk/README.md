@@ -42,10 +42,13 @@ Robinhood Chain. Custom deployments can still be configured with `registerCustom
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
-writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits and
-exits use the same shape for token or exact share authorization. Vault `inKindRedeem` additionally
-checks live Blue liquidity. Calling `buildTx()` directly skips RPC-backed pre-flight checks.
-`forceWithdraw` and `forceRedeem` remain direct Vault V2 multicalls without prerequisites.
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits use
+it for token authorization. Vault exits use it too: VaultBundlesV1 burns `msg.sender`'s shares, so
+they need a vault-share allowance equal to the derived share cap — an approval, or an ERC-2612
+shares permit folded into the call when `supportSignature` is enabled. Vault `inKindRedeem`
+additionally checks live Blue liquidity. Calling `buildTx()` directly skips those RPC-backed
+pre-flight checks. `forceWithdraw` and `forceRedeem` remain direct Vault V2 multicalls without
+prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -113,15 +116,18 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw needs an exact vault-share approval or permit:
+Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the exact share
+allowance returned by `getRequirements()`:
 
 ```typescript
 const { buildTx, getRequirements } = vault.withdraw({
   amount: 500000000000000000n,
   userAddress: "0xUser...",
 });
+// One approval transaction to send, or one shares permit to sign when
+// `supportSignature: true`.
 const requirements = await getRequirements();
-const tx = buildTx([sharePermitSignature]);
+const tx = buildTx([sharesPermitSignature]);
 ```
 
 For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).

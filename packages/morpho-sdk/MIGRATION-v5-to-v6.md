@@ -171,12 +171,25 @@ ERC-4626 call or Bundler3 multicall.
   transaction. A connected builder account may prepare a transaction for a different submitter;
   identity-bound signature helpers still enforce `userAddress` when signing.
 - `withdraw` and `redeem` now return a full `ActionOutput`. Call `getRequirements()` and satisfy the
-  exact vault-share approval or ERC-2612 permit before calling `buildTx(signatures)`.
+  exact vault-share approval or ERC-2612 permit before calling `buildTx(signatures)`; without
+  signature support it returns one ERC-20 approval transaction to send first, and with
+  `supportSignature: true` it returns one signable ERC-2612 shares permit that is folded into the
+  VaultBundlesV1 call.
 - Vault calls gain `deadline`, `referralFeePct`, and `referralFeeRecipient`. Entity deadlines default
   to two hours; pure builder callers provide them explicitly. Amounts remain gross, and fixed-asset
-  action metadata reports `referralFeeAssets` and `netAssets`.
+  action metadata drops `recipient` and reports the gross amount, optional `nativeAmount`,
+  `maxSharePrice`, `referralFeePct`, `referralFeeRecipient`, exact `referralFeeAssets`, resulting
+  `netAssets`, and `deadline`.
 - `migrateToV2` accepts exactly one of `assets` and `shares`, removes `recipient` and source
   `minSharePriceVaultV1`, and retains only the destination `maxSharePriceVaultV2` bound.
+
+On an asset-denominated exit the share allowance is the only cap on the burn, since the calldata
+carries no maximum-shares argument. `getRequirements()` therefore derives an exact cap from the
+vault snapshot, the deadline, and `slippageTolerance` (default 0.03%), and returns an approval or
+permit for exactly that amount whenever the current allowance differs — including when a larger
+leftover approval already exists. It also re-validates the deadline on every call, so a prepared
+exit reused after its deadline throws `ExpiredDeadlineError` rather than returning cached
+prerequisites.
 
 VaultBundlesV1 permits only one call to itself in a transaction. Do not put two vault calls into one
 Safe multisend or EIP-5792 batch; use `migrateToV2` for an atomic V1-to-V2 move. Permissioned Vault
