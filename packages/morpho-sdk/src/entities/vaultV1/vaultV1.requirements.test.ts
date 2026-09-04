@@ -8,7 +8,7 @@ import {
 } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_ASSET,
   IN_KIND_USER,
@@ -157,6 +157,74 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
 
     expect(deposit.buildTx([requirementSignature]).action.type).toBe(
       "vaultV1Deposit",
+    );
+  });
+});
+
+describe("MorphoVaultV1 withdraw getRequirements", () => {
+  const prepareWithdraw = (handle: ReturnType<typeof createMockClient>) => {
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const getData = vi
+      .spyOn(vault, "getData")
+      .mockResolvedValue(inKindVaultV1Data());
+    return {
+      getData,
+      withdraw: vault.withdraw({ amount, userAddress: IN_KIND_USER }),
+    };
+  };
+
+  test("behavior: re-reads the share allowance after the approval is executed", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const { withdraw } = prepareWithdraw(handle);
+
+    const [approval] = (await withdraw.getRequirements()).filter(
+      isRequirementApproval,
+    );
+    const requiredShareAllowance = approval?.action.args.amount;
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+
+    // The caller executes that approval. Replaying a memoized requirement here would leave the
+    // documented first-time withdrawal flow permanently unresolvable.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: requiredShareAllowance,
+    });
+
+    expect(await withdraw.getRequirements()).toEqual([]);
+  });
+
+  test("behavior: pins the derived share cap across re-resolutions", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const { getData, withdraw } = prepareWithdraw(handle);
+
+    const first = await withdraw.getRequirements();
+    const second = await withdraw.getRequirements();
+
+    // Re-reading the allowance must not retarget the cap this handle already committed to, so
+    // the vault snapshot it was derived from is fetched exactly once.
+    expect(getData).toHaveBeenCalledTimes(1);
+    expect(countAllowanceReads(handle)).toBe(2);
+    expect(
+      second.filter(isRequirementApproval).map(({ action }) => action.args),
+    ).toEqual(
+      first.filter(isRequirementApproval).map(({ action }) => action.args),
     );
   });
 });

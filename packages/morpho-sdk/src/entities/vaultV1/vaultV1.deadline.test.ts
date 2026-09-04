@@ -37,7 +37,7 @@ describe("MorphoVaultV1 bundles deadlines", () => {
     expect(accrueInterest).toHaveBeenCalledWith(deadline);
   });
 
-  test("error: cached withdrawal requirements expire with their deadline", async () => {
+  test("error: withdrawal requirement resolution expires with its deadline", async () => {
     const now = Time.timestamp();
     const deadline = now + Time.s.from.h(1n);
     const handle = createMockClient(mainnet);
