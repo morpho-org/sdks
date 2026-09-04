@@ -433,6 +433,121 @@ describe("MorphoBlue write surface", () => {
     expect(tx.action.args.assets).toBe(assets);
   });
 
+  test("target BlueBundlesV1 for token approval and Morpho authorization", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: getChainAddress(mainnet.id, "morpho"),
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const tokenRequirements = await entity
+      .supply({
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    const authorizationRequirements = await entity
+      .withdraw({
+        userAddress,
+        positionData: makePosition(marketParams, {
+          borrowShares: 0n,
+          supplyShares: 10n ** 18n,
+        }),
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+
+    expect(tokenRequirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1 },
+        },
+      },
+    ]);
+    expect(authorizationRequirements).toMatchObject([
+      {
+        action: {
+          type: "blueAuthorization",
+          args: { authorized: blueBundlesV1, isAuthorized: true },
+        },
+      },
+    ]);
+  });
+
+  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supply({ assets: 1n, userAddress, deadline: maxUint256 })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
+  test("supply funds a wrapped-native market with tx value and no requirements", async () => {
+    const nativeMarketParams = new MarketParams({
+      loanToken: getChainAddress(mainnet.id, "wNative"),
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    });
+    const market = createMockClient(mainnet)
+      .client.extend(morphoViemExtension())
+      .morpho.blue(nativeMarketParams, mainnet.id);
+
+    const assets = 10n ** 18n;
+    const action = market.supply({
+      userAddress,
+      assets,
+      nativeAmount: assets,
+      deadline: maxUint256,
+    });
+
+    // The native branch short-circuits before any on-chain read: it emits no
+    // token approval/permit (and no Morpho authorization), rides the funded
+    // amount as `tx.value`, and leaves the encoded token permit empty. A
+    // regression that dropped the branch would demand a token requirement or
+    // omit the value, and would revert on-chain rather than fail here.
+    expect(await action.getRequirements()).toEqual([]);
+    const tx = action.buildTx();
+    expect(tx.value).toBe(assets);
+    expect(tx.action.args.nativeAmount).toBe(assets);
+    expect(tx.action.args.assets).toBe(assets);
+  });
+
   test("repay forwards a reusable approvalAmount to the token requirement", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
