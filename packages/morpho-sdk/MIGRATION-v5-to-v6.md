@@ -11,6 +11,20 @@ extension or automatic fallback to the v5 route.
 names but now route through the chain's registered VaultBundlesV1 contract instead of Bundler3 and
 GeneralAdapter1.
 
+> **Chain availability.** Vault deposits require the `bundles.vaultBundlesV1` deployment on the
+> target chain. On a registered chain without it, including Fraxtal, both `MorphoVaultV1.deposit()`
+> and `MorphoVaultV2.deposit()` throw `UnknownAddressError` synchronously at handle creation,
+> before `getRequirements()` or `buildTx()` can be called. This is a breaking loss of deposit
+> functionality on chains previously supported through Bundler3/GeneralAdapter1; there is no
+> automatic fallback. Confirm coverage before upgrading with
+> `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Stay on v5 if your application needs
+> deposits on an affected chain until VaultBundlesV1 is deployed and registered in the SDK.
+
+As checked on 2026-09-07, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
+and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 13 chains: Ethereum,
+Arbitrum, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain, and
+World Chain. Bundler3 availability alone does not imply support for v6 vault deposits.
+
 Update deposit inputs as follows:
 
 | v5 | v6 |
@@ -233,6 +247,8 @@ The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
 
 ## Upgrade checklist
 
+- Confirm `bundles.vaultBundlesV1` coverage for vault deposits and `bundles.blueBundlesV1` coverage
+  for Blue writes on every chain your application supports.
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
