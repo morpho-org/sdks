@@ -375,6 +375,32 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(accrued.accrualAdapters[0]).toBe(legacyAdapter);
     expect(accrued.accrualLiquidityAdapter).toBe(legacyAdapter);
   });
+
+  test("behavior: leaves an adapter already ahead of the timestamp at its pre-accrual state", () => {
+    // A nested market was poked more recently than the vault (lastUpdate 105 >
+    // the vault's 100), so it cannot be accrued back to the vault's `lastUpdate`.
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      {
+        ...adapterBaseInput(),
+        marketParamsList: [new MarketParams(marketParams())],
+      },
+      [accrualPosition({ supplyShares: 100n }, { lastUpdate: 105n })],
+    );
+    const vault = accrualVaultV2(adapter);
+
+    // Accruing to the vault's own `lastUpdate` (elapsed 0) must not throw — it
+    // stayed valid before nested accrual existed — and leaves the ahead adapter
+    // untouched rather than accruing it backwards.
+    const { vault: accrued } = vault.accrueInterest(100n);
+
+    expect(accrued.lastUpdate).toBe(100n);
+    expect(accrued.accrualAdapters[0]).toBe(adapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(adapter);
+    expect(
+      (accrued.accrualAdapters[0] as AccrualVaultV2MorphoMarketV1Adapter)
+        .positions[0]?.market.lastUpdate,
+    ).toBe(105n);
+  });
 });
 
 describe("VaultV2Adapter", () => {

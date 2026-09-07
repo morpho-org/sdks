@@ -124,6 +124,8 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * accrued to `timestamp`.
    * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an
    * underlying market's `lastUpdate`.
+   * @throws {UnknownMarketAllocationError} when the underlying V1 vault's withdraw
+   * queue references a market without an allocation.
    * @example
    * ```ts
    * const accrued = adapter.accrueInterest(timestamp);
