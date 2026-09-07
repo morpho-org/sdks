@@ -8,7 +8,11 @@ import {
   SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
-import { makeTransferLog } from "../test-helpers/index.js";
+import {
+  encodeUint256,
+  makeTransferLog,
+  padAddress,
+} from "../test-helpers/index.js";
 import type {
   AccountAssetChanges,
   RawLog,
@@ -19,6 +23,7 @@ import type {
 } from "../types.js";
 import type { simulateV1 } from "./backends/eth-simulate-v1.js";
 import type { simulateTenderlyRpc } from "./backends/tenderly-rpc.js";
+import { WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import { simulate } from "./simulate.js";
 
 const mockTenderlyRpc = vi.fn<typeof simulateTenderlyRpc>();
@@ -228,6 +233,24 @@ describe.sequential("simulate — success", () => {
     );
   });
 
+  it("does not let lookalike Withdrawal logs cancel bundler retention", async () => {
+    const bundler = getChainAddresses(1).bundler3.bundler3;
+    const amount = 1_000_000n;
+    const logs: RawLog[] = [
+      makeTransferLog({ token: USDC, from: USER, to: bundler, amount }),
+      {
+        address: USDC,
+        topics: [WITHDRAWAL_TOPIC, padAddress(bundler)],
+        data: encodeUint256(amount),
+      },
+    ];
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
+      BlacklistViolationError,
+    );
+  });
+
   it("throws BlacklistViolationError end-to-end when Tenderly reports native ETH retention via assetChanges only (finding 1440)", async () => {
     // Tenderly derives native ETH into assetChanges and emits no transfer log.
     // With logs empty, only assetChanges carries the retained ETH — the guard
@@ -398,7 +421,9 @@ describe.sequential("simulate — backend fallback", () => {
     const result = await simulate(makeConfig(), makeParams());
 
     expect(result.transfers).toHaveLength(1);
-    expect(mockSimulateV1).toHaveBeenCalled();
+    expect(mockSimulateV1).toHaveBeenCalledWith(
+      expect.objectContaining({ wNative: getChainAddresses(1).wNative }),
+    );
   });
 
   it("falls back successfully when Tenderly times out within budget", async () => {
@@ -470,6 +495,24 @@ describe.sequential("simulate — validation", () => {
     await expect(
       simulate(makeConfig(), makeParams({ chainId: 999999 })),
     ).rejects.toThrow(UnsupportedChainError);
+  });
+
+  it("rejects configured chains without registered retention metadata before execution", async () => {
+    const chainId = 999999;
+
+    await expect(
+      simulate(
+        {
+          chains: new Map([
+            [chainId, { simulateV1Url: "http://unregistered.local" }],
+          ]),
+        },
+        makeParams({ chainId }),
+      ),
+    ).rejects.toThrow(UnsupportedChainError);
+
+    expect(mockTenderlyRpc).not.toHaveBeenCalled();
+    expect(mockSimulateV1).not.toHaveBeenCalled();
   });
 
   it("throws SimulationValidationError for zero-address token in signature auth", async () => {

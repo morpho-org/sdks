@@ -59,11 +59,11 @@ export class SimulationValidationError extends SimulationPackageError {
   }
 }
 
-/** Chain ID not configured for any simulation method. Not bypassable. */
+/** Chain ID lacks a simulation backend or registered bundler metadata. Not bypassable. */
 export class UnsupportedChainError extends SimulationPackageError {
   readonly code = "UNSUPPORTED_CHAIN";
 
   constructor(public readonly chainId: number) {
-    super(`Chain ${chainId} is not configured for simulation`);
+    super(`Chain ${chainId} is not fully configured for simulation`);
   }
 }

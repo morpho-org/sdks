@@ -10,6 +10,7 @@ import {
   assertNoBundlerRetention,
   buildSimulationTxs,
   executeSimulation,
+  resolveBundlerRetentionMetadata,
   validateInput,
 } from "./pipeline/index.js";
 
@@ -42,7 +43,7 @@ import {
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
- * @throws {UnsupportedChainError} when the chain is not configured for any backend.
+ * @throws {UnsupportedChainError} when the chain lacks a backend or registered bundler metadata.
  * @throws {SimulationRevertedError} when the bundle reverts on either backend.
  * @throws {BlacklistViolationError} when the simulation leaves value retained by
  *   a `bundler3` address beyond the dust threshold.
@@ -79,6 +80,7 @@ export async function simulate(
   params: SimulateParams,
 ): Promise<SimulationResult> {
   validateInput(params);
+  const retentionMetadata = resolveBundlerRetentionMetadata(params.chainId);
 
   const simulationTxs = buildSimulationTxs(params);
   const result = await executeSimulation({
@@ -86,6 +88,7 @@ export async function simulate(
     chainId: params.chainId,
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
+    wNative: retentionMetadata.wNative,
   });
   if (result.calls.length !== simulationTxs.length) {
     throw new ExternalServiceError(
@@ -93,10 +96,13 @@ export async function simulate(
     );
   }
 
-  const transfers = parseTransfers(result.calls, config.logger);
+  const transfers = parseTransfers(result.calls, {
+    wNative: retentionMetadata.wNative,
+    logger: config.logger,
+  });
 
   assertNoBundlerRetention({
-    chainId: params.chainId,
+    metadata: retentionMetadata,
     transfers,
     assetChanges: result.assetChanges,
     logger: config.logger,

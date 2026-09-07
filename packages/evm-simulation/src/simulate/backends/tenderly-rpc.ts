@@ -18,7 +18,6 @@ import {
 import type {
   AccountAssetChanges,
   RawCall,
-  RawLog,
   RawSimulationResult,
   SimulationTransaction,
   TenderlyRpcConfig,
@@ -34,10 +33,16 @@ interface TenderlyRpcCall {
   value: Hex;
 }
 
-const addressSchema = z.custom<Address>(
-  (val) => typeof val === "string" && isAddress(val),
-);
+const addressSchema = z
+  .string()
+  .refine((value) => isAddress(value, { strict: false }))
+  .transform((value): Address => getAddress(value.toLowerCase()));
 const hexSchema = z.custom<Hex>((val) => typeof val === "string" && isHex(val));
+const quantitySchema = z.custom<Hex>(
+  (value) =>
+    typeof value === "string" &&
+    /^0x(?:0|[1-9a-fA-F][0-9a-fA-F]{0,63})$/.test(value),
+);
 
 const traceFrameSchema = z
   .object({
@@ -52,11 +57,10 @@ const logSchema = z
     raw: z
       .object({
         address: addressSchema,
-        topics: z.array(hexSchema).optional(),
-        data: hexSchema.optional(),
+        topics: z.array(hexSchema),
+        data: hexSchema,
       })
-      .passthrough()
-      .optional(),
+      .passthrough(),
   })
   .passthrough();
 
@@ -71,23 +75,27 @@ const assetChangeSchema = z
       .passthrough(),
     from: addressSchema.optional(),
     to: addressSchema.optional(),
-    rawAmount: hexSchema,
+    rawAmount: quantitySchema,
   })
   .passthrough();
 
-const simResultSchema = z
+const successResultSchema = z
   .object({
-    status: z.boolean(),
-    gasUsed: hexSchema,
-    logs: z.array(logSchema).optional(),
+    status: z.literal(true),
+    gasUsed: quantitySchema,
+    logs: z.array(logSchema),
     trace: z.array(traceFrameSchema).optional(),
-    assetChanges: z.array(assetChangeSchema).optional(),
+    assetChanges: z.array(assetChangeSchema),
     error: z.string().optional(),
     errorMessage: z.string().optional(),
   })
   .passthrough();
 
-type SimResult = z.infer<typeof simResultSchema>;
+const failureResultSchema = z
+  .object({ status: z.literal(false) })
+  .passthrough();
+
+type SimResult = z.infer<typeof successResultSchema>;
 
 const rpcErrorSchema = z
   .object({
@@ -103,8 +111,8 @@ function rpcEnvelope<T extends z.ZodTypeAny>(result: T) {
     .passthrough();
 }
 
-const singleEnvelope = rpcEnvelope(simResultSchema);
-const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
+const singleEnvelope = rpcEnvelope(z.unknown());
+const bundleEnvelope = rpcEnvelope(z.array(z.unknown()).min(1));
 
 /**
  * Simulate one or more transactions via Tenderly's Node Web3 Gateway.
@@ -150,7 +158,9 @@ export async function simulateTenderlyRpc(params: {
         params: [buildCall(firstTx), block, stateOverrides],
         signal,
       });
-      const result = unwrapResult(singleEnvelope.parse(json));
+      const rawResult = unwrapResult(singleEnvelope.parse(json));
+      throwIfReverted(rawResult);
+      const result = successResultSchema.parse(rawResult);
       return {
         calls: [toRawCall(result)],
         assetChanges: toAssetChanges([result]),
@@ -163,7 +173,11 @@ export async function simulateTenderlyRpc(params: {
       params: [transactions.map(buildCall), block, stateOverrides],
       signal,
     });
-    const results = unwrapResult(bundleEnvelope.parse(json));
+    const rawResults = unwrapResult(bundleEnvelope.parse(json));
+    for (const rawResult of rawResults) throwIfReverted(rawResult);
+    const results = rawResults.map((result) =>
+      successResultSchema.parse(result),
+    );
     return {
       calls: results.map(toRawCall),
       assetChanges: toAssetChanges(results),
@@ -241,31 +255,38 @@ function encodeBlock(blockNumber?: bigint | BlockTag): string {
     : blockNumber;
 }
 
-function toRawCall(data: SimResult): RawCall {
-  if (data.status !== true) {
-    // Tenderly RPC surfaces the revert reason on the trace frame; the
-    // top-level fields are checked as a defensive fallback.
-    const traceError = data.trace?.find((f) => f.errorReason || f.error);
-    const message =
-      traceError?.errorReason ||
+function throwIfReverted(result: unknown): void {
+  if (!failureResultSchema.safeParse(result).success) return;
+
+  const details = z
+    .object({
+      trace: z.array(traceFrameSchema).optional(),
+      error: z.string().optional(),
+      errorMessage: z.string().optional(),
+    })
+    .passthrough()
+    .safeParse(result);
+  const traceError = details.success
+    ? details.data.trace?.find((frame) => frame.errorReason || frame.error)
+    : undefined;
+  const message = details.success
+    ? traceError?.errorReason ||
       traceError?.error ||
-      data.errorMessage ||
-      data.error ||
-      "Transaction simulation reverted";
-    throw new SimulationRevertedError(message, data);
-  }
-  const logs: RawLog[] = [];
-  for (const log of data.logs ?? []) {
-    if (log.raw) {
-      logs.push({
-        address: log.raw.address,
-        topics: log.raw.topics ?? [],
-        data: log.raw.data ?? "0x",
-      });
-    }
-  }
+      details.data.errorMessage ||
+      details.data.error ||
+      "Transaction simulation reverted"
+    : "Transaction simulation reverted";
+
+  throw new SimulationRevertedError(message, result);
+}
+
+function toRawCall(data: SimResult): RawCall {
   return {
-    logs,
+    logs: data.logs.map(({ raw }) => ({
+      address: raw.address,
+      topics: raw.topics,
+      data: raw.data,
+    })),
     status: true,
     returnData: data.trace?.[0]?.output ?? "0x",
     gasUsed: BigInt(data.gasUsed),
@@ -280,7 +301,7 @@ function toRawCall(data: SimResult): RawCall {
 function toAssetChanges(results: SimResult[]): AccountAssetChanges[] {
   const entries: AssetChangeEntry[] = [];
   for (const result of results) {
-    for (const change of result.assetChanges ?? []) {
+    for (const change of result.assetChanges) {
       const amount = BigInt(change.rawAmount);
       const token = change.assetInfo.contractAddress
         ? getAddress(change.assetInfo.contractAddress)

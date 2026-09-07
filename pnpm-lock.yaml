@@ -131,9 +131,6 @@ importers:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/morpho-ts':
-        specifier: workspace:^
-        version: link:../morpho-ts
       zod:
         specifier: ^4.4.3
         version: 4.4.3

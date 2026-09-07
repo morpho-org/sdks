@@ -34,7 +34,9 @@ export type ChainSimulationConfig =
  *
  * Every chain entry must declare at least one backend (Tenderly RPC primary,
  * `eth_simulateV1` fallback, or both). Calling `simulate` for a `chainId`
- * missing from `chains` throws `UnsupportedChainError`.
+ * missing from `chains` throws `UnsupportedChainError`. Custom Morpho chains
+ * must also be registered through `registerCustomAddresses` in the same active
+ * module graph before simulation.
  */
 export interface SimulationConfig {
   /** Per-chain simulation capabilities. */

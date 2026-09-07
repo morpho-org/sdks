@@ -52,6 +52,8 @@ try {
 
 Each chain entry must declare at least one backend — `tenderlyRpc` (primary), `simulateV1Url` (fallback), or both. The type system enforces this.
 
+Custom chains must also register their Morpho deployment with `registerCustomAddresses` in the same active ESM/CJS module graph that runs `simulate`; simulation rejects chains whose bundler retention metadata is unavailable.
+
 ### API surface
 
 All symbols below are re-exported from the package root.

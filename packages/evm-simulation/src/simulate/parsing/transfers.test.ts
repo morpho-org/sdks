@@ -12,10 +12,10 @@ import {
   makeCall,
   padAddress,
 } from "../../test-helpers/index.js";
-import type { RawLog } from "../../types.js";
+import type { RawLog, SimulationLogger } from "../../types.js";
 import {
   DEPOSIT_TOPIC,
-  parseTransfers,
+  parseTransfers as parseRawTransfers,
   TRANSFER_TOPIC,
   WITHDRAWAL_TOPIC,
 } from "./transfers.js";
@@ -25,6 +25,11 @@ const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const DAI: Address = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
+
+const parseTransfers = (
+  calls: Parameters<typeof parseRawTransfers>[0],
+  logger?: SimulationLogger,
+) => parseRawTransfers(calls, { logger, wNative: WETH });
 
 describe("parseTransfers", () => {
   it("parses a standard ERC20 Transfer", () => {
@@ -195,6 +200,99 @@ describe("parseTransfers", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.from).toBe(zeroAddress);
     expect(result[0]!.to).toBe(getAddress(USER));
+  });
+
+  it("ignores Deposit events from unregistered tokens", () => {
+    const amount = 1_000n;
+    const logs: RawLog[] = [
+      {
+        address: DAI,
+        topics: [DEPOSIT_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    expect(parseRawTransfers([makeCall(logs)], { wNative: WETH })).toEqual([]);
+  });
+
+  it("ignores wrapped-native events when no token is registered", () => {
+    const amount = 1_000n;
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    expect(parseRawTransfers([makeCall(logs)])).toEqual([]);
+  });
+
+  it("rejects wrapped-native events with extra topics", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1n),
+      },
+      {
+        address: WETH,
+        topics: [WITHDRAWAL_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(2n),
+      },
+    ];
+
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("normalizes mixed-case event data before wrapped-native deduplication", () => {
+    const upperHex = (value: Hex): Hex =>
+      `0x${value.slice(2).toUpperCase()}` as Hex;
+    const amount = BigInt(`0x${"ab".repeat(32)}`);
+    const data = upperHex(encodeUint256(amount));
+    const logs: RawLog[] = [
+      {
+        address: WETH.toLowerCase() as Address,
+        topics: [upperHex(DEPOSIT_TOPIC), upperHex(padAddress(USER))],
+        data,
+      },
+      {
+        address: WETH,
+        topics: [
+          upperHex(TRANSFER_TOPIC),
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: data.toLowerCase() as Hex,
+      },
+    ];
+
+    expect(parseTransfers([makeCall(logs)])).toEqual([
+      expect.objectContaining({ token: WETH, amount }),
+    ]);
+  });
+
+  it("rejects non-canonical uint256 data and indexed addresses", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const signedData = `0x${"0".repeat(62)}-1` as Hex;
+    const nonZeroPadding = `0x${"1".repeat(24)}${USER.slice(2)}` as Hex;
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: signedData,
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, nonZeroPadding, padAddress(VAULT)],
+        data: encodeUint256(1n),
+      },
+    ];
+
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
   });
 
   it("handles multi-token flows", () => {

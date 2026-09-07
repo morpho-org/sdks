@@ -2,9 +2,11 @@ import {
   getChainAddresses,
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress, getAddress } from "viem";
-import { BlacklistViolationError } from "../../errors.js";
+import {
+  BlacklistViolationError,
+  UnsupportedChainError,
+} from "../../errors.js";
 import type {
   AccountAssetChanges,
   SimulationLogger,
@@ -28,43 +30,54 @@ interface BundlerEntry {
   netChange: bigint;
 }
 
-function getBundlerAddresses(
+interface BundlerRetentionMetadata {
+  readonly bundlerAddresses: ReadonlySet<Address>;
+  readonly wNative?: Address;
+}
+
+/**
+ * Resolves the chain metadata required to enforce bundler retention.
+ *
+ * @param chainId - Chain whose registered bundler addresses are required.
+ * @returns One immutable metadata snapshot for parsing and retention checks.
+ * @throws {UnsupportedChainError} when the active registry has no bundler metadata for the chain.
+ * @internal
+ */
+export function resolveBundlerRetentionMetadata(
   chainId: number,
-  logger?: SimulationLogger,
-): Set<Address> {
+): BundlerRetentionMetadata {
   try {
     const addresses = getChainAddresses(chainId);
     if (!addresses.bundler3) {
-      // blue-sdk knows the chain but didn't catalog a bundler3 for it.
-      // Treat the same as UnsupportedChainIdError — retention check skipped.
-      logger?.warn(
-        "Chain known to blue-sdk but has no bundler3 config, retention check skipped",
-        {
-          chainId,
-        },
-      );
-      return new Set();
+      throw new UnsupportedChainError(chainId);
     }
-    return new Set(
+
+    const bundlerAddresses = new Set(
       Object.values(addresses.bundler3)
-        .filter(isDefined)
-        .map((addr) => getAddress(addr)),
+        .filter((address) => address !== undefined)
+        .map((address) => getAddress(address.toLowerCase())),
     );
+    if (bundlerAddresses.size === 0) {
+      throw new UnsupportedChainError(chainId);
+    }
+
+    return {
+      bundlerAddresses,
+      wNative:
+        addresses.wNative == null
+          ? undefined
+          : getAddress(addresses.wNative.toLowerCase()),
+    };
   } catch (error) {
     if (error instanceof UnsupportedChainIdError) {
-      // Loud warn: this disables a "never bypassable" check for the chain.
-      // Consumers relying on the guarantee must handle this signal.
-      logger?.warn("Chain not supported by blue-sdk, retention check skipped", {
-        chainId,
-      });
-      return new Set();
+      throw new UnsupportedChainError(chainId);
     }
     throw error;
   }
 }
 
 interface AssertNoBundlerRetentionParams {
-  chainId: number;
+  metadata: BundlerRetentionMetadata;
   transfers: Transfer[];
   assetChanges: readonly AccountAssetChanges[];
   logger?: SimulationLogger;
@@ -99,9 +112,8 @@ interface AssertNoBundlerRetentionParams {
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
 ): void {
-  const { chainId, transfers, assetChanges, logger } = params;
-  const bundlerAddresses = getBundlerAddresses(chainId, logger);
-  if (bundlerAddresses.size === 0) return;
+  const { metadata, transfers, assetChanges, logger } = params;
+  const { bundlerAddresses } = metadata;
 
   // Map keyed by (bundler, token) → structured entry. Avoids string parse-back.
   const flow = new Map<string, BundlerEntry>();
@@ -126,11 +138,12 @@ export function assertNoBundlerRetention(
   // does not re-add the same native move on `eth_simulateV1`.
   const nativeFromAssetChanges = new Set<string>();
   for (const { account, changes } of assetChanges) {
-    if (!bundlerAddresses.has(account)) continue;
+    const normalizedAccount = getAddress(account.toLowerCase());
+    if (!bundlerAddresses.has(normalizedAccount)) continue;
     for (const change of changes) {
-      if (change.token !== ethAddress) continue;
-      recordFlow(account, ethAddress, change.diff);
-      nativeFromAssetChanges.add(account.toLowerCase());
+      if (change.token.toLowerCase() !== ethAddress) continue;
+      recordFlow(normalizedAccount, ethAddress, change.diff);
+      nativeFromAssetChanges.add(normalizedAccount.toLowerCase());
     }
   }
 
@@ -139,12 +152,15 @@ export function assertNoBundlerRetention(
   // is absent from `nativeFromAssetChanges`, so native is never summed on top
   // of the `assetChanges` value already recorded for that address.
   const usesAssetChangeNative = (t: Transfer, addr: Address): boolean =>
-    t.token === ethAddress && nativeFromAssetChanges.has(addr.toLowerCase());
+    t.token.toLowerCase() === ethAddress &&
+    nativeFromAssetChanges.has(addr.toLowerCase());
   for (const t of transfers) {
-    if (bundlerAddresses.has(t.to) && !usesAssetChangeNative(t, t.to))
-      recordFlow(t.to, t.token, t.amount);
-    if (bundlerAddresses.has(t.from) && !usesAssetChangeNative(t, t.from))
-      recordFlow(t.from, t.token, -t.amount);
+    const to = getAddress(t.to.toLowerCase());
+    const from = getAddress(t.from.toLowerCase());
+    if (bundlerAddresses.has(to) && !usesAssetChangeNative(t, to))
+      recordFlow(to, t.token, t.amount);
+    if (bundlerAddresses.has(from) && !usesAssetChangeNative(t, from))
+      recordFlow(from, t.token, -t.amount);
   }
 
   const entries = [...flow.values()];

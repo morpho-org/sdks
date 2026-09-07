@@ -103,6 +103,7 @@ describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
     const result = await simulateV1({
       rpcUrl: client.transport.url!,
       chainId: mainnet.id,
+      wNative: WETH,
       transactions: [
         {
           from: client.account.address,

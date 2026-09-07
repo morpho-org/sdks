@@ -360,7 +360,7 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     expect(tx.value).toBe("0x4d2");
   });
 
-  it("defaults omitted log fields to empty topics and 0x data", async () => {
+  it("rejects incomplete log evidence", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>
@@ -372,17 +372,15 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     });
     installFetchMock(fetchMock);
 
-    const result = await simulateTenderlyRpc({
-      config: CONFIG,
-      transactions: [TX1],
-    });
-
-    expect(result.calls[0]!.logs).toEqual([
-      { address: USDC, topics: [], data: "0x" },
-    ]);
+    await expect(
+      simulateTenderlyRpc({
+        config: CONFIG,
+        transactions: [TX1],
+      }),
+    ).rejects.toThrow(ExternalServiceError);
   });
 
-  it("defaults omitted logs array to empty", async () => {
+  it("rejects a successful response without logs", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>
@@ -394,12 +392,12 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     });
     installFetchMock(fetchMock);
 
-    const result = await simulateTenderlyRpc({
-      config: CONFIG,
-      transactions: [TX1],
-    });
-
-    expect(result.calls[0]!.logs).toEqual([]);
+    await expect(
+      simulateTenderlyRpc({
+        config: CONFIG,
+        transactions: [TX1],
+      }),
+    ).rejects.toThrow(ExternalServiceError);
   });
 
   it("defaults missing trace output to 0x", async () => {
@@ -410,6 +408,7 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
           status: true,
           gasUsed: "0x5208",
           logs: [],
+          assetChanges: [],
         }),
     });
     installFetchMock(fetchMock);
@@ -542,6 +541,25 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     ).rejects.toThrow(SimulationRevertedError);
   });
 
+  it("preserves a later bundle revert when earlier success evidence is malformed", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope([
+          { status: true, gasUsed: "0x5208", logs: [] },
+          { status: false },
+        ]),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({
+        config: CONFIG,
+        transactions: [TX1, TX2],
+      }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
+
   it("throws ExternalServiceError on non-200 bundle response", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: false,
@@ -570,6 +588,18 @@ describe.sequential("simulateTenderlyRpc — errors", () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () => envelope(revertResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
+
+  it("classifies a status=false response as a revert without success fields", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope({ status: false, gasUsed: "not-hex" }),
     });
     installFetchMock(fetchMock);
 
@@ -771,6 +801,93 @@ describe.sequential("simulateTenderlyRpc — errors", () => {
     await expect(
       simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
     ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it("throws ExternalServiceError when a successful response omits assetChanges", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope({
+          status: true,
+          gasUsed: "0x5208",
+          logs: [],
+          trace: [{ output: "0x" }],
+        }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+    ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it.each([
+    ["gasUsed", { ...successResult(), gasUsed: `0x${"f".repeat(65)}` }],
+    [
+      "assetChanges.rawAmount",
+      successResult({
+        assetChanges: [
+          assetChange({
+            token: USDC,
+            to: USER,
+            rawAmount: `0x${"f".repeat(65)}` as Hex,
+          }),
+        ],
+      }),
+    ],
+  ])(
+    "throws ExternalServiceError for an oversized %s",
+    async (_field, result) => {
+      const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+        ok: true,
+        json: async () => envelope(result),
+      });
+      installFetchMock(fetchMock);
+
+      await expect(
+        simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+      ).rejects.toThrow(ExternalServiceError);
+    },
+  );
+
+  it("normalizes mixed-case success addresses", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope(
+          successResult({
+            logs: [
+              {
+                raw: {
+                  address: USDC.toLowerCase(),
+                  topics: ["0xaaaa"],
+                  data: "0x",
+                },
+              },
+            ],
+            assetChanges: [
+              assetChange({
+                token: USDC.toLowerCase() as Address,
+                from: USDC.toLowerCase() as Address,
+                to: VAULT,
+                rawAmount: "0x1",
+              }),
+            ],
+          }),
+        ),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+    });
+
+    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
+    expect(
+      result.assetChanges.find(({ account }) => account === USDC)?.changes[0]
+        ?.token,
+    ).toBe(USDC);
   });
 
   it("throws ExternalServiceError when a bundle returns an empty array", async () => {
