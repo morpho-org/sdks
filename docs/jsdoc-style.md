@@ -113,7 +113,7 @@ Rules for examples:
  * @example
  * ```ts
  * import { vaults } from "@morpho-org/morpho-test";
- * import { createPublicClient, http } from "viem";
+ * import { createPublicClient, http, zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
  * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
@@ -123,7 +123,7 @@ Rules for examples:
  * const vault = client.morpho.vaultV1(vaults[mainnet.id].steakUsdc.address, mainnet.id);
  * const vaultData = await vault.getData();
  * const { buildTx } = vault.deposit({
- *   userAddress: depositor,
+ *   userAddress: zeroAddress,
  *   amount: 1_000_000n,
  *   vaultData,
  * });
@@ -214,6 +214,7 @@ What's wrong:
  * @example
  * ```ts
  * import { vaults } from "@morpho-org/morpho-test";
+ * import { zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
  * import { vaultV1Deposit } from "@morpho-org/morpho-sdk";
  *
@@ -223,7 +224,7 @@ What's wrong:
  *   args: {
  *     amount: 1_000_000n,
  *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n,
- *     recipient: depositor,
+ *     recipient: zeroAddress,
  *   },
  * });
  * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>

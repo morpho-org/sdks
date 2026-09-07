@@ -866,13 +866,13 @@ export function isMidnightOfferRootSignature(
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
-  permit?: PermitRequirementSignature;
+  readonly permit?: PermitRequirementSignature;
   /** The single Permit2 SignatureTransfer signature, when present. */
-  permit2TransferFrom?: Permit2TransferFromRequirementSignature;
+  readonly permit2TransferFrom?: Permit2TransferFromRequirementSignature;
   /** The single Morpho authorization signature, when present. */
-  authorization?: AuthorizationRequirementSignature;
+  readonly authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
-  midnightOfferRoot?: MidnightOfferRootSignature;
+  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
