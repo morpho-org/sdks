@@ -6,6 +6,7 @@ import {
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
   type BlueAuthorizationAction,
+  ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
@@ -42,6 +43,7 @@ import {
   createClient,
   custom,
   erc4626Abi,
+  fallback,
   http,
   isAddress,
   isAddressEqual,
@@ -80,20 +82,7 @@ export interface Eip1193Provider {
 type WdkProviderSource =
   | string
   | Eip1193Provider
-  | Array<string | Eip1193Provider>;
-
-/**
- * wdk-wallet exposes the construction config (including the provider URL or
- * EIP-1193 provider) via a `protected _config` field on every wallet account
- * class. Reading it here is the package boundary: there is no public accessor,
- * and we need the raw source to construct a viem client bound to the same
- * provider the wallet uses.
- */
-interface WdkWalletWithConfig {
-  readonly _config: {
-    readonly provider?: WdkProviderSource;
-  };
-}
+  | readonly (string | Eip1193Provider)[];
 
 type ViemPublicClient = Client<Transport, Chain> &
   PublicActions<Transport, Chain>;
@@ -298,6 +287,16 @@ interface WdkTransaction {
   data: `0x${string}`;
 }
 
+interface ChainContext {
+  readonly chainId: number;
+  readonly generation: number;
+}
+
+interface PreparedTransaction {
+  readonly context: ChainContext;
+  readonly transaction: WdkTransaction;
+}
+
 const SUPPORTED_CHAINS: Record<number, Chain> = {
   [mainnet.id]: mainnet,
   [base.id]: base,
@@ -437,11 +436,31 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   private readonly _evmAccount: MorphoEvmAccount;
   private readonly _options: NormalizedMorphoProtocolOptions;
   private readonly _providerSource: WdkProviderSource;
-  private _chainId: number | undefined = undefined;
-  private _viemClient: ViemPublicClient | undefined = undefined;
-  private _viemClientAccount: Address | undefined = undefined;
-  private _morphoClient: MorphoClientType | undefined = undefined;
-  private _marketParams: MarketParams | undefined = undefined;
+  private readonly _providerRetries: number;
+  private readonly _accountConfiguredChainId: number | undefined;
+  private _chainContext: ChainContext | undefined = undefined;
+  private _latestChainObservation:
+    | { readonly chainId: Promise<number> }
+    | undefined = undefined;
+  private _erc4337Context: ChainContext | undefined = undefined;
+  private _erc4337InvalidChainId: number | undefined = undefined;
+  private _viemClient:
+    | {
+        readonly context: ChainContext;
+        readonly account: Address;
+        readonly value: ViemPublicClient;
+      }
+    | undefined = undefined;
+  private _morphoClient:
+    | {
+        readonly context: ChainContext;
+        readonly viemClient: ViemPublicClient;
+        readonly value: MorphoClientType;
+      }
+    | undefined = undefined;
+  private _marketParams:
+    | { readonly context: ChainContext; readonly value: MarketParams }
+    | undefined = undefined;
 
   /**
    * Creates a new interface to the Morpho protocol for EVM blockchains.
@@ -464,10 +483,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     super(account as ConstructorParameters<typeof LendingProtocol>[0]);
     this._evmAccount = account;
 
-    const provider = (account as unknown as WdkWalletWithConfig)._config
-      ?.provider;
+    // wdk-wallet exposes its provider config only through this protected
+    // runtime field. Absorb that unstable boundary as unknown before narrowing.
+    const walletConfig: unknown = Reflect.get(account, "_config");
+    const config =
+      typeof walletConfig === "object" && walletConfig !== null
+        ? walletConfig
+        : {};
+    const provider: unknown =
+      "provider" in config ? config.provider : undefined;
 
-    if (!provider) {
+    if (!provider || (Array.isArray(provider) && provider.length === 0)) {
       throw new Error("The wallet account must have a provider configured.");
     }
 
@@ -476,7 +502,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._validateOptions(normalizedOptions);
 
     this._options = normalizedOptions;
-    this._providerSource = provider;
+    this._providerSource = Array.isArray(provider)
+      ? (Object.freeze([...provider]) as WdkProviderSource)
+      : (provider as WdkProviderSource);
+    const retries = "retries" in config ? config.retries : undefined;
+    this._providerRetries = typeof retries === "number" ? retries : 3;
+    const accountChainId = "chainId" in config ? config.chainId : undefined;
+    this._accountConfiguredChainId =
+      typeof accountChainId === "number" ? accountChainId : undefined;
   }
 
   /**
@@ -492,6 +525,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, the account lacks funds, or the transaction fails.
    */
   async supply(
@@ -500,13 +534,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<SupplyResult> {
     this._assertWritable("supply(options)");
     const depositAmounts = normalizeDepositAmounts(options);
+    const operationOptions: MorphoSupplyOptions = {
+      ...options,
+      ...depositAmounts,
+    };
+    const context = await this._getVaultContext();
     if (depositAmounts.amount > 0n) {
-      await this._assertTokenBalance(options.token, depositAmounts.amount);
+      await this._assertTokenBalance(context, {
+        token: operationOptions.token,
+        amount: depositAmounts.amount,
+      });
     } else {
-      this._assertAddress("token", options.token);
+      this._assertAddress("token", operationOptions.token);
     }
 
-    const tx = await this._getSupplyTransaction(options, depositAmounts);
+    const tx = await this._getSupplyTransaction(context, operationOptions);
 
     return await this._sendTransaction(tx, config);
   }
@@ -517,14 +559,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {ChainIdMismatchError} When the provider changes chains while resolving requirements.
    */
   async getSupplyRequirements(
     options: MorphoSupplyOptions,
     requirementOptions?: RequirementOptions,
   ): Promise<ApprovalOrSignatureRequirement[]> {
-    const action = await this._getSupplyAction(options);
+    const context = await this._getVaultContext();
+    const action = await this._getSupplyAction(context, options);
+    const requirements = await action.getRequirements(requirementOptions);
+    await this._revalidate(context);
 
-    return await action.getRequirements(requirementOptions);
+    return requirements;
   }
 
   /**
@@ -533,17 +579,20 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteSupply(
     options: MorphoSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const tx = await this._getSupplyTransaction(options);
+    const context = await this._getVaultContext();
+    const tx = await this._getSupplyTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
   private async _getSupplyAction(
+    context: ChainContext,
     {
       token,
       amount,
@@ -551,17 +600,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       onBehalfOf,
       slippageTolerance,
     }: MorphoSupplyOptions,
-    depositAmounts: NormalizedDepositAmounts = normalizeDepositAmounts({
-      amount,
-      nativeAmount,
-    }),
   ) {
+    const depositAmounts = normalizeDepositAmounts({ amount, nativeAmount });
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(onBehalfOf);
-    const vault = await this._getVault();
+    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const vault = await this._getVault(context);
     const accrualVault = await vault.entity.getData();
+    await this._revalidate(context);
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
       throw new Error(
@@ -579,18 +626,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getSupplyTransaction(
+    context: ChainContext,
     options: MorphoSupplyOptions,
-    depositAmounts?: NormalizedDepositAmounts,
-  ): Promise<WdkTransaction> {
-    const action = await this._getSupplyAction(options, depositAmounts);
+  ): Promise<PreparedTransaction> {
+    const action = await this._getSupplyAction(context, options);
 
-    return toWdkTransaction(
-      action.buildTx(
-        options.requirementSignature
-          ? [options.requirementSignature]
-          : undefined,
+    return {
+      context,
+      transaction: toWdkTransaction(
+        action.buildTx(
+          options.requirementSignature
+            ? [options.requirementSignature]
+            : undefined,
+        ),
       ),
-    );
+    };
   }
 
   /**
@@ -599,6 +649,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, or the transaction fails.
    */
   async withdraw(
@@ -606,8 +657,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdraw(options)");
-
-    const tx = await this._getWithdrawTransaction(options);
+    const context = await this._getVaultContext();
+    const tx = await this._getWithdrawTransaction(context, options);
 
     return await this._sendTransaction(tx, config);
   }
@@ -618,34 +669,37 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteWithdraw(
     options: WithdrawOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const tx = await this._getWithdrawTransaction(options);
+    const context = await this._getVaultContext();
+    const tx = await this._getWithdrawTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
-  private async _getWithdrawTransaction({
-    token,
-    amount,
-    to,
-  }: WithdrawOptions): Promise<WdkTransaction> {
+  private async _getWithdrawTransaction(
+    context: ChainContext,
+    { token, amount, to }: WithdrawOptions,
+  ): Promise<PreparedTransaction> {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("to", to);
 
     const userAddress = (await this._evmAccount.getAddress()) as Address;
+    this._assertCurrent(context);
     if (to !== undefined && !isAddressEqual(to as Address, userAddress)) {
       throw new Error(
         "'to' must equal the wallet account address for Morpho vault withdrawals.",
       );
     }
 
-    const vault = await this._getVault();
+    const vault = await this._getVault(context);
     const accrualVault = await vault.entity.getData();
+    await this._revalidate(context);
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
       throw new Error(
@@ -653,14 +707,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       );
     }
 
-    return toWdkTransaction(
-      vault.entity
-        .withdraw({
-          amount: normalizedAmount,
-          userAddress,
-        })
-        .buildTx(),
-    );
+    return {
+      context,
+      transaction: toWdkTransaction(
+        vault.entity
+          .withdraw({
+            amount: normalizedAmount,
+            userAddress,
+          })
+          .buildTx(),
+      ),
+    };
   }
 
   /**
@@ -677,6 +734,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.
    * @returns The borrow result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, GeneralAdapter1 is not authorized, or the transaction fails.
    */
   async borrow(
@@ -684,8 +742,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<BorrowResult> {
     this._assertWritable("borrow(options)");
-
-    const tx = await this._getBorrowTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getBorrowTransaction(context, options);
 
     return await this._sendTransaction(tx, config);
   }
@@ -697,6 +755,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns Authorization requirements. When offchain signatures are enabled
    *   (`supportSignature: true`), the authorization may instead be returned as a signable
    *   `RequirementSignatureRequest` to fold into the bundle via `setAuthorizationWithSig`.
+   * @throws {ChainIdMismatchError} When the provider changes chains while resolving requirements.
    */
   public getBorrowRequirements(
     options: MorphoBorrowOptions,
@@ -709,6 +768,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   allocator penalty donation. When offchain signatures are enabled (`supportSignature: true`),
    *   the authorization may instead be returned as a signable `RequirementSignatureRequest` to
    *   fold into the bundle via `setAuthorizationWithSig`.
+   * @throws {ChainIdMismatchError} When the provider changes chains while resolving requirements.
    */
   public getBorrowRequirements(
     options: MorphoBorrowWithVaultV2ReallocationsOptions,
@@ -728,9 +788,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       | RequirementSignatureRequest
     )[]
   > {
-    const action = await this._getBorrowAction(options);
+    const context = await this._getMarketContext();
+    const action = await this._getBorrowAction(context, options);
+    const requirements = await action.getRequirements();
+    await this._revalidate(context);
 
-    return await action.getRequirements();
+    return requirements;
   }
 
   /**
@@ -739,29 +802,34 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteBorrow(
     options: MorphoBorrowInput,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<BorrowResult, "hash">> {
-    const tx = await this._getBorrowTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getBorrowTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
-  private async _getBorrowAction({
-    token,
-    amount,
-    onBehalfOf,
-    slippageTolerance,
-    reallocations,
-  }: MorphoBorrowInput) {
+  private async _getBorrowAction(
+    context: ChainContext,
+    {
+      token,
+      amount,
+      onBehalfOf,
+      slippageTolerance,
+      reallocations,
+    }: MorphoBorrowInput,
+  ) {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(onBehalfOf);
-    const market = await this._getMarket();
+    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
       throw new Error(
@@ -770,6 +838,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
+    await this._revalidate(context);
 
     return market.entity.borrow({
       amount: normalizedAmount,
@@ -781,17 +850,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getBorrowTransaction(
+    context: ChainContext,
     options: MorphoBorrowInput,
-  ): Promise<WdkTransaction> {
-    const action = await this._getBorrowAction(options);
+  ): Promise<PreparedTransaction> {
+    const action = await this._getBorrowAction(context, options);
 
-    return toWdkTransaction(
-      action.buildTx(
-        options.requirementSignature
-          ? [options.requirementSignature]
-          : undefined,
+    return {
+      context,
+      transaction: toWdkTransaction(
+        action.buildTx(
+          options.requirementSignature
+            ? [options.requirementSignature]
+            : undefined,
+        ),
       ),
-    );
+    };
   }
 
   /**
@@ -802,6 +875,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The repay result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, the account lacks funds, or the transaction fails.
    */
   async repay(
@@ -811,12 +885,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertWritable("repay(options)");
     const amount =
       options.amount === "max" ? "max" : normalizeAmount(options.amount);
+    const operationOptions: MorphoRepayOptions = { ...options, amount };
+    const context = await this._getMarketContext();
 
     if (amount !== "max") {
-      await this._assertTokenBalance(options.token, amount);
+      await this._assertTokenBalance(context, {
+        token: operationOptions.token,
+        amount,
+      });
     }
 
-    const tx = await this._getRepayTransaction(options, amount);
+    const tx = await this._getRepayTransaction(context, operationOptions);
 
     return await this._sendTransaction(tx, config);
   }
@@ -827,14 +906,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {ChainIdMismatchError} When the provider changes chains while resolving requirements.
    */
   async getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
   ): Promise<ApprovalOrSignatureRequirement[]> {
-    const action = await this._getRepayAction(options);
+    const context = await this._getMarketContext();
+    const action = await this._getRepayAction(context, options);
+    const requirements = await action.getRequirements(requirementOptions);
+    await this._revalidate(context);
 
-    return await action.getRequirements(requirementOptions);
+    return requirements;
   }
 
   /**
@@ -843,27 +926,28 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteRepay(
     options: MorphoRepayOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<RepayResult, "hash">> {
-    const tx = await this._getRepayTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getRepayTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
   private async _getRepayAction(
+    context: ChainContext,
     { token, amount, onBehalfOf, slippageTolerance }: MorphoRepayOptions,
-    normalizedAmount: "max" | bigint = amount === "max"
-      ? "max"
-      : normalizeAmount(amount),
   ) {
+    const normalizedAmount = amount === "max" ? "max" : normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(onBehalfOf);
-    const market = await this._getMarket();
+    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
       throw new Error(
@@ -872,6 +956,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
+    await this._revalidate(context);
     const repayAmount =
       normalizedAmount === "max"
         ? { shares: positionData.borrowShares }
@@ -886,18 +971,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getRepayTransaction(
+    context: ChainContext,
     options: MorphoRepayOptions,
-    amount?: "max" | bigint,
-  ): Promise<WdkTransaction> {
-    const action = await this._getRepayAction(options, amount);
+  ): Promise<PreparedTransaction> {
+    const action = await this._getRepayAction(context, options);
 
-    return toWdkTransaction(
-      action.buildTx(
-        options.requirementSignature
-          ? [options.requirementSignature]
-          : undefined,
+    return {
+      context,
+      transaction: toWdkTransaction(
+        action.buildTx(
+          options.requirementSignature
+            ? [options.requirementSignature]
+            : undefined,
+        ),
       ),
-    );
+    };
   }
 
   /**
@@ -912,6 +1000,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply collateral result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, the token does not match the configured market collateral, the account lacks funds, or the transaction fails.
    */
   async supplyCollateral(
@@ -920,15 +1009,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<SupplyResult> {
     this._assertWritable("supplyCollateral(options)");
     const depositAmounts = normalizeDepositAmounts(options);
+    const operationOptions: MorphoSupplyOptions = {
+      ...options,
+      ...depositAmounts,
+    };
+    const context = await this._getMarketContext();
     if (depositAmounts.amount > 0n) {
-      await this._assertTokenBalance(options.token, depositAmounts.amount);
+      await this._assertTokenBalance(context, {
+        token: operationOptions.token,
+        amount: depositAmounts.amount,
+      });
     } else {
-      this._assertAddress("token", options.token);
+      this._assertAddress("token", operationOptions.token);
     }
 
     const tx = await this._getSupplyCollateralTransaction(
-      options,
-      depositAmounts,
+      context,
+      operationOptions,
     );
 
     return await this._sendTransaction(tx, config);
@@ -940,14 +1037,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral supply options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {ChainIdMismatchError} When the provider changes chains while resolving requirements.
    */
   async getSupplyCollateralRequirements(
     options: MorphoSupplyOptions,
     requirementOptions?: RequirementOptions,
   ): Promise<ApprovalOrSignatureRequirement[]> {
-    const action = await this._getSupplyCollateralAction(options);
+    const context = await this._getMarketContext();
+    const action = await this._getSupplyCollateralAction(context, options);
+    const requirements = await action.getRequirements(requirementOptions);
+    await this._revalidate(context);
 
-    return await action.getRequirements(requirementOptions);
+    return requirements;
   }
 
   /**
@@ -956,28 +1057,28 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteSupplyCollateral(
     options: MorphoSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const tx = await this._getSupplyCollateralTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getSupplyCollateralTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
   private async _getSupplyCollateralAction(
+    context: ChainContext,
     { token, amount, nativeAmount, onBehalfOf }: MorphoSupplyOptions,
-    depositAmounts: NormalizedDepositAmounts = normalizeDepositAmounts({
-      amount,
-      nativeAmount,
-    }),
   ) {
+    const depositAmounts = normalizeDepositAmounts({ amount, nativeAmount });
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(onBehalfOf);
-    const market = await this._getMarket();
+    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
       throw new Error(
@@ -993,21 +1094,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getSupplyCollateralTransaction(
+    context: ChainContext,
     options: MorphoSupplyOptions,
-    depositAmounts?: NormalizedDepositAmounts,
-  ): Promise<WdkTransaction> {
-    const action = await this._getSupplyCollateralAction(
-      options,
-      depositAmounts,
-    );
+  ): Promise<PreparedTransaction> {
+    const action = await this._getSupplyCollateralAction(context, options);
 
-    return toWdkTransaction(
-      action.buildTx(
-        options.requirementSignature
-          ? [options.requirementSignature]
-          : undefined,
+    return {
+      context,
+      transaction: toWdkTransaction(
+        action.buildTx(
+          options.requirementSignature
+            ? [options.requirementSignature]
+            : undefined,
+        ),
       ),
-    );
+    };
   }
 
   /**
@@ -1016,6 +1117,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw collateral result.
+   * @throws {ChainIdMismatchError} When the provider changes chains before dispatch.
    * @throws {Error} If the options are invalid, the token does not match the configured market collateral, or the transaction fails.
    */
   async withdrawCollateral(
@@ -1023,8 +1125,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdrawCollateral(options)");
-
-    const tx = await this._getWithdrawCollateralTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getWithdrawCollateralTransaction(context, options);
 
     return await this._sendTransaction(tx, config);
   }
@@ -1035,27 +1137,29 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {ChainIdMismatchError} When the provider changes chains while quoting.
    */
   async quoteWithdrawCollateral(
     options: WithdrawOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const tx = await this._getWithdrawCollateralTransaction(options);
+    const context = await this._getMarketContext();
+    const tx = await this._getWithdrawCollateralTransaction(context, options);
 
     return await this._quoteTransaction(tx, config);
   }
 
-  private async _getWithdrawCollateralTransaction({
-    token,
-    amount,
-    to,
-  }: WithdrawOptions): Promise<WdkTransaction> {
+  private async _getWithdrawCollateralTransaction(
+    context: ChainContext,
+    { token, amount, to }: WithdrawOptions,
+  ): Promise<PreparedTransaction> {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("to", to);
 
     const userAddress = (await this._evmAccount.getAddress()) as Address;
-    const market = await this._getMarket();
+    this._assertCurrent(context);
+    const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
       throw new Error(
@@ -1070,16 +1174,20 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
+    await this._revalidate(context);
 
-    return toWdkTransaction(
-      market.entity
-        .withdrawCollateral({
-          amount: normalizedAmount,
-          userAddress,
-          positionData,
-        })
-        .buildTx(),
-    );
+    return {
+      context,
+      transaction: toWdkTransaction(
+        market.entity
+          .withdrawCollateral({
+            amount: normalizedAmount,
+            userAddress,
+            positionData,
+          })
+          .buildTx(),
+      ),
+    };
   }
 
   /**
@@ -1087,22 +1195,35 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * @param account - If set, returns the vault position for the given address.
    * @returns The vault position.
+   * @throws {ChainIdMismatchError} When the provider changes chains while reading the position.
    */
   async getVaultPosition(account?: string): Promise<VaultPosition> {
+    const context = await this._getVaultContext();
+
+    return await this._getVaultPosition(context, account);
+  }
+
+  private async _getVaultPosition(
+    context: ChainContext,
+    account?: string,
+  ): Promise<VaultPosition> {
     this._assertOptionalAddress("account", account);
 
     const userAddress =
       (account as Address | undefined) ??
       ((await this._evmAccount.getAddress()) as Address);
-    const vault = await this._getVault();
+    this._assertCurrent(context);
+    const vault = await this._getVault(context);
     const data = await vault.entity.getData();
-    const client = await this._getViemClient();
+    await this._revalidate(context);
+    const client = await this._getViemClient(context);
     const shares = await client.readContract({
       address: vault.address,
       abi: erc4626Abi,
       functionName: "balanceOf",
       args: [userAddress],
     });
+    await this._revalidate(context);
 
     return {
       shares,
@@ -1116,15 +1237,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * @param account - If set, returns the market position for the given address.
    * @returns The market position.
+   * @throws {ChainIdMismatchError} When the provider changes chains while reading the position.
    */
   async getMarketPosition(account?: string): Promise<MarketPosition> {
+    const context = await this._getMarketContext();
+
+    return await this._getMarketPosition(context, account);
+  }
+
+  private async _getMarketPosition(
+    context: ChainContext,
+    account?: string,
+  ): Promise<MarketPosition> {
     this._assertOptionalAddress("account", account);
 
     const userAddress =
       (account as Address | undefined) ??
       ((await this._evmAccount.getAddress()) as Address);
-    const market = await this._getMarket();
+    this._assertCurrent(context);
+    const market = await this._getMarket(context);
     const position = await market.entity.getPositionData(userAddress);
+    await this._revalidate(context);
 
     return {
       supplyShares: position.supplyShares,
@@ -1140,12 +1273,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * @param account - If set, returns the data for the given address.
    * @returns The account data.
+   * @throws {ChainIdMismatchError} When the provider changes chains while reading account data.
    */
   async getAccountData(account?: string): Promise<AccountData> {
+    const context = await this._getChainContext();
+    this._assertTargetChain(this._resolveVaultTarget(), context);
+    this._assertTargetChain(this._resolveMarketTarget(), context);
     const [vault, market] = await Promise.all([
-      this.getVaultPosition(account),
-      this.getMarketPosition(account),
+      this._getVaultPosition(context, account),
+      this._getMarketPosition(context, account),
     ]);
+    await this._revalidate(context);
 
     return {
       vaultShares: vault.shares,
@@ -1183,82 +1321,112 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return target.marketId;
   }
 
-  private async _getVault(): Promise<{
+  private async _getVault(context: ChainContext): Promise<{
     address: Address;
     entity: ReturnType<MorphoClientType["vaultV2"]>;
   }> {
     const target = this._resolveVaultTarget();
     const { address } = target;
-    const chainId = await this._getChainId();
-    this._assertTargetChain(target, { chainId, label: "Morpho target" });
-    const client = await this._getMorphoClient();
-    const entity = client.vaultV2(address, chainId);
+    this._assertCurrent(context);
+    this._assertTargetChain(target, context);
+    const client = await this._getMorphoClient(context);
+    const entity = client.vaultV2(address, context.chainId);
 
     return { address, entity };
   }
 
-  private async _getMarket(): Promise<{
+  private async _getMarket(context: ChainContext): Promise<{
     params: MarketParams;
     entity: ReturnType<MorphoClientType["blue"]>;
   }> {
-    const params = await this._getMarketParams();
-    const chainId = await this._getChainId();
-    const client = await this._getMorphoClient();
+    const params = await this._getMarketParams(context);
+    const client = await this._getMorphoClient(context);
+    this._assertCurrent(context);
 
     return {
       params,
-      entity: client.blue(params, chainId),
+      entity: client.blue(params, context.chainId),
     };
   }
 
-  private async _getMarketParams(): Promise<MarketParams> {
-    const chainId = await this._getChainId();
-
-    if (this._marketParams) return this._marketParams;
+  private async _getMarketParams(context: ChainContext): Promise<MarketParams> {
+    if (this._marketParams?.context === context) {
+      return this._marketParams.value;
+    }
 
     const target = this._resolveMarketTarget();
 
-    this._assertTargetChain(target, { chainId, label: "Morpho target" });
+    this._assertCurrent(context);
+    this._assertTargetChain(target, context);
 
     if ("marketParams" in target) {
-      this._marketParams =
+      const value =
         target.marketParams instanceof MarketParams
           ? target.marketParams
           : new MarketParams(target.marketParams);
-      return this._marketParams;
+      this._marketParams = { context, value };
+      return value;
     }
 
-    const client = await this._getViemClient();
+    const client = await this._getViemClient(context);
     const market = await fetchMarket(target.marketId as MarketId, client, {
-      chainId,
+      chainId: context.chainId,
       deployless: this._options.supportDeployless,
     });
+    await this._revalidate(context);
 
-    this._marketParams =
+    const value =
       market.params instanceof MarketParams
         ? market.params
         : new MarketParams(market.params);
+    this._marketParams = { context, value };
 
-    return this._marketParams;
+    return value;
   }
 
-  private async _getMorphoClient(): Promise<MorphoClientType> {
-    const viemClient = await this._getViemClient();
+  private async _getMorphoClient(
+    context: ChainContext,
+  ): Promise<MorphoClientType> {
+    const viemClient = await this._getViemClient(context);
 
-    if (!this._morphoClient) {
-      this._morphoClient = viemClient.extend(
+    if (
+      this._morphoClient?.context !== context ||
+      this._morphoClient.viemClient !== viemClient
+    ) {
+      const value = viemClient.extend(
         morphoViemExtension({
           supportSignature: this._options.supportSignature ?? false,
           supportDeployless: this._options.supportDeployless,
           metadata: this._options.metadata,
         }),
       ).morpho;
+      this._morphoClient = { context, viemClient, value };
     }
 
-    return this._morphoClient;
+    return this._morphoClient.value;
   }
 
   private _getViemTransport(): Transport {
+    if (Array.isArray(this._providerSource)) {
+      const providers = this._providerSource as readonly (
+        | string
+        | Eip1193Provider
+      )[];
+      const attempts = 1 + this._providerRetries;
+      return fallback(
+        Array.from({ length: attempts }, (_, index) => {
+          const provider = providers[index % providers.length] as
+            | string
+            | Eip1193Provider;
+
+          return typeof provider === "string"
+            ? http(provider)
+            : custom(provider);
+        }),
+        { retryCount: 0 },
+      );
+    }
+
     return typeof this._providerSource === "string"
       ? http(this._providerSource)
       : custom(this._providerSource as Eip1193Provider);
@@ -1283,48 +1451,140 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     } satisfies Chain;
   }
 
-  private async _getViemClient(): Promise<ViemPublicClient> {
+  private async _getViemClient(
+    context: ChainContext,
+  ): Promise<ViemPublicClient> {
     const address = (await this._evmAccount.getAddress()) as Address;
-    const chainId = await this._getChainId();
+    this._assertCurrent(context);
 
     if (
       this._viemClient &&
-      this._viemClientAccount &&
-      isAddressEqual(this._viemClientAccount, address)
+      this._viemClient.context === context &&
+      isAddressEqual(this._viemClient.account, address)
     ) {
-      return this._viemClient;
+      return this._viemClient.value;
     }
 
-    this._viemClient = createClient({
+    const value = createClient({
       account: address,
-      chain: this._getViemChain(chainId),
+      chain: this._getViemChain(context.chainId),
       transport: this._getViemTransport(),
     }).extend(publicActions) as ViemPublicClient;
-    this._viemClientAccount = address;
-    this._morphoClient = undefined;
+    this._viemClient = { context, account: address, value };
 
-    return this._viemClient;
+    return value;
   }
 
-  private async _getChainId(): Promise<number> {
-    const currentChainId = Number(
-      await createClient({
+  private async _getChainContext(): Promise<ChainContext> {
+    const observation = {
+      chainId: createClient({
         transport: this._getViemTransport(),
       })
         .extend(publicActions)
-        .getChainId(),
-    );
+        .getChainId()
+        .then(Number),
+    };
+    this._latestChainObservation = observation;
+    const chainId = await observation.chainId;
+    let latestObservation = observation;
+    let latestChainId = chainId;
 
-    if (this._chainId !== undefined && this._chainId !== currentChainId) {
-      this._viemClient = undefined;
-      this._viemClientAccount = undefined;
-      this._morphoClient = undefined;
-      this._marketParams = undefined;
+    while (latestObservation !== this._latestChainObservation) {
+      const nextObservation = this._latestChainObservation;
+      if (nextObservation === undefined) break;
+      latestObservation = nextObservation;
+      latestChainId = await nextObservation.chainId;
     }
 
-    this._chainId = currentChainId;
+    if (latestChainId !== chainId) {
+      this._chainContext = Object.freeze({
+        chainId: latestChainId,
+        generation: (this._chainContext?.generation ?? 0) + 1,
+      });
+      if (this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337) {
+        this._erc4337InvalidChainId = chainId;
+      }
+      throw new ChainIdMismatchError(latestChainId, chainId);
+    }
 
-    return this._chainId;
+    const context =
+      this._chainContext?.chainId === latestChainId
+        ? this._chainContext
+        : Object.freeze({
+            chainId: latestChainId,
+            generation: (this._chainContext?.generation ?? 0) + 1,
+          });
+    this._chainContext = context;
+    this._assertErc4337Context(context);
+    return context;
+  }
+
+  private async _getVaultContext(): Promise<ChainContext> {
+    const context = await this._getChainContext();
+    this._assertTargetChain(this._resolveVaultTarget(), context);
+    return context;
+  }
+
+  private async _getMarketContext(): Promise<ChainContext> {
+    const context = await this._getChainContext();
+    this._assertTargetChain(this._resolveMarketTarget(), context);
+    return context;
+  }
+
+  private _assertCurrent(context: ChainContext): void {
+    if (this._chainContext !== context) {
+      throw new ChainIdMismatchError(
+        this._chainContext?.chainId,
+        context.chainId,
+      );
+    }
+
+    this._assertErc4337Context(context);
+  }
+
+  private async _revalidate(context: ChainContext): Promise<void> {
+    const current = await this._getChainContext();
+    if (current !== context) {
+      throw new ChainIdMismatchError(current.chainId, context.chainId);
+    }
+  }
+
+  private _assertErc4337Context(context: ChainContext): void {
+    if (!(this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337)) {
+      return;
+    }
+
+    const cachedChainId: unknown = Reflect.get(this._evmAccount, "_chainId");
+    const accountChainId =
+      typeof cachedChainId === "bigint"
+        ? Number(cachedChainId)
+        : this._accountConfiguredChainId;
+    const expectedChainId =
+      this._erc4337Context?.chainId ?? accountChainId ?? context.chainId;
+
+    if (this._erc4337InvalidChainId !== undefined) {
+      throw new ChainIdMismatchError(
+        this._erc4337InvalidChainId,
+        expectedChainId,
+      );
+    }
+
+    if (
+      (accountChainId !== undefined && accountChainId !== expectedChainId) ||
+      context.chainId !== expectedChainId ||
+      (this._erc4337Context !== undefined && this._erc4337Context !== context)
+    ) {
+      this._erc4337InvalidChainId =
+        accountChainId !== undefined && accountChainId !== expectedChainId
+          ? accountChainId
+          : context.chainId;
+      throw new ChainIdMismatchError(
+        this._erc4337InvalidChainId,
+        expectedChainId,
+      );
+    }
+
+    this._erc4337Context = context;
   }
 
   private _resolveVaultTarget(): VaultTarget {
@@ -1378,12 +1638,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private _assertTargetChain(
     target: { chainId: number | undefined },
-    args: { chainId: number; label: string },
+    context: ChainContext,
   ): void {
-    if (target.chainId !== undefined && target.chainId !== args.chainId) {
-      throw new Error(
-        `${args.label} is configured for chain ${target.chainId}, but the connected provider is on chain ${args.chainId}.`,
-      );
+    if (target.chainId !== undefined && target.chainId !== context.chainId) {
+      throw new ChainIdMismatchError(context.chainId, target.chainId);
     }
   }
 
@@ -1477,9 +1735,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getSdkUserAddress(
+    context: ChainContext,
     onBehalfOf: string | undefined,
   ): Promise<Address> {
     const address = (await this._evmAccount.getAddress()) as Address;
+    this._assertCurrent(context);
 
     if (
       onBehalfOf !== undefined &&
@@ -1494,11 +1754,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _assertTokenBalance(
-    token: string,
-    amount: bigint,
+    context: ChainContext,
+    { token, amount }: { token: string; amount: bigint },
   ): Promise<void> {
     this._assertAddress("token", token);
     const balance = await this._evmAccount.getTokenBalance(token);
+    await this._revalidate(context);
 
     if (balance < amount) {
       throw new Error("Not enough funds to fulfill the operation.");
@@ -1506,17 +1767,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _sendTransaction(
-    tx: WdkTransaction,
+    prepared: PreparedTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
+    await this._revalidate(prepared.context);
+
     if (this._evmAccount instanceof WalletAccountEvmErc4337) {
       return (await this._evmAccount.sendTransaction(
-        tx,
+        prepared.transaction,
         config,
       )) as SupplyResult;
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
-      return (await this._evmAccount.sendTransaction(tx)) as SupplyResult;
+      return (await this._evmAccount.sendTransaction(
+        prepared.transaction,
+      )) as SupplyResult;
     }
     throw new Error(
       "The method requires the protocol to be initialized with a non read-only account.",
@@ -1524,13 +1789,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _quoteTransaction(
-    tx: WdkTransaction,
+    prepared: PreparedTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<{ fee: bigint }> {
+    await this._revalidate(prepared.context);
     const { fee } =
       this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337
-        ? await this._evmAccount.quoteSendTransaction(tx, config)
-        : await this._evmAccount.quoteSendTransaction(tx);
+        ? await this._evmAccount.quoteSendTransaction(
+            prepared.transaction,
+            config,
+          )
+        : await this._evmAccount.quoteSendTransaction(prepared.transaction);
+    await this._revalidate(prepared.context);
 
     return { fee };
   }

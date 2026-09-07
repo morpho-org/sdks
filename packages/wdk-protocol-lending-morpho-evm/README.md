@@ -79,6 +79,8 @@ Options:
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
 
+ERC-4337 accounts cache chain-bound UserOperation state. After switching the provider network, create a fresh wallet account and `MorphoProtocolEvm` adapter before continuing.
+
 For vault deposits and collateral supply, pass either `amount`, `nativeAmount`, or both. `nativeAmount` follows Morpho SDK semantics and is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
 
 ## Methods
