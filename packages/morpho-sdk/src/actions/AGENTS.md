@@ -48,9 +48,10 @@ chain registry supplies the allocator, and each call passes the vault's configur
 `penalty` — the allocator donates `ceil(assets × penalty / WAD)` of the target loan token per call.
 BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address
 market. BlueBundlesV1 executes every allocation unconditionally; aggregate penalties reduce borrow
-or withdrawal proceeds, or increase destination debt during migration, and the builder rejects an
-aggregate penalty above `borrowAssets` (or, in withdraw assets mode, the withdrawn amount). They do
-not add native value or a separate GeneralAdapter1 funding requirement.
+or withdrawal proceeds, and those builders reject an aggregate penalty above `borrowAssets` (or, in
+withdraw assets mode, the withdrawn amount). Migration instead adds penalties to destination debt,
+which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
+separate GeneralAdapter1 funding requirement.
 
 PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders
 remain public only for compatibility and advanced composition. All Vault V1 planning and low-level
