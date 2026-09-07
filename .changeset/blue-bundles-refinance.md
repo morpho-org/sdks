@@ -10,3 +10,6 @@ supported. Builders cannot enforce this alignment because `userAddress` is not e
 The v5 partial-migration error classes (`BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
 `RefinanceExceedsBorrowAssetsError`, `RefinanceSharesMissingBorrowAssetsError`) are removed in v6.
+These classes shipped without a published deprecation window. Their removal is an intentional,
+one-time lifecycle deviation because partial and collateral-only refinance modes no longer exist;
+consumers pattern-matching them must remove those branches or stay on v5.
