@@ -1,8 +1,9 @@
 import type { Address, Hex } from "viem";
-import { InvalidTreeError } from "../errors.js";
-import { type IOffer, Offer } from "../offers/index.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
+import { isEmptyOfferStruct } from "./offerStructInternal.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -19,6 +20,67 @@ function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
 
 function normalizeTree(tree: RatifierTreeInput): TreeLike {
   if (isTreeLike(tree)) {
+    if (!Number.isInteger(tree.height) || tree.height < 0 || tree.height > 20) {
+      throw new InvalidTreeHeightError(tree.height);
+    }
+
+    const expectedLength = 2 ** tree.height;
+    if (
+      tree.paddedOffers.length !== expectedLength ||
+      tree.leaves.length !== expectedLength ||
+      tree.offers.length > expectedLength
+    ) {
+      throw new InvalidTreeError(
+        "Tree offers, leaves, and height describe different trees.",
+      );
+    }
+
+    const computedLeaves = tree.paddedOffers.map(OfferUtils.hashStruct);
+    const seen = new Set<string>();
+    for (const [index, offer] of tree.offers.entries()) {
+      const hash = OfferUtils.hashStruct(OfferUtils.toStruct({ offer }));
+      if (
+        hash.toLowerCase() !== computedLeaves[index]!.toLowerCase() ||
+        seen.has(hash.toLowerCase())
+      ) {
+        throw new InvalidTreeError(
+          "Visible offers do not match the tree leaves.",
+        );
+      }
+      seen.add(hash.toLowerCase());
+    }
+    if (
+      tree.paddedOffers
+        .slice(tree.offers.length)
+        .some(
+          (offer) => !isEmptyOfferStruct(offer, { allowDefaultGroup: true }),
+        )
+    ) {
+      throw new InvalidTreeError(
+        "Tree padding contains offers hidden from the visible offer list.",
+      );
+    }
+    if (
+      computedLeaves.some(
+        (leaf, index) =>
+          leaf.toLowerCase() !== tree.leaves[index]!.toLowerCase(),
+      )
+    ) {
+      throw new InvalidTreeError("Tree leaves do not match its padded offers.");
+    }
+
+    let level = computedLeaves;
+    while (level.length > 1) {
+      const next: typeof computedLeaves = [];
+      for (let index = 0; index < level.length; index += 2) {
+        next.push(TreeUtils.hashNode(level[index]!, level[index + 1]!));
+      }
+      level = next;
+    }
+    if (level[0]?.toLowerCase() !== tree.root.toLowerCase()) {
+      throw new InvalidTreeError("Tree root does not match its leaves.");
+    }
+
     return tree;
   }
 
@@ -144,8 +206,8 @@ export namespace RatifierUtils {
    * @param params.tree - Tree-like object or raw offer/group input.
    * @param params.label - Ratifier label used in validation errors.
    * @returns Normalized tree-like data and its shared ratifier.
-   * @throws {InvalidTreeError} when the tree is empty or contains multiple ratifiers.
-   * @throws {InvalidTreeHeightError} when normalized raw input exceeds the supported tree height.
+   * @throws {InvalidTreeError} when the tree fields disagree, the tree is empty, or it contains multiple ratifiers.
+   * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
    * import { Offer, RatifierUtils } from "@morpho-org/midnight-sdk";
