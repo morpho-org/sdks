@@ -1479,7 +1479,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
   );
 
   baseTest(
-    "refinance: a Vault V2 reallocation penalty and referral fee increase destination debt",
+    "refinance: an above-debt Vault V2 penalty and referral fee increase destination debt",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
       const { morpho, vaultV2BluePublicAllocator: allocator } =
@@ -1487,7 +1487,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
       assert(allocator != null);
       const depositAssets = parseUnits("100", 6);
       const destinationLiquidity = parseUnits("20", 6);
-      const penalty = MathLib.WAD / 100n;
+      const penalty = MathLib.WAD / 10n;
       const relativeCap = MathLib.WAD / 2n;
       const referralFeePct = MathLib.WAD / 100n;
       const sourceCollateral = parseUnits("1", 18);
@@ -1708,10 +1708,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         requirements: await action.getRequirements(),
       });
       const transaction = action.buildTx(signatures);
-      // The single reallocation and its positive penalty are recorded in the built action.
+      // The single reallocation and its above-source-debt penalty are recorded in the built action.
       expect(transaction.action.args.reallocations).toBe(1);
       expect(transaction.action.args.reallocationPenaltyAssets).toBeGreaterThan(
-        0n,
+        sourcePositionData.borrowAssets,
       );
       expect(transaction.action.args.referralFeePct).toBe(referralFeePct);
       await client.sendTransaction(transaction);
