@@ -1007,8 +1007,6 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
  * {@link VaultV2BlueReallocation}: a non-object entry, or an entry carrying Vault V1
  * `withdrawals`/`fee` fields that high-level Blue writes no longer accept.
  *
- * @deprecated Vault V1/V2 reallocation-shape dispatch will be removed in the next major. Use Vault
- * V2 reallocations.
  * @example
  * ```ts
  * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
