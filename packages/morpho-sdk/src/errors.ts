@@ -4,6 +4,7 @@ export {
   InvalidMarketParamsError as InvalidBlueMarketParamsError,
   /** @deprecated Use InvalidBlueMarketParamsError or the raw protocol subpath. */
   InvalidMarketParamsError,
+  MarketIdMismatchError,
   UnknownAddressError,
   UnknownDataError as UnknownBlueDataError,
   /** @deprecated Use UnknownBlueDataError or the raw protocol subpath. */
@@ -28,6 +29,7 @@ export {
   /** @deprecated Use UnknownBlueVaultConfigError or the raw protocol subpath. */
   UnknownVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError as UnsupportedBlueMarketIrmError,
   UnsupportedPreLiquidationParamsError as UnsupportedBluePreLiquidationParamsError,
   /** @deprecated Use UnsupportedBluePreLiquidationParamsError or the raw protocol subpath. */
   UnsupportedPreLiquidationParamsError,

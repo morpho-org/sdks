@@ -22,6 +22,7 @@ import {
   computeMaxSupplySharePrice,
 } from "../../helpers/index.js";
 import {
+  ChainIdMismatchError,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
@@ -75,6 +76,7 @@ function makePosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: 0n,
   });
 
   return new AccrualPosition(
@@ -99,6 +101,7 @@ function makeWethPosition(
     totalBorrowShares: 10n ** 24n / 2n,
     lastUpdate: 1_700_000_000n,
     fee: 0n,
+    rateAtTarget: 0n,
     price: ORACLE_PRICE_SCALE,
   });
 
@@ -152,6 +155,33 @@ describe("MorphoBlue builder = signer freedom", () => {
 });
 
 describe("MorphoBlue validation", () => {
+  test("rejects cross-chain market and position snapshots", () => {
+    const market = noRpcClient
+      .extend(morphoViemExtension())
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const marketData = new Market({
+      ...makePosition().market,
+      chainId: mainnet.id + 1,
+    });
+    const currentPosition = makePosition();
+    const positionData = new AccrualPosition(
+      currentPosition,
+      new Market({ ...currentPosition.market, chainId: mainnet.id + 1 }),
+    );
+
+    expect(() =>
+      market.supply({ amount: 1n, userAddress: USER, marketData }),
+    ).toThrow(ChainIdMismatchError);
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: MARKET_PARAMS, positionData: currentPosition },
+        collateralAmount: 1n,
+      }),
+    ).toThrow(ChainIdMismatchError);
+  });
+
   test("supplyCollateral rejects invalid amounts", () => {
     const market = noRpcClient
       .extend(morphoViemExtension())

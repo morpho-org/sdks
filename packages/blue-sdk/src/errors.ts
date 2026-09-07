@@ -12,6 +12,32 @@ export {
 import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
+/** Thrown when returned market parameters do not match the requested market id. */
+export class MarketIdMismatchError extends Error {
+  constructor(
+    public readonly marketId: string,
+    public readonly expectedMarketId: string,
+  ) {
+    super(
+      `Market "${marketId}" does not match expected market "${expectedMarketId}".`,
+    );
+    this.name = "MarketIdMismatchError";
+  }
+}
+
+/** Thrown when interest projection is requested for an unsupported nonzero IRM. */
+export class UnsupportedMarketIrmError extends Error {
+  constructor(
+    public readonly marketId: MarketId,
+    public readonly irm: Address,
+  ) {
+    super(
+      `Market "${marketId}" uses unsupported IRM "${irm}". Interest cannot be projected without a supported rate model.`,
+    );
+    this.name = "UnsupportedMarketIrmError";
+  }
+}
+
 /** Error thrown when bytes cannot be decoded into valid Morpho Blue market params. */
 export class InvalidMarketParamsError extends Error {
   constructor(public readonly data: Hex) {

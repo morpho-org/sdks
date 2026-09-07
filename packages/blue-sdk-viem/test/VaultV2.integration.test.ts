@@ -2,6 +2,7 @@ import { VaultV2, VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
+import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   fetchAccrualVaultV2,
@@ -103,6 +104,7 @@ describe("AccrualVaultV2", () => {
   describe("should fetch vault V2", () => {
     vaultV2Test("with deployless reads", async ({ client }) => {
       const expectedData = new VaultV2({
+        chainId: base.id,
         adapters: ["0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F"],
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -141,6 +143,7 @@ describe("AccrualVaultV2", () => {
 
     vaultV2Test("with multicall", async ({ client }) => {
       const expectedData = new VaultV2({
+        chainId: base.id,
         adapters: ["0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F"],
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",

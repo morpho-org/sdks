@@ -6,10 +6,11 @@ import {
 } from "@morpho-org/blue-sdk";
 import { _try } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
-import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
+import { parseMarketParams } from "./parseMarketParams.js";
+import { resolveReadChainId } from "./resolveReadChainId.js";
 
 /**
  * Fetches immutable Morpho Blue market params by market id.
@@ -21,6 +22,8 @@ import { readContractRestructured } from "../utils.js";
  * @param client - Viem client used for the fallback on-chain read.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)` when an on-chain read is needed.
  * @returns The resolved `MarketParams` entity.
+ * @throws {viem.ChainMismatchError} when `parameters.chainId` conflicts with the client's chain.
+ * @throws {MarketIdMismatchError} when RPC returns parameters for another market.
  * @example
  * ```ts
  * import type { MarketId, MarketParams } from "@morpho-org/blue-sdk";
@@ -44,11 +47,12 @@ export async function fetchMarketParams(
   let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
-    chainId ??= await getChainId(client);
+    chainId = await resolveReadChainId(client, chainId);
 
     const { morpho } = getChainAddresses(chainId);
 
-    config = new MarketParams(
+    config = parseMarketParams(
+      id,
       await readContractRestructured(client, {
         address: morpho,
         abi: blueAbi,

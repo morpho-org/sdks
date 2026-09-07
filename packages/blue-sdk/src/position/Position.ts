@@ -205,11 +205,13 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   /**
    * Returns a new position derived from this position, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the market's `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    */
   public accrueInterest(timestamp?: BigIntish) {
     return new AccrualPosition(this, this._market.accrueInterest(timestamp));
   }
 
+  /** @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM. */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -223,6 +225,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /** @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM. */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -248,6 +251,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return new AccrualPosition(this, new Market(this._market));
   }
 
+  /** @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM. */
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
     if (this._market.price == null)
       throw new BlueErrors.UnknownOraclePrice(this.marketId);
@@ -271,6 +275,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return position;
   }
 
+  /** @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM. */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -290,6 +295,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /** @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM. */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;

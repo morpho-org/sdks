@@ -96,9 +96,10 @@ describe("validateUserAddress", () => {
 
 const marketParams = new MarketParams(WethUsdsBlue);
 
-/** Builds a Market with configurable price. */
-function makeMarket(overrides?: { price?: bigint }) {
+/** Builds a Market with configurable price and provenance. */
+function makeMarket(overrides?: { price?: bigint; chainId?: number }) {
   return new Market({
+    chainId: overrides?.chainId,
     params: marketParams,
     totalSupplyAssets: 10n ** 24n,
     totalBorrowAssets: 10n ** 24n / 2n,
@@ -166,6 +167,24 @@ describe("validateAccrualPosition", () => {
         expectedUser: USER_B,
       }),
     ).toThrow(AccrualPositionUserMismatchError);
+  });
+
+  test("should throw ChainIdMismatchError for cross-chain snapshot provenance", () => {
+    const pos = makePosition({
+      market: makeMarket({
+        price: ORACLE_PRICE_SCALE,
+        chainId: mainnet.id + 1,
+      }),
+    });
+
+    expect(() =>
+      validateAccrualPosition({
+        positionData: pos,
+        expectedMarketId: marketParams.id,
+        expectedUser: USER_A,
+        expectedChainId: mainnet.id,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });
 

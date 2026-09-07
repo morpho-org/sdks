@@ -90,6 +90,7 @@ export interface VaultV2Actions {
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
    * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @throws {ChainIdMismatchError} when the client, entity, and present vault snapshot provenance differ.
    */
   deposit: (
     params: {
@@ -163,7 +164,7 @@ export interface VaultV2Actions {
    * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
-   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {ChainIdMismatchError} when the client, entity, and present vault snapshot provenance differ.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` is not positive.
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
@@ -310,6 +311,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (vaultData.chainId !== undefined) {
+      validateChainId(vaultData.chainId, this.chainId);
+    }
 
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
@@ -456,6 +460,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     undefined
   > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (vaultData.chainId !== undefined) {
+      validateChainId(vaultData.chainId, this.chainId);
+    }
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }

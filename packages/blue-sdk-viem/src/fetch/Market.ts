@@ -2,15 +2,17 @@ import {
   getChainAddresses,
   Market,
   type MarketId,
-  MarketParams,
+  MarketIdMismatchError,
 } from "@morpho-org/blue-sdk";
-import { type Client, zeroAddress } from "viem";
+import { type Client, isAddressEqual, zeroAddress } from "viem";
 
-import { getChainId, readContract } from "viem/actions";
+import { readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
 import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
+import { parseMarketParams } from "./parseMarketParams.js";
+import { resolveReadChainId } from "./resolveReadChainId.js";
 
 /**
  * Fetches Morpho Blue market state, params, oracle price, and adaptive IRM rate.
@@ -28,6 +30,8 @@ import { readContractRestructured } from "../utils.js";
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Market` entity.
+ * @throws {viem.ChainMismatchError} when `parameters.chainId` conflicts with the client's chain.
+ * @throws {MarketIdMismatchError} when RPC returns parameters for another market.
  * @example
  * ```ts
  * import type { Market, MarketId } from "@morpho-org/blue-sdk";
@@ -48,9 +52,10 @@ export async function fetchMarket(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
+  const chainId = await resolveReadChainId(client, parameters.chainId);
+  const readParameters = { ...parameters, chainId };
 
-  const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
+  const { morpho, adaptiveCurveIrm } = getChainAddresses(chainId);
 
   /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
@@ -69,15 +74,18 @@ export async function fetchMarket(
         price,
         rateAtTarget,
       } = await readContract(client, {
-        ...parameters,
+        ...readParameters,
         abi,
         code,
         functionName: "query",
         args: [morpho, id, adaptiveCurveIrm],
       });
 
+      const params = parseMarketParams(id, marketParams);
+
       return new Market({
-        params: new MarketParams(marketParams),
+        chainId,
+        params,
         totalSupplyAssets,
         totalBorrowAssets,
         totalSupplyShares,
@@ -85,44 +93,47 @@ export async function fetchMarket(
         lastUpdate,
         fee,
         price: hasPrice ? price : undefined,
-        rateAtTarget:
-          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+        rateAtTarget: isAddressEqual(params.irm, adaptiveCurveIrm)
+          ? rateAtTarget
+          : undefined,
       });
     } catch (error) {
+      if (error instanceof MarketIdMismatchError) throw error;
       if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
 
-  const [params, market] = await Promise.all([
+  const [rawParams, market] = await Promise.all([
     readContractRestructured(client, {
-      ...parameters,
+      ...readParameters,
       address: morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
     }),
     readContractRestructured(client, {
-      ...parameters,
+      ...readParameters,
       address: morpho,
       abi: blueAbi,
       functionName: "market",
       args: [id],
     }),
   ]);
+  const params = parseMarketParams(id, rawParams);
 
   const [price, rateAtTarget] = await Promise.all([
     params.oracle !== zeroAddress
       ? readContract(client, {
-          ...parameters,
+          ...readParameters,
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
         }).catch(() => undefined)
       : undefined,
-    params.irm === adaptiveCurveIrm
+    isAddressEqual(params.irm, adaptiveCurveIrm)
       ? readContract(client, {
-          ...parameters,
+          ...readParameters,
           address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
@@ -132,6 +143,7 @@ export async function fetchMarket(
   ]);
 
   return new Market({
+    chainId,
     params,
     ...market,
     price,

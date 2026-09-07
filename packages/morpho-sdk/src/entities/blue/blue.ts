@@ -186,6 +186,7 @@ export interface BlueActions {
    *
    * @param params - Supply parameters.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, and present market snapshot provenance differ.
    */
   supply: (
     params: {
@@ -235,6 +236,7 @@ export interface BlueActions {
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, or either present position snapshot provenance differs.
    * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
@@ -285,6 +287,7 @@ export interface BlueActions {
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, or present position snapshot provenance differs.
    * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
@@ -330,6 +333,7 @@ export interface BlueActions {
    *
    * @param params - Repay parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, or present position snapshot provenance differs.
    */
   repay: (
     params: {
@@ -370,6 +374,7 @@ export interface BlueActions {
    *
    * @param params - Withdraw collateral parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx`.
+   * @throws {ChainIdMismatchError} when the client, entity, or present position snapshot provenance differs.
    */
   withdrawCollateral: (params: {
     userAddress: Address;
@@ -394,6 +399,7 @@ export interface BlueActions {
    *
    * @param params - Combined parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, or present position snapshot provenance differs.
    */
   repayWithdrawCollateral: (
     params: {
@@ -443,6 +449,7 @@ export interface BlueActions {
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, or present position snapshot provenance differs.
    * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
@@ -508,6 +515,7 @@ export interface BlueActions {
    * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the
    *   target market. Vault V1 inputs are deprecated; prefer Vault V2.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, source, or target snapshot provenance differs.
    * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
@@ -814,6 +822,9 @@ export class MorphoBlue implements BlueActions {
     if (marketData.id !== this.marketParams.id) {
       throw new MarketIdMismatchError(marketData.id, this.marketParams.id);
     }
+    if (marketData.chainId !== undefined) {
+      validateChainId(marketData.chainId, this.chainId);
+    }
 
     validateSlippageTolerance(slippageTolerance);
 
@@ -918,6 +929,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (shares > 0n) {
@@ -1069,6 +1081,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     validatePositionHealth({
@@ -1179,6 +1192,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (nativeAmount > 0n) {
@@ -1303,6 +1317,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (amount > positionData.collateral) {
@@ -1398,6 +1413,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (nativeAmount > 0n) {
@@ -1584,6 +1600,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
@@ -1737,6 +1754,7 @@ export class MorphoBlue implements BlueActions {
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     if (this.marketParams.id === target.marketParams.id) {
@@ -1763,6 +1781,7 @@ export class MorphoBlue implements BlueActions {
       positionData: target.positionData,
       expectedMarketId: target.marketParams.id,
       expectedUser: userAddress,
+      expectedChainId: this.chainId,
     });
 
     const sharesMode = requestedShares > 0n;
@@ -1805,9 +1824,9 @@ export class MorphoBlue implements BlueActions {
     const accruedSource = positionData.market.accrueInterest(
       sourceAccrualTimestamp,
     );
-    const accruedTarget = target.positionData.market.accrueInterest(
-      targetAccrualTimestamp,
-    );
+    const accruedTarget = shouldMigrateBorrow
+      ? target.positionData.market.accrueInterest(targetAccrualTimestamp)
+      : target.positionData.market;
 
     // Shares burned by the source repay: exact in shares mode, else mirror Morpho's toSharesDown.
     const repaidShares = sharesMode

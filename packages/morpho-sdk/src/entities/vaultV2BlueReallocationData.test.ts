@@ -103,6 +103,7 @@ const makeMarket = ({
     totalBorrowShares: borrow * 1_000_000n,
     lastUpdate,
     fee: 0n,
+    rateAtTarget: 0n,
   });
 
 interface FixtureOptions {

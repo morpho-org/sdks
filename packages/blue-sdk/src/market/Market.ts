@@ -1,5 +1,5 @@
 import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { BlueErrors } from "../errors.js";
+import { BlueErrors, UnsupportedMarketIrmError } from "../errors.js";
 import {
   AdaptiveCurveIrmLib,
   MathLib,
@@ -31,6 +31,8 @@ export interface MaxPositionCapacities {
 
 /** Plain input shape for a Morpho Blue market. */
 export interface IMarket {
+  /** Chain provenance when the snapshot was fetched from RPC. */
+  readonly chainId?: number;
   params: IMarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
@@ -46,6 +48,8 @@ export interface IMarket {
  * Represents a lending market on Morpho Blue.
  */
 export class Market implements IMarket {
+  /** Chain provenance when the snapshot was fetched from RPC. */
+  public readonly chainId?: number;
   /**
    * The market's params.
    */
@@ -90,6 +94,7 @@ export class Market implements IMarket {
   public rateAtTarget?: bigint;
 
   constructor({
+    chainId,
     params,
     totalSupplyAssets,
     totalBorrowAssets,
@@ -100,6 +105,7 @@ export class Market implements IMarket {
     price,
     rateAtTarget,
   }: IMarket) {
+    this.chainId = chainId;
     this.params =
       params instanceof MarketParams ? params : new MarketParams(params);
     this.totalSupplyAssets = totalSupplyAssets;
@@ -161,6 +167,7 @@ export class Market implements IMarket {
    *
    * If interested in the instantaneous rate experienced by existing market actors at a specific timestamp,
    * use `getEndBorrowRate(timestamp)`, `getBorrowApy(timestamp)`, or `getSupplyApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   get endBorrowRate() {
     return this.getAccrualBorrowRates().endBorrowRate;
@@ -177,6 +184,7 @@ export class Market implements IMarket {
    *
    * If interested in the average rate experienced by existing market actors at a specific timestamp,
    * use `getAvgBorrowRate(timestamp)`, `getAvgBorrowApy(timestamp)`, or `getAvgSupplyApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   get avgBorrowRate() {
     return this.getAccrualBorrowRates().avgBorrowRate;
@@ -185,6 +193,7 @@ export class Market implements IMarket {
   /**
    * The market's current, instantaneous supply-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getSupplyApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   get supplyApy() {
     return this.getSupplyApy();
@@ -193,6 +202,7 @@ export class Market implements IMarket {
   /**
    * The market's current, instantaneous borrow-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getBorrowApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   get borrowApy() {
     return this.getBorrowApy();
@@ -206,6 +216,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the borrow rate.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow rate).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getEndBorrowRate(timestamp: BigIntish = Time.timestamp()) {
     return this.getAccrualBorrowRates(timestamp).endBorrowRate;
@@ -217,6 +228,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the average borrow rate.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current average borrow rate).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getAvgBorrowRate(timestamp: BigIntish = Time.timestamp()) {
     return this.getAccrualBorrowRates(timestamp).avgBorrowRate;
@@ -246,12 +258,16 @@ export class Market implements IMarket {
         this.lastUpdate,
       );
 
-    if (this.rateAtTarget == null)
+    if (this.rateAtTarget == null) {
+      if (this.params.irm.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+        throw new UnsupportedMarketIrmError(this.id, this.params.irm);
+      }
       return {
         elapsed,
         avgBorrowRate: 0n,
         endBorrowRate: 0n,
       };
+    }
 
     return {
       elapsed,
@@ -269,6 +285,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getBorrowApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getEndBorrowRate(timestamp);
@@ -282,6 +299,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getEndBorrowRate(timestamp);
@@ -300,6 +318,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getAvgBorrowApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getAvgBorrowRate(timestamp);
@@ -313,6 +332,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the average supply rate.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current average supply rate).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getAvgBorrowRate(timestamp);
@@ -329,6 +349,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
+   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
   public getAvgSupplyApy(timestamp: BigIntish = Time.timestamp()) {
     return MarketUtils.rateToApy(this.getAvgSupplyRate(timestamp));
@@ -339,10 +360,13 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to accrue interest.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `lastUpdate` (returns a copy of the market).
+   * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    */
   public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
+
+    if (timestamp === this.lastUpdate) return new Market(this);
 
     const { elapsed, avgBorrowRate, endRateAtTarget } =
       this.getAccrualBorrowRates(timestamp);

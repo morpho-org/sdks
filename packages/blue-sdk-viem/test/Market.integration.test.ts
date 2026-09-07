@@ -1,4 +1,9 @@
-import { addressesRegistry, ChainId, MarketParams } from "@morpho-org/blue-sdk";
+import {
+  addressesRegistry,
+  ChainId,
+  MarketParams,
+  UnsupportedMarketIrmError,
+} from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
@@ -14,6 +19,7 @@ const { usdc_wstEth, usdc_idle, eth_wstEth, crvUsd_stkcvx2BTC } =
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
     const expectedData = new Market({
+      chainId: ChainId.EthMainnet,
       params: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
@@ -32,6 +38,7 @@ describe("augment/Market", () => {
 
   test("should fetch price and rate if idle market", async ({ client }) => {
     const expectedData = new Market({
+      chainId: ChainId.EthMainnet,
       params: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -83,6 +90,7 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
+      chainId: ChainId.EthMainnet,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -97,6 +105,9 @@ describe("augment/Market", () => {
     const value = await Market.fetch(params.id, client);
 
     expect(value).toStrictEqual(expectedData);
+    expect(() => value.accrueInterest(value.lastUpdate + 1n)).toThrow(
+      UnsupportedMarketIrmError,
+    );
   });
 
   test("should fetch market with incorrect oracle", async ({ client }) => {
@@ -112,6 +123,7 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
+      chainId: ChainId.EthMainnet,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,

@@ -215,6 +215,7 @@ export interface VaultV1Actions {
    * @param {bigint} params.shares - User's V1 share balance to migrate.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
    * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @throws {ChainIdMismatchError} when the client, entity, and present target snapshot provenance differ.
    */
   migrateToV2: (params: {
     userAddress: Address;
@@ -590,6 +591,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
     slippageTolerance?: bigint;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (targetVault.chainId !== undefined) {
+      validateChainId(targetVault.chainId, this.chainId);
+    }
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);

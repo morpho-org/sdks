@@ -17,6 +17,8 @@ export interface IVaultV2Allocation {
 
 /** Plain input shape for a Morpho Vault V2. */
 export interface IVaultV2 extends IToken {
+  /** Chain provenance when the snapshot was fetched from RPC. */
+  readonly chainId?: number;
   asset: Address;
   /**
    * Stored total assets at `lastUpdate`, excluding virtually accrued interest.
@@ -45,6 +47,8 @@ export interface IVaultV2 extends IToken {
 
 /** Represents a Morpho Vault V2 and its fee, adapter, and accounting state. */
 export class VaultV2 extends WrappedToken implements IVaultV2 {
+  /** Chain provenance when the snapshot was fetched from RPC. */
+  public readonly chainId?: number;
   public readonly asset: Address;
 
   public _totalAssets;
@@ -69,6 +73,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   public managementFeeRecipientCanReceiveShares;
 
   constructor({
+    chainId,
     asset,
     _totalAssets,
     totalSupply,
@@ -89,6 +94,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   }: IVaultV2) {
     super(config, asset);
 
+    this.chainId = chainId;
     this.asset = asset;
     this._totalAssets = _totalAssets;
     this.totalSupply = totalSupply;

@@ -151,6 +151,7 @@ export const inKindVaultV1Data = (params?: {
 };
 
 export const inKindVaultV2Data = (params?: {
+  readonly chainId?: number;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
@@ -176,7 +177,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
-    rateAtTarget: params?.rateAtTarget,
+    rateAtTarget: params?.rateAtTarget ?? 0n,
   });
   const secondMarket = new Market({
     params: secondInKindMarketParams,
@@ -186,6 +187,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    rateAtTarget: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
   const totalAssets =
@@ -233,6 +235,7 @@ export const inKindVaultV2Data = (params?: {
 
   return new AccrualVaultV2(
     {
+      chainId: params?.chainId,
       address,
       name: "In Kind V2",
       symbol: "ikV2",

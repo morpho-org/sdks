@@ -33,7 +33,7 @@
     "@noble/hashes": "^2.2.0"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.10.0"
+    "@morpho-org/morpho-ts": "^2.11.2"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",

@@ -3,6 +3,7 @@ import {
   _try,
   BlueErrors,
   InvalidMarketParamsError,
+  MarketIdMismatchError,
   UnknownDataError,
   UnknownFactory,
   UnknownMarketParamsError,
@@ -11,6 +12,7 @@ import {
   UnknownTokenPriceError,
   UnknownVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError,
   UnsupportedPreLiquidationParamsError,
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
@@ -26,6 +28,20 @@ describe("error classes", () => {
     expect(err).toBeInstanceOf(Error);
     expect(err.data).toBe("0xabcd");
     expect(err.message).toContain("0xabcd");
+  });
+
+  test("MarketIdMismatchError preserves both market ids", () => {
+    const error = new MarketIdMismatchError(MARKET_ID, "0xabcdef");
+
+    expect(error.marketId).toBe(MARKET_ID);
+    expect(error.expectedMarketId).toBe("0xabcdef");
+  });
+
+  test("UnsupportedMarketIrmError preserves the market and IRM", () => {
+    const error = new UnsupportedMarketIrmError(MARKET_ID, ADDRESS);
+
+    expect(error.marketId).toBe(MARKET_ID);
+    expect(error.irm).toBe(ADDRESS);
   });
 
   test("UnknownTokenError extends UnknownDataError", () => {

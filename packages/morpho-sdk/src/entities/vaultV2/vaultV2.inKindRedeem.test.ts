@@ -243,6 +243,15 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       vault.inKindRedeem({
         amount: 1n,
         marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data({ chainId: mainnet.id + 1 }),
+        userAddress: IN_KIND_USER,
+      }),
+    ).toThrow(ChainIdMismatchError);
+
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
         vaultData: inKindVaultV2Data({
           address: "0x0000000000000000000000000000000000001999",
         }),
