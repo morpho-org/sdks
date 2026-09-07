@@ -219,6 +219,24 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toBeUndefined();
   });
 
+  // A vault whose `totalSupply` dwarfs `totalAssets` has a share price that rounds the realized
+  // exit price down to zero, offering no slippage protection. The entity rejects such an exit with
+  // `VaultV2ForceWithdrawZeroSharePriceError`, so the preview must not hand back a usable
+  // `exitAssets` for it.
+  test("behavior: returns undefined when the realized share price rounds to zero", () => {
+    expect(
+      previewVaultV2ForceWithdraw(
+        vaultV2ExitData({
+          penalty: 0n,
+          assetBalance: 1n,
+          totalAssets: 1n,
+          totalSupply: 10n ** 40n,
+        }),
+        { requestedExitAssets: 1n, timestamp: 0n },
+      ),
+    ).toBeUndefined();
+  });
+
   // Out of range the transaction path rejects, so quoting a payout here would overstate what the
   // user receives (negative fee) or promise a non-positive one (at or above WAD).
   test.each([-1n, MathLib.WAD, MathLib.WAD + 1n])(

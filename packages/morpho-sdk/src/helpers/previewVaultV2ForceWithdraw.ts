@@ -5,6 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
 } from "./vaultV2ForceWithdrawPlan.js";
 
@@ -67,7 +68,9 @@ export interface VaultV2ForceWithdrawPreview {
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
- *   `referralFeePct` outside `[0, WAD)`, a non-positive request, or a request that yields nothing.
+ *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, or an
+ *   exit whose realized share price rounds down to zero (which the entity rejects with
+ *   `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
@@ -125,6 +128,28 @@ export function previewVaultV2ForceWithdraw(
         });
 
   if (plan.withdrawnAssets <= 0n) return undefined;
+
+  // Mirror the entity's zero-floor guard. `forceWithdraw()` derives its slippage floor from
+  // `withdrawnAssets / sharesBurnt` and rejects an exit whose realized share price rounds down to
+  // zero (`VaultV2ForceWithdrawZeroSharePriceError`) — a degenerate vault (e.g. `totalSupply`
+  // dwarfing `totalAssets`) offers no price protection at all. Evaluate the largest possible floor
+  // here (slippage-free, matching the burn upper bound the entity divides by, accrued to
+  // `timestamp` like the plan): if that rounds to zero, every slippage tolerance does too, so the
+  // preview must report "not previewable" rather than hand back an `exitAssets` the entity refuses.
+  const { vault: accruedVaultData } = vaultData.accrueInterest(
+    MathLib.max(timestamp, vaultData.lastUpdate),
+  );
+  const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData: accruedVaultData,
+    deadlineVaultData: accruedVaultData,
+    plan,
+  });
+  if (
+    sharesBurnt <= 0n ||
+    MathLib.mulDivDown(plan.withdrawnAssets, MathLib.RAY, sharesBurnt) <= 0n
+  ) {
+    return undefined;
+  }
 
   const referralFeeAssets = MathLib.mulDivDown(
     plan.withdrawnAssets,
