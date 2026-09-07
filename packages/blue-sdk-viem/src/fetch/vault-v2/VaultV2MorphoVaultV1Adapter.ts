@@ -1,12 +1,13 @@
 import {
+  AccrualVault,
   AccrualVaultV2MorphoVaultV1Adapter,
   getChainAddresses,
   UnknownFactory,
   UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, erc20Abi } from "viem";
-import { getChainId, readContract } from "viem/actions";
+import { type Address, BlockNotFoundError, type Client, erc20Abi } from "viem";
+import { getBlock, getChainId, readContract } from "viem/actions";
 import {
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
@@ -17,7 +18,8 @@ import {
   code,
 } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
 import type { DeploylessFetchParameters } from "../../types.js";
-import { fetchAccrualVault } from "../Vault.js";
+import { fetchVault } from "../Vault.js";
+import { fetchVaultMarketAllocation } from "../VaultMarketAllocation.js";
 
 /**
  * Fetches a MorphoVaultV1Adapter used by VaultV2.
@@ -140,6 +142,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` entity.
+ * @throws {viem.BlockNotFoundError} when the selected block has no number and cannot anchor one snapshot.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example
@@ -162,15 +165,47 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
+  const resolvedParameters = {
+    ...parameters,
+    chainId: parameters.chainId ?? (await getChainId(client)),
+  };
+  const block = await getBlock(
+    client,
+    resolvedParameters.blockNumber !== undefined
+      ? { blockNumber: resolvedParameters.blockNumber }
+      : { blockTag: resolvedParameters.blockTag ?? "latest" },
+  );
+  if (block.number === null) throw new BlockNotFoundError({});
+  const snapshotParameters = {
+    account: resolvedParameters.account,
+    stateOverride: resolvedParameters.stateOverride,
+    deployless: resolvedParameters.deployless,
+    chainId: resolvedParameters.chainId,
+    blockNumber: block.number,
+  };
   const adapter = await fetchVaultV2MorphoVaultV1Adapter(
     address,
     client,
-    parameters,
+    snapshotParameters,
   );
-  const [vaultV1, shares] = await Promise.all([
-    fetchAccrualVault(adapter.morphoVaultV1, client, parameters),
+  const vaultV1 = await fetchVault(
+    adapter.morphoVaultV1,
+    client,
+    snapshotParameters,
+  );
+  const [allocations, shares] = await Promise.all([
+    Promise.all(
+      vaultV1.withdrawQueue.map((marketId) =>
+        fetchVaultMarketAllocation(
+          vaultV1.address,
+          marketId,
+          client,
+          snapshotParameters,
+        ),
+      ),
+    ),
     readContract(client, {
-      ...parameters,
+      ...snapshotParameters,
       address: adapter.morphoVaultV1,
       abi: erc20Abi,
       functionName: "balanceOf",
@@ -178,5 +213,9 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
     }),
   ]);
 
-  return new AccrualVaultV2MorphoVaultV1Adapter(adapter, vaultV1, shares);
+  return new AccrualVaultV2MorphoVaultV1Adapter(
+    adapter,
+    new AccrualVault({ ...vaultV1, totalAssets: undefined }, allocations),
+    shares,
+  );
 }

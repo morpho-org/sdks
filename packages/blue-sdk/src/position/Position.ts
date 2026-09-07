@@ -242,10 +242,31 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /**
+   * Returns a new position with additional collateral and leaves this position unchanged.
+   *
+   * @param assets - Collateral assets to add.
+   * @returns A new accrued position with the increased collateral balance.
+   * @example
+   * ```ts
+   * import { ChainId } from "@morpho-org/blue-sdk";
+   * import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const market = markets[ChainId.EthMainnet].eth_wstEth;
+   * const position = await fetchAccrualPosition(zeroAddress, market.id, client);
+   * const projected = position.supplyCollateral(1_000_000_000_000_000_000n);
+   * // projected satisfies AccrualPosition
+   * ```
+   */
   public supplyCollateral(assets: bigint) {
-    this.collateral += assets;
+    const position = new AccrualPosition(this, this._market);
+    position.collateral += assets;
 
-    return new AccrualPosition(this, new Market(this._market));
+    return position;
   }
 
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {

@@ -203,14 +203,16 @@ export interface CollateralAllocation {
 
 /** Plain input shape for a MetaMorpho vault paired with accrued market allocations. */
 export interface IAccrualVault
-  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {}
+  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {
+  /** Full vault assets, including assets not allocated to Morpho markets. */
+  readonly totalAssets?: bigint;
+}
 
 /** Represents a MetaMorpho vault with accrued market allocation state. */
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * @inheritdoc
-   * Reflects the sum of assets of the vault's allocations.
-   * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
+   * Reflects full vault assets when supplied, otherwise the sum of allocation assets.
    */
   declare totalAssets: bigint;
 
@@ -232,13 +234,14 @@ export class AccrualVault extends Vault implements IAccrualVault {
      */
     allocations: Omit<IVaultMarketAllocation, "proportion">[],
   ) {
+    const allocatedTotal = allocations.reduce(
+      (total, { position }) => total + position.supplyAssets,
+      0n,
+    );
     super({
       ...vault,
       withdrawQueue: allocations.map(({ position }) => position.market.id),
-      totalAssets: allocations.reduce(
-        (total, { position }) => total + position.supplyAssets,
-        0n,
-      ),
+      totalAssets: vault.totalAssets ?? allocatedTotal,
     });
 
     this.allocations = new Map(
@@ -428,40 +431,65 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to each of the vault's market's `lastUpdate`.
+   * @param timestamp - Optional timestamp at which to accrue interest. Must be greater than or equal to each market's `lastUpdate`; defaults each allocation to its own `lastUpdate`.
    * @returns A new vault whose market positions and fee accounting reflect accrued interest.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an allocation market's `lastUpdate`.
    * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an allocation.
+   * @example
+   * ```ts
+   * import { ChainId } from "@morpho-org/blue-sdk";
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { vaults } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const config = vaults[ChainId.EthMainnet].steakUsdc;
+   * const vault = await fetchAccrualVault(config.address, client);
+   * const accrued = vault.accrueInterest();
+   * // accrued satisfies AccrualVault
+   * ```
    */
   public accrueInterest(timestamp?: BigIntish) {
-    const vault = new AccrualVault(
-      this,
-      // Keep withdraw queue order.
-      this.withdrawQueue.map((marketId) => {
-        const allocation = this.allocations.get(marketId);
-        // Fail loudly rather than silently dropping the market: a stale
-        // `withdrawQueue` entry (e.g., one mutated after construction to
-        // reference a market that is no longer allocated) would otherwise
-        // crash with an opaque "Cannot destructure property 'config' of
-        // 'undefined'" via the non-null assertion below.
-        if (allocation == null)
-          throw new UnknownMarketAllocationError(marketId);
+    const allocatedBefore = this.allocations
+      .values()
+      .reduce((total, { position }) => total + position.supplyAssets, 0n);
+    const accruedAllocations = this.withdrawQueue.map((marketId) => {
+      const allocation = this.allocations.get(marketId);
+      if (allocation == null) throw new UnknownMarketAllocationError(marketId);
 
-        const { config, position } = allocation;
-        return {
-          config,
-          position: position.accrueInterest(timestamp),
-        };
-      }),
+      const { config, position } = allocation;
+      return {
+        config,
+        position: position.accrueInterest(timestamp),
+      };
+    });
+    const allocatedAfter = accruedAllocations.reduce(
+      (total, { position }) => total + position.supplyAssets,
+      0n,
     );
-
-    if (vault.lostAssets != null) {
-      vault.lostAssets += MathLib.max(
-        vault.lastTotalAssets - vault.lostAssets - vault.totalAssets,
-        0n,
-      );
-
-      vault.totalAssets += vault.lostAssets;
-    }
+    const unaccountedAssets = MathLib.zeroFloorSub(
+      this.totalAssets,
+      allocatedBefore,
+    );
+    const unallocatedAssets =
+      this.lostAssets === undefined ? unaccountedAssets : 0n;
+    const realTotalAssets = allocatedAfter + unallocatedAssets;
+    const lostAssets =
+      this.lostAssets === undefined
+        ? undefined
+        : realTotalAssets <
+            MathLib.zeroFloorSub(this.lastTotalAssets, this.lostAssets)
+          ? this.lastTotalAssets - realTotalAssets
+          : this.lostAssets;
+    const vault = new AccrualVault(
+      {
+        ...this,
+        totalAssets: realTotalAssets + (lostAssets ?? 0n),
+        lostAssets,
+      },
+      accruedAllocations,
+    );
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);
 

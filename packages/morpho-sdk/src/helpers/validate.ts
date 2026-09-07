@@ -149,6 +149,33 @@ export const validateAccrualPosition = (params: {
  * @param params.borrowAmount - Amount being borrowed.
  * @param params.marketId - The market identifier (for error messages).
  * @param params.lltv - The market's liquidation LTV.
+ * @returns Nothing when the exact projected debt stays within the buffered LLTV.
+ * @throws {MissingMarketPriceError} when the market snapshot has no oracle price.
+ * @throws {BorrowExceedsSafeLtvError} when rounded post-borrow debt exceeds the buffered LLTV.
+ * @example
+ * ```ts
+ * import { ChainId } from "@morpho-org/blue-sdk";
+ * import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+ * import { markets } from "@morpho-org/morpho-test";
+ * import { validatePositionHealth } from "@morpho-org/morpho-sdk";
+ * import { createPublicClient, http, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const market = markets[ChainId.EthMainnet].eth_wstEth;
+ * const positionData = await fetchAccrualPosition(
+ *   zeroAddress,
+ *   market.id,
+ *   client,
+ * );
+ * validatePositionHealth({
+ *   positionData,
+ *   additionalCollateral: 1_000_000_000_000_000_000n,
+ *   borrowAmount: 1_000_000_000_000_000n,
+ *   marketId: market.id,
+ *   lltv: market.lltv,
+ * });
+ * ```
  */
 export const validatePositionHealth = (params: {
   positionData: AccrualPosition;
@@ -180,13 +207,44 @@ export const validatePositionHealth = (params: {
     effectiveLltv,
   );
 
-  const totalBorrowAfter = positionData.borrowAssets + borrowAmount + 1n; // +1 to account for share-to-asset rounding (happens when the borrow amount doesn't divide evenly into shares)
+  const borrowShares = positionData.market.toBorrowShares(borrowAmount, "Up");
+  const totalBorrowAfter = MarketUtils.toBorrowAssets(
+    positionData.borrowShares + borrowShares,
+    {
+      totalBorrowAssets: positionData.market.totalBorrowAssets + borrowAmount,
+      totalBorrowShares: positionData.market.totalBorrowShares + borrowShares,
+    },
+    "Up",
+  );
 
   if (totalBorrowAfter > maxSafeBorrowAfter) {
-    const maxSafeAdditionalBorrow = MathLib.zeroFloorSub(
+    let maxSafeAdditionalBorrow = MathLib.zeroFloorSub(
       maxSafeBorrowAfter,
       positionData.borrowAssets,
     );
+    let lowerBound = 0n;
+    while (lowerBound < maxSafeAdditionalBorrow) {
+      const candidate = (lowerBound + maxSafeAdditionalBorrow + 1n) / 2n;
+      const candidateShares = positionData.market.toBorrowShares(
+        candidate,
+        "Up",
+      );
+      const candidateTotalBorrow = MarketUtils.toBorrowAssets(
+        positionData.borrowShares + candidateShares,
+        {
+          totalBorrowAssets: positionData.market.totalBorrowAssets + candidate,
+          totalBorrowShares:
+            positionData.market.totalBorrowShares + candidateShares,
+        },
+        "Up",
+      );
+
+      if (candidateTotalBorrow <= maxSafeBorrowAfter) {
+        lowerBound = candidate;
+      } else {
+        maxSafeAdditionalBorrow = candidate - 1n;
+      }
+    }
     throw new BorrowExceedsSafeLtvError(borrowAmount, maxSafeAdditionalBorrow);
   }
 };

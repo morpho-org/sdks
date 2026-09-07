@@ -16,6 +16,6 @@ describe("AccrualVault", () => {
     const accruedVault = accrualVault.accrueInterest(block.timestamp);
 
     expect(vault.totalAssets).toEqual(accruedVault.totalAssets);
-    expect(accrualVault.totalAssets).not.toEqual(accruedVault.totalAssets);
+    expect(accrualVault.totalAssets).toEqual(accruedVault.totalAssets);
   });
 });

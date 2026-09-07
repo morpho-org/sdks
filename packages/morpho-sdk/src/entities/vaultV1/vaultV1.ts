@@ -605,8 +605,18 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     validateSlippageTolerance(slippageTolerance);
 
-    // Compute minSharePriceVaultV1 for V1 redeem (slippage downward)
-    const v1RefAssets = sourceVault.toAssets(shares);
+    // V1 redeem accrues pending performance fees before converting shares to assets.
+    const sourceAccrualTimestamp = sourceVault.allocations
+      .values()
+      .reduce(
+        (timestamp, { position }) =>
+          MathLib.max(timestamp, position.market.lastUpdate),
+        Time.timestamp(),
+      );
+    const accruedSourceVault = sourceVault.accrueInterest(
+      sourceAccrualTimestamp,
+    );
+    const v1RefAssets = accruedSourceVault.toAssets(shares);
     const minSharePriceVaultV1 = MathLib.mulDivDown(
       v1RefAssets,
       MathLib.wToRay(MathLib.WAD - slippageTolerance),

@@ -47,6 +47,7 @@ import {
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
 import {
+  DEFAULT_LLTV_BUFFER,
   MAX_REALLOCATION_PENALTY,
   MAX_SLIPPAGE_TOLERANCE,
 } from "./constant.js";
@@ -97,13 +98,17 @@ describe("validateUserAddress", () => {
 const marketParams = new MarketParams(WethUsdsBlue);
 
 /** Builds a Market with configurable price. */
-function makeMarket(overrides?: { price?: bigint }) {
+function makeMarket(overrides?: {
+  price?: bigint;
+  totalBorrowAssets?: bigint;
+  totalBorrowShares?: bigint;
+}) {
   return new Market({
     params: marketParams,
     totalSupplyAssets: 10n ** 24n,
-    totalBorrowAssets: 10n ** 24n / 2n,
+    totalBorrowAssets: overrides?.totalBorrowAssets ?? 10n ** 24n / 2n,
     totalSupplyShares: 10n ** 24n,
-    totalBorrowShares: 10n ** 24n / 2n,
+    totalBorrowShares: overrides?.totalBorrowShares ?? 10n ** 24n / 2n,
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: overrides?.price,
@@ -264,6 +269,28 @@ describe("validatePositionHealth", () => {
         borrowAmount: 1n,
         marketId: marketParams.id,
         lltv: 1n,
+      }),
+    ).toThrow(BorrowExceedsSafeLtvError);
+  });
+
+  test("rejects a borrow using the exact rounded post-borrow debt", () => {
+    const pos = makePosition({
+      collateral: 2_000n,
+      borrowShares: 1n,
+      market: makeMarket({
+        price: ORACLE_PRICE_SCALE,
+        totalBorrowAssets: 1_000_000_000n,
+        totalBorrowShares: 1n,
+      }),
+    });
+
+    expect(() =>
+      validatePositionHealth({
+        positionData: pos,
+        additionalCollateral: 0n,
+        borrowAmount: 1n,
+        marketId: marketParams.id,
+        lltv: (75n * MathLib.WAD) / 100n + DEFAULT_LLTV_BUFFER,
       }),
     ).toThrow(BorrowExceedsSafeLtvError);
   });

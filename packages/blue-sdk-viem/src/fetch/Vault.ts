@@ -9,9 +9,14 @@ import {
   VaultConfig,
   type VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, zeroAddress } from "viem";
+import {
+  type Address,
+  BlockNotFoundError,
+  type Client,
+  zeroAddress,
+} from "viem";
 
-import { getChainId, readContract } from "viem/actions";
+import { getBlock, getChainId, readContract } from "viem/actions";
 import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
@@ -384,6 +389,8 @@ export async function fetchVault(
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVault` entity with accrued market allocations.
+ * @throws {BlueErrors.InvalidInterestAccrual} when the block timestamp precedes an allocation market's `lastUpdate`.
+ * @throws {viem.BlockNotFoundError} when the selected block has no number and cannot anchor one snapshot.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
  * @example
@@ -405,14 +412,42 @@ export async function fetchAccrualVault(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
+  const resolvedParameters = {
+    ...parameters,
+    chainId: parameters.chainId ?? (await getChainId(client)),
+  };
 
-  const vault = await fetchVault(address, client, parameters);
+  const block = await getBlock(
+    client,
+    resolvedParameters.blockNumber !== undefined
+      ? { blockNumber: resolvedParameters.blockNumber }
+      : { blockTag: resolvedParameters.blockTag ?? "latest" },
+  );
+  if (block.number === null) throw new BlockNotFoundError({});
+  const snapshotParameters = {
+    account: resolvedParameters.account,
+    stateOverride: resolvedParameters.stateOverride,
+    deployless: resolvedParameters.deployless,
+    chainId: resolvedParameters.chainId,
+    blockNumber: block.number,
+  };
+  const vault = await fetchVault(address, client, snapshotParameters);
   const allocations = await Promise.all(
     vault.withdrawQueue.map((marketId) =>
-      fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
+      fetchVaultMarketAllocation(
+        vault.address,
+        marketId,
+        client,
+        snapshotParameters,
+      ),
     ),
   );
 
-  return new AccrualVault(vault, allocations);
+  return new AccrualVault(
+    vault,
+    allocations.map(({ config, position }) => ({
+      config,
+      position: position.accrueInterest(block.timestamp),
+    })),
+  );
 }
