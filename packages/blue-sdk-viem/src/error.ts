@@ -1,4 +1,4 @@
-import type { Address, ChainId } from "@morpho-org/blue-sdk";
+import { type Address, type ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 
 /** Thrown when a permit domain targets another chain; consumers should not sign it. */
@@ -40,6 +40,15 @@ export class UnsupportedPermitDomainExtensionsError extends Error {
     );
 
     this.extensions = [...extensions];
+  }
+}
+
+/** Thrown when a finite Permit2 allowance cannot fit in its uint160 field. */
+export class Permit2AllowanceOverflowError extends Error {
+  constructor(public readonly allowance: bigint) {
+    super(
+      `Permit2 allowance "${allowance}" exceeds maximum "${MathLib.MAX_UINT_160}". Reduce the allowance or use the exact maximum for an unlimited approval.`,
+    );
   }
 }
 

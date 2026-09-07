@@ -16,6 +16,7 @@ import {
   InvalidMarketParamsError as RawBlueInvalidMarketParamsError,
   InvalidPermitDomainChainIdError as RawBlueInvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
+  Permit2AllowanceOverflowError as RawBluePermit2AllowanceOverflowError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownDataError as RawBlueUnknownDataError,
   UnknownFactory as RawBlueUnknownFactory,
@@ -60,6 +61,7 @@ import {
   MidnightMarket,
 } from "@morpho-org/morpho-sdk/entities";
 import {
+  BluePermit2AllowanceOverflowError,
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
   InvalidBitLengthError,
@@ -143,6 +145,7 @@ describe("protocol facades", () => {
       RawBlueInvalidPermitDomainVerifyingContractError,
     ],
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
+    [BluePermit2AllowanceOverflowError, RawBluePermit2AllowanceOverflowError],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],
     [

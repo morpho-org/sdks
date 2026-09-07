@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
+import { Permit2AllowanceOverflowError } from "../error.js";
 import { getAuthorizationTypedData } from "./manager.js";
 import { getDaiPermitTypedData, getPermitTypedData } from "./permit.js";
 import {
@@ -130,27 +131,45 @@ describe("getDaiPermitTypedData", () => {
 });
 
 describe("getPermit2PermitTypedData", () => {
-  test("clamps allowance and defaults expiration to MAX_UINT_48", () => {
-    const typedData = getPermit2PermitTypedData(
-      {
-        erc20: TOKEN,
-        allowance: MathLib.MAX_UINT_160 + 1n,
-        nonce: 7,
-        deadline: 8n,
-        spender: SPENDER,
-      },
-      ChainId.EthMainnet,
-    );
+  test.each([MathLib.MAX_UINT_160 - 1n, MathLib.MAX_UINT_160])(
+    "preserves supported allowance %s",
+    (allowance) => {
+      const typedData = getPermit2PermitTypedData(
+        {
+          erc20: TOKEN,
+          allowance,
+          nonce: 7,
+          deadline: 8n,
+          spender: SPENDER,
+        },
+        ChainId.EthMainnet,
+      );
 
-    expect(typedData.domain?.verifyingContract).toBe(
-      addressesRegistry[ChainId.EthMainnet].permit2,
-    );
-    expect(typedData.message.details).toEqual({
-      token: TOKEN,
-      amount: MathLib.MAX_UINT_160,
-      expiration: MathLib.MAX_UINT_48,
-      nonce: 7,
-    });
+      expect(typedData.domain?.verifyingContract).toBe(
+        addressesRegistry[ChainId.EthMainnet].permit2,
+      );
+      expect(typedData.message.details).toEqual({
+        token: TOKEN,
+        amount: allowance,
+        expiration: MathLib.MAX_UINT_48,
+        nonce: 7,
+      });
+    },
+  );
+
+  test("error: Permit2AllowanceOverflowError", () => {
+    expect(() =>
+      getPermit2PermitTypedData(
+        {
+          erc20: TOKEN,
+          allowance: MathLib.MAX_UINT_160 + 1n,
+          nonce: 7,
+          deadline: 8n,
+          spender: SPENDER,
+        },
+        ChainId.EthMainnet,
+      ),
+    ).toThrow(Permit2AllowanceOverflowError);
   });
 
   test("preserves finite allowance and expiration", () => {

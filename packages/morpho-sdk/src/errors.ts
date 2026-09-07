@@ -41,6 +41,7 @@ export {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
+  Permit2AllowanceOverflowError as BluePermit2AllowanceOverflowError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {

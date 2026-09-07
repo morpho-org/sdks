@@ -5,6 +5,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
+import { Permit2AllowanceOverflowError } from "../error.js";
 
 /** Message fields for Permit2 allowance typed data. */
 export interface Permit2PermitArgs {
@@ -45,6 +46,7 @@ const permit2PermitTypes = {
  * @param args - Permit2 allowance message fields.
  * @param chainId - Chain id whose Permit2 deployment verifies the signature.
  * @returns Typed data ready to pass to a wallet for signing.
+ * @throws {Permit2AllowanceOverflowError} When `args.allowance` exceeds the Permit2 uint160 limit.
  * @example
  * ```ts
  * import { ChainId } from "@morpho-org/blue-sdk";
@@ -66,6 +68,10 @@ export const getPermit2PermitTypedData = (
   args: Permit2PermitArgs,
   chainId: ChainId,
 ): TypedDataDefinition<typeof permit2PermitTypes, "PermitSingle"> => {
+  if (args.allowance > MathLib.MAX_UINT_160) {
+    throw new Permit2AllowanceOverflowError(args.allowance);
+  }
+
   return {
     domain: {
       name: "Permit2",
@@ -76,7 +82,7 @@ export const getPermit2PermitTypedData = (
     message: {
       details: {
         token: args.erc20,
-        amount: MathLib.min(args.allowance, MathLib.MAX_UINT_160),
+        amount: args.allowance,
         // Use an unlimited expiration because it most
         // closely mimics how a standard approval works.
         expiration: MathLib.min(
