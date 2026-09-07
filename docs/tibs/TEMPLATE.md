@@ -27,7 +27,7 @@ invariant. Never leave an empty placeholder, a `TBD`, or an `N/A`.
 | ----------------- | -------------------------------------------- |
 | **Date**          | <DATE>                                       |
 | **Author**        | <AUTHOR>                                     |
-| **Scope**         | <packages and target versions>               |
+| **Scope**         | <packages and target versions, or `Repo-wide`> |
 | **Supersedes**    | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 | **Superseded by** | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 
@@ -87,8 +87,9 @@ _Optional._ Approaches seriously evaluated, each with why it was rejected. Not a
 
 ## Breaking Changes & Migration
 
-_When the decision breaks compat._ Which packages bump and by how much, what callers must change,
-the ordering of releases, and migration guidance.
+_When the decision has a semver consequence — additive, patch, or breaking._ Which packages bump and
+by how much, and the ordering of releases. When the change breaks compat, also state what callers
+must change and the migration guidance.
 
 ## Acceptance Criteria
 

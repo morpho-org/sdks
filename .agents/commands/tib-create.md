@@ -77,8 +77,11 @@ when it _is_ the decision**:
 Worked example — _"pure collateral-supply passes `maxLtv = maxUint256`, so an already-unhealthy
 position can still improve"_:
 
-- the **behavior** (unhealthy positions can still improve) passes both tests → in the TIB;
-- the literal **`maxUint256`** fails both → it is a mechanic, leave it to the code.
+- the **behavior** (an unhealthy position can still improve) passes both tests → in the TIB;
+- the sentinel **`maxLtv = maxUint256`** is observable in the simulated calldata and pinned as
+  protocol behavior, so it is an exact protocol value, not a mechanic → it stays too;
+- what leaves is the *mechanic that produces it* — that a pure supply is encoded as the combined
+  supply/borrow call with a zero-amount inactive leg has no observable or semver consequence.
 
 These same two tests are the gate on every question you are allowed to ask (Step 3).
 
@@ -106,7 +109,8 @@ AUTHOR="@$(gh api user --jq .login 2>/dev/null)" || AUTHOR=$(git config user.nam
   otherwise collide. The H1 stays `TIB-<DATE>: <TITLE>` for readability; the slug in the ID is what
   disambiguates.
 - **SCOPE** — the packages and target versions the decision binds (e.g. `morpho-sdk 6.0.0, WDK
-  2.0.0`). If you cannot derive it from the repo, this is a legitimate Step 3 question.
+  2.0.0`), or `Repo-wide` for a process, tooling, or documentation decision that binds no single
+  package or version. If you cannot derive it from the repo, this is a legitimate Step 3 question.
 
 If `PATH` already exists, **stop and report it** — accepted TIBs are frozen records and are never
 overwritten. Pick a distinct slug, or, if this decision supersedes the existing one, create a new
@@ -142,7 +146,7 @@ the TIB.** Nothing else earns an interruption.
 
 1. **Section-bound.** You can name the section the answer lands in — Context, Goals / Non-Goals,
    Decision, Public Interface, Behavior, Invariants, Rejected alternatives, Breaking Changes &
-   Migration, Acceptance Criteria, or a metadata field.
+   Migration, Acceptance Criteria, Consequences, or a metadata field.
 2. **Passes the compression test or the agent acceptance test.** Without the answer, two good
    engineers could build functionally different behaviors, or a reviewing agent could not tell
    whether a PR honors the decision.
@@ -274,8 +278,10 @@ Run this against the draft and fix what fails:
 
 ### Step 6 — Hand off
 
-1. **Its own PR.** A TIB is proposed in a separate PR containing nothing else, and needs **at least
-   one developer review** before it is accepted.
+1. **Its own PR.** A TIB is proposed in a separate PR that adds only this brief — plus, when it
+   supersedes an existing TIB, the `Superseded by` metadata edit on that older file (Step 1). No
+   implementation and nothing else unrelated. It needs **at least one developer review** before it
+   is accepted.
 2. **No changeset.** A TIB is documentation, not a change to published package source
    (`AGENTS.md` §7).
 3. **Codify a rule change first.** If the accepted TIB evolves an engineering principle — any rule
@@ -312,7 +318,7 @@ drop another; a process or tooling decision drops `Public Interface` and `Behavi
 | ----------------- | -------------------------------------------- |
 | **Date**          | <DATE>                                       |
 | **Author**        | <AUTHOR>                                     |
-| **Scope**         | <packages and target versions>               |
+| **Scope**         | <packages and target versions, or `Repo-wide`> |
 | **Supersedes**    | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 | **Superseded by** | TIB-YYYY-MM-DD-slug _(remove if not applicable)_ |
 
@@ -372,8 +378,9 @@ _Optional._ Approaches seriously evaluated, each with why it was rejected. Not a
 
 ## Breaking Changes & Migration
 
-_When the decision breaks compat._ Which packages bump and by how much, what callers must change,
-the ordering of releases, and migration guidance.
+_When the decision has a semver consequence — additive, patch, or breaking._ Which packages bump and
+by how much, and the ordering of releases. When the change breaks compat, also state what callers
+must change and the migration guidance.
 
 ## Acceptance Criteria
 
@@ -421,7 +428,9 @@ If a draft contains one of these, move it to the Linear tickets — outside the 
 - Private / non-exported function signatures.
 - Pseudo-code or step-by-step "call Y then Z" sequences.
 - Variable names and internal helper structure.
-- The literal constants used to achieve a behavior — the *behavior* stays; the constant goes.
+- Private implementation constants used to achieve a behavior — the *behavior* stays; the constant
+  goes. Exact public or protocol values (exported constants, caps, rates) are the exception — they
+  are contract and stay in `Public Interface` / `Behavior`.
 - Test file names and individual test-case enumerations.
 - Anything that would read as false after a routine refactor.
 
