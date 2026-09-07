@@ -7,7 +7,7 @@
 
 > 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on every chain where Morpho is deployed. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
+Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
 ## Installation
 
@@ -15,20 +15,21 @@ Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**,
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating Blue
-write integrations.
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+deposit or Blue write integrations.
 
 ## Actions
 
-Each entity exposes a set of actions. Vault deposits route through Bundler3 via `GeneralAdapter1`;
+Each entity exposes a set of actions. Vault deposits call VaultBundlesV1 directly;
 Blue writes call BlueBundlesV1 directly; the remaining rows identify their direct destination.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler3 → GeneralAdapter1 |
+| **VaultV1** (MetaMorpho) | `deposit` | VaultBundlesV1 |
+| | `migrateToV2` | Bundler3 → GeneralAdapter1 |
 | | `withdraw`, `redeem` | Direct call |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **VaultV2** | `deposit` | Bundler3 → GeneralAdapter1 |
+| **VaultV2** | `deposit` | VaultBundlesV1 |
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
@@ -54,7 +55,8 @@ RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
-const { buildTx, getRequirements } = await vault.deposit({ amount, userAddress });
+const vaultData = await vault.getData();
+const { buildTx, getRequirements } = vault.deposit({ amount, userAddress, vaultData });
 
 const requirements = await getRequirements();
 // Send each approval tx and collect each signature, then:
@@ -101,14 +103,18 @@ Create an entity — every factory takes a chain ID as its last argument:
 
 ### Vault deposit / withdraw
 
-Deposit routes through the bundler and may require an approval or permit:
+Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
+permits authorize VaultBundlesV1. Permit2 SignatureTransfer also names VaultBundlesV1 as spender,
+while the ERC-20 approval prerequisite targets canonical Permit2.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
 
-const { buildTx, getRequirements } = await vault.deposit({
+const vaultData = await vault.getData();
+const { buildTx, getRequirements } = vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
+  vaultData,
 });
 const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
@@ -124,7 +130,8 @@ const { buildTx } = vault.withdraw({
 const tx = buildTx();
 ```
 
-For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).
+For wNative vaults, pass `nativeAmount` instead of `amount`. The transaction sends that amount as
+`tx.value` to VaultBundlesV1, which wraps it internally; native deposits require no token permit.
 
 ### Blue: BlueBundlesV1 writes
 
@@ -219,11 +226,11 @@ graph LR
         MV1 --> V1IKR[vaultV1InKindRedeem]
         MV1 --> V1M[vaultV1MigrateToV2]
 
-        V1D -->|nativeTransfer + wrapNative + erc4626Deposit| B1[Bundler3]
+        V1D -->|vaultBundlesV1Deposit| VBV1[VaultBundlesV1]
         V1W -->|direct call| MM[MetaMorpho]
         V1R -->|direct call| MM
         V1IKR -->|direct call| VEB[VaultExitBundlesV1]
-        V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1
+        V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1[Bundler3]
     end
 
     subgraph VaultV2 Flow
@@ -235,7 +242,7 @@ graph LR
         MV2 --> V2FW[vaultV2ForceWithdraw]
         MV2 --> V2FR[vaultV2ForceRedeem]
 
-        V2D -->|nativeTransfer + wrapNative + erc4626Deposit| B2[Bundler3]
+        V2D -->|vaultBundlesV1Deposit| VBV1
         V2W -->|direct call| V2C[VaultV2 Contract]
         V2R -->|direct call| V2C
         V2IKR -->|direct call| VEB

@@ -11,6 +11,7 @@ import {
   NonPositiveInputError,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
+  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import { vaultV1Deposit } from "./deposit.js";
 
@@ -24,6 +25,44 @@ const { usdc, wNative } = addressesRegistry[chainId];
 const positiveUint128 = fc.bigInt({ min: 1n, max: (1n << 128n) - 1n });
 
 describe("vaultV1Deposit", () => {
+  test.each(["permit", "permit2SignatureTransfer"] as const)(
+    "error: UnexpectedRequirementSignatureError for native funding with %s",
+    (type) => {
+      const args = {
+        spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+        amount: 7n,
+        deadline,
+      };
+      const permitArgs = {
+        owner: userAddress,
+        asset: wNative,
+        amount: 7n,
+        nonce: 0n,
+        deadline,
+        signature: "0x" as const,
+      };
+      const requirementSignature =
+        type === "permit"
+          ? { args: permitArgs, action: { type, args } }
+          : {
+              args: permitArgs,
+              action: { type, args: { ...args, nonce: 0n } },
+            };
+      expect(() =>
+        vaultV1Deposit({
+          vault: { chainId, address: vault, asset: wNative },
+          args: {
+            nativeAmount: 7n,
+            maxSharePrice: 2n,
+            userAddress,
+            deadline,
+            requirementSignature,
+          },
+        }),
+      ).toThrow(UnexpectedRequirementSignatureError);
+    },
+  );
+
   test("default", () => {
     const referralFeePct = MathLib.WAD / 10n;
     const transaction = vaultV1Deposit({

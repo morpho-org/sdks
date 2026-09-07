@@ -1313,11 +1313,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       onBehalfOf,
       requirementSignature,
     }: MorphoCollateralSupplyOptions,
-    depositAmounts: NormalizedDepositAmounts = normalizeDepositAmounts({
-      amount,
-      nativeAmount,
-    }),
+    depositAmounts?: NormalizedDepositAmounts,
   ) {
+    if (amount !== undefined && nativeAmount !== undefined) {
+      throw new MixedBlueCollateralFundingError();
+    }
+    const normalizedAmounts =
+      depositAmounts ?? normalizeDepositAmounts({ amount, nativeAmount });
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
@@ -1331,11 +1333,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const collateralAssets =
-      depositAmounts.nativeAmount ?? depositAmounts.amount;
+      normalizedAmounts.nativeAmount ?? normalizedAmounts.amount;
 
     return market.entity.supplyCollateral({
       collateralAssets,
-      nativeAmount: depositAmounts.nativeAmount,
+      nativeAmount: normalizedAmounts.nativeAmount,
       userAddress,
       deadline: getBlueBundlesV1Deadline(requirementSignature),
     });

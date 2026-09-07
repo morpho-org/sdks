@@ -1,7 +1,9 @@
-import type {
-  AuthorizationRequirementSignature,
-  BundlesTokenRequirementSignature,
-  VaultV2BlueReallocation,
+import {
+  type AuthorizationRequirementSignature,
+  type BundlesTokenRequirementSignature,
+  MixedBundlesFundingError,
+  NonPositiveInputError,
+  type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
@@ -156,6 +158,8 @@ const createClientMock = vi.fn().mockReturnValue({ extend: extendMock });
 
 vi.doMock("@morpho-org/morpho-sdk", () => ({
   morphoViemExtension: morphoViemExtensionMock,
+  MixedBundlesFundingError,
+  NonPositiveInputError,
 }));
 
 vi.doMock("@morpho-org/blue-sdk-viem", () => ({
@@ -201,6 +205,18 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("supply", () => {
+    test("error: MixedBundlesFundingError for vault mixed funding", async () => {
+      const mixedFunding = {
+        token: TOKEN,
+        amount: 50_000n,
+        nativeAmount: 50_000n,
+      } as unknown as MorphoExclusiveSupplyOptions;
+
+      await expect(protocol.prepareSupply(mixedFunding)).rejects.toBeInstanceOf(
+        MixedBundlesFundingError,
+      );
+    });
+
     test("types: vault funding is ERC-20 or native, never both", () => {
       expectTypeOf<{
         token: string;
@@ -853,18 +869,25 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
-    test("should reject mixed ERC-20 and native collateral funding", async () => {
-      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      const mixedFunding = {
-        token: COLLATERAL,
-        amount: 50_000n,
-        nativeAmount: 50_000n,
-      } as unknown as MorphoCollateralSupplyOptions;
+    test.each([
+      "supplyCollateral",
+      "getSupplyCollateralRequirements",
+      "quoteSupplyCollateral",
+    ] as const)(
+      "error: MixedBlueCollateralFundingError from %s",
+      async (method) => {
+        const mixedFunding = {
+          token: COLLATERAL,
+          amount: 50_000n,
+          nativeAmount: 50_000n,
+        } as unknown as MorphoCollateralSupplyOptions;
 
-      await expect(
-        protocol.supplyCollateral(mixedFunding),
-      ).rejects.toBeInstanceOf(MixedBlueCollateralFundingError);
-    });
+        await expect(protocol[method](mixedFunding)).rejects.toBeInstanceOf(
+          MixedBlueCollateralFundingError,
+        );
+        expect(marketEntity.supplyCollateral).not.toHaveBeenCalled();
+      },
+    );
 
     test("should build a withdraw collateral transaction with morpho-sdk", async () => {
       account.sendTransaction = vi.fn().mockResolvedValue({

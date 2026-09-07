@@ -39,8 +39,8 @@ Protocol terms used across this package's docs and JSDoc:
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals and executes composed calls.
-  Vault deposits and public low-level Bundler3 primitives use it; the high-level Blue write
-  methods do not.
+  Vault V1 to V2 migrations and public low-level Bundler3 primitives use it. High-level vault
+  deposits use VaultBundlesV1, and high-level Blue writes use BlueBundlesV1.
 - **BlueBundlesV1** — the protocol-owned periphery called directly by the high-level Blue
   write methods. It owns operation ordering, token pulls, optional native wrapping, Morpho
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
