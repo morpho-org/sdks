@@ -73,12 +73,12 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * ```
  */
 export const getBlueAuthorizationRequirement = async (params: {
-  viemClient: Client;
-  chainId: number;
-  userAddress: Address;
-  supportSignature?: boolean;
-  authorized?: Address;
-  deadline?: bigint;
+  readonly viemClient: Client;
+  readonly chainId: number;
+  readonly userAddress: Address;
+  readonly supportSignature?: boolean;
+  readonly authorized?: Address;
+  readonly deadline?: bigint;
 }): Promise<
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>
