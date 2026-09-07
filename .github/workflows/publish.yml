@@ -319,6 +319,17 @@ jobs:
             fi
           done
 
+          # Record the bijection-verified release set (name + version) for the
+          # tag step. Package tags are derived from what is actually published
+          # here — anchored to these tarballs — rather than from a HEAD^..HEAD
+          # diff, which misses the release when publish runs on a later recovery
+          # commit (e.g. a workflow fix) instead of the version-bump commit.
+          published_manifest="${RUNNER_TEMP}/published-packages.txt"
+          : > "$published_manifest"
+          for name in "${!received_version[@]}"; do
+            printf '%s\t%s\n' "$name" "${received_version[$name]}" >> "$published_manifest"
+          done
+
           # Publish, skipping versions already on the registry (idempotent reruns).
           published=0
           for name in "${!received_version[@]}"; do
@@ -367,16 +378,20 @@ jobs:
           trap 'rm -f "$local_tags" "$remote_tags"; reset_origin_url' EXIT
 
           # Create package git tags after npm publish succeeds. This also
-          # recovers reruns after publish succeeded but tag push failed.
-          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-            while IFS= read -r -d '' manifest; do
-              tag="$(
-                node scripts/release/compute-pending-tag.mjs "$manifest"
-              )"
-
-              if [ -z "$tag" ]; then
+          # recovers reruns after publish succeeded but tag push failed. The tag
+          # set is derived from the bijection-verified release set the publish
+          # step recorded (not a HEAD^..HEAD diff), so the released versions are
+          # tagged even when publish runs on a later recovery commit rather than
+          # the version-bump commit. The existence guards keep this idempotent
+          # and skip already-tagged (unchanged) packages.
+          published_manifest="${RUNNER_TEMP}/published-packages.txt"
+          if [ -f "$published_manifest" ]; then
+            while IFS=$'\t' read -r name version; do
+              if [ -z "$name" ] || [ -z "$version" ]; then
                 continue
               fi
+
+              tag="${name}-v${version}"
 
               if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
                 continue
@@ -387,7 +402,7 @@ jobs:
               fi
 
               git tag "$tag" -m "$tag"
-            done < <(git diff --name-only -z --diff-filter=ACMRT HEAD^ HEAD -- 'packages/*/package.json')
+            done < "$published_manifest"
           fi
 
           git tag --list | LC_ALL=C sort > "$local_tags"
