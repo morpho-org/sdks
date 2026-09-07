@@ -218,7 +218,8 @@ export function computeMinWithdrawSharePrice(params: {
  * Computes the RAY-scaled maximum share price for a VaultBundlesV1 deposit leg.
  *
  * Accrues the supplied Vault V1 or Vault V2 snapshot through the bundles execution deadline before
- * previewing shares.
+ * previewing shares. Shares are previewed rounding down, mirroring the ERC-4626 `deposit()` shares
+ * the on-chain `maxSharePrice` check divides by.
  *
  * @param params - Vault snapshot, bundles execution deadline, net assets, and slippage.
  * @returns The capped maximum share price enforced by VaultBundlesV1.
@@ -265,7 +266,7 @@ export const computeVaultMaxSharePrice = (params: {
     params.vaultData instanceof AccrualVaultV2
       ? params.vaultData.accrueInterest(accrualTimestamp).vault
       : params.vaultData.accrueInterest(accrualTimestamp);
-  const shares = accruedVault.toShares(params.assets);
+  const shares = accruedVault.toShares(params.assets, "Down");
   if (shares <= 0n) {
     throw new NonPositiveInputError("shares", shares);
   }
@@ -282,8 +283,8 @@ export const computeVaultMaxSharePrice = (params: {
 /**
  * Computes the exact vault-share authorization cap for an asset-denominated exit.
  *
- * The cap covers both the current and deadline-accrued preview. Vault V2 and MetaMorpho 1.0 add
- * the caller's loss/slippage buffer because their share price can fall before inclusion;
+ * The cap covers both the current and deadline-accrued preview. Vault V2 and MetaMorpho 1.0 divide
+ * by `1 - slippageTolerance`, rounding up, to cover a share-price decline before inclusion;
  * MetaMorpho 1.1's `lostAssets` clamp keeps that preview upper-bounded without widening it.
  *
  * @param params - Vault snapshot, execution deadline, asset amount, and WAD-scaled slippage.
@@ -332,6 +333,6 @@ export const computeVaultMaxShareAllowance = (params: {
     !("lostAssets" in params.vaultData) ||
     params.vaultData.lostAssets == null;
   return needsLossBuffer
-    ? MathLib.wMulUp(previewedShares, MathLib.WAD + params.slippageTolerance)
+    ? MathLib.wDivUp(previewedShares, MathLib.WAD - params.slippageTolerance)
     : previewedShares;
 };

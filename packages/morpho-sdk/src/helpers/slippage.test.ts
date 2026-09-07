@@ -1,5 +1,6 @@
 import {
   type AccrualVault,
+  AccrualVaultV2,
   Market,
   MarketParams,
   MathLib,
@@ -378,6 +379,35 @@ describe("computeVaultMaxSharePrice", () => {
     expect(accruedAt).toBe(deadline);
   });
 
+  test("behavior: previews shares rounding down, matching the on-chain ERC-4626 deposit()", () => {
+    const roundings: ("Up" | "Down")[] = [];
+    const vaultData = {
+      accrueInterest: () => ({
+        toShares: (_assets: bigint, rounding: "Up" | "Down") => {
+          roundings.push(rounding);
+          // Vault V1's own default (`"Up"`) would preview 3n here; the on-chain
+          // `vault.deposit(...)` share count is rounded down, i.e. 2n.
+          return rounding === "Down" ? 2n : 3n;
+        },
+      }),
+    } as unknown as AccrualVault;
+
+    const maxSharePrice = computeVaultMaxSharePrice({
+      vaultData,
+      deadline: 1_900_000_000n,
+      assets: 7n,
+      slippageTolerance: 0n,
+    });
+
+    expect(roundings).toEqual(["Down"]);
+    // Rounding down previews fewer shares, which loosens (raises) the bound relative to the
+    // `"Up"` default; the reverse would falsely tighten the bound and revert small V1 deposits
+    // at zero slippage tolerance.
+    expect(maxSharePrice).toBe(
+      MathLib.mulDivUp(7n, MathLib.wToRay(MathLib.WAD), 2n),
+    );
+  });
+
   test("behavior: is monotonic in slippage tolerance", () => {
     const vaultData = {
       accrueInterest: () => ({ toShares: (assets: bigint) => assets }),
@@ -441,5 +471,57 @@ describe("computeVaultMaxShareAllowance", () => {
         slippageTolerance: MathLib.WAD / 10n,
       }),
     ).toBe(12n);
+  });
+
+  test.each(["MetaMorpho 1.0", "Vault V2"] as const)(
+    "behavior: covers the full permitted price decline for %s",
+    (version) => {
+      const preview = { toShares: () => 100n };
+      const snapshot =
+        version === "Vault V2"
+          ? (Object.assign(Object.create(AccrualVaultV2.prototype), {
+              ...preview,
+              lastUpdate: 1_800_000_000n,
+              accrueInterest: () => ({ vault: preview }),
+            }) as AccrualVaultV2)
+          : ({
+              ...preview,
+              accrueInterest: () => preview,
+            } as unknown as AccrualVault);
+
+      expect(
+        computeVaultMaxShareAllowance({
+          vaultData: snapshot,
+          deadline: 1_900_000_000n,
+          assets: 100n,
+          slippageTolerance: MathLib.WAD / 10n,
+        }),
+      ).toBe(112n);
+    },
+  );
+
+  test("behavior: authorizes the minimum whole-share cap covering the price floor", () => {
+    fc.assert(
+      fc.property(
+        fc.bigInt({ min: 1n, max: (1n << 128n) - 1n }),
+        fc.bigInt({ min: 0n, max: MathLib.WAD / 10n }),
+        (shares, slippageTolerance) => {
+          const preview = { toShares: () => shares };
+          const cap = computeVaultMaxShareAllowance({
+            vaultData: {
+              ...preview,
+              accrueInterest: () => preview,
+            } as unknown as AccrualVault,
+            deadline: 1_900_000_000n,
+            assets: shares,
+            slippageTolerance,
+          });
+          const priceFloor = MathLib.WAD - slippageTolerance;
+          expect(cap * priceFloor).toBeGreaterThanOrEqual(shares * MathLib.WAD);
+          expect((cap - 1n) * priceFloor).toBeLessThan(shares * MathLib.WAD);
+        },
+      ),
+      { numRuns: 100, seed: 20_260_907 },
+    );
   });
 });

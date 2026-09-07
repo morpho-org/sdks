@@ -1,7 +1,13 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { createWalletClient, erc20Abi, http, maxUint256 } from "viem";
+import {
+  createWalletClient,
+  erc20Abi,
+  http,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -15,6 +21,7 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../types/index.js";
 import { getBundlesTokenRequirements } from "./getBundlesTokenRequirements.js";
 
@@ -33,6 +40,44 @@ describe("getBundlesTokenRequirements", () => {
     throw new Error("BlueBundlesV1 requirements are not registered");
   }
   const blueBundlesV1 = bundles.blueBundlesV1;
+
+  test.each([
+    { supportSignature: false, amount: 0n, allowance: 0n },
+    { supportSignature: false, amount: 1n, allowance: 0n },
+    { supportSignature: false, amount: 1n, allowance: maxUint256 },
+    { supportSignature: true, amount: 1n, useSimplePermit: true },
+    { supportSignature: true, amount: 1n, useSimplePermit: false },
+  ])(
+    "error: UnsupportedErc20ApprovalSpenderError before RPC reads (case %#)",
+    async (options) => {
+      for (const spender of [
+        addressesRegistry[mainnet.id].bundler3.generalAdapter1,
+        permit2,
+        zeroAddress,
+      ]) {
+        const handle = createMockClient(mainnet);
+        mockRead(handle, {
+          address: usdc,
+          abi: erc20Abi,
+          functionName: "allowance",
+          result: options.allowance ?? 0n,
+        });
+
+        await expect(
+          getBundlesTokenRequirements(handle.client, {
+            token: usdc,
+            spender,
+            owner: account.address,
+            chainId: mainnet.id,
+            deadline: maxUint256,
+            permit2Nonce: 0n,
+            ...options,
+          }),
+        ).rejects.toBeInstanceOf(UnsupportedErc20ApprovalSpenderError);
+        expect(handle.request).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   test("returns a direct exact approval when signatures are disabled", async () => {
     const handle = createMockClient(mainnet);
