@@ -87,21 +87,25 @@ describe("MorphoBlue.refinance", () => {
     });
   });
 
-  test("error: NonPositiveInputError when the source has no debt", () => {
-    expect(() =>
-      makeEntity().refinance({
-        userAddress,
-        positionData: makePosition(sourceMarketParams, {
-          collateral: 10n ** 18n,
+  test.each([{ borrowShares: 0n }, { borrowShares: -1n }])(
+    "error: NonPositiveInputError when source borrow shares are $borrowShares",
+    ({ borrowShares }) => {
+      expect(() =>
+        makeEntity().refinance({
+          userAddress,
+          positionData: makePosition(sourceMarketParams, {
+            borrowShares,
+            collateral: 10n ** 18n,
+          }),
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: makePosition(destinationMarketParams),
+          },
+          deadline: maxUint256,
         }),
-        destination: {
-          marketParams: destinationMarketParams,
-          positionData: makePosition(destinationMarketParams),
-        },
-        deadline: maxUint256,
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
+      ).toThrow(NonPositiveInputError);
+    },
+  );
 
   test("error: RefinanceSameMarketError", () => {
     const source = makePosition(sourceMarketParams, {
@@ -121,27 +125,40 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceSameMarketError);
   });
 
-  test("error: RefinanceTokenMismatchError", () => {
-    const mismatchedMarketParams = new MarketParams({
-      loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-      collateralToken: destinationMarketParams.collateralToken,
-      oracle: destinationMarketParams.oracle,
-      irm: destinationMarketParams.irm,
-      lltv: destinationMarketParams.lltv,
-    });
-    expect(() =>
-      makeEntity().refinance({
-        userAddress,
-        positionData: makePosition(sourceMarketParams, {
-          borrowShares: 1n,
-          collateral: 10n ** 18n,
+  test.each([
+    {
+      field: "loanToken",
+      value: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    },
+    {
+      field: "collateralToken",
+      value: "0x0000000000000000000000000000000000000099",
+    },
+  ] as const)(
+    "error: RefinanceTokenMismatchError for $field",
+    ({ field, value }) => {
+      const mismatchedMarketParams = new MarketParams({
+        loanToken: destinationMarketParams.loanToken,
+        collateralToken: destinationMarketParams.collateralToken,
+        oracle: destinationMarketParams.oracle,
+        irm: destinationMarketParams.irm,
+        lltv: destinationMarketParams.lltv,
+        [field]: value,
+      });
+      expect(() =>
+        makeEntity().refinance({
+          userAddress,
+          positionData: makePosition(sourceMarketParams, {
+            borrowShares: 1n,
+            collateral: 10n ** 18n,
+          }),
+          destination: {
+            marketParams: mismatchedMarketParams,
+            positionData: makePosition(mismatchedMarketParams),
+          },
+          deadline: maxUint256,
         }),
-        destination: {
-          marketParams: mismatchedMarketParams,
-          positionData: makePosition(mismatchedMarketParams),
-        },
-        deadline: maxUint256,
-      }),
-    ).toThrow(RefinanceTokenMismatchError);
-  });
+      ).toThrow(RefinanceTokenMismatchError);
+    },
+  );
 });
