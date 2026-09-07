@@ -23,6 +23,7 @@ export {
   getAuthorizationTypedData as getBlueAuthorizationTypedData,
   /** @deprecated Use getBlueAuthorizationTypedData or the raw protocol subpath. */
   getAuthorizationTypedData,
+  /** @deprecated DAI is routed through Permit2 internally; scheduled for removal in the next major. */
   getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,

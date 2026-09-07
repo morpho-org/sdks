@@ -10,6 +10,7 @@ import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
+import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
@@ -76,6 +77,7 @@ const GROUP_ID =
   "0x000000000000000000000000000000000000000000000000000000000008b8f4";
 const MAKER = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
 const LOAN_TOKEN = "0xC9A9C45C0eB717f8b5F193Af6bAa05A1c0Ac5078";
+const SECOND_LOAN_TOKEN = "0x1111111111111111111111111111111111111111";
 const COLLATERAL_TOKEN = "0x34Cf890dB685FC536E05652FB41f02090c3fb751";
 const ORACLE = "0x45093658BE7f90b63D7c359E8F408E503C2D9401";
 const API_MIDNIGHT = "0x0000000000000000000000000000000000001234";
@@ -117,6 +119,36 @@ const apiBook = {
   asks: [apiPriceLevel],
   bids: [],
 };
+
+// A coherent book for a *different* market: foreign loan token, `market_id`
+// recomputed from its own params (so it passes the integrity check but is still
+// outside the requested market).
+const coherentForeignApiBook = (() => {
+  const params = { ...apiBook, loan_token: SECOND_LOAN_TOKEN };
+  return {
+    ...params,
+    market_id: MarketUtils.toId({
+      chainId: params.chain_id,
+      midnight: params.midnight,
+      loanToken: params.loan_token,
+      collateralParams: params.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcf_threshold,
+      enterGate: params.enter_gate,
+      liquidatorGate: params.liquidator_gate,
+    }) satisfies Hex,
+  };
+})();
+
+// A substituted book: foreign market params relabeled with the requested id.
+// This is the SDKS-60 attack — it passes a label-only check but must fail the
+// derived-id integrity check.
+const substitutedApiBook = { ...apiBook, loan_token: SECOND_LOAN_TOKEN };
 
 const expectedPriceLevel = {
   tick: 495,
@@ -630,6 +662,43 @@ describe("MidnightApi.fetchBooks", () => {
     expect(call.init?.method).toBe("GET");
     expect(call.init?.body).toBeUndefined();
   });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the marketIds filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [coherentForeignApiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ marketIds: [MARKET_ID], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book whose market_id does not match its params", async () => {
+    // SDKS-60: foreign market params relabeled with an allowed id must not pass
+    // the filter check on the label alone.
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [substitutedApiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ marketIds: [MARKET_ID], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for substituted params even without a marketIds filter", async () => {
+    // The derived-id integrity check runs for every listed book, not only when a
+    // marketIds filter is supplied.
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [substitutedApiBook],
+    });
+
+    await expect(MidnightApi.fetchBooks({ fetch })).rejects.toBeInstanceOf(
+      InvalidMidnightApiResponseError,
+    );
+  });
 });
 
 describe("MidnightApi.fetchBook", () => {
@@ -651,6 +720,59 @@ describe("MidnightApi.fetchBook", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}`);
     expect(url.searchParams.get("depth")).toBe("100");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("error: InvalidMidnightApiResponseError when the API returns a coherent foreign market", async () => {
+    // SDKS-60: a hostile/compromised API must not substitute a coherent foreign
+    // market for the requested id and have it flow downstream unbound. The book's
+    // id matches its own params, but not the requested market.
+    const { fetch } = createJsonFetch({
+      data: coherentForeignApiBook,
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError when the returned market_id does not match its params", async () => {
+    // SDKS-60: foreign market params relabeled with the *requested* id pass a
+    // label-only check but must fail the derived-id integrity check.
+    const { fetch } = createJsonFetch({
+      data: { ...substitutedApiBook, market_id: MARKET_ID },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError when the returned market params are malformed", async () => {
+    // A JSON response with market params that cannot hash to an id (here a
+    // non-bigint LLTV) must surface as an API response error, not the underlying
+    // InvalidMarketParameterError that blames caller input.
+    const { fetch } = createJsonFetch({
+      data: {
+        ...apiBook,
+        collaterals: [{ ...apiCollateral, lltv: "not-a-bigint" }],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError when the returned market_id is not a hex string", async () => {
+    // A non-string advertised market_id must not leak a raw TypeError from the
+    // hex comparison; it surfaces as a wrapped API response error.
+    const { fetch } = createJsonFetch({
+      data: { ...apiBook, market_id: 12345 },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 });
 
