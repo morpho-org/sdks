@@ -40,6 +40,34 @@ describe("MorphoVaultV1 bundles deadlines", () => {
     expect(accrueInterest).toHaveBeenCalledWith(deadline);
   });
 
+  test("behavior: migration forecasts its destination through a deadline beyond two hours", () => {
+    const now = 1_800_000_000n;
+    const deadline = now + Time.s.from.h(3n);
+    const sourceVault = withChainTimestamp(now, () => inKindVaultV1Data());
+    const targetVault = withChainTimestamp(now, () =>
+      inKindVaultV2Data({ address: TARGET_VAULT }),
+    );
+    const accrueInterest = vi.spyOn(targetVault, "accrueInterest");
+    const vault = createPublicClient({
+      chain: mainnet,
+      transport: http("https://rpc.example"),
+    })
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+
+    withChainTimestamp(now, () =>
+      vault.migrateToV2({
+        assets: 100n,
+        sourceVault,
+        targetVault,
+        userAddress: IN_KIND_USER,
+        deadline,
+      }),
+    );
+
+    expect(accrueInterest).toHaveBeenCalledWith(deadline);
+  });
+
   test("error: withdrawal requirement resolution expires with its deadline", async () => {
     const now = Time.timestamp();
     const deadline = now + Time.s.from.h(1n);
@@ -67,34 +95,6 @@ describe("MorphoVaultV1 bundles deadlines", () => {
     await expect(
       withChainTimestamp(deadline + 1n, () => withdraw.getRequirements()),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
-  });
-
-  test("behavior: migration forecasts its destination through a deadline beyond two hours", () => {
-    const now = 1_800_000_000n;
-    const deadline = now + Time.s.from.h(3n);
-    const sourceVault = withChainTimestamp(now, () => inKindVaultV1Data());
-    const targetVault = withChainTimestamp(now, () =>
-      inKindVaultV2Data({ address: TARGET_VAULT }),
-    );
-    const accrueInterest = vi.spyOn(targetVault, "accrueInterest");
-    const vault = createPublicClient({
-      chain: mainnet,
-      transport: http("https://rpc.example"),
-    })
-      .extend(morphoViemExtension())
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-
-    withChainTimestamp(now, () =>
-      vault.migrateToV2({
-        assets: 100n,
-        sourceVault,
-        targetVault,
-        userAddress: IN_KIND_USER,
-        deadline,
-      }),
-    );
-
-    expect(accrueInterest).toHaveBeenCalledWith(deadline);
   });
 
   test("error: redeem re-checks the deadline before returning cached requirements", async () => {

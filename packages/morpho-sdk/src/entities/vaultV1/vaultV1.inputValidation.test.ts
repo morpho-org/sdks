@@ -116,7 +116,9 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
 
     const requirements = await withdrawal.getRequirements();
 
-    expect(await withdrawal.getRequirements()).toBe(requirements);
+    // Re-resolution re-reads the live allowance, so the array is rebuilt rather than memoized;
+    // the cap it reports must still be the one this handle already committed to.
+    expect(await withdrawal.getRequirements()).toStrictEqual(requirements);
     expect(getData).toHaveBeenCalledOnce();
 
     expect(() => withdrawal.buildTx([oversizedPermit])).toThrow(

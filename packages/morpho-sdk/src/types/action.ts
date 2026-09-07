@@ -267,22 +267,6 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
-/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
-export interface BlueWithdrawAction
-  extends BaseAction<
-    "blueWithdraw",
-    {
-      market: Hex;
-      withdrawAssets: bigint;
-      withdrawShares: bigint;
-      onBehalf: Address;
-      reallocations: number;
-      reallocationPenaltyAssets: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
-    }
-  > {}
 /** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<

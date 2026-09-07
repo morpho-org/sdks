@@ -3,8 +3,9 @@
 This document describes the SDK flows that still use Bundler3 and GeneralAdapter1, plus the public
 low-level composition surface.
 
-> Blue routing changed in `@morpho-org/morpho-sdk` v6. The high-level writes on
-> `client.morpho.blue(...)` call BlueBundlesV1 directly; they do not use the route described below.
+> Blue and vault routing changed in `@morpho-org/morpho-sdk` v6. The high-level writes on
+> `client.morpho.blue(...)` call BlueBundlesV1 directly. Vault deposits, withdrawals, redemptions,
+> and V1-to-V2 migrations call VaultBundlesV1 directly.
 > See the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md).
 
 ## What is Bundler3?
@@ -19,7 +20,7 @@ does not imply that a high-level entity method routes through Bundler3.
 
 ### GeneralAdapter1
 
-GeneralAdapter1 is the generic adapter used by Bundler3. For current high-level vault flows it:
+GeneralAdapter1 is the generic adapter used by Bundler3. For explicit low-level compositions it:
 
 - receives ERC-20 tokens through `erc20TransferFrom`, ERC-2612, or Permit2 AllowanceTransfer;
 - wraps native assets through `nativeTransfer` + `wrapNative`; and
@@ -39,10 +40,10 @@ Use Vault V2 BluePublicAllocator actions for new integrations.
 
 | Operation | Route | Composition |
 | --- | --- | --- |
-| VaultV1 `deposit` | Bundler3 → GeneralAdapter1 | Optional native wrap or ERC-20 permit/pull, then `erc4626Deposit`. |
-| VaultV2 `deposit` | Bundler3 → GeneralAdapter1 | Same shape as VaultV1. |
-| VaultV1 `migrateToV2` | Bundler3 → GeneralAdapter1 | Pull/redeem VaultV1 shares, then deposit into VaultV2. |
-| VaultV1/VaultV2 `withdraw` / `redeem` | Direct vault call | No Bundler3 or adapter. |
+| VaultV1 `deposit` | VaultBundlesV1 | Exclusive native wrap or ERC-20 funding, optional referral fee, and a deposit with `maxSharePrice`. |
+| VaultV2 `deposit` | VaultBundlesV1 | Same shape as VaultV1. |
+| VaultV1 `migrateToV2` | VaultBundlesV1 | Exit by assets or shares, then deposit net assets into VaultV2 with `maxSharePrice`. |
+| VaultV1/VaultV2 `withdraw` / `redeem` | VaultBundlesV1 | Exact share approval or embedded ERC-2612 shares permit. |
 | VaultV1/VaultV2 `inKindRedeem` | VaultExitBundlesV1 | Fixed standalone periphery call. |
 | VaultV2 `forceWithdraw` / `forceRedeem` | VaultV2 `multicall` | `forceDeallocate` calls followed by withdraw/redeem. |
 | Blue writes | BlueBundlesV1 | One of five fixed direct entrypoints; see below. |
@@ -79,27 +80,27 @@ Consequences for integrators:
 - Transaction decoding and simulation must expect one BlueBundlesV1 function call rather than a
   Bundler3 multicall action list.
 
-## Guarantees retained by Bundler3 vault deposits
+## Guarantees of low-level Bundler3 compositions
 
 ### Atomic share-price protection
 
-For every VaultV1/VaultV2 deposit, GeneralAdapter1 calls
+For low-level vault-deposit compositions, GeneralAdapter1 calls
 `erc4626Deposit(vault, assets, maxSharePrice, recipient)`. The share-price bound is checked in the
-same transaction as the asset transfer, closing the ERC-4626 inflation-attack window. Never bypass
-GeneralAdapter1 for a high-level vault deposit.
+same transaction as the asset transfer. High-level vault deposits enforce their maximum share
+price directly through VaultBundlesV1.
 
 ### Ordered composition
 
 Bundler3 either executes every encoded action in order or reverts the whole multicall. This is why
-vault migration and native-wrap deposit flows can safely combine several protocol steps without
+explicitly composed migration and native-wrap deposit flows can combine protocol steps without
 exposing intermediate state.
 
 ### One spender for Bundler3 flows
 
-Vault deposits and advanced GeneralAdapter1 compositions share the same requirement resolver,
+Advanced GeneralAdapter1 compositions use the requirement resolver,
 [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts).
 An allowance to GeneralAdapter1 can be reused by those flows. It is not reused by direct
-BlueBundlesV1 writes because they have a different spender.
+BlueBundlesV1 or VaultBundlesV1 writes because they have different spenders.
 
 ## Pitfalls
 
@@ -114,7 +115,7 @@ BlueBundlesV1 writes because they have a different spender.
   primitives remain public for advanced users, but `client.morpho.blue(...)` never falls back to
   them in v6.
 
-**Vault withdrawals bound that exposure through their share allowance.** `vaultV1Withdraw` and
+**Vault withdrawals cap the share burn through their allowance.** `vaultV1Withdraw` and
 `vaultV2Withdraw` burn `msg.sender`'s shares from VaultBundlesV1, so they need a vault-share
 allowance for VaultBundlesV1 — the exact spender, not GeneralAdapter1. Because asset-mode calldata
 carries no maximum-shares argument, that allowance _is_ the cap on the burn:
@@ -124,7 +125,8 @@ enabled) for exactly that amount. An allowance that does not equal the derived c
 larger leftover approval — is replaced rather than reused, so the cap holds on every withdrawal.
 Callers must therefore await `getRequirements()` and satisfy it before `buildTx()`.
 
-Vault redemptions remain direct calls without an onchain share-price bound.
+Vault redemptions also target VaultBundlesV1 and require an exact share approval or permit. They
+encode exact shares and carry no minimum-assets bound.
 
 ## Code references
 
