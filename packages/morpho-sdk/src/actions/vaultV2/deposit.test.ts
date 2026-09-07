@@ -8,6 +8,7 @@ import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   type BundlesFundingArgs,
   MixedBundlesFundingError,
+  NonPositiveInputError,
   ReferralFeeRecipientMissingError,
   UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
@@ -173,5 +174,20 @@ describe("vaultV2Deposit", () => {
         },
       }),
     ).toThrow(ReferralFeeRecipientMissingError);
+  });
+
+  test("error: NonPositiveInputError for non-positive maxSharePrice", () => {
+    let thrown: unknown;
+    try {
+      vaultV2Deposit({
+        vault: { chainId, address: vault, asset: usdc },
+        args: { amount: 1n, maxSharePrice: 0n, userAddress, deadline },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(NonPositiveInputError);
+    expect(thrown).toMatchObject({ field: "maxSharePrice", value: 0n });
   });
 });
