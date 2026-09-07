@@ -17,7 +17,6 @@ export type {
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs,
-  DaiPermitArgs,
   DeploylessFetchParameters,
   FetchParameters,
   InputAllocation,

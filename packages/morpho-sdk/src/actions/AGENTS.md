@@ -53,11 +53,9 @@ withdraw assets mode, the withdrawn amount). Migration instead adds penalties to
 which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
 separate GeneralAdapter1 funding requirement.
 
-PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders
-remain public only for compatibility and advanced composition. All Vault V1 planning and low-level
-composition compatibility surfaces are deprecated and will be removed in the next major. Their
-`VaultV1Reallocation` outputs are not accepted by the high-level Blue write methods; new write
-integrations use `VaultV2BlueReallocation`.
+PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders were
+removed in v6. Direct Vault V1 flows and canonical raw ABI, address, fetch, and config exports
+remain; shared-liquidity integrations use `VaultV2BlueReallocation`.
 
 ## Discriminated unions
 

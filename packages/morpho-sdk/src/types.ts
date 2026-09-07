@@ -6,34 +6,19 @@ export type {
   Failable,
   Fetchable,
   InputMarketParams as BlueInputMarketParams,
-  /** @deprecated Use `BlueInputMarketParams` or the raw `/blue/types` subpath. */
-  InputMarketParams,
   IPermit2Allowance,
   Loadable,
   MarketId as BlueMarketId,
-  /** @deprecated Use `BlueMarketId` or the raw `/blue/types` subpath. */
-  MarketId,
   MaxBorrowOptions as BlueMaxBorrowOptions,
-  /** @deprecated Use `BlueMaxBorrowOptions` or the raw `/blue/types` subpath. */
-  MaxBorrowOptions,
   MaxPositionCapacities as BlueMaxPositionCapacities,
-  /** @deprecated Use `BlueMaxPositionCapacities` or the raw `/blue/types` subpath. */
-  MaxPositionCapacities,
   MaxWithdrawCollateralOptions as BlueMaxWithdrawCollateralOptions,
-  /** @deprecated Use `BlueMaxWithdrawCollateralOptions` or the raw `/blue/types` subpath. */
-  MaxWithdrawCollateralOptions,
   Pending,
   Permit2Allowance,
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs as BlueAuthorizationTypedDataArgs,
-  DaiPermitArgs,
   DeploylessFetchParameters as BlueDeploylessFetchParameters,
-  /** @deprecated Use `BlueDeploylessFetchParameters` or the raw `/blue/types` subpath. */
-  DeploylessFetchParameters,
   FetchParameters as BlueFetchParameters,
-  /** @deprecated Use `BlueFetchParameters` or the raw `/blue/types` subpath. */
-  FetchParameters,
   InputAllocation as BlueInputAllocation,
   MetaMorphoCall as BlueMetaMorphoCall,
   Permit2PermitArgs,

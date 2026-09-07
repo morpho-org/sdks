@@ -1,14 +1,8 @@
 import type { Abi } from "viem";
 
-export {
-  marketParamsAbi as blueMarketParamsAbi,
-  /** @deprecated Use `blueMarketParamsAbi` or the raw `/blue/abis` subpath. */
-  marketParamsAbi,
-} from "@morpho-org/blue-sdk";
+export { marketParamsAbi as blueMarketParamsAbi } from "@morpho-org/blue-sdk";
 export {
   adaptiveCurveIrmAbi as blueAdaptiveCurveIrmAbi,
-  /** @deprecated Use `blueAdaptiveCurveIrmAbi` or the raw `/blue/abis` subpath. */
-  adaptiveCurveIrmAbi,
   blueAbi,
   blueOracleAbi,
   erc2612Abi,
@@ -24,14 +18,7 @@ export {
   permissionedErc20WrapperAbi,
   permit2Abi,
   preLiquidationAbi as bluePreLiquidationAbi,
-  /** @deprecated Use `bluePreLiquidationAbi` or the raw `/blue/abis` subpath. */
-  preLiquidationAbi,
   preLiquidationFactoryAbi as bluePreLiquidationFactoryAbi,
-  /** @deprecated Use `bluePreLiquidationFactoryAbi` or the raw `/blue/abis` subpath. */
-  preLiquidationFactoryAbi,
-  publicAllocatorAbi,
-  vaultV1AdapterAbi,
-  vaultV1AdapterFactoryAbi,
   vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
@@ -42,13 +29,9 @@ export {
 } from "@morpho-org/blue-sdk-viem";
 export {
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,
-  /** @deprecated Use `midnightEcrecoverRatifierAbi` or the raw `/midnight/abis` subpath. */
-  ecrecoverRatifierAbi,
   midnightAbi,
   midnightBundlesAbi,
   setterRatifierAbi as midnightSetterRatifierAbi,
-  /** @deprecated Use `midnightSetterRatifierAbi` or the raw `/midnight/abis` subpath. */
-  setterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
 
 /** ABI for the VaultExitBundlesV1 periphery contract. */

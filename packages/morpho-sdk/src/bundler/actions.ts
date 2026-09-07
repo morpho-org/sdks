@@ -7,7 +7,6 @@ import {
   blueAbi,
   erc2612Abi,
   permit2Abi,
-  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import {
@@ -25,12 +24,7 @@ import {
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
 import { BundlerErrors } from "../types/error.js";
-import type {
-  Action,
-  Authorization,
-  InputReallocation,
-  Permit2PermitSingle,
-} from "./types.js";
+import type { Action, Authorization, Permit2PermitSingle } from "./types.js";
 
 /**
  * Encoded low-level call consumed by Bundler3's `multicall`.
@@ -341,9 +335,6 @@ export namespace BundlerAction {
       }
       case "morphoWithdrawCollateral": {
         return BundlerAction.morphoWithdrawCollateral(chainId, ...args);
-      }
-      case "reallocateTo": {
-        return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
       }
       case "vaultV2BluePublicAllocatorReallocate": {
         return BundlerAction.vaultV2BluePublicAllocatorReallocate(
@@ -1383,75 +1374,6 @@ export namespace BundlerAction {
           args: [market, assets, receiver],
         }),
         value: 0n,
-        skipRevert,
-        callbackHash: zeroHash,
-      },
-    ];
-  }
-
-  /**
-   * Encodes a PublicAllocator reallocation call.
-   *
-   * @param chainId - Chain where the action will execute.
-   * @param vault - Vault to reallocate.
-   * @param fee - Public allocator fee.
-   * @param withdrawals - Market withdrawals performed before supply.
-   * @param supplyMarketParams - Target supply market parameters.
-   * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns Encoded Bundler3 calls.
-   * @throws {BundlerErrors.UnexpectedAction} when the PublicAllocator is unavailable on the chain.
-   * @deprecated Vault V1 PublicAllocator composition will be removed in the next major. Use
-   * `vaultV2BluePublicAllocatorReallocate` or `vaultV2BluePublicAllocatorAllocateFromIdle`.
-   *
-   * @example
-   * ```ts
-   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
-   *
-   * const loanToken = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-   * const collateralToken = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-   * const oracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
-   * const irm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC";
-   * const vault = "0x186514400e52270cef3D80e1c6F8d10A75d47344";
-   * const marketParams = {
-   *   loanToken,
-   *   collateralToken,
-   *   oracle,
-   *   irm,
-   *   lltv: 860_000000000000000000n,
-   * };
-   *
-   * const calls = BundlerAction.publicAllocatorReallocateTo(
-   *   1,
-   *   vault,
-   *   0n,
-   *   [{ marketParams, amount: 100n }],
-   *   marketParams,
-   * );
-   * ```
-   */
-  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-  export function publicAllocatorReallocateTo(
-    chainId: number,
-    vault: Address,
-    fee: bigint,
-    withdrawals: InputReallocation[],
-    supplyMarketParams: InputMarketParams,
-    skipRevert = false,
-  ): BundlerCall[] {
-    const { vaultV1PublicAllocator } = getChainAddresses(chainId);
-    if (vaultV1PublicAllocator == null) {
-      throw new BundlerErrors.UnexpectedAction("reallocateTo", chainId);
-    }
-
-    return [
-      {
-        to: vaultV1PublicAllocator,
-        data: encodeFunctionData({
-          abi: vaultV1PublicAllocatorAbi,
-          functionName: "reallocateTo",
-          args: [vault, withdrawals, supplyMarketParams],
-        }),
-        value: fee,
         skipRevert,
         callbackHash: zeroHash,
       },

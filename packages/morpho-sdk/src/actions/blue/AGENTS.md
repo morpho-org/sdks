@@ -67,8 +67,7 @@ builders stay synchronous and encode-only.
   BlueBundlesV1 cannot enforce Bundler3 share-price bounds.
 - Write reallocations are Vault V2 `VaultV2BlueReallocation` calls only. They map to the contract's
   `PublicAllocations` and execute unconditionally. PublicAllocator V1 planning and low-level
-  composition helpers remain available only for compatibility, are deprecated for future removal,
-  and do not produce valid inputs for these builders.
+  composition helpers were removed in v6.
 
 Requirement details live in [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md). Reallocation
 mapping is canonical in

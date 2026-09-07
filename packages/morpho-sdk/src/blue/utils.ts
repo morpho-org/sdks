@@ -15,7 +15,6 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData,
-  getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,

@@ -434,8 +434,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    const addresses = getChainAddresses(this.chainId);
-    const blue = addresses.blue ?? addresses.morpho;
+    const blue = getChainAddress(this.chainId, "blue");
     let covered = 0n;
     const assignedByMarket = new Map<string, bigint>();
     for (const marketParams of marketParamsListSnapshot) {

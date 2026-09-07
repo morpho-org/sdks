@@ -20,20 +20,14 @@ import {
   maxUint128,
   parseUnits,
 } from "viem";
-import { base, mainnet } from "viem/chains";
+import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
-import {
-  ChainIdMismatchError,
-  morphoViemExtension,
-} from "../../../src/index.js";
-import { CbbtcUsdcBlue } from "../../fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { morphoViemExtension } from "../../../src/index.js";
 import {
   deployMorphoMarketV1AdapterV2,
   deployVaultV2,
   submitAndAcceptVaultV2Call,
 } from "../../helpers/vaultV2.js";
-import { test } from "../../setup.js";
 
 const baseTargetMarket = new MarketParams({
   loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -47,61 +41,6 @@ const baseTest = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
   forkBlockNumber: 50_063_965n, // BluePublicAllocator deployment block.
   stepsTracing: false,
-});
-
-describe("MorphoBlue Vault V1 reallocation integration", () => {
-  test("error: getVaultV1ReallocationData rejects a mismatched chain", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id + 1);
-
-    await expect(
-      market.getVaultV1ReallocationData({
-        vaultAddresses: [SteakhouseUsdcVaultV1.address],
-        block: { number: 0n, timestamp: 0n },
-      }),
-    ).rejects.toBeInstanceOf(ChainIdMismatchError);
-  });
-
-  test("plans only when target liquidity is insufficient", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const block = await client.getBlock();
-    const reallocationData = await market.getVaultV1ReallocationData({
-      vaultAddresses: [SteakhouseUsdcVaultV1.address],
-      block,
-    });
-
-    const reallocations = market.getVaultV1Reallocations({
-      reallocationData,
-      operation: "borrow",
-      amount: parseUnits("50000000", 6),
-      options: { timestamp: block.timestamp },
-    });
-
-    expect(reallocations.length).toBeGreaterThan(0);
-    expect(
-      reallocations.every(
-        ({ withdrawals }) =>
-          withdrawals.length > 0 &&
-          withdrawals.every(({ amount }) => amount > 0n),
-      ),
-    ).toBe(true);
-
-    expect(
-      market.getVaultV1Reallocations({
-        reallocationData,
-        operation: "borrow",
-        amount: parseUnits("1", 6),
-        options: { timestamp: block.timestamp },
-      }),
-    ).toEqual([]);
-  });
 });
 
 describe("MorphoBlue Vault V2 reallocation integration", () => {

@@ -25,8 +25,6 @@ export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 90_0000000000000000n;
 /**
  * The default target utilization above which shared liquidity reallocations are
  * triggered (and the level the target market is brought back to), scaled by WAD.
- * Still overridable through the deprecated `supplyTargetUtilization` /
- * `defaultSupplyTargetUtilization` options until the next major.
  */
 export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_0000000000000000n;
 

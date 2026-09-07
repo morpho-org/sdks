@@ -16,7 +16,7 @@ import {
 import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
-const { morpho } = addressesRegistry[mainnet.id];
+const blue = getChainAddress(mainnet.id, "blue");
 
 describe("getBlueAuthorizationRequirement", () => {
   test("throws ChainIdMismatchError when the client chain differs", async () => {
@@ -33,7 +33,7 @@ describe("getBlueAuthorizationRequirement", () => {
   test("returns null when GeneralAdapter1 is already authorized", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: true,
@@ -50,7 +50,7 @@ describe("getBlueAuthorizationRequirement", () => {
   test("builds an authorization transaction when authorization is missing", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,
@@ -64,7 +64,7 @@ describe("getBlueAuthorizationRequirement", () => {
     if (tx == null || isRequirementSignature(tx)) {
       throw new Error("expected an authorization transaction");
     }
-    expect(tx.to).toBe(addressesRegistry[mainnet.id].morpho);
+    expect(tx.to).toBe(blue);
     expect(tx.action.type).toBe("blueAuthorization");
     expect(tx.action.args.authorized).toBe(
       addressesRegistry[mainnet.id].bundler3.generalAdapter1,
@@ -76,7 +76,7 @@ describe("getBlueAuthorizationRequirement", () => {
     if (authorized == null) throw new Error("BlueBundlesV1 is not registered");
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,
@@ -98,13 +98,13 @@ describe("getBlueAuthorizationRequirement", () => {
   test("behavior: returns a signable requirement when supportSignature is true", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,
     });
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "nonce",
       result: 3n,
@@ -144,7 +144,7 @@ describe("getBlueAuthorizationRequirement", () => {
   test("behavior: accepts the registered BlueBundlesV1 operator", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: true,

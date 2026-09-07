@@ -54,7 +54,6 @@ registerCustomAddresses({
   addresses: {
     [chainId]: {
       blue,
-      morpho: blue,
       bundler3: {
         bundler3: "0x0000000000000000000000000000000000000010",
         generalAdapter1: "0x0000000000000000000000000000000000000011",

@@ -1,7 +1,5 @@
 export type {
   IAccrualPosition as IBlueAccrualPosition,
-  /** @deprecated Use `IBlueAccrualPosition` or the raw Blue subpath. */
-  IAccrualPosition,
   IAccrualVault,
   IAccrualVaultV2,
   IAccrualVaultV2Adapter,
@@ -12,20 +10,10 @@ export type {
   IEip5267Domain,
   IHolding,
   IMarket as IBlueMarket,
-  /** @deprecated Use `IBlueMarket` or the raw Blue subpath. */
-  IMarket,
   IMarketParams as IBlueMarketParams,
-  /** @deprecated Use `IBlueMarketParams` or the raw Blue subpath. */
-  IMarketParams,
   IPosition as IBluePosition,
-  /** @deprecated Use `IBluePosition` or the raw Blue subpath. */
-  IPosition,
   IPreLiquidationParams as IBluePreLiquidationParams,
-  /** @deprecated Use `IBluePreLiquidationParams` or the raw Blue subpath. */
-  IPreLiquidationParams,
   IPreLiquidationPosition as IBluePreLiquidationPosition,
-  /** @deprecated Use `IBluePreLiquidationPosition` or the raw Blue subpath. */
-  IPreLiquidationPosition,
   IToken,
   IVault,
   IVaultConfig,
@@ -48,8 +36,6 @@ export type {
 } from "@morpho-org/blue-sdk";
 export {
   AccrualPosition as BlueAccrualPosition,
-  /** @deprecated Use `BlueAccrualPosition` or the raw Blue subpath. */
-  AccrualPosition,
   AccrualVault,
   AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1Adapter,
@@ -61,24 +47,12 @@ export {
   ExchangeRateWrappedToken,
   Holding,
   Market as BlueMarket,
-  /** @deprecated Use `BlueMarket` or the raw Blue subpath. */
-  Market,
   MarketParams as BlueMarketParams,
-  /** @deprecated Use `BlueMarketParams` or the raw Blue subpath. */
-  MarketParams,
   Position as BluePosition,
-  /** @deprecated Use `BluePosition` or the raw Blue subpath. */
-  Position,
   PreLiquidationParams as BluePreLiquidationParams,
-  /** @deprecated Use `BluePreLiquidationParams` or the raw Blue subpath. */
-  PreLiquidationParams,
   PreLiquidationPosition as BluePreLiquidationPosition,
-  /** @deprecated Use `BluePreLiquidationPosition` or the raw Blue subpath. */
-  PreLiquidationPosition,
   Token,
   User as BlueUser,
-  /** @deprecated Use `BlueUser` or the raw Blue subpath. */
-  User,
   Vault,
   VaultConfig,
   VaultMarketAllocation,
@@ -134,50 +108,20 @@ export type {
 export { MorphoBlue } from "./blue/index.js";
 export type {
   GetOffersDataParams as MidnightGetOffersDataParams,
-  /** @deprecated Use `MidnightGetOffersDataParams`. */
-  GetOffersDataParams,
   GetPositionDataParams as MidnightGetPositionDataParams,
-  /** @deprecated Use `MidnightGetPositionDataParams`. */
-  GetPositionDataParams,
   MakeLendParams as MidnightMakeLendParams,
-  /** @deprecated Use `MidnightMakeLendParams`. */
-  MakeLendParams,
   MakeOffersOutput as MidnightMakeOffersOutput,
-  /** @deprecated Use `MidnightMakeOffersOutput`. */
-  MakeOffersOutput,
   MakeOffersParams as MidnightMakeOffersParams,
-  /** @deprecated Use `MidnightMakeOffersParams`. */
-  MakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
-  /** @deprecated Use `MidnightMarketActionParams`. */
-  MarketActionParams,
   OffersData as MidnightOffersData,
-  /** @deprecated Use `MidnightOffersData`. */
-  OffersData,
   OfferValidationParams as MidnightOfferValidationParams,
-  /** @deprecated Use `MidnightOfferValidationParams`. */
-  OfferValidationParams,
   RedeemParams as MidnightRedeemParams,
-  /** @deprecated Use `MidnightRedeemParams`. */
-  RedeemParams,
   RepayWithdrawCollateralParams as MidnightRepayWithdrawCollateralParams,
-  /** @deprecated Use `MidnightRepayWithdrawCollateralParams`. */
-  RepayWithdrawCollateralParams,
   SupplyCollateralMakeBorrowParams as MidnightSupplyCollateralMakeBorrowParams,
-  /** @deprecated Use `MidnightSupplyCollateralMakeBorrowParams`. */
-  SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams as MidnightSupplyCollateralParams,
-  /** @deprecated Use `MidnightSupplyCollateralParams`. */
-  SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,
-  /** @deprecated Use `MidnightSupplyCollateralTakeBorrowParams`. */
-  SupplyCollateralTakeBorrowParams,
   TakeBorrowParams as MidnightTakeBorrowParams,
-  /** @deprecated Use `MidnightTakeBorrowParams`. */
-  TakeBorrowParams,
   TakeLendParams as MidnightTakeLendParams,
-  /** @deprecated Use `MidnightTakeLendParams`. */
-  TakeLendParams,
 } from "./midnight/index.js";
 export {
   type MidnightActionOutput,
@@ -186,12 +130,6 @@ export {
   MorphoMidnight,
 } from "./midnight/index.js";
 export { MorphoVaultV1 } from "./vaultV1/index.js";
-export {
-  type InputReallocationData,
-  type InputVaultV1ReallocationData,
-  ReallocationData,
-  VaultV1ReallocationData,
-} from "./vaultV1ReallocationData.js";
 export { MorphoVaultV2 } from "./vaultV2/index.js";
 export {
   type InputVaultV2BlueReallocationData,

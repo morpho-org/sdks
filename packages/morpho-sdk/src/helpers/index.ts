@@ -1,8 +1,4 @@
 export {
-  computeReallocations,
-  computeVaultV1Reallocations,
-} from "./computeVaultV1Reallocations.js";
-export {
   APPROVE_ONLY_ONCE_TOKENS,
   DEFAULT_LLTV_BUFFER,
   DEFAULT_MAX_REALLOCATION_PENALTY,
@@ -33,7 +29,6 @@ export {
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
-  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,

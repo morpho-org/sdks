@@ -21,13 +21,12 @@ import {
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
-  EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationAddressError,
-  InvalidReallocationShapeError,
   InvalidReallocationSourceTypeError,
+  InvalidVaultV2ReallocationError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -37,8 +36,6 @@ import {
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
-  UnsortedReallocationWithdrawalsError,
-  type VaultV1Reallocation,
   type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
@@ -358,67 +355,6 @@ export const validateRepayShares = (params: {
   }
 };
 
-/**
- * Validates that Vault V1 PublicAllocator reallocations are well-formed.
- *
- * @param reallocations - Vault V1 reallocations to validate.
- * @param targetMarketId - The operation's target market ID.
- * @returns Nothing when every reallocation is valid.
- * @throws {NegativeInputError} when a reallocation fee is negative.
- * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
- * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
- * @deprecated Vault V1 PublicAllocator validation will be removed in the next major. Use Vault V2
- * reallocations for new integrations.
- * @example
- * ```ts
- * import type { BlueMarketId } from "@morpho-org/morpho-sdk/types";
- * import { validateReallocations } from "@morpho-org/morpho-sdk";
- * import { zeroHash } from "viem";
- *
- * const result: void = validateReallocations([], zeroHash as BlueMarketId);
- * ```
- */
-export const validateReallocations = (
-  reallocations: Iterable<VaultV1Reallocation>,
-  targetMarketId: MarketId,
-): void => {
-  for (const reallocation of reallocations) {
-    if (reallocation.fee < 0n) {
-      throw new NegativeInputError("reallocation.fee", reallocation.fee);
-    }
-    if (reallocation.withdrawals.length === 0) {
-      throw new EmptyReallocationWithdrawalsError(reallocation.vault);
-    }
-    let previousMarketId: MarketId | undefined;
-    for (const withdrawal of reallocation.withdrawals) {
-      if (withdrawal.amount <= 0n) {
-        throw new NonPositiveInputError(
-          `reallocation.withdrawals[${withdrawal.marketParams.id}].amount`,
-          withdrawal.amount,
-        );
-      }
-      if (withdrawal.marketParams.id === targetMarketId) {
-        throw new ReallocationWithdrawalOnTargetMarketError(
-          reallocation.vault,
-          withdrawal.marketParams.id,
-        );
-      }
-      if (
-        previousMarketId !== undefined &&
-        compareMarketIds(withdrawal.marketParams.id, previousMarketId) <= 0
-      ) {
-        throw new UnsortedReallocationWithdrawalsError(
-          reallocation.vault,
-          withdrawal.marketParams.id,
-        );
-      }
-      previousMarketId = withdrawal.marketParams.id;
-    }
-  }
-};
-
 /** @internal */
 export const validateVaultV2BlueReallocations = (
   reallocations: Iterable<VaultV2BlueReallocation>,
@@ -436,7 +372,7 @@ export const validateVaultV2BlueReallocations = (
       "withdrawals" in reallocation ||
       "fee" in reallocation
     ) {
-      throw new InvalidReallocationShapeError();
+      throw new InvalidVaultV2ReallocationError();
     }
     if (
       typeof reallocation.vault !== "string" ||
