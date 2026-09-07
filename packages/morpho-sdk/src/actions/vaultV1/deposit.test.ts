@@ -208,4 +208,19 @@ describe("vaultV1Deposit", () => {
       }),
     ).toThrow(ReferralFeeRecipientMissingError);
   });
+
+  test("error: NonPositiveInputError for non-positive maxSharePrice", () => {
+    let thrown: unknown;
+    try {
+      vaultV1Deposit({
+        vault: { chainId, address: vault, asset: usdc },
+        args: { amount: 1n, maxSharePrice: 0n, userAddress, deadline },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(NonPositiveInputError);
+    expect(thrown).toMatchObject({ field: "maxSharePrice", value: 0n });
+  });
 });
