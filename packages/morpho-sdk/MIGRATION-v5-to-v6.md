@@ -200,9 +200,10 @@ major:
 - `InvalidReallocationShapeError` is removed with mixed V1/V2 shape dispatch. Invalid V2 entries
   now throw `InvalidVaultV2ReallocationError`.
 - Deprecated ABI, constant, typed-data helper, and utility-type aliases inherited from upstream
-  packages are removed. Import their canonical replacements from the same facade category. In
-  particular, `getDaiPermitTypedData` and `DaiPermitArgs` are removed; route DAI approvals through
-  Permit2 or a classic approval.
+  packages are removed. Import their canonical replacements from the same facade category.
+- The unprefixed `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed. Their canonical
+  exports remain available from `/blue/utils` and `/blue/types`; maintained action flows route DAI
+  approvals through Permit2 or a classic approval.
 - PublicAllocator V1 planner, data, input, validation, and Bundler3-composition symbols are removed.
   Use `getVaultV2BlueReallocationData` and
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.

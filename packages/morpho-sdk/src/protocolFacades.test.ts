@@ -1,4 +1,8 @@
 import {
+  type DaiPermitArgs as UpstreamDaiPermitArgs,
+  getDaiPermitTypedData as upstreamGetDaiPermitTypedData,
+} from "@morpho-org/blue-sdk-viem";
+import {
   blueMarketParamsAbi,
   midnightEcrecoverRatifierAbi,
 } from "@morpho-org/morpho-sdk/abis";
@@ -32,6 +36,7 @@ import {
 import { fetchPosition as rawFetchBluePosition } from "@morpho-org/morpho-sdk/blue/fetch";
 import type {
   AuthorizationArgs as RawBlueAuthorizationArgs,
+  DaiPermitArgs as RawBlueDaiPermitArgs,
   DeploylessFetchParameters as RawBlueDeploylessFetchParameters,
   FetchParameters as RawBlueFetchParameters,
   InputAllocation as RawBlueInputAllocation,
@@ -46,6 +51,7 @@ import {
   MetaMorphoAction as RawBlueMetaMorphoAction,
   defaultPreLiquidationParamsRegistry as rawBlueDefaultPreLiquidationParamsRegistry,
   getDefaultPreLiquidationParams as rawGetBlueDefaultPreLiquidationParams,
+  getDaiPermitTypedData as rawGetDaiPermitTypedData,
 } from "@morpho-org/morpho-sdk/blue/utils";
 import {
   BLUE_LIQUIDATION_CURSOR,
@@ -158,6 +164,7 @@ describe("protocol facades", () => {
       rawBlueDefaultPreLiquidationParamsRegistry,
     ],
     [getBlueDefaultPreLiquidationParams, rawGetBlueDefaultPreLiquidationParams],
+    [rawGetDaiPermitTypedData, upstreamGetDaiPermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
@@ -193,6 +200,8 @@ describe("protocol facades", () => {
     const blueMetaMorphoCall: Equal<BlueMetaMorphoCall, RawBlueMetaMorphoCall> =
       true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
+    const rawDaiPermit: Equal<RawBlueDaiPermitArgs, UpstreamDaiPermitArgs> =
+      true;
     const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
     const permit2Transfer: Equal<
       Permit2TransferFromArgs,
@@ -209,6 +218,7 @@ describe("protocol facades", () => {
       blueInputAllocation,
       blueMetaMorphoCall,
       permit,
+      rawDaiPermit,
       permit2,
       permit2Transfer,
     }).toEqual({
@@ -221,6 +231,7 @@ describe("protocol facades", () => {
       blueInputAllocation: true,
       blueMetaMorphoCall: true,
       permit: true,
+      rawDaiPermit: true,
       permit2: true,
       permit2Transfer: true,
     });
