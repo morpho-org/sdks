@@ -64,45 +64,80 @@ Delivery remains vaults first, then markets:
   targets. The legacy Bundler3/GeneralAdapter1 route is separate compatibility scope, never an
   automatic fallback.
 
-Supported signature mechanisms follow the selected route rather than a package-wide spender
-assumption. Each signature must match its complete typed-data schema, domain, signer, chain, and
-declared grant.
+### Gate 1 — declared intent
 
-### Trust boundary
+The consumer supplies the authority it expects the transaction to request:
 
-- Morpho contracts, spenders, and operators must match the pinned chain registry and selected
-  protocol route.
-- Every call that may execute, including optional and callback-triggered calls, remains inside the
-  verification boundary. Callback commitments must match their payloads.
-- An external executor is verifiable only when its chain, address, role, and supported call
-  semantics are pinned. An address-only allowlist is insufficient.
-- Trust in a router or callback role never expands spender, operator, or recipient permissions.
-- Unknown, malformed, opaque, or unsupported execution fails closed.
+| Consumer input | Requirement | Default |
+| --- | --- | --- |
+| Chain and identities | Exact chain ID, bundle sender, and expected signer or signers | None |
+| Signing intent | Exact typed data and expected grant for every wallet request | None |
+| Transaction intent | Complete transactions and every committed callback payload once available | None |
+| External execution policy | For each external executor: chain, address, role, and supported call semantics | Empty; no external executor is trusted |
 
-### Verified effects and risk
+The gate succeeds only when all of the following hold:
 
-The verdict covers realized ERC-20 and native balances, raw vault shares, Morpho Blue supply and
-borrow shares, collateral, recipients, authorization changes, fees, and bundler retention. Supply
-assets round down and debt rounds up. New or increased approvals and authorizations are accepted
-only when explicitly declared for the selected route.
+- Every transaction, nested call, optional call, and callback is inside the supported execution
+  scope. Callback payloads match their commitments.
+- Every Morpho contract, spender, and operator matches the pinned chain registry and selected
+  protocol route. A trusted router or callback role grants no additional authority.
+- Every signature request matches its supported schema, domain, chain, verifying contract, signer,
+  owner or authorizer, token, spender or operator, amount, nonce, and time bounds, and corresponds
+  to exactly one declared action.
+- External executors match the complete supplied policy. An address alone is not sufficient.
+- There are no unmatched signatures, undeclared grants, malformed calls, opaque leaves, or
+  unsupported envelopes.
 
-Guarded vault deposits must preserve the canonical share-price inflation protection. Direct exits
-can be verified only as simulations at a particular state; verification does not turn a snapshot
-into an execution-time slippage guarantee.
+The initial signature scope is EIP-2612, the Permit2 mechanism used by the selected route, and
+Morpho authorization in the Blue milestone. Other permit or account-signature schemes remain
+unsupported until explicitly scoped.
 
-The default economic envelope is:
+A successful gate authenticates the exact signing and transaction intent. Existing Morpho signing
+flows must be able to run this gate before displaying the wallet prompt.
 
-- **Asset-delivery slippage:** at most 0.5%. Existing operation-level share-price and accrual guards
-  retain their tighter 0.03% default.
-- **Additional protocol or reallocation fees:** zero unless accepted for the exact fee asset.
-  PublicAllocator V1 fees are native-token charges; Vault V2 BluePublicAllocator penalties are
-  loan-token charges. Network gas is excluded.
-- **Position risk:** a risk-increasing operation must finish at or below LLTV minus the existing
-  0.5 percentage-point buffer. A pure repayment or collateral addition may remain above that
-  threshold when it does not worsen the position, allowing incremental recovery.
+### Gate 2 — effective result
 
-Consumers may choose stricter economic limits. Economic configuration can never relax trust,
-recipient, authorization, or retention invariants.
+The consumer supplies the outcome and economic limits it expects:
+
+| Consumer input | Requirement | Default |
+| --- | --- | --- |
+| Authenticated intent | Successful Gate 1 result | None |
+| Sendable transaction and signatures | Exact transaction and every required signature | None |
+| Declared effects | Expected changes for every touched asset, position, recipient, fee, and authorization | None; undeclared effects fail |
+| Maximum adverse asset-delivery slippage | Optional per-asset limit | 0.5% (50 bps) |
+| Maximum additional protocol or reallocation fee | Optional absolute cap for each fee asset | Zero; network gas excluded |
+| Maximum resulting LTV | Optional limit for each affected debt position | LLTV minus 0.5 percentage points, floored at zero, for risk-increasing operations; pre-simulation LTV for pure risk-reducing operations |
+
+Existing operation-level share-price and accrual guards retain their tighter 0.03% (3 bps) default.
+Consumers may choose stricter limits, but economic inputs can never relax trust, recipient,
+authorization, or retention invariants.
+
+At the end of simulation, all of the following must hold:
+
+- The simulated transaction and recovered signers match the authenticated intent exactly, and all
+  required execution and final-state evidence is present.
+- Each realized ERC-20 and native-asset delta matches its declared expectation within the accepted
+  per-asset slippage. Different assets are never netted into one value judgment.
+- Vault deposits match declared assets spent and minimum raw shares received; mints match maximum
+  assets spent and raw shares received; withdrawals match assets received and maximum raw shares
+  burned; redeems match raw shares burned and minimum assets received.
+- Morpho Blue supply shares, borrow shares, and collateral match their declared changes. Derived
+  supply assets round down and debt rounds up.
+- Every realized recipient matches the declared recipient.
+- Every protocol or reallocation charge stays within the cap for its actual asset. PublicAllocator
+  V1 fees are native-token charges; Vault V2 BluePublicAllocator penalties are loan-token charges.
+- Final ERC-20 allowances by owner and spender, Permit2 allowances by owner, token, and spender
+  including amount, expiration, and nonce, and Morpho authorizations by authorizer and operator
+  contain no undeclared new or increased authority. Unchanged pre-existing grants are not side
+  effects; persistent authority is allowed only when explicitly declared for the selected route.
+- Guarded vault deposits preserve the canonical share-price inflation protection.
+- Risk-increasing operations finish below their accepted LTV limit. Pure repayment and collateral
+  addition do not worsen LTV, allowing incremental recovery from an already-unsafe position.
+- The existing bundler-retention invariant still passes.
+
+A successful result reports the authenticated intent and matched effects alongside the ordinary
+simulation result. It certifies the simulated transaction at that state; it does not turn a direct
+exit or other snapshot into an execution-time slippage guarantee.
 
 ### Compatibility and release
 
