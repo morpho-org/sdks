@@ -9,6 +9,7 @@ import {
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
+  UnexpectedRequirementSignatureError,
   vaultV1Deposit,
   vaultV2Deposit,
 } from "../../src/index.js";
@@ -165,7 +166,7 @@ describe("VaultBundlesV1 native funding", () => {
           deadline: 1n,
         },
       }),
-    ).toThrow(MixedBundlesFundingError);
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("rejects non-wNative, zero, and negative native funding", () => {
