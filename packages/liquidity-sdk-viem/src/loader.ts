@@ -179,32 +179,36 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
-          try {
-            // The source-market withdrawal ceiling defaults to 90%
-            // (DEFAULT_WITHDRAWAL_TARGET_UTILIZATION) inside
-            // `getMarketPublicReallocations`; the API's per-market
-            // `targetWithdrawUtilization` is no longer consulted.
-            // Caller `parameters` overrides are forwarded to the planner.
-            const { data: endState, withdrawals } =
-              startState.getMarketPublicReallocations(uniqueKey, {
-                ...parameters,
-                timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
-                enabled: true,
-              });
+        return apiMarkets.map(
+          ({ uniqueKey, targetBorrowUtilization, supplyingVaults }) => {
+            try {
+              // The source-market withdrawal ceiling defaults to 90%
+              // (DEFAULT_WITHDRAWAL_TARGET_UTILIZATION) inside
+              // `getMarketPublicReallocations`; the API's per-market
+              // `targetWithdrawUtilization` is no longer consulted.
+              // Caller `parameters` overrides are forwarded to the planner.
+              const { data: endState, withdrawals } =
+                startState.getMarketPublicReallocations(uniqueKey, {
+                  ...parameters,
+                  timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
+                  enabled: true,
+                  reallocatableVaults:
+                    supplyingVaults?.map(({ address }) => address) ?? [],
+                });
 
-            return {
-              startState,
-              endState,
-              withdrawals,
-              targetBorrowUtilization,
-            };
-          } catch (error) {
-            return Error(
-              `An error occurred while simulating reallocations: ${error}`,
-            );
-          }
-        });
+              return {
+                startState,
+                endState,
+                withdrawals,
+                targetBorrowUtilization,
+              };
+            } catch (error) {
+              return Error(
+                `An error occurred while simulating reallocations: ${error}`,
+              );
+            }
+          },
+        );
       },
       { cache: false },
     );

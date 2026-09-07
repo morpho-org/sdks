@@ -11,6 +11,7 @@ import {
   metaMorphoFactoryAbi,
   vaultV1PublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
+import { ReallocationData } from "@morpho-org/morpho-sdk/entities";
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 import { createMockClient, type MockClientHandle } from "@morpho-org/test/mock";
 import nock from "nock";
@@ -26,7 +27,7 @@ import {
   zeroHash,
 } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { LiquidityLoader } from "./loader.js";
 
 const { morpho, vaultV1PublicAllocator, metaMorphoFactory } = getChainAddresses(
@@ -40,6 +41,7 @@ if (vaultV1PublicAllocator == null || metaMorphoFactory == null) {
 }
 
 const vault = "0x0000000000000000000000000000000000000aaa";
+const otherVault = "0x0000000000000000000000000000000000000bBB";
 const loanToken = "0x0000000000000000000000000000000000000101";
 const targetCollateralToken = "0x0000000000000000000000000000000000000202";
 const sourceCollateralToken = "0x0000000000000000000000000000000000000303";
@@ -72,6 +74,7 @@ type ContractRead = {
 };
 
 type LoaderMockOptions = {
+  readonly additionalVaults?: readonly Address[];
   readonly blockNumber?: bigint;
   readonly blockTimestamp: bigint;
   readonly targetPendingCapValue?: bigint;
@@ -156,6 +159,7 @@ const marketParamsResult = (params: MarketParams) => [
 ];
 
 const setupLoaderMockClient = ({
+  additionalVaults = [],
   blockNumber = 10n,
   blockTimestamp,
   targetPendingCapValue = 100n,
@@ -444,6 +448,33 @@ const setupLoaderMockClient = ({
     result: [0n, 10_000n],
   });
 
+  const baseVaultReads = [...reads];
+  for (const additionalVault of additionalVaults) {
+    for (const read of baseVaultReads) {
+      const referencesVault =
+        read.address.toLowerCase() === vault.toLowerCase() ||
+        read.args?.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.toLowerCase() === vault.toLowerCase(),
+        );
+      if (!referencesVault) continue;
+
+      addRead({
+        ...read,
+        address:
+          read.address.toLowerCase() === vault.toLowerCase()
+            ? additionalVault
+            : read.address,
+        args: read.args?.map((arg) =>
+          typeof arg === "string" && arg.toLowerCase() === vault.toLowerCase()
+            ? additionalVault
+            : arg,
+        ),
+      });
+    }
+  }
+
   handle.request.mockImplementation(async ({ method, params }) => {
     if (method === "eth_chainId") return toHex(mainnet.id);
     if (method === "eth_getBlockByNumber")
@@ -580,6 +611,65 @@ describe("LiquidityLoader (constructor + public API)", () => {
 describe.sequential("LiquidityLoader.fetch", () => {
   afterEach(() => {
     nock.cleanAll();
+    vi.restoreAllMocks();
+  });
+
+  test("isolates batched target planning to each target's supplying vaults", async () => {
+    const handle = setupLoaderMockClient({
+      additionalVaults: [otherVault],
+      blockTimestamp: 100n,
+    });
+    const allocation = [
+      {
+        market: {
+          uniqueKey: targetMarketId,
+          loanAsset: { address: loanToken },
+          targetWithdrawUtilization: MathLib.WAD.toString(),
+        },
+      },
+      {
+        market: {
+          uniqueKey: sourceMarketId,
+          loanAsset: { address: loanToken },
+          targetWithdrawUtilization: MathLib.WAD.toString(),
+        },
+      },
+    ];
+    mockApiMarkets(MathLib.WAD, [
+      {
+        uniqueKey: targetMarketId,
+        targetBorrowUtilization: "900000000000000000",
+        publicAllocatorSharedLiquidity: [],
+        supplyingVaults: [{ address: vault, state: { allocation } }],
+      },
+      {
+        uniqueKey: sourceMarketId,
+        targetBorrowUtilization: "900000000000000000",
+        publicAllocatorSharedLiquidity: [],
+        supplyingVaults: [{ address: otherVault, state: { allocation } }],
+      },
+    ]);
+    const planner = vi
+      .spyOn(ReallocationData.prototype, "getMarketPublicReallocations")
+      .mockImplementation(function (this: ReallocationData) {
+        return { data: this, withdrawals: [] };
+      });
+    const loader = new LiquidityLoader(handle.client);
+
+    await Promise.all([
+      loader.fetch(targetMarketId),
+      loader.fetch(sourceMarketId),
+    ]);
+
+    expect(
+      planner.mock.calls.map(([marketId, options]) => [
+        marketId,
+        [...(options?.reallocatableVaults ?? [])],
+      ]),
+    ).toStrictEqual([
+      [targetMarketId, [vault]],
+      [sourceMarketId, [otherVault]],
+    ]);
   });
 
   test("returns a Promise that rejects when the RPC block read is not mocked", async () => {
