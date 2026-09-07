@@ -51,10 +51,9 @@ describe("resolveBundlesTokenRequirements", () => {
     );
   });
 
-  test("behavior: a raised approval target is the allowance level the caller must reach", () => {
+  test("behavior: a raised approval target does not require replacing a sufficient allowance", () => {
     const amount = 1_000_000n;
-    // A saturated share repay quotes `amount` now but pulls more once interest accrues, so an
-    // allowance covering only the quote must still be raised to the target.
+    // The fixed call cannot pull beyond the supplied amount, even with a reusable approval target.
     const requirements = resolveBundlesTokenRequirements({
       token: usdc,
       spender,
@@ -68,11 +67,7 @@ describe("resolveBundlesTokenRequirements", () => {
         approvalAmount: maxUint256,
       },
     });
-    expect(requirements).toHaveLength(1);
-    expect(requirements[0]?.action).toMatchObject({
-      type: "erc20Approval",
-      args: { spender, amount: maxUint256 },
-    });
+    expect(requirements).toHaveLength(0);
 
     expect(
       resolveBundlesTokenRequirements({

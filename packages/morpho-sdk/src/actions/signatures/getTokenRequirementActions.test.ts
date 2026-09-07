@@ -119,20 +119,26 @@ describe("getTokenRequirementActions", () => {
 
   test("error: UnexpectedRequirementSignatureError rejects a BlueBundlesV1 SignatureTransfer result", () => {
     // permit2SignatureTransfer is a BlueBundlesV1-only result; it must never reach the Bundler3 path.
-    const transferFromSignature: Permit2SignatureTransferRequirementSignature = {
-      args: {
-        owner: OWNER,
-        nonce: 0n,
-        asset: ASSET,
-        signature: SIGNATURE,
-        amount: AMOUNT,
-        deadline: DEADLINE,
-      },
-      action: {
-        type: "permit2SignatureTransfer",
-        args: { spender: SPENDER, amount: AMOUNT, nonce: 0n, deadline: DEADLINE },
-      },
-    };
+    const transferFromSignature: Permit2SignatureTransferRequirementSignature =
+      {
+        args: {
+          owner: OWNER,
+          nonce: 0n,
+          asset: ASSET,
+          signature: SIGNATURE,
+          amount: AMOUNT,
+          deadline: DEADLINE,
+        },
+        action: {
+          type: "permit2SignatureTransfer",
+          args: {
+            spender: SPENDER,
+            amount: AMOUNT,
+            nonce: 0n,
+            deadline: DEADLINE,
+          },
+        },
+      };
 
     expect(() =>
       getTokenRequirementActions({

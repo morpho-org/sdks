@@ -96,7 +96,10 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
 
   test("error: InputExceedsMaxError when amount exceeds uint256", () => {
     expect(() =>
-      encodeErc20Permit2SignatureTransfer({ ...base(), amount: maxUint256 + 1n }),
+      encodeErc20Permit2SignatureTransfer({
+        ...base(),
+        amount: maxUint256 + 1n,
+      }),
     ).toThrow(InputExceedsMaxError);
   });
 
@@ -108,7 +111,10 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
 
   test("error: InputExceedsMaxError when nonce exceeds uint256", () => {
     expect(() =>
-      encodeErc20Permit2SignatureTransfer({ ...base(), nonce: maxUint256 + 1n }),
+      encodeErc20Permit2SignatureTransfer({
+        ...base(),
+        nonce: maxUint256 + 1n,
+      }),
     ).toThrow(InputExceedsMaxError);
   });
 
@@ -120,7 +126,10 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
 
   test("error: InputExceedsMaxError when deadline exceeds uint256", () => {
     expect(() =>
-      encodeErc20Permit2SignatureTransfer({ ...base(), deadline: maxUint256 + 1n }),
+      encodeErc20Permit2SignatureTransfer({
+        ...base(),
+        deadline: maxUint256 + 1n,
+      }),
     ).toThrow(InputExceedsMaxError);
   });
 
