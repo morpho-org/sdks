@@ -21,7 +21,7 @@ import {
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
   selectBundlesTokenRequirementSignature,
-} from "../../actions/bundles/index.js";
+} from "../../actions/bundles/common.js";
 import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
