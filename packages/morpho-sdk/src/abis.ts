@@ -1250,7 +1250,7 @@ export const generalAdapter1Abi = [
   },
   {
     type: "function",
-    name: "permit2SignatureTransfer",
+    name: "permit2TransferFrom",
     inputs: [
       {
         name: "token",

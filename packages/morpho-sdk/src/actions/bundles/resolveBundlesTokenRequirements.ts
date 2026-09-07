@@ -18,13 +18,7 @@ export type BundlesTokenRequirementsState =
       readonly type: "approval";
       /** Current allowance of the funding token for `spender`. */
       readonly allowance: bigint;
-      /**
-       * Allowance level the caller must reach, at least `amount`.
-       *
-       * Callers raise it above `amount` when the eventual pull can grow past the quoted amount
-       * between `getRequirements()` and submission — a saturated share repay accruing interest, for
-       * example. The allowance is therefore compared against this target, not against `amount`.
-       */
+      /** Allowance to set when the current allowance cannot cover `amount`. */
       readonly approvalAmount: bigint;
     }
   | {
@@ -89,10 +83,9 @@ export const resolveBundlesTokenRequirements = (params: {
       address: params.token,
       chainId: params.chainId,
       args: {
-        // The approval target, not `amount`, is the level the allowance must reach: a caller that
-        // raised it did so because the pull can grow past `amount` before submission.
+        // Compare against the bounded pull to avoid redundant approvals and USDT zero-resets.
         spender: params.spender,
-        spendAmount: params.state.approvalAmount,
+        spendAmount: params.amount,
         approvalAmount: params.state.approvalAmount,
       },
       allowances: params.state.allowance,

@@ -1251,7 +1251,7 @@ describe("BundlerAction", () => {
 
     expect(call.to).toBe(generalAdapter1);
     expect(call.skipRevert).toBe(true);
-    expect(decoded.functionName).toBe("permit2SignatureTransfer");
+    expect(decoded.functionName).toBe("permit2TransferFrom");
     expect(decoded.args).toEqual([asset, recipient, 1n]);
   });
 

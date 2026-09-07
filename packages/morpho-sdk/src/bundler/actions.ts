@@ -783,7 +783,7 @@ export namespace BundlerAction {
         to: generalAdapter1,
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
-          functionName: "permit2SignatureTransfer",
+          functionName: "permit2TransferFrom",
           args: [asset, recipient, amount],
         }),
         value: 0n,
