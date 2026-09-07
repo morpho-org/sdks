@@ -363,6 +363,7 @@ describe("computeVaultMaxSharePrice", () => {
     const deadline = 1_800_010_800n;
     let accruedAt: bigint | undefined;
     const vaultData = {
+      toShares: (assets: bigint) => assets,
       accrueInterest: (timestamp: bigint) => {
         accruedAt = timestamp;
         return { toShares: (assets: bigint) => assets };
@@ -381,15 +382,15 @@ describe("computeVaultMaxSharePrice", () => {
 
   test("behavior: previews shares rounding down, matching the on-chain ERC-4626 deposit()", () => {
     const roundings: ("Up" | "Down")[] = [];
+    const toShares = (_assets: bigint, rounding: "Up" | "Down") => {
+      roundings.push(rounding);
+      // Vault V1's own default (`"Up"`) would preview 3n here; the on-chain
+      // `vault.deposit(...)` share count is rounded down, i.e. 2n.
+      return rounding === "Down" ? 2n : 3n;
+    };
     const vaultData = {
-      accrueInterest: () => ({
-        toShares: (_assets: bigint, rounding: "Up" | "Down") => {
-          roundings.push(rounding);
-          // Vault V1's own default (`"Up"`) would preview 3n here; the on-chain
-          // `vault.deposit(...)` share count is rounded down, i.e. 2n.
-          return rounding === "Down" ? 2n : 3n;
-        },
-      }),
+      toShares,
+      accrueInterest: () => ({ toShares }),
     } as unknown as AccrualVault;
 
     const maxSharePrice = computeVaultMaxSharePrice({
@@ -399,7 +400,7 @@ describe("computeVaultMaxSharePrice", () => {
       slippageTolerance: 0n,
     });
 
-    expect(roundings).toEqual(["Down"]);
+    expect(roundings).toEqual(["Down", "Down"]);
     // Rounding down previews fewer shares, which loosens (raises) the bound relative to the
     // `"Up"` default; the reverse would falsely tighten the bound and revert small V1 deposits
     // at zero slippage tolerance.
@@ -410,6 +411,7 @@ describe("computeVaultMaxSharePrice", () => {
 
   test("behavior: is monotonic in slippage tolerance", () => {
     const vaultData = {
+      toShares: (assets: bigint) => assets,
       accrueInterest: () => ({ toShares: (assets: bigint) => assets }),
     } as unknown as AccrualVault;
     fc.assert(
@@ -440,6 +442,45 @@ describe("computeVaultMaxSharePrice", () => {
       ),
       { numRuns: 100, seed: 20_260_912 },
     );
+  });
+
+  test("behavior: bounds a declining Vault V2 price at the pre-accrual snapshot", () => {
+    // An idle Vault V2 still charges its management fee, minting shares against an unchanged
+    // `_totalAssets`: the deadline preview yields *more* shares, i.e. a *lower* price, than the
+    // current one. Bounding on the deadline snapshot alone would false-revert `SlippageExceeded`
+    // for a deposit included before the deadline.
+    const vaultData = Object.assign(Object.create(AccrualVaultV2.prototype), {
+      lastUpdate: 1_800_000_000n,
+      toShares: () => 100n,
+      accrueInterest: () => ({ vault: { toShares: () => 110n } }),
+    }) as AccrualVaultV2;
+
+    expect(
+      computeVaultMaxSharePrice({
+        vaultData,
+        deadline: 1_900_000_000n,
+        assets: 100n,
+        slippageTolerance: 0n,
+      }),
+    ).toBe(MathLib.mulDivUp(100n, MathLib.wToRay(MathLib.WAD), 100n));
+  });
+
+  test("behavior: keeps a rising price bounded on the deadline-accrued preview", () => {
+    // The common case: interest raises the price, so the deadline preview yields fewer shares
+    // and remains the binding endpoint.
+    const vaultData = {
+      toShares: () => 110n,
+      accrueInterest: () => ({ toShares: () => 100n }),
+    } as unknown as AccrualVault;
+
+    expect(
+      computeVaultMaxSharePrice({
+        vaultData,
+        deadline: 1_900_000_000n,
+        assets: 100n,
+        slippageTolerance: 0n,
+      }),
+    ).toBe(MathLib.mulDivUp(100n, MathLib.wToRay(MathLib.WAD), 100n));
   });
 });
 

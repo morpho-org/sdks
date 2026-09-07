@@ -217,9 +217,10 @@ export function computeMinWithdrawSharePrice(params: {
 /**
  * Computes the RAY-scaled maximum share price for a VaultBundlesV1 deposit leg.
  *
- * Accrues the supplied Vault V1 or Vault V2 snapshot through the bundles execution deadline before
- * previewing shares. Shares are previewed rounding down, mirroring the ERC-4626 `deposit()` shares
- * the on-chain `maxSharePrice` check divides by.
+ * Previews shares on both the supplied Vault V1 or Vault V2 snapshot and its deadline-accrued
+ * counterpart, dividing by the smaller of the two so the bound covers the highest price the
+ * bundle may execute at. Shares are previewed rounding down, mirroring the ERC-4626 `deposit()`
+ * shares the on-chain `maxSharePrice` check divides by.
  *
  * @param params - Vault snapshot, bundles execution deadline, net assets, and slippage.
  * @returns The capped maximum share price enforced by VaultBundlesV1.
@@ -266,7 +267,15 @@ export const computeVaultMaxSharePrice = (params: {
     params.vaultData instanceof AccrualVaultV2
       ? params.vaultData.accrueInterest(accrualTimestamp).vault
       : params.vaultData.accrueInterest(accrualTimestamp);
-  const shares = accruedVault.toShares(params.assets, "Down");
+  // The deadline snapshot is not necessarily the highest price over `[now, deadline]`: Vault V2
+  // charges its management fee regardless of yield, minting shares against an unchanged
+  // `_totalAssets`, so an idle vault's price *declines*. Bound at the maximum price across both
+  // endpoints — the minimum previewed shares — mirroring the `max(current, accrued)` shares the
+  // sibling `computeVaultMaxShareAllowance` authorizes.
+  const shares = MathLib.min(
+    params.vaultData.toShares(params.assets, "Down"),
+    accruedVault.toShares(params.assets, "Down"),
+  );
   if (shares <= 0n) {
     throw new NonPositiveInputError("shares", shares);
   }
