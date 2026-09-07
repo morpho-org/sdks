@@ -31,9 +31,9 @@ export interface BlueRefinanceParams {
   /** Direct BlueBundlesV1 full-position migration arguments. */
   readonly args: {
     /**
-     * User whose live source borrow position is migrated. Must also sign the Morpho authorization and
-     * send the transaction: BlueBundlesV1 migrates the signer's position (bound to `msg.sender`), so
-     * on-behalf refinance by a relayer is not supported.
+     * Intended user used to bind an optional Morpho authorization and action metadata. This value is
+     * not encoded; the caller must send from the same account because BlueBundlesV1 always migrates
+     * `msg.sender`.
      */
     readonly userAddress: Address;
     /** Maximum destination LTV enforced by BlueBundlesV1. */
@@ -64,9 +64,9 @@ export interface BlueRefinanceParams {
  * @param params.market.chainId - Chain containing BlueBundlesV1.
  * @param params.market.sourceMarketParams - Source market scoped by the Blue entity.
  * @param params.market.destinationMarketParams - Distinct compatible destination market.
- * @param params.args.userAddress - User whose live position is migrated; must sign the Morpho
- *   authorization and send the transaction (BlueBundlesV1 migrates the `msg.sender` position, so
- *   on-behalf refinance is unsupported).
+ * @param params.args.userAddress - Intended user used to bind an optional Morpho authorization and
+ *   action metadata. This value is not encoded; the caller must send from the same account because
+ *   BlueBundlesV1 always migrates `msg.sender`.
  * @param params.args.maxLtv - Maximum destination LTV.
  * @param params.args.reallocations - Vault V2 reallocations into the destination.
  * @param params.args.deadline - Final call deadline in Unix seconds.
