@@ -83,7 +83,7 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1
+        uses: anthropics/claude-code-action@d75b94d5ad426cb8546e6628b6f5f19b84e5cce1 # v1
         env:
           # Best-effort scrub of API/cloud secrets from Bash subprocess environments (Claude Code CLI feature).
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
