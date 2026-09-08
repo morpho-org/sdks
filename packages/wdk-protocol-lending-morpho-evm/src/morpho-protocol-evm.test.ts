@@ -593,14 +593,39 @@ describe.sequential("MorphoProtocolEvm", () => {
       expectTypeOf<{
         token: string;
         amount: bigint;
+        requirementSignature: PermitRequirementSignature;
       }>().toMatchTypeOf<MorphoErc20SupplyOptions>();
       expectTypeOf<{
         token: string;
         nativeAmount: bigint;
+        requirementSignature: PermitRequirementSignature;
       }>().toMatchTypeOf<MorphoNativeSupplyOptions>();
       expectTypeOf<MorphoSupplyOptions["requirementSignature"]>().toEqualTypeOf<
-        RequirementSignature | undefined
+        PermitRequirementSignature | undefined
       >();
+      expectTypeOf<
+        MorphoErc20SupplyOptions["requirementSignature"]
+      >().toEqualTypeOf<PermitRequirementSignature | undefined>();
+      expectTypeOf<
+        MorphoNativeSupplyOptions["requirementSignature"]
+      >().toEqualTypeOf<PermitRequirementSignature | undefined>();
+    });
+
+    test("types: legacy supply options reject non-legacy signatures", () => {
+      type UnsupportedSignature = Exclude<
+        RequirementSignature,
+        PermitRequirementSignature
+      >;
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        requirementSignature: UnsupportedSignature;
+      }>().not.toMatchTypeOf<MorphoErc20SupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        nativeAmount: bigint;
+        requirementSignature: UnsupportedSignature;
+      }>().not.toMatchTypeOf<MorphoNativeSupplyOptions>();
     });
 
     test.each(["supply", "getSupplyRequirements", "quoteSupply"] as const)(

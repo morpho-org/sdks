@@ -49,8 +49,10 @@ that route; legacy GeneralAdapter1 approvals and permits cannot fund a prepared 
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
   Prepared vault deposits take it as the first argument of `PreparedMorphoSupply.submit` / `.quote`.
-  Deprecated vault supplies retain the existing `RequirementSignature` option type and consume
-  ERC-2612/Permit2 AllowanceTransfer permits. They return
+  Deprecated vault supplies narrow their option-level signature to `PermitRequirementSignature`,
+  accepting only ERC-2612/Permit2 AllowanceTransfer permits. If a signature variable is typed as
+  the broader `RequirementSignature`, narrow it with `isPermitSignature` from
+  `@morpho-org/morpho-sdk` before passing it to `supply` or `quoteSupply`. They return
   `ApprovalOrSignatureRequirement` from `getSupplyRequirements`, including Permit2 AllowanceTransfer.
 
 ## Borrow reallocations
