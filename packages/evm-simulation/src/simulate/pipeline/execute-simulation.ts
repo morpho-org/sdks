@@ -43,7 +43,7 @@ export async function executeSimulation(params: {
   chainId: number;
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
-  wNative?: Address;
+  wNative?: Address | null;
 }): Promise<RawSimulationResult> {
   const { config, chainId, transactions, blockNumber, wNative } = params;
   const chain = resolveChain(config, chainId);

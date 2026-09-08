@@ -1,8 +1,8 @@
 import {
+  _try,
   getChainAddresses,
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
 import { ExternalServiceError } from "../errors.js";
 import type {
   SimulateParams,
@@ -24,10 +24,10 @@ import {
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
  * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
  * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
- * events to the registered wrapped-native token when chain metadata exists and retaining
- * signature-based parsing otherwise → asserts no funds are retained by `bundler3` or the
- * standalone `bundles` periphery contracts → returns the full result set. The caller reads
- * whichever fields they need:
+ * events to the registered wrapped-native token, rejecting them on known tokenless chains,
+ * and retaining signature-based parsing for unknown chains → asserts no funds are retained
+ * by `bundler3` or the standalone `bundles` periphery contracts → returns the full result
+ * set. The caller reads whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
@@ -89,12 +89,10 @@ export async function simulate(
 ): Promise<SimulationResult> {
   validateInput(params);
 
-  let wNative: Address | undefined;
-  try {
-    wNative = getChainAddresses(params.chainId).wNative;
-  } catch (error) {
-    if (!(error instanceof UnsupportedChainIdError)) throw error;
-  }
+  const wNative = _try(
+    () => getChainAddresses(params.chainId).wNative ?? null,
+    UnsupportedChainIdError,
+  );
 
   const simulationTxs = buildSimulationTxs(params);
   const result = await executeSimulation({

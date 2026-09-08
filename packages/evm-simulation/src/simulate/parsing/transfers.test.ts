@@ -158,7 +158,7 @@ describe("parseTransfers", () => {
         data: encodeUint256(amount),
       },
       {
-        address: WETH,
+        address: WETH.toLowerCase() as Address,
         topics: [
           TRANSFER_TOPIC,
           padAddress(USER),
@@ -212,6 +212,43 @@ describe("parseTransfers", () => {
     ];
 
     expect(parseRawTransfers([makeCall(logs)], { wNative: WETH })).toEqual([]);
+  });
+
+  test("behavior: rejects WETH9 events without deduplicating ERC20 transfers on known tokenless chains", () => {
+    const amount = 1_000n;
+    const mintLog: RawLog = {
+      address: DAI,
+      topics: [TRANSFER_TOPIC, padAddress(zeroAddress), padAddress(USER)],
+      data: encodeUint256(amount),
+    };
+    const calls = [
+      makeCall([
+        {
+          address: DAI,
+          topics: [DEPOSIT_TOPIC, padAddress(USER)],
+          data: encodeUint256(amount),
+        },
+        mintLog,
+        mintLog,
+      ]),
+    ];
+
+    expect(parseRawTransfers(calls, { wNative: null })).toEqual([
+      {
+        token: DAI,
+        from: zeroAddress,
+        to: USER,
+        amount,
+        txIdx: 0,
+      },
+      {
+        token: DAI,
+        from: zeroAddress,
+        to: USER,
+        amount,
+        txIdx: 0,
+      },
+    ]);
   });
 
   test("behavior: keeps signature-based parsing without registry metadata", () => {

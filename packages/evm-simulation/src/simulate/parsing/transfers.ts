@@ -1,4 +1,11 @@
-import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
+import {
+  type Address,
+  getAddress,
+  type Hex,
+  isAddressEqual,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 
 import type {
   RawCall,
@@ -29,10 +36,12 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  *
  * **Supported event types:** ERC20 `Transfer(from, to, amount)` and WETH9
  * `Deposit(to, amount)` / `Withdrawal(from, amount)` from the registered
- * wrapped-native token. Chains without registry metadata retain legacy
- * signature-based parsing. Paired mint/burn Transfer events are deduplicated.
- * ERC721 and ERC1155 transfer events are **not** parsed — consumers with NFT
- * flows will see an incomplete transfer list.
+ * wrapped-native token. Known chains without a wrapped-native token ignore
+ * WETH9 events and skip wrapped-native deduplication; chains without registry
+ * metadata retain legacy signature-based parsing. On enabled paths, paired
+ * mint/burn Transfer events are deduplicated. ERC721 and ERC1155 transfer
+ * events are **not** parsed — consumers with NFT flows will see an incomplete
+ * transfer list.
  *
  * **Native ETH (`eth_simulateV1` + `traceTransfers`).** When the backend runs
  * `eth_simulateV1` with `traceTransfers` enabled, native-ETH moves — including
@@ -66,23 +75,25 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * `txIdx` is attached but does not influence sort order.
  *
  * @param calls - Per-transaction call results to parse.
- * @param options - Registered wrapped-native metadata and optional logger.
+ * @param options - Wrapped-native metadata and optional logger. Pass `null` for
+ *   a known chain without a wrapped-native token; omit it for legacy parsing on
+ *   an unknown chain.
  * @returns Canonically sorted transfers with their originating transaction index.
  * @internal
  */
 export function parseTransfers(
   calls: readonly RawCall[],
   options: {
-    readonly wNative?: Address;
+    readonly wNative?: Address | null;
     readonly logger?: SimulationLogger;
   } = {},
 ): Transfer[] {
   const transfers: Transfer[] = [];
-  const { logger } = options;
-  const wNative = options.wNative?.toLowerCase();
+  const { logger, wNative } = options;
   const wnativeShapedTokens = collectWnativeShapedTokens(calls);
   const acceptsWnativeEvent = (address: Address): boolean =>
-    wNative === undefined || address.toLowerCase() === wNative;
+    wNative === undefined ||
+    (wNative !== null && isAddressEqual(address, wNative));
 
   for (let txIdx = 0; txIdx < calls.length; txIdx++) {
     const logs = calls[txIdx]!.logs;
@@ -161,7 +172,7 @@ export function parseTransfers(
               const paired = logs.some(
                 (other) =>
                   other.topics[0] === WITHDRAWAL_TOPIC &&
-                  other.address === log.address &&
+                  isAddressEqual(other.address, log.address) &&
                   other.data === log.data &&
                   other.topics.length === 2 &&
                   other.topics[1] === fromTopic,
@@ -181,7 +192,7 @@ export function parseTransfers(
               const paired = logs.some(
                 (other) =>
                   other.topics[0] === DEPOSIT_TOPIC &&
-                  other.address === log.address &&
+                  isAddressEqual(other.address, log.address) &&
                   other.data === log.data &&
                   other.topics.length === 2 &&
                   other.topics[1] === toTopic,

@@ -1,4 +1,4 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
 import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
@@ -469,6 +469,29 @@ describe.sequential("simulate — backend fallback", () => {
     expect(mockSimulateV1).toHaveBeenCalled();
   });
 
+  test("behavior: ignores WETH9 events on registered tokenless chains", async () => {
+    const chainId = ChainId.StableMainnet;
+    mockSimulateV1.mockResolvedValueOnce(
+      makeSuccessResult([
+        {
+          address: USDC,
+          topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+          data: encodeUint256(1_000n),
+        },
+      ]),
+    );
+
+    const result = await simulate(
+      {
+        chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]),
+      },
+      makeParams({ chainId }),
+    );
+
+    expect(result.transfers).toEqual([]);
+    expect(mockSimulateV1.mock.calls[0]![0].wNative).toBeNull();
+  });
+
   test("behavior: keeps configured custom chains without registered addresses", async () => {
     const chainId = 999_999;
     const amount = 1_000n;
@@ -498,6 +521,7 @@ describe.sequential("simulate — backend fallback", () => {
         txIdx: 0,
       },
     ]);
+    expect(mockSimulateV1.mock.calls[0]![0].wNative).toBeUndefined();
   });
 });
 

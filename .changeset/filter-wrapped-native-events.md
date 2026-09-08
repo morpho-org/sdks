@@ -2,4 +2,4 @@
 "@morpho-org/evm-simulation": patch
 ---
 
-On chains with registered wrapped-native metadata, only interpret WETH9 `Deposit` and `Withdrawal` logs emitted by that token.
+Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.

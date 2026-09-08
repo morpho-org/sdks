@@ -40,7 +40,7 @@ export async function simulateV1(params: {
   chainId: number;
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
-  wNative?: Address;
+  wNative?: Address | null;
   signal?: AbortSignal;
 }): Promise<RawSimulationResult> {
   const { rpcUrl, transactions, blockNumber, wNative, signal } = params;
