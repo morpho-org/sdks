@@ -107,7 +107,7 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/midnight-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "peerDependencies": {
     "viem": "^2.0.0"

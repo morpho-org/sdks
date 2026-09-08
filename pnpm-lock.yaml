@@ -72,7 +72,7 @@ importers:
         version: 8.9.0
       viem:
         specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vite:
         specifier: 8.2.0
         version: 8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0)
@@ -97,7 +97,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -121,7 +121,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -135,8 +135,8 @@ importers:
         specifier: workspace:^
         version: link:../morpho-ts
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@morpho-org/test':
         specifier: workspace:^
@@ -146,7 +146,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -207,7 +207,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -228,7 +228,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -248,8 +248,8 @@ importers:
         specifier: workspace:^
         version: link:../morpho-ts
       zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+        specifier: ^4.5.4
+        version: 4.5.4
     devDependencies:
       '@morpho-org/test':
         specifier: workspace:^
@@ -265,7 +265,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -286,7 +286,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
 
   packages/morpho-ts:
     devDependencies:
@@ -304,10 +304,10 @@ importers:
         version: 4.1.1
       viem-deal:
         specifier: ^2.0.4
-        version: 2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.4.3))
+        version: 2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.5.4))
       viem-tracer:
         specifier: ^1.8.0
-        version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.4.3))
+        version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.5.4))
     devDependencies:
       '@playwright/test':
         specifier: ^1.62.1
@@ -320,7 +320,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -357,7 +357,7 @@ importers:
         version: 7.0.2
       viem:
         specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        version: 2.55.10(typescript@7.0.2)(zod@4.5.4)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -1613,8 +1613,8 @@ packages:
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
 
-  argue-cli@3.1.0:
-    resolution: {integrity: sha512-DhBpBfXL4SS2uC0N922MMajKR3CdrTG0u2or1PNYgXMsrSzViJrbtvT0nCLlLGUI0plam/ZZCs7aAauHtW9thw==}
+  argue-cli@3.2.0:
+    resolution: {integrity: sha512-VipTB0gXgGIFO2Rg9yEVN5wLt2AurJcZqDbgmYSwPwsykhLrQhs240/bfceev4w68lI8JshoOJIk9uW7tFzROw==}
     engines: {node: '>=22'}
 
   array-union@2.1.0:
@@ -1722,6 +1722,15 @@ packages:
     resolution: {integrity: sha512-abwjHmpWqSRNB7V5615QxPH92L71AVzFm/kKTs8VYiNTAi2xVdonpv0BjJ0hwXLwomoW+xsSOPjW6PZPO14asg==}
     engines: {bare: '>=1.7.0'}
 
+  bare-dns@2.2.0:
+    resolution: {integrity: sha512-iEqjj122eXdbDP5gXwk/NG/XVI5xoGjQA24UlGBPafUeMIGesxUZ5rxDvjNXPBHDyTkO+H3IsV5izZ8T5IGAXA==}
+    engines: {bare: '>=1.7.0'}
+    peerDependencies:
+      bare-buffer: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+
   bare-encoding@1.0.3:
     resolution: {integrity: sha512-Kqf+t/azs13lUeyK4Tb7ha4wdLRXKWCXQ8w1rVmt7KtoPCPdHD/Xwt7LBIsCSwwGglrcmblo5VOLa5avkJqULA==}
     peerDependencies:
@@ -1735,6 +1744,14 @@ packages:
 
   bare-events@2.9.1:
     resolution: {integrity: sha512-Z0oHEHAFDZkffN8Qc39zNZjQlMDkPJRyyyZieU1VH7u8c5S+qHZ2S8ixdKIAxEjfHO7FJxXmJWgteOghVanIsg==}
+    peerDependencies:
+      bare-abort-controller: '*'
+    peerDependenciesMeta:
+      bare-abort-controller:
+        optional: true
+
+  bare-events@2.9.2:
+    resolution: {integrity: sha512-AIPKioV7/Y/8KfZ3AAhjPJxLLbY49S64Ym5DakZlUg75qQiTgUq9hEJoEwa4eUezPUlXRy/i5NpsKvo9jgKmoA==}
     peerDependencies:
       bare-abort-controller: '*'
     peerDependenciesMeta:
@@ -1855,6 +1872,9 @@ packages:
   bare-path@3.1.1:
     resolution: {integrity: sha512-JprUlveX3QjApC1cTpsUOiscADftCGVWkzitbHsRqv84hzYwYHw2mbluddsq5TvI8mH/8Ov1f4BiMAdcB0oYnQ==}
 
+  bare-path@3.1.2:
+    resolution: {integrity: sha512-ZyKbsuuqK6Ag0K8pX6V5Txq6XeJRvY+wXucnFGRjiyVYP9YWDpIQugk/b+enRYrEYBJaqLzghRQpXPMR7341Nw==}
+
   bare-performance@2.1.1:
     resolution: {integrity: sha512-nVlulswnYgXS2Fkbk4ZIKgfIWY/rmeG8ljM9aryPYClgPNzpOgOSLQzVSgU/K+ReLJHq7fEUQ9SBdjEs1QTIfw==}
     engines: {bare: '>=1.27.0'}
@@ -1905,6 +1925,20 @@ packages:
 
   bare-stream@2.13.3:
     resolution: {integrity: sha512-Kc+brLqvEqGkjyfiwJmImAOqLZL7OsoLKuavx+hJjgVV3nLTOjloJyPMFxjUPerGGHrNH0fLU06jjykMLWrERQ==}
+    peerDependencies:
+      bare-abort-controller: '*'
+      bare-buffer: '*'
+      bare-events: '*'
+    peerDependenciesMeta:
+      bare-abort-controller:
+        optional: true
+      bare-buffer:
+        optional: true
+      bare-events:
+        optional: true
+
+  bare-stream@2.13.4:
+    resolution: {integrity: sha512-PcrQ8lVLbiJscNm1Kez+Yp4Gy4AHGcN1lzwjvf5NybWen7VvEgUfyfnXYJ2zNqWnzOfCb1Abq6lH8ti0syQszA==}
     peerDependencies:
       bare-abort-controller: '*'
       bare-buffer: '*'
@@ -3170,6 +3204,9 @@ packages:
   streamx@2.28.0:
     resolution: {integrity: sha512-1Yowhzjf0ivGMrTIkY9hav5TxobO9qIVqUE41fiCGMGgc3CLlf4MY+9AHmZqBWgDTue0fY9zWjYFVyf6Diuobw==}
 
+  streamx@2.28.1:
+    resolution: {integrity: sha512-zEzXb0s5Cds7tqMH6rhZ05lcJydCWiQPEwiNngVqzsxCc962vLY4Uw+mW7od8kDH258k2Uz/JrOkdIAAhSh9VA==}
+
   strict-event-emitter@0.5.1:
     resolution: {integrity: sha512-vMgjE/GGEPEFnhFub6pa4FmJBRBVOLpIII2hvCZ8Kzb7K0hlHo7mQv6xYrBvCL2LtAIBwFUK8wvuJgTVSQ5MFQ==}
 
@@ -3508,8 +3545,8 @@ packages:
     resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
     engines: {node: '>=18'}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
 snapshots:
 
@@ -5032,10 +5069,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  abitype@1.2.3(typescript@7.0.2)(zod@4.4.3):
+  abitype@1.2.3(typescript@7.0.2)(zod@4.5.4):
     optionalDependencies:
       typescript: 7.0.2
-      zod: 4.4.3
+      zod: 4.5.4
 
   abstractionkit@0.4.0:
     dependencies:
@@ -5069,7 +5106,7 @@ snapshots:
 
   argparse@2.0.1: {}
 
-  argue-cli@3.1.0: {}
+  argue-cli@3.2.0: {}
 
   array-union@2.1.0: {}
 
@@ -5191,6 +5228,10 @@ snapshots:
 
   bare-dns@2.1.4: {}
 
+  bare-dns@2.2.0(bare-buffer@3.6.2):
+    optionalDependencies:
+      bare-buffer: 3.6.2
+
   bare-encoding@1.0.3(bare-buffer@3.6.2):
     optionalDependencies:
       bare-buffer: 3.6.2
@@ -5200,6 +5241,10 @@ snapshots:
       bare-os: 3.9.3
 
   bare-events@2.9.1(bare-abort-controller@1.1.2):
+    optionalDependencies:
+      bare-abort-controller: 1.1.2
+
+  bare-events@2.9.2(bare-abort-controller@1.1.2):
     optionalDependencies:
       bare-abort-controller: 1.1.2
 
@@ -5415,6 +5460,8 @@ snapshots:
 
   bare-path@3.1.1: {}
 
+  bare-path@3.1.2: {}
+
   bare-performance@2.1.1(bare-abort-controller@1.1.2):
     dependencies:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
@@ -5423,8 +5470,8 @@ snapshots:
 
   bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2):
     dependencies:
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-events: 2.9.2(bare-abort-controller@1.1.2)
+      bare-stream: 2.13.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.2(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -5514,6 +5561,18 @@ snapshots:
     transitivePeerDependencies:
       - react-native-b4a
 
+  bare-stream@2.13.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.2(bare-abort-controller@1.1.2)):
+    dependencies:
+      b4a: 1.8.1
+      streamx: 2.28.1(bare-abort-controller@1.1.2)
+      teex: 1.0.1(bare-abort-controller@1.1.2)
+    optionalDependencies:
+      bare-abort-controller: 1.1.2
+      bare-buffer: 3.6.2
+      bare-events: 2.9.2(bare-abort-controller@1.1.2)
+    transitivePeerDependencies:
+      - react-native-b4a
+
   bare-string-decoder@1.0.0(bare-buffer@3.6.2):
     dependencies:
       text-decoder: 1.2.7
@@ -5567,9 +5626,9 @@ snapshots:
 
   bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)):
     dependencies:
-      bare-dns: 2.1.4
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-dns: 2.2.0(bare-buffer@3.6.2)
+      bare-events: 2.9.2(bare-abort-controller@1.1.2)
+      bare-stream: 2.13.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.2(bare-abort-controller@1.1.2))
     optionalDependencies:
       bare-pipe: 4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     transitivePeerDependencies:
@@ -5622,7 +5681,7 @@ snapshots:
 
   bare-url@2.4.6:
     dependencies:
-      bare-path: 3.1.1
+      bare-path: 3.1.2
 
   bare-utils@1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
@@ -5818,7 +5877,7 @@ snapshots:
   conventional-commits-parser@7.1.1:
     dependencies:
       '@simple-libs/stream-utils': 2.0.0
-      argue-cli: 3.1.0
+      argue-cli: 3.2.0
 
   convert-source-map@2.0.0: {}
 
@@ -6479,7 +6538,7 @@ snapshots:
 
   outvariant@1.4.3: {}
 
-  ox@0.14.33(typescript@7.0.2)(zod@4.4.3):
+  ox@0.14.33(typescript@7.0.2)(zod@4.5.4):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -6487,7 +6546,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@7.0.2)(zod@4.4.3)
+      abitype: 1.2.3(typescript@7.0.2)(zod@4.5.4)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 7.0.2
@@ -6770,6 +6829,15 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
+  streamx@2.28.1(bare-abort-controller@1.1.2):
+    dependencies:
+      events-universal: 1.0.1(bare-abort-controller@1.1.2)
+      fast-fifo: 1.3.2
+      text-decoder: 1.2.7
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - react-native-b4a
+
   strict-event-emitter@0.5.1: {}
 
   string-argv@0.3.2: {}
@@ -6936,24 +7004,24 @@ snapshots:
 
   urlpattern-polyfill@10.1.0: {}
 
-  viem-deal@2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.4.3)):
+  viem-deal@2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.5.4)):
     dependencies:
-      viem: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.5.4)
 
-  viem-tracer@1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.4.3)):
+  viem-tracer@1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.5.4)):
     dependencies:
       colors: 1.4.0
-      viem: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+      viem: 2.55.10(typescript@7.0.2)(zod@4.5.4)
 
-  viem@2.55.10(typescript@7.0.2)(zod@4.4.3):
+  viem@2.55.10(typescript@7.0.2)(zod@4.5.4):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@7.0.2)(zod@4.4.3)
+      abitype: 1.2.3(typescript@7.0.2)(zod@4.5.4)
       isows: 1.0.7(ws@8.21.0)
-      ox: 0.14.33(typescript@7.0.2)(zod@4.4.3)
+      ox: 0.14.33(typescript@7.0.2)(zod@4.5.4)
       ws: 8.21.0
     optionalDependencies:
       typescript: 7.0.2
@@ -7064,4 +7132,4 @@ snapshots:
 
   yoctocolors@2.2.0: {}
 
-  zod@4.4.3: {}
+  zod@4.5.4: {}
