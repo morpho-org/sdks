@@ -157,6 +157,28 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     ).toThrow(InvalidTreeError);
   });
 
+  test("error: empty visible offer", () => {
+    const visible = Group.create([baseOffer({ maxAssets: 0n })]).offers[0]!;
+    const { group, market, ...fields } = EMPTY_OFFER_STRUCT;
+    Object.assign(visible.market, market);
+    Object.assign(visible, fields);
+    Object.defineProperty(visible, "group", { value: group });
+    const leaf = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
+
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: {
+          offers: [visible],
+          paddedOffers: [EMPTY_OFFER_STRUCT],
+          leaves: [leaf],
+          root: leaf,
+          height: 0,
+        },
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
   test.each(["offer", "leaf", "root", "height"] as const)(
     "error: altered %s",
     (field) => {

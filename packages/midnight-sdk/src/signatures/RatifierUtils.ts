@@ -38,6 +38,15 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     const computedLeaves = tree.paddedOffers.map(OfferUtils.hashStruct);
     const seen = new Set<string>();
     for (const [index, offer] of tree.offers.entries()) {
+      if (
+        isEmptyOfferStruct(tree.paddedOffers[index]!, {
+          allowDefaultGroup: true,
+        })
+      ) {
+        throw new InvalidTreeError(
+          "Visible offers must not contain tree padding.",
+        );
+      }
       const hash = OfferUtils.hashStruct(OfferUtils.toStruct({ offer }));
       if (
         hash.toLowerCase() !== computedLeaves[index]!.toLowerCase() ||
