@@ -1,6 +1,10 @@
 import { type Address, type Hex, zeroAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams, SimulationAuthorization } from "../../types.js";
+import type {
+  SimulateParams,
+  SimulationAuthorization,
+  SimulationTransaction,
+} from "../../types.js";
 import { validateInput } from "./validate-input.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
@@ -197,5 +201,148 @@ describe("validateInput", () => {
         }),
       ),
     ).toThrow(SimulationValidationError);
+  });
+
+  it("does not throw on a valid legacy gasPrice or EIP-1559 fee", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            { from: USER, to: VAULT, data: "0x12" as Hex, gasPrice: 1n },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            {
+              from: USER,
+              to: VAULT,
+              data: "0x12" as Hex,
+              maxFeePerGas: 2n,
+              maxPriorityFeePerGas: 1n,
+            },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("throws when legacy and EIP-1559 fees are both set", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            {
+              from: USER,
+              to: VAULT,
+              data: "0x12" as Hex,
+              gasPrice: 1n,
+              maxFeePerGas: 2n,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(SimulationValidationError);
+  });
+
+  it("throws when a fee field is negative", () => {
+    for (const bad of [
+      { gasPrice: -1n },
+      { maxFeePerGas: -1n },
+      { maxPriorityFeePerGas: -1n },
+    ]) {
+      expect(() =>
+        validateInput(
+          params({
+            transactions: [
+              { from: USER, to: VAULT, data: "0x12" as Hex, ...bad },
+            ],
+          }),
+        ),
+      ).toThrow(SimulationValidationError);
+    }
+  });
+
+  it("throws when a zero gas price would hide a fee-sensitive revert (Cantina 1631)", () => {
+    for (const bad of [{ gasPrice: 0n }, { maxFeePerGas: 0n }]) {
+      expect(() =>
+        validateInput(
+          params({
+            transactions: [
+              { from: USER, to: VAULT, data: "0x12" as Hex, ...bad },
+            ],
+          }),
+        ),
+      ).toThrow(SimulationValidationError);
+    }
+  });
+
+  it("allows a zero priority tip and a priority tip equal to the max fee", () => {
+    for (const priority of [0n, 2n]) {
+      expect(() =>
+        validateInput(
+          params({
+            transactions: [
+              {
+                from: USER,
+                to: VAULT,
+                data: "0x12" as Hex,
+                maxFeePerGas: 2n,
+                maxPriorityFeePerGas: priority,
+              },
+            ],
+          }),
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  it("throws when maxPriorityFeePerGas exceeds maxFeePerGas", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            {
+              from: USER,
+              to: VAULT,
+              data: "0x12" as Hex,
+              maxFeePerGas: 1n,
+              maxPriorityFeePerGas: 2n,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(SimulationValidationError);
+  });
+
+  it("validates fee fields on approval authorization transactions", () => {
+    const approvalWith = (
+      fee: Partial<SimulationTransaction>,
+    ): SimulationAuthorization[] => [
+      {
+        type: "approval",
+        transaction: { from: USER, to: USDC, data: "0x12" as Hex, ...fee },
+      },
+    ];
+    // Mixed legacy + EIP-1559 on the approval tx must be rejected, not passed
+    // through to the backend as a bypassable ExternalServiceError.
+    expect(() =>
+      validateInput(
+        params({
+          authorizations: approvalWith({ gasPrice: 1n, maxFeePerGas: 2n }),
+        }),
+      ),
+    ).toThrow(SimulationValidationError);
+    // A zero gas price on the approval tx is rejected too.
+    expect(() =>
+      validateInput(params({ authorizations: approvalWith({ gasPrice: 0n }) })),
+    ).toThrow(SimulationValidationError);
+    // A well-formed approval fee passes.
+    expect(() =>
+      validateInput(params({ authorizations: approvalWith({ gasPrice: 1n }) })),
+    ).not.toThrow();
   });
 });

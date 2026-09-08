@@ -1,4 +1,10 @@
-import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
+import {
+  type Address,
+  ethAddress,
+  type Hex,
+  numberToHex,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -6,6 +12,7 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type { SimulationTransaction, TenderlyRpcConfig } from "../../types.js";
+import { DEFAULT_SIMULATION_GAS_PRICE } from "../fee-context.js";
 import { simulateTenderlyRpc } from "./tenderly-rpc.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
@@ -146,6 +153,41 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     expect(tx.data).toBe("0x12");
     expect(tx.value).toBe("0x0");
     expect(block).toBe("latest");
+  });
+
+  it("serializes a non-zero default gas price hex when the caller sets none (Cantina 1631)", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope(successResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] });
+
+    const body = requestBody(fetchMock.mock.calls[0]!);
+    const [tx] = body.params as [
+      { gasPrice?: Hex; maxFeePerGas?: Hex },
+      string,
+    ];
+    expect(tx.gasPrice).toBe(numberToHex(DEFAULT_SIMULATION_GAS_PRICE));
+    expect(tx.maxFeePerGas).toBeUndefined();
+  });
+
+  it("forwards a caller-provided legacy gasPrice as hex", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope(successResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [{ ...TX1, gasPrice: 3_000000000n }],
+    });
+
+    const body = requestBody(fetchMock.mock.calls[0]!);
+    const [tx] = body.params as [{ gasPrice?: Hex }, string];
+    expect(tx.gasPrice).toBe(numberToHex(3_000000000n));
   });
 
   it("returns parsed logs, gasUsed and returnData", async () => {

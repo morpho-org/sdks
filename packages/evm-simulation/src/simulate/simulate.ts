@@ -31,6 +31,20 @@ import {
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
+ * @remarks
+ * **Fee context.** Each backend runs the bundle at a gas price — the caller's
+ * `gasPrice` / `maxFeePerGas` when set, otherwise a non-zero default
+ * (`DEFAULT_SIMULATION_GAS_PRICE`) — never `0`. A zero gas price never occurs
+ * on-chain; running at it would let a step that reverts *only* under a positive
+ * fee context (e.g. an external route whose settlement nets out gas cost and
+ * then fails its own min-out) succeed in the preview. If that step is
+ * `skipRevert: true`, Bundler3 skips it on-chain and funds routed to `bundler3`
+ * by earlier steps are stranded, while the retention guard — run on the preview
+ * — sees nothing retained (Cantina finding 1631). Pass the transaction's real
+ * effective gas price for an exact preview; the default only guarantees a
+ * *possible* execution, not the submitted one. First-party Morpho bundles avoid
+ * the hazard entirely by keeping every value-carrying step `skipRevert: false`.
+ *
  * @param config - Backend configuration: per-chain Tenderly RPC and/or `eth_simulateV1`
  *   URL, optional logger, and the overall timeout budget.
  * @param params - Per-call simulation input.

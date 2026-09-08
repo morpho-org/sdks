@@ -30,7 +30,20 @@ interface RetainedAsset {
   netRetained: string;
 }
 
-/** Funds would flow to bundler3 contract addresses. Never bypassable. */
+/**
+ * Funds would flow to bundler3 contract addresses. Never bypassable.
+ *
+ * @remarks
+ * The guard proves this for the simulated run, which now executes at a non-zero
+ * gas price (the caller's, or `DEFAULT_SIMULATION_GAS_PRICE`) so a step that
+ * reverts only under a positive fee context is reproduced instead of hidden
+ * (Cantina finding 1631). A residual gap remains for callers who do not pass the
+ * transaction's real effective gas price and whose bundle reverts only at a
+ * *specific* gas price between the default and the real one (e.g. a
+ * `require(tx.gasprice <= cap)` leg), or for reverts driven by state that moves
+ * between simulation and inclusion (slippage, deadlines). Keep every
+ * value-carrying step `skipRevert: false` so such a bundle reverts atomically.
+ */
 export class BlacklistViolationError extends SimulationPackageError {
   readonly code = "BLACKLIST_ERROR";
 

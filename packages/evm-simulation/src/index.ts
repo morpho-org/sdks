@@ -9,6 +9,7 @@ export {
   SimulationValidationError,
   UnsupportedChainError,
 } from "./errors.js";
+export { DEFAULT_SIMULATION_GAS_PRICE } from "./simulate/fee-context.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {

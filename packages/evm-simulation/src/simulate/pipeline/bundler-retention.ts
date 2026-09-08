@@ -95,6 +95,15 @@ interface AssertNoBundlerRetentionParams {
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
  * `assetChanges` derived from it — native transfer logs are only used as a
  * fallback for bundler addresses that carry no native `assetChanges` entry.
+ *
+ * **Fee context.** This runs on the simulated bundle, which now executes at a
+ * non-zero gas price (the caller's, or `DEFAULT_SIMULATION_GAS_PRICE`) rather
+ * than `0`, so a step that reverts only under a positive fee context is
+ * reproduced here instead of silently succeeding and stranding earlier funds
+ * (Cantina finding 1631). The guard still cannot see a revert driven by a gas
+ * price the caller did not simulate, nor by state that moves between simulation
+ * and inclusion; those are contained by keeping value-carrying steps
+ * `skipRevert: false`.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,

@@ -1,6 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams } from "../../types.js";
+import type { SimulateParams, SimulationTransaction } from "../../types.js";
 import { validateAuthorizations } from "../authorizations/index.js";
 
 /**
@@ -8,8 +8,9 @@ import { validateAuthorizations } from "../authorizations/index.js";
  *
  * Throws `SimulationValidationError` with a `fieldErrors[]` list on any invalid input:
  * empty transactions, malformed / zero-addr fields, missing `data`, negative `value`,
- * bad `chainId`, or mixed senders (all txs in a bundle must share the same `from`).
- * Also runs `validateAuthorizations` on the optional authorizations array.
+ * bad `chainId`, mixed senders (all txs in a bundle must share the same `from`), or an
+ * invalid fee (a zero/negative gas price, a priority fee above the max fee, or mixing
+ * the legacy and EIP-1559 forms). Also runs `validateAuthorizations`.
  */
 export function validateInput(params: SimulateParams): void {
   const errors: string[] = [];
@@ -56,6 +57,54 @@ export function validateInput(params: SimulateParams): void {
 
   if (params.authorizations) {
     errors.push(...validateAuthorizations(params.authorizations));
+  }
+
+  // Fee validation, in one pass over every transaction whose fee fields reach a
+  // backend: the caller's transactions plus any `approval` authorization
+  // transaction, which resolveAuthorizations prepends to the bundle as-is. Both
+  // share these checks so an invalid fee fails here as SimulationValidationError,
+  // not later as a bypassable ExternalServiceError. A zero (or negative)
+  // effective gas price never occurs on-chain and would re-open the Cantina 1631
+  // skipRevert gap; a zero `maxPriorityFeePerGas` tip is fine.
+  const feeTargets: { tx: SimulationTransaction; label: string }[] =
+    transactions.map((tx, i) => ({ tx, label: `transactions[${i}]` }));
+  params.authorizations?.forEach((auth, i) => {
+    if (auth.type === "approval") {
+      feeTargets.push({
+        tx: auth.transaction,
+        label: `authorizations[${i}].transaction`,
+      });
+    }
+  });
+
+  for (const { tx, label } of feeTargets) {
+    const { gasPrice, maxFeePerGas, maxPriorityFeePerGas } = tx;
+    if (gasPrice !== undefined && gasPrice <= 0n) {
+      errors.push(`${label}.gasPrice: must be a positive gas price`);
+    }
+    if (maxFeePerGas !== undefined && maxFeePerGas <= 0n) {
+      errors.push(`${label}.maxFeePerGas: must be a positive gas price`);
+    }
+    if (maxPriorityFeePerGas !== undefined && maxPriorityFeePerGas < 0n) {
+      errors.push(`${label}.maxPriorityFeePerGas: must be non-negative`);
+    }
+    if (
+      gasPrice !== undefined &&
+      (maxFeePerGas !== undefined || maxPriorityFeePerGas !== undefined)
+    ) {
+      errors.push(
+        `${label}: set either gasPrice (legacy) or maxFeePerGas/maxPriorityFeePerGas (EIP-1559), not both`,
+      );
+    }
+    if (
+      maxFeePerGas !== undefined &&
+      maxPriorityFeePerGas !== undefined &&
+      maxPriorityFeePerGas > maxFeePerGas
+    ) {
+      errors.push(
+        `${label}: maxPriorityFeePerGas must not exceed maxFeePerGas`,
+      );
+    }
   }
 
   if (errors.length > 0) {
