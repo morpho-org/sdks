@@ -11,7 +11,10 @@ import {
 import { readContract } from "viem/actions";
 import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
 import { encodeErc20Permit } from "../../actions/requirements/encode/encodeErc20Permit.js";
-import { validateChainId } from "../../helpers/index.js";
+import {
+  validateChainId,
+  validateRequirementSpender,
+} from "../../helpers/index.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   type BundlesTokenSignatureRequirement,
@@ -78,6 +81,8 @@ export interface GetBundlesTokenRequirementsParams {
  * @throws {NonPositiveInputError} when `deadline` is not positive.
  * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
+ *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
  * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
  * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
@@ -117,6 +122,11 @@ export const getBundlesTokenRequirements = async (
   )[]
 > => {
   validateChainId(viemClient.chain?.id, params.chainId);
+  validateRequirementSpender({
+    chainId: params.chainId,
+    spender: params.spender,
+    allowed: ["blueBundlesV1", "vaultBundlesV1"],
+  });
   if (params.amount < 0n) {
     throw new NegativeInputError("amount", params.amount);
   }
@@ -214,7 +224,6 @@ export const getBundlesTokenRequirements = async (
         deadline: params.deadline,
         state: {
           type: "permit2SignatureTransfer",
-          permit2,
           permit2Allowance: allowance,
           permit2Nonce: params.permit2Nonce,
           nonceBitmap,

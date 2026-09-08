@@ -123,10 +123,48 @@ export function buildBookPath(params: {
   return segments.map(encodeURIComponent).join("/");
 }
 
-/** @internal Maps a book market API payload to the SDK response shape. */
+/**
+ * @internal Maps a book market API payload to the SDK response shape, rejecting any
+ * response whose advertised `market_id` cannot be derived from — or does not match —
+ * its own market params. Recomputing the id with `MarketUtils.toId` (mirroring the
+ * takeable-offers path) stops a hostile API from pairing a trusted id with foreign
+ * metadata; every book flows through here, so both bound paths reject the same substitution.
+ */
 export function mapBookMarket(
   book: ApiBookMarketResponse,
 ): MidnightApiBookMarket {
+  let derivedMarketId: Hash;
+  let matchesAdvertisedId: boolean;
+  try {
+    derivedMarketId = MarketUtils.toId({
+      chainId: book.chain_id,
+      midnight: book.midnight,
+      loanToken: book.loan_token,
+      collateralParams: book.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: book.maturity,
+      rcfThreshold: book.rcf_threshold,
+      enterGate: book.enter_gate,
+      liquidatorGate: book.liquidator_gate,
+    });
+    // Comparison stays inside the try so a malformed advertised `market_id`
+    // (non-hex value) surfaces as a wrapped response error, not a raw TypeError.
+    matchesAdvertisedId = isHexEqual(derivedMarketId, book.market_id);
+  } catch (cause) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API book market_id "${book.market_id}" could not be validated against its market params.`,
+      { cause },
+    );
+  }
+  if (!matchesAdvertisedId) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API book market_id "${book.market_id}" does not match the id "${derivedMarketId}" derived from its market params.`,
+    );
+  }
   return {
     marketId: book.market_id,
     chainId: book.chain_id,
@@ -140,6 +178,40 @@ export function mapBookMarket(
     asks: book.asks.map(mapPriceLevel),
     bids: book.bids.map(mapPriceLevel),
   };
+}
+
+/** @internal Maps a book market, binding its verified id to the requested market. */
+export function mapBoundBookMarket(
+  book: ApiBookMarketResponse,
+  requestedMarketId: Hash,
+): MidnightApiBookMarket {
+  const market = mapBookMarket(book);
+  if (!isHexEqual(market.marketId, requestedMarketId)) {
+    throw new InvalidMidnightApiResponseError(
+      `Midnight API book market_id "${market.marketId}" does not match requested market "${requestedMarketId}".`,
+    );
+  }
+  return market;
+}
+
+/** @internal Maps listed book markets, binding each verified id to the requested market_ids filter when present. */
+export function mapBoundBooks(
+  books: readonly ApiBookMarketResponse[],
+  marketIds?: readonly Hash[],
+): MidnightApiBookMarket[] {
+  return books.map((book) => {
+    const market = mapBookMarket(book);
+    if (
+      marketIds != null &&
+      marketIds.length > 0 &&
+      !marketIds.some((marketId) => isHexEqual(marketId, market.marketId))
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${market.marketId}" is outside the requested market_ids filter.`,
+      );
+    }
+    return market;
+  });
 }
 
 /** @internal Maps a collateral API payload to the SDK response shape. */

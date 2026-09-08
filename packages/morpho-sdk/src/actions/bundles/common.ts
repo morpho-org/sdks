@@ -64,7 +64,7 @@ export interface BundlesTokenPermit {
 }
 
 /** ABI-ready ERC-2612 share permit consumed by vault bundles. */
-export interface BundlesSharesPermit {
+export interface BundleSharesPermit {
   /** Exact vault-share allowance authorized by the permit. */
   readonly value: bigint;
   /** Vault permit nonce signed by the owner. */
@@ -78,6 +78,9 @@ export interface BundlesSharesPermit {
   /** ECDSA signature `s`, or zero for the empty sentinel. */
   readonly s: Hex;
 }
+
+/** Compatibility alias for the canonical {@link BundleSharesPermit} tuple. */
+export type BundlesSharesPermit = BundleSharesPermit;
 
 /** Common deadline and referral fields shared by fixed bundles calls. */
 export interface BundlesCommonParams {
@@ -155,8 +158,11 @@ export const normalizeBundlesCommonParams = (
  * Resolves mutually exclusive ERC-20/native funding into the entrypoint amount and transaction value.
  *
  * @param params - Exclusive bundles funding.
+ * @param params.amount - ERC-20 funding in the token's smallest unit; mutually exclusive with `nativeAmount`.
+ * @param params.nativeAmount - Native funding in wei; mutually exclusive with `amount`.
  * @returns The gross ABI asset amount and native transaction value.
  * @throws {MixedBundlesFundingError} when both funding keys are present.
+ * @throws {NegativeInputError} when the selected amount is negative.
  * @throws {NonPositiveInputError} when the selected amount is not positive.
  * @example
  * ```ts
@@ -195,6 +201,11 @@ export const resolveBundlesFunding = (
  * Converts an optional signed token requirement into the ABI-ready TokenLib permit tuple.
  *
  * @param params - Expected funding values and optional signed requirement.
+ * @param params.userAddress - Account funding the operation; must match the signature owner.
+ * @param params.token - ERC-20 funding token; must match the signed asset.
+ * @param params.spender - Fixed bundles contract authorized to pull the token.
+ * @param params.amount - Exact pull amount in the token's smallest unit; must match both signed amount fields.
+ * @param params.requirementSignature - Optional signed ERC-2612 or Permit2 SignatureTransfer requirement; omit for allowance funding.
  * @returns An empty, ERC-2612, or Permit2 SignatureTransfer token permit.
  * @throws {UnexpectedRequirementSignatureError} when Permit2 AllowanceTransfer is supplied.
  * @throws {DepositOwnerMismatchError} when the signature owner differs from `userAddress`.
@@ -366,6 +377,12 @@ export const normalizeBundlesSignature = (
  * Converts an optional vault-share ERC-2612 requirement into the ABI-ready Permit tuple.
  *
  * @param params - Vault token, empty-sentinel deadline, and optional signed requirement.
+ * @param params.vault - Vault share token authorized by the permit.
+ * @param params.deadline - Unix timestamp in seconds used by the empty-permit sentinel.
+ * @param params.owner - Optional expected signature owner.
+ * @param params.spender - Optional expected fixed bundles contract authorized to pull shares.
+ * @param params.amount - Optional exact share allowance in the vault share token's smallest unit.
+ * @param params.requirementSignature - Optional signed ERC-2612 share requirement; omit for the empty-permit sentinel.
  * @returns The signed share permit or the contract's empty-permit sentinel.
  * @throws {BundlesPermitMismatchError} when the requirement kind, token, or signature is invalid.
  * @example
@@ -387,7 +404,7 @@ export const getBundlesSharesPermit = (params: {
   readonly spender?: Address;
   readonly amount?: bigint;
   readonly requirementSignature?: PermitRequirementSignature;
-}): BundlesSharesPermit => {
+}): BundleSharesPermit => {
   const { requirementSignature } = params;
   if (requirementSignature == null) {
     return {

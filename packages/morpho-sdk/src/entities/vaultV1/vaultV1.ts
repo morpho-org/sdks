@@ -22,7 +22,7 @@ import {
   resolveBundlesFunding,
   selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
-} from "../../actions/bundles/index.js";
+} from "../../actions/bundles/common.js";
 import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
@@ -38,7 +38,10 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
-import { validateNativeVaultAsset } from "../../helpers/validate.js";
+import {
+  validateNativeVaultAsset,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -90,6 +93,8 @@ export interface VaultV1Actions {
    * `getRequirements()` reads the asset allowance and, when enabled, the selected ERC-2612 or
    * Permit2 nonce state. Native funding is exclusive and skips token requirements. Shares are
    * always minted to the transaction sender, which must be `userAddress`.
+   * Concurrent requirement reads share the first caller's options; later calls refresh on-chain
+   * state using their own options. `buildTx()` accepts signatures from the latest completed read.
    *
    * @param params.userAddress - Account that funds, signs, submits, and receives the vault shares.
    * @param params.vaultData - Pre-fetched Vault V1 snapshot used for asset and share conversion.
@@ -120,7 +125,8 @@ export interface VaultV1Actions {
    *   selected without an explicit nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
    *   explicit Permit2 nonce is consumed.
-   * @throws {InputExceedsMaxError} from `getRequirements()` when the Permit2 nonce exceeds uint256.
+   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
+   *   `getRequirements()` when the Permit2 nonce exceeds uint256.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature was not produced for
@@ -447,13 +453,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
     private readonly chainId: number,
   ) {}
 
-  private getBundlesDeadline(deadlineOverride?: bigint): bigint {
-    const now = Time.timestamp();
-    const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
-    if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-    return deadline;
-  }
-
   async getData(parameters?: FetchParameters) {
     if (
       this.client.viemClient.chain?.id &&
@@ -489,13 +488,21 @@ export class MorphoVaultV1 implements VaultV1Actions {
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
-    const deadline = this.getBundlesDeadline(params.deadline);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
     const common = normalizeBundlesCommonParams({
       deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
     });
     const funding = resolveBundlesFunding(params);
+    // Reject overflow before share-price math or native-only prerequisite resolution.
+    validateUint256Field(
+      funding.value > 0n ? "nativeAmount" : "amount",
+      funding.assets,
+    );
     if (funding.value > 0n) {
       // The native path must target the chain's registered wrapped-native asset.
       validateNativeVaultAsset(this.chainId, vaultAsset);
@@ -511,7 +518,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
     });
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: Promise<readonly ActionRequirement[]> | undefined;
+    let pendingRequirements: Promise<readonly ActionRequirement[]> | undefined;
     let expectedRequirement:
       | PermitAction
       | Permit2SignatureTransferAction
@@ -522,7 +529,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ) => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return await resolvedRequirements;
+        if (pendingRequirements != null) return await pendingRequirements;
         // Memoize the in-flight promise, not just its result: concurrent callers
         // requesting different routes would otherwise both resolve requirements and
         // the slower one would overwrite `expectedRequirement`, making `buildTx()`
@@ -546,22 +553,19 @@ export class MorphoVaultV1 implements VaultV1Actions {
           const signatureRequirement = requirements.find(
             isRequirementSignature,
           );
-          if (
+          expectedRequirement =
             signatureRequirement?.action.type === "permit" ||
             signatureRequirement?.action.type === "permit2SignatureTransfer"
-          ) {
-            expectedRequirement = signatureRequirement.action;
-          }
+              ? signatureRequirement.action
+              : undefined;
           return requirements;
         })();
-        resolvedRequirements = pending;
+        pendingRequirements = pending;
         try {
           return await pending;
-        } catch (error) {
-          // Drop the failed attempt so a caller can retry resolution.
-          if (resolvedRequirements === pending)
-            resolvedRequirements = undefined;
-          throw error;
+        } finally {
+          // Later calls must re-read live allowances/nonces and honor their own options.
+          if (pendingRequirements === pending) pendingRequirements = undefined;
         }
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -603,7 +607,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (params.amount <= 0n)
       throw new NonPositiveInputError("amount", params.amount);
-    const deadline = this.getBundlesDeadline(params.deadline);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
     const common = normalizeBundlesCommonParams({
       deadline,
       referralFeePct: params.referralFeePct,
@@ -683,7 +690,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (params.shares <= 0n)
       throw new NonPositiveInputError("shares", params.shares);
-    const deadline = this.getBundlesDeadline(params.deadline);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
     const common = normalizeBundlesCommonParams({
       deadline,
       referralFeePct: params.referralFeePct,
@@ -964,7 +974,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const slippageTolerance =
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
-    const deadline = this.getBundlesDeadline(params.deadline);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
     const common = normalizeBundlesCommonParams({
       deadline,
       referralFeePct: params.referralFeePct,

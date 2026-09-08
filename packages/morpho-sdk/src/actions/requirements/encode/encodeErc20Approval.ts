@@ -22,7 +22,7 @@ interface EncodeErc20ApprovalParams {
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
  * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
- *   Midnight, MidnightBundles, VaultExitBundlesV1, or BlueBundlesV1 for the chain.
+ *   Midnight, MidnightBundles, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.

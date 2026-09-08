@@ -21,18 +21,28 @@ export interface ERC20PermitAction {
   sign: (client: WalletClient, userAddress: Address) => Promise<Hex>;
 }
 
+/** Metadata for a direct Vault V2 deposit through VaultBundlesV1. */
 export interface VaultV2DepositAction
   extends BaseAction<
     "vaultV2Deposit",
     {
+      /** Destination vault receiving net assets; shares are minted to the transaction sender. */
       readonly vault: Address;
+      /** Gross funding in asset base units, for either ERC-20 or native funding, before fees. */
       readonly amount: bigint;
+      /** Maximum asset/share ratio scaled by 1e27, computed from net assets through the deadline. */
       readonly maxSharePrice: bigint;
+      /** Native funding marker: equals `amount` and transaction `value` on native deposits; otherwise undefined. */
       readonly nativeAmount?: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
       readonly referralFeeAssets: bigint;
+      /** Assets deposited into the vault: amount minus referralFeeAssets. */
       readonly netAssets: bigint;
+      /** Execution and token-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}
@@ -99,18 +109,28 @@ export interface VaultV2ForceRedeemAction
     }
   > {}
 
+/** Metadata for a direct Vault V1 deposit through VaultBundlesV1. */
 export interface VaultV1DepositAction
   extends BaseAction<
     "vaultV1Deposit",
     {
+      /** Destination vault receiving net assets; shares are minted to the transaction sender. */
       readonly vault: Address;
+      /** Gross funding in asset base units, for either ERC-20 or native funding, before fees. */
       readonly amount: bigint;
+      /** Maximum asset/share ratio scaled by 1e27, computed from net assets through the deadline. */
       readonly maxSharePrice: bigint;
+      /** Native funding marker: equals `amount` and transaction `value` on native deposits; otherwise undefined. */
       readonly nativeAmount?: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
       readonly referralFeeAssets: bigint;
+      /** Assets deposited into the vault: amount minus referralFeeAssets. */
       readonly netAssets: bigint;
+      /** Execution and token-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}

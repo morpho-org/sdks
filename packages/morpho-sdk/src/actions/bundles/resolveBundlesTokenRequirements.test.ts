@@ -5,11 +5,18 @@ import { maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
+  ApprovalAmountLessThanSpendAmountError,
+  InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
+  NegativeInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../types/index.js";
-import { resolveBundlesTokenRequirements } from "./resolveBundlesTokenRequirements.js";
+import {
+  type BundlesTokenRequirementsState,
+  resolveBundlesTokenRequirements,
+} from "./resolveBundlesTokenRequirements.js";
 
 const chainId = mainnet.id;
 const { usdc, permit2 } = addressesRegistry[chainId];
@@ -18,6 +25,111 @@ const owner = "0x0000000000000000000000000000000000000001" as const;
 const deadline = 1_900_000_000n;
 
 describe("resolveBundlesTokenRequirements", () => {
+  const states = [
+    { type: "approval", allowance: 0n, approvalAmount: maxUint256 },
+    {
+      type: "permit2SignatureTransfer",
+      permit2Allowance: maxUint256,
+      permit2Nonce: 0n,
+      nonceBitmap: 0n,
+    },
+  ] as const satisfies readonly BundlesTokenRequirementsState[];
+
+  test.each(states)(
+    "behavior: zero amount returns no requirements for $type",
+    (state) => {
+      expect(
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          spender,
+          owner,
+          chainId,
+          amount: 0n,
+          deadline,
+          state,
+        }),
+      ).toEqual([]);
+    },
+  );
+
+  test.each(states)(
+    "behavior: accepts maxUint256 amount for $type",
+    (state) => {
+      const requirements = resolveBundlesTokenRequirements({
+        token: usdc,
+        spender,
+        owner,
+        chainId,
+        amount: maxUint256,
+        deadline,
+        state,
+      });
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action.args.amount).toBe(maxUint256);
+    },
+  );
+
+  test.each(
+    states.flatMap((state) => [
+      { state, amount: -1n, error: NegativeInputError },
+      { state, amount: maxUint256 + 1n, error: InputExceedsMaxError },
+    ]),
+  )(
+    "error: $error.name for $state.type amount $amount",
+    ({ state, amount, error }) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          spender,
+          owner,
+          chainId,
+          amount,
+          deadline,
+          state,
+        }),
+      ).toThrow(error);
+    },
+  );
+
+  test("error: ApprovalAmountLessThanSpendAmountError", () => {
+    expect(() =>
+      resolveBundlesTokenRequirements({
+        token: usdc,
+        spender,
+        owner,
+        chainId,
+        amount: 2n,
+        deadline,
+        state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+      }),
+    ).toThrow(ApprovalAmountLessThanSpendAmountError);
+  });
+
+  test.each([
+    { permit2Nonce: -1n, error: NegativeInputError },
+    { permit2Nonce: maxUint256 + 1n, error: InputExceedsMaxError },
+  ])(
+    "error: $error.name for Permit2 nonce $permit2Nonce",
+    ({ permit2Nonce, error }) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          spender,
+          owner,
+          chainId,
+          amount: 1n,
+          deadline,
+          state: {
+            type: "permit2SignatureTransfer",
+            permit2Allowance: maxUint256,
+            permit2Nonce,
+            nonceBitmap: 0n,
+          },
+        }),
+      ).toThrow(error);
+    },
+  );
+
   test("behavior: direct approval resolution is deterministic", () => {
     fc.assert(
       fc.property(
@@ -97,7 +209,6 @@ describe("resolveBundlesTokenRequirements", () => {
       deadline,
       state: {
         type: "permit2SignatureTransfer",
-        permit2,
         permit2Allowance: 0n,
         permit2Nonce: 257n,
         nonceBitmap: 0n,
@@ -128,7 +239,6 @@ describe("resolveBundlesTokenRequirements", () => {
           deadline,
           state: {
             type: "permit2SignatureTransfer",
-            permit2,
             permit2Allowance: maxUint256,
             permit2Nonce: BigInt(nonce),
             nonceBitmap: 0n,
@@ -154,7 +264,6 @@ describe("resolveBundlesTokenRequirements", () => {
         deadline,
         state: {
           type: "permit2SignatureTransfer",
-          permit2,
           permit2Allowance: maxUint256,
           permit2Nonce: 7n,
           nonceBitmap: 1n << 7n,
@@ -162,4 +271,68 @@ describe("resolveBundlesTokenRequirements", () => {
       }),
     ).toThrow(Permit2SignatureTransferNonceAlreadyUsedError);
   });
+
+  test.each([
+    getChainAddress(chainId, "bundles.blueBundlesV1"),
+    getChainAddress(chainId, "bundles.vaultBundlesV1"),
+  ])("behavior: accepts the registered bundles spender %s", (allowed) => {
+    expect(
+      resolveBundlesTokenRequirements({
+        token: usdc,
+        spender: allowed,
+        owner,
+        chainId,
+        amount: 1n,
+        deadline,
+        state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+      })[0]?.action,
+    ).toMatchObject({ type: "erc20Approval", args: { spender: allowed } });
+  });
+
+  test.each([
+    {
+      label: "approval",
+      amount: 1n,
+      state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+    },
+    {
+      label: "sufficient allowance",
+      amount: 1n,
+      state: { type: "approval", allowance: maxUint256, approvalAmount: 1n },
+    },
+    {
+      label: "zero amount",
+      amount: 0n,
+      state: { type: "approval", allowance: 0n, approvalAmount: 0n },
+    },
+    {
+      label: "permit2SignatureTransfer",
+      amount: 1n,
+      state: {
+        type: "permit2SignatureTransfer",
+        permit2Allowance: maxUint256,
+        permit2Nonce: 0n,
+        nonceBitmap: 0n,
+      },
+    },
+  ] as const satisfies readonly {
+    label: string;
+    amount: bigint;
+    state: BundlesTokenRequirementsState;
+  }[])(
+    "error: UnsupportedErc20ApprovalSpenderError for an unregistered spender ($label)",
+    ({ amount, state }) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          spender: getChainAddress(chainId, "bundler3.generalAdapter1"),
+          owner,
+          chainId,
+          amount,
+          deadline,
+          state,
+        }),
+      ).toThrow(UnsupportedErc20ApprovalSpenderError);
+    },
+  );
 });

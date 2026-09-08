@@ -13,7 +13,7 @@ import {
   getBundlesReferralFeeAssets,
   getBundlesSharesPermit,
   normalizeBundlesCommonParams,
-} from "../bundles/index.js";
+} from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2Withdraw}. */
 export interface VaultV2WithdrawParams {

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/liquidity-sdk-viem",
   "description": "Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator.",
-  "version": "4.1.2",
+  "version": "4.2.0-next.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -54,9 +54,9 @@
     "dataloader": "^2.2.3",
     "graphql": "^16.14.2",
     "nock": "^14.0.17",
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",

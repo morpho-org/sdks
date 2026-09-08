@@ -17,7 +17,7 @@ import {
   getBundlesReferralFeeAssets,
   getBundlesSharesPermit,
   normalizeBundlesCommonParams,
-} from "../bundles/index.js";
+} from "../bundles/common.js";
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
 export interface VaultV1MigrateToV2Params {

@@ -39,10 +39,10 @@ import {
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { normalizeBundlesCommonParams } from "../bundles/common.js";
 import {
   type BundlesTokenPermit,
   getBundlesTokenPermit,
-  normalizeBundlesCommonParams,
 } from "../bundles/index.js";
 
 /** @internal */

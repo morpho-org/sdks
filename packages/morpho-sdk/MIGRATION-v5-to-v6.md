@@ -5,6 +5,60 @@ write-method names while routing them through five direct BlueBundlesV1 entrypoi
 versioned reallocation-data helpers remain on the same entity. There is no parallel BlueBundlesV1
 extension or automatic fallback to the v5 route.
 
+## Vault V1 and Vault V2 deposits
+
+`MorphoVaultV1.deposit`, `MorphoVaultV2.deposit`, `vaultV1Deposit`, and `vaultV2Deposit` keep their
+names but now route through the chain's registered VaultBundlesV1 contract instead of Bundler3 and
+GeneralAdapter1.
+
+> **Chain availability.** Vault deposits require the `bundles.vaultBundlesV1` deployment on the
+> target chain. On a registered chain without it, including Fraxtal, both `MorphoVaultV1.deposit()`
+> and `MorphoVaultV2.deposit()` throw `UnknownAddressError` synchronously at handle creation,
+> before `getRequirements()` or `buildTx()` can be called. This is a breaking loss of deposit
+> functionality on chains previously supported through Bundler3/GeneralAdapter1; there is no
+> automatic fallback. Confirm coverage before upgrading with
+> `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Stay on v5 if your application needs
+> deposits on an affected chain until VaultBundlesV1 is deployed and registered in the SDK.
+
+As checked on 2026-09-07, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
+and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 13 chains: Ethereum,
+Arbitrum, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain, and
+World Chain. Bundler3 availability alone does not imply support for v6 vault deposits.
+
+Update deposit inputs as follows:
+
+| v5 | v6 |
+| --- | --- |
+| `amount` plus optional additive `nativeAmount` | Choose exactly one positive `amount` or `nativeAmount`. |
+| Low-level `args.recipient` | Remove it. VaultBundlesV1 mints shares to `msg.sender`; `userAddress` must be the signing and submitting account. |
+| Optional Bundler3 `PermitRequirementSignature` | Use an ERC-2612 or Permit2 SignatureTransfer requirement returned by the prepared entity handle. |
+| No deadline or referral fee | Entity methods accept an optional `deadline` that defaults to two hours from preparation; low-level builders require it. Both surfaces accept optional `referralFeePct` and `referralFeeRecipient`. |
+
+For ERC-20 funding, approvals and ERC-2612 permits now name VaultBundlesV1 as spender. Permit2
+keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTransfer payload names
+VaultBundlesV1. Resolve requirements and build from the same prepared handle so its captured nonce,
+deadline, asset, owner, amount, and spender remain consistent:
+
+```ts
+const deposit = vault.deposit({
+  amount: 1_000_000n,
+  userAddress,
+  vaultData,
+  referralFeePct,
+  referralFeeRecipient,
+});
+
+const requirements = await deposit.getRequirements({ permit2Nonce });
+// Submit approval transactions or sign the returned token requirement first.
+const tx = deposit.buildTx(requirementSignature ? [requirementSignature] : undefined);
+```
+
+Deposit action metadata no longer contains `recipient`. It now reports the gross `amount`, optional
+`nativeAmount`, `maxSharePrice`, `referralFeePct`, `referralFeeRecipient`, exact
+`referralFeeAssets`, resulting `netAssets`, and `deadline`.
+
+## Blue write routing
+
 > **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
 > deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
 > flows covered more chains), **every** Blue write — `supply`, `supplyCollateral`, `borrow`,
@@ -83,6 +137,33 @@ section below for that method's larger shape change.
 
 ## Update pure action builder inputs and metadata
 
+## Vault V1 and V2 withdrawals
+
+The established `withdraw` methods and the `vaultV1Withdraw` / `vaultV2Withdraw` builder names stay
+stable, but now encode one direct VaultBundlesV1 call instead of a direct vault call.
+
+| Flow | v5 input | v6 input |
+| --- | --- | --- |
+| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
+
+`withdraw` now returns `{ buildTx, getRequirements }` instead of `{ buildTx }`. VaultBundlesV1 spends
+the caller's vault shares, so the withdrawal needs a vault-share allowance for VaultBundlesV1 — a
+prerequisite v5 withdrawals did not have. Await `getRequirements()` and satisfy it before calling
+`buildTx()`, or the withdrawal reverts:
+
+- Without signature support, it returns one ERC-20 approval transaction to send first.
+- With `supportSignature: true`, it returns one signable ERC-2612 shares permit; pass the signature
+  to `buildTx([sharesPermit])` and it is folded into the VaultBundlesV1 call.
+
+The allowance is the only cap on the burn, since asset-mode calldata carries no maximum-shares
+argument. `getRequirements()` therefore derives an exact cap from the vault snapshot, the deadline,
+and `slippageTolerance` (default 0.03%), and returns an approval or permit for exactly that amount
+whenever the current allowance differs — including when a larger leftover approval already exists.
+
+`getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
+its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
+
+## Blue pure action builder inputs and metadata
 Direct action consumers keep the root-barrel builder and parameter-type names, but must replace
 their `args` objects as follows. `metadata` is unchanged.
 
@@ -285,9 +366,32 @@ const transaction = withdrawal.buildTx(signatures);
 
 ## Upgrade checklist
 
+- Confirm `bundles.vaultBundlesV1` coverage for vault deposits and `bundles.blueBundlesV1` coverage
+  for Blue writes on every chain your application supports.
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
 - Update transaction decoding, simulation fixtures, and action metadata fields; discriminator
   names remain stable.
 - Test native funding, full repay, and full-position migration paths used by the application.
+
+## Fixed-bundles token requirement APIs
+
+The Blue-only fixed-bundles requirement surface is generalized into a shared surface used by both
+BlueBundlesV1 and the upcoming VaultBundlesV1.
+
+| v5 symbol | v6 replacement |
+| --- | --- |
+| `getBlueBundlesV1TokenRequirements` (action-layer) | `getBundlesTokenRequirements` (entity-layer; reads state, so it now lives under `entities/requirements` instead of `actions/requirements/blue`). Takes the same funding parameters plus a `spender` naming the registered fixed bundles deployment (BlueBundlesV1 or VaultBundlesV1). |
+| `BlueBundlesV1TokenSignatureRequirement` / `BlueBundlesV1TokenRequirementSignature` | `BundlesTokenSignatureRequirement` / `BundlesTokenRequirementSignature` |
+| `encodeErc20Permit2TransferFrom` | `encodeErc20Permit2SignatureTransfer` |
+| Action discriminator `"permit2TransferFrom"` | `"permit2SignatureTransfer"` |
+| `Permit2TransferFromAction` / `Permit2TransferFromRequirementSignature` | `Permit2SignatureTransferAction` / `Permit2SignatureTransferRequirementSignature` |
+| `isPermit2TransferFromSignature` | `isPermit2SignatureTransferSignature` |
+| `selectRequirementSignatures` option and result field `permit2TransferFrom` | `permit2SignatureTransfer` |
+| `MissingPermit2TransferFromNonceError` | `MissingPermit2SignatureTransferNonceError` (old name kept as a `@deprecated` alias) |
+| `Permit2TransferFromNonceAlreadyUsedError` | `Permit2SignatureTransferNonceAlreadyUsedError` (old name kept as a `@deprecated` alias) |
+
+Update call sites and `switch`/discriminated-union checks on `action.type` to the new
+`"permit2SignatureTransfer"` tag; the signed payload shape (`nonce`, `deadline`, `signature`) is
+unchanged.

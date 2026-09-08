@@ -1,14 +1,17 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { decodeFunctionData, zeroAddress } from "viem";
+import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   type BundlesFundingArgs,
+  InputExceedsMaxError,
   MixedBundlesFundingError,
+  NonPositiveInputError,
   ReferralFeeRecipientMissingError,
+  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import { vaultV2Deposit } from "./deposit.js";
 
@@ -22,6 +25,89 @@ const { usdc, wNative } = addressesRegistry[chainId];
 const positiveUint128 = fc.bigInt({ min: 1n, max: (1n << 128n) - 1n });
 
 describe("vaultV2Deposit", () => {
+  test.each(["amount", "nativeAmount", "maxSharePrice"] as const)(
+    "error: InputExceedsMaxError for %s above uint256",
+    (field) => {
+      const value = maxUint256 + 1n;
+      const funding =
+        field === "nativeAmount"
+          ? { nativeAmount: value }
+          : { amount: field === "amount" ? value : 1n };
+      expect(() =>
+        vaultV2Deposit({
+          vault: { chainId, address: vault, asset: wNative },
+          args: {
+            ...funding,
+            maxSharePrice: field === "maxSharePrice" ? value : 1n,
+            userAddress,
+            deadline,
+          },
+        }),
+      ).toThrow(InputExceedsMaxError);
+    },
+  );
+
+  test.each(["amount", "nativeAmount"] as const)(
+    "behavior: uint256 maximum remains encodable for %s and maxSharePrice",
+    (field) => {
+      const funding =
+        field === "nativeAmount"
+          ? { nativeAmount: maxUint256 }
+          : { amount: maxUint256 };
+      const transaction = vaultV2Deposit({
+        vault: { chainId, address: vault, asset: wNative },
+        args: { ...funding, maxSharePrice: maxUint256, userAddress, deadline },
+      });
+      const decoded = decodeFunctionData({
+        abi: vaultBundlesV1Abi,
+        data: transaction.data,
+      });
+      expect(decoded.args[1]).toBe(maxUint256);
+      expect(decoded.args[2]).toBe(maxUint256);
+      expect(transaction.value).toBe(
+        field === "nativeAmount" ? maxUint256 : 0n,
+      );
+    },
+  );
+
+  test.each(["permit", "permit2SignatureTransfer"] as const)(
+    "error: UnexpectedRequirementSignatureError for native funding with %s",
+    (type) => {
+      const args = {
+        spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+        amount: 7n,
+        deadline,
+      };
+      const permitArgs = {
+        owner: userAddress,
+        asset: wNative,
+        amount: 7n,
+        nonce: 0n,
+        deadline,
+        signature: "0x" as const,
+      };
+      const requirementSignature =
+        type === "permit"
+          ? { args: permitArgs, action: { type, args } }
+          : {
+              args: permitArgs,
+              action: { type, args: { ...args, nonce: 0n } },
+            };
+      expect(() =>
+        vaultV2Deposit({
+          vault: { chainId, address: vault, asset: wNative },
+          args: {
+            nativeAmount: 7n,
+            maxSharePrice: 2n,
+            userAddress,
+            deadline,
+            requirementSignature,
+          },
+        }),
+      ).toThrow(UnexpectedRequirementSignatureError);
+    },
+  );
+
   test("default", () => {
     const referralFeePct = MathLib.WAD / 5n;
     const transaction = vaultV2Deposit({
@@ -134,5 +220,20 @@ describe("vaultV2Deposit", () => {
         },
       }),
     ).toThrow(ReferralFeeRecipientMissingError);
+  });
+
+  test("error: NonPositiveInputError for non-positive maxSharePrice", () => {
+    let thrown: unknown;
+    try {
+      vaultV2Deposit({
+        vault: { chainId, address: vault, asset: usdc },
+        args: { amount: 1n, maxSharePrice: 0n, userAddress, deadline },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(NonPositiveInputError);
+    expect(thrown).toMatchObject({ field: "maxSharePrice", value: 0n });
   });
 });

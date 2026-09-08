@@ -66,6 +66,9 @@ composition compatibility surfaces are deprecated and will be removed in the nex
 `VaultV1Reallocation` outputs are not accepted by the high-level Blue write methods; new write
 integrations use `VaultV2BlueReallocation`.
 
+All Vault V1 shared-liquidity inputs and low-level Bundler3 composition are deprecated and will be
+removed in the next major. New integrations use `VaultV2BlueReallocation`.
+
 ## Discriminated unions
 
 All action interfaces extend `BaseAction<TType, TArgs>` and discriminate on `type`. To add a new operation, see [`types/AGENTS.md`](../types/AGENTS.md#adding-a-new-operation).

@@ -3,6 +3,7 @@ export type {
   RequirementSignature,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+export { ChainIdMismatchError } from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
@@ -33,10 +34,13 @@ export type {
   MarketPosition,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
+  MorphoErc20SupplyOptions,
   MorphoEvmAccount,
   MorphoExclusiveSupplyOptions,
+  MorphoNativeSupplyOptions,
   MorphoProtocolOptions,
   MorphoRepayOptions,
+  MorphoSupplyOptions,
   MorphoWithdrawCollateralOptions,
   MorphoWithdrawOptions,
   PreparedMorphoSupply,

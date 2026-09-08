@@ -5,16 +5,16 @@ import {
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 import {
-  type BundlesSharesPermit,
+  type BundleSharesPermit,
   getBundlesSharesPermit,
-} from "../bundles/index.js";
+} from "../bundles/common.js";
 
 /**
- * Permit tuple consumed by VaultExitBundlesV1.
+ * Compatibility alias for the canonical {@link BundleSharesPermit} tuple consumed by VaultExitBundlesV1.
  *
- * @deprecated Use {@link BundlesSharesPermit}.
+ * @deprecated Use {@link BundleSharesPermit}.
  */
-export interface VaultExitBundlesV1PermitStruct extends BundlesSharesPermit {}
+export type VaultExitBundlesV1PermitStruct = BundleSharesPermit;
 
 /**
  * Parameters for {@link getVaultExitBundlesV1PermitStruct}.

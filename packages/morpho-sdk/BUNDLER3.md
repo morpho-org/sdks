@@ -20,7 +20,7 @@ does not imply that a high-level entity method routes through Bundler3.
 
 ### GeneralAdapter1
 
-GeneralAdapter1 is the generic adapter used by Bundler3. For explicit low-level compositions it:
+GeneralAdapter1 is the generic adapter used by Bundler3. Its low-level primitives can:
 
 - receives ERC-20 tokens through `erc20TransferFrom`, ERC-2612, or Permit2 AllowanceTransfer;
 - wraps native assets through `nativeTransfer` + `wrapNative`; and
@@ -40,7 +40,7 @@ Use Vault V2 BluePublicAllocator actions for new integrations.
 
 | Operation | Route | Composition |
 | --- | --- | --- |
-| VaultV1 `deposit` | VaultBundlesV1 | Exclusive native wrap or ERC-20 funding, optional referral fee, and a deposit with `maxSharePrice`. |
+| VaultV1 `deposit` | VaultBundlesV1 | Exclusive ERC-20 pull or native wrap, optional referral fee, then deposit with `maxSharePrice` and `deadline`. |
 | VaultV2 `deposit` | VaultBundlesV1 | Same shape as VaultV1. |
 | VaultV1 `migrateToV2` | VaultBundlesV1 | Exit by assets or shares, then deposit net assets into VaultV2 with `maxSharePrice`. |
 | VaultV1/VaultV2 `withdraw` / `redeem` | VaultBundlesV1 | Exact share approval or embedded ERC-2612 shares permit. |
@@ -80,6 +80,26 @@ Consequences for integrators:
 - Transaction decoding and simulation must expect one BlueBundlesV1 function call rather than a
   Bundler3 multicall action list.
 
+## Vault deposit routing
+
+High-level VaultV1/VaultV2 deposits call `vaultBundlesV1Deposit` directly. Funding is either
+ERC-20 `amount` or `nativeAmount`, never both. The native path sends the full gross amount as
+`tx.value`; VaultBundlesV1 wraps it, and the vault asset must be the chain's wrapped-native token.
+
+VaultBundlesV1 deducts the optional referral fee before depositing and atomically enforces the
+`maxSharePrice` inflation-attack guard and execution deadline. The entity computes this bound from
+net assets using the vault snapshot accrued through the deadline. Shares go to the transaction
+sender, which must match `userAddress`.
+
+Classic approvals and ERC-2612 permits target VaultBundlesV1. Permit2 uses SignatureTransfer:
+the ERC-20 prerequisite targets canonical Permit2, and the signed transfer names VaultBundlesV1
+as spender with an explicit unused `permit2Nonce`. Native funding needs no token requirements and
+rejects token signatures. The same prepared handle resolves requirements and builds the deposit;
+its accepted signature is encoded into the fixed call's token permit.
+
+See [the requirements system](./ARCHITECTURE.md#requirements-system) for the decision table and
+[the migration guide](./MIGRATION-v5-to-v6.md) for per-chain deployment checks.
+
 ## Guarantees of low-level Bundler3 compositions
 
 ### Atomic share-price protection
@@ -95,7 +115,7 @@ Bundler3 either executes every encoded action in order or reverts the whole mult
 explicitly composed migration and native-wrap deposit flows can combine protocol steps without
 exposing intermediate state.
 
-### One spender for Bundler3 flows
+### One spender for GeneralAdapter1 compositions
 
 Advanced GeneralAdapter1 compositions use the requirement resolver,
 [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts).
@@ -110,10 +130,15 @@ BlueBundlesV1 or VaultBundlesV1 writes because they have different spenders.
 - **Do not overwrite `tx.value`.** `BundlerAction.encodeBundle` derives native value from encoded
   native transfers and any low-level value-carrying allocator calls.
 - **Resolve addresses per chain.** Use the address registry and validate the viem client's chain
-  before encoding. Bundler3, GeneralAdapter1, and BlueBundlesV1 are independent addresses.
+  before encoding. Bundler3, GeneralAdapter1, VaultBundlesV1, and BlueBundlesV1 are independent addresses.
 - **Do not infer high-level routing from low-level exports.** Morpho and PublicAllocator Bundler3
   primitives remain public for advanced users, but `client.morpho.blue(...)` never falls back to
-  them in v6.
+  them in v6. High-level vault deposits, vault withdrawals, and Blue writes require their
+  registered fixed bundles contracts in v6.
+- **Direct vault `redeem` has no share-price bound.** Unlike VaultBundlesV1 deposits and
+  withdrawals, VaultV1/VaultV2 `redeem` is a direct vault call that carries no on-chain
+  `minSharePrice`/`maxSharePrice` bound, so callers must weigh share-price movement between
+  transaction construction and inclusion.
 
 **Vault withdrawals cap the share burn through their allowance.** `vaultV1Withdraw` and
 `vaultV2Withdraw` burn `msg.sender`'s shares from VaultBundlesV1, so they need a vault-share
@@ -131,7 +156,7 @@ encode exact shares and carry no minimum-assets bound.
 ## Code references
 
 - Bundle encoding: [src/bundler/actions.ts](src/bundler/actions.ts)
-- Vault deposit actions: [src/actions/vaultV1/deposit.ts](src/actions/vaultV1/deposit.ts),
+- Direct VaultBundlesV1 deposit actions: [src/actions/vaultV1/deposit.ts](src/actions/vaultV1/deposit.ts),
   [src/actions/vaultV2/deposit.ts](src/actions/vaultV2/deposit.ts)
 - GeneralAdapter1 requirements:
   [src/actions/requirements/generalAdapter/](src/actions/requirements/generalAdapter/)

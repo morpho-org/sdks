@@ -62,8 +62,6 @@ const prepared = await morpho.prepareSupply({
   token: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   amount: 1000000n
 })
-const requirements = await prepared.getRequirements()
-
 // Send approvals and retain any permit/Permit2 signature for this prepared handle.
 // Keep the explicit Permit2 nonce unique and unused for this owner.
 let requirementSignature
@@ -103,15 +101,16 @@ Options:
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
 
-Vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collateral methods accept `MorphoCollateralSupplyOptions`; both types require exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
+Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collateral methods accept `MorphoCollateralSupplyOptions`; both types require exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
 
 ## Methods
 
 | Method | Description |
 |---|---|
-| `supply(options, config?)` | Deposit assets into the configured vault |
+| `supply(options, config?)` | Deprecated: legacy Bundler3 deposit, retained through 2.x; removed in 3.0 |
+| `getSupplyRequirements(options, requirementOptions?)` | Deprecated: GeneralAdapter1 approval/permit requirements for legacy supply |
 | `prepareSupply(options)` | Prepare one vault deposit handle exposing `getRequirements`, `submit`, and `quote` |
-| `quoteSupply(options, config?)` | Quote vault deposit |
+| `quoteSupply(options, config?)` | Deprecated: quote the legacy deposit with its option-level signature |
 | `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
 | `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
@@ -151,6 +150,20 @@ Borrow presets target Ethereum mainnet USDT loan markets:
 | `wbtc` | WBTC |
 | `xaut` | XAUt |
 
+## Deprecated vault supply compatibility
+
+`supply`, `getSupplyRequirements`, and `quoteSupply`, together with `MorphoSupplyOptions`,
+`MorphoErc20SupplyOptions`, and `MorphoNativeSupplyOptions`, remain functional throughout 2.x.
+They are deprecated in favor of `prepareSupply` and scheduled for removal in 3.0.
+
+The legacy flow keeps Bundler3/GeneralAdapter1, allows additive `amount` and `nativeAmount`,
+and consumes ERC-2612 or Permit2 AllowanceTransfer through `options.requirementSignature`.
+Only the ERC-20 portion needs approval. Existing GeneralAdapter1 allowances continue to work.
+Native funding still requires a wrapped-native vault asset.
+
+Use `prepareSupply` for new integrations. It targets VaultBundlesV1 with exclusive funding and
+Permit2 SignatureTransfer. Keep approvals and signatures with the route that requested them.
+
 ## Morpho SDK Requirements
 
 Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
@@ -163,7 +176,7 @@ Requirement entries are one of:
 
 - Approval transaction: send the returned transaction before the final action.
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
-- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Vault deposits take theirs on the prepared handle's own `submit(requirementSignature)` or `quote(requirementSignature)`, never on `supply` options.
+- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Prepared vault deposits take theirs on the handle's `submit(requirementSignature)` or `quote(requirementSignature)`. Deprecated `supply` and `quoteSupply` still accept legacy ERC-2612 or Permit2 AllowanceTransfer signatures on their options.
 - Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
 

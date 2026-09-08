@@ -1,11 +1,39 @@
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, http, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { inKindVaultV2Data } from "../../../test/fixtures/inKindRedeem.js";
 import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  InputExceedsMaxError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 
 describe("MorphoVaultV2 deposit input validation", () => {
+  test.each(["amount", "nativeAmount"] as const)(
+    "error: InputExceedsMaxError before preparing requirements for oversized %s",
+    (field) => {
+      const client = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      }).extend(morphoViemExtension());
+      const vault = client.morpho.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+      const value = maxUint256 + 1n;
+      const funding =
+        field === "nativeAmount" ? { nativeAmount: value } : { amount: value };
+      expect(() =>
+        vault.deposit({
+          ...funding,
+          userAddress: KeyrockUsdcVaultV2.address,
+          vaultData: inKindVaultV2Data({ address: KeyrockUsdcVaultV2.address }),
+        }),
+      ).toThrow(InputExceedsMaxError);
+    },
+  );
+
   test("error: NonPositiveInputError for zero total assets", () => {
     const client = createPublicClient({
       chain: mainnet,
@@ -39,13 +67,11 @@ describe("MorphoVaultV2 deposit input validation", () => {
     const vault = client.morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
 
     const action = vault.deposit({
-      amount: 1n,
+      amount: 100n,
       userAddress: submitter,
-      vaultData: {
+      vaultData: inKindVaultV2Data({
         address: KeyrockUsdcVaultV2.address,
-        asset: KeyrockUsdcVaultV2.asset,
-        accrueInterest: () => ({ toShares: () => 1n }),
-      } as never,
+      }),
     });
 
     expect(action).toBeDefined();

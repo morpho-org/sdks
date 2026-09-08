@@ -12,7 +12,7 @@ import {
   finalizeVaultBundlesV1Transaction,
   getBundlesSharesPermit,
   normalizeBundlesCommonParams,
-} from "../bundles/index.js";
+} from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2Redeem}. */
 export interface VaultV2RedeemParams {

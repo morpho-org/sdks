@@ -1,5 +1,8 @@
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { maxUint256 } from "viem";
+import { validateUint256Field } from "../../helpers/validate.js";
+import { validateRequirementSpender } from "../../helpers/validateRequirementSpender.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   type BundlesTokenSignatureRequirement,
@@ -23,7 +26,6 @@ export type BundlesTokenRequirementsState =
     }
   | {
       readonly type: "permit2SignatureTransfer";
-      readonly permit2: Address;
       readonly permit2Allowance: bigint;
       readonly permit2Nonce: bigint;
       readonly nonceBitmap: bigint;
@@ -32,23 +34,46 @@ export type BundlesTokenRequirementsState =
 /**
  * Resolves pre-fetched allowance and Permit2 nonce state into ordered bundles requirements.
  *
+ * `spender` is validated against the chain registry's fixed bundles deployments, and the
+ * SignatureTransfer branch resolves canonical Permit2 from that same registry, so no caller can
+ * route an approval or a signed pull to an address the SDK does not know.
+ *
  * The SignatureTransfer branch always places any ERC-20 approval to canonical Permit2 before the
  * one-time signature requirement.
  *
  * @param params - Funding values, expected bundles spender, and pre-fetched state.
+ * @param params.token - ERC-20 token funded by the operation.
+ * @param params.spender - Registered fixed bundles contract that pulls the token; must be the
+ *   chain's BlueBundlesV1 or VaultBundlesV1 deployment.
+ * @param params.owner - Account funding the operation and owning the Permit2 nonce bitmap.
+ * @param params.chainId - Target chain id used to resolve supported approval spenders and canonical Permit2.
+ * @param params.amount - Exact pull amount in the token's smallest unit; zero returns no requirements.
+ * @param params.deadline - Signature expiration as a Unix timestamp in seconds.
+ * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
+ * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
+ * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
+ * @param params.state.approvalAmount - In the approval branch, allowance to set if needed; must cover `amount`.
+ * @param params.state.permit2Allowance - In the SignatureTransfer branch, current token allowance from `owner` to canonical Permit2.
+ * @param params.state.permit2Nonce - In the SignatureTransfer branch, caller-selected unused uint256 unordered nonce.
+ * @param params.state.nonceBitmap - In the SignatureTransfer branch, owner's Permit2 bitmap word at `permit2Nonce >> 8n`.
  * @returns Ordered approval transactions and/or a Permit2 SignatureTransfer requirement.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
+ *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
  * @throws {NegativeInputError} when an amount or Permit2 nonce is negative.
- * @throws {InputExceedsMaxError} when the Permit2 nonce exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount` or the Permit2 nonce exceeds uint256.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the selected nonce bit is set.
  * @throws {ApprovalAmountLessThanSpendAmountError} when a classic approval cannot cover the pull.
+ * @throws {UnknownAddressError} when the SignatureTransfer branch runs on a chain without canonical Permit2.
  * @example
  * ```ts
  * import { resolveBundlesTokenRequirements } from "@morpho-org/morpho-sdk";
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
  * import { zeroAddress } from "viem";
  *
  * const requirements = resolveBundlesTokenRequirements({
  *   token: zeroAddress,
- *   spender: zeroAddress,
+ *   spender: getChainAddress(1, "bundles.vaultBundlesV1"),
  *   owner: zeroAddress,
  *   chainId: 1,
  *   amount: 1_000_000n,
@@ -70,9 +95,13 @@ export const resolveBundlesTokenRequirements = (params: {
   | Readonly<Transaction<ERC20ApprovalAction>>
   | BundlesTokenSignatureRequirement
 )[] => {
-  if (params.amount < 0n) {
-    throw new NegativeInputError("amount", params.amount);
-  }
+  validateRequirementSpender({
+    chainId: params.chainId,
+    spender: params.spender,
+    allowed: ["blueBundlesV1", "vaultBundlesV1"],
+  });
+  // Reject invalid pulls before an approval encoder can cap the requested amount.
+  validateUint256Field("amount", params.amount);
   if (params.amount === 0n) return [];
 
   if (params.state.type === "approval") {
@@ -109,12 +138,13 @@ export const resolveBundlesTokenRequirements = (params: {
       params.state.permit2Nonce,
     );
   }
+  const permit2 = getChainAddress(params.chainId, "permit2");
   return [
     ...getRequirementsApproval({
       address: params.token,
       chainId: params.chainId,
       args: {
-        spender: params.state.permit2,
+        spender: permit2,
         spendAmount: params.amount,
         approvalAmount: maxUint256,
       },

@@ -7,7 +7,7 @@
 
 > 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on every chain where Morpho is deployed. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
+Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
 ## Installation
 
@@ -15,8 +15,8 @@ Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**,
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating Blue
-write integrations.
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+deposit or Blue write integrations.
 
 ## Actions
 
@@ -51,7 +51,8 @@ checks live Blue liquidity. Calling `buildTx()` directly skips RPC-backed pre-fl
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
-const { buildTx, getRequirements } = await vault.deposit({ amount, userAddress });
+const vaultData = await vault.getData();
+const { buildTx, getRequirements } = vault.deposit({ amount, userAddress, vaultData });
 
 const requirements = await getRequirements();
 // Send each approval tx and collect each signature, then:
@@ -98,13 +99,14 @@ Create an entity — every factory takes a chain ID as its last argument:
 
 ### Vault deposit / withdraw
 
-Deposit routes through VaultBundlesV1 and may require an approval or permit:
+Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
+permits authorize VaultBundlesV1. Permit2 SignatureTransfer also names VaultBundlesV1 as spender,
+while the ERC-20 approval prerequisite targets canonical Permit2.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
 const vaultData = await vault.getData();
-
-const { buildTx, getRequirements } = await vault.deposit({
+const { buildTx, getRequirements } = vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
   vaultData,
@@ -126,7 +128,8 @@ const requirements = await getRequirements();
 const tx = buildTx([sharesPermitSignature]);
 ```
 
-For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).
+For wNative vaults, pass `nativeAmount` instead of `amount`. The transaction sends that amount as
+`tx.value` to VaultBundlesV1, which wraps it internally; native deposits require no token permit.
 
 ### Blue: BlueBundlesV1 writes
 
@@ -172,6 +175,10 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 > High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
 > low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
 > will be removed in the next major.
+
+> All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
+> composition are deprecated and will be removed in the next major. Use Vault V2
+> BluePublicAllocator reallocations.
 
 ### Midnight: take a fixed-rate offer
 
