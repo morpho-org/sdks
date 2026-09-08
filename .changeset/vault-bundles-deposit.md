@@ -19,5 +19,9 @@ throughout 2.x, with removal deferred to 3.0. The compatibility methods preserve
 GeneralAdapter1 approvals, additive native/ERC-20 amounts, and ERC-2612/Permit2 AllowanceTransfer
 signatures. Use `prepareSupply` for the new VaultBundlesV1 route.
 
+Narrow the legacy WDK supply options' `requirementSignature` to `PermitRequirementSignature`,
+matching the supported ERC-2612 and Permit2 AllowanceTransfer permits. Callers holding the broader
+`RequirementSignature` union must narrow it before supplying a legacy vault deposit signature.
+
 Reject vault deposit funding and share-price bounds above uint256 with `InputExceedsMaxError`.
 Prepared Vault V1/V2 deposits reject oversized native amounts before returning requirements.

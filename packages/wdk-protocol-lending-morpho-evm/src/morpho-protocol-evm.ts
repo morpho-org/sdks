@@ -194,7 +194,7 @@ export interface MorphoErc20SupplyOptions extends MorphoSupplyCommonOptions {
   /** Additional native amount to wrap for a wrapped-native vault. */
   readonly nativeAmount?: number | bigint;
   /** ERC-2612 or Permit2 AllowanceTransfer signature returned by getSupplyRequirements. */
-  readonly requirementSignature?: RequirementSignature;
+  readonly requirementSignature?: PermitRequirementSignature;
 }
 
 /**
@@ -207,7 +207,7 @@ export interface MorphoNativeSupplyOptions extends MorphoSupplyCommonOptions {
   /** Native amount to wrap; zero is allowed when ERC-20 funding is positive. */
   readonly nativeAmount: number | bigint;
   /** ERC-2612 or Permit2 AllowanceTransfer signature covering only the ERC-20 portion. */
-  readonly requirementSignature?: RequirementSignature;
+  readonly requirementSignature?: PermitRequirementSignature;
 }
 
 /**
