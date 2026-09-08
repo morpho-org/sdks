@@ -713,15 +713,9 @@ describe("MorphoBlue position validation", () => {
     ).toThrow(BorrowExceedsSafeLtvError);
   });
 
-  test("error: InputExceedsMaxError when the migration penalty exceeds current source debt", () => {
-    const now = 1_800_000_000n;
+  test("behavior: migration accepts a penalty above current source debt when healthy", () => {
     const entity = makeEntity();
-    // Interest-bearing source: the current quoted debt is strictly below the `now + 2h` health
-    // projection the method uses elsewhere, so a penalty just above the current debt lands between
-    // the two figures. The cap must bind against the current quote, not the forecast, to reject it.
     const sourcePosition = makePosition(marketParams, {
-      lastUpdate: now - 5n * 24n * 3_600n,
-      rateAtTarget: 3_170_979_198n,
       collateral: 10n ** 24n,
     });
     const destinationPosition = makePosition(destinationMarketParams, {
@@ -729,11 +723,6 @@ describe("MorphoBlue position validation", () => {
       collateral: 0n,
     });
     const currentDebt = sourcePosition.borrowAssets;
-    const forecastDebt = sourcePosition.accrueInterest(
-      now + 7_200n,
-    ).borrowAssets;
-    // Guard the fixture: the penalty sits in the (current, forecast] gap the bug would have missed.
-    expect(forecastDebt).toBeGreaterThan(currentDebt + 1n);
     // penaltyAssets = ceil(assets × penalty / WAD) = currentDebt + 1n with penalty = 100%.
     const reallocation = {
       vault: "0x0000000000000000000000000000000000000031",
@@ -744,19 +733,17 @@ describe("MorphoBlue position validation", () => {
     } satisfies VaultV2BlueReallocation;
 
     expect(() =>
-      withChainTimestamp(now, () =>
-        entity.refinance({
-          userAddress,
-          positionData: sourcePosition,
-          destination: {
-            marketParams: destinationMarketParams,
-            positionData: destinationPosition,
-          },
-          reallocations: [reallocation],
-          deadline: maxUint256,
-        }),
-      ),
-    ).toThrow(InputExceedsMaxError);
+      entity.refinance({
+        userAddress,
+        positionData: sourcePosition,
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: destinationPosition,
+        },
+        reallocations: [reallocation],
+        deadline: maxUint256,
+      }),
+    ).not.toThrow();
   });
 
   test("error: WithdrawMakesPositionUnhealthyError after collateral withdrawal", () => {

@@ -120,7 +120,12 @@ export const getPermitTypedData = (
   };
 };
 
-/** Message fields for DAI-style permit typed data. */
+/**
+ * Message fields for DAI-style permit typed data.
+ *
+ * @deprecated Arguments for the deprecated {@link getDaiPermitTypedData}; DAI is
+ * routed through Permit2 internally. Scheduled for removal in the next major.
+ */
 export interface DaiPermitArgs {
   owner: Address;
   spender: Address;
@@ -141,6 +146,15 @@ const daiPermitTypes = {
 
 /**
  * Builds DAI-style permit typed data for signing.
+ *
+ * @deprecated Not used by any SDK flow — DAI approvals are routed through
+ * Permit2 / classic approval internally (DAI's non-standard permit is
+ * incompatible with the ERC-2612 simple-permit path). Prefer the Permit2 flow.
+ * Scheduled for removal in the next major.
+ *
+ * @remarks DAI's permit is **boolean**: any `allowance > 0n` authorizes the
+ * spender for `type(uint256).max`, not the passed amount — there is no
+ * finite-allowance DAI permit.
  *
  * @param args - DAI permit message fields.
  * @param chainId - Chain id whose DAI deployment verifies the signature.

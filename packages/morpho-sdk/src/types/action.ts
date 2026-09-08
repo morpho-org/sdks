@@ -507,17 +507,17 @@ export interface Permit2Args {
  */
 export interface AuthorizationSignatureArgs {
   /** Account granting the authorization (the position owner). */
-  owner: Address;
+  readonly owner: Address;
   /** Account being authorized to operate on Morpho on the owner's behalf. */
-  authorized: Address;
+  readonly authorized: Address;
   /** Whether the authorization is granted (`true`) or revoked (`false`). */
-  isAuthorized: boolean;
+  readonly isAuthorized: boolean;
   /** Morpho authorization nonce consumed by the signature. */
-  nonce: bigint;
+  readonly nonce: bigint;
   /** Signature deadline timestamp in seconds. */
-  deadline: bigint;
+  readonly deadline: bigint;
   /** EIP-712 signature over the Morpho `Authorization` typed data. */
-  signature: Hex;
+  readonly signature: Hex;
 }
 
 /** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
@@ -612,8 +612,8 @@ export interface Permit2TransferFromRequirementSignature {
 
 /** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */
 export interface AuthorizationRequirementSignature {
-  args: AuthorizationSignatureArgs;
-  action: AuthorizationAction;
+  readonly args: AuthorizationSignatureArgs;
+  readonly action: AuthorizationAction;
 }
 
 /** A signed Midnight Ecrecover offer-root requirement. */
@@ -877,13 +877,13 @@ export function isMidnightOfferRootSignature(
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
-  permit?: PermitRequirementSignature;
+  readonly permit?: PermitRequirementSignature;
   /** The single Permit2 SignatureTransfer signature, when present. */
-  permit2TransferFrom?: Permit2TransferFromRequirementSignature;
+  readonly permit2TransferFrom?: Permit2TransferFromRequirementSignature;
   /** The single Morpho authorization signature, when present. */
-  authorization?: AuthorizationRequirementSignature;
+  readonly authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
-  midnightOfferRoot?: MidnightOfferRootSignature;
+  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**

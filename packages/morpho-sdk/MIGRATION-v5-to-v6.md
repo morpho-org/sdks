@@ -136,12 +136,13 @@ the full live source debt and collateral always move, the source and destination
 same loan and collateral tokens and must not be the same market, and Morpho authorization targets
 BlueBundlesV1.
 
-`userAddress` must be the account that signs the Morpho authorization **and** sends the transaction.
-The BlueBundlesV1 migration calldata carries no owner field: it migrates the position of the
-authorization signer, which the contract binds to `msg.sender`. Unlike the v5 Bundler3 route (where
-`args.user` was encoded as `onBehalf` in every leg), a relayer can no longer migrate a third party's
-position — supplying a `userAddress` other than the sender reverts on-chain. On-behalf refinance is no
-longer supported; the SDK uses `userAddress` only to build the authorization requirement and action
+`userAddress` must be the account that sends the transaction and, when used, signs the Morpho
+authorization. BlueBundlesV1 migration calldata carries no owner field and always migrates
+`msg.sender`; a supplied authorization signature is likewise bound to that sender. Unlike the v5
+Bundler3 route (where `args.user` was encoded as `onBehalf` in every leg), a relayer can no longer
+migrate a third party's position. Builders cannot enforce that `userAddress` matches the sender; a
+mismatch does not itself revert, and BlueBundlesV1 still migrates `msg.sender`. The SDK uses
+`userAddress` only to validate snapshots, build the authorization requirement, and populate action
 metadata.
 
 `market.refinance(...)` (entity method):
@@ -173,10 +174,10 @@ The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are **deprecated,
 not removed**: they stay exported through v6 (marked `@deprecated`) for consumers pattern-matching on
 the v5 surface, are never thrown by the full-position route, and are removed in the next major. The
-full-position route validates ownership and token/market compatibility, rejects a reallocation plan
-whose rounded aggregate penalty exceeds the migrated source debt (`InputExceedsMaxError`), then checks
-the combined destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`);
-`RefinanceSameMarketError` and `RefinanceTokenMismatchError` stay.
+full-position route validates snapshot ownership and token/market compatibility, accounts for
+reallocation penalties in destination debt, then checks the combined destination position against
+the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError` and
+`RefinanceTokenMismatchError` stay.
 
 ## Removed action-output field: `reallocationFee`
 

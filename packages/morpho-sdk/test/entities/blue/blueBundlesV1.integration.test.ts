@@ -28,7 +28,11 @@ import {
   isRequirementBlueAuthorization,
   morphoViemExtension,
 } from "../../../src/index.js";
-import { CbbtcUsdcBlue, WethUsdsBlue } from "../../fixtures/blue.js";
+import {
+  CbbtcUsdcBlue,
+  WethUsdsBlue,
+  WstethWethBlue,
+} from "../../fixtures/blue.js";
 import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import {
   satisfyBlueBundlesV1Requirements,
@@ -191,6 +195,43 @@ describe("BlueBundlesV1 Blue writes", () => {
       beforePosition.supplyShares,
     );
     expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("supply: executes with native funding without retaining assets", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1", 18);
+    await client.setBalance({
+      address: client.account.address,
+      value: amount * 2n,
+    });
+
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      WstethWethBlue,
+    ]);
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      nativeAmount: amount,
+      deadline: maxUint256,
+    });
+
+    expect(await action.getRequirements()).toEqual([]);
+    const transaction = action.buildTx();
+    expect(transaction.value).toBe(amount);
+    await client.sendTransaction(transaction);
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(await getBlueBundlesBalances(client, [WstethWethBlue])).toEqual(
       beforeBalances,
     );
   });
@@ -877,9 +918,9 @@ describe("BlueBundlesV1 Blue writes", () => {
 });
 
 describe("BlueBundlesV1 Vault V2 reallocations", () => {
-  baseTest(
-    "borrow: executes market and idle reallocations through live Base contracts",
-    async ({ client }) => {
+  baseTest.for(["borrow", "withdraw"] as const)(
+    "%s: executes market and idle reallocations through live Base contracts",
+    async (operation, { client }) => {
       const anvilClient = client as AnvilTestClient;
       const { morpho, vaultV2BluePublicAllocator: allocator } =
         getChainAddresses(base.id);
@@ -887,7 +928,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
       const sourceDepositAssets = parseUnits("100", 6);
       const initialIdleAssets = parseUnits("20", 6);
       const penalty = MathLib.WAD / 100n;
-      const borrowAssets = parseUnits("2", 6);
+      const operationAssets = parseUnits("2", 6);
 
       for (const marketParams of [baseSourceMarket, baseTargetMarket]) {
         const marketState = await readContractRestructured(client, {
@@ -1047,12 +1088,21 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         functionName: "decreaseRelativeCap",
         args: [sharedCapId, (MathLib.WAD * 9n) / 10n],
       });
-      await supplyCollateral({
-        client: anvilClient,
-        chainId: base.id,
-        market: baseTargetMarket,
-        collateralAmount: parseUnits("1", 18),
-      });
+      if (operation === "borrow") {
+        await supplyCollateral({
+          client: anvilClient,
+          chainId: base.id,
+          market: baseTargetMarket,
+          collateralAmount: parseUnits("1", 18),
+        });
+      } else {
+        await supplyLoan({
+          client: anvilClient,
+          chainId: base.id,
+          market: baseTargetMarket,
+          supplyAmount: operationAssets * 2n,
+        });
+      }
 
       const market = client
         .extend(morphoViemExtension())
@@ -1079,6 +1129,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         0n,
       );
       expect(totalPenaltyAssets).toBeGreaterThan(0n);
+      expect(totalPenaltyAssets).toBeLessThan(operationAssets);
 
       const positionData = await market.getPositionData(client.account.address);
       const [
@@ -1086,6 +1137,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         targetPositionBefore,
         vaultBalanceBefore,
         bundleBalancesBefore,
+        userBalanceBefore,
       ] = await Promise.all([
         readContractRestructured(client, {
           address: morpho,
@@ -1107,25 +1159,46 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
           baseSourceMarket,
           baseTargetMarket,
         ]),
+        client.balanceOf({
+          erc20: baseTargetMarket.loanToken,
+          owner: client.account.address,
+        }),
       ]);
-      const action = market.borrow({
-        userAddress: client.account.address,
-        positionData,
-        borrowAssets,
-        reallocations: discovery.reallocations,
-        deadline: maxUint256,
-      });
+      const action =
+        operation === "borrow"
+          ? market.borrow({
+              userAddress: client.account.address,
+              positionData,
+              borrowAssets: operationAssets,
+              reallocations: discovery.reallocations,
+              deadline: maxUint256,
+            })
+          : market.withdraw({
+              userAddress: client.account.address,
+              positionData,
+              assets: operationAssets,
+              reallocations: discovery.reallocations,
+              deadline: maxUint256,
+            });
       const signatures = await satisfyBlueBundlesV1Requirements(anvilClient, {
         requirements: await action.getRequirements(),
         approvalFundingToken: baseTargetMarket.loanToken,
       });
-      await client.sendTransaction(action.buildTx(signatures));
+      const transaction = action.buildTx(signatures);
+      expect(transaction.action.args.reallocations).toBe(
+        discovery.reallocations.length,
+      );
+      expect(transaction.action.args.reallocationPenaltyAssets).toBe(
+        totalPenaltyAssets,
+      );
+      await client.sendTransaction(transaction);
 
       const [
         positionAfter,
         sourcePositionAfter,
         targetPositionAfter,
         vaultBalanceAfter,
+        userBalanceAfter,
       ] = await Promise.all([
         market.getPositionData(client.account.address),
         readContractRestructured(client, {
@@ -1144,9 +1217,22 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
           erc20: baseTargetMarket.loanToken,
           owner: vault,
         }),
+        client.balanceOf({
+          erc20: baseTargetMarket.loanToken,
+          owner: client.account.address,
+        }),
       ]);
-      expect(positionAfter.borrowShares).toBeGreaterThan(
-        positionData.borrowShares,
+      if (operation === "borrow") {
+        expect(positionAfter.borrowShares).toBeGreaterThan(
+          positionData.borrowShares,
+        );
+      } else {
+        expect(positionAfter.supplyShares).toBeLessThan(
+          positionData.supplyShares,
+        );
+      }
+      expect(userBalanceAfter - userBalanceBefore).toBe(
+        operationAssets - totalPenaltyAssets,
       );
       expect(sourcePositionAfter.supplyShares).toBeLessThan(
         sourcePositionBefore.supplyShares,
@@ -1479,7 +1565,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
   );
 
   baseTest(
-    "refinance: a Vault V2 reallocation penalty and referral fee increase destination debt",
+    "refinance: an above-debt Vault V2 penalty and referral fee increase destination debt",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
       const { morpho, vaultV2BluePublicAllocator: allocator } =
@@ -1487,7 +1573,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
       assert(allocator != null);
       const depositAssets = parseUnits("100", 6);
       const destinationLiquidity = parseUnits("20", 6);
-      const penalty = MathLib.WAD / 100n;
+      const penalty = MathLib.WAD / 10n;
       const relativeCap = MathLib.WAD / 2n;
       const referralFeePct = MathLib.WAD / 100n;
       const sourceCollateral = parseUnits("1", 18);
@@ -1708,10 +1794,10 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         requirements: await action.getRequirements(),
       });
       const transaction = action.buildTx(signatures);
-      // The single reallocation and its positive penalty are recorded in the built action.
+      // The single reallocation and its above-source-debt penalty are recorded in the built action.
       expect(transaction.action.args.reallocations).toBe(1);
       expect(transaction.action.args.reallocationPenaltyAssets).toBeGreaterThan(
-        0n,
+        sourcePositionData.borrowAssets,
       );
       expect(transaction.action.args.referralFeePct).toBe(referralFeePct);
       await client.sendTransaction(transaction);

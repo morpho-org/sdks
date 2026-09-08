@@ -14,6 +14,7 @@ import {
   InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { encodeErc20Permit2TransferFrom } from "./encodeErc20Permit2TransferFrom.js";
 
@@ -139,5 +140,16 @@ describe("encodeErc20Permit2TransferFrom", () => {
         deadline: maxUint256,
       }),
     ).toThrow(UnknownAddressError);
+  });
+
+  test("error: UnsupportedErc20ApprovalSpenderError when spender is not BlueBundlesV1", () => {
+    // Permit2 SignatureTransfer for a direct Blue write must name BlueBundlesV1; any other spender
+    // (e.g. GeneralAdapter1) is rejected before signing.
+    expect(() =>
+      encodeErc20Permit2TransferFrom({
+        ...base(),
+        spender: "0x1111111111111111111111111111111111111111",
+      }),
+    ).toThrow(UnsupportedErc20ApprovalSpenderError);
   });
 });

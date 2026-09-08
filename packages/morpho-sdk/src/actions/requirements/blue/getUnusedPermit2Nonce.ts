@@ -40,6 +40,7 @@ const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
  * @throws {InputExceedsMaxError} when `startNonce` exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no registered canonical Permit2 deployment.
+ * @throws {viem.BaseError} when a Permit2 nonce-bitmap RPC read fails.
  * @throws {NoUnusedPermit2NonceError} when every nonce at or after `startNonce` is consumed.
  * @example
  * ```ts

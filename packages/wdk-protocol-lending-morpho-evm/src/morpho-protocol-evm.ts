@@ -143,9 +143,9 @@ export class MixedBlueCollateralFundingError extends Error {
 /** Controls token requirements generated for a BlueBundlesV1 action. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
-  useSimplePermit?: boolean;
+  readonly useSimplePermit?: boolean;
   /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
-  permit2Nonce?: bigint;
+  readonly permit2Nonce?: bigint;
 }
 
 /** Options for an ERC-20-funded Morpho Vault supply. */
