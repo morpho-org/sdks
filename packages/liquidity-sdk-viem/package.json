@@ -54,9 +54,9 @@
     "dataloader": "^2.2.3",
     "graphql": "^16.14.2",
     "nock": "^14.0.17",
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",

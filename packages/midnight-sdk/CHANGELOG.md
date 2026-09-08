@@ -1,5 +1,14 @@
 # @morpho-org/midnight-sdk
 
+## 1.3.1
+
+### Patch Changes
+
+- [#1006](https://github.com/morpho-org/sdks/pull/1006) [`014364e`](https://github.com/morpho-org/sdks/commit/014364ee2e9efd45f16ca5104780f4ab041c9d65) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Bind `MidnightApi.fetchBook` and `fetchBooks` results to the requested market. Both now recompute the market id from each returned book's own params with `MarketUtils.toId` and throw `InvalidMidnightApiResponseError` when it does not match the advertised `market_id`, so a hostile or compromised API cannot pair a trusted id with foreign market metadata. `fetchBook` additionally rejects a book whose id differs from the requested one, and `fetchBooks` rejects any book outside a supplied `marketIds` filter. This mirrors the derive-and-compare rebinding already enforced on the takeable-offers path. `morpho-sdk` re-exports this API via its `/midnight/api` facade and takes a matching patch so facade consumers resolve the fixed dependency.
+
+- Updated dependencies [[`2601458`](https://github.com/morpho-org/sdks/commit/26014581bf7470bc090c4837bd9ed3cf6fc8f31b)]:
+  - @morpho-org/morpho-ts@2.11.1
+
 ## 1.3.0
 
 ### Minor Changes
