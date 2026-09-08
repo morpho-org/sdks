@@ -93,6 +93,7 @@ const requirements = await prepared.getRequirements();
 const requirement = requirements[0];
 if (requirement && "sign" in requirement) {
   const requirementSignature = await requirement.sign(walletClient, userAddress);
+  const quote = await prepared.quote(requirementSignature); // { fee: bigint }
   await prepared.submit(requirementSignature);
 } else {
   for (const transaction of requirements) {
@@ -105,6 +106,7 @@ if (requirement && "sign" in requirement) {
       await publicClient.waitForTransactionReceipt({ hash: result.hash });
     }
   }
+  const quote = await prepared.quote(); // { fee: bigint }
   await prepared.submit();
 }
 ```
@@ -116,6 +118,14 @@ The share allowance is the only cap on how many shares the exit burns, so `withd
 resolves the same requirement before submitting and throws
 `UnresolvedVaultWithdrawRequirementsError` when one is outstanding — including when a larger
 leftover allowance would let a share-price loss burn past the derived cap.
+
+`quoteWithdraw(options)` and unsigned `prepared.quote()` also check the exact share allowance
+before estimating gas and throw `UnresolvedVaultWithdrawRequirementsError` when it is outstanding.
+For a first withdrawal, satisfy the requirements and quote through the same prepared handle as
+shown above, so the quote uses the approved share cap or the corresponding signed permit.
+All three prepared methods (`getRequirements`, `quote`, and `submit`) re-read the provider chain
+before using the captured action and throw `ChainIdMismatchError` after a switch away from the
+configured vault chain.
 
 ## Collateral withdrawal authorization
 
