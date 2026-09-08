@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { inKindVaultV2Data } from "../../../test/fixtures/inKindRedeem.js";
 import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { NonPositiveInputError } from "../../types/index.js";
@@ -39,13 +40,11 @@ describe("MorphoVaultV2 deposit input validation", () => {
     const vault = client.morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
 
     const action = vault.deposit({
-      amount: 1n,
+      amount: 100n,
       userAddress: submitter,
-      vaultData: {
+      vaultData: inKindVaultV2Data({
         address: KeyrockUsdcVaultV2.address,
-        asset: KeyrockUsdcVaultV2.asset,
-        accrueInterest: () => ({ toShares: () => 1n }),
-      } as never,
+      }),
     });
 
     expect(action).toBeDefined();
