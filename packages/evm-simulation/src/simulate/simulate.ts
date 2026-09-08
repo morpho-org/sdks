@@ -23,9 +23,11 @@ import {
  *
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
  * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20/WETH transfers from per-tx logs → asserts no funds are retained
- * by `bundler3` or the standalone `bundles` periphery contracts → returns the full result
- * set. The caller reads whichever fields they need:
+ * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
+ * events to the registered wrapped-native token when chain metadata exists and retaining
+ * signature-based parsing otherwise → asserts no funds are retained by `bundler3` or the
+ * standalone `bundles` periphery contracts → returns the full result set. The caller reads
+ * whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
