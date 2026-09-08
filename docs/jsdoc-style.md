@@ -186,50 +186,72 @@ What's wrong:
 
 ```ts
 /**
- * Prepares a deposit transaction for a VaultV1 (MetaMorpho) contract.
+ * Encodes a Vault V1 deposit through the registered VaultBundlesV1 contract.
  *
- * Routed through bundler3 so GeneralAdapter1 atomically transfers the assets and enforces the
- * vault's `maxSharePrice` bound onchain.
- *
- * @param params.vault.chainId - The chain the vault lives on.
- * @param params.vault.address - The VaultV1 contract address.
- * @param params.vault.asset - The vault's underlying ERC-20 asset.
- * @param params.args.amount - ERC-20 asset amount to deposit.
- * @param params.args.maxSharePrice - Maximum accepted share price, scaled by RAY.
- * @param params.args.recipient - Address that receives the minted vault shares.
- * @param params.args.requirementSignature - Optional signed token-pull requirement.
- * @param params.args.nativeAmount - Optional native amount to wrap when the asset is wNative.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<VaultV1DepositAction>` with `to`, `value`, `data`, and the
- *   typed `action` discriminator.
- * @throws {NegativeInputError} when `amount` or `nativeAmount` is negative.
- * @throws {NonPositiveInputError} when the total deposit or `maxSharePrice` is non-positive.
- * @throws {ChainWNativeMissingError} when native funding is requested on a chain without a
- *   configured wNative token.
- * @throws {NativeAmountOnNonWNativeVaultError} when native funding is requested for a vault whose
- *   asset is not the chain's wNative token.
- * @throws {DepositAssetMismatchError} when the signed token requirement names a different asset.
- * @throws {DepositAmountMismatchError} when the signed token requirement names a different amount.
- * @throws {Permit2ExpirationMissingError} when a Permit2 requirement signature omits expiration.
+ * @param params.vault.chainId - Chain containing the vault and its registered VaultBundlesV1 contract.
+ * @param params.vault.address - Vault V1 contract receiving the net deposit.
+ * @param params.vault.asset - Underlying ERC-20 asset; must be the chain's wNative for native funding.
+ * @param params.args.amount - Positive gross ERC-20 amount in asset base units, exclusive with `nativeAmount`.
+ * @param params.args.nativeAmount - Positive gross native amount in wei, exclusive with `amount` and
+ *   `requirementSignature`; sent as `tx.value` and wrapped by VaultBundlesV1.
+ * @param params.args.maxSharePrice - Positive maximum asset base units per share base unit, scaled
+ *   by RAY (1e27). Compute it for the net deposit after referral fees to bound slippage.
+ * @param params.args.userAddress - Permit owner and transaction sender; VaultBundlesV1 mints shares to this account.
+ * @param params.args.recipient - Unsupported; shares are always minted to the transaction sender.
+ * @param params.args.requirementSignature - Optional ERC-2612 or Permit2 SignatureTransfer signature
+ *   for the gross amount, vault asset, `userAddress`, and VaultBundlesV1 spender.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ *   The fee is rounded down and deducted from gross assets before depositing.
+ * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
+ *   when `referralFeePct > 0n`.
+ * @param params.args.deadline - Positive uint256 Unix timestamp in seconds after which execution
+ *   reverts. The caller must supply it; the builder chooses no default.
+ * @param params.metadata - Optional analytics metadata appended to the transaction calldata.
+ * @param params.metadata.origin - Hex origin identifier of at most four bytes, with an optional `0x` prefix.
+ * @param params.metadata.timestamp - Optional flag to append the current timestamp; defaults to false.
+ * @returns A deep-frozen `Transaction<VaultV1DepositAction>` targeting VaultBundlesV1, with
+ *   `to`, `value`, `data`, and gross/fee/net deposit action metadata.
+ * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
+ * @throws {NegativeInputError} when the selected funding amount or `referralFeePct` is negative.
+ * @throws {NonPositiveInputError} when funding, `maxSharePrice`, or `deadline` is not positive.
+ * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
+ * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
+ *   {@link InputExceedsMaxError}, so either class catches it.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+ * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit or a
+ *   Permit2 AllowanceTransfer signature is supplied.
+ * @throws {InputExceedsMaxError} when funding, `maxSharePrice`, or `deadline` exceeds uint256.
+ * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from the gross funding amount.
+ * @throws {DepositSpenderMismatchError} when the signed spender is not VaultBundlesV1.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature deadline, nonce, or encoding is invalid.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
  * @example
  * ```ts
  * import { vaults } from "@morpho-org/morpho-test";
- * import { zeroAddress } from "viem";
- * import { mainnet } from "viem/chains";
  * import { vaultV1Deposit } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const vault = vaults[mainnet.id].steakUsdc;
- * const tx = vaultV1Deposit({
- *   vault: { chainId: mainnet.id, address: vault.address, asset: vault.asset },
- *   args: {
- *     amount: 1_000_000n,
- *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n,
- *     recipient: zeroAddress,
- *   },
- * });
- * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
+ * export function buildSteakUsdcDeposit(
+ *   userAddress: Address,
+ *   maxSharePrice: bigint,
+ *   deadline: bigint,
+ * ) {
+ *   const vault = vaults[mainnet.id].steakUsdc;
+ *   const tx = vaultV1Deposit({
+ *     vault: { chainId: mainnet.id, address: vault.address, asset: vault.asset },
+ *     args: { amount: 1_000_000n, maxSharePrice, userAddress, deadline },
+ *   });
+ *   // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
+ *   return tx;
+ * }
  * ```
  */
+export const vaultV1Deposit = (params: VaultV1DepositParams) => { … };
 ```
 
 The two cited reference exemplars in this repo are:

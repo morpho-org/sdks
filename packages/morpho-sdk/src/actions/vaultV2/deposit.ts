@@ -1,7 +1,10 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { validateNativeVaultAsset } from "../../helpers/validate.js";
+import {
+  validateNativeVaultAsset,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import {
   type BundlesFundingArgs,
   type BundlesTokenRequirementSignature,
@@ -74,7 +77,7 @@ export interface VaultV2DepositParams {
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit or a
  *   Permit2 AllowanceTransfer signature is supplied.
- * @throws {InputExceedsMaxError} when `deadline` exceeds uint256.
+ * @throws {InputExceedsMaxError} when funding, `maxSharePrice`, or `deadline` exceeds uint256.
  * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
  * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.
  * @throws {DepositAmountMismatchError} when the signed amount differs from the gross funding amount.
@@ -112,6 +115,12 @@ export const vaultV2Deposit = (
   if (params.args.maxSharePrice <= 0n) {
     throw new NonPositiveInputError("maxSharePrice", params.args.maxSharePrice);
   }
+  // Reject ABI overflow with SDK errors before calldata encoding.
+  validateUint256Field(
+    funding.value > 0n ? "nativeAmount" : "amount",
+    funding.assets,
+  );
+  validateUint256Field("maxSharePrice", params.args.maxSharePrice);
   if (funding.value > 0n) {
     // Reject native funding unless the vault accepts the chain's wrapped-native asset.
     validateNativeVaultAsset(params.vault.chainId, params.vault.asset);

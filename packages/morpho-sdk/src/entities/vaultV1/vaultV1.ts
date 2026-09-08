@@ -38,7 +38,10 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
-import { validateNativeVaultAsset } from "../../helpers/validate.js";
+import {
+  validateNativeVaultAsset,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -122,7 +125,8 @@ export interface VaultV1Actions {
    *   selected without an explicit nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
    *   explicit Permit2 nonce is consumed.
-   * @throws {InputExceedsMaxError} from `getRequirements()` when the Permit2 nonce exceeds uint256.
+   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
+   *   `getRequirements()` when the Permit2 nonce exceeds uint256.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature was not produced for
@@ -305,13 +309,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
     private readonly chainId: number,
   ) {}
 
-  private getBundlesDeadline(deadlineOverride?: bigint): bigint {
-    const now = Time.timestamp();
-    const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
-    if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-    return deadline;
-  }
-
   async getData(parameters?: FetchParameters) {
     if (
       this.client.viemClient.chain?.id &&
@@ -347,13 +344,21 @@ export class MorphoVaultV1 implements VaultV1Actions {
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
-    const deadline = this.getBundlesDeadline(params.deadline);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
     const common = normalizeBundlesCommonParams({
       deadline,
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
     });
     const funding = resolveBundlesFunding(params);
+    // Reject overflow before share-price math or native-only prerequisite resolution.
+    validateUint256Field(
+      funding.value > 0n ? "nativeAmount" : "amount",
+      funding.assets,
+    );
     if (funding.value > 0n) {
       // The native path must target the chain's registered wrapped-native asset.
       validateNativeVaultAsset(this.chainId, vaultAsset);
