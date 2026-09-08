@@ -331,3 +331,87 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     );
   });
 });
+
+describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
+  const MIGRATION_TARGET_VAULT =
+    "0x0000000000000000000000000000000000002003" as const;
+  const migrationSnapshot = (address: Address, shares: bigint) =>
+    ({
+      address,
+      asset: IN_KIND_ASSET,
+      toShares: () => shares,
+      accrueInterest: () => ({ toShares: () => shares }),
+    }) as never;
+
+  const prepareMigration = (handle: ReturnType<typeof createMockClient>) =>
+    handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .migrateToV2({
+        assets: amount,
+        userAddress: IN_KIND_USER,
+        sourceVault: migrationSnapshot(IN_KIND_VAULT, 10n),
+        targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, 100n),
+        slippageTolerance: 0n,
+      });
+
+  test("behavior: re-reads the share allowance after the approval is executed", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const migration = prepareMigration(handle);
+
+    const [approval] = (await migration.getRequirements()).filter(
+      isRequirementApproval,
+    );
+    const requiredShareAllowance = approval?.action.args.amount;
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+
+    // Assets-mode calldata carries no share limit, so this allowance is the sole cap on the burn.
+    // Replaying a memoized requirement would hide both a satisfied approval and a later change.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: requiredShareAllowance,
+    });
+
+    expect(await migration.getRequirements()).toEqual([]);
+    expect(countAllowanceReads(handle)).toBe(2);
+  });
+
+  test("behavior: pins the derived share cap across re-resolutions", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const migration = prepareMigration(handle);
+
+    const first = await migration.getRequirements();
+
+    // A larger leftover allowance must resurface as an outstanding requirement for the cap this
+    // handle already committed to, never satisfy it.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: amount,
+    });
+
+    expect(
+      (await migration.getRequirements())
+        .filter(isRequirementApproval)
+        .map(({ action }) => action.args),
+    ).toEqual(
+      first.filter(isRequirementApproval).map(({ action }) => action.args),
+    );
+  });
+});

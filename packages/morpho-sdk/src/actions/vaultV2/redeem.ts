@@ -1,6 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type Erc2612RequirementSignature,
   type Metadata,
@@ -36,6 +37,12 @@ export interface VaultV2RedeemParams {
  * @param params - Vault, shares, share permit, fee, and deadline values.
  * @returns A deep-frozen VaultBundlesV1 redemption transaction.
  * @throws {NonPositiveInputError} when `shares` or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
  * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
@@ -55,6 +62,8 @@ export const vaultV2Redeem = (
   if (params.args.shares <= 0n) {
     throw new NonPositiveInputError("shares", params.args.shares);
   }
+  // Reject ABI overflow with SDK errors before calldata encoding.
+  validateUint256Field("shares", params.args.shares);
   const common = normalizeBundlesCommonParams(params.args);
   const spender = getChainAddress(
     params.vault.chainId,

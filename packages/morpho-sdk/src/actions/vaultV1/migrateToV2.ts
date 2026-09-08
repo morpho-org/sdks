@@ -1,6 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   AmountAndSharesExclusiveError,
   type Erc2612RequirementSignature,
@@ -50,6 +51,13 @@ export interface VaultV1MigrateToV2Params {
  * @throws {SameVaultMigrationError} when source and destination vaults are identical.
  * @throws {AmountAndSharesExclusiveError} when both amount modes or neither are supplied.
  * @throws {NonPositiveInputError} when the selected amount, destination share-price bound, or deadline is not positive.
+ * @throws {InputExceedsMaxError} when the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+ * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
  * import { vaultV1MigrateToV2 } from "@morpho-org/morpho-sdk";
@@ -102,6 +110,12 @@ export const vaultV1MigrateToV2 = (
       params.args.maxSharePriceVaultV2,
     );
   }
+  // Reject ABI overflow with SDK errors before calldata encoding.
+  validateUint256Field(assets != null ? "assets" : "shares", selectedAmount);
+  validateUint256Field(
+    "maxSharePriceVaultV2",
+    params.args.maxSharePriceVaultV2,
+  );
   const common = normalizeBundlesCommonParams(params.args);
   const spender = getChainAddress(
     params.vault.chainId,

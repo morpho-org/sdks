@@ -135,10 +135,10 @@ BlueBundlesV1 or VaultBundlesV1 writes because they have different spenders.
   primitives remain public for advanced users, but `client.morpho.blue(...)` never falls back to
   them in v6. High-level vault deposits, vault withdrawals, and Blue writes require their
   registered fixed bundles contracts in v6.
-- **Direct vault `redeem` has no share-price bound.** Unlike VaultBundlesV1 deposits and
-  withdrawals, VaultV1/VaultV2 `redeem` is a direct vault call that carries no on-chain
-  `minSharePrice`/`maxSharePrice` bound, so callers must weigh share-price movement between
-  transaction construction and inclusion.
+- **Vault `redeem` has no share-price bound.** VaultV1/VaultV2 `redeem` targets VaultBundlesV1
+  like deposits and withdrawals, but unlike a deposit it encodes exact shares and carries no
+  on-chain `minSharePrice`/`maxSharePrice` bound, so callers must weigh share-price movement
+  between transaction construction and inclusion.
 
 **Vault withdrawals cap the share burn through their allowance.** `vaultV1Withdraw` and
 `vaultV2Withdraw` burn `msg.sender`'s shares from VaultBundlesV1, so they need a vault-share
@@ -150,8 +150,8 @@ enabled) for exactly that amount. An allowance that does not equal the derived c
 larger leftover approval — is replaced rather than reused, so the cap holds on every withdrawal.
 Callers must therefore await `getRequirements()` and satisfy it before `buildTx()`.
 
-Vault redemptions also target VaultBundlesV1 and require an exact share approval or permit. They
-encode exact shares and carry no minimum-assets bound.
+Vault redemptions also target VaultBundlesV1 and require an exact share approval or permit for
+exactly the shares they burn.
 
 ## Code references
 

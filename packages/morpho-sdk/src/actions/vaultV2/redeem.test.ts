@@ -4,7 +4,10 @@ import { decodeFunctionData, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  InputExceedsMaxError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 import { vaultV2Redeem } from "./redeem.js";
 
 const chainId = mainnet.id;
@@ -59,5 +62,18 @@ describe("vaultV2Redeem", () => {
         args: { shares: 0n, userAddress, deadline: 1n },
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError for shares above uint256", () => {
+    expect(() =>
+      vaultV2Redeem({
+        vault: { chainId, address: vault },
+        args: {
+          shares: maxUint256 + 1n,
+          userAddress,
+          deadline: 1_900_000_000n,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 });

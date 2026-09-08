@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   AmountAndSharesExclusiveError,
+  InputExceedsMaxError,
   SameVaultMigrationError,
   type VaultV1MigrateToV2AmountArgs,
 } from "../../types/index.js";
@@ -127,6 +128,30 @@ describe("vaultV1MigrateToV2", () => {
       }),
     ).toThrow(AmountAndSharesExclusiveError);
   });
+
+  test.each(["assets", "shares", "maxSharePriceVaultV2"] as const)(
+    "error: InputExceedsMaxError for %s above uint256",
+    (field) => {
+      const value = maxUint256 + 1n;
+      const amountArgs: VaultV1MigrateToV2AmountArgs =
+        field === "shares"
+          ? { shares: value }
+          : { assets: field === "assets" ? value : 1n };
+      expect(() =>
+        vaultV1MigrateToV2({
+          vault: { chainId, address: sourceVault, asset },
+          args: {
+            targetVault,
+            targetAsset: asset,
+            ...amountArgs,
+            maxSharePriceVaultV2: field === "maxSharePriceVaultV2" ? value : 1n,
+            userAddress,
+            deadline: 1_900_000_000n,
+          },
+        }),
+      ).toThrow(InputExceedsMaxError);
+    },
+  );
 
   test("error: SameVaultMigrationError", () => {
     expect(() =>

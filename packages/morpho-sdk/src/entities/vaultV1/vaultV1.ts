@@ -370,6 +370,9 @@ export interface VaultV1Actions {
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
    *   to two hours from handle creation.
    * @returns Lazy exact source-share requirements and a synchronous transaction builder.
+   *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
+   *   satisfied between calls stops being reported, while the derived source share cap stays
+   *   pinned to the supplied snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and destination vault assets differ.
@@ -1004,13 +1007,17 @@ export class MorphoVaultV1 implements VaultV1Actions {
         slippageTolerance,
       });
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: readonly ActionRequirement[] | undefined;
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return resolvedRequirements;
+        // Re-read the live share allowance on every call instead of caching the resolved
+        // requirements: in assets mode the calldata carries no share limit, so the allowance is
+        // the sole cap on the burn. A caller that executed the returned approval must see it
+        // satisfied on the next call, and an allowance revoked or raised afterwards must resurface
+        // as an outstanding requirement. The pinned snapshot and the cap derived from it stay
+        // fixed, so re-reading cannot move the cap this handle already committed to.
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
           {
@@ -1027,8 +1034,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
         if (signatureRequirement?.action.type === "permit") {
           expectedRequirement = signatureRequirement.action;
         }
-        resolvedRequirements = requirements;
-        return resolvedRequirements;
+        return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesRequirementSignature(signatures, {
