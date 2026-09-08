@@ -11,6 +11,7 @@ import {
   isRequirementSignature,
   NegativeInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../types/index.js";
 import {
   type BundlesTokenRequirementsState,
@@ -28,7 +29,6 @@ describe("resolveBundlesTokenRequirements", () => {
     { type: "approval", allowance: 0n, approvalAmount: maxUint256 },
     {
       type: "permit2SignatureTransfer",
-      permit2,
       permit2Allowance: maxUint256,
       permit2Nonce: 0n,
       nonceBitmap: 0n,
@@ -121,7 +121,6 @@ describe("resolveBundlesTokenRequirements", () => {
           deadline,
           state: {
             type: "permit2SignatureTransfer",
-            permit2,
             permit2Allowance: maxUint256,
             permit2Nonce,
             nonceBitmap: 0n,
@@ -210,7 +209,6 @@ describe("resolveBundlesTokenRequirements", () => {
       deadline,
       state: {
         type: "permit2SignatureTransfer",
-        permit2,
         permit2Allowance: 0n,
         permit2Nonce: 257n,
         nonceBitmap: 0n,
@@ -241,7 +239,6 @@ describe("resolveBundlesTokenRequirements", () => {
           deadline,
           state: {
             type: "permit2SignatureTransfer",
-            permit2,
             permit2Allowance: maxUint256,
             permit2Nonce: BigInt(nonce),
             nonceBitmap: 0n,
@@ -267,7 +264,6 @@ describe("resolveBundlesTokenRequirements", () => {
         deadline,
         state: {
           type: "permit2SignatureTransfer",
-          permit2,
           permit2Allowance: maxUint256,
           permit2Nonce: 7n,
           nonceBitmap: 1n << 7n,
@@ -275,4 +271,71 @@ describe("resolveBundlesTokenRequirements", () => {
       }),
     ).toThrow(Permit2SignatureTransferNonceAlreadyUsedError);
   });
+
+  test.each([
+    getChainAddress(chainId, "bundles.blueBundlesV1"),
+    getChainAddress(chainId, "bundles.vaultBundlesV1"),
+  ])("behavior: accepts the registered bundles spender %s", (allowed) => {
+    expect(
+      resolveBundlesTokenRequirements({
+        token: usdc,
+        spender: allowed,
+        owner,
+        chainId,
+        amount: 1n,
+        deadline,
+        state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+      })[0]?.action,
+    ).toMatchObject({ type: "erc20Approval", args: { spender: allowed } });
+  });
+
+  // An unregistered spender must never reach an approval or a signature, including on the paths
+  // that never touch the approval encoder: a zero amount and an already-sufficient allowance.
+  test.each([
+    {
+      label: "approval",
+      amount: 1n,
+      state: { type: "approval", allowance: 0n, approvalAmount: 1n },
+    },
+    {
+      label: "sufficient allowance",
+      amount: 1n,
+      state: { type: "approval", allowance: maxUint256, approvalAmount: 1n },
+    },
+    {
+      label: "zero amount",
+      amount: 0n,
+      state: { type: "approval", allowance: 0n, approvalAmount: 0n },
+    },
+    {
+      label: "permit2SignatureTransfer",
+      amount: 1n,
+      state: {
+        type: "permit2SignatureTransfer",
+        permit2Allowance: maxUint256,
+        permit2Nonce: 0n,
+        nonceBitmap: 0n,
+      },
+    },
+  ] as const satisfies readonly {
+    label: string;
+    amount: bigint;
+    state: BundlesTokenRequirementsState;
+  }[])(
+    "error: UnsupportedErc20ApprovalSpenderError for an unregistered spender ($label)",
+    ({ amount, state }) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          // GeneralAdapter1 is a registered SDK approval spender, but never a bundles spender.
+          spender: getChainAddress(chainId, "bundler3.generalAdapter1"),
+          owner,
+          chainId,
+          amount,
+          deadline,
+          state,
+        }),
+      ).toThrow(UnsupportedErc20ApprovalSpenderError);
+    },
+  );
 });

@@ -224,7 +224,6 @@ export const getBundlesTokenRequirements = async (
         deadline: params.deadline,
         state: {
           type: "permit2SignatureTransfer",
-          permit2,
           permit2Allowance: allowance,
           permit2Nonce: params.permit2Nonce,
           nonceBitmap,
