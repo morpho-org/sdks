@@ -95,9 +95,6 @@ export const resolveBundlesTokenRequirements = (params: {
   | Readonly<Transaction<ERC20ApprovalAction>>
   | BundlesTokenSignatureRequirement
 )[] => {
-  // Bind the caller-supplied spender to the chain registry before anything else: a sufficient
-  // allowance short-circuits the approval encoder, so this is the only guard that keeps an
-  // unregistered spender from being accepted on every path, zero-amount requests included.
   validateRequirementSpender({
     chainId: params.chainId,
     spender: params.spender,
@@ -141,8 +138,6 @@ export const resolveBundlesTokenRequirements = (params: {
       params.state.permit2Nonce,
     );
   }
-  // Canonical Permit2 is the only address the signed pull can be funded through, so resolve it from
-  // the chain registry instead of trusting a caller-supplied one. Throws when the chain has none.
   const permit2 = getChainAddress(params.chainId, "permit2");
   return [
     ...getRequirementsApproval({

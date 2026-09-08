@@ -289,8 +289,6 @@ describe("resolveBundlesTokenRequirements", () => {
     ).toMatchObject({ type: "erc20Approval", args: { spender: allowed } });
   });
 
-  // An unregistered spender must never reach an approval or a signature, including on the paths
-  // that never touch the approval encoder: a zero amount and an already-sufficient allowance.
   test.each([
     {
       label: "approval",
@@ -327,7 +325,6 @@ describe("resolveBundlesTokenRequirements", () => {
       expect(() =>
         resolveBundlesTokenRequirements({
           token: usdc,
-          // GeneralAdapter1 is a registered SDK approval spender, but never a bundles spender.
           spender: getChainAddress(chainId, "bundler3.generalAdapter1"),
           owner,
           chainId,
