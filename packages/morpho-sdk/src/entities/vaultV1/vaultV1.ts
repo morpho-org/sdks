@@ -90,6 +90,8 @@ export interface VaultV1Actions {
    * `getRequirements()` reads the asset allowance and, when enabled, the selected ERC-2612 or
    * Permit2 nonce state. Native funding is exclusive and skips token requirements. Shares are
    * always minted to the transaction sender, which must be `userAddress`.
+   * Concurrent requirement reads share the first caller's options; later calls refresh on-chain
+   * state using their own options. `buildTx()` accepts signatures from the latest completed read.
    *
    * @param params.userAddress - Account that funds, signs, submits, and receives the vault shares.
    * @param params.vaultData - Pre-fetched Vault V1 snapshot used for asset and share conversion.
@@ -367,7 +369,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
     });
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: Promise<readonly ActionRequirement[]> | undefined;
+    let pendingRequirements: Promise<readonly ActionRequirement[]> | undefined;
     let expectedRequirement:
       | PermitAction
       | Permit2SignatureTransferAction
@@ -378,7 +380,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ) => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return await resolvedRequirements;
+        if (pendingRequirements != null) return await pendingRequirements;
         // Memoize the in-flight promise, not just its result: concurrent callers
         // requesting different routes would otherwise both resolve requirements and
         // the slower one would overwrite `expectedRequirement`, making `buildTx()`
@@ -402,22 +404,19 @@ export class MorphoVaultV1 implements VaultV1Actions {
           const signatureRequirement = requirements.find(
             isRequirementSignature,
           );
-          if (
+          expectedRequirement =
             signatureRequirement?.action.type === "permit" ||
             signatureRequirement?.action.type === "permit2SignatureTransfer"
-          ) {
-            expectedRequirement = signatureRequirement.action;
-          }
+              ? signatureRequirement.action
+              : undefined;
           return requirements;
         })();
-        resolvedRequirements = pending;
+        pendingRequirements = pending;
         try {
           return await pending;
-        } catch (error) {
-          // Drop the failed attempt so a caller can retry resolution.
-          if (resolvedRequirements === pending)
-            resolvedRequirements = undefined;
-          throw error;
+        } finally {
+          // Later calls must re-read live allowances/nonces and honor their own options.
+          if (pendingRequirements === pending) pendingRequirements = undefined;
         }
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {

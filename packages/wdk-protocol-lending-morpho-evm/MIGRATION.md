@@ -2,6 +2,19 @@
 
 Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault deposits through `VaultBundlesV1`, both instead of Bundler3.
 
+## Release prerequisite
+
+The vault supply removals below require a published WDK 1.x minor before the stable 2.0 release.
+That minor must introduce `MorphoExclusiveSupplyOptions` and `prepareSupply` while retaining
+functional `MorphoSupplyOptions`, `MorphoErc20SupplyOptions`, `MorphoNativeSupplyOptions`, and
+`getSupplyRequirements` compatibility surfaces marked `@deprecated`. The existing supply methods
+must continue accepting their legacy funding and signature inputs during that minor.
+
+This prerequisite remains open: [the earlier runway PR #991](https://github.com/morpho-org/sdks/pull/991)
+closed without merging. This `next` stack implements the successor APIs; it does not fulfill the
+published-minor requirement. The Blue route exception in root `AGENTS.md` does not cover vault
+supply removals. Keep the release gate open until the compatibility minor has shipped.
+
 ## Required changes
 
 - Replace Vault V1 borrow reallocations with `VaultV2BlueReallocation` values on `MorphoBorrowOptions.reallocations`.
@@ -12,6 +25,8 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault dep
 - Replace `getSupplyRequirements(options)` with `prepareSupply(options)`. The returned handle carries `getRequirements(requirementOptions?)`, `submit(requirementSignature?, config?)`, and `quote(requirementSignature?, config?)` over one SDK action, so the share-price bound and the resolved requirement set are shared between requirement discovery and submission. Vault deposit options no longer accept `requirementSignature`; pass the signed permit to the same handle's `submit` or `quote` instead. `supply` and `quoteSupply` still work unchanged for deposits that need no approval or signature.
 - Recreate cached vault-asset approvals. Their spender is now `VaultBundlesV1` instead of GeneralAdapter1.
 - Vault deposits now expire after two hours and enforce the same deadline as the signed permit; `slippageTolerance` still bounds the deposit's `maxSharePrice`.
+- Prepared supply methods recheck the live provider chain on every call. Handle `ChainIdMismatchError`,
+  re-exported by this package, if the wallet switches away from the configured vault chain.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls, and to the prepared deposit's `getRequirements`, when selecting Permit2 SignatureTransfer.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
 - Blue writes now expire after two hours instead of using an unbounded deadline; signed calls preserve the requirement signature's deadline.
