@@ -63,8 +63,8 @@ export interface MidnightTakeLendParams {
  * const tx = midnightTakeLend({
  *   chainId: 8453,
  *   market: marketData.params,
- *   assets: BigInt(quote.data.availableAssets),
- *   minUnits: BigInt(quote.data.availableUnits),
+ *   assets: 1_000_000n,
+ *   minUnits: 900_000n,
  *   taker: lender,
  *   takeableOffers: quote.data.takeableOffers,
  *   deadline: maxUint256,

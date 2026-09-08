@@ -107,8 +107,8 @@ import type {
  * const output = midnight.takeLend({
  *   accountAddress: lender,
  *   marketData,
- *   assets: BigInt(quote.data.availableAssets),
- *   minUnits: BigInt(quote.data.availableUnits),
+ *   assets: 1_000_000n,
+ *   minUnits: 900_000n,
  *   takeableOffers: quote.data.takeableOffers,
  *   deadline: maxUint256,
  * });
