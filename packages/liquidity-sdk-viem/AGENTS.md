@@ -10,6 +10,9 @@
 - `apiSdk` is a singleton `GraphQLClient` bound to `BLUE_API_GRAPHQL_URL`.
 - Batch expensive market requests by chunking IDs before paginating.
 - Keep loader output deterministic: return `withdrawals`, `startState`, `endState`, and utilization.
+- Keep workspace installs pinned to published `@morpho-org/morpho-sdk@5.9.0` through the scoped pnpm
+  override: this package still uses the removed Vault V1 planner and intentionally does not support
+  morpho-sdk v6. Remove the override when a separate Vault V2 migration lands.
 
 ## Continuous Improvement
 

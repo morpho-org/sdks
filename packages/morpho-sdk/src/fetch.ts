@@ -1,7 +1,5 @@
 export {
   fetchAccrualPosition as fetchBlueAccrualPosition,
-  /** @deprecated Use `fetchBlueAccrualPosition` or the raw `/blue/fetch` subpath. */
-  fetchAccrualPosition,
   fetchAccrualVault,
   fetchAccrualVaultV2,
   fetchAccrualVaultV2Adapter,
@@ -10,24 +8,12 @@ export {
   fetchAccrualVaultV2MorphoVaultV1Adapter,
   fetchHolding,
   fetchMarket as fetchBlueMarket,
-  /** @deprecated Use `fetchBlueMarket` or the raw `/blue/fetch` subpath. */
-  fetchMarket,
   fetchMarketParams as fetchBlueMarketParams,
-  /** @deprecated Use `fetchBlueMarketParams` or the raw `/blue/fetch` subpath. */
-  fetchMarketParams,
   fetchPosition as fetchBluePosition,
-  /** @deprecated Use `fetchBluePosition` or the raw `/blue/fetch` subpath. */
-  fetchPosition,
   fetchPreLiquidationParams as fetchBluePreLiquidationParams,
-  /** @deprecated Use `fetchBluePreLiquidationParams` or the raw `/blue/fetch` subpath. */
-  fetchPreLiquidationParams,
   fetchPreLiquidationPosition as fetchBluePreLiquidationPosition,
-  /** @deprecated Use `fetchBluePreLiquidationPosition` or the raw `/blue/fetch` subpath. */
-  fetchPreLiquidationPosition,
   fetchToken,
   fetchUser as fetchBlueUser,
-  /** @deprecated Use `fetchBlueUser` or the raw `/blue/fetch` subpath. */
-  fetchUser,
   fetchVault,
   fetchVaultConfig,
   fetchVaultMarketAllocation,

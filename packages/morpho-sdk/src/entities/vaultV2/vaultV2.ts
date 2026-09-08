@@ -572,8 +572,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    const addresses = getChainAddresses(this.chainId);
-    const blue = addresses.blue ?? addresses.morpho;
+    const blue = getChainAddress(this.chainId, "blue");
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {

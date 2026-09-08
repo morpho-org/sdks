@@ -1,20 +1,13 @@
 import {
   type AccrualPosition,
   type Market,
-  type MarketId,
   type MarketParams,
   MathLib,
-  type Position,
-  type Vault,
-  type VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
   fetchAccrualVaultV2,
   fetchMarket,
-  fetchPosition,
-  fetchVault,
-  fetchVaultMarketConfig,
   fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
@@ -41,7 +34,6 @@ import {
   getBlueBundlesV1TokenRequirements,
 } from "../../actions/index.js";
 import {
-  computeVaultV1Reallocations,
   DEFAULT_LLTV_BUFFER,
   MAX_TOKEN_APPROVALS,
   validateAccrualPosition,
@@ -76,34 +68,14 @@ import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
-  type ReallocationComputeOptions,
   ReallocationsRequireBorrowError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type RequirementSignature,
-  type VaultV1Reallocation,
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
-
-type VaultV1ReallocationsParams = {
-  readonly reallocationData: VaultV1ReallocationData;
-  readonly options?: ReallocationComputeOptions;
-} & (
-  | {
-      readonly operation: "borrow" | "withdraw";
-      readonly amount: bigint;
-      readonly borrowAmount?: never;
-    }
-  | {
-      /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
-      readonly borrowAmount: bigint;
-      readonly operation?: never;
-      readonly amount?: never;
-    }
-);
 
 type VaultV2BlueReallocationsParams = {
   readonly reallocationData: VaultV2BlueReallocationData;
@@ -903,56 +875,6 @@ export interface BlueActions {
   >;
 
   /**
-   * Fetches all on-chain data needed to construct a {@link VaultV1ReallocationData}
-   * for computing vault reallocations via the public allocator.
-   *
-   * The target market is refetched internally at `block.number` so the
-   * reallocation planner always sees a snapshot from the same block as the
-   * source vaults. A caller-owned market would let stale or adversarial data
-   * inject unnecessary `reallocateTo` actions (and their PublicAllocator
-   * fees) into the resulting bundle.
-   *
-   * The returned data can be passed to {@link getVaultV1Reallocations} for explicit low-level
-   * Bundler3 composition.
-   *
-   * **Stale data reverts on-chain (fail-safe).**
-   *
-   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
-   * @param params.block - The block to fetch data at (number and timestamp).
-   * @returns A VaultV1ReallocationData instance populated with all required data.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
-   */
-  getVaultV1ReallocationData: (params: {
-    vaultAddresses: readonly Address[];
-    block: {
-      readonly number: bigint;
-      readonly timestamp: bigint;
-    };
-  }) => Promise<VaultV1ReallocationData>;
-
-  /**
-   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
-   *
-   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
-   * @param params.block.number - Block number used for every RPC read.
-   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Use {@link getVaultV1ReallocationData} for deprecated low-level Bundler3
-   * planning. Vault V1 shared-liquidity planning will be removed in the next major; use
-   * {@link getVaultV2BlueReallocationData} for high-level Blue writes.
-   */
-  getReallocationData: (params: {
-    vaultAddresses: readonly Address[];
-    block: {
-      readonly number: bigint;
-      readonly timestamp: bigint;
-    };
-  }) => Promise<VaultV1ReallocationData>;
-
-  /**
    * Fetches Vault V2 BluePublicAllocator state for this target market.
    *
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
@@ -977,74 +899,6 @@ export interface BlueActions {
       readonly timestamp: bigint;
     };
   }) => Promise<VaultV2BlueReallocationData>;
-
-  /**
-   * Computes Vault V1 PublicAllocator reallocations for this market.
-   *
-   * Uses the shared-liquidity algorithm to determine which vaults should reallocate liquidity to
-   * this market via the PublicAllocator, based on the post-operation utilization target.
-   *
-   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow",
-   * amount }`) or `{ operation: "withdraw", amount }` for a loan-asset withdraw.
-   *
-   * @param params.reallocationData - The current on-chain state (from {@link getVaultV1ReallocationData}).
-   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
-   *        Defaults to `"borrow"` when `borrowAmount` is provided.
-   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
-   * @param params.borrowAmount - {@deprecated} Equivalent to `{ operation: "borrow", amount }`. Use the
-   *   `operation` + `amount` form on new code.
-   * @param params.options - Optional reallocation computation options
-   *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
-   *        Pass the fetched block timestamp to compute reallocations at the same block.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
-   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
-   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
-   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
-   * @example
-   * ```ts
-   * const reallocations = market.getVaultV1Reallocations({
-   *   reallocationData,
-   *   operation: "borrow",
-   *   amount: 1_000_000n,
-   * });
-   * ```
-   */
-  getVaultV1Reallocations: (
-    params: VaultV1ReallocationsParams,
-  ) => readonly VaultV1Reallocation[];
-
-  /**
-   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
-   *
-   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
-   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
-   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
-   * @param params.borrowAmount - Deprecated borrow amount alias.
-   * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
-   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
-   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
-   * @example
-   * ```ts
-   * const reallocations = market.getReallocations({
-   *   reallocationData,
-   *   operation: "borrow",
-   *   amount: 1_000_000n,
-   * });
-   * ```
-   */
-  getReallocations: (
-    params: VaultV1ReallocationsParams,
-  ) => readonly VaultV1Reallocation[];
 
   /**
    * Computes Vault V2 BluePublicAllocator reallocations for this market.
@@ -2016,171 +1870,6 @@ export class MorphoBlue implements BlueActions {
   }
 
   /**
-   * Fetches all on-chain inputs needed to compute public allocator reallocations.
-   *
-   * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
-   * @param params.block.number - Block number used for every RPC read.
-   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns Reallocation data ready for {@link getVaultV1Reallocations}.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
-   * @example
-   * ```ts
-   * import { markets, vaults } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-   * import type { VaultV1ReallocationData } from "@morpho-org/morpho-sdk/entities";
-   *
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const block = await client.getBlock();
-   * const data: VaultV1ReallocationData = await market.getVaultV1ReallocationData({
-   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
-   *   block,
-   * });
-   * ```
-   */
-  async getVaultV1ReallocationData({
-    vaultAddresses,
-    block,
-  }: {
-    vaultAddresses: readonly Address[];
-    block: {
-      readonly number: bigint;
-      readonly timestamp: bigint;
-    };
-  }): Promise<VaultV1ReallocationData> {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    const client = this.client.viemClient;
-    const fetchParams = {
-      blockNumber: block.number,
-      chainId: this.chainId,
-      deployless: this.client.options.supportDeployless,
-    };
-
-    const targetMarketId = this.marketParams.id;
-
-    // Phase 1: Fetch the target market and all vaults at `block.number` in
-    // parallel so every row of the resulting state comes from the same epoch
-    // and the planner never trusts a caller-owned target-market snapshot.
-    const [targetMarket, vaults] = await Promise.all([
-      fetchMarket(targetMarketId, client, fetchParams),
-      Promise.all(
-        vaultAddresses.map((addr) => fetchVault(addr, client, fetchParams)),
-      ),
-    ]);
-
-    const allMarketIds = new Set<MarketId>([targetMarketId]);
-    const vaultMarketPairs: { vault: Address; marketId: MarketId }[] = [];
-
-    for (const vault of vaults) {
-      // Always include target market pair so its config/position is fetched
-      // even when the target market is only in the vault's supplyQueue.
-      vaultMarketPairs.push({ vault: vault.address, marketId: targetMarketId });
-      for (const mid of vault.withdrawQueue) {
-        allMarketIds.add(mid);
-        if (mid !== targetMarketId) {
-          vaultMarketPairs.push({ vault: vault.address, marketId: mid });
-        }
-      }
-    }
-
-    // Phase 2: Fetch all source markets, vault configs, and positions in parallel.
-    const sourceMarketIds = [...allMarketIds].filter(
-      (mid) => mid !== targetMarketId,
-    );
-
-    const [markets, configs, positions] = await Promise.all([
-      Promise.all(
-        sourceMarketIds.map((mid) => fetchMarket(mid, client, fetchParams)),
-      ),
-      Promise.all(
-        vaultMarketPairs.map(({ vault, marketId: mid }) =>
-          fetchVaultMarketConfig(vault, mid, client, fetchParams).then(
-            (config) => ({ vault, mid, config }),
-          ),
-        ),
-      ),
-      Promise.all(
-        vaultMarketPairs.map(({ vault, marketId: mid }) =>
-          fetchPosition(vault, mid, client, fetchParams).then((position) => ({
-            vault,
-            mid,
-            position,
-          })),
-        ),
-      ),
-    ]);
-
-    // Assemble records for VaultV1ReallocationData.
-    const marketsRecord: Record<MarketId, Market | undefined> = {
-      [targetMarketId]: targetMarket,
-    };
-    for (const m of markets) {
-      marketsRecord[m.id] = m;
-    }
-
-    const vaultsRecord: Record<Address, Vault | undefined> = {};
-    for (const v of vaults) {
-      vaultsRecord[v.address] = v;
-    }
-
-    const vaultMarketConfigsRecord: Record<
-      Address,
-      Record<MarketId, VaultMarketConfig | undefined>
-    > = {};
-    for (const { vault, mid, config } of configs) {
-      (vaultMarketConfigsRecord[vault] ??= {})[mid] = config;
-    }
-
-    const positionsRecord: Record<
-      Address,
-      Record<MarketId, Position | undefined>
-    > = {};
-    for (const { vault, mid, position } of positions) {
-      (positionsRecord[vault] ??= {})[mid] = position;
-    }
-
-    return new VaultV1ReallocationData({
-      chainId: this.chainId,
-      markets: marketsRecord,
-      vaults: vaultsRecord,
-      vaultMarketConfigs: vaultMarketConfigsRecord,
-      positions: positionsRecord,
-    });
-  }
-
-  /**
-   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
-   *
-   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
-   * @param params.block.number - Block number used for every RPC read.
-   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
-   * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
-   * @example
-   * ```ts
-   * const data = await market.getReallocationData({ vaultAddresses, block });
-   * // Equivalent to market.getVaultV1ReallocationData({ vaultAddresses, block }).
-   * ```
-   */
-  getReallocationData(params: {
-    vaultAddresses: readonly Address[];
-    block: {
-      readonly number: bigint;
-      readonly timestamp: bigint;
-    };
-  }): Promise<VaultV1ReallocationData> {
-    return this.getVaultV1ReallocationData(params);
-  }
-
-  /**
    * Fetches Vault V2 BluePublicAllocator state for this target market.
    *
    * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
@@ -2284,93 +1973,6 @@ export class MorphoBlue implements BlueActions {
         ]),
       ),
     });
-  }
-
-  /**
-   * Computes Vault V1 PublicAllocator reallocations for this market.
-   *
-   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
-   * or `{ operation, amount }` for a borrow or loan-asset withdraw.
-   *
-   * @param params - Reallocation computation parameters.
-   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
-   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
-   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
-   * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}
-   * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market.
-   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
-   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
-   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
-   * @example
-   * ```ts
-   * const reallocations = market.getVaultV1Reallocations({
-   *   reallocationData,
-   *   operation: "borrow",
-   *   amount: 1_000_000n,
-   * });
-   * ```
-   */
-  getVaultV1Reallocations(
-    params: VaultV1ReallocationsParams,
-  ): readonly VaultV1Reallocation[] {
-    validateChainId(params.reallocationData.chainId, this.chainId);
-
-    const marketId = this.marketParams.id;
-    const options = { enabled: true, ...params.options };
-
-    if (params.borrowAmount !== undefined) {
-      return computeVaultV1Reallocations({
-        reallocationData: params.reallocationData,
-        marketId,
-        operation: "borrow",
-        amount: params.borrowAmount,
-        options,
-      });
-    }
-
-    return computeVaultV1Reallocations({
-      reallocationData: params.reallocationData,
-      marketId,
-      operation: params.operation,
-      amount: params.amount,
-      options,
-    });
-  }
-
-  /**
-   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
-   *
-   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
-   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
-   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
-   * @param params.borrowAmount - Deprecated borrow amount alias.
-   * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
-   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
-   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
-   * @example
-   * ```ts
-   * const reallocations = market.getReallocations({
-   *   reallocationData,
-   *   operation: "borrow",
-   *   amount: 1_000_000n,
-   * });
-   * ```
-   */
-  getReallocations(
-    params: VaultV1ReallocationsParams,
-  ): readonly VaultV1Reallocation[] {
-    return this.getVaultV1Reallocations(params);
   }
 
   /**

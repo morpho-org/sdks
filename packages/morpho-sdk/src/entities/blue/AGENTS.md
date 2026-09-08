@@ -10,8 +10,8 @@
   `fetchAccrualPosition`.
 - `AccrualPosition` exposes `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`,
   `supplyShares`, and derived `supplyAssets`.
-- Versioned Vault V1 and Vault V2 reallocation-data fetchers remain readable planning APIs. Only
-  Vault V2 reallocation outputs are accepted by high-level Blue writes.
+- `getVaultV2BlueReallocationData` is the shared-liquidity planning API. Vault V1 reallocation-data
+  fetchers were removed in v6.
 
 ## Write surface and routing
 

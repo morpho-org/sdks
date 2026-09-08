@@ -1,6 +1,5 @@
 import {
   addressesRegistry,
-  type ChainAddresses,
   getChainAddresses,
   Holding,
   MathLib,
@@ -155,10 +154,10 @@ describe("getGeneralAdapterRequirements", () => {
     registerCustomAddresses({
       addresses: {
         [noPermit2ChainId]: {
-          morpho: addressesRegistry[mainnet.id].morpho,
+          blue: addressesRegistry[mainnet.id].blue,
           bundler3: addressesRegistry[mainnet.id].bundler3,
           adaptiveCurveIrm: addressesRegistry[mainnet.id].adaptiveCurveIrm,
-        } satisfies ChainAddresses,
+        },
       },
     });
   });

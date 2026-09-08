@@ -2,8 +2,8 @@
 
 Version 6 keeps the Blue entity at `client.morpho.blue(marketParams, chainId)` and preserves its
 write-method names while routing them through five direct BlueBundlesV1 entrypoints. Blue reads and
-versioned reallocation-data helpers remain on the same entity. There is no parallel BlueBundlesV1
-extension or automatic fallback to the v5 route.
+the Vault V2 reallocation-data helper remain on the same entity. There is no parallel
+BlueBundlesV1 extension or automatic fallback to the v5 route.
 
 > **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
 > deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
@@ -71,10 +71,9 @@ it alongside the added fields.
   transaction sender and sends proceeds and refunds back to that sender; `userAddress` must be the
   eventual sender used to resolve requirements and position snapshots.
 - Replace PublicAllocator V1 or mixed-version reallocation write inputs with Vault V2
-  `VaultV2BlueReallocation` inputs. All Vault V1 reallocation planning, data, input, validation,
-  and explicit low-level Bundler3-composition surfaces remain available only as deprecated
-  compatibility surfaces and will be removed in the next major; the high-level Blue writes do not
-  accept their outputs.
+  `VaultV2BlueReallocation` inputs. Vault V1 reallocation planning, data, input, validation, and
+  explicit low-level Bundler3-composition surfaces are removed in v6. Direct Vault V1 flows and
+  canonical raw ABI, address, fetch, and config exports remain.
 - Provide the BlueBundlesV1 execution deadline and any optional referral-fee configuration through
   the new typed method inputs. Share-mode repayment deadlines are limited to two hours so the SDK's
   derived `maxRepayAssets` remains sufficient through execution.
@@ -167,14 +166,12 @@ referral-fee fields, and `deadline`.
 
 Stay on v5 if the product requires partial or collateral-only refinance behavior.
 
-The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
+The v5-only partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
-`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are **deprecated,
-not removed**: they stay exported through v6 (marked `@deprecated`) for consumers pattern-matching on
-the v5 surface, are never thrown by the full-position route, and are removed in the next major. The
-full-position route validates snapshot ownership and token/market compatibility, accounts for
-reallocation penalties in destination debt, then checks the combined destination position against
-the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError` and
+`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are removed in
+v6. The full-position route validates snapshot ownership and token/market compatibility, accounts
+for reallocation penalties in destination debt, then checks the combined destination position
+against the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError` and
 `RefinanceTokenMismatchError` stay.
 
 ## Removed action-output field: `reallocationFee`
@@ -188,13 +185,36 @@ reallocations.
 ## Removed type: `BlueReallocationPlan`
 
 The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
-`Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
-`VaultV1Reallocation[]`.
+`Iterable<VaultV2BlueReallocation>` directly. Stay on v5 if explicit PublicAllocator V1 planning or
+Bundler3 composition is required.
+
+## Removed deprecated compatibility exports
+
+Version 6 removes the deprecated compatibility surface rather than carrying it through another
+major:
+
+- Ambiguous unprefixed Blue and Midnight facade aliases are removed. Use the `Blue*` / `Midnight*`
+  names from shared facade subpaths or canonical names from `/blue/*` and `/midnight/*`.
+- Operation-specific scalar and native-asset error aliases are removed. Pattern-match on the
+  current generic input errors and canonical native-asset error classes.
+- `InvalidReallocationShapeError` remains the error thrown for malformed Vault V2 entries.
+- Deprecated ABI, constant, typed-data helper, and utility-type aliases inherited from upstream
+  packages are removed. Import their canonical replacements from the same facade category.
+- The unprefixed `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed. Their canonical
+  exports remain available from `/blue/utils` and `/blue/types`; maintained action flows route DAI
+  approvals through Permit2 or a classic approval.
+- PublicAllocator V1 planner, data, input, validation, and Bundler3-composition symbols are removed.
+  Use `getVaultV2BlueReallocationData` and
+  `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
+
+This does not remove direct Vault V1 actions or canonical raw Vault V1 ABI, address, fetch, and
+config exports.
 
 ## Upgrade checklist
 
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
+- Replace deprecated facade, error, and upstream aliases with their canonical exports.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
 - Update transaction decoding, simulation fixtures, and action metadata fields; discriminator
   names remain stable.

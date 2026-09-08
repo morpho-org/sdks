@@ -1,4 +1,8 @@
 import {
+  type DaiPermitArgs as UpstreamDaiPermitArgs,
+  getDaiPermitTypedData as upstreamGetDaiPermitTypedData,
+} from "@morpho-org/blue-sdk-viem";
+import {
   blueMarketParamsAbi,
   midnightEcrecoverRatifierAbi,
 } from "@morpho-org/morpho-sdk/abis";
@@ -54,11 +58,7 @@ import {
   ERC20_ALLOWANCE_RECIPIENTS,
   MIDNIGHT_CBP,
 } from "@morpho-org/morpho-sdk/constants";
-import {
-  BlueMarket,
-  Market as LegacyBlueMarket,
-  MidnightMarket,
-} from "@morpho-org/morpho-sdk/entities";
+import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
@@ -101,7 +101,6 @@ import type {
   BlueInputAllocation,
   BlueMarketId,
   BlueMetaMorphoCall,
-  DaiPermitArgs,
   MidnightDeploylessFetchParameters,
   MidnightRatifierInfo,
   Permit2PermitArgs,
@@ -113,7 +112,6 @@ import {
   BlueMetaMorphoAction,
   blueDefaultPreLiquidationParamsRegistry,
   getBlueDefaultPreLiquidationParams,
-  getDaiPermitTypedData,
   MidnightMarketUtils,
 } from "@morpho-org/morpho-sdk/utils";
 import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
@@ -133,7 +131,6 @@ describe("protocol facades", () => {
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
     [ERC20_ALLOWANCE_RECIPIENTS, rawBlueErc20AllowanceRecipients],
     [BlueMarket, RawBlueMarket],
-    [LegacyBlueMarket, RawBlueMarket],
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
     [DivisionByZeroError, RawBlueDivisionByZeroError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
@@ -167,7 +164,7 @@ describe("protocol facades", () => {
       rawBlueDefaultPreLiquidationParamsRegistry,
     ],
     [getBlueDefaultPreLiquidationParams, rawGetBlueDefaultPreLiquidationParams],
-    [getDaiPermitTypedData, rawGetDaiPermitTypedData],
+    [rawGetDaiPermitTypedData, upstreamGetDaiPermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
@@ -203,7 +200,8 @@ describe("protocol facades", () => {
     const blueMetaMorphoCall: Equal<BlueMetaMorphoCall, RawBlueMetaMorphoCall> =
       true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
-    const daiPermit: Equal<DaiPermitArgs, RawBlueDaiPermitArgs> = true;
+    const rawDaiPermit: Equal<RawBlueDaiPermitArgs, UpstreamDaiPermitArgs> =
+      true;
     const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
     const permit2Transfer: Equal<
       Permit2TransferFromArgs,
@@ -220,7 +218,7 @@ describe("protocol facades", () => {
       blueInputAllocation,
       blueMetaMorphoCall,
       permit,
-      daiPermit,
+      rawDaiPermit,
       permit2,
       permit2Transfer,
     }).toEqual({
@@ -233,7 +231,7 @@ describe("protocol facades", () => {
       blueInputAllocation: true,
       blueMetaMorphoCall: true,
       permit: true,
-      daiPermit: true,
+      rawDaiPermit: true,
       permit2: true,
       permit2Transfer: true,
     });

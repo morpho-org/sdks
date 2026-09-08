@@ -4,7 +4,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
-> **Dependency facade:** apply root §4 on every `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` surface change. Raw upstream names live under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`; Midnight has no address surface. The corresponding unprefixed facade qualifies protocol-specific names with `Blue` or `Midnight`, keeps shared infrastructure unqualified, and preserves old ambiguous names only as deprecated compatibility exports. Extend these categories only where an equivalent facade already exists; do not add parity-only upstream internals.
+> **Dependency facade:** apply root §4 on every `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` surface change. Canonical raw upstream names live under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`; Midnight has no address surface. The corresponding unprefixed facade qualifies protocol-specific names with `Blue` or `Midnight` and keeps shared infrastructure unqualified. Deprecated ambiguous compatibility exports were removed in v6. Extend these categories only where an equivalent facade already exists; do not add parity-only upstream internals.
 
 ## Routing summary
 
@@ -17,10 +17,9 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   approvals, ERC-2612 permits, Permit2 signature transfers, and Morpho authorization therefore
   target BlueBundlesV1 (the ERC-20 prerequisite for Permit2 still targets canonical Permit2). Blue
   write calls accept no share-price bounds or `slippageTolerance` input. Optional write
-  reallocations are Vault V2 BluePublicAllocator calls only. All Vault V1 reallocation planning,
-  data, input, validation, and explicit low-level Bundler3-composition surfaces remain available
-  only as deprecated compatibility surfaces and will be removed in the next major; their outputs
-  are not accepted by the high-level write methods.
+  reallocations are Vault V2 BluePublicAllocator calls only. Vault V1 shared-liquidity planning,
+  data, input, validation, and explicit low-level Bundler3-composition surfaces were removed in v6.
+  Direct Vault V1 flows and canonical raw ABI, address, fetch, and config exports remain.
 - **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
@@ -44,11 +43,11 @@ Protocol terms used across this package's docs and JSDoc:
 - **BlueBundlesV1** — the protocol-owned periphery called directly by the high-level Blue
   write methods. It owns operation ordering, token pulls, optional native wrapping, Morpho
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
-- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Its data and low-level helpers remain public, but v6 high-level Blue writes do not accept V1 reallocations.
+- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Canonical raw ABI, address, fetch, and config exports remain, but the v6 SDK does not expose its shared-liquidity planner or composition helpers.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
-- **Shared-liquidity migration** — every PublicAllocator V1 planning, data, input, validation, and
-  Bundler3-composition symbol is deprecated and will be removed in the next major. The successor is
+- **Shared-liquidity migration** — PublicAllocator V1 planning, data, input, validation, and
+  Bundler3-composition symbols were removed in v6. The successor is
   `MorphoBlue.getVaultV2BlueReallocationData` plus
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`, which return flat, action-ready
   `VaultV2BlueReallocation` calls and their simulated state. Raw protocol ABI, address, fetch, and
@@ -69,8 +68,6 @@ The action verbs available to vault flows and advanced low-level Bundler3 compos
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
-- **`reallocateTo`** — deprecated PublicAllocator V1 call that shifts liquidity from sorted
-  source markets into the target market; it will be removed from the SDK in the next major.
 - **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — low-level Bundler3 actions that move one market source or vault idle liquidity into a target market. Both target the chain's registered allocator, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata. The direct BlueBundlesV1 route instead carries equivalent allocator inputs in its fixed call.
 
 ### Constants and conventions

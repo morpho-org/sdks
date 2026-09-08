@@ -167,17 +167,13 @@ borrowing. That path may also require Morpho authorization for BlueBundlesV1. Op
 instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePrice`, or
 `maxSharePrice` because BlueBundlesV1 has no share-price-bound inputs.
 
-> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
-> low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
-> will be removed in the next major.
-
-> All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
-> composition are deprecated and will be removed in the next major. Use Vault V2
-> BluePublicAllocator reallocations.
+> High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 planner and
+> explicit low-level Bundler3-composition surfaces were removed in v6; direct Vault V1 flows and
+> canonical raw ABI, address, fetch, and config exports remain.
 
 ### Midnight: take a fixed-rate offer
 
-Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
+Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
 
 ```typescript
 const midnight = client.morpho.midnight(8453);

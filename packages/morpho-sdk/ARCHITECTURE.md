@@ -107,7 +107,8 @@ at the SDK level. The differences are at the protocol layer:
   `maxSharePrice` checks, so high-level Blue writes do not accept `slippageTolerance`.
 - **V2-only write reallocations**: Optional high-level Blue reallocations are
   `VaultV2BlueReallocation` calls mapped to BlueBundlesV1 `PublicAllocations`. PublicAllocator V1
-  data and low-level helpers remain public but are not accepted by these writes.
+  planner and low-level composition helpers were removed in v6; canonical raw protocol exports and
+  direct Vault V1 flows remain.
 - **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
   `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
   `borrowAssets`, `collateral`.

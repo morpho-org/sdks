@@ -7,7 +7,6 @@ import {
   blueAbi,
   erc2612Abi,
   permit2Abi,
-  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import fc from "fast-check";
@@ -38,7 +37,6 @@ describe("BundlerAction", () => {
   const {
     morpho,
     permit2,
-    publicAllocator,
     vaultV2BluePublicAllocator: allocator,
     bundler3: { bundler3, generalAdapter1 },
   } = getChainAddresses(chainId);
@@ -102,10 +100,6 @@ describe("BundlerAction", () => {
       nonce: permitNumberArbitrary,
     }),
     sigDeadline: amountArbitrary,
-  });
-  const reallocationArbitrary = fc.record({
-    marketParams: marketArbitrary,
-    amount: amountArbitrary,
   });
   const callbackActionArbitrary = fc
     .tuple(
@@ -339,21 +333,6 @@ describe("BundlerAction", () => {
     fc
       .tuple(
         addressArbitrary,
-        amountArbitrary,
-        fc.array(reallocationArbitrary, { maxLength: 2 }),
-        marketArbitrary,
-        skipRevertArbitrary,
-      )
-      .map(
-        (args) =>
-          ({
-            type: "reallocateTo",
-            args,
-          }) satisfies Action,
-      ),
-    fc
-      .tuple(
-        addressArbitrary,
         addressArbitrary,
         marketArbitrary,
         addressArbitrary,
@@ -407,19 +386,6 @@ describe("BundlerAction", () => {
         ({
           type: "nativeTransfer",
           args: [bundler3, generalAdapter1, amount, skipRevert],
-        }) satisfies Action,
-    ),
-    fc.tuple(amountArbitrary, skipRevertArbitrary).map(
-      ([fee, skipRevert]) =>
-        ({
-          type: "reallocateTo",
-          args: [
-            vault,
-            fee,
-            [{ marketParams: market, amount: 1n }],
-            market,
-            skipRevert,
-          ],
         }) satisfies Action,
     ),
   );
@@ -591,28 +557,6 @@ describe("BundlerAction", () => {
     `);
   });
 
-  test("encodeBundle includes reallocateTo fees in transaction value", () => {
-    const withdrawals = [{ marketParams: market, amount: 2n }];
-    const tx = BundlerAction.encodeBundle(chainId, [
-      {
-        type: "reallocateTo",
-        args: [vault, 5n, withdrawals, market, false],
-      },
-    ]);
-
-    expect(tx.value).toBe(5n);
-
-    const decoded = decodeFunctionData({
-      abi: bundler3Abi,
-      data: tx.data,
-    });
-
-    expect(decoded.functionName).toBe("multicall");
-    const calls = decoded.args[0] ?? [];
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.value).toBe(5n);
-  });
-
   test("encodeBundle keeps Blue Public Allocator calls nonpayable", () => {
     const tx = BundlerAction.encodeBundle(chainId, [
       {
@@ -646,71 +590,6 @@ describe("BundlerAction", () => {
       0n,
       0n,
     ]);
-  });
-
-  test("encodeBundle includes callback action values in transaction value", () => {
-    const tx = BundlerAction.encodeBundle(chainId, [
-      {
-        type: "morphoSupplyCollateral",
-        args: [
-          market,
-          1n,
-          owner,
-          [
-            {
-              type: "reallocateTo",
-              args: [
-                vault,
-                5n,
-                [{ marketParams: market, amount: 2n }],
-                market,
-                false,
-              ],
-            },
-          ],
-          false,
-        ],
-      },
-    ]);
-
-    expect(tx.value).toBe(5n);
-
-    const decoded = decodeFunctionData({
-      abi: bundler3Abi,
-      data: tx.data,
-    });
-
-    expect(decoded.functionName).toBe("multicall");
-    const calls = decoded.args[0] ?? [];
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.value).toBe(0n);
-    expect(calls[0]?.callbackHash).not.toBe(zeroHash);
-  });
-
-  test("encodeBundle uses native transfers to Bundler3 before adding call value", () => {
-    const withdrawals = [{ marketParams: market, amount: 2n }];
-    const tx = BundlerAction.encodeBundle(chainId, [
-      {
-        type: "nativeTransfer",
-        args: [owner, bundler3, 5n, false],
-      },
-      {
-        type: "reallocateTo",
-        args: [vault, 5n, withdrawals, market, false],
-      },
-    ]);
-
-    expect(tx.value).toBe(5n);
-
-    const decoded = decodeFunctionData({
-      abi: bundler3Abi,
-      data: tx.data,
-    });
-
-    expect(decoded.functionName).toBe("multicall");
-    const calls = decoded.args[0] ?? [];
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.value).toBe(5n);
   });
 
   test.each([
@@ -1026,27 +905,6 @@ describe("BundlerAction", () => {
             market,
             18n,
             recipient,
-            false,
-          ),
-        ],
-        [
-          "reallocateTo",
-          {
-            type: "reallocateTo",
-            args: [
-              vault,
-              19n,
-              [{ marketParams: market, amount: 20n }],
-              market,
-              false,
-            ],
-          },
-          BundlerAction.publicAllocatorReallocateTo(
-            chainId,
-            vault,
-            19n,
-            [{ marketParams: market, amount: 20n }],
-            market,
             false,
           ),
         ],
@@ -1542,30 +1400,6 @@ describe("BundlerAction", () => {
     expect(decoded.args).toEqual([market, 1n, recipient]);
   });
 
-  test("publicAllocatorReallocateTo", () => {
-    const withdrawals = [{ marketParams: market, amount: 1n }];
-    const call = onlyCall(
-      BundlerAction.publicAllocatorReallocateTo(
-        chainId,
-        vault,
-        2n,
-        withdrawals,
-        market,
-        true,
-      ),
-    );
-    const decoded = decodeFunctionData({
-      abi: vaultV1PublicAllocatorAbi,
-      data: call.data,
-    });
-
-    expect(call.to).toBe(publicAllocator);
-    expect(call.value).toBe(2n);
-    expect(call.skipRevert).toBe(true);
-    expect(decoded.functionName).toBe("reallocateTo");
-    expect(decoded.args).toEqual([vault, withdrawals, market]);
-  });
-
   test("vaultV2BluePublicAllocatorReallocate", () => {
     const penalty = 1_000_000_000_000_000n;
     const [reset, approval, call] =
@@ -1786,16 +1620,6 @@ describe("BundlerAction", () => {
         owner,
         permitSingle,
         signature,
-      ),
-    ).toThrow(BundlerErrors.UnexpectedAction);
-
-    expect(() =>
-      BundlerAction.publicAllocatorReallocateTo(
-        ChainId.TempoMainnet,
-        vault,
-        1n,
-        [{ marketParams: market, amount: 2n }],
-        market,
       ),
     ).toThrow(BundlerErrors.UnexpectedAction);
 

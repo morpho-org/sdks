@@ -11,6 +11,7 @@ preferWorkspacePackages: true
 ignoreWorkspaceCycles: true
 
 overrides:
+  "@morpho-org/liquidity-sdk-viem>@morpho-org/morpho-sdk": "npm:@morpho-org/morpho-sdk@5.9.0"
   axios: 1.18.1
   tmp: 0.2.7
   ws: 8.21.0

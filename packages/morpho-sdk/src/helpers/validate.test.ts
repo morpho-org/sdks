@@ -2,7 +2,6 @@ import {
   AccrualPosition,
   ChainId,
   Market,
-  type MarketId,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
@@ -21,7 +20,6 @@ import {
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
-  EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
@@ -37,8 +35,6 @@ import {
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
-  UnsortedReallocationWithdrawalsError,
-  type VaultReallocation,
   type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
@@ -56,7 +52,6 @@ import {
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
-  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
@@ -70,7 +65,7 @@ const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_B: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
 // ---------------------------------------------------------------------------
-// validateUserAddress (deprecated, kept for backwards compatibility)
+// validateUserAddress
 // ---------------------------------------------------------------------------
 
 describe("validateUserAddress", () => {
@@ -547,22 +542,12 @@ describe("validateRepayShares", () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateReallocations
+// validateVaultV2BlueReallocations
 // ---------------------------------------------------------------------------
 
 describe("reallocation validation", () => {
   const targetMarketId = marketParams.id;
   const sourceMarketA = new MarketParams(CbbtcUsdcBlue);
-  const marketParamsWithId = (id: MarketId) => ({
-    ...sourceMarketA,
-    id,
-  });
-
-  const validReallocation: VaultReallocation = {
-    vault: USER_A,
-    fee: 0n,
-    withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
-  };
 
   const validBluePublicAllocatorReallocation: VaultV2BlueReallocation = {
     vault: USER_B,
@@ -571,12 +556,6 @@ describe("reallocation validation", () => {
     assets: 1n,
     penalty: 0n,
   };
-
-  test("should pass with valid reallocations", () => {
-    expect(() =>
-      validateReallocations([validReallocation], targetMarketId),
-    ).not.toThrow();
-  });
 
   test("behavior: accepts a valid Blue Public Allocator idle reallocation", () => {
     expect(() =>
@@ -814,7 +793,9 @@ describe("reallocation validation", () => {
     {
       name: "entry matching both shapes",
       reallocation: {
-        ...validReallocation,
+        vault: USER_A,
+        fee: 0n,
+        withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
         from: { type: "idle" },
         to: { adapter: USER_A },
         assets: 1n,
@@ -833,104 +814,6 @@ describe("reallocation validation", () => {
     expect(() =>
       validateVaultV2BlueReallocations([reallocation], targetMarketId),
     ).toThrow(InvalidReallocationShapeError);
-  });
-
-  test("should throw NegativeInputError when fee is negative", () => {
-    expect(() =>
-      validateReallocations(
-        [{ ...validReallocation, fee: -1n }],
-        targetMarketId,
-      ),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw EmptyReallocationWithdrawalsError when withdrawals is empty", () => {
-    expect(() =>
-      validateReallocations(
-        [{ ...validReallocation, withdrawals: [] }],
-        targetMarketId,
-      ),
-    ).toThrow(EmptyReallocationWithdrawalsError);
-  });
-
-  test("should throw NonPositiveInputError when withdrawal amount is zero", () => {
-    expect(() =>
-      validateReallocations(
-        [
-          {
-            ...validReallocation,
-            withdrawals: [{ marketParams: sourceMarketA, amount: 0n }],
-          },
-        ],
-        targetMarketId,
-      ),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when withdrawal amount is negative", () => {
-    expect(() =>
-      validateReallocations(
-        [
-          {
-            ...validReallocation,
-            withdrawals: [{ marketParams: sourceMarketA, amount: -1n }],
-          },
-        ],
-        targetMarketId,
-      ),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
-    expect(() =>
-      validateReallocations(
-        [
-          {
-            ...validReallocation,
-            withdrawals: [{ marketParams, amount: 10n ** 18n }],
-          },
-        ],
-        targetMarketId,
-      ),
-    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
-  });
-
-  test("should throw UnsortedReallocationWithdrawalsError when withdrawals are not ascending", () => {
-    // Using the same market twice triggers the <= check (equal IDs).
-    expect(() =>
-      validateReallocations(
-        [
-          {
-            ...validReallocation,
-            withdrawals: [
-              { marketParams: sourceMarketA, amount: 10n ** 18n },
-              { marketParams: sourceMarketA, amount: 10n ** 18n },
-            ],
-          },
-        ],
-        targetMarketId,
-      ),
-    ).toThrow(UnsortedReallocationWithdrawalsError);
-  });
-
-  test("should accept mixed-case withdrawal ids when normalized order is ascending", () => {
-    const mixedSourceA = `0x${"a".repeat(64)}` as MarketId;
-    const mixedSourceB = `0x${"B".repeat(64)}` as MarketId;
-
-    expect(() =>
-      validateReallocations(
-        [
-          {
-            ...validReallocation,
-            withdrawals: [
-              { marketParams: marketParamsWithId(mixedSourceA), amount: 1n },
-              { marketParams: marketParamsWithId(mixedSourceB), amount: 1n },
-            ],
-          },
-        ],
-        targetMarketId,
-      ),
-    ).not.toThrow();
   });
 });
 

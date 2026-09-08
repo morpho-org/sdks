@@ -31,9 +31,9 @@ With Permit2 AllowanceTransfer, the ERC-20 allowance targets canonical Permit2 a
 allowance names GeneralAdapter1. Bundler3 primitives can also execute Morpho and allocator actions
 for applications that deliberately build their own low-level bundles.
 
-All Vault V1 shared-liquidity planning, data, input, validation, and explicit PublicAllocator V1
-Bundler3-composition surfaces are deprecated and will be removed from the SDK in the next major.
-Use Vault V2 BluePublicAllocator actions for new integrations.
+Vault V1 shared-liquidity planning, data, input, validation, and explicit PublicAllocator V1
+Bundler3-composition surfaces were removed in v6. Direct Vault V1 flows remain, while
+shared-liquidity integrations use Vault V2 BluePublicAllocator actions.
 
 ## Current high-level routes
 
@@ -71,9 +71,8 @@ Consequences for integrators:
 - Permit2 uses SignatureTransfer: the ERC-20 prerequisite still targets canonical Permit2, while
   the signature authorizes BlueBundlesV1 as spender.
 - Morpho authorization grants BlueBundlesV1 operator rights, not GeneralAdapter1.
-- High-level Blue reallocations are Vault V2 BluePublicAllocator calls only. Deprecated
-  PublicAllocator V1 helpers and low-level composition remain available until the next major, but
-  these writes do not accept their outputs.
+- High-level Blue reallocations are Vault V2 BluePublicAllocator calls only. PublicAllocator V1
+  planner and low-level composition helpers were removed in v6.
 - High-level Blue writes have no `slippageTolerance`, `minSharePrice`, or `maxSharePrice` input.
   BlueBundlesV1 cannot enforce the old Bundler3 share-price bounds.
 - Transaction decoding and simulation must expect one BlueBundlesV1 function call rather than a
@@ -110,7 +109,7 @@ BlueBundlesV1 writes because they have a different spender.
   native transfers and any low-level value-carrying allocator calls.
 - **Resolve addresses per chain.** Use the address registry and validate the viem client's chain
   before encoding. Bundler3, GeneralAdapter1, and BlueBundlesV1 are independent addresses.
-- **Do not infer high-level routing from low-level exports.** Morpho and PublicAllocator Bundler3
+- **Do not infer high-level routing from low-level exports.** Morpho and Vault V2 allocator Bundler3
   primitives remain public for advanced users, but `client.morpho.blue(...)` never falls back to
   them in v6.
 - **Direct vault `withdraw`/`redeem` have no share-price bound.** Unlike GeneralAdapter1 deposits,
