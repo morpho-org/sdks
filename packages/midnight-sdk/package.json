@@ -48,9 +48,9 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "fast-check": "^4.9.0",
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "^4.1.10"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",

@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+catalog:
+  typescript: 7.0.2
+  vitest: ^4.1.10
+
 autoInstallPeers: true
 linkWorkspacePackages: deep
 preferWorkspacePackages: true
