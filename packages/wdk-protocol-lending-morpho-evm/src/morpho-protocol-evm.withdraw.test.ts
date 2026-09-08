@@ -5,10 +5,12 @@ import {
 } from "@morpho-org/morpho-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+import { createWalletClient, http } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import MorphoProtocolEvm, {
-  type ApprovalOrSignatureRequirement,
+  type PreparedMorphoWithdraw,
+  type RequirementApproval,
   UnresolvedVaultWithdrawRequirementsError,
 } from "./morpho-protocol-evm.js";
 
@@ -38,7 +40,7 @@ const setup = () => {
   const transaction = { to: VAULT, data: "0x1234", value: 0n } as const;
   const action = {
     getRequirements: vi
-      .fn<() => Promise<readonly ApprovalOrSignatureRequirement[]>>()
+      .fn<PreparedMorphoWithdraw["getRequirements"]>()
       .mockResolvedValue([]),
     buildTx: vi.fn(
       (_signatures?: readonly RequirementSignature[]) => transaction,
@@ -106,9 +108,7 @@ describe.sequential("prepared withdrawal adapter", () => {
     async (route) => {
       const { protocol, action, quote } = setup();
       // Only requirement presence matters to this adapter; exact allowance math is SDK-owned.
-      action.getRequirements.mockResolvedValue([
-        {} as ApprovalOrSignatureRequirement,
-      ]);
+      action.getRequirements.mockResolvedValue([{} as RequirementApproval]);
       const prepared =
         route === "prepared"
           ? await protocol.prepareWithdraw(OPTIONS)
@@ -148,7 +148,7 @@ describe.sequential("prepared withdrawal adapter", () => {
   test("behavior: rechecks prerequisites on the same handle after an approval", async () => {
     const { protocol, action, withdraw, quote } = setup();
     action.getRequirements
-      .mockResolvedValueOnce([{} as ApprovalOrSignatureRequirement])
+      .mockResolvedValueOnce([{} as RequirementApproval])
       .mockResolvedValueOnce([]);
     const prepared = await protocol.prepareWithdraw(OPTIONS);
 
@@ -174,6 +174,57 @@ describe.sequential("prepared withdrawal adapter", () => {
     expect(action.buildTx).toHaveBeenCalledWith([signature]);
     expect(withdraw).toHaveBeenCalledOnce();
     expect(quote).toHaveBeenCalledWith(transaction);
+  });
+
+  test("behavior: signs an ERC-2612 requirement and passes it directly to quote and submit", async () => {
+    const { protocol, action, send, quote, transaction } = setup();
+    const owner = "0x405005C7c4422390F4B334F64Cf20E0b767131d0";
+    const signature = {
+      args: {
+        owner,
+        asset: VAULT,
+        amount: 1_000n,
+        nonce: 0n,
+        deadline: 1_900_000_000n,
+        signature: "0x01",
+      },
+      action: {
+        type: "permit",
+        args: {
+          spender: VAULT,
+          amount: 1_000n,
+          deadline: 1_900_000_000n,
+        },
+      },
+    } as const satisfies Erc2612RequirementSignature;
+    // Signing is SDK-owned; this adapter test verifies the public return type and forwarding.
+    const sign = vi.fn().mockResolvedValue(signature);
+    action.getRequirements.mockResolvedValue([
+      { action: signature.action, sign },
+    ]);
+    send.mockResolvedValue({ hash: "withdrawal-hash", fee: 12_345n });
+    const wallet = createWalletClient({ chain: mainnet, transport: http() });
+    const prepared = await protocol.prepareWithdraw(OPTIONS);
+    const requirements = await prepared.getRequirements();
+    const requirement = requirements[0]!;
+    expect(requirement).toHaveProperty("sign");
+    if (!("sign" in requirement))
+      throw new Error("Expected a signable requirement");
+
+    const signed = await requirement.sign(wallet, owner);
+    expectTypeOf(signed).toEqualTypeOf<Erc2612RequirementSignature>();
+    await expect(prepared.quote(signed)).resolves.toEqual({ fee: 12_345n });
+    await expect(prepared.submit(signed)).resolves.toEqual({
+      hash: "withdrawal-hash",
+      fee: 12_345n,
+    });
+
+    expect(sign).toHaveBeenCalledWith(wallet, owner);
+    expect(action.buildTx).toHaveBeenCalledTimes(2);
+    expect(action.buildTx).toHaveBeenNthCalledWith(1, [signed]);
+    expect(action.buildTx).toHaveBeenNthCalledWith(2, [signed]);
+    expect(quote).toHaveBeenCalledWith(transaction);
+    expect(send).toHaveBeenCalledWith(transaction);
   });
 
   test("behavior: propagates requirement-read failures without estimating gas", async () => {

@@ -322,9 +322,40 @@ export interface PreparedMorphoSupply {
  * away from the configured vault chain.
  */
 export interface PreparedMorphoWithdraw {
-  /** Resolves the exact share approval or permit requirement for this prepared withdrawal. */
+  /**
+   * Resolves the exact share approval or ERC-2612 permit requirement for this prepared withdrawal.
+   *
+   * @returns No requirements when the share allowance matches the cap, otherwise an approval
+   *   transaction or ERC-2612 request whose signed result can be passed directly to `submit` or `quote`.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {ExpiredDeadlineError} when requirement resolution happens after the deadline.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
+   * @example
+   * ```ts
+   * import type { PreparedMorphoWithdraw } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { createWalletClient, custom, type EIP1193Provider } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteWithPermit(prepared: PreparedMorphoWithdraw, provider: EIP1193Provider): Promise<{ fee: bigint }> {
+   *   const wallet = createWalletClient({ chain: mainnet, transport: custom(provider) });
+   *   const [owner] = await wallet.requestAddresses();
+   *   if (!owner) throw new Error("Connect the wallet used to prepare this withdrawal.");
+   *   for (const requirement of await prepared.getRequirements()) {
+   *     if ("sign" in requirement) {
+   *       const signature = await requirement.sign(wallet, owner);
+   *       return prepared.quote(signature); // Resolves to { fee: bigint }.
+   *     }
+   *   }
+   *   // Confirm any approval transactions before quoting without a permit.
+   *   return prepared.quote();
+   * }
+   * ```
+   */
   readonly getRequirements: () => Promise<
-    readonly ApprovalOrSignatureRequirement[]
+    readonly (
+      | RequirementApproval
+      | RequirementSignatureRequest<Erc2612RequirementSignature>
+    )[]
   >;
   /**
    * Submits this prepared withdrawal with its optional signed share permit. When no signature is
@@ -1085,7 +1116,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       getRequirements: async () => {
         // Recheck the live chain before using the captured SDK action.
         await this._getVault();
-        return (await action.getRequirements()) as readonly ApprovalOrSignatureRequirement[];
+        return (await action.getRequirements()) as readonly (
+          | RequirementApproval
+          | RequirementSignatureRequest<Erc2612RequirementSignature>
+        )[];
       },
       submit: async (
         requirementSignature?: Erc2612RequirementSignature,
