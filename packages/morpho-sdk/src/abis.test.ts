@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   blueBundlesV1Abi,
   publicAllocatorAbi,
+  vaultBundlesV1Abi,
   vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "./abis.js";
@@ -25,6 +26,26 @@ describe("blueBundlesV1Abi", () => {
       blueBundlesV1RepayAndWithdrawCollateral: "0x827d6bd8",
       blueBundlesV1Withdraw: "0xc0229fe8",
       blueBundlesV1MigrateBorrowPosition: "0x9834e387",
+    });
+  });
+});
+
+describe("vaultBundlesV1Abi", () => {
+  test("behavior: matches the pinned VaultBundlesV1 selectors", () => {
+    const selectors = Object.fromEntries(
+      vaultBundlesV1Abi
+        .filter((item) => item.type === "function")
+        .map((item) => [
+          item.name,
+          toFunctionSelector(toFunctionSignature(item)),
+        ]),
+    );
+
+    expect(selectors).toEqual({
+      initiator: "0x5c39fcc1",
+      vaultBundlesV1Deposit: "0x6bbba4e0",
+      vaultBundlesV1Withdraw: "0x932084a8",
+      vaultBundlesV1Migrate: "0x8355f776",
     });
   });
 });

@@ -223,6 +223,10 @@ export function computeMinWithdrawSharePrice(params: {
  * shares the on-chain `maxSharePrice` check divides by.
  *
  * @param params - Vault snapshot, bundles execution deadline, net assets, and slippage.
+ * @param params.vaultData - Hydrated Vault V1 `AccrualVault` or Vault V2 `AccrualVaultV2` snapshot.
+ * @param params.deadline - Bundle execution deadline as a Unix timestamp in seconds, used for accrual.
+ * @param params.assets - Net assets deposited after referral fees, in the underlying token's smallest unit.
+ * @param params.slippageTolerance - Accepted share-price increase as a WAD-scaled fraction (`1e18` = 100%).
  * @returns The capped maximum share price enforced by VaultBundlesV1.
  * @throws {NonPositiveInputError} when `assets` or the previewed shares are not positive.
  * @throws {NegativeInputError} when `slippageTolerance` is negative.
@@ -297,17 +301,30 @@ export const computeVaultMaxSharePrice = (params: {
  * MetaMorpho 1.1's `lostAssets` clamp keeps that preview upper-bounded without widening it.
  *
  * @param params - Vault snapshot, execution deadline, asset amount, and WAD-scaled slippage.
+ * @param params.vaultData - Hydrated Vault V1 `AccrualVault` or Vault V2 `AccrualVaultV2` snapshot.
+ * @param params.deadline - Bundle execution deadline as a Unix timestamp in seconds, used for accrual.
+ * @param params.assets - Assets withdrawn from the vault, in the underlying token's smallest unit.
+ * @param params.slippageTolerance - Accepted share-price decline as a WAD-scaled fraction (`1e18` = 100%).
  * @returns The maximum shares the prepared operation may burn.
  * @throws {NonPositiveInputError} when `assets` or the computed share cap is not positive.
  * @throws {NegativeInputError} when `slippageTolerance` is negative.
  * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
  * @example
  * ```ts
+ * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
  * import { computeVaultMaxShareAllowance } from "@morpho-org/morpho-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
  *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const vaultData = await fetchAccrualVault(
+ *   "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+ *   client,
+ * );
+ * const { timestamp } = await client.getBlock();
  * const shares = computeVaultMaxShareAllowance({
  *   vaultData,
- *   deadline: 1_900_000_000n,
+ *   deadline: timestamp + 7_200n,
  *   assets: 1_000_000n,
  *   slippageTolerance: 500_000_000_000_000n,
  * });

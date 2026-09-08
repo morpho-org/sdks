@@ -1,5 +1,6 @@
 import type { Address } from "viem";
 import { maxUint256 } from "viem";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   type BundlesTokenSignatureRequirement,
@@ -36,9 +37,23 @@ export type BundlesTokenRequirementsState =
  * one-time signature requirement.
  *
  * @param params - Funding values, expected bundles spender, and pre-fetched state.
+ * @param params.token - ERC-20 token funded by the operation.
+ * @param params.spender - Registered fixed bundles contract that pulls the token.
+ * @param params.owner - Account funding the operation and owning the Permit2 nonce bitmap.
+ * @param params.chainId - Target chain id used to resolve supported approval spenders.
+ * @param params.amount - Exact pull amount in the token's smallest unit; zero returns no requirements.
+ * @param params.deadline - Signature expiration as a Unix timestamp in seconds.
+ * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
+ * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
+ * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
+ * @param params.state.approvalAmount - In the approval branch, allowance to set if needed; must cover `amount`.
+ * @param params.state.permit2 - In the SignatureTransfer branch, canonical Permit2 address for the chain.
+ * @param params.state.permit2Allowance - In the SignatureTransfer branch, current token allowance from `owner` to Permit2.
+ * @param params.state.permit2Nonce - In the SignatureTransfer branch, caller-selected unused uint256 unordered nonce.
+ * @param params.state.nonceBitmap - In the SignatureTransfer branch, owner's Permit2 bitmap word at `permit2Nonce >> 8n`.
  * @returns Ordered approval transactions and/or a Permit2 SignatureTransfer requirement.
  * @throws {NegativeInputError} when an amount or Permit2 nonce is negative.
- * @throws {InputExceedsMaxError} when the Permit2 nonce exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount` or the Permit2 nonce exceeds uint256.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the selected nonce bit is set.
  * @throws {ApprovalAmountLessThanSpendAmountError} when a classic approval cannot cover the pull.
  * @example
@@ -70,9 +85,8 @@ export const resolveBundlesTokenRequirements = (params: {
   | Readonly<Transaction<ERC20ApprovalAction>>
   | BundlesTokenSignatureRequirement
 )[] => {
-  if (params.amount < 0n) {
-    throw new NegativeInputError("amount", params.amount);
-  }
+  // Reject invalid pulls before an approval encoder can cap the requested amount.
+  validateUint256Field("amount", params.amount);
   if (params.amount === 0n) return [];
 
   if (params.state.type === "approval") {

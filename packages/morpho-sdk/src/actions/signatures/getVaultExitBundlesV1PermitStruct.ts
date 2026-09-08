@@ -1,7 +1,6 @@
 import {
   type Address,
   compactSignatureToSignature,
-  type Hex,
   isAddressEqual,
   parseCompactSignature,
   parseSignature,
@@ -12,22 +11,10 @@ import {
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
+import type { BundleSharesPermit } from "../bundles/common.js";
 
-/** Permit tuple consumed by VaultExitBundlesV1. */
-export interface VaultExitBundlesV1PermitStruct {
-  /** Vault-share allowance authorized by the permit. */
-  readonly value: bigint;
-  /** Vault permit nonce signed by the owner. */
-  readonly nonce: bigint;
-  /** Timestamp after which the permit is invalid. */
-  readonly deadline: bigint;
-  /** ECDSA recovery identifier, or zero for the empty-permit sentinel. */
-  readonly v: number;
-  /** ECDSA signature `r`, or zero for the empty-permit sentinel. */
-  readonly r: Hex;
-  /** ECDSA signature `s`, or zero for the empty-permit sentinel. */
-  readonly s: Hex;
-}
+/** Compatibility alias for the canonical {@link BundleSharesPermit} tuple consumed by VaultExitBundlesV1. */
+export type VaultExitBundlesV1PermitStruct = BundleSharesPermit;
 
 /** Parameters for {@link getVaultExitBundlesV1PermitStruct}. */
 export interface GetVaultExitBundlesV1PermitStructParams {

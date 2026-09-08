@@ -736,7 +736,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockResolvedValue({ hash: "dummy-repay-hash", fee: 12_345n });
       const requirementSignature = {
         args: { deadline: SIGNATURE_DEADLINE },
-        action: { type: "permit2TransferFrom" },
+        action: { type: "permit2SignatureTransfer" },
       } as unknown as BundlesTokenRequirementSignature;
 
       await protocol.repay({

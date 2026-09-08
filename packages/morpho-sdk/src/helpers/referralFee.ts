@@ -8,6 +8,8 @@ import {
  * Computes the gross amount whose post-referral-fee proceeds equal `netAssets` exactly.
  *
  * @param params - Net target and WAD-scaled referral fee.
+ * @param params.netAssets - Required proceeds after the fee, in the asset's smallest unit.
+ * @param params.referralFeePct - Referral fee fraction scaled by WAD (`1e18`); must be below WAD.
  * @returns The gross asset amount to pass to a bundles entrypoint.
  * @throws {NegativeInputError} when `netAssets` or `referralFeePct` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct >= WAD`.

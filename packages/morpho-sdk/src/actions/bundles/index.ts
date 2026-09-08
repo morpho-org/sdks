@@ -1,4 +1,5 @@
 export type {
+  BundleSharesPermit,
   BundlesCommonParams,
   BundlesSharesPermit,
   BundlesTokenPermit,
