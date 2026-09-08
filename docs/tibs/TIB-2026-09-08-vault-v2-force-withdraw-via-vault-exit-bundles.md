@@ -24,13 +24,18 @@ The multicall path pushes three problems onto every consumer:
 3. **The caller plans the exit.** Every integrator reimplements the same deallocation planner, and
    each reimplementation is a place to be wrong about an amount the user cannot verify.
 
-`vaultExitBundlesV1ForceWithdrawVaultV2` closes all three on-chain: it computes its own
-deallocations by walking the adapter's market list, withdraws everything the vault can pay without a
-penalty (idle assets plus the liquidity reachable through the vault's liquidity adapter) before the
-penalised remainder, and checks the realized exit share price against `minSharePriceE27`. The caller
-supplies an amount, not a plan. The contract is already vendored, deployed on the 13 chains where
-`bundles.vaultExitBundlesV1` is registered, and carries the same two audits as the in-kind entry
-points — all shipped by the in-kind TIB, so this decision adds no ABI, address, or dependency.
+`vaultExitBundlesV1ForceWithdrawVaultV2` addresses the last two problems on-chain and the first at
+the SDK boundary. On-chain it plans the exit itself — computing its own deallocations by walking the
+adapter's market list, withdrawing everything the vault can pay without a penalty (idle assets plus
+the liquidity reachable through the vault's liquidity adapter) before the penalised remainder — and
+enforces a realized-exit-share-price bound against `minSharePriceE27` (problems 3 and 2). Coverage
+(problem 1) it does **not** close: an exit the adapter's markets cannot cover still reaches the
+contract's unbounded loop and reverts with a raw `panic 0x32`. This decision closes that at the SDK
+boundary, by pre-flighting coverage against the vault snapshot and rejecting before submission. In
+every case the caller supplies an amount, not a plan. The contract is already vendored, deployed on
+the 13 chains where `bundles.vaultExitBundlesV1` is registered, and carries the same two audits as
+the in-kind entry points — all shipped by the in-kind TIB, so this decision adds no ABI, address, or
+dependency.
 
 ## Goals / Non-Goals
 
@@ -60,7 +65,8 @@ points — all shipped by the in-kind TIB, so this decision adds no ABI, address
 - **No share-sufficiency validation**, **no gate preflighting** — both carried over from the in-kind
   TIB, for the same reasons. New here: the vault's `receiveAssetsGate` must now allow
   VaultExitBundlesV1, a precondition the multicall path never had.
-- No new runtime dependency, ABI, or address slot; no downstream package bump beyond `morpho-sdk`.
+- No new runtime dependency, ABI, or address slot. The `morpho-sdk`-major dependent audit and its
+  outcome are recorded in [Breaking Changes & Migration](#breaking-changes--migration), not waived.
 
 ## Current Solution
 
@@ -233,9 +239,17 @@ for the checks the in-kind path introduced as `InKindRedeemRequiresSingleAdapter
 
 ## Breaking Changes & Migration
 
-Major bump on `@morpho-org/morpho-sdk` only — the ABI and address slot shipped with the in-kind TIB,
-so no downstream peer-range audit is required. Migration is documented in
-`MIGRATION-v5-to-v6.md`.
+Major bump on `@morpho-org/morpho-sdk`. It adds no ABI, address, or dependency — those shipped with
+the in-kind TIB — but a `morpho-sdk` major still requires the downstream dependent audit
+(`AGENTS.md` §4, §7), which this decision records rather than waives. The maintained dependents are
+`wdk-protocol-lending-morpho-evm` (direct runtime dependency, `workspace:^`) and `liquidity-sdk-viem`
+(peer dependency, range `^5.4.0 || ^6.0.0`). Audit outcome: neither consumes the reshaped
+`forceWithdraw` surface, so this change forces no additional migration on either.
+`wdk-protocol-lending-morpho-evm` already takes its own `2.0.0` major in this same v6 line, driven by
+the BlueBundlesV1 route replacement ([`TIB-2026-08-25`](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)),
+not by this change; `liquidity-sdk-viem`'s peer range already admits `^6.0.0` and needs no update. So
+this decision contributes no dependent bump or peer-range change of its own beyond the `morpho-sdk`
+v6 major it is part of. Migration is documented in `MIGRATION-v5-to-v6.md`.
 
 - `MorphoVaultV2.forceWithdraw` takes `{ exitAssets, vaultData, userAddress, adapter?, deadline?,
   slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }` instead of
