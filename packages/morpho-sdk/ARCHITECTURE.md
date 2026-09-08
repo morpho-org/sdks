@@ -133,31 +133,33 @@ force the vault to pull assets back to vault level and withdraw/redeem after.
 ## Contract Routing
 
 This is the most important routing decision in the SDK. "Bundled" does not always mean Bundler3:
-Blue and Midnight use fixed, protocol-owned bundle contracts directly.
+Vault deposits, Blue, and Midnight use fixed, protocol-owned bundle contracts directly.
 
-### Vault deposits: Always through the Morpho Bundler
+### Vault deposits: Direct VaultBundlesV1 calls
 
-All vault deposits — both V1 and V2 — are routed through the **Morpho Bundler** (specifically, its
-**general adapter**). The bundle atomically:
+Both vault versions call `vaultBundlesV1Deposit` on the chain's registered
+`bundles.vaultBundlesV1` deployment. The contract atomically:
 
-1. _(If `nativeAmount` is provided)_ Transfers native token to the general adapter via `nativeTransfer`, then wraps it to wNative via `wrapNative`.
-2. _(If `amount` is provided)_ Transfers the user's ERC-20 tokens to the general adapter (via `erc20TransferFrom`, permit,
-   or permit2).
-3. Calls `erc4626Deposit` on the vault with a `maxSharePrice` parameter, using `totalAssets = amount + nativeAmount`.
+1. Pulls the gross ERC-20 `amount`, consuming an optional ERC-2612 or Permit2 SignatureTransfer
+   permit, or wraps the exclusive `nativeAmount` supplied as `tx.value`.
+2. Deducts `referralFeeAssets = amount * referralFeePct / WAD`, rounded down.
+3. Deposits the remaining `netAssets` into the vault, minting shares to the transaction sender
+   and enforcing `maxSharePrice` and the execution `deadline`.
 
-**Why the bundler is mandatory for deposits:** The `maxSharePrice` check inside the general
-adapter prevents **ERC-4626 inflation attacks**. In this attack, a malicious actor manipulates
-the share price between the user's approval and the deposit transaction. The general adapter
-enforces the price check atomically in the same transaction as the token transfer, closing this
-vector. Vaults without "dead deposit protection" are especially vulnerable.
-This also makes the UX simpler, since users only need to approve the general adapter instead of approving each vault individually.
+The entity computes `maxSharePrice` from the net deposit assets and the supplied vault snapshot
+accrued through the deadline, including slippage tolerance and vault share rounding. The
+VaultBundlesV1 share-price check provides atomic protection against ERC-4626 inflation attacks.
+High-level deposits must preserve this guard.
 
-**Native token wrapping:** For vaults whose underlying asset is wNative, deposits accept an optional `nativeAmount` parameter. When provided, the bundler first transfers native token (`nativeTransfer`) to the general adapter, then wraps it (`wrapNative`) before depositing. The transaction's `value` field is set to `nativeAmount`. Users can combine ERC-20 `amount` and `nativeAmount` in a single deposit. Validation ensures the vault asset is the chain's wrapped native token (`wNative`), and throws `NativeAmountOnNonWNativeVaultError` otherwise.
+Funding accepts exactly one of `amount` or `nativeAmount`. Native funding requires the vault asset
+to be the chain's wrapped-native token, otherwise `NativeAmountOnNonWNativeVaultError` is thrown.
+It needs no token approval or permit; `tx.value` is the full gross native amount and wrapping
+happens inside VaultBundlesV1. The action does not encode Bundler3 sub-actions.
 
-**Security invariant:** Never bypass the general adapter for deposits.
-
-The bundle is encoded via the local `BundlerAction.encodeBundle(chainId, actions)` helper. The `to` address of the resulting transaction is always the
-Bundler3 contract address for the target chain.
+Classic approvals and ERC-2612 permits name VaultBundlesV1 as spender. Permit2 SignatureTransfer
+keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the signed transfer.
+Each chain must have a registered VaultBundlesV1 deployment; missing deployments throw
+`UnknownAddressError`. Check the [migration guide](./MIGRATION-v5-to-v6.md) for chain availability.
 
 ### Withdrawals and Redeems: Direct vault calls
 
@@ -188,7 +190,7 @@ GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound
 
 | Operation                             | Route                      | Why                                                                                                        |
 | ------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Deposit (V1 & V2)                     | Bundler3 (general adapter) | `maxSharePrice` enforcement prevents inflation attacks. Optional native token wrapping for wNative vaults. |
+| Deposit (V1 & V2)                     | VaultBundlesV1 | `maxSharePrice` enforcement, exclusive ERC-20/native funding, referral fee, and deadline. |
 | Withdraw (V1 & V2)                    | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
@@ -217,7 +219,7 @@ morpho-sdk
 Provides protocol-level constants and math:
 
 - **`getChainAddresses(chainId)`** — resolves contract addresses for the target chain, including
-  `bundler3.generalAdapter1`, `bundles.blueBundlesV1`, `permit2`, `dai`, and others.
+  `bundler3.generalAdapter1`, `bundles.blueBundlesV1`, `bundles.vaultBundlesV1`, `permit2`, and others.
 - **`MathLib`** — fixed-point arithmetic (`mulDivUp`, `wToRay`, `min`, `WAD`, `RAY`).
 - **`DEFAULT_SLIPPAGE_TOLERANCE`** — the default 0.03% slippage used for deposit `maxSharePrice`.
 - **`MarketParams`** and **`marketParamsAbi`** — used when encoding force-deallocation data
@@ -227,7 +229,7 @@ Provides protocol-level constants and math:
 
 On-chain data fetching and contract ABIs:
 
-- **ABIs**: `metaMorphoAbi` (V1), `vaultV2Abi` (V2) — used for calldata encoding in actions.
+- **ABIs**: `metaMorphoAbi` (V1), `vaultV2Abi` (V2), and `vaultBundlesV1Abi` (deposits for both versions) — used for calldata encoding in actions.
 - **Fetchers**: `fetchVault`, `fetchAccrualVault` (V1), `fetchVaultV2`, `fetchAccrualVaultV2`
   (V2) — read vault state from the blockchain.
 - **`fetchHolding`** — reads a user's token allowances, EIP-2612 nonce, and Permit2 state.
@@ -239,7 +241,7 @@ On-chain data fetching and contract ABIs:
 
 ### Local Bundler Encoding
 
-Deposit bundle encoding:
+Vault V1-to-V2 migration and public low-level bundle encoding:
 
 - **`BundlerAction.encodeBundle(chainId, actions)`** — takes an array of bundler `Action`
   objects (e.g. `erc20TransferFrom`, `erc4626Deposit`, `permit`, `approve2`, `transferFrom2`)
@@ -259,46 +261,24 @@ Shared utilities:
 Before a token-funded action, the user may need an approval or signature. The requirements system
 resolves only the prerequisites consumed by the selected route.
 
-### Vault deposit requirements target GeneralAdapter1
+### Vault deposit requirements target VaultBundlesV1
 
-Vault deposits flow: **user → general adapter → vault**. The general adapter is the contract
-that calls `transferFrom` on the user's tokens, then calls `erc4626Deposit` on the vault.
-Therefore, the **spender** in any approval/permit is always `bundler3.generalAdapter1` for the
-target chain — the vault address only determines which contract receives the deposit inside the
-bundle. This statement does not apply to the high-level Blue writes, which target
-BlueBundlesV1 as described above.
+Vault deposits flow: **user → VaultBundlesV1 → vault**. Requirements cover the gross funding
+amount, before the referral fee. Native deposits return no token requirements.
 
-### Bundler3 deposit decision tree
+For ERC-20 deposits, `getBundlesTokenRequirements` resolves the selected route:
 
-```
-getRequirements(viemClient, params)
-│
-├─ supportSignature: false (default)
-│    └─► getRequirementsApproval()
-│         Spender: generalAdapter1
-│         Returns: Transaction<ERC20ApprovalAction>[]
-│         • Checks current allowance — skips if sufficient.
-│         • For APPROVE_ONLY_ONCE_TOKENS (e.g. USDT): prepends
-│           a reset-to-zero approval before the actual approval.
-│
-└─ supportSignature: true
-     │
-     ├─ Token supports EIP-2612 AND useSimplePermit: true
-     │    └─► getRequirementsPermit()
-     │         Returns: Requirement[] with sign() → PermitAction
-     │         • Checks generalAdapter1 allowance — skips if sufficient.
-     │         • Produces a signable permit for the generalAdapter1 spender.
-     │
-     ├─ Permit2 contract exists on this chain
-     │    └─► getRequirementsPermit2()
-     │         Returns: (Transaction | Requirement)[]
-     │         Two-step:
-     │         1. ERC20 → Permit2: classic approve() if needed (infinite).
-     │         2. Permit2 → generalAdapter1: signature if needed or expiring.
-     │
-     └─ Fallback
-          └─► getRequirementsApproval() (same as supportSignature: false)
-```
+| Route | Prerequisites |
+| --- | --- |
+| `supportSignature: false` (default) | Check ERC-20 allowance to VaultBundlesV1. Return an exact approval if insufficient, preceded by a zero reset for tokens that require it. |
+| `supportSignature: true`, `useSimplePermit: true`, compatible ERC-2612 token | Read the token nonce and metadata; return a signable permit naming VaultBundlesV1. |
+| Signature support with canonical Permit2 available | Check the ERC-20 allowance to Permit2 and the owner nonce bitmap. Return any required Permit2 approval and a SignatureTransfer requirement naming VaultBundlesV1. An explicit unused `permit2Nonce` is mandatory. |
+| No available signature route | Fall back to the classic VaultBundlesV1 approval check. |
+
+Concurrent `getRequirements()` calls share one in-flight read and its first caller's options.
+After that read settles, the next call refreshes allowance and nonce state using its own options.
+`buildTx()` validates signatures against the latest completed resolution; collect and submit the
+signature from that resolution. The handle retains its original deadline and share-price bound.
 
 ### BlueBundlesV1 requirement decision
 
@@ -317,32 +297,24 @@ Loan-asset withdrawal, borrow, collateral-withdraw, and migration legs also chec
 authorization is returned as a standalone Morpho transaction or a signable requirement consumed
 inside the BlueBundlesV1 call.
 
-### How signatures flow into Bundler3 deposits
+### How signatures flow into VaultBundlesV1 deposits
 
-When a vault-deposit requirement returns a token-permit `Requirement`, the consuming application
-calls `requirement.sign(client, userAddress)` to obtain a `RequirementSignature`. The collected
-signature is then passed to `buildTx` as an array (`buildTx([signature])`):
+Call `requirement.sign(walletClient, userAddress)` for a signable requirement and pass the result
+to the same prepared handle's `buildTx([signature])`. Submit any approval transactions and wait
+for their receipts before sending the deposit transaction.
 
 ```
-getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
+getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([signature])
 ```
 
-Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
+The builder reshapes the accepted ERC-2612 or Permit2 SignatureTransfer signature into the
+`TokenPermit` struct inside `vaultBundlesV1Deposit`. The signature owner, asset, amount, spender,
+nonce, and deadline must match the prepared requirement. With classic approval, `buildTx()`
+encodes an empty token permit and VaultBundlesV1 pulls the approved assets. Native funding also
+uses an empty permit and rejects token signatures.
 
-- **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
-- **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.
-
-These actions are prepended to the `erc4626Deposit` action in the bundle. The entire sequence
-executes atomically in a single transaction.
-
-When no signature is provided (classic approval path), `buildTx()` uses a simple
-`erc20TransferFrom` action to move tokens from the user to the general adapter before the
-deposit.
-
-Direct BlueBundlesV1 writes use the same lazy collection workflow but a different encoding step.
-Their `buildTx(signatures)` reshapes accepted ERC-2612 or Permit2 SignatureTransfer signatures and
-Morpho authorization signatures into the fixed BlueBundlesV1 ABI structs; it does not create
-Bundler3 sub-actions.
+Direct BlueBundlesV1 writes use the same lazy collection workflow. Their builders additionally
+reshape Morpho authorization signatures into fixed BlueBundlesV1 ABI structs.
 
 ### Guard functions
 

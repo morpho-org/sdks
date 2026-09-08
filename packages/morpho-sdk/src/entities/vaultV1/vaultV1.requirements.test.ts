@@ -17,6 +17,7 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  BundlesPermitMismatchError,
   type BundlesTokenRequirementSignature,
   isRequirementApproval,
   isRequirementSignature,
@@ -74,6 +75,108 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
         amount,
       },
     ]);
+  });
+
+  test("behavior: settled reads refresh the allowance after approval", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const deposit = prepareDeposit(handle);
+    expect(await deposit.getRequirements()).toHaveLength(1);
+
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: amount,
+    });
+    expect(await deposit.getRequirements()).toEqual([]);
+    expect(countAllowanceReads(handle)).toBe(2);
+    expect(() => deposit.buildTx()).not.toThrow();
+  });
+
+  test("behavior: concurrent options share a signature while later reads refresh its nonce", async () => {
+    const handle = createMockClient(mainnet);
+    const permit2 = getChainAddress(mainnet.id, "permit2");
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: amount,
+    });
+    mockRead(handle, {
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "nonceBitmap",
+      result: 0n,
+    });
+    const deposit = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .deposit({
+        amount,
+        userAddress: IN_KIND_USER,
+        vaultData: inKindVaultV1Data(),
+      });
+
+    const [first, concurrent] = await Promise.all([
+      deposit.getRequirements({ permit2Nonce: 0n }),
+      deposit.getRequirements({ useSimplePermit: true, permit2Nonce: 1n }),
+    ]);
+    expect(concurrent).toBe(first);
+    expect(countAllowanceReads(handle)).toBe(1);
+    const requirement = first.find(isRequirementSignature);
+    if (requirement?.action.type !== "permit2SignatureTransfer") {
+      throw new Error("Permit2 SignatureTransfer requirement not found");
+    }
+    const signature = {
+      action: requirement.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_ASSET,
+        amount,
+        nonce: requirement.action.args.nonce,
+        deadline: requirement.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies BundlesTokenRequirementSignature;
+    expect(signature.args.nonce).toBe(0n);
+    expect(() => deposit.buildTx([signature])).not.toThrow();
+
+    // The old nonce is now consumed, so the next read must use the new options and live state.
+    mockRead(handle, {
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "nonceBitmap",
+      result: 1n,
+    });
+    const refreshed = await deposit.getRequirements({ permit2Nonce: 1n });
+    const nextRequirement = refreshed.find(isRequirementSignature);
+    if (nextRequirement?.action.type !== "permit2SignatureTransfer") {
+      throw new Error("Permit2 SignatureTransfer requirement not found");
+    }
+    const nextAction = nextRequirement.action;
+    expect(nextAction.args.nonce).toBe(1n);
+    expect(countAllowanceReads(handle)).toBe(2);
+    expect(() => deposit.buildTx([signature])).toThrow(
+      BundlesPermitMismatchError,
+    );
+    expect(() =>
+      deposit.buildTx([
+        {
+          action: nextAction,
+          args: { ...signature.args, nonce: 1n },
+        },
+      ]),
+    ).not.toThrow();
   });
 
   test("behavior: a failed resolution is not cached", async () => {

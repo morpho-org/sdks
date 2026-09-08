@@ -1,6 +1,7 @@
 import {
   type AuthorizationRequirementSignature,
   type BundlesTokenRequirementSignature,
+  ChainIdMismatchError,
   MixedBundlesFundingError,
   NonPositiveInputError,
   type VaultV2BlueReallocation,
@@ -158,6 +159,7 @@ const createClientMock = vi.fn().mockReturnValue({ extend: extendMock });
 
 vi.doMock("@morpho-org/morpho-sdk", () => ({
   morphoViemExtension: morphoViemExtensionMock,
+  ChainIdMismatchError,
   MixedBundlesFundingError,
   NonPositiveInputError,
 }));
@@ -279,6 +281,84 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
       expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
     });
+
+    test.each(["getRequirements", "submit", "quote"] as const)(
+      "error: ChainIdMismatchError after preparing ERC-20 or native funding (%s)",
+      async (method) => {
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        account.sendTransaction = vi.fn();
+        account.quoteSendTransaction = vi.fn();
+        for (const options of [
+          { token: TOKEN, amount: 100_000n },
+          { token: COLLATERAL, nativeAmount: 100_000n },
+        ]) {
+          mockGetChainId.mockResolvedValue(1);
+          vaultV2Entity.getData.mockResolvedValueOnce({
+            ...vaultData,
+            asset: options.token,
+          });
+          const prepared = await protocol.prepareSupply(options);
+          mockGetChainId.mockResolvedValue(8453);
+
+          await expect(prepared[method]()).rejects.toBeInstanceOf(
+            ChainIdMismatchError,
+          );
+        }
+        expect(supplyAction.getRequirements).not.toHaveBeenCalled();
+        expect(supplyAction.buildTx).not.toHaveBeenCalled();
+        expect(account.getTokenBalance).not.toHaveBeenCalled();
+        expect(account.sendTransaction).not.toHaveBeenCalled();
+        expect(account.quoteSendTransaction).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each(["submit", "quote"] as const)(
+      "behavior: prepared supply forwards its token signature to %s",
+      async (method) => {
+        const signature = {
+          args: {
+            owner: ADDRESS,
+            asset: TOKEN,
+            amount: 100_000n,
+            nonce: 7n,
+            deadline: SIGNATURE_DEADLINE,
+            signature: "0x1234",
+          },
+          action: {
+            type: "permit2SignatureTransfer",
+            args: {
+              spender: "0x0000000000000000000000000000000000000001",
+              amount: 100_000n,
+              nonce: 7n,
+              deadline: SIGNATURE_DEADLINE,
+            },
+          },
+        } satisfies BundlesTokenRequirementSignature;
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        account.sendTransaction = vi
+          .fn()
+          .mockResolvedValue({ hash: "supply-hash", fee: 123n });
+        account.quoteSendTransaction = vi.fn().mockResolvedValue({ fee: 123n });
+        const prepared = await protocol.prepareSupply({
+          token: TOKEN,
+          amount: 100_000n,
+        });
+
+        const result = await prepared[method](signature);
+
+        expect(supplyAction.buildTx).toHaveBeenCalledWith([signature]);
+        expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
+        if (method === "submit") {
+          expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
+          expect(account.quoteSendTransaction).not.toHaveBeenCalled();
+          expect(result).toEqual({ hash: "supply-hash", fee: 123n });
+        } else {
+          expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
+          expect(account.sendTransaction).not.toHaveBeenCalled();
+          expect(result).toEqual({ fee: 123n });
+        }
+      },
+    );
 
     test("behavior: prepared supply checks the balance of the token it was prepared with", async () => {
       const options = {
@@ -426,8 +506,8 @@ describe.sequential("MorphoProtocolEvm", () => {
         borrowMarketParams: MARKET_PARAMS,
       });
 
-      await expect(protocol.getVaultPosition()).rejects.toThrow(
-        "Morpho target is configured for chain 1, but the connected provider is on chain 8453.",
+      await expect(protocol.getVaultPosition()).rejects.toBeInstanceOf(
+        ChainIdMismatchError,
       );
     });
 
@@ -624,9 +704,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       await expect(
         protocol.borrow({ token: TOKEN, amount: 100_000n }),
-      ).rejects.toThrow(
-        "Morpho target is configured for chain 1, but the connected provider is on chain 8453.",
-      );
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
       expect(fetchMarketMock).not.toHaveBeenCalled();
     });
 
@@ -1047,8 +1125,8 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       mockGetChainId.mockResolvedValue(8453);
 
-      await expect(protocol.getMarketPosition()).rejects.toThrow(
-        "Morpho target is configured for chain 1, but the connected provider is on chain 8453.",
+      await expect(protocol.getMarketPosition()).rejects.toBeInstanceOf(
+        ChainIdMismatchError,
       );
       expect(blueMock).toHaveBeenCalledTimes(1);
     });

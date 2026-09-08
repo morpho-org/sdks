@@ -8,3 +8,7 @@ Route Vault V1 and Vault V2 deposits through VaultBundlesV1, including exclusive
 Native vault deposits reject token permits with `UnexpectedRequirementSignatureError`. WDK
 collateral supply, requirement, and quote methods consistently reject mixed funding with
 `MixedBlueCollateralFundingError`.
+
+Refresh prepared vault requirements after each settled read while deduplicating concurrent calls.
+WDK prepared supplies revalidate the live provider chain before resolving requirements, quoting,
+or submitting, and expose the shared `ChainIdMismatchError` for chain mismatches.

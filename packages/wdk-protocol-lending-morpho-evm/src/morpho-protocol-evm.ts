@@ -8,6 +8,7 @@ import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   type BundlesTokenRequirementSignature,
+  ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
   type Metadata,
@@ -232,7 +233,11 @@ export type MorphoWithdrawCollateralOptions = Readonly<
   }
 >;
 
-/** A prepared vault deposit whose requirements and transaction share one SDK operation handle. */
+/**
+ * A prepared vault deposit whose requirements and transaction share one SDK operation handle.
+ * Every method rechecks the provider chain and throws `ChainIdMismatchError` after a switch
+ * away from the configured vault chain.
+ */
 export interface PreparedMorphoSupply {
   /** Resolves the approval or token signature requirements for this prepared deposit. */
   readonly getRequirements: (
@@ -610,14 +615,19 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const { token } = options;
     const action = await this._getSupplyAction(options, depositAmounts);
     return Object.freeze({
-      getRequirements: async (requirementOptions?: RequirementOptions) =>
-        (await action.getRequirements(
+      getRequirements: async (requirementOptions?: RequirementOptions) => {
+        // Recheck the live chain before using the captured SDK action.
+        await this._getVault();
+        return (await action.getRequirements(
           requirementOptions,
-        )) as readonly BundlesApprovalOrSignatureRequirement[],
+        )) as readonly BundlesApprovalOrSignatureRequirement[];
+      },
       submit: async (
         requirementSignature?: BundlesTokenRequirementSignature,
         config?: Erc4337TransactionConfig,
       ) => {
+        // Recheck the live chain before balance checks or submission, including native funding.
+        await this._getVault();
         this._assertWritable("preparedSupply.submit()");
         if (depositAmounts.amount != null) {
           await this._assertTokenBalance(token, depositAmounts.amount);
@@ -634,15 +644,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       quote: async (
         requirementSignature?: BundlesTokenRequirementSignature,
         config?: Erc4337TransactionConfig,
-      ) =>
-        await this._quoteTransaction(
+      ) => {
+        // Recheck the live chain before quoting the captured SDK action.
+        await this._getVault();
+        return await this._quoteTransaction(
           toWdkTransaction(
             action.buildTx(
               requirementSignature ? [requirementSignature] : undefined,
             ),
           ),
           config,
-        ),
+        );
+      },
     });
   }
 
@@ -1661,7 +1674,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const target = this._resolveVaultTarget();
     const { address } = target;
     const chainId = await this._getChainId();
-    this._assertTargetChain(target, { chainId, label: "Morpho target" });
+    this._assertTargetChain(target, chainId);
     const client = await this._getMorphoClient();
     const entity = client.vaultV2(address, chainId);
 
@@ -1689,7 +1702,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const target = this._resolveMarketTarget();
 
-    this._assertTargetChain(target, { chainId, label: "Morpho target" });
+    this._assertTargetChain(target, chainId);
 
     if ("marketParams" in target) {
       this._marketParams =
@@ -1849,12 +1862,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private _assertTargetChain(
     target: { chainId: number | undefined },
-    args: { chainId: number; label: string },
+    chainId: number,
   ): void {
-    if (target.chainId !== undefined && target.chainId !== args.chainId) {
-      throw new Error(
-        `${args.label} is configured for chain ${target.chainId}, but the connected provider is on chain ${args.chainId}.`,
-      );
+    if (target.chainId !== undefined && target.chainId !== chainId) {
+      throw new ChainIdMismatchError(chainId, target.chainId);
     }
   }
 
