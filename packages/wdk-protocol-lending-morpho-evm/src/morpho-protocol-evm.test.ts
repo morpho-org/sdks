@@ -24,7 +24,9 @@ import type {
   MorphoNativeSupplyOptions,
   MorphoSupplyOptions,
   PreparedMorphoSupply,
+  RequirementApproval,
   RequirementOptions,
+  RequirementSignatureRequest,
 } from "./morpho-protocol-evm.js";
 
 const SEED =
@@ -831,7 +833,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(Object.isFrozen(prepared)).toBe(true);
       const requirements = await prepared.getRequirements();
       expectTypeOf(requirements).toEqualTypeOf<
-        readonly ApprovalOrSignatureRequirement[]
+        readonly (
+          | RequirementApproval
+          | RequirementSignatureRequest<Erc2612RequirementSignature>
+        )[]
       >();
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
       expect(withdrawAction.getRequirements).toHaveBeenCalledWith();

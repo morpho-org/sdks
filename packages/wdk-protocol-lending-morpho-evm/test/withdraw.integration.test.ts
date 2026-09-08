@@ -82,10 +82,7 @@ describe.skipIf(!process.env.MAINNET_RPC_URL)(
         let signature: Erc2612RequirementSignature | undefined;
         if ("sign" in requirement) {
           expect(route).toBe("permit");
-          const signed = await requirement.sign(walletClient, owner);
-          if (signed.action.type !== "permit")
-            throw new Error("Expected vault-share ERC-2612 permit");
-          signature = { args: signed.args, action: signed.action };
+          signature = await requirement.sign(walletClient, owner);
         } else {
           expect(route).not.toBe("permit");
           const hash = await walletClient.sendTransaction(requirement);
