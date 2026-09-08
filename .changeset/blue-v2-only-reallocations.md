@@ -17,5 +17,3 @@ Remove morpho-sdk's previously deprecated compatibility exports, including ambig
 Blue and Midnight facade aliases, operation-specific scalar/native/refinance error aliases, and
 deprecated upstream ABI, constant, typed-data helper, and utility-type aliases. Canonical qualified
 facade names, generic errors, and canonical raw protocol exports remain.
-Replace the deprecated mixed-shape `InvalidReallocationShapeError` with the V2-specific
-`InvalidVaultV2ReallocationError`.

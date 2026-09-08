@@ -197,8 +197,7 @@ major:
   names from shared facade subpaths or canonical names from `/blue/*` and `/midnight/*`.
 - Operation-specific scalar and native-asset error aliases are removed. Pattern-match on the
   current generic input errors and canonical native-asset error classes.
-- `InvalidReallocationShapeError` is removed with mixed V1/V2 shape dispatch. Invalid V2 entries
-  now throw `InvalidVaultV2ReallocationError`.
+- `InvalidReallocationShapeError` remains the error thrown for malformed Vault V2 entries.
 - Deprecated ABI, constant, typed-data helper, and utility-type aliases inherited from upstream
   packages are removed. Import their canonical replacements from the same facade category.
 - The unprefixed `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed. Their canonical

@@ -882,17 +882,17 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
  *
  * @example
  * ```ts
- * import { InvalidVaultV2ReallocationError } from "@morpho-org/morpho-sdk";
+ * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
  *
- * const error = new InvalidVaultV2ReallocationError();
+ * const error = new InvalidReallocationShapeError();
  * ```
  */
-export class InvalidVaultV2ReallocationError extends Error {
+export class InvalidReallocationShapeError extends Error {
   public constructor() {
     super(
       "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()). Use morpho-sdk v5 if Vault V1 reallocations are required.",
     );
-    this.name = "InvalidVaultV2ReallocationError";
+    this.name = "InvalidReallocationShapeError";
   }
 }
 

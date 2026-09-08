@@ -8,8 +8,7 @@ methods, and `BundlerAction.publicAllocatorReallocateTo` composition surface; us
 `MorphoBlue.getVaultV2BlueReallocationData` and
 `VaultV2BlueReallocationData.computeVaultV2BlueReallocations` instead. Direct Vault V1 actions and
 canonical raw Vault V1 ABI, address, fetch, and config exports remain; stay on v5 for Vault V1
-planning or Bundler3 composition. Replace `InvalidReallocationShapeError` with
-`InvalidVaultV2ReallocationError`.
+planning or Bundler3 composition.
 
 Remove the five v5 partial-refinance compatibility errors: `BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,

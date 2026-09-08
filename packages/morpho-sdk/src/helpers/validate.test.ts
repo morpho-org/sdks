@@ -24,8 +24,8 @@ import {
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
   InvalidReallocationSourceTypeError,
-  InvalidVaultV2ReallocationError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -810,10 +810,10 @@ describe("reallocation validation", () => {
       name: "primitive entry",
       reallocation: 1 as unknown as VaultV2BlueReallocation,
     },
-  ])("error: InvalidVaultV2ReallocationError for $name", ({ reallocation }) => {
+  ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
     expect(() =>
       validateVaultV2BlueReallocations([reallocation], targetMarketId),
-    ).toThrow(InvalidVaultV2ReallocationError);
+    ).toThrow(InvalidReallocationShapeError);
   });
 });
 

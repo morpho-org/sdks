@@ -25,8 +25,8 @@ import {
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
   InvalidReallocationSourceTypeError,
-  InvalidVaultV2ReallocationError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -372,7 +372,7 @@ export const validateVaultV2BlueReallocations = (
       "withdrawals" in reallocation ||
       "fee" in reallocation
     ) {
-      throw new InvalidVaultV2ReallocationError();
+      throw new InvalidReallocationShapeError();
     }
     if (
       typeof reallocation.vault !== "string" ||

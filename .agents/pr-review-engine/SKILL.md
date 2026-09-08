@@ -31,8 +31,8 @@ How a caller knows the engine is working (rough targets, not hard thresholds):
 | `<HEAD_BRANCH>` | `gh pr view` → `headRefName` (PR modes) OR `git branch --show-current` (Local-only) |
 | `<BASE_BRANCH>` | `gh pr view` → `baseRefName` (PR modes) OR `--local` arg / auto-detected default branch |
 | `<HEAD_SHA>` | `gh pr view` → `headRefOid` (PR modes) OR `git rev-parse HEAD` (Local-only) |
-| `<DIFF_SOURCE>` | `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`) OR `local` (use `origin/<BASE_BRANCH>...HEAD` and overlay uncommitted) |
-| `<HEAD_REF>` | `origin/<HEAD_BRANCH>` for `<DIFF_SOURCE>=pr`, `HEAD` for `<DIFF_SOURCE>=local` |
+| `<DIFF_SOURCE>` | `pr` (use `origin/<BASE_BRANCH>...<HEAD_REF>`) OR `local` (use `origin/<BASE_BRANCH>...HEAD` and overlay uncommitted) |
+| `<HEAD_REF>` | Caller-supplied for `<DIFF_SOURCE>=pr` (`origin/<HEAD_BRANCH>`, or `origin/pr/<PR_NUMBER>` when fetched via `refs/pull/<PR_NUMBER>/head` — required for fork PRs); `HEAD` for `<DIFF_SOURCE>=local` |
 | `<EXCLUDE_AGENTS>` | Optional list of agent names to skip in Step 5 (e.g. `["documentation"]` from `/pr-review-local --fast`). Defaults to empty. |
 | `<INTENT_CONTEXT>` | Optional caller-supplied intent/history block — changed-commit messages, and (when the caller talks to GitHub) the PR title+body. Injected into the Step 5 envelope between items 6 and 7. Empty by default; callers that can't reach the data omit it. |
 
@@ -44,7 +44,7 @@ Compute the merge-base and the diff:
 
 ```bash
 MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> <HEAD_REF>)
-# <HEAD_REF> is origin/<HEAD_BRANCH> for <DIFF_SOURCE>=pr, or HEAD for <DIFF_SOURCE>=local
+# <HEAD_REF> is the caller-supplied head ref for <DIFF_SOURCE>=pr, or HEAD for <DIFF_SOURCE>=local
 
 git diff $MERGE_BASE..<HEAD_REF>
 git diff --name-only $MERGE_BASE..<HEAD_REF>
