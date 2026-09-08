@@ -8,7 +8,11 @@ import {
   SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
-import { makeTransferLog } from "../test-helpers/index.js";
+import {
+  encodeUint256,
+  makeTransferLog,
+  padAddress,
+} from "../test-helpers/index.js";
 import type {
   AccountAssetChanges,
   RawLog,
@@ -19,6 +23,7 @@ import type {
 } from "../types.js";
 import type { simulateV1 } from "./backends/eth-simulate-v1.js";
 import type { simulateTenderlyRpc } from "./backends/tenderly-rpc.js";
+import { WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import { simulate } from "./simulate.js";
 
 const mockTenderlyRpc = vi.fn<typeof simulateTenderlyRpc>();
@@ -462,6 +467,37 @@ describe.sequential("simulate — backend fallback", () => {
     expect(result.transfers).toHaveLength(1);
     expect(mockTenderlyRpc).not.toHaveBeenCalled();
     expect(mockSimulateV1).toHaveBeenCalled();
+  });
+
+  test("behavior: keeps configured custom chains without registered addresses", async () => {
+    const chainId = 999_999;
+    const amount = 1_000n;
+    mockSimulateV1.mockResolvedValueOnce(
+      makeSuccessResult([
+        {
+          address: USDC,
+          topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+          data: encodeUint256(amount),
+        },
+      ]),
+    );
+
+    const result = await simulate(
+      {
+        chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]),
+      },
+      makeParams({ chainId }),
+    );
+
+    expect(result.transfers).toEqual([
+      {
+        token: USDC,
+        from: USER,
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+    ]);
   });
 });
 

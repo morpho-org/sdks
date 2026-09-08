@@ -1,3 +1,8 @@
+import {
+  getChainAddresses,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
+import type { Address } from "viem";
 import { ExternalServiceError } from "../errors.js";
 import type {
   SimulateParams,
@@ -82,12 +87,20 @@ export async function simulate(
 ): Promise<SimulationResult> {
   validateInput(params);
 
+  let wNative: Address | undefined;
+  try {
+    wNative = getChainAddresses(params.chainId).wNative;
+  } catch (error) {
+    if (!(error instanceof UnsupportedChainIdError)) throw error;
+  }
+
   const simulationTxs = buildSimulationTxs(params);
   const result = await executeSimulation({
     config,
     chainId: params.chainId,
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
+    wNative,
   });
   if (result.calls.length !== simulationTxs.length) {
     throw new ExternalServiceError(
@@ -95,7 +108,10 @@ export async function simulate(
     );
   }
 
-  const transfers = parseTransfers(result.calls, config.logger);
+  const transfers = parseTransfers(result.calls, {
+    wNative,
+    logger: config.logger,
+  });
 
   assertNoBundlerRetention({
     chainId: params.chainId,
