@@ -12,3 +12,9 @@ collateral supply, requirement, and quote methods consistently reject mixed fund
 Refresh prepared vault requirements after each settled read while deduplicating concurrent calls.
 WDK prepared supplies revalidate the live provider chain before resolving requirements, quoting,
 or submitting, and expose the shared `ChainIdMismatchError` for chain mismatches.
+
+Retain WDK `supply`, `getSupplyRequirements`, `quoteSupply`, `MorphoSupplyOptions`,
+`MorphoErc20SupplyOptions`, and `MorphoNativeSupplyOptions` as deprecated compatibility APIs
+throughout 2.x, with removal deferred to 3.0. The compatibility methods preserve Bundler3 funding,
+GeneralAdapter1 approvals, additive native/ERC-20 amounts, and ERC-2612/Permit2 AllowanceTransfer
+signatures. Use `prepareSupply` for the new VaultBundlesV1 route.
