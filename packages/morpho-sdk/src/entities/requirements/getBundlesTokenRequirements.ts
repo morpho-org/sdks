@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, isDefined, Time } from "@morpho-org/morpho-ts";
+import { isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -9,28 +9,31 @@ import {
   maxUint256,
 } from "viem";
 import { readContract } from "viem/actions";
-import { validateChainId } from "../../../helpers/index.js";
+import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
+import { encodeErc20Permit } from "../../actions/requirements/encode/encodeErc20Permit.js";
+import {
+  validateChainId,
+  validateRequirementSpender,
+} from "../../helpers/index.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
-  type BlueBundlesV1TokenSignatureRequirement,
+  type BundlesTokenSignatureRequirement,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InputExceedsMaxError,
-  MissingPermit2TransferFromNonceError,
+  MissingPermit2SignatureTransferNonceError,
   NegativeInputError,
   NonPositiveInputError,
-  Permit2TransferFromNonceAlreadyUsedError,
   type Transaction,
-} from "../../../types/index.js";
-import { encodeErc20Permit } from "../encode/encodeErc20Permit.js";
-import { encodeErc20Permit2TransferFrom } from "../encode/encodeErc20Permit2TransferFrom.js";
-import { getRequirementsApproval } from "../getRequirementsApproval.js";
+} from "../../types/index.js";
 
-/** Parameters for {@link getBlueBundlesV1TokenRequirements}. */
-export interface GetBlueBundlesV1TokenRequirementsParams {
+/** Parameters for {@link getBundlesTokenRequirements}. */
+export interface GetBundlesTokenRequirementsParams {
   /** ERC-20 token funded by the operation. */
   readonly token: Address;
-  /** Exact amount BlueBundlesV1 will pull. */
+  /** Registered fixed bundles contract that pulls the token. */
+  readonly spender: Address;
+  /** Exact amount the bundles contract will pull. */
   readonly amount: bigint;
   /** Classic approval amount; defaults to the exact pull amount. */
   readonly approvalAmount?: bigint;
@@ -52,17 +55,18 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
 
 /**
  * Resolves direct approval, ERC-2612, or Permit2 SignatureTransfer prerequisites for
- * BlueBundlesV1.
+ * a registered fixed bundles contract.
  *
  * Reads only the allowance and nonce state required by the selected path. Permit2 keeps the
- * ERC-20 allowance on canonical Permit2 while the one-time signed transfer names BlueBundlesV1
+ * ERC-20 allowance on canonical Permit2 while the one-time signed transfer names the bundles contract
  * as spender. Permit2 SignatureTransfer requires an explicit unused unordered nonce so concurrent
  * requirements never silently sign the same owner-global nonce.
  *
  * @param viemClient - Connected viem client used for allowance and nonce reads.
  * @param params - Token requirement parameters.
  * @param params.token - ERC-20 token funded by the operation.
- * @param params.amount - Exact amount BlueBundlesV1 will pull; zero returns no requirements.
+ * @param params.spender - Registered fixed bundles contract that pulls the token.
+ * @param params.amount - Exact amount the contract will pull; zero returns no requirements.
  * @param params.approvalAmount - Classic approval amount; defaults to `amount` and is ignored by signature paths.
  * @param params.owner - Account funding the operation.
  * @param params.chainId - Target chain id; must match the client chain.
@@ -77,9 +81,10 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
  * @throws {NonPositiveInputError} when `deadline` is not positive.
  * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
- * @throws {UnknownAddressError} when BlueBundlesV1 is not registered for the chain.
- * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
- * @throws {Permit2TransferFromNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
+ *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
+ * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+ * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
  * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
  * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, or ERC-2612 metadata
@@ -87,13 +92,16 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
  * @example
  * ```ts
  * import { addressesRegistry } from "@morpho-org/blue-sdk";
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
  * import { createPublicClient, http, zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getBlueBundlesV1TokenRequirements } from "@morpho-org/morpho-sdk";
+ * import { getBundlesTokenRequirements } from "@morpho-org/morpho-sdk";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const requirements = await getBlueBundlesV1TokenRequirements(client, {
+ * const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+ * const requirements = await getBundlesTokenRequirements(client, {
  *   token: addressesRegistry[mainnet.id].usdc,
+ *   spender: vaultBundlesV1,
  *   amount: 1_000_000n,
  *   owner: zeroAddress,
  *   chainId: mainnet.id,
@@ -101,19 +109,24 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
  *   supportSignature: true,
  *   permit2Nonce: 42n,
  * });
- * // requirements contains approvals and/or signable BlueBundlesV1 token requirements.
+ * // requirements contains approvals and/or signable bundles token requirements.
  * ```
  */
-export const getBlueBundlesV1TokenRequirements = async (
+export const getBundlesTokenRequirements = async (
   viemClient: Client,
-  params: GetBlueBundlesV1TokenRequirementsParams,
+  params: GetBundlesTokenRequirementsParams,
 ): Promise<
   readonly (
     | Readonly<Transaction<ERC20ApprovalAction>>
-    | BlueBundlesV1TokenSignatureRequirement
+    | BundlesTokenSignatureRequirement
   )[]
 > => {
   validateChainId(viemClient.chain?.id, params.chainId);
+  validateRequirementSpender({
+    chainId: params.chainId,
+    spender: params.spender,
+    allowed: ["blueBundlesV1", "vaultBundlesV1"],
+  });
   if (params.amount < 0n) {
     throw new NegativeInputError("amount", params.amount);
   }
@@ -145,10 +158,6 @@ export const getBlueBundlesV1TokenRequirements = async (
   }
   if (params.amount === 0n) return [];
 
-  const blueBundlesV1 = getChainAddress(
-    params.chainId,
-    "bundles.blueBundlesV1",
-  );
   const { permit2, dai } = getChainAddresses(params.chainId);
 
   if (params.supportSignature) {
@@ -165,7 +174,7 @@ export const getBlueBundlesV1TokenRequirements = async (
         return [
           await encodeErc20Permit(viemClient, {
             token: params.token,
-            spender: blueBundlesV1,
+            spender: params.spender,
             amount: params.amount,
             chainId: params.chainId,
             nonce,
@@ -178,7 +187,7 @@ export const getBlueBundlesV1TokenRequirements = async (
 
     if (permit2 != null) {
       if (params.permit2Nonce == null) {
-        throw new MissingPermit2TransferFromNonceError();
+        throw new MissingPermit2SignatureTransferNonceError();
       }
       if (params.permit2Nonce < 0n) {
         throw new NegativeInputError("permit2Nonce", params.permit2Nonce);
@@ -191,7 +200,6 @@ export const getBlueBundlesV1TokenRequirements = async (
         });
       }
       const wordPosition = params.permit2Nonce >> 8n;
-      const bitPosition = params.permit2Nonce & 255n;
       const [allowance, nonceBitmap] = await Promise.all([
         readContract(viemClient, {
           abi: erc20Abi,
@@ -207,33 +215,20 @@ export const getBlueBundlesV1TokenRequirements = async (
         }),
       ]);
 
-      if ((nonceBitmap & (1n << bitPosition)) !== 0n) {
-        throw new Permit2TransferFromNonceAlreadyUsedError(
-          params.owner,
-          params.permit2Nonce,
-        );
-      }
-
-      return [
-        ...getRequirementsApproval({
-          address: params.token,
-          chainId: params.chainId,
-          args: {
-            spender: permit2,
-            spendAmount: params.amount,
-            approvalAmount: maxUint256,
-          },
-          allowances: allowance,
-        }),
-        encodeErc20Permit2TransferFrom({
-          token: params.token,
-          spender: blueBundlesV1,
-          amount: params.amount,
-          chainId: params.chainId,
-          nonce: params.permit2Nonce,
-          deadline: params.deadline,
-        }),
-      ];
+      return resolveBundlesTokenRequirements({
+        token: params.token,
+        spender: params.spender,
+        owner: params.owner,
+        chainId: params.chainId,
+        amount: params.amount,
+        deadline: params.deadline,
+        state: {
+          type: "permit2SignatureTransfer",
+          permit2Allowance: allowance,
+          permit2Nonce: params.permit2Nonce,
+          nonceBitmap,
+        },
+      });
     }
   }
 
@@ -245,21 +240,19 @@ export const getBlueBundlesV1TokenRequirements = async (
     abi: erc20Abi,
     address: params.token,
     functionName: "allowance",
-    args: [params.owner, blueBundlesV1],
+    args: [params.owner, params.spender],
   });
-  return getRequirementsApproval({
-    address: params.token,
+  return resolveBundlesTokenRequirements({
+    token: params.token,
+    spender: params.spender,
+    owner: params.owner,
     chainId: params.chainId,
-    args: {
-      spender: blueBundlesV1,
-      // The pull the operation actually performs is `amount`; `approvalAmount`
-      // is only the allowance to set when one is needed. Comparing the existing
-      // allowance against `amount` (not `approvalAmount`) avoids emitting a
-      // redundant approval — and a zero-reset on approve-only-once tokens like
-      // USDT — when the current allowance already covers the pull.
-      spendAmount: params.amount,
+    amount: params.amount,
+    deadline: params.deadline,
+    state: {
+      type: "approval",
+      allowance,
       approvalAmount,
     },
-    allowances: allowance,
   });
 };

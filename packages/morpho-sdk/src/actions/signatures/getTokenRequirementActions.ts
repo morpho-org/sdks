@@ -3,7 +3,7 @@ import type { Action } from "../../bundler/index.js";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
-  isPermit2TransferFromSignature,
+  isPermit2SignatureTransferSignature,
   Permit2ExpirationMissingError,
   type PermitRequirementSignature,
   UnexpectedRequirementSignatureError,
@@ -78,8 +78,8 @@ export const getTokenRequirementActions = ({
     ];
   }
 
-  if (isPermit2TransferFromSignature(requirementSignature)) {
-    throw new UnexpectedRequirementSignatureError("permit2TransferFrom");
+  if (isPermit2SignatureTransferSignature(requirementSignature)) {
+    throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
   }
 
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {

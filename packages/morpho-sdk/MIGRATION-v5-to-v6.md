@@ -199,3 +199,24 @@ The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
 - Update transaction decoding, simulation fixtures, and action metadata fields; discriminator
   names remain stable.
 - Test native funding, full repay, and full-position migration paths used by the application.
+
+## Fixed-bundles token requirement APIs
+
+The Blue-only fixed-bundles requirement surface is generalized into a shared surface used by both
+BlueBundlesV1 and the upcoming VaultBundlesV1.
+
+| v5 symbol | v6 replacement |
+| --- | --- |
+| `getBlueBundlesV1TokenRequirements` (action-layer) | `getBundlesTokenRequirements` (entity-layer; reads state, so it now lives under `entities/requirements` instead of `actions/requirements/blue`). Takes the same funding parameters plus a `spender` naming the registered fixed bundles deployment (BlueBundlesV1 or VaultBundlesV1). |
+| `BlueBundlesV1TokenSignatureRequirement` / `BlueBundlesV1TokenRequirementSignature` | `BundlesTokenSignatureRequirement` / `BundlesTokenRequirementSignature` |
+| `encodeErc20Permit2TransferFrom` | `encodeErc20Permit2SignatureTransfer` |
+| Action discriminator `"permit2TransferFrom"` | `"permit2SignatureTransfer"` |
+| `Permit2TransferFromAction` / `Permit2TransferFromRequirementSignature` | `Permit2SignatureTransferAction` / `Permit2SignatureTransferRequirementSignature` |
+| `isPermit2TransferFromSignature` | `isPermit2SignatureTransferSignature` |
+| `selectRequirementSignatures` option and result field `permit2TransferFrom` | `permit2SignatureTransfer` |
+| `MissingPermit2TransferFromNonceError` | `MissingPermit2SignatureTransferNonceError` (old name kept as a `@deprecated` alias) |
+| `Permit2TransferFromNonceAlreadyUsedError` | `Permit2SignatureTransferNonceAlreadyUsedError` (old name kept as a `@deprecated` alias) |
+
+Update call sites and `switch`/discriminated-union checks on `action.type` to the new
+`"permit2SignatureTransfer"` tag; the signed payload shape (`nonce`, `deadline`, `signature`) is
+unchanged.

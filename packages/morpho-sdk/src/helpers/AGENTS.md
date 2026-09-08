@@ -11,6 +11,8 @@ Per-function contracts (arguments, return shapes, behavior) live as JSDoc on eac
 - **Math / share-price helpers** — helpers for vault share-price bounds and public low-level
   composition use `MAX_SLIPPAGE_TOLERANCE` and cap at `MAX_ABSOLUTE_SHARE_PRICE`. The
   high-level Blue write methods do not use these helpers or accept slippage inputs.
+  `computeVaultMaxSharePrice` accrues vault snapshots for fixed-bundle price protection.
+  `grossFromNetAssets` exactly inverts VaultBundlesV1 referral-fee deductions.
 - **Shared-liquidity** — `computeVaultV1Reallocations` builds PublicAllocator V1 reallocations for
   low-level composition. It, its compatibility alias `computeReallocations`, the PublicAllocator V1
   validator, and the other Vault V1 planning and low-level composition helpers are deprecated and

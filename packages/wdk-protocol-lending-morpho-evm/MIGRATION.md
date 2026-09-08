@@ -23,8 +23,8 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
 - `RequirementApproval` and `RequirementAuthorization` are readonly transactions.
 - `RequirementSignatureRequest<TSignature>` is now generic. Vault token requirements use
   `PermitRequirementSignature`, Blue token requirements use
-  `BlueBundlesV1TokenRequirementSignature`, and Blue authorization requirements use
-  `AuthorizationRequirementSignature`.
+  `BundlesTokenRequirementSignature` (renamed from `BlueBundlesV1TokenRequirementSignature`),
+  and Blue authorization requirements use `AuthorizationRequirementSignature`.
 - Use `ApprovalOrSignatureRequirement` for vault deposits,
   `BlueApprovalOrSignatureRequirement` for Blue token-funded writes, and
   `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization.
