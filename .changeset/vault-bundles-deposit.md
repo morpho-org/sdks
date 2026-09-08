@@ -18,3 +18,6 @@ Retain WDK `supply`, `getSupplyRequirements`, `quoteSupply`, `MorphoSupplyOption
 throughout 2.x, with removal deferred to 3.0. The compatibility methods preserve Bundler3 funding,
 GeneralAdapter1 approvals, additive native/ERC-20 amounts, and ERC-2612/Permit2 AllowanceTransfer
 signatures. Use `prepareSupply` for the new VaultBundlesV1 route.
+
+Reject vault deposit funding and share-price bounds above uint256 with `InputExceedsMaxError`.
+Prepared Vault V1/V2 deposits reject oversized native amounts before returning requirements.

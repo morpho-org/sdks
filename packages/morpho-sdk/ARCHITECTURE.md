@@ -229,7 +229,7 @@ Provides protocol-level constants and math:
 
 On-chain data fetching and contract ABIs:
 
-- **ABIs**: `metaMorphoAbi` (V1), `vaultV2Abi` (V2), and `vaultBundlesV1Abi` (deposits for both versions) — used for calldata encoding in actions.
+- **ABIs**: `metaMorphoAbi` (V1) and `vaultV2Abi` (V2) — used for calldata encoding in actions.
 - **Fetchers**: `fetchVault`, `fetchAccrualVault` (V1), `fetchVaultV2`, `fetchAccrualVaultV2`
   (V2) — read vault state from the blockchain.
 - **`fetchHolding`** — reads a user's token allowances, EIP-2612 nonce, and Permit2 state.
@@ -238,6 +238,12 @@ On-chain data fetching and contract ABIs:
 - **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData`, and
   `getPermit2TransferFromTypedData` — used to build EIP-712 signing payloads for ERC-2612,
   Permit2 AllowanceTransfer, and Permit2 SignatureTransfer flows.
+
+### Local VaultBundlesV1 ABI
+
+`vaultBundlesV1Abi` is pinned in this package's [`src/abis.ts`](./src/abis.ts) and exported from
+`@morpho-org/morpho-sdk/abis`. Both vault deposit builders use this local ABI to encode
+`vaultBundlesV1Deposit`.
 
 ### Local Bundler Encoding
 
