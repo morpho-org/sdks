@@ -275,7 +275,15 @@ export function computeVaultV2ForceWithdrawPlan(params: {
   }
 
   // Worst-case leg count is the ascending walk: the most markets the loop can touch is the number
-  // of smallest positions that together reach `assetsToDeallocate`.
+  // of smallest positions that together reach `assetsToDeallocate`. Deliberately an upper bound, not
+  // a replay of the contract's prefetched `marketIds` order (where an earlier market may cover the
+  // whole request in one leg): this count feeds the share-burn *upper* bound behind the slippage
+  // floor, so it must hold for any execution order. Replaying a snapshot order that then diverges at
+  // inclusion (a market added or drained between `getData()` and execution) would under-count legs,
+  // over-state the floor, and false-revert a valid distressed exit — a worse failure than the
+  // bounded looseness (≤ `penaltyLegs - 1` asset-units, absorbed by `slippageTolerance`) the
+  // ascending walk leaves. Tightening it to the exact walk is a separate change needing fork
+  // coverage of the snapshot-vs-execution divergence.
   let penaltyLegs = 0;
   let remaining = assetsToDeallocate;
   for (const available of nonEmpty.toSorted((a, b) =>
