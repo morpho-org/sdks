@@ -3,8 +3,11 @@ import type {
   VaultReallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+import { createMockClient } from "@morpho-org/test/mock";
 import * as viem from "viem";
+import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { MissingWalletProviderError } from "./errors.js";
 import type {
   MorphoBorrowOptions,
   MorphoBorrowWithVaultV2ReallocationsOptions,
@@ -58,6 +61,13 @@ const WITHDRAW_COLLATERAL_TX = {
   to: "0x0000000000000000000000000000000000000006",
   value: 0n,
   data: "0x06",
+};
+const POPULATED_TRANSACTION = {
+  chainId: 1,
+  gasLimit: 1n,
+  nonce: 0,
+  maxFeePerGas: 12_345n,
+  maxPriorityFeePerGas: 1n,
 };
 
 const vaultData = {
@@ -130,18 +140,33 @@ const morphoNamespaceMock = {
 const morphoExtendMock = vi
   .fn()
   .mockReturnValue({ morpho: morphoNamespaceMock });
-const morphoViemExtensionMock = vi.fn().mockReturnValue("morpho-extension");
+const morphoViemExtensionMock = vi.fn<(...args: unknown[]) => unknown>(
+  () => "morpho-extension",
+);
 const fetchMarketMock = vi.fn();
 const mockGetChainId = vi.fn().mockResolvedValue(1);
 const readContractMock = vi.fn().mockResolvedValue(123n);
+const prepareTransactionRequestMock = vi.fn().mockResolvedValue({
+  gas: 1n,
+  nonce: 0,
+  maxFeePerGas: 12_345n,
+  maxPriorityFeePerGas: 1n,
+});
+const sendRawTransactionMock = vi
+  .fn()
+  .mockResolvedValue("dummy-transaction-hash");
 const extendMock = vi.fn().mockReturnValue({
   account: { address: ADDRESS },
   chain: { id: 1 },
   getChainId: mockGetChainId,
   readContract: readContractMock,
+  prepareTransactionRequest: prepareTransactionRequestMock,
+  sendRawTransaction: sendRawTransactionMock,
   extend: morphoExtendMock,
 });
-const createClientMock = vi.fn().mockReturnValue({ extend: extendMock });
+const createClientMock = vi.fn<(parameters: unknown) => unknown>(() => ({
+  extend: extendMock,
+}));
 
 const { ChainIdMismatchError } = await vi.importActual<
   typeof import("@morpho-org/morpho-sdk")
@@ -181,11 +206,22 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
     mockGetChainId.mockResolvedValue(1);
     readContractMock.mockResolvedValue(123n);
+    prepareTransactionRequestMock.mockReset().mockResolvedValue({
+      gas: 1n,
+      nonce: 0,
+      maxFeePerGas: 12_345n,
+      maxPriorityFeePerGas: 1n,
+    });
+    sendRawTransactionMock
+      .mockReset()
+      .mockResolvedValue("dummy-transaction-hash");
 
     account = new WalletAccountEvm(SEED, "0'/0/0", {
       provider: "https://dummy-rpc-url.com",
     });
     account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+    account.quoteSendTransaction = vi.fn().mockResolvedValue({ fee: 12_345n });
+    vi.spyOn(account, "signTransaction");
     protocol = new MorphoProtocolEvm(account, {
       chainId: 1,
       earnVaultAddress: VAULT,
@@ -196,9 +232,6 @@ describe.sequential("MorphoProtocolEvm", () => {
   describe("supply", () => {
     test("should build a vault deposit with morpho-sdk and send it", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
 
       const result = await protocol.supply({ token: TOKEN, amount: 100_000n });
 
@@ -217,21 +250,152 @@ describe.sequential("MorphoProtocolEvm", () => {
         vaultData,
         slippageTolerance: undefined,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
-      expect(result).toEqual({ hash: "dummy-supply-hash", fee: 12_345n });
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...SUPPLY_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
+    });
+
+    test("uses real viem transport actions for legacy EOA preparation and broadcast", async () => {
+      const handle = createMockClient(mainnet);
+      const hash =
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      handle.request.mockImplementation(async ({ method }) => {
+        if (method === "eth_chainId") return "0x1";
+        if (method === "eth_fillTransaction") {
+          return {
+            tx: {
+              chainId: "0x1",
+              from: ADDRESS,
+              to: SUPPLY_TX.to,
+              input: SUPPLY_TX.data,
+              value: "0x0",
+              gas: "0x5208",
+              gasPrice: "0x3",
+              nonce: "0x0",
+              type: "0x0",
+            },
+          };
+        }
+        if (method === "eth_sendRawTransaction") return hash;
+        throw new Error(`Unhandled RPC ${method}`);
+      });
+      const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+        provider: {
+          request: ({ method, params }) =>
+            handle.request({
+              method,
+              params: Array.isArray(params) ? params : undefined,
+            }),
+        },
+      });
+      transportAccount.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      transportAccount.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      const signTransaction = vi.spyOn(transportAccount, "signTransaction");
+      const transportProtocol = new MorphoProtocolEvm(transportAccount, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+      });
+
+      await createClientMock.withImplementation(
+        (parameters) =>
+          viem.createClient(
+            parameters as Parameters<typeof viem.createClient>[0],
+          ),
+        () =>
+          morphoViemExtensionMock.withImplementation(
+            () => () => ({ morpho: morphoNamespaceMock }),
+            async () => {
+              await expect(
+                transportProtocol.supply({
+                  token: TOKEN,
+                  amount: 100_000n,
+                }),
+              ).resolves.toEqual({ hash, fee: 12_345n });
+            },
+          ),
+      );
+
+      expect(signTransaction).toHaveBeenCalledWith({
+        ...SUPPLY_TX,
+        chainId: 1,
+        gasLimit: 21_000n,
+        gasPrice: 3n,
+        nonce: 0,
+      });
+      expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual(
+        expect.arrayContaining([
+          "eth_chainId",
+          "eth_fillTransaction",
+          "eth_sendRawTransaction",
+        ]),
+      );
     });
 
     test("should return supply requirements from morpho-sdk", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      const options = { token: TOKEN, amount: 100_000n };
       const requirementOptions = { useSimplePermit: true };
-      const requirements = await protocol.getSupplyRequirements(
-        { token: TOKEN, amount: 100_000n },
+      const pending = protocol.getSupplyRequirements(
+        options,
         requirementOptions,
       );
+      options.amount = 200_000n;
+      requirementOptions.useSimplePermit = false;
+      observedChain.resolve(1);
+      const requirements = await pending;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
-      expect(supplyAction.getRequirements).toHaveBeenCalledWith(
-        requirementOptions,
+      expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100_000n }),
       );
+      expect(supplyAction.getRequirements).toHaveBeenCalledWith({
+        useSimplePermit: true,
+      });
+    });
+
+    test("rejects a signer result bound to another chain", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      const wrongChainTransaction = await account.signTransaction({
+        ...SUPPLY_TX,
+        ...POPULATED_TRANSACTION,
+        chainId: 8453,
+      });
+      vi.mocked(account.signTransaction)
+        .mockClear()
+        .mockResolvedValueOnce(wrongChainTransaction);
+
+      await expect(
+        protocol.supply({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
+    });
+
+    test("rejects an EOA provider switch after signing", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      const signedTransaction = await account.signTransaction({
+        ...SUPPLY_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      vi.mocked(account.signTransaction)
+        .mockClear()
+        .mockImplementationOnce(async () => {
+          mockGetChainId.mockResolvedValue(8453);
+          return signedTransaction;
+        });
+
+      await expect(
+        protocol.supply({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
     });
 
     test("should use vaultV2 when an explicit vault is configured", async () => {
@@ -243,9 +407,6 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
 
       await protocol.supply({ token: TOKEN, amount: 100_000n });
 
@@ -277,6 +438,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         chainId: 1,
         earnVaultAddress: VAULT as string,
         borrowMarketParams: mutableParams,
+        metadata: { origin: "before" },
       };
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(
@@ -287,15 +449,16 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
       options.earnVaultAddress = "0x0000000000000000000000000000000000000001";
       mutableParams.loanToken = COLLATERAL;
+      options.metadata.origin = "after";
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
 
       await protocol.supply({ token: TOKEN, amount: 100_000n });
 
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
+      expect(morphoViemExtensionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { origin: "before" } }),
+      );
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 100_000n,
@@ -310,9 +473,6 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       account.getTokenBalance = vi.fn();
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
 
       await protocol.supply({ token: COLLATERAL, nativeAmount: 100_000n });
 
@@ -343,9 +503,6 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
 
       await protocol.supply({ token: TOKEN, amount: 100_000n });
 
@@ -415,7 +572,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
   });
 
-  describe("quoteSupply", () => {
+  describe("quotes", () => {
     test("should quote a vault deposit transaction", async () => {
       account.quoteSendTransaction = vi
         .fn()
@@ -429,14 +586,75 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
       expect(result).toEqual({ fee: 12_345n });
     });
+
+    test.each([
+      {
+        name: "quoteWithdraw",
+        quote: () => protocol.quoteWithdraw({ token: TOKEN, amount: 100_000n }),
+        transaction: WITHDRAW_TX,
+      },
+      {
+        name: "quoteBorrow",
+        quote: () => protocol.quoteBorrow({ token: TOKEN, amount: 100_000n }),
+        transaction: BORROW_TX,
+      },
+      {
+        name: "quoteRepay",
+        quote: () => protocol.quoteRepay({ token: TOKEN, amount: 100_000n }),
+        transaction: REPAY_TX,
+      },
+      {
+        name: "quoteSupplyCollateral",
+        quote: () =>
+          protocol.quoteSupplyCollateral({
+            token: COLLATERAL,
+            amount: 100_000n,
+          }),
+        transaction: SUPPLY_COLLATERAL_TX,
+      },
+      {
+        name: "quoteWithdrawCollateral",
+        quote: () =>
+          protocol.quoteWithdrawCollateral({
+            token: COLLATERAL,
+            amount: 100_000n,
+          }),
+        transaction: WITHDRAW_COLLATERAL_TX,
+      },
+    ])(
+      "should route $name through the WDK quote API",
+      async ({ quote, transaction }) => {
+        account.quoteSendTransaction = vi
+          .fn()
+          .mockResolvedValue({ fee: 12_345n });
+
+        await expect(quote()).resolves.toEqual({ fee: 12_345n });
+
+        expect(account.quoteSendTransaction).toHaveBeenCalledWith(transaction);
+      },
+    );
+
+    test("snapshots collateral-withdraw quote options", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      const options = { token: COLLATERAL, amount: 100_000n };
+
+      const pending = protocol.quoteWithdrawCollateral(options);
+      options.amount = 200_000n;
+      observedChain.resolve(1);
+      await pending;
+
+      expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100_000n }),
+      );
+    });
   });
 
   describe("withdraw", () => {
     test("should build a vault withdraw with morpho-sdk and send it", async () => {
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
-
       const result = await protocol.withdraw({
         token: TOKEN,
         amount: 100_000n,
@@ -446,8 +664,14 @@ describe.sequential("MorphoProtocolEvm", () => {
         amount: 100_000n,
         userAddress: ADDRESS,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
-      expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...WITHDRAW_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
     });
 
     test("should throw if 'to' is not the wallet address", async () => {
@@ -459,6 +683,21 @@ describe.sequential("MorphoProtocolEvm", () => {
         }),
       ).rejects.toThrow(
         "'to' must equal the wallet account address for Morpho vault withdrawals.",
+      );
+    });
+
+    test("snapshots withdraw options before resolving chain state", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      const options = { token: TOKEN, amount: 100_000n };
+
+      const pending = protocol.withdraw(options);
+      options.amount = 200_000n;
+      observedChain.resolve(1);
+      await pending;
+
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100_000n }),
       );
     });
   });
@@ -474,10 +713,6 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should build a market borrow with morpho-sdk and send it", async () => {
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
-
       const result = await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
       expect(blueMock).toHaveBeenCalledWith(
@@ -495,8 +730,14 @@ describe.sequential("MorphoProtocolEvm", () => {
         slippageTolerance: undefined,
         reallocations: undefined,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(BORROW_TX);
-      expect(result).toEqual({ hash: "dummy-borrow-hash", fee: 12_345n });
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...BORROW_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
     });
 
     test("should forward Vault V2 BluePublicAllocator reallocations", async () => {
@@ -509,10 +750,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         assets: 50_000n,
         penalty: 1n,
       } satisfies VaultV2BlueReallocation;
-
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-v2-borrow-hash", fee: 12_345n });
 
       await protocol.borrow({
         token: TOKEN,
@@ -529,6 +766,114 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
+    test("snapshots borrow inputs before resolving chain state", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      const adapter = "0x0000000000000000000000000000000000000020";
+      const sourceMarketParams = new MarketParams({
+        ...MARKET_PARAMS,
+        collateralToken: VAULT,
+      });
+      const reallocation = {
+        vault: VAULT,
+        from: {
+          type: "market",
+          adapter: COLLATERAL,
+          marketParams: sourceMarketParams,
+        },
+        to: { adapter: adapter as `0x${string}` },
+        assets: 50_000n,
+        penalty: 1n,
+      } satisfies VaultV2BlueReallocation;
+      const requirementSignature = {
+        args: {
+          owner: ADDRESS,
+          authorized: adapter,
+          isAuthorized: true,
+          nonce: 1n,
+          deadline: 2n,
+          signature: "0x01",
+        },
+        action: {
+          type: "authorization",
+          args: { authorized: adapter, isAuthorized: true, deadline: 2n },
+        },
+      } satisfies RequirementSignature;
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [reallocation],
+        requirementSignature,
+      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
+
+      const pending = protocol.borrow(options);
+      options.amount = 200_000n;
+      reallocation.assets = 75_000n;
+      reallocation.to.adapter = TOKEN;
+      Object.assign(sourceMarketParams, { collateralToken: TOKEN });
+      requirementSignature.args.deadline = 3n;
+      requirementSignature.action.args.deadline = 3n;
+      observedChain.resolve(1);
+      await pending;
+
+      expect(marketEntity.borrow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 100_000n,
+          reallocations: [
+            expect.objectContaining({
+              assets: 50_000n,
+              from: expect.objectContaining({
+                type: "market",
+                marketParams: expect.objectContaining({
+                  collateralToken: VAULT,
+                }),
+              }),
+              to: { adapter },
+            }),
+          ],
+        }),
+      );
+      const forwardedSignature = borrowAction.buildTx.mock.calls[0]?.[0]?.[0];
+      expect(forwardedSignature).not.toBe(requirementSignature);
+      expect(forwardedSignature).toEqual(
+        expect.objectContaining({
+          args: expect.objectContaining({ deadline: 2n }),
+          action: expect.objectContaining({
+            args: expect.objectContaining({ deadline: 2n }),
+          }),
+        }),
+      );
+    });
+
+    test("snapshots Vault V1 reallocation withdrawals", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      const withdrawal = {
+        marketParams: new MarketParams(MARKET_PARAMS),
+        amount: 50_000n,
+      };
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [{ vault: VAULT, fee: 1n, withdrawals: [withdrawal] }],
+      } satisfies MorphoBorrowOptions;
+
+      const pending = protocol.getBorrowRequirements(options);
+      withdrawal.amount = 75_000n;
+      observedChain.resolve(1);
+      await pending;
+
+      expect(marketEntity.borrow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reallocations: [
+            expect.objectContaining({
+              withdrawals: [expect.objectContaining({ amount: 50_000n })],
+            }),
+          ],
+        }),
+      );
+    });
+
     test("should fetch market params when only borrowMarketId is configured", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
@@ -536,10 +881,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         earnVaultAddress: VAULT,
         borrowMarketId: MARKET_ID,
       });
-
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
 
       await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
@@ -614,19 +955,12 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should build the borrow without signatures by default", async () => {
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
-
       await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
       expect(borrowAction.buildTx).toHaveBeenCalledWith(undefined);
     });
 
     test("should fold a signed authorization into the bundle when provided", async () => {
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
       const requirementSignature = {
         action: { type: "authorization" },
       } as unknown as RequirementSignature;
@@ -637,7 +971,11 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementSignature,
       });
 
-      expect(borrowAction.buildTx).toHaveBeenCalledWith([requirementSignature]);
+      expect(borrowAction.buildTx).toHaveBeenCalledWith([
+        expect.objectContaining({
+          action: expect.objectContaining({ type: "authorization" }),
+        }),
+      ]);
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {
@@ -666,10 +1004,6 @@ describe.sequential("MorphoProtocolEvm", () => {
 
   describe("repay", () => {
     test("should build a max repay by shares with morpho-sdk", async () => {
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-repay-hash", fee: 12_345n });
-
       const result = await protocol.repay({ token: TOKEN, amount: "max" });
 
       expect(marketEntity.repay).toHaveBeenCalledWith({
@@ -678,15 +1012,18 @@ describe.sequential("MorphoProtocolEvm", () => {
         positionData,
         slippageTolerance: undefined,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(REPAY_TX);
-      expect(result).toEqual({ hash: "dummy-repay-hash", fee: 12_345n });
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...REPAY_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
     });
 
     test("should build an asset repay with morpho-sdk after balance check", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-repay-hash", fee: 12_345n });
 
       await protocol.repay({ token: TOKEN, amount: 100_000n });
 
@@ -716,9 +1053,6 @@ describe.sequential("MorphoProtocolEvm", () => {
   describe("collateral", () => {
     test("should build a supply collateral transaction with morpho-sdk", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-collateral-hash", fee: 12_345n });
 
       const result = await protocol.supplyCollateral({
         token: COLLATERAL,
@@ -730,17 +1064,18 @@ describe.sequential("MorphoProtocolEvm", () => {
         nativeAmount: undefined,
         userAddress: ADDRESS,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(
-        SUPPLY_COLLATERAL_TX,
-      );
-      expect(result).toEqual({ hash: "dummy-collateral-hash", fee: 12_345n });
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...SUPPLY_COLLATERAL_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
     });
 
     test("should build a native-only supply collateral transaction", async () => {
       account.getTokenBalance = vi.fn();
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-collateral-hash", fee: 12_345n });
 
       await protocol.supplyCollateral({
         token: COLLATERAL,
@@ -756,11 +1091,6 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should build a withdraw collateral transaction with morpho-sdk", async () => {
-      account.sendTransaction = vi.fn().mockResolvedValue({
-        hash: "dummy-withdraw-collateral-hash",
-        fee: 12_345n,
-      });
-
       const result = await protocol.withdrawCollateral({
         token: COLLATERAL,
         amount: 100_000n,
@@ -771,11 +1101,12 @@ describe.sequential("MorphoProtocolEvm", () => {
         userAddress: ADDRESS,
         positionData,
       });
-      expect(account.sendTransaction).toHaveBeenCalledWith(
-        WITHDRAW_COLLATERAL_TX,
-      );
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...WITHDRAW_COLLATERAL_TX,
+        ...POPULATED_TRANSACTION,
+      });
       expect(result).toEqual({
-        hash: "dummy-withdraw-collateral-hash",
+        hash: "dummy-transaction-hash",
         fee: 12_345n,
       });
     });
@@ -795,7 +1126,7 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("erc-4337", () => {
-    test("should send through an erc-4337 account with config", async () => {
+    test("should use the validated balance client, snapshot config, and send a signed erc-4337 operation", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 1,
@@ -807,9 +1138,17 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      readContractMock.mockResolvedValueOnce(0n);
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      const signed = { signature: "0x01" } as unknown as Awaited<
+        ReturnType<typeof account.signTransaction>
+      >;
+      account.signTransaction = vi.fn().mockResolvedValue(signed);
       account.sendTransaction = vi
         .fn()
-        .mockResolvedValue({ hash: "dummy-user-operation-hash", fee: 12_345n });
+        .mockResolvedValue({ hash: "dummy-user-operation-hash", fee: 99_999n });
 
       // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
@@ -818,25 +1157,83 @@ describe.sequential("MorphoProtocolEvm", () => {
         borrowMarketParams: MARKET_PARAMS,
       });
 
+      await expect(
+        protocol.supply({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(Error);
+      expect(account.getTokenBalance).not.toHaveBeenCalled();
+      expect(account.quoteSendTransaction).not.toHaveBeenCalled();
+
+      readContractMock.mockResolvedValue(100_000n);
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
       const config = { paymasterToken: { address: TOKEN } };
-      const result = await protocol.supply(
+      const pending = protocol.supply(
         { token: TOKEN, amount: 100_000n },
         config,
       );
+      config.paymasterToken.address = COLLATERAL;
+      observedChain.resolve(1);
+      const result = await pending;
 
-      expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, config);
+      expect(account.getTokenBalance).not.toHaveBeenCalled();
+      expect(readContractMock).toHaveBeenCalledWith({
+        address: TOKEN,
+        abi: viem.erc20Abi,
+        functionName: "balanceOf",
+        args: [ADDRESS],
+      });
+      const operationConfig = vi.mocked(account.quoteSendTransaction).mock
+        .calls[0]?.[1];
+      expect(operationConfig).toEqual({
+        paymasterToken: { address: TOKEN },
+      });
+      expect(operationConfig).not.toBe(config);
+      expect(
+        operationConfig !== undefined &&
+          "paymasterToken" in operationConfig &&
+          operationConfig.paymasterToken,
+      ).not.toBe(config.paymasterToken);
+      expect(account.signTransaction).toHaveBeenCalledWith(
+        SUPPLY_TX,
+        operationConfig,
+      );
+      expect(account.sendTransaction).toHaveBeenCalledWith(
+        signed,
+        operationConfig,
+      );
       expect(result).toEqual({
         hash: "dummy-user-operation-hash",
         fee: 12_345n,
       });
+
+      vi.mocked(account.quoteSendTransaction).mockClear();
+      const quoteConfig = { useNativeCoins: true as const };
+      await expect(
+        protocol.quoteBorrow({ token: TOKEN, amount: 100_000n }, quoteConfig),
+      ).resolves.toEqual({ fee: 12_345n });
+      const forwardedQuoteConfig = vi.mocked(account.quoteSendTransaction).mock
+        .calls[0]?.[1];
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith(
+        BORROW_TX,
+        quoteConfig,
+      );
+      expect(forwardedQuoteConfig).not.toBe(quoteConfig);
+
+      mockGetChainId.mockResolvedValue(1);
+      vi.mocked(account.sendTransaction).mockClear();
+      vi.mocked(account.signTransaction).mockImplementationOnce(async () => {
+        mockGetChainId.mockResolvedValue(8453);
+        return signed;
+      });
+      await expect(
+        protocol.supply({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
+      expect(account.sendTransaction).not.toHaveBeenCalled();
     });
 
     test("snapshots native value before resolving chain state", async () => {
       const observedChain = Promise.withResolvers<number>();
       mockGetChainId.mockImplementationOnce(() => observedChain.promise);
-      account.sendTransaction = vi
-        .fn()
-        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
       const options = { token: TOKEN, nativeAmount: 100_000n };
 
       const result = protocol.supply(options);
@@ -851,17 +1248,27 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("read methods", () => {
-    test("preserves provider-array failover attempts", async () => {
+    test("tracks the provider selected by WDK failover", async () => {
       const attempts: string[] = [];
-      const providers = ["A", "B"].map((label) => ({
-        request: vi.fn(async () => {
-          attempts.push(label);
-          throw new Error(label);
-        }),
-      }));
+      const providers = [
+        {
+          request: vi.fn(async ({ method }: { method: string }) => {
+            attempts.push(`A:${method}`);
+            if (method === "eth_blockNumber") throw new Error("A down");
+            return method === "eth_chainId" ? "0x1" : "0x0";
+          }),
+        },
+        {
+          request: vi.fn(async ({ method }: { method: string }) => {
+            attempts.push(`B:${method}`);
+            if (method === "eth_chainId") return "0x2105";
+            return method === "eth_blockNumber" ? "0x1" : "0x0";
+          }),
+        },
+      ];
       const fallbackAccount = new WalletAccountReadOnlyEvm(ADDRESS, {
         provider: providers,
-        retries: 3,
+        retries: 1,
         chainId: 1,
       });
       fallbackAccount.getAddress = vi.fn().mockResolvedValue(ADDRESS);
@@ -872,14 +1279,24 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       await fallbackProtocol.getMarketPosition();
 
+      const accountProvider = Reflect.get(fallbackAccount, "_provider") as {
+        send(method: string, params: readonly unknown[]): Promise<unknown>;
+      };
+      await accountProvider.send("eth_blockNumber", []);
       const clientConfig = createClientMock.mock.calls[0]?.[0] as {
         transport: viem.Transport;
       };
       const transport = clientConfig.transport({ retryCount: 0 });
-      await expect(
-        transport.request({ method: "eth_chainId" }),
-      ).rejects.toThrow();
-      expect(attempts).toEqual(["A", "B", "A", "B"]);
+      await expect(transport.request({ method: "eth_chainId" })).resolves.toBe(
+        "0x2105",
+      );
+      expect(attempts).toEqual([
+        "A:eth_chainId",
+        "A:eth_blockNumber",
+        "B:eth_chainId",
+        "B:eth_blockNumber",
+        "B:eth_chainId",
+      ]);
     });
 
     test("should return vault position data", async () => {
@@ -989,8 +1406,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockResolvedValueOnce(1)
         .mockImplementationOnce(() => dispatchChain.promise)
         .mockImplementationOnce(() => newerChain.promise);
-      account.sendTransaction = vi.fn();
-
       const supply = protocol.supply({ token: TOKEN, nativeAmount: 100_000n });
       await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
       const position = protocol.getMarketPosition();
@@ -998,7 +1413,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       dispatchChain.resolve(1);
       await Promise.resolve();
-      expect(account.sendTransaction).not.toHaveBeenCalled();
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
 
       newerChain.resolve(8453);
       await expect(supply).rejects.toBeInstanceOf(ChainIdMismatchError);
@@ -1063,15 +1478,13 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(8453);
-      account.sendTransaction = vi.fn();
-
       await expect(
         protocol.supply({ token: TOKEN, nativeAmount: 100_000n }),
       ).rejects.toBeInstanceOf(ChainIdMismatchError);
-      expect(account.sendTransaction).not.toHaveBeenCalled();
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
     });
 
-    test("rejects a quote when its completion crosses chains", async () => {
+    test("rejects a market quote when its completion crosses chains", async () => {
       mockGetChainId
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(1)
@@ -1082,7 +1495,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockResolvedValue({ fee: 12_345n });
 
       await expect(
-        protocol.quoteSupply({ token: TOKEN, amount: 100_000n }),
+        protocol.quoteBorrow({ token: TOKEN, amount: 100_000n }),
       ).rejects.toBeInstanceOf(ChainIdMismatchError);
     });
 
@@ -1131,6 +1544,66 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("erc-4337 chain binding", () => {
+    test("preserves the invalid chain across out-of-order provider requests", async () => {
+      const first = Promise.withResolvers<number>();
+      const second = Promise.withResolvers<number>();
+      mockGetChainId
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementationOnce(() => second.promise);
+      const handle = createMockClient(mainnet);
+      handle.request.mockImplementation(async ({ method }) => {
+        if (method === "eth_chainId") {
+          const chainId = await mockGetChainId();
+          return `0x${chainId.toString(16)}`;
+        }
+        throw new Error(`Unhandled RPC ${method}`);
+      });
+      const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+        chainId: 1,
+        provider: {
+          request: ({ method, params }) =>
+            handle.request({
+              method,
+              params: Array.isArray(params) ? params : undefined,
+            }),
+        },
+        bundlerUrl: "https://dummy-bundler-url.com",
+        safeModulesVersion: "0.3.0",
+        isSponsored: false,
+        useNativeCoins: true,
+      });
+      erc4337Account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      const erc4337Protocol = new MorphoProtocolEvm(erc4337Account, {
+        chainId: 1,
+        borrowMarketParams: MARKET_PARAMS,
+      });
+
+      await createClientMock.withImplementation(
+        (parameters) =>
+          viem.createClient(
+            parameters as Parameters<typeof viem.createClient>[0],
+          ),
+        async () => {
+          const firstPosition = erc4337Protocol.getMarketPosition();
+          const secondPosition = erc4337Protocol.getMarketPosition();
+          second.resolve(8453);
+          await expect(secondPosition).rejects.toBeInstanceOf(
+            ChainIdMismatchError,
+          );
+          first.resolve(1);
+          await expect(firstPosition).rejects.toBeInstanceOf(
+            ChainIdMismatchError,
+          );
+        },
+      );
+
+      expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
+        "eth_chainId",
+        "eth_chainId",
+      ]);
+      expect(Reflect.get(erc4337Protocol, "_erc4337InvalidChainId")).toBe(8453);
+    });
+
     test("rejects a cached account chain before resolving entities", async () => {
       const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 8453,
@@ -1202,6 +1675,16 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("read-only accounts", () => {
+    test("error: MissingWalletProviderError", () => {
+      const providerlessAccount = new WalletAccountEvm(SEED, "0'/0/0", {
+        provider: [],
+      });
+
+      expect(() => new MorphoProtocolEvm(providerlessAccount)).toThrow(
+        MissingWalletProviderError,
+      );
+    });
+
     test("should reject write methods", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountReadOnlyEvm(ADDRESS, {

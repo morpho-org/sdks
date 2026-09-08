@@ -68,7 +68,7 @@ new MorphoProtocolEvm(account, options)
 
 Options:
 
-- `chainId` (number | bigint): required when using explicit Morpho targets; guards transaction building against wallet chain switches.
+- `chainId` (number | bigint): required when using explicit Morpho targets; validates reads, requirements, quotes, and sends against provider/target chain mismatches and switches.
 - `earnVaultAddress` (string): explicit Morpho vault address.
 - `borrowMarketParams` (object): explicit Morpho Blue market params.
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
@@ -77,7 +77,7 @@ Options:
 - `supportSignature` (boolean): enable SDK permit/permit2 requirements.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
-Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
+Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter rejects reads, requirements, quotes, and sends when the provider chain differs from the target or changes mid-operation.
 
 ERC-4337 accounts cache chain-bound UserOperation state. After switching the provider network, create a fresh wallet account and `MorphoProtocolEvm` adapter before continuing.
 
