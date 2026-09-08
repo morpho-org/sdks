@@ -99,7 +99,7 @@ Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collatera
 | `quoteSupply(options, config?)` | Deprecated: quote the legacy deposit with its option-level signature |
 | `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
 | `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
-| `quoteWithdraw(options, config?)` | Quote vault withdrawal |
+| `quoteWithdraw(options, config?)` | Quote vault withdrawal when its exact share allowance is already in place |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
 | `quoteSupplyCollateral(options, config?)` | Quote collateral supply |
@@ -165,6 +165,13 @@ Requirement entries are one of:
 - Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Prepared vault deposits take theirs on the handle's `submit(requirementSignature)` or `quote(requirementSignature)`. Deprecated `supply` and `quoteSupply` still accept legacy ERC-2612 or Permit2 AllowanceTransfer signatures on their options.
 - Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
+
+For withdrawal quotes, keep the same prepared handle: confirm its approval before `prepared.quote()`,
+or pass its signed share permit to `prepared.quote(signedPermit)`. Both `quoteWithdraw()` and unsigned
+`prepared.quote()` throw `UnresolvedVaultWithdrawRequirementsError` when the exact share allowance
+is missing, including when an existing allowance exceeds the cap. Quoting does not execute approvals
+or consume permits. Every prepared-withdrawal method rechecks the provider chain and throws
+`ChainIdMismatchError` if the wallet has switched away from the configured vault chain.
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
