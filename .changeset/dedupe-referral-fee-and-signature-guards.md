@@ -1,5 +1,5 @@
 ---
-"@morpho-org/morpho-sdk": patch
+"@morpho-org/morpho-sdk": major
 ---
 
 Route the referral-fee, deadline, and ECDSA-signature guards shared by the direct BlueBundlesV1 writes and the VaultExitBundlesV1 force withdrawal through single helpers instead of per-call-site copies.

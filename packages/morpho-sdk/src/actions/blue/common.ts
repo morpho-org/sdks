@@ -102,6 +102,9 @@ const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
 export const normalizeBlueBundlesV1CommonParams = (
   params: BlueBundlesV1CommonParams,
 ): NormalizedBlueBundlesV1CommonParams => {
+  // `validateDeadline` is called for its throwing side effect only: it enforces the positive-uint256
+  // deadline every periphery requires and returns nothing. The normalized `{ referralFeePct,
+  // referralFeeRecipient }` pair the callers encode comes from `validateReferralFee`.
   validateDeadline(params.deadline);
   return validateReferralFee(params);
 };

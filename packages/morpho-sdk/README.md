@@ -173,10 +173,6 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 > low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
 > will be removed in the next major.
 
-> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
-> low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
-> will be removed in the next major.
-
 ### Midnight: take a fixed-rate offer
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.

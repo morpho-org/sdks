@@ -197,17 +197,6 @@ BlueBundlesV1 entrypoints own the atomic ordering. Vault V2 public allocations a
 the fixed call rather than prepended as arbitrary Bundler3 actions. Blue writes therefore have no
 GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound input.
 
-### Blue writes: direct BlueBundlesV1 calls
-
-The Blue methods build direct BlueBundlesV1 transactions. Requirements authorize the actual
-puller/operator: classic approvals and ERC-2612 permits target BlueBundlesV1; Permit2 keeps its
-ERC-20 prerequisite on canonical Permit2 while its SignatureTransfer payload targets
-BlueBundlesV1; Morpho authorization grants BlueBundlesV1 operator rights.
-
-BlueBundlesV1 entrypoints own the atomic ordering. Vault V2 public allocations are encoded inside
-the fixed call rather than prepended as arbitrary Bundler3 actions. Blue writes therefore have no
-GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound input.
-
 ### Summary
 
 | Operation                             | Route                      | Why                                                                                                        |
