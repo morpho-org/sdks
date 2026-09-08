@@ -7,6 +7,7 @@ import {
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
 import {
   computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
 } from "./vaultV2ForceWithdrawPlan.js";
 
@@ -235,6 +236,50 @@ describe("previewVaultV2ForceWithdraw", () => {
         { requestedExitAssets: 1n, timestamp: 0n },
       ),
     ).toBeUndefined();
+  });
+
+  // Tighter regime than the test above: the zero-slippage price here is a positive `1n`, so a
+  // tolerance-free screen would clear it — but `forceWithdraw()` applies `DEFAULT_SLIPPAGE_TOLERANCE`
+  // by default, which scales that floor below 1 and rounds it to zero, throwing
+  // `VaultV2ForceWithdrawZeroSharePriceError`. The preview must mirror the default tolerance and
+  // decline, not hand back an `exitAssets` the default call rejects.
+  test("behavior: returns undefined when only the default-tolerance floor rounds to zero", () => {
+    const vaultData = vaultV2ExitData({
+      penalty: 0n,
+      assetBalance: 1_000_000n,
+      totalAssets: 1_000_000n,
+      totalSupply: 1_000_000n * MathLib.RAY,
+    });
+    const params = { requestedExitAssets: 1_000_000n, timestamp: 0n } as const;
+
+    // Guard the regime: this fixture's tolerance-free price is strictly positive, so the exit is
+    // declined by the default-tolerance screen — not by the coarser zero-slippage one above.
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+    if (eligibility.type !== "eligible") {
+      throw new Error(
+        `Expected an eligible fixture, got "${eligibility.type}"`,
+      );
+    }
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: eligibility.adapter,
+      liquidityMarketId: eligibility.liquidityMarketId,
+      exitAssets: params.requestedExitAssets,
+      timestamp: params.timestamp,
+    });
+    const { vault: accrued } = vaultData.accrueInterest(
+      MathLib.max(params.timestamp, vaultData.lastUpdate),
+    );
+    const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: accrued,
+      deadlineVaultData: accrued,
+      plan,
+    });
+    expect(
+      MathLib.mulDivDown(plan.withdrawnAssets, MathLib.RAY, sharesBurnt),
+    ).toBeGreaterThan(0n);
+
+    expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
   });
 
   // Out of range the transaction path rejects, so quoting a payout here would overstate what the

@@ -1,6 +1,7 @@
 import {
   type AccrualVaultV2,
   type Address,
+  DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
@@ -69,8 +70,8 @@ export interface VaultV2ForceWithdrawPreview {
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
  *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, or an
- *   exit whose realized share price rounds down to zero (which the entity rejects with
- *   `VaultV2ForceWithdrawZeroSharePriceError`).
+ *   exit whose realized share price rounds down to zero at the default slippage tolerance (which the
+ *   entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
@@ -132,10 +133,13 @@ export function previewVaultV2ForceWithdraw(
   // Mirror the entity's zero-floor guard. `forceWithdraw()` derives its slippage floor from
   // `withdrawnAssets / sharesBurnt` and rejects an exit whose realized share price rounds down to
   // zero (`VaultV2ForceWithdrawZeroSharePriceError`) — a degenerate vault (e.g. `totalSupply`
-  // dwarfing `totalAssets`) offers no price protection at all. Evaluate the largest possible floor
-  // here (slippage-free, matching the burn upper bound the entity divides by, accrued to
-  // `timestamp` like the plan): if that rounds to zero, every slippage tolerance does too, so the
-  // preview must report "not previewable" rather than hand back an `exitAssets` the entity refuses.
+  // dwarfing `totalAssets`) offers no price protection at all. Screen at the entity's default
+  // `DEFAULT_SLIPPAGE_TOLERANCE`, not slippage-free, against the same burn upper bound the entity
+  // divides by (accrued to `timestamp` like the plan): a tolerance-free screen clears an exit whose
+  // realized price is a single RAY-unit, yet the default tolerance scales that below 1 and rounds it
+  // to zero — so the entity would reject with `VaultV2ForceWithdrawZeroSharePriceError` the very
+  // `exitAssets` this preview handed back. A caller passing a larger tolerance still relies on the
+  // entity's own guard.
   const { vault: accruedVaultData } = vaultData.accrueInterest(
     MathLib.max(timestamp, vaultData.lastUpdate),
   );
@@ -146,7 +150,11 @@ export function previewVaultV2ForceWithdraw(
   });
   if (
     sharesBurnt <= 0n ||
-    MathLib.mulDivDown(plan.withdrawnAssets, MathLib.RAY, sharesBurnt) <= 0n
+    MathLib.mulDivDown(
+      plan.withdrawnAssets,
+      MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
+      sharesBurnt,
+    ) <= 0n
   ) {
     return undefined;
   }
