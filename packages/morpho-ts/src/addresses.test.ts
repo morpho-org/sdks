@@ -1133,6 +1133,41 @@ describe("registerCustomAddresses", () => {
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
 
+  test("behavior: casing variants of one wrapped token inside a single registration", () => {
+    const wrappedToken = "0xCA5d8F8a8d49439357d3CF46Ca2e720702F132b8";
+    const lowercased = wrappedToken.toLowerCase() as `0x${string}`;
+    const unwrappedToken = randomAddress();
+    const otherToken = randomAddress();
+
+    for (const [first, second] of [
+      [wrappedToken, lowercased],
+      [lowercased, wrappedToken],
+    ] as const) {
+      const chainId = 31_337_200 + (first === wrappedToken ? 0 : 1);
+
+      expect(() =>
+        registerCustomAddresses({
+          unwrappedTokens: {
+            [chainId]: { [first]: unwrappedToken, [second]: unwrappedToken },
+          },
+        }),
+      ).not.toThrow();
+      expect(Object.keys(unwrappedTokensMapping[chainId] ?? {})).toEqual([
+        first,
+      ]);
+      expect(getUnwrappedToken(second, chainId)).toBe(unwrappedToken);
+
+      expect(() =>
+        registerCustomAddresses({
+          unwrappedTokens: {
+            [chainId + 10]: { [first]: unwrappedToken, [second]: otherToken },
+          },
+        }),
+      ).toThrow(RegistryValueAlreadyRegisteredError);
+      expect(unwrappedTokensMapping[chainId + 10]).toBeUndefined();
+    }
+  });
+
   test("error: conflicting PublicAllocator addresses", () => {
     const chainId = 31_337_015;
 
