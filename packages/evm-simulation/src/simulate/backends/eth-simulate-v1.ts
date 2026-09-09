@@ -2,6 +2,7 @@ import {
   type Address,
   type BlockTag,
   createPublicClient,
+  ExecutionRevertedError,
   getAddress,
   http,
   maxUint256,
@@ -136,6 +137,9 @@ export async function simulateV1(params: {
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
+    // A node-level "execution reverted" is a property of the bundle, not the backend.
+    if (error instanceof ExecutionRevertedError)
+      throw new SimulationRevertedError(error.shortMessage, error);
     throw new ExternalServiceError(
       `eth_simulateV1 error: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },

@@ -1,5 +1,6 @@
 import {
   type Address,
+  ExecutionRevertedError,
   ethAddress,
   type Hex,
   maxUint256,
@@ -306,6 +307,23 @@ describe.sequential("simulateV1", () => {
         transactions: [BASIC_TX],
       }),
     ).rejects.toThrow(SimulationRevertedError);
+  });
+
+  it("maps a node-level ExecutionRevertedError to SimulationRevertedError", async () => {
+    const cause = new ExecutionRevertedError({
+      message: "execution reverted: insufficient collateral",
+    });
+    mockSimulateCalls.mockRejectedValueOnce(cause);
+
+    const error = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).not.toBeInstanceOf(ExternalServiceError);
+    expect((error as SimulationRevertedError).details).toBe(cause);
   });
 
   it("throws ExternalServiceError when results is not an array", async () => {
