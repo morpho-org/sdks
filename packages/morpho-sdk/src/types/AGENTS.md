@@ -10,9 +10,9 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
   AllowanceTransfer, Permit2 SignatureTransfer, Morpho authorization, and Midnight offer roots.
 - `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
-- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Used by vault
-  deposits and public low-level composition. Direct BlueBundlesV1 native funding is exclusive with
-  ERC-20 funding rather than additive.
+- `DepositAmountArgs` — additive funding union enforcing at least one of `amount` / `nativeAmount`.
+  Retained for public low-level composition; high-level vault deposits and Blue writes use
+  exclusive `BundlesFundingArgs`.
 - `BundlesFundingArgs` — exclusive `{ amount } | { nativeAmount }` funding used by fixed BlueBundlesV1 and VaultBundlesV1 calls.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
 - Repay funding is expressed with the operation-specific `repayAssets` / `repayShares` inputs, mutually exclusive (`repayShares = maxUint256` requests a saturated full repay); the entity surface pairs them with a `maxRepayAssets` funding cap and optional `nativeAmount`, deriving every amount from live market state, and the flat action arg shapes (`BlueRepayWithdrawCollateralActionArgs`) carry the pre-resolved `{ repayAssets, repayShares, maxRepayAssets, collateralAssets, maxLtv }` so the action does no arithmetic. The former `RepayAmountArgs` / `RepayActionAmountArgs` shapes were removed with the BlueBundlesV1 migration.

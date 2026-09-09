@@ -197,7 +197,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
-          amount: 0n,
           nativeAmount: -1n,
           userAddress: client.account.address,
           vaultData,
@@ -221,7 +220,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
-          amount: 0n,
           nativeAmount: parseUnits("1", 18),
           userAddress: client.account.address,
           vaultData,
@@ -240,7 +238,6 @@ describe("MorphoVaultV1 entity tests", () => {
 
       expect(() =>
         vault.deposit({
-          amount: 1n,
           nativeAmount: 1n,
           userAddress: SteakhouseUsdcVaultV1.address,
           vaultData: {
