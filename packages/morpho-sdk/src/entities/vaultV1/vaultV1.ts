@@ -272,12 +272,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     vaultData: AccrualVault;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
@@ -364,12 +359,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -386,12 +376,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -425,12 +410,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     readonly RequirementSignature[],
     undefined
   > {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }

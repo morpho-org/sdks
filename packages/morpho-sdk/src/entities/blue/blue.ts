@@ -224,6 +224,8 @@ export interface BlueActions {
    * When `reallocations` is provided, its homogeneous V1 or V2 actions are
    * prepended to move liquidity before withdrawing. V1 fees add
    * to the transaction value; V2 penalties are paid in the loan token.
+   * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2
+   * reallocations for new integrations.
    *
    * `getRequirements` returns the loan-token approval needed for V2 penalties
    * and `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
@@ -247,6 +249,7 @@ export interface BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
       reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
   ) => {
@@ -272,6 +275,8 @@ export interface BlueActions {
    * When `reallocations` is provided, its homogeneous V1 or V2 actions are
    * prepended before borrowing. V1 fees add to the transaction
    * value; V2 penalties are paid in the loan token.
+   * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2
+   * reallocations for new integrations.
    *
    * `getRequirements` returns the loan-token approval needed for V2 penalties
    * and Morpho authorization for GeneralAdapter1 when needed.
@@ -293,6 +298,7 @@ export interface BlueActions {
     amount: bigint;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
+    /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
     reallocations?: BlueReallocationPlan;
   }) => {
     buildTx: (
@@ -425,6 +431,8 @@ export interface BlueActions {
    * When `reallocations` is provided, its homogeneous V1 or V2 actions run
    * between the collateral supply and `morphoBorrow`. V1 fees add
    * to the transaction value; V2 penalties are paid in the loan token.
+   * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2
+   * reallocations for new integrations.
    *
    * `getRequirements` returns in parallel:
    * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
@@ -449,6 +457,7 @@ export interface BlueActions {
       positionData: AccrualPosition;
       borrowAmount: bigint;
       slippageTolerance?: bigint;
+      /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
       reallocations?: BlueReallocationPlan;
     } & DepositAmountArgs,
   ) => {
@@ -482,6 +491,8 @@ export interface BlueActions {
    * A homogeneous V1 or V2 target reallocation plan runs first; V1 fees add
    * to the transaction value and V2 penalties are paid
    * in the loan token.
+   * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2
+   * reallocations for new integrations.
    *
    * `getRequirements` returns the loan-token approval needed for V2 penalties
    * and Morpho authorization for GeneralAdapter1 when needed.
@@ -494,7 +505,8 @@ export interface BlueActions {
    * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
    * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
-   * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the target market.
+   * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the
+   *   target market. Vault V1 inputs are deprecated; prefer Vault V2.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
@@ -515,6 +527,7 @@ export interface BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
+    /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
     targetReallocations?: BlueReallocationPlan;
   }) => {
     buildTx: (
@@ -549,6 +562,8 @@ export interface BlueActions {
    * @param params.block - The block to fetch data at (number and timestamp).
    * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    */
   getVaultV1ReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -566,7 +581,8 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -627,6 +643,8 @@ export interface BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -654,7 +672,8 @@ export interface BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({
@@ -1914,6 +1933,8 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns Reallocation data ready for {@link getVaultV1Reallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    * @example
    * ```ts
    * import { markets, vaults } from "@morpho-org/morpho-test";
@@ -2051,7 +2072,8 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    * @example
    * ```ts
    * const data = await market.getReallocationData({ vaultAddresses, block });
@@ -2192,6 +2214,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -2242,7 +2266,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({

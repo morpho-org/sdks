@@ -44,7 +44,10 @@ export interface BlueRefinanceParams {
     minBorrowSharePrice: bigint;
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
-    /** Homogeneous Vault V1 or Vault V2 reallocations into the target market. */
+    /**
+     * Homogeneous Vault V1 or Vault V2 reallocations into the target market.
+     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
+     */
     targetReallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -103,7 +106,9 @@ export interface BlueRefinanceParams {
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
  * @param params.args.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the
- *   target, run before the supply leg. V1 fees add to `tx.value`; V2 penalties are paid in the target loan token.
+ *   target, run before the supply leg. Vault V1 inputs are deprecated for high-level Blue writes;
+ *   use Vault V2 for new integrations. V1 fees add to `tx.value`; V2 penalties are paid in the
+ *   target loan token.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.

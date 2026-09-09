@@ -33,6 +33,9 @@ import {
 
 /**
  * Input state required to construct {@link VaultV1ReallocationData}.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `InputVaultV2BlueReallocationData`.
  */
 export interface InputVaultV1ReallocationData {
   /** Chain id associated with the fetched state. */
@@ -58,7 +61,8 @@ export interface InputVaultV1ReallocationData {
 /**
  * Deprecated input name for Vault V1 reallocation data.
  *
- * @deprecated Use {@link InputVaultV1ReallocationData} instead.
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `InputVaultV2BlueReallocationData`.
  */
 export type InputReallocationData = InputVaultV1ReallocationData;
 
@@ -124,6 +128,9 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
  * `markets`, `vaults`, `positions`, and `vaultMarketConfigs` as a read
  * contract keyed by market id or address; use the getters for typed absence
  * errors and use simulation methods to produce updated state.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `VaultV2BlueReallocationData`.
  */
 export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
   /** Chain id associated with the fetched reallocation data. */
@@ -341,6 +348,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
@@ -481,7 +490,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Use {@link computeVaultV1Reallocations} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
    */
   public getMarketPublicReallocations(
     marketId: MarketId,
@@ -503,6 +513,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
+   * `VaultV2BlueReallocationData.getPublicReallocationLiquidity`.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
@@ -562,6 +574,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
+   * `VaultV2BlueReallocationData.getAvailableLiquidityToUtilization`.
    * @example
    * ```ts
    * import { createPublicClient, http, parseEther } from "viem";
@@ -816,6 +830,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
 /**
  * Deprecated class name for Vault V1 reallocation data.
  *
- * @deprecated Use {@link VaultV1ReallocationData} instead.
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * `VaultV2BlueReallocationData`.
  */
 export { VaultV1ReallocationData as ReallocationData };

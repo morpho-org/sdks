@@ -35,7 +35,10 @@ export interface BlueSupplyCollateralBorrowParams {
     minSharePrice: bigint;
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
-    /** Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing. */
+    /**
+     * Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing.
+     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
+     */
     reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -77,7 +80,8 @@ export interface BlueSupplyCollateralBorrowParams {
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   collateral supply. Requires the collateral token to be the chain's wNative.
  * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
- *   execute between the supply and borrow legs.
+ *   execute between the supply and borrow legs. Vault V1 inputs are deprecated; use Vault V2 for
+ *   new integrations.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.

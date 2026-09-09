@@ -20,6 +20,9 @@ Instead of exposing the user directly to target contracts (ERC-4626 vault, Morph
 Bundler3 also calls allocator contracts directly for shared liquidity: `reallocateTo` on Public
 Allocator V1 and `reallocate` or `allocateFromIdle` on Blue Public Allocator.
 
+PublicAllocator V1 composition is deprecated and will be removed from the SDK in the next major.
+Use Vault V2 BluePublicAllocator actions for new integrations.
+
 The spender of every **user-supplied** approval / permit / permit2 is `generalAdapter1`, never the vault or Morpho directly. Blue Public Allocator penalties add a separate internal allowance: Bundler3 approves the allocator for each exact penalty amount immediately before the non-skippable allocator call. See [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
 
 ## Composability & modularity

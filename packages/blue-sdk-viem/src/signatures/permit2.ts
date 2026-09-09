@@ -145,7 +145,7 @@ export const getPermit2TransferFromTypedData = (
     message: {
       permitted: {
         token: args.erc20,
-        amount: MathLib.min(args.allowance, MathLib.MAX_UINT_160),
+        amount: MathLib.min(args.allowance, MathLib.MAX_UINT_256),
       },
       spender: args.spender,
       nonce: args.nonce,

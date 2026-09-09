@@ -157,7 +157,13 @@ export interface MorphoBorrowOptions {
   amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
-  /** Optional Vault V1 PublicAllocator reallocations to include in the borrow action. */
+  /**
+   * Optional Vault V1 PublicAllocator reallocations to include in the borrow action.
+   *
+   * @deprecated Use {@link MorphoBorrowWithVaultV2ReallocationsOptions} for Vault V2
+   * BluePublicAllocator reallocations. Vault V1 reallocations will no longer be accepted by
+   * high-level Blue writes in the next major.
+   */
   reallocations?: readonly VaultReallocation[];
   /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
   requirementSignature?: RequirementSignature;
