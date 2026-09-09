@@ -17,6 +17,7 @@ import {
   MixedBundlesFundingError,
   type MorphoClientType,
   morphoViemExtension,
+  NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
   type Requirement,
@@ -278,16 +279,139 @@ export type MorphoWithdrawCollateralOptions = Readonly<
  * away from the configured vault chain.
  */
 export interface PreparedMorphoSupply {
-  /** Resolves the approval or token signature requirements for this prepared deposit. */
+  /**
+   * Resolves approvals or token signature requirements using live allowances and nonces.
+   *
+   * Submit and confirm approval transactions before depositing. Sign token requirements with
+   * the funding wallet, then pass the signature to this handle's submit or quote method.
+   * Each settled call refreshes the requirements; concurrent calls share the pending read.
+   *
+   * @param requirementOptions - Optional token requirement preferences.
+   * @param requirementOptions.useSimplePermit - Optional preference for ERC-2612; unsupported
+   *   tokens fall back to Permit2 or direct approval.
+   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce; required when
+   *   Permit2 SignatureTransfer is selected. Allocate a distinct nonce per pending operation.
+   * @returns Ordered approval transactions and/or signable token requirements; an empty array
+   *   for native funding or an already sufficient direct allowance.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {ExpiredDeadlineError} when the prepared deposit's execution deadline has passed.
+   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
+   * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
+   * @throws {viem.BaseError} when a required chain, allowance, nonce, or token metadata read fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * export async function getUsdtDepositRequirements(account: WalletAccountReadOnlyEvm) {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: false,
+   *   });
+   *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
+   *   const requirements = await prepared.getRequirements();
+   *   // requirements satisfies readonly BundlesApprovalOrSignatureRequirement[]
+   *   return requirements;
+   * }
+   * ```
+   */
   readonly getRequirements: (
     requirementOptions?: RequirementOptions,
   ) => Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
-  /** Submits this prepared deposit with its optional signed token requirement. */
+  /**
+   * Submits this prepared deposit after rechecking the provider chain and ERC-20 balance.
+   *
+   * @param requirementSignature - Optional ERC-2612 or Permit2 SignatureTransfer signature
+   *   produced from this handle's latest resolved getRequirements call. Omit for native funding
+   *   or direct approval; prerequisite approvals must already be confirmed.
+   * @param config - Optional ERC-4337 transaction configuration override; ignored for EOA wallets.
+   * @returns The WDK supply result containing the transaction hash and fee, denominated
+   *   according to the wallet's payment configuration.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {UnexpectedRequirementSignatureError} when an unsupported signature kind is supplied.
+   * @throws {BundlesPermitMismatchError} when no matching signature requirement was resolved,
+   *   including native funding, or its kind, spender, amount, deadline, or nonce differs.
+   * @throws {DepositOwnerMismatchError} when the signed owner is not the funding wallet.
+   * @throws {DepositAssetMismatchError} when the signed asset is not the vault asset.
+   * @throws {BundlesRequirementSignatureMismatchError} when the token signature is malformed.
+   * @throws {viem.BaseError} when a required provider read or transaction encoding fails.
+   * @throws {Error} when the WDK account is read-only, the ERC-20 balance is insufficient,
+   *   or the wallet rejects or fails to submit the transaction.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import { createPublicClient, http, type Hash } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function submitUsdtDeposit(account: WalletAccountEvm) {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() });
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: false,
+   *   });
+   *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
+   *   for (const requirement of await prepared.getRequirements()) {
+   *     if ("sign" in requirement) continue; // Signature support is disabled above.
+   *     const { hash } = await account.sendTransaction({
+   *       to: requirement.to, value: requirement.value, data: requirement.data,
+   *     });
+   *     await client.waitForTransactionReceipt({ hash: hash as Hash });
+   *   }
+   *   const result = await prepared.submit();
+   *   // result satisfies SupplyResult: { hash: string, fee: bigint }
+   *   return result;
+   * }
+   * ```
+   */
   readonly submit: (
     requirementSignature?: BundlesTokenRequirementSignature,
     config?: Erc4337TransactionConfig,
   ) => Promise<SupplyResult>;
-  /** Quotes this prepared deposit with its optional signed token requirement. */
+  /**
+   * Quotes this prepared deposit through the wallet after rechecking the provider chain.
+   *
+   * Read-only accounts may quote; balances and prerequisite approvals must satisfy the wallet's
+   * simulation. This method does not submit the deposit or sign its token requirement.
+   *
+   * @param requirementSignature - Optional ERC-2612 or Permit2 SignatureTransfer signature
+   *   produced from this handle's latest resolved getRequirements call. Omit for native funding
+   *   or direct approval.
+   * @param config - Optional ERC-4337 quote configuration override; ignored for EOA wallets.
+   * @returns The WDK fee quote as { fee: bigint }, denominated according to the wallet's
+   *   payment configuration, without a transaction hash.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {UnexpectedRequirementSignatureError} when an unsupported signature kind is supplied.
+   * @throws {BundlesPermitMismatchError} when no matching signature requirement was resolved,
+   *   including native funding, or its kind, spender, amount, deadline, or nonce differs.
+   * @throws {DepositOwnerMismatchError} when the signed owner is not the funding wallet.
+   * @throws {DepositAssetMismatchError} when the signed asset is not the vault asset.
+   * @throws {BundlesRequirementSignatureMismatchError} when the token signature is malformed.
+   * @throws {viem.BaseError} when a required provider read or transaction encoding fails.
+   * @throws {Error} when the wallet's fee estimation or transaction simulation fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * export async function quoteUsdtDeposit(account: WalletAccountReadOnlyEvm) {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: false,
+   *   });
+   *   // The account must already hold USDT and have approved VaultBundlesV1.
+   *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
+   *   const quote = await prepared.quote();
+   *   // quote satisfies Omit<SupplyResult, "hash">: { fee: bigint }
+   *   return quote;
+   * }
+   * ```
+   */
   readonly quote: (
     requirementSignature?: BundlesTokenRequirementSignature,
     config?: Erc4337TransactionConfig,
@@ -451,6 +575,21 @@ function normalizeDepositAmounts({
 >): NormalizedDepositAmounts {
   if (amount !== undefined && nativeAmount !== undefined) {
     throw new MixedBundlesFundingError();
+  }
+  for (const [field, value] of [
+    ["amount", amount],
+    ["nativeAmount", nativeAmount],
+  ] as const) {
+    if (value === 0 || value === 0n) {
+      throw new NonPositiveInputError(field, 0n);
+    }
+    if (
+      value !== undefined &&
+      value < 0 &&
+      (typeof value === "bigint" || Number.isSafeInteger(value))
+    ) {
+      throw new NegativeInputError(field, BigInt(value));
+    }
   }
   if (amount !== undefined) return { amount: normalizeAmount(amount) };
   if (nativeAmount !== undefined) {
@@ -642,7 +781,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {NonPositiveInputError} when neither `amount` nor `nativeAmount` is supplied.
+   * @throws {NonPositiveInputError} when neither funding amount is supplied or the selected amount is zero.
+   * @throws {NegativeInputError} when the selected funding amount is negative.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {Error} when the token, amount, vault, or account configuration is invalid.
    * @example
