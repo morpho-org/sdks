@@ -1,6 +1,6 @@
 ---
 "@morpho-org/blue-sdk": patch
-"@morpho-org/morpho-sdk": patch
+"@morpho-org/morpho-sdk": minor
 "@morpho-org/liquidity-sdk-viem": patch
 ---
 
