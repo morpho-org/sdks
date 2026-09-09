@@ -7,6 +7,7 @@ import {
   NATIVE_ADDRESS,
   Token,
 } from "@morpho-org/blue-sdk";
+import { isHexEqual } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -75,14 +76,16 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
+  const isKnownAddress = (known?: Address) =>
+    known != null && typeof address === "string" && isHexEqual(address, known);
+
+  if (isKnownAddress(NATIVE_ADDRESS)) return Token.native(parameters.chainId);
 
   const { wstEth, stEth } = getChainAddresses(parameters.chainId);
+  const isWstEth = isKnownAddress(wstEth);
 
   if (deployless) {
     try {
-      const isWstEth = address === wstEth;
-
       const token = await readContract(client, {
         ...parameters,
         abi,
@@ -195,20 +198,15 @@ export async function fetchToken(
     eip5267Domain,
   };
 
-  switch (address) {
-    case wstEth: {
-      if (stEth) {
-        const stEthPerWstEth = await readContract(client, {
-          ...parameters,
-          address: wstEth!,
-          abi: wstEthAbi,
-          functionName: "stEthPerToken",
-        });
+  if (isWstEth && wstEth != null && stEth != null) {
+    const stEthPerWstEth = await readContract(client, {
+      ...parameters,
+      address: wstEth,
+      abi: wstEthAbi,
+      functionName: "stEthPerToken",
+    });
 
-        return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
-      }
-      break;
-    }
+    return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
   }
 
   const unwrapToken = getUnwrappedToken(address, parameters.chainId);

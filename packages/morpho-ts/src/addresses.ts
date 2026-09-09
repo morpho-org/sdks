@@ -6,7 +6,7 @@ import {
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
-import { deepFreeze, entries } from "./utils.js";
+import { deepFreeze, entries, isHexEqual } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *
@@ -2339,6 +2339,8 @@ const _unwrappedTokensMapping: Record<
 /**
  * Returns the unwrapped token mapped to a wrapped token on a chain.
  *
+ * Lookup is case-insensitive: the registry keys are checksummed, but callers may pass a lowercased address.
+ *
  * @param wrappedToken - The wrapped token address to resolve.
  * @param chainId - The EIP-155 chain id.
  * @returns The unwrapped token address, or `undefined` when no mapping is registered.
@@ -2354,7 +2356,13 @@ export function getUnwrappedToken(
   wrappedToken: `0x${string}`,
   chainId: number,
 ) {
-  return unwrappedTokensMapping[chainId]?.[wrappedToken];
+  const mapping = unwrappedTokensMapping[chainId];
+  if (mapping == null || wrappedToken == null) return undefined;
+
+  return (
+    mapping[wrappedToken] ??
+    entries(mapping).find(([key]) => isHexEqual(key, wrappedToken))?.[1]
+  );
 }
 
 /**
@@ -2522,6 +2530,30 @@ const assertRequiredBlueRegistry = ({
     type,
   });
 };
+
+/**
+ * Rewrites patch keys that differ from a registered wrapped-token key only by case onto the registered key,
+ * so `mergeRegistry` compares the two mappings for the same token instead of adding a duplicate entry.
+ */
+const alignUnwrappedTokenKeys = (
+  base: Record<number, Record<`0x${string}`, `0x${string}`>>,
+  patch: Record<number, Record<`0x${string}`, `0x${string}`>>,
+): Record<number, Record<`0x${string}`, `0x${string}`>> =>
+  Object.fromEntries(
+    Object.entries(patch).map(([chainIdString, tokens]) => {
+      const registeredKeys = Object.keys(base[Number(chainIdString)] ?? {});
+
+      return [
+        chainIdString,
+        Object.fromEntries(
+          Object.entries(tokens).map(([wrapped, unwrapped]) => [
+            registeredKeys.find((key) => isHexEqual(key, wrapped)) ?? wrapped,
+            unwrapped,
+          ]),
+        ),
+      ];
+    }),
+  );
 
 const mergeRegistry = <T>({
   base,
@@ -2814,7 +2846,7 @@ export function registerCustomAddresses<
     unwrappedTokensMapping = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
-        patch: unwrappedTokens,
+        patch: alignUnwrappedTokenKeys(unwrappedTokensMapping, unwrappedTokens),
         label: "unwrappedTokens",
         type: "unwrapped token",
       }),

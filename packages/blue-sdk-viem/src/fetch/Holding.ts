@@ -7,7 +7,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { fromEntries, getValue } from "@morpho-org/morpho-ts";
+import { fromEntries, getValue, isHexEqual } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -68,7 +68,7 @@ export async function fetchHolding(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (token === NATIVE_ADDRESS)
+  if (isHexEqual(token, NATIVE_ADDRESS))
     return new Holding({
       user,
       token,
@@ -88,6 +88,16 @@ export async function fetchHolding(
           })
         : 0n,
     });
+
+  const isRegistered = (tokens?: Set<Address>) =>
+    tokens != null &&
+    [...tokens].some((registered) => isHexEqual(registered, token));
+  const isPermissionedBackedToken = isRegistered(
+    permissionedBackedTokens[parameters.chainId],
+  );
+  const isPermissionedWrapperToken = isRegistered(
+    permissionedWrapperTokens[parameters.chainId],
+  );
 
   if (deployless) {
     const {
@@ -118,8 +128,8 @@ export async function fetchHolding(
           morpho,
           permit2,
           generalAdapter1,
-          !!permissionedBackedTokens[parameters.chainId]?.has(token),
-          !!permissionedWrapperTokens[parameters.chainId]?.has(token),
+          isPermissionedBackedToken,
+          isPermissionedWrapperToken,
         ],
       });
 
@@ -195,7 +205,7 @@ export async function fetchHolding(
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[parameters.chainId]?.has(token)
+    isPermissionedBackedToken
       ? readContract(client, {
           ...parameters,
           abi: wrappedBackedTokenAbi,
@@ -209,7 +219,7 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !permissionedWrapperTokens[parameters.chainId!]?.has(token)),
+    }).catch(() => !isPermissionedWrapperToken),
   ]);
 
   const holding = new Holding({
