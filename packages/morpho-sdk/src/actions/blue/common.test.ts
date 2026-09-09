@@ -14,15 +14,16 @@ import { describe, expect, test } from "vitest";
 import {
   AmbiguousRequirementSignaturesError,
   type AuthorizationRequirementSignature,
-  BlueBundlesV1RequirementSignatureMismatchError,
-  type BlueBundlesV1TokenRequirementSignature,
+  BundlesRequirementSignatureMismatchError,
+  type BundlesTokenRequirementSignature,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
   type Permit2AllowanceRequirementSignature,
-  type Permit2TransferFromRequirementSignature,
+  type Permit2SignatureTransferRequirementSignature,
+  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import {
   getBlueBundlesV1SignedAuthorization,
@@ -44,9 +45,9 @@ const permit = {
     deadline: 123n,
   },
   action: { type: "permit", args: { spender, amount: 5n, deadline: 123n } },
-} satisfies BlueBundlesV1TokenRequirementSignature;
+} satisfies BundlesTokenRequirementSignature;
 
-const permit2TransferFrom = {
+const permit2SignatureTransfer = {
   args: {
     owner,
     nonce: 2n,
@@ -56,10 +57,10 @@ const permit2TransferFrom = {
     deadline: 123n,
   },
   action: {
-    type: "permit2TransferFrom",
-    args: { spender, amount: 5n, deadline: 123n },
+    type: "permit2SignatureTransfer",
+    args: { spender, amount: 5n, nonce: 2n, deadline: 123n },
   },
-} satisfies BlueBundlesV1TokenRequirementSignature;
+} satisfies BundlesTokenRequirementSignature;
 
 describe("selectBlueBundlesV1RequirementSignatures", () => {
   test("default: returns the single accepted token signature", () => {
@@ -69,13 +70,16 @@ describe("selectBlueBundlesV1RequirementSignatures", () => {
     expect(selected.token).toBe(permit);
   });
 
-  test("error: AmbiguousRequirementSignaturesError when both a permit and a permit2TransferFrom target the single token slot", () => {
+  test("error: AmbiguousRequirementSignaturesError when both a permit and a permit2SignatureTransfer target the single token slot", () => {
     // The single BlueBundlesV1 permit slot can carry one token signature; two competing ones would
     // otherwise silently drop one and mis-fund the bundle, so the selector must reject them.
     expect(() =>
-      selectBlueBundlesV1RequirementSignatures([permit, permit2TransferFrom], {
-        token: true,
-      }),
+      selectBlueBundlesV1RequirementSignatures(
+        [permit, permit2SignatureTransfer],
+        {
+          token: true,
+        },
+      ),
     ).toThrow(AmbiguousRequirementSignaturesError);
   });
 });
@@ -132,12 +136,14 @@ const erc2612Permit = (
   },
 });
 
-const permit2TransferFromPermit = (
-  argsOverrides: Partial<Permit2TransferFromRequirementSignature["args"]> = {},
-  actionArgsOverrides: Partial<
-    Permit2TransferFromRequirementSignature["action"]["args"]
+const permit2SignatureTransferPermit = (
+  argsOverrides: Partial<
+    Permit2SignatureTransferRequirementSignature["args"]
   > = {},
-): Permit2TransferFromRequirementSignature => ({
+  actionArgsOverrides: Partial<
+    Permit2SignatureTransferRequirementSignature["action"]["args"]
+  > = {},
+): Permit2SignatureTransferRequirementSignature => ({
   args: {
     owner,
     nonce: 9n,
@@ -148,8 +154,9 @@ const permit2TransferFromPermit = (
     ...argsOverrides,
   },
   action: {
-    type: "permit2TransferFrom",
+    type: "permit2SignatureTransfer",
     args: {
+      nonce: argsOverrides.nonce ?? 9n,
       spender: blueBundlesV1,
       amount: permitAmount,
       deadline: permitDeadline,
@@ -236,7 +243,7 @@ describe("getBlueBundlesV1TokenPermit", () => {
       userAddress: owner,
       token: asset,
       amount: permitAmount,
-      requirementSignature: permit2TransferFromPermit({ nonce: 42n }),
+      requirementSignature: permit2SignatureTransferPermit({ nonce: 42n }),
     });
 
     expect(tokenPermit.kind).toBe(2);
@@ -311,7 +318,7 @@ describe("getBlueBundlesV1TokenPermit", () => {
     ).toThrow(DepositSpenderMismatchError);
   });
 
-  test("error: BlueBundlesV1RequirementSignatureMismatchError on inconsistent permit deadlines", () => {
+  test("error: BundlesRequirementSignatureMismatchError on inconsistent permit deadlines", () => {
     let thrown: unknown;
     try {
       getBlueBundlesV1TokenPermit({
@@ -328,13 +335,11 @@ describe("getBlueBundlesV1TokenPermit", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(
-      BlueBundlesV1RequirementSignatureMismatchError,
-    );
+    expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
     expect(thrown).toMatchObject({ field: "deadline" });
   });
 
-  test("error: BlueBundlesV1RequirementSignatureMismatchError rejects a Permit2 AllowanceTransfer signature", () => {
+  test("error: UnexpectedRequirementSignatureError rejects a Permit2 AllowanceTransfer signature", () => {
     const permit2Allowance: Permit2AllowanceRequirementSignature = {
       args: {
         owner,
@@ -363,19 +368,17 @@ describe("getBlueBundlesV1TokenPermit", () => {
         userAddress: owner,
         token: asset,
         amount: permitAmount,
-        requirementSignature: permit2Allowance,
+        requirementSignature:
+          permit2Allowance as unknown as BundlesTokenRequirementSignature,
       });
     } catch (error) {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(
-      BlueBundlesV1RequirementSignatureMismatchError,
-    );
-    expect(thrown).toMatchObject({ field: "type" });
+    expect(thrown).toBeInstanceOf(UnexpectedRequirementSignatureError);
   });
 
-  test("error: BlueBundlesV1RequirementSignatureMismatchError preserves the parser cause for a malformed signature", () => {
+  test("error: BundlesRequirementSignatureMismatchError preserves the parser cause for a malformed signature", () => {
     let thrown: unknown;
     try {
       getBlueBundlesV1TokenPermit({
@@ -389,10 +392,8 @@ describe("getBlueBundlesV1TokenPermit", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(
-      BlueBundlesV1RequirementSignatureMismatchError,
-    );
-    if (!(thrown instanceof BlueBundlesV1RequirementSignatureMismatchError))
+    expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
+    if (!(thrown instanceof BundlesRequirementSignatureMismatchError))
       throw thrown;
     expect(thrown.field).toBe("signature");
     expect(thrown.cause).toBeInstanceOf(Error);
@@ -412,7 +413,7 @@ describe("getBlueBundlesV1TokenPermit", () => {
             userAddress: owner,
             token: asset,
             amount,
-            requirementSignature: permit2TransferFromPermit(
+            requirementSignature: permit2SignatureTransferPermit(
               { amount, deadline, nonce },
               { amount, deadline },
             ),
@@ -501,9 +502,7 @@ describe("getBlueBundlesV1SignedAuthorization", () => {
         thrown = error;
       }
 
-      expect(thrown).toBeInstanceOf(
-        BlueBundlesV1RequirementSignatureMismatchError,
-      );
+      expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
       expect(thrown).toMatchObject({ field: "authorized" });
     },
   );
@@ -531,14 +530,12 @@ describe("getBlueBundlesV1SignedAuthorization", () => {
         thrown = error;
       }
 
-      expect(thrown).toBeInstanceOf(
-        BlueBundlesV1RequirementSignatureMismatchError,
-      );
+      expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
       expect(thrown).toMatchObject({ field: "isAuthorized" });
     },
   );
 
-  test("error: BlueBundlesV1RequirementSignatureMismatchError on inconsistent authorization deadlines", () => {
+  test("error: BundlesRequirementSignatureMismatchError on inconsistent authorization deadlines", () => {
     let thrown: unknown;
     try {
       getBlueBundlesV1SignedAuthorization({
@@ -553,13 +550,11 @@ describe("getBlueBundlesV1SignedAuthorization", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(
-      BlueBundlesV1RequirementSignatureMismatchError,
-    );
+    expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
     expect(thrown).toMatchObject({ field: "deadline" });
   });
 
-  test("error: BlueBundlesV1RequirementSignatureMismatchError preserves the parser cause for a malformed signature", () => {
+  test("error: BundlesRequirementSignatureMismatchError preserves the parser cause for a malformed signature", () => {
     let thrown: unknown;
     try {
       getBlueBundlesV1SignedAuthorization({
@@ -571,10 +566,8 @@ describe("getBlueBundlesV1SignedAuthorization", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(
-      BlueBundlesV1RequirementSignatureMismatchError,
-    );
-    if (!(thrown instanceof BlueBundlesV1RequirementSignatureMismatchError))
+    expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
+    if (!(thrown instanceof BundlesRequirementSignatureMismatchError))
       throw thrown;
     expect(thrown.field).toBe("signature");
     expect(thrown.cause).toBeInstanceOf(Error);

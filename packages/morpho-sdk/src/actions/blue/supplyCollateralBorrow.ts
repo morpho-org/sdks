@@ -4,8 +4,8 @@ import { blueBundlesV1Abi } from "../../abis.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueBundlesV1TokenRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
+  type BundlesTokenRequirementSignature,
   InputExceedsMaxError,
   type Metadata,
   NonPositiveInputError,
@@ -53,7 +53,7 @@ export interface BlueSupplyCollateralBorrowParams {
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
     /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BundlesTokenRequirementSignature;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
     readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
@@ -103,7 +103,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the collateral token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `collateralAssets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be bound safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
