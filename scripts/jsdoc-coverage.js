@@ -157,8 +157,8 @@ function analyzeFile(filePath, { collectUndocumented }) {
     }
     const block = lines.slice(k, j + 1).join("\n");
 
-    // @internal exempts the symbol from coverage entirely (matches typedoc's
-    // excludeInternal behavior — these are not on the public docs surface).
+    // @internal exempts the symbol from coverage entirely (matches API Extractor's
+    // doc-model trimming — these are not on the public docs surface).
     if (isInternal(block)) {
       total--;
       continue;

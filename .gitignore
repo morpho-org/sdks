@@ -10,7 +10,8 @@
 # dependencies
 node_modules
 
-# generated HTML docs; docs/api-markdown is committed for Context7
+# documentation intermediates; docs/api-markdown is committed for Context7
+.api-docs
 docs/api
 
 # testing

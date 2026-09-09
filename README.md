@@ -64,8 +64,8 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported secur
 ### API documentation
 
 The [Markdown API reference](./docs/api-markdown/README.md) is committed for Context7.
-The commands `pnpm docs:build` (HTML) and `pnpm docs:build:markdown` (Markdown)
-currently await TypeDoc support for TypeScript 7 before they can regenerate it.
+Run `pnpm docs:build` or `pnpm docs:build:markdown` to regenerate it with
+API Extractor and API Documenter using declarations emitted by TypeScript 7.
 See [Generating API documentation](./docs/api-generation.md) for output locations,
 the docs toolchain, and publishing the reference for Context7.
 
