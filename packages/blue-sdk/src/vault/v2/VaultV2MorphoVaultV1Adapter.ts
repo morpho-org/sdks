@@ -10,6 +10,7 @@ export interface IVaultV2MorphoVaultV1Adapter
 }
 
 import type { BigIntish, Hash } from "../../types.js";
+import { CapacityLimitReason } from "../../utils.js";
 import type { AccrualVault } from "../Vault.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -107,11 +108,14 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     adapter: IAccrualVaultV2MorphoVaultV1Adapter,
     public accrualVaultV1: AccrualVault,
     public shares: bigint,
+    /** Parent Vault V2 allocation for this adapter, when fetched. */
+    public readonly parentAllocation?: bigint,
   ) {
     super(adapter);
   }
 
   realAssets(timestamp?: BigIntish) {
+    if (this.parentAllocation === 0n) return 0n;
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 
@@ -120,6 +124,8 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   }
 
   maxWithdraw(_data: Hex) {
+    if (this.parentAllocation === 0n)
+      return { value: 0n, limiter: CapacityLimitReason.position };
     return this.accrualVaultV1.maxWithdraw(this.shares);
   }
 }

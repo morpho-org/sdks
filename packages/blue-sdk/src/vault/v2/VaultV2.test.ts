@@ -607,4 +607,19 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
       limiter: CapacityLimitReason.liquidity,
     });
   });
+
+  test("ignores residual shares when the parent allocation is zero", () => {
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      {} as AccrualVault,
+      10n,
+      0n,
+    );
+
+    expect(adapter.realAssets()).toBe(0n);
+    expect(adapter.maxWithdraw(EMPTY_HEX)).toStrictEqual({
+      value: 0n,
+      limiter: CapacityLimitReason.position,
+    });
+  });
 });

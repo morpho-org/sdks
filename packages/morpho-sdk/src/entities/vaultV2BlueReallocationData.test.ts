@@ -1253,6 +1253,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       },
       nestedVault,
       30n,
+      25n,
     );
     const fixtureVault = data.getVault(VAULT);
     const inputVault = new AccrualVaultV2(
@@ -1336,6 +1337,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(clonedNested?.accrualVaultV1.allocations).not.toBe(
       inputNested?.accrualVaultV1.allocations,
     );
+    expect(clonedNested?.parentAllocation).toBe(25n);
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise probe isolation directly.
     const probe = input["applyPublicReallocation"]({

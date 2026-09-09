@@ -197,7 +197,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
     client,
     snapshotParameters,
   );
-  const [allocations, shares] = await Promise.all([
+  const [allocations, shares, parentAllocation] = await Promise.all([
     Promise.all(
       vaultV1.withdrawQueue.map((marketId) =>
         fetchVaultMarketAllocation(
@@ -215,11 +215,18 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
       functionName: "balanceOf",
       args: [adapter.address],
     }),
+    readContract(client, {
+      ...snapshotParameters,
+      address: adapter.address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+    }),
   ]);
 
   return new AccrualVaultV2MorphoVaultV1Adapter(
     adapter,
     new AccrualVault(vaultV1, allocations),
     shares,
+    parentAllocation,
   );
 }

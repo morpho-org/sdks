@@ -1520,6 +1520,12 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 77n,
+    });
 
     const adapter = await fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {
       chainId: CHAIN_ID,
@@ -1527,6 +1533,9 @@ describe("individual adapter fetchers", () => {
 
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect((adapter as AccrualVaultV2MorphoVaultV1Adapter).shares).toBe(99n);
+    expect(
+      (adapter as AccrualVaultV2MorphoVaultV1Adapter).parentAllocation,
+    ).toBe(77n);
   });
 
   test("fetchAccrualVaultV2MorphoVaultV1Adapter composes the underlying Vault V1 accrual state", async () => {
@@ -1577,6 +1586,12 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 0n,
+    });
 
     const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
@@ -1587,6 +1602,8 @@ describe("individual adapter fetchers", () => {
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect(adapter.accrualVaultV1.address).toBe(VAULT);
     expect(adapter.shares).toBe(99n);
+    expect(adapter.parentAllocation).toBe(0n);
+    expect(adapter.realAssets()).toBe(0n);
   });
 
   test("fetchAccrualVaultV2MorphoVaultV1Adapter rejects a pending block that cannot anchor one snapshot", async () => {
@@ -1779,6 +1796,7 @@ function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
     vaultV1: emptyVaultV1QueryResult,
     vaultV1Allocations: [],
     vaultV1Shares: 0n,
+    vaultV1ParentAllocation: 0n,
     marketV1Positions: [],
     adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
     marketV1V2Allocations: [
@@ -1800,6 +1818,7 @@ function marketV1AdapterUncreatedQueryResult(adapter: Address) {
     vaultV1: emptyVaultV1QueryResult,
     vaultV1Allocations: [],
     vaultV1Shares: 0n,
+    vaultV1ParentAllocation: 0n,
     marketV1Positions: [
       {
         marketParams: marketQueryResult.marketParams,
@@ -1897,6 +1916,41 @@ describe("fetchAccrualVaultV2Deployless", () => {
     expect(marketAdapter.markets[0]?.id).toBe(ID);
   });
 
+  test("ignores residual nested-vault shares under a zero parent allocation", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      adapters: [
+        {
+          adapter: ADAPTER_2,
+          adapterType: 1,
+          parentVault: VAULT,
+          skimRecipient: RECIPIENT,
+          forceDeallocatePenalty: 0n,
+          morphoVaultV1: VAULT,
+          vaultV1: emptyVaultV1QueryResult,
+          vaultV1Allocations: [],
+          vaultV1Shares: 99n,
+          vaultV1ParentAllocation: 0n,
+          marketV1Positions: [],
+          adaptiveCurveIrm: zeroAddress,
+          marketV1V2Allocations: [],
+        },
+      ],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+    const [adapter] = vault.accrualAdapters;
+
+    expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+    expect(
+      (adapter as AccrualVaultV2MorphoVaultV1Adapter).parentAllocation,
+    ).toBe(0n);
+    expect(adapter?.realAssets(0n)).toBe(0n);
+  });
+
   test("keeps nested V1.1 accounting equal across deployless and fallback reads", async () => {
     const unit = 10n ** 18n;
     const blockTimestamp = 5n;
@@ -1947,6 +2001,12 @@ describe("fetchAccrualVaultV2Deployless", () => {
       abi: erc20Abi,
       functionName: "balanceOf",
       result: 25n * unit,
+    });
+    mockRead(sequentialHandle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 30n * unit,
     });
     mockRead(sequentialHandle, {
       address: VAULT,
@@ -2007,6 +2067,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
             },
           ],
           vaultV1Shares: 25n * unit,
+          vaultV1ParentAllocation: 30n * unit,
           marketV1Positions: [],
           adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
           marketV1V2Allocations: [],

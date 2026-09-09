@@ -281,6 +281,7 @@ const cloneAdapter = (
       { ...base, morphoVaultV1: adapter.morphoVaultV1 },
       cloneAccrualVault(adapter.accrualVaultV1, markets),
       adapter.shares,
+      adapter.parentAllocation,
     );
 
   throw new UnsupportedVaultV2AdapterError(adapter.address);

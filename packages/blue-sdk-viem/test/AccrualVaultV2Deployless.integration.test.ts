@@ -96,6 +96,7 @@ function vaultV1PublicFields(adapter: IAccrualVaultV2Adapter | undefined) {
     return undefined;
   const vault = adapter.accrualVaultV1;
   return {
+    parentAllocation: adapter.parentAllocation,
     eip5267Domain: vault.eip5267Domain,
     publicAllocatorConfig: vault.publicAllocatorConfig,
     marketPublicAllocatorConfigs: [...vault.allocations.values()].map(
@@ -368,7 +369,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
   );
 
   testTreehouseEth(
-    "matches sequential V1.1 adapter accounting with nonzero lost assets",
+    "matches V1.1 accounting and ignores residual shares at zero allocation",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
       const sourceVault = await fetchVault(lostAssetsVaultV1, client);
@@ -421,6 +422,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       expect(deployless).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
       expect(sequential).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
       expect(sequential?.shares).toBe(shares);
+      expect(sequential?.parentAllocation).toBe(0n);
       expect(sequential?.accrualVaultV1.lostAssets).toBeGreaterThan(0n);
       expect(deployless?.accrualVaultV1.lostAssets).toBe(
         sequential?.accrualVaultV1.lostAssets,
@@ -437,10 +439,11 @@ describe("fetchAccrualVaultV2Deployless", () => {
       expect(deployless?.realAssets(block.timestamp)).toBe(
         sequential?.realAssets(block.timestamp),
       );
-      expect(sequential?.realAssets(block.timestamp)).toBeGreaterThan(0n);
+      expect(sequential?.realAssets(block.timestamp)).toBe(0n);
       expect(deployless?.maxWithdraw("0x")).toStrictEqual(
         sequential?.maxWithdraw("0x"),
       );
+      expect(sequential?.maxWithdraw("0x").value).toBe(0n);
     },
   );
 
