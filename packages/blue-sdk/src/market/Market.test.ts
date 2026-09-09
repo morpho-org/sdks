@@ -149,6 +149,24 @@ describe("Market accrueInterest and accounting actions", () => {
     expect(m.repay(100n, 0n).assets).toBe(100n);
     expect(m.repay(0n, 100n).shares).toBe(100n);
   });
+
+  test("repay floors total borrow assets at zero when rounded-up assets exceed the total", () => {
+    const m = market({
+      totalBorrowAssets: 1n,
+      totalBorrowShares: 3_000_000n,
+    });
+
+    const {
+      market: repaid,
+      assets,
+      shares,
+    } = m.repay(0n, 3_000_000n, m.lastUpdate);
+
+    expect(assets).toBe(2n);
+    expect(shares).toBe(3_000_000n);
+    expect(repaid.totalBorrowAssets).toBe(0n);
+    expect(repaid.totalBorrowShares).toBe(0n);
+  });
 });
 
 describe("Market conversion and risk delegation", () => {

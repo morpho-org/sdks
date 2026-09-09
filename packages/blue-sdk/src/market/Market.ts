@@ -435,7 +435,11 @@ export class Market implements IMarket {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toBorrowAssets(shares, "Up");
 
-    market.totalBorrowAssets -= assets;
+    // Mirrors Morpho.repay: repaid assets rounded up can exceed the market total.
+    market.totalBorrowAssets = MathLib.zeroFloorSub(
+      market.totalBorrowAssets,
+      assets,
+    );
     market.totalBorrowShares -= shares;
 
     return { market, assets, shares };
