@@ -5,6 +5,7 @@ import {
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
   MixedBundlesFundingError,
+  NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
   type RequirementSignature,
@@ -235,6 +236,33 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("supply", () => {
+    describe("prepareSupply funding validation", () => {
+      test.each([
+        { value: 0, errorClass: NonPositiveInputError },
+        { value: 0n, errorClass: NonPositiveInputError },
+        { value: -1, errorClass: NegativeInputError },
+        { value: -1n, errorClass: NegativeInputError },
+      ])(
+        "error: $errorClass.name for funding $value",
+        async ({ value, errorClass }) => {
+          for (const field of ["amount", "nativeAmount"] as const) {
+            const funding =
+              field === "amount" ? { amount: value } : { nativeAmount: value };
+            const result = protocol.prepareSupply({ token: TOKEN, ...funding });
+
+            await expect(result).rejects.toBeInstanceOf(errorClass);
+            await expect(result).rejects.toMatchObject({
+              field,
+              value: BigInt(value),
+            });
+          }
+
+          expect(vaultV2Entity.getData).not.toHaveBeenCalled();
+          expect(vaultV2Entity.deposit).not.toHaveBeenCalled();
+        },
+      );
+    });
+
     test("error: MixedBundlesFundingError for vault mixed funding", async () => {
       const mixedFunding = {
         token: TOKEN,

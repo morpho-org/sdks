@@ -286,7 +286,7 @@ The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
 ## Fixed-bundles token requirement APIs
 
 The Blue-only fixed-bundles requirement surface is generalized into a shared surface used by both
-BlueBundlesV1 and the upcoming VaultBundlesV1.
+BlueBundlesV1 and VaultBundlesV1.
 
 | v5 symbol | v6 replacement |
 | --- | --- |

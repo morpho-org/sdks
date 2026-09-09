@@ -1,6 +1,6 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc20Abi } from "viem";
+import { createPublicClient, erc20Abi, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -40,5 +40,29 @@ describe("MorphoVaultV2 bundles deadlines", () => {
     await expect(
       withChainTimestamp(deadline + 1n, () => withdraw.getRequirements()),
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+  });
+
+  test("behavior: deposit forecasts share price through a deadline beyond two hours", () => {
+    const now = 1_800_000_000n;
+    const deadline = now + Time.s.from.h(3n);
+    const vaultData = withChainTimestamp(now, () => inKindVaultV2Data());
+    const accrueInterest = vi.spyOn(vaultData, "accrueInterest");
+    const vault = createPublicClient({
+      chain: mainnet,
+      transport: http("https://rpc.example"),
+    })
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    withChainTimestamp(now, () =>
+      vault.deposit({
+        amount: 100n,
+        userAddress: IN_KIND_USER,
+        vaultData,
+        deadline,
+      }),
+    );
+
+    expect(accrueInterest).toHaveBeenCalledWith(deadline);
   });
 });

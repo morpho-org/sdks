@@ -25,3 +25,6 @@ matching the supported ERC-2612 and Permit2 AllowanceTransfer permits. Callers h
 
 Reject vault deposit funding and share-price bounds above uint256 with `InputExceedsMaxError`.
 Prepared Vault V1/V2 deposits reject oversized native amounts before returning requirements.
+
+WDK prepared supplies reject zero ERC-20/native funding with `NonPositiveInputError` and negative
+funding with `NegativeInputError` before fetching vault data or constructing the deposit.
