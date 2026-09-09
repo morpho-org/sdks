@@ -375,24 +375,27 @@ export async function fetchVault(
 }
 
 /**
- * Fetches MetaMorpho vault state with accrued market allocations.
+ * Fetches a block-aligned MetaMorpho vault snapshot accrued to the selected block timestamp.
  *
- * Reads the vault state with `fetchVault`, then fetches an accrued `VaultMarketAllocation` for every
- * market in the withdraw queue.
+ * Resolves the requested block to a number, reads the vault and every withdraw-queue allocation at
+ * that block, then accrues market interest, lost-asset accounting, and performance-fee shares to
+ * the block timestamp.
  *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.blockTag - Optional block tag used to resolve the snapshot; `"pending"` is
+ *   unsupported because it has no block number.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVault` entity with accrued market allocations.
- * @throws {BlueErrors.InvalidInterestAccrual} when the block timestamp precedes an allocation market's `lastUpdate`.
- * @throws {viem.BlockNotFoundError} when the selected block has no number and cannot anchor one snapshot.
+ * @returns The hydrated `AccrualVault` whose allocations, `totalAssets`, `totalSupply`, and
+ *   `lastTotalAssets` reflect accrual at the selected block timestamp.
+ * @throws {viem.BlockNotFoundError} when the selected block has no number, including `"pending"`.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
+ * @throws {BlueErrors.InvalidInterestAccrual} when the block timestamp precedes an allocation market's `lastUpdate`.
  * @example
  * ```ts
  * import type { AccrualVault } from "@morpho-org/blue-sdk";

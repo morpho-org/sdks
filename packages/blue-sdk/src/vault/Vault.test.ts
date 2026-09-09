@@ -288,6 +288,13 @@ describe("AccrualVault", () => {
 
     expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
     expect(accrued.lostAssets).toBe(10n);
+    const proportion = accrued.collateralAllocations.get(
+      position.market.params.collateralToken,
+    )?.proportion;
+    expect(proportion).toBe(accrued.getAllocationProportion(position.marketId));
+    expect(proportion).toBe(
+      MathLib.wDivDown(allocatedAssets, allocatedAssets + 10n),
+    );
   });
 
   test("accrueInterest preserves virtual losses not yet stored on-chain", () => {

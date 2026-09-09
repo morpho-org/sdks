@@ -128,21 +128,25 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 }
 
 /**
- * Fetches a MorphoVaultV1Adapter with accrued parent vault state and adapter shares.
+ * Fetches a MorphoVaultV1Adapter with block-aligned parent-vault state and adapter shares.
  *
- * Reads the adapter state, the accrued MetaMorpho vault it wraps, and the adapter's vault share
- * balance.
+ * Resolves the requested block to a number, then reads the adapter, underlying MetaMorpho vault,
+ * withdraw-queue allocations, and adapter share balance at that block. The nested
+ * `accrualVaultV1` retains unprojected market, loss, and fee accounting from the selected block,
+ * so `realAssets(timestamp)` can project the vault accounting once.
  *
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.blockTag - Optional block tag used to resolve the snapshot; `"pending"` is
+ *   unsupported because it has no block number.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` entity.
- * @throws {viem.BlockNotFoundError} when the selected block has no number and cannot anchor one snapshot.
+ * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` with adapter shares and unprojected,
+ *   block-aligned market allocations, Vault V1 loss, and fee accounting.
+ * @throws {viem.BlockNotFoundError} when the selected block has no number, including `"pending"`.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example

@@ -476,6 +476,16 @@ export class AccrualVault extends Vault implements IAccrualVault {
       );
 
       vault.totalAssets += vault.lostAssets;
+
+      for (const exposure of vault.collateralAllocations.values()) {
+        exposure.proportion = exposure.markets
+          .values()
+          .reduce(
+            (total, marketId) =>
+              total + vault.getAllocationProportion(marketId),
+            0n,
+          );
+      }
     }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);
