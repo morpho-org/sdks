@@ -40,6 +40,10 @@ containing TypeDoc, `typedoc-plugin-markdown`, and TypeScript 6. TypeDoc 0.28.20
 requires the TypeScript compiler API supplied by TypeScript 6; the SDK workspace
 uses TypeScript 7, whose root module no longer exposes that API. Keeping the docs
 tools together gives TypeDoc a compatible compiler without changing SDK builds.
+TypeScript 7 support is tracked in
+[TypeDoc #3098](https://github.com/TypeStrong/typedoc/issues/3098). Once a compatible
+release is available, upgrade TypeDoc and move the docs tools back to the root
+workspace using the TypeScript catalog.
 The `generate:*` script names keep documentation generation out of recursive
 package builds.
 
