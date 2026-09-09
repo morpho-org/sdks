@@ -7,11 +7,12 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { fromEntries, getValue, isHexEqual } from "@morpho-org/morpho-ts";
+import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
   erc20Abi,
+  isAddressEqual,
   maxUint256,
   zeroAddress,
 } from "viem";
@@ -68,7 +69,7 @@ export async function fetchHolding(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (isHexEqual(token, NATIVE_ADDRESS))
+  if (isAddressEqual(token, NATIVE_ADDRESS))
     return new Holding({
       user,
       token,
@@ -91,10 +92,10 @@ export async function fetchHolding(
 
   const isPermissionedBackedToken = [
     ...(permissionedBackedTokens[parameters.chainId] ?? []),
-  ].some((registered) => isHexEqual(registered, token));
+  ].some((registered) => isAddressEqual(registered, token));
   const isPermissionedWrapperToken = [
     ...(permissionedWrapperTokens[parameters.chainId] ?? []),
-  ].some((registered) => isHexEqual(registered, token));
+  ].some((registered) => isAddressEqual(registered, token));
 
   if (deployless) {
     const {

@@ -6,7 +6,7 @@ import {
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
-import { deepFreeze, entries, isHexEqual } from "./utils.js";
+import { deepFreeze, entries, fromEntries, isHexEqual } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *
@@ -2820,24 +2820,21 @@ export function registerCustomAddresses<
 
   if (unwrappedTokens) {
     // Patch keys that differ only by case from a registered key (or from an earlier key of the same
-    // patch) are rewritten onto that key, so `mergeRegistry` compares values for the same token instead
-    // of adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
-    const alignedUnwrappedTokens: Record<
-      number,
-      Record<`0x${string}`, `0x${string}`>
-    > = Object.fromEntries(
-      Object.entries(unwrappedTokens).map(([chainIdString, tokens]) => {
-        const registeredKeys = Object.keys(
-          unwrappedTokensMapping[Number(chainIdString)] ?? {},
-        );
+    // patch) are rewritten onto that key, and values that differ only by case from the registered
+    // value are rewritten onto that value, so `mergeRegistry` compares the same token instead of
+    // adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
+    const alignedUnwrappedTokens = fromEntries(
+      entries(unwrappedTokens).map(([chainIdString, tokens]) => {
+        const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
+        const registeredKeys = Object.keys(registered);
         const aligned: Record<string, `0x${string}`> = {};
 
-        for (const [wrapped, unwrapped] of Object.entries(tokens)) {
+        for (const [wrapped, unwrapped] of entries(tokens)) {
           const key =
             [...registeredKeys, ...Object.keys(aligned)].find((candidate) =>
               isHexEqual(candidate, wrapped),
             ) ?? wrapped;
-          const previous = aligned[key];
+          const previous = aligned[key] ?? registered[key as `0x${string}`];
 
           if (previous !== undefined && !isHexEqual(previous, unwrapped))
             throw new RegistryValueAlreadyRegisteredError({
@@ -2850,7 +2847,7 @@ export function registerCustomAddresses<
           aligned[key] = previous ?? unwrapped;
         }
 
-        return [chainIdString, aligned];
+        return [chainIdString, aligned] as const;
       }),
     );
 

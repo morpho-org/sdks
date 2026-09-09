@@ -1126,6 +1126,20 @@ describe("registerCustomAddresses", () => {
     expect(() =>
       registerCustomAddresses({
         unwrappedTokens: {
+          [chainId]: {
+            [lowercasedWrappedToken]:
+              unwrappedToken.toLowerCase() as `0x${string}`,
+          },
+        },
+      }),
+    ).not.toThrow();
+    expect(unwrappedTokensMapping[chainId]?.[wrappedToken]).toBe(
+      unwrappedToken,
+    );
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
           [chainId]: { [lowercasedWrappedToken]: randomAddress() },
         },
       }),

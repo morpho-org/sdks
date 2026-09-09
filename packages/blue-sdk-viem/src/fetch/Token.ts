@@ -7,13 +7,13 @@ import {
   NATIVE_ADDRESS,
   Token,
 } from "@morpho-org/blue-sdk";
-import { isHexEqual } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
   erc20Abi,
   erc20Abi_bytes32,
   hexToString,
+  isAddressEqual,
   isHex,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -76,14 +76,14 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (typeof address === "string" && isHexEqual(address, NATIVE_ADDRESS))
+  if (typeof address === "string" && isAddressEqual(address, NATIVE_ADDRESS))
     return Token.native(parameters.chainId);
 
   const { wstEth, stEth } = getChainAddresses(parameters.chainId);
   const isWstEth =
     wstEth != null &&
     typeof address === "string" &&
-    isHexEqual(address, wstEth);
+    isAddressEqual(address, wstEth);
 
   if (deployless) {
     try {
