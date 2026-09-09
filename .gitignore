@@ -67,6 +67,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# Generated API pages include log-related symbol names.
+!/docs/api-markdown/*.md
+
 # Local
 local_*
 
