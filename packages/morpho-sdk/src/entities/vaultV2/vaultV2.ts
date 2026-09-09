@@ -202,6 +202,7 @@ export interface VaultV2Actions {
   /**
    * Prepares an exact-shares Vault V2 redemption through VaultBundlesV1.
    *
+   * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
    * `buildTx()`; the requirement is resolved once and re-checked against the deadline on every call.
    *
@@ -625,6 +626,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
+  /** {@inheritDoc VaultV2Actions.redeem} */
   redeem(params: {
     readonly shares: bigint;
     readonly userAddress: Address;
@@ -633,8 +635,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
     readonly deadline?: bigint;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    if (params.shares <= 0n)
-      throw new NonPositiveInputError("shares", params.shares);
+    const { shares, userAddress } = params;
+    if (shares <= 0n) throw new NonPositiveInputError("shares", shares);
     const createdAt = Time.timestamp();
     const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
     if (deadline <= createdAt)
@@ -657,9 +659,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
           {
             vaultData: await this.getData(),
             version: "vaultV2",
-            owner: params.userAddress,
+            owner: userAddress,
             chainId: this.chainId,
-            requiredShareAllowance: params.shares,
+            requiredShareAllowance: shares,
             deadline,
             supportSignature: this.client.options.supportSignature,
           },
@@ -673,14 +675,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesRequirementSignature(signatures, {
-          requiredShareAllowance: params.shares,
+          requiredShareAllowance: shares,
           expectedRequirement,
         });
         return vaultV2Redeem({
           vault: { chainId: this.chainId, address: this.vault },
           args: {
-            shares: params.shares,
-            userAddress: params.userAddress,
+            shares,
+            userAddress,
             requirementSignature: permit,
             referralFeePct: common.referralFeePct,
             referralFeeRecipient: common.referralFeeRecipient,

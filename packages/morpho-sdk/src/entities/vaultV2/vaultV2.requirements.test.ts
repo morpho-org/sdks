@@ -1,5 +1,5 @@
 import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
-import { permit2Abi } from "@morpho-org/blue-sdk-viem";
+import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
@@ -19,6 +19,7 @@ import { morphoViemExtension } from "../../client/index.js";
 import {
   BundlesPermitMismatchError,
   type BundlesTokenRequirementSignature,
+  type Erc2612RequirementSignature,
   isRequirementApproval,
   isRequirementSignature,
 } from "../../types/index.js";
@@ -262,6 +263,93 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       "vaultV2Deposit",
     );
   });
+});
+
+describe("MorphoVaultV2 redeem getRequirements", () => {
+  test.each([
+    { mutationTiming: "before", supportSignature: false },
+    { mutationTiming: "after", supportSignature: false },
+    { mutationTiming: "before", supportSignature: true },
+    { mutationTiming: "after", supportSignature: true },
+  ])(
+    "behavior: snapshots inputs mutated $mutationTiming requirements (supportSignature=$supportSignature)",
+    async ({ mutationTiming, supportSignature }) => {
+      const handle = createMockClient(mainnet);
+      const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
+      const params: { shares: bigint; userAddress: Address } = {
+        shares: amount,
+        userAddress: IN_KIND_USER,
+      };
+      const redeem = vault.redeem(params);
+      const originalTx = redeem.buildTx();
+
+      if (mutationTiming === "before") {
+        params.shares = amount * 2n;
+        params.userAddress = MUTATED_USER;
+      }
+      const requirements = await redeem.getRequirements();
+      if (mutationTiming === "after") {
+        params.shares = amount * 2n;
+        params.userAddress = MUTATED_USER;
+      }
+
+      expect(
+        expectReadCall(handle, {
+          address: IN_KIND_VAULT,
+          abi: erc20Abi,
+          functionName: "allowance",
+        })[0]?.args,
+      ).toEqual([IN_KIND_USER, spender]);
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action.args).toMatchObject({
+        amount,
+        spender,
+      });
+      expect(await redeem.getRequirements()).toBe(requirements);
+      expect(redeem.buildTx()).toEqual(originalTx);
+
+      if (supportSignature) {
+        const requirement = requirements.find(isRequirementSignature);
+        if (requirement?.action.type !== "permit") {
+          throw new Error("Share permit requirement not found");
+        }
+        const signature = {
+          action: requirement.action,
+          args: {
+            owner: IN_KIND_USER,
+            asset: IN_KIND_VAULT,
+            amount,
+            nonce: 0n,
+            deadline: requirement.action.args.deadline,
+            signature: serializeSignature({
+              r: toHex(1n, { size: 32 }),
+              s: toHex(2n, { size: 32 }),
+              yParity: 0,
+            }),
+          },
+        } satisfies Erc2612RequirementSignature;
+        expect(redeem.buildTx([signature]).action).toEqual(originalTx.action);
+      } else {
+        expect(requirements.filter(isRequirementApproval)).toHaveLength(1);
+      }
+    },
+  );
 });
 
 describe("MorphoVaultV2 withdraw getRequirements", () => {
