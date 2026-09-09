@@ -6,7 +6,7 @@ import {
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
-import { deepFreeze, entries, fromEntries, isHexEqual } from "./utils.js";
+import { deepFreeze, entries, fromEntries, isHexEqual, keys } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *
@@ -2826,15 +2826,15 @@ export function registerCustomAddresses<
     const alignedUnwrappedTokens = fromEntries(
       entries(unwrappedTokens).map(([chainIdString, tokens]) => {
         const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
-        const registeredKeys = Object.keys(registered);
-        const aligned: Record<string, `0x${string}`> = {};
+        const registeredKeys = keys(registered);
+        const aligned: Record<`0x${string}`, `0x${string}`> = {};
 
         for (const [wrapped, unwrapped] of entries(tokens)) {
           const key =
-            [...registeredKeys, ...Object.keys(aligned)].find((candidate) =>
+            [...registeredKeys, ...keys(aligned)].find((candidate) =>
               isHexEqual(candidate, wrapped),
             ) ?? wrapped;
-          const previous = aligned[key] ?? registered[key as `0x${string}`];
+          const previous = aligned[key] ?? registered[key];
 
           if (previous !== undefined && !isHexEqual(previous, unwrapped))
             throw new RegistryValueAlreadyRegisteredError({
