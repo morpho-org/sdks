@@ -1,5 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
+  "url": "https://context7.com/morpho-org/sdks",
+  "public_key": "pk_56N2F7HNcFqpwQN2WCHY0",
   "projectTitle": "Morpho SDKs",
   "description": "TypeScript SDKs for Morpho Blue, Vault V1, Vault V2, and Midnight. Use @morpho-org/morpho-sdk with viem for reads and transaction building.",
   "folders": ["packages", "docs"],
