@@ -42,11 +42,6 @@
     "code_of_conduct.md"
   ],
   "rules": [
-    "Prefer @morpho-org/morpho-sdk with viem for Morpho reads and transaction building. Use lower-level packages only when the consumer SDK does not cover the use case.",
-    "Import from public package exports and documented subpaths. Do not use deep imports into src/ or lib/ internals.",
-    "Match APIs and examples to the installed package version, target chain, and protocol or vault version. Do not mix stable and prerelease APIs.",
-    "Use bigint for onchain amounts, shares, and fixed-point rates. Apply the documented token decimals and rate scales; do not assume all tokens have 18 decimals.",
-    "When an action exposes getRequirements(), await it and satisfy its approvals, authorizations, and signature requirements before submitting the transaction built by buildTx().",
-    "For morpho-sdk actions with userAddress, use the account that signs and sends the transaction. Configure the viem client and contract addresses for the intended chain."
+    "Prefer @morpho-org/morpho-sdk with viem for Morpho reads and transaction building. Use lower-level packages only when the consumer SDK does not cover the use case."
   ]
 }
