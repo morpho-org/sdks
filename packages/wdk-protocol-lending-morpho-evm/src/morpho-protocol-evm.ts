@@ -290,9 +290,11 @@ export type MorphoWithdrawCollateralOptions = Readonly<
 >;
 
 /** Vault withdrawal intent. Use {@link PreparedMorphoWithdraw} to attach a signed share permit. */
-export type MorphoWithdrawOptions = WithdrawOptions & {
-  readonly requirementSignature?: never;
-};
+export type MorphoWithdrawOptions = Readonly<
+  WithdrawOptions & {
+    readonly requirementSignature?: never;
+  }
+>;
 
 /**
  * A prepared vault deposit whose requirements and transaction share one SDK operation handle.

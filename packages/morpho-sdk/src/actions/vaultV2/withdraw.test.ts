@@ -5,7 +5,10 @@ import { decodeFunctionData, maxUint256, zeroHash } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  InputExceedsMaxError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 import { vaultV2Withdraw } from "./withdraw.js";
 
 const chainId = mainnet.id;
@@ -67,6 +70,27 @@ describe("vaultV2Withdraw", () => {
       }),
       { numRuns: 50, seed: 20_260_905 },
     );
+  });
+
+  test("behavior: accepts maxUint256 assets", () => {
+    const transaction = vaultV2Withdraw({
+      vault: { chainId, address: vault },
+      args: { amount: maxUint256, userAddress, deadline: 1n },
+    });
+
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data })
+        .args?.[1],
+    ).toBe(maxUint256);
+  });
+
+  test("error: InputExceedsMaxError", () => {
+    expect(() =>
+      vaultV2Withdraw({
+        vault: { chainId, address: vault },
+        args: { amount: maxUint256 + 1n, userAddress, deadline: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: NonPositiveInputError", () => {
