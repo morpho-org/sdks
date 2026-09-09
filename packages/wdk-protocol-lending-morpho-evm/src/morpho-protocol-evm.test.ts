@@ -1126,7 +1126,7 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("erc-4337", () => {
-    test("should use the validated balance client, snapshot config, and send a signed erc-4337 operation", async () => {
+    test("should use the validated balance client and atomically send a cache-proof erc-4337 operation", async () => {
       // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 1,
@@ -1182,10 +1182,11 @@ describe.sequential("MorphoProtocolEvm", () => {
         functionName: "balanceOf",
         args: [ADDRESS],
       });
-      const operationConfig = vi.mocked(account.quoteSendTransaction).mock
+      const operationConfig = vi.mocked(account.sendTransaction).mock
         .calls[0]?.[1];
       expect(operationConfig).toEqual({
         paymasterToken: { address: TOKEN },
+        nonceKey: 0n,
       });
       expect(operationConfig).not.toBe(config);
       expect(
@@ -1193,20 +1194,17 @@ describe.sequential("MorphoProtocolEvm", () => {
           "paymasterToken" in operationConfig &&
           operationConfig.paymasterToken,
       ).not.toBe(config.paymasterToken);
-      expect(account.signTransaction).toHaveBeenCalledWith(
-        SUPPLY_TX,
-        operationConfig,
-      );
+      expect(account.quoteSendTransaction).not.toHaveBeenCalled();
+      expect(account.signTransaction).not.toHaveBeenCalled();
       expect(account.sendTransaction).toHaveBeenCalledWith(
-        signed,
+        SUPPLY_TX,
         operationConfig,
       );
       expect(result).toEqual({
         hash: "dummy-user-operation-hash",
-        fee: 12_345n,
+        fee: 99_999n,
       });
 
-      vi.mocked(account.quoteSendTransaction).mockClear();
       const quoteConfig = { useNativeCoins: true as const };
       await expect(
         protocol.quoteBorrow({ token: TOKEN, amount: 100_000n }, quoteConfig),
@@ -1218,18 +1216,44 @@ describe.sequential("MorphoProtocolEvm", () => {
         quoteConfig,
       );
       expect(forwardedQuoteConfig).not.toBe(quoteConfig);
-
-      mockGetChainId.mockResolvedValue(1);
-      vi.mocked(account.sendTransaction).mockClear();
-      vi.mocked(account.signTransaction).mockImplementationOnce(async () => {
-        mockGetChainId.mockResolvedValue(8453);
-        return signed;
-      });
-      await expect(
-        protocol.supply({ token: TOKEN, amount: 100_000n }),
-      ).rejects.toBeInstanceOf(ChainIdMismatchError);
-      expect(account.sendTransaction).not.toHaveBeenCalled();
     });
+
+    test.each([
+      ["parallel", { parallel: true }],
+      ["custom nonce", { nonceKey: "morpho" }],
+    ])(
+      "behavior: preserves an account-level %s lane",
+      async (_name, nonceConfig) => {
+        // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
+        const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+          chainId: 1,
+          provider: "https://dummy-rpc-url.com",
+          bundlerUrl: "https://dummy-bundler-url.com",
+          safeModulesVersion: "0.3.0",
+          isSponsored: false,
+          useNativeCoins: true,
+          ...nonceConfig,
+        });
+        account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        readContractMock.mockResolvedValue(100_000n);
+        account.sendTransaction = vi.fn().mockResolvedValue({
+          hash: "dummy-user-operation-hash",
+          fee: 99_999n,
+        });
+        // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+        const protocol = new MorphoProtocolEvm(account, {
+          chainId: 1,
+          earnVaultAddress: VAULT,
+        });
+
+        await protocol.supply({ token: TOKEN, amount: 100_000n });
+
+        expect(account.sendTransaction).toHaveBeenCalledWith(
+          SUPPLY_TX,
+          undefined,
+        );
+      },
+    );
 
     test("snapshots native value before resolving chain state", async () => {
       const observedChain = Promise.withResolvers<number>();

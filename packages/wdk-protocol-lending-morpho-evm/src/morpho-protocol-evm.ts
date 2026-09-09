@@ -568,6 +568,20 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param account - The wallet account to use to interact with the protocol.
    * @param options - The Morpho target configuration.
    * @throws {MissingWalletProviderError} when the account has no provider or an empty provider list.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings", borrow: "wsteth" },
+   * });
+   * // morpho satisfies MorphoProtocolEvm
+   * ```
    */
   constructor(account: MorphoEvmAccount, options: MorphoProtocolOptions = {}) {
     // `LendingProtocol`'s constructor is overloaded to accept either an
@@ -635,10 +649,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, the account lacks funds, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const result = await morpho.supply({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // result satisfies SupplyResult
+   * ```
    */
   async supply(
     options: MorphoSupplyOptions,
@@ -670,6 +701,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns Approval/signature requirements.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const requirements = await morpho.getSupplyRequirements({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // requirements satisfies ApprovalOrSignatureRequirement[]
+   * ```
    */
   async getSupplyRequirements(
     options: MorphoSupplyOptions,
@@ -696,6 +744,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const quote = await morpho.quoteSupply({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // quote satisfies Omit<SupplyResult, "hash">
+   * ```
    */
   async quoteSupply(
     options: MorphoSupplyOptions,
@@ -767,10 +833,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const result = await morpho.withdraw({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // result satisfies WithdrawResult
+   * ```
    */
   async withdraw(
     options: WithdrawOptions,
@@ -793,6 +876,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const quote = await morpho.quoteWithdraw({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // quote satisfies Omit<WithdrawResult, "hash">
+   * ```
    */
   async quoteWithdraw(
     options: WithdrawOptions,
@@ -859,10 +960,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.
    * @returns The borrow result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, GeneralAdapter1 is not authorized, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const result = await morpho.borrow({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // result satisfies BorrowResult
+   * ```
    */
   async borrow(
     options: MorphoBorrowInput,
@@ -886,6 +1004,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   `RequirementSignatureRequest` to fold into the bundle via `setAuthorizationWithSig`.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const requirements = await morpho.getBorrowRequirements({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // requirements satisfies (RequirementAuthorization | RequirementSignatureRequest)[]
+   * ```
    */
   public getBorrowRequirements(
     options: MorphoBorrowOptions,
@@ -900,6 +1035,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   fold into the bundle via `setAuthorizationWithSig`.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm, {
+   *   type MorphoBorrowWithVaultV2ReallocationsOptions,
+   * } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const options: MorphoBorrowWithVaultV2ReallocationsOptions = {
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   *   reallocations: [],
+   * };
+   * const requirements = await morpho.getBorrowRequirements(options);
+   * // requirements may also include a RequirementApproval
+   * ```
    */
   public getBorrowRequirements(
     options: MorphoBorrowWithVaultV2ReallocationsOptions,
@@ -936,6 +1092,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const quote = await morpho.quoteBorrow({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // quote satisfies Omit<BorrowResult, "hash">
+   * ```
    */
   async quoteBorrow(
     options: MorphoBorrowInput,
@@ -1010,10 +1184,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The repay result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, the account lacks funds, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const result = await morpho.repay({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // result satisfies RepayResult
+   * ```
    */
   async repay(
     options: MorphoRepayOptions,
@@ -1044,6 +1235,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns Approval/signature requirements.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const requirements = await morpho.getRepayRequirements({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // requirements satisfies ApprovalOrSignatureRequirement[]
+   * ```
    */
   async getRepayRequirements(
     options: MorphoRepayOptions,
@@ -1070,6 +1278,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const quote = await morpho.quoteRepay({
+   *   token: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+   *   amount: 1_000_000n,
+   * });
+   * // quote satisfies Omit<RepayResult, "hash">
+   * ```
    */
   async quoteRepay(
     options: MorphoRepayOptions,
@@ -1145,10 +1371,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply collateral result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, the token does not match the configured market collateral, the account lacks funds, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const result = await morpho.supplyCollateral({
+   *   token: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   *   amount: 1_000_000_000_000_000n,
+   * });
+   * // result satisfies SupplyResult
+   * ```
    */
   async supplyCollateral(
     options: MorphoSupplyOptions,
@@ -1183,6 +1426,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns Approval/signature requirements.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const requirements = await morpho.getSupplyCollateralRequirements({
+   *   token: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   *   amount: 1_000_000_000_000_000n,
+   * });
+   * // requirements satisfies ApprovalOrSignatureRequirement[]
+   * ```
    */
   async getSupplyCollateralRequirements(
     options: MorphoSupplyOptions,
@@ -1212,6 +1472,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const quote = await morpho.quoteSupplyCollateral({
+   *   token: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   *   amount: 1_000_000_000_000_000n,
+   * });
+   * // quote satisfies Omit<SupplyResult, "hash">
+   * ```
    */
   async quoteSupplyCollateral(
     options: MorphoSupplyOptions,
@@ -1276,10 +1554,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The collateral withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw collateral result.
-   * @throws {ChainIdMismatchError} when the provider chain context changes mid-operation,
-   *   conflicts with the configured target or cached ERC-4337 account context, or the EOA signer
-   *   returns a transaction for another chain.
+   * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
+   *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
+   *   EOA signer returns a transaction for another chain.
    * @throws {Error} If the options are invalid, the token does not match the configured market collateral, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountEvm(process.env.WALLET_SEED!, "0'/0/0", {
+   *   provider: process.env.MAINNET_RPC_URL!,
+   * });
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const result = await morpho.withdrawCollateral({
+   *   token: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   *   amount: 1_000_000_000_000_000n,
+   * });
+   * // result satisfies WithdrawResult
+   * ```
    */
   async withdrawCollateral(
     options: WithdrawOptions,
@@ -1305,6 +1600,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const quote = await morpho.quoteWithdrawCollateral({
+   *   token: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+   *   amount: 1_000_000_000_000_000n,
+   * });
+   * // quote satisfies Omit<WithdrawResult, "hash">
+   * ```
    */
   async quoteWithdrawCollateral(
     options: WithdrawOptions,
@@ -1369,6 +1682,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The vault position.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const position = await morpho.getVaultPosition();
+   * // position satisfies VaultPosition
+   * ```
    */
   async getVaultPosition(account?: string): Promise<VaultPosition> {
     const context = await this._getVaultContext();
@@ -1412,6 +1740,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The market position.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { borrow: "wsteth" },
+   * });
+   * const position = await morpho.getMarketPosition();
+   * // position satisfies MarketPosition
+   * ```
    */
   async getMarketPosition(account?: string): Promise<MarketPosition> {
     const context = await this._getMarketContext();
@@ -1449,6 +1792,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The account data.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings", borrow: "wsteth" },
+   * });
+   * const data = await morpho.getAccountData();
+   * // data satisfies AccountData
+   * ```
    */
   async getAccountData(account?: string): Promise<AccountData> {
     const context = await this._getChainContext();
@@ -1944,20 +2302,34 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     await this._revalidate(prepared.context);
 
     if (this._evmAccount instanceof WalletAccountEvmErc4337) {
-      const { fee } = await this._evmAccount.quoteSendTransaction(
-        prepared.transaction,
-        config,
-      );
-      await this._revalidate(prepared.context);
-      const signed = await this._evmAccount.signTransaction(
-        prepared.transaction,
-        config,
-      );
-      await this._revalidate(prepared.context);
+      const account = this._evmAccount;
+      const walletConfig: unknown = Reflect.get(account, "_config");
+      const effectiveConfig = {
+        ...(typeof walletConfig === "object" && walletConfig !== null
+          ? walletConfig
+          : {}),
+        ...config,
+      };
+      const hasNonceLane =
+        ("nonceKey" in effectiveConfig &&
+          effectiveConfig.nonceKey !== undefined &&
+          effectiveConfig.nonceKey !== null) ||
+        ("parallel" in effectiveConfig && effectiveConfig.parallel === true);
 
-      const { hash } = await this._evmAccount.sendTransaction(signed, config);
+      if (hasNonceLane) {
+        return await account.sendTransaction(prepared.transaction, config);
+      }
 
-      return { hash, fee };
+      // WDK's quote cache omits config; its default key-0 nonce lane forces a
+      // fresh, config-bound build instead of consuming a cached operation.
+      const cacheProofConfig: Erc4337TransactionConfig & {
+        readonly nonceKey: bigint;
+      } = { ...config, nonceKey: 0n };
+
+      return await account.sendTransaction(
+        prepared.transaction,
+        cacheProofConfig,
+      );
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
       const { fee } = await this._evmAccount.quoteSendTransaction(

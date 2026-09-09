@@ -77,7 +77,7 @@ Options:
 - `supportSignature` (boolean): enable SDK permit/permit2 requirements.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
-Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter rejects reads, requirements, quotes, and sends when the provider chain differs from the target or changes mid-operation.
+Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter rejects mismatches and switches at each adapter-controlled async boundary and immediately before dispatch. ERC-4337 preparation, signing, and broadcast then execute inside one WDK call.
 
 ERC-4337 accounts cache chain-bound UserOperation state. After switching the provider network, create a fresh wallet account and `MorphoProtocolEvm` adapter before continuing.
 
