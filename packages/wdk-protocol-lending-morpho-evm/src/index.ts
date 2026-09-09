@@ -1,10 +1,9 @@
 export type { InputMarketParams } from "@morpho-org/blue-sdk";
 export type {
   RequirementSignature,
-  VaultReallocation,
-  VaultV1Reallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+export { ChainIdMismatchError } from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
@@ -26,18 +25,20 @@ export {
 } from "./morpho-presets.js";
 export type {
   AccountData,
-  ApprovalOrSignatureRequirement,
+  AuthorizationOrSignatureRequirement,
+  BlueApprovalOrSignatureRequirement,
+  BundlesApprovalOrSignatureRequirement,
   Eip1193Provider,
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
-  MorphoBorrowWithVaultV2ReallocationsOptions,
-  MorphoErc20SupplyOptions,
+  MorphoCollateralSupplyOptions,
   MorphoEvmAccount,
-  MorphoNativeSupplyOptions,
+  MorphoExclusiveSupplyOptions,
   MorphoProtocolOptions,
   MorphoRepayOptions,
-  MorphoSupplyOptions,
+  MorphoWithdrawCollateralOptions,
+  PreparedMorphoSupply,
   Presets,
   RequirementApproval,
   RequirementAuthorization,
@@ -48,4 +49,5 @@ export type {
 export {
   default,
   default as MorphoProtocolEvm,
+  MixedBlueCollateralFundingError,
 } from "./morpho-protocol-evm.js";

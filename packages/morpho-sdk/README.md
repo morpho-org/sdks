@@ -7,7 +7,7 @@
 
 > 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on every chain where Morpho is deployed. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
+Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
 ## Installation
 
@@ -15,42 +15,48 @@ Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**,
 pnpm add @morpho-org/morpho-sdk
 ```
 
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+deposit or Blue write integrations.
+
 ## Actions
 
-Each entity exposes a set of actions. Bundled actions route through bundler3 (via `GeneralAdapter1`); the rest are direct contract calls.
+Each entity exposes a set of actions. Vault deposits call VaultBundlesV1 directly;
+Blue writes call BlueBundlesV1 directly; the remaining rows identify their direct destination.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler |
+| **VaultV1** (MetaMorpho) | `deposit` | VaultBundlesV1 |
+| | `migrateToV2` | Bundler3 → GeneralAdapter1 |
 | | `withdraw`, `redeem` | Direct call |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **VaultV2** | `deposit` | Bundler |
+| **VaultV2** | `deposit` | VaultBundlesV1 |
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
-| | `withdrawCollateral` | Direct call |
+| **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
-`VaultExitBundlesV1` is registered on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain,
-Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain. Custom deployments can still
-be configured with `registerCustomAddresses`.
+`VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
+Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and
+Robinhood Chain. Custom deployments can still be configured with `registerCustomAddresses`.
 
 ## How it works
 
-Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Vault
+Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault
 `inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
 and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
 RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
-`forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
+`forceRedeem` — have no prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
-const { buildTx, getRequirements } = await vault.deposit({ amount, userAddress });
+const vaultData = await vault.getData();
+const { buildTx, getRequirements } = vault.deposit({ amount, userAddress, vaultData });
 
 const requirements = await getRequirements();
 // Send each approval tx and collect each signature, then:
@@ -61,7 +67,10 @@ Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ suppor
 
 ### `userAddress` must be the signer
 
-`userAddress` must be the account that signs and sends the transaction. Builders don't enforce this, but the signature helpers do — `sign()` throws `AddressMismatchError` when the wallet's account differs. It matters most for `repayWithdrawCollateral`; see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
+`userAddress` must be the account that signs and sends the transaction. Builders don't enforce
+this, but the signature helpers do — `sign()` throws `AddressMismatchError` when the wallet's
+account differs. BlueBundlesV1 always operates on `msg.sender`, so a Blue transaction must be sent
+by that same account.
 
 ## Usage
 
@@ -94,14 +103,18 @@ Create an entity — every factory takes a chain ID as its last argument:
 
 ### Vault deposit / withdraw
 
-Deposit routes through the bundler and may require an approval or permit:
+Deposit calls VaultBundlesV1 and may require an approval or permit. ERC-20 approvals and ERC-2612
+permits authorize VaultBundlesV1. Permit2 SignatureTransfer also names VaultBundlesV1 as spender,
+while the ERC-20 approval prerequisite targets canonical Permit2.
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
 
-const { buildTx, getRequirements } = await vault.deposit({
+const vaultData = await vault.getData();
+const { buildTx, getRequirements } = vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
+  vaultData,
 });
 const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
@@ -117,9 +130,10 @@ const { buildTx } = vault.withdraw({
 const tx = buildTx();
 ```
 
-For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).
+For wNative vaults, pass `nativeAmount` instead of `amount`. The transaction sends that amount as
+`tx.value` to VaultBundlesV1, which wraps it internally; native deposits require no token permit.
 
-### Blue: supply collateral & borrow
+### Blue: BlueBundlesV1 writes
 
 ```typescript
 const market = client.morpho.blue(
@@ -133,18 +147,15 @@ const market = client.morpho.blue(
   1,
 );
 
-const positionData = await market.getPositionData("0xUser...");
-
 const { buildTx, getRequirements } = market.supplyCollateralBorrow({
-  amount: 1000000000000000000n, // collateral
-  borrowAmount: 500000000000000000n, // loan asset
   userAddress: "0xUser...",
-  positionData,
+  collateralAssets: 1_000_000n,
+  borrowAssets: 0n,
+  deadline: 1_900_000_000n,
 });
 
-// This flow can return more than one requirement — a collateral approval/permit
-// and a one-time Morpho authorization for GeneralAdapter1. Satisfy each and pass
-// every collected signature to buildTx.
+// Satisfy each BlueBundlesV1 approval or signature requirement, then pass every
+// collected signature to buildTx.
 const signatures = [];
 for (const requirement of await getRequirements()) {
   if (isRequirementSignature(requirement)) {
@@ -157,7 +168,15 @@ for (const requirement of await getRequirements()) {
 const tx = buildTx(signatures);
 ```
 
-The LLTV buffer guards against instant liquidation.
+Set `borrowAssets` to a non-zero amount and provide `positionData` to combine collateral supply and
+borrowing. That path may also require Morpho authorization for BlueBundlesV1. Optional
+`reallocations` are Vault V2 only, and the LLTV buffer guards the resulting position against
+instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePrice`, or
+`maxSharePrice` because BlueBundlesV1 has no share-price-bound inputs.
+
+> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
+> low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
+> will be removed in the next major.
 
 > All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
 > composition are deprecated and will be removed in the next major. Use Vault V2
@@ -184,7 +203,9 @@ const requirements = await output.getRequirements();
 const tx = output.buildTx();
 ```
 
-See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API: native wrapping, PublicAllocator reallocations, V1 → V2 migration, refinance, force withdraw/redeem, and Midnight maker flows.
+See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API:
+native wrapping, Vault V2 BluePublicAllocator reallocations, borrow-position migration, vault V1 →
+V2 migration, force withdraw/redeem, and Midnight maker flows.
 
 ## Architecture
 
@@ -205,11 +226,11 @@ graph LR
         MV1 --> V1IKR[vaultV1InKindRedeem]
         MV1 --> V1M[vaultV1MigrateToV2]
 
-        V1D -->|nativeTransfer + wrapNative + erc4626Deposit| B1[Bundler3]
+        V1D -->|vaultBundlesV1Deposit| VBV1[VaultBundlesV1]
         V1W -->|direct call| MM[MetaMorpho]
         V1R -->|direct call| MM
         V1IKR -->|direct call| VEB[VaultExitBundlesV1]
-        V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1
+        V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1[Bundler3]
     end
 
     subgraph VaultV2 Flow
@@ -221,7 +242,7 @@ graph LR
         MV2 --> V2FW[vaultV2ForceWithdraw]
         MV2 --> V2FR[vaultV2ForceRedeem]
 
-        V2D -->|nativeTransfer + wrapNative + erc4626Deposit| B2[Bundler3]
+        V2D -->|vaultBundlesV1Deposit| VBV1
         V2W -->|direct call| V2C[VaultV2 Contract]
         V2R -->|direct call| V2C
         V2IKR -->|direct call| VEB
@@ -231,22 +252,27 @@ graph LR
 
     subgraph Blue Flow
         MM1[MorphoBlue]
-        MM1 --> M1S[blueSupply]
-        MM1 --> M1SC[blueSupplyCollateral]
-        MM1 --> M1B[blueBorrow]
-        MM1 --> M1SCB[blueSupplyCollateralBorrow]
-        MM1 --> M1W[blueWithdraw]
-        MM1 --> M1RF[blueRefinance]
+        MM1 --> M1S[supply]
+        MM1 --> M1SC[supplyCollateral]
+        MM1 --> M1B[borrow]
+        MM1 --> M1SCB[supplyCollateralBorrow]
+        MM1 --> M1R[repay]
+        MM1 --> M1WC[withdrawCollateral]
+        MM1 --> M1RW[repayWithdrawCollateral]
+        MM1 --> M1W[withdraw]
+        MM1 --> M1M[refinance]
 
-        M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
-        M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
-        M1B -->|allocator reallocation? + morphoBorrow| B3
-        M1SCB -->|transfer + supplyCollateral + allocator reallocation? + borrow| B3
-        M1W -->|allocator reallocation? + morphoWithdraw| B3
-        M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
+        M1S --> BBV1[BlueBundlesV1]
+        M1SC --> BBV1
+        M1B --> BBV1
+        M1SCB --> BBV1
+        M1R --> BBV1
+        M1WC --> BBV1
+        M1RW --> BBV1
+        M1W --> BBV1
+        M1M --> BBV1
 
-        B3 -.->|reallocateTo| PA1[PublicAllocator V1]
-        B3 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
+        BBV1 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
     end
 
     subgraph Midnight Flow
@@ -271,11 +297,10 @@ graph LR
 
     style B1 fill:#e8f5e9,stroke:#4caf50
     style B2 fill:#e8f5e9,stroke:#4caf50
-    style B3 fill:#e8f5e9,stroke:#4caf50
+    style BBV1 fill:#e8f5e9,stroke:#4caf50
     style MM fill:#fff3e0,stroke:#ff9800
     style V2C fill:#e3f2fd,stroke:#2196f3
     style REQ fill:#f3e5f5,stroke:#9c27b0
-    style PA1 fill:#fff9c4,stroke:#f9a825
     style BPA fill:#fff9c4,stroke:#f9a825
 ```
 

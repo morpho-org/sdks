@@ -128,6 +128,7 @@ export const encodeVaultSharesPermit = (
       spender,
       amount,
       deadline,
+      nonce,
     },
   };
 

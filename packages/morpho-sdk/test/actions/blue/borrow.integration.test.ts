@@ -1,254 +1,46 @@
-import {
-  type AccrualPosition,
-  addressesRegistry,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
-  SharesMath,
-} from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
-
-import { parseUnits } from "viem";
+import { maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
-import {
-  BorrowExceedsSafeLtvError,
-  isRequirementBlueAuthorization,
-  isRequirementSignature,
-  MissingAccrualPositionError,
-  morphoViemExtension,
-} from "../../../src/index.js";
+import { expect } from "vitest";
+import { morphoViemExtension } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
-import { supplyCollateral } from "../../helpers/blue.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { supplyCollateral, supplyLoan } from "../../helpers/blue.js";
+import {
+  satisfyBlueBundlesV1Requirements,
+  blueBundlesV1Test as test,
+} from "../../helpers/blueBundlesV1.js";
 
-describe("BorrowBlue", () => {
-  test("should compute minSharePrice from real market borrow state", async ({
+test("borrow executes through BlueBundlesV1", async ({ client }) => {
+  const collateralAssets = parseUnits("10", 18);
+  const borrowAssets = parseUnits("100", 18);
+  await supplyLoan({
     client,
-  }) => {
-    const collateralAmount = parseUnits("10", 18);
-    await client.deal({
-      erc20: WethUsdsBlue.collateralToken,
-      amount: collateralAmount,
-    });
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount,
-    });
-
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const { totalBorrowAssets, totalBorrowShares } = positionData.market;
-
-    const tx = market
-      .borrow({
-        userAddress: client.account.address,
-        amount: parseUnits("100", 18),
-        positionData,
-      })
-      .buildTx();
-
-    const expectedMinSharePrice = MathLib.mulDivDown(
-      totalBorrowAssets + SharesMath.VIRTUAL_ASSETS,
-      MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
-      totalBorrowShares + SharesMath.VIRTUAL_SHARES,
-    );
-
-    expect(tx.action.args.minSharePrice).toBe(expectedMinSharePrice);
-    expect(tx.action.args.minSharePrice).toBeGreaterThan(0n);
+    chainId: mainnet.id,
+    market: WethUsdsBlue,
+    supplyAmount: borrowAssets * 2n,
   });
-
-  test("should borrow loan token", async ({ client }) => {
-    const collateralAmount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1000", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount,
-    });
-
-    const {
-      markets: {
-        WethUsdsBlue: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        markets: { WethUsdsBlue },
-      },
-      actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
-        const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
-        const positionData = await market.getPositionData(
-          client.account.address,
-        );
-
-        const borrow = market.borrow({
-          userAddress: client.account.address,
-          amount: borrowAmount,
-          positionData,
-        });
-
-        const requirements = await borrow.getRequirements();
-        const requirementAuthorization = requirements[0];
-        if (!isRequirementBlueAuthorization(requirementAuthorization)) {
-          throw new Error("Authorization requirement not found");
-        }
-
-        await client.sendTransaction(requirementAuthorization);
-
-        const tx = borrow.buildTx();
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userCollateralTokenBalance).toEqual(
-      initialState.userCollateralTokenBalance,
-    );
-    expect(finalState.morphoCollateralTokenBalance).toEqual(
-      initialState.morphoCollateralTokenBalance,
-    );
-    expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
-    );
-    expect(finalState.userLoanTokenBalance).toEqual(
-      initialState.userLoanTokenBalance + borrowAmount,
-    );
-    expect(finalState.morphoLoanTokenBalance).toEqual(
-      initialState.morphoLoanTokenBalance - borrowAmount,
-    );
-    expect(finalState.position.borrowAssets).toEqual(
-      initialState.position.borrowAssets + borrowAmount + 1n,
-    );
-  });
-
-  test("should borrow loan token end-to-end with an in-bundle setAuthorizationWithSig", async ({
+  await supplyCollateral({
     client,
-  }) => {
-    const collateralAmount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1000", 18);
-
-    const { morpho, bundler3 } = addressesRegistry[mainnet.id];
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount,
-    });
-
-    const {
-      markets: {
-        WethUsdsBlue: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        markets: { WethUsdsBlue },
-      },
-      actionFn: async () => {
-        const morphoClient = client.extend(
-          morphoViemExtension({ supportSignature: true }),
-        ).morpho;
-        const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
-        const positionData = await market.getPositionData(
-          client.account.address,
-        );
-
-        const borrow = market.borrow({
-          userAddress: client.account.address,
-          amount: borrowAmount,
-          positionData,
-        });
-
-        // With supportSignature the authorization requirement is signable —
-        // no standalone setAuthorization transaction is sent.
-        const requirements = await borrow.getRequirements();
-        const requirement = requirements[0];
-        if (!isRequirementSignature(requirement)) {
-          throw new Error("Expected a signable authorization requirement");
-        }
-        if (requirement.action.type !== "authorization") {
-          throw new Error("Expected an authorization action");
-        }
-        expect(requirement.action.args.authorized).toBe(
-          bundler3.generalAdapter1,
-        );
-
-        const authorizationSignature = await requirement.sign(
-          client,
-          client.account.address,
-        );
-
-        // GeneralAdapter1 is not authorized before the bundle runs.
-        expect(
-          await client.readContract({
-            address: morpho,
-            abi: blueAbi,
-            functionName: "isAuthorized",
-            args: [client.account.address, bundler3.generalAdapter1],
-          }),
-        ).toBe(false);
-
-        const tx = borrow.buildTx([authorizationSignature]);
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userLoanTokenBalance).toEqual(
-      initialState.userLoanTokenBalance + borrowAmount,
-    );
-    expect(finalState.position.borrowAssets).toEqual(
-      initialState.position.borrowAssets + borrowAmount + 1n,
-    );
+    chainId: mainnet.id,
+    market: WethUsdsBlue,
+    collateralAmount: collateralAssets,
   });
 
-  // Test to create a new position exceeding the LLTV buffer
-  test("should throw error when creating a new position exceeding the LLTV buffer", async ({
-    client,
-  }) => {
-    const collateralAmount = parseUnits("1", 18);
-    const borrowAmount = parseUnits("10000", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsBlue,
-      collateralAmount,
-    });
-
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    expect(() =>
-      market.borrow({
-        userAddress: client.account.address,
-        amount: borrowAmount,
-        positionData,
-      }),
-    ).toThrow(BorrowExceedsSafeLtvError);
+  const market = client
+    .extend(morphoViemExtension())
+    .morpho.blue(WethUsdsBlue, mainnet.id);
+  const positionData = await market.getPositionData(client.account.address);
+  const action = market.borrow({
+    userAddress: client.account.address,
+    borrowAssets,
+    positionData,
+    deadline: maxUint256,
+  });
+  const signatures = await satisfyBlueBundlesV1Requirements(client, {
+    requirements: await action.getRequirements(),
   });
 
-  test("should revert when positionData is not provided", async ({
-    client,
-  }) => {
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
+  await client.sendTransaction(action.buildTx(signatures));
 
-    expect(() =>
-      market.borrow({
-        userAddress: client.account.address,
-        amount: parseUnits("100", 18),
-        positionData: undefined as unknown as AccrualPosition,
-      }),
-    ).toThrow(MissingAccrualPositionError);
-  });
+  const position = await market.getPositionData(client.account.address);
+  expect(position.borrowShares).toBeGreaterThan(0n);
 });

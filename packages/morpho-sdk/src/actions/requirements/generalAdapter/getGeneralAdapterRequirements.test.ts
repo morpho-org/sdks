@@ -24,6 +24,8 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   Permit2ExpirationMissingError,
+  type PermitRequirementSignature,
+  UnexpectedRequirementSignatureError,
 } from "../../../types/index.js";
 import { getTokenRequirementActions } from "../../signatures/getTokenRequirementActions.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
@@ -671,9 +673,38 @@ describe("getGeneralAdapterRequirements", () => {
                 expiration: 2n,
               },
             },
-          },
+          } as unknown as PermitRequirementSignature,
         }),
       ).toThrow(Permit2ExpirationMissingError);
+    });
+
+    test("getTokenRequirementActions rejects BlueBundlesV1 SignatureTransfer results", () => {
+      expect(() =>
+        getTokenRequirementActions({
+          asset: usdc,
+          amount: mockAmount,
+          recipient: generalAdapter1,
+          requirementSignature: {
+            args: {
+              owner: mockFrom,
+              signature: "0x00",
+              deadline: 1n,
+              amount: mockAmount,
+              asset: usdc,
+              nonce: 0n,
+            },
+            action: {
+              type: "permit2SignatureTransfer",
+              args: {
+                spender: generalAdapter1,
+                amount: mockAmount,
+                nonce: 0n,
+                deadline: 1n,
+              },
+            },
+          } as unknown as PermitRequirementSignature,
+        }),
+      ).toThrow(UnexpectedRequirementSignatureError);
     });
 
     test("getRequirementsApproval rejects approval amounts below spend amount", () => {

@@ -124,7 +124,6 @@ const capVaultWithdrawals = (
  *   transport: http(),
  * }).extend(morphoViemExtension());
  *
- * const userAddress = "0x000000000000000000000000000000000000dEaD";
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
@@ -140,14 +139,9 @@ const capVaultWithdrawals = (
  *   amount: borrowAmount,
  *   options: { timestamp: block.timestamp },
  * });
- * const positionData = await market.getPositionData(userAddress);
- * const borrow = market.borrow({
- *   userAddress,
- *   amount: borrowAmount,
- *   positionData,
- *   reallocations,
- * });
- * // borrow.buildTx() includes any required PublicAllocator reallocations.
+ * // Encode `reallocations` explicitly with
+ * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // High-level Blue writes accept Vault V2 reallocations only.
  * ```
  */
 export const computeVaultV1Reallocations = ({
