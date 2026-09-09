@@ -48,7 +48,7 @@ export async function fetchPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  parameters: FetchParameters = {},
+  { ...parameters }: FetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
@@ -102,7 +102,7 @@ export async function fetchPosition(
 export async function fetchPreLiquidationParams(
   preLiquidation: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
   parameters.chainId ??= await getChainId(client);
   const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
@@ -159,7 +159,7 @@ export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
@@ -215,7 +215,7 @@ export async function fetchPreLiquidationPosition(
   marketId: MarketId,
   preLiquidation: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
