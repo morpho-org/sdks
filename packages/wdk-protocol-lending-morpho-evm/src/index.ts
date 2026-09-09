@@ -5,6 +5,7 @@ export type {
   VaultV1Reallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+export { ChainIdMismatchError } from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
@@ -16,6 +17,7 @@ export type {
   WithdrawOptions,
   WithdrawResult,
 } from "@tetherto/wdk-wallet/protocols";
+export { MissingWalletProviderError } from "./errors.js";
 export {
   type Market,
   type MarketPresetKey,
