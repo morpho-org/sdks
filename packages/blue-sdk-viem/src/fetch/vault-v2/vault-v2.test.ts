@@ -20,7 +20,6 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
-  BlockNotFoundError,
   encodeAbiParameters,
   encodeErrorResult,
   erc20Abi,
@@ -31,7 +30,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
-  mockBlock,
   mockDeploylessRead,
   mockDeploylessReads,
   mockReadFailure,
@@ -1456,7 +1454,6 @@ describe("individual adapter fetchers", () => {
 
   test("fetchAccrualVaultV2Adapter routes to the Vault V1 accrual fetcher", async () => {
     const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: 1n, timestamp: 0n });
     mockRead(handle, {
       address: ADDRESSES.morphoVaultV1AdapterFactory,
       abi: morphoVaultV1AdapterFactoryAbi,
@@ -1540,7 +1537,6 @@ describe("individual adapter fetchers", () => {
 
   test("fetchAccrualVaultV2MorphoVaultV1Adapter composes the underlying Vault V1 accrual state", async () => {
     const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: 1n, timestamp: 0n });
     mockDeploylessReads(handle, [
       encodeReadResult(vaultAdapterQueryAbi, "query", {
         morphoVaultV1: VAULT,
@@ -1604,20 +1600,6 @@ describe("individual adapter fetchers", () => {
     expect(adapter.shares).toBe(99n);
     expect(adapter.parentAllocation).toBe(0n);
     expect(adapter.realAssets()).toBe(0n);
-  });
-
-  test("fetchAccrualVaultV2MorphoVaultV1Adapter rejects a pending block that cannot anchor one snapshot", async () => {
-    const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: null, timestamp: 0n });
-
-    await expect(
-      fetchAccrualVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        blockTag: "pending",
-      }),
-    ).rejects.toBeInstanceOf(BlockNotFoundError);
-    expect(
-      handle.request.mock.calls.some(([call]) => call.method === "eth_call"),
-    ).toBe(false);
   });
 });
 
@@ -1983,7 +1965,6 @@ describe("fetchAccrualVaultV2Deployless", () => {
       withdrawQueue: [ID],
     };
     const sequentialHandle = createMockClient(mainnet);
-    mockBlock(sequentialHandle, { number: 1n, timestamp: blockTimestamp });
     mockDeploylessReads(sequentialHandle, [
       encodeReadResult(vaultAdapterQueryAbi, "query", {
         morphoVaultV1: VAULT,
@@ -2035,7 +2016,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       sequentialHandle.client,
-      { chainId: CHAIN_ID },
+      { blockNumber: 1n, chainId: CHAIN_ID },
     );
 
     const deploylessHandle = createMockClient(mainnet);
@@ -2077,7 +2058,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const deployless = await fetchAccrualVaultV2Deployless(
       VAULT,
       deploylessHandle.client,
-      { chainId: CHAIN_ID },
+      { blockNumber: 1n, chainId: CHAIN_ID },
     );
     const deploylessAdapter = deployless.accrualAdapters[0] as
       | AccrualVaultV2MorphoVaultV1Adapter

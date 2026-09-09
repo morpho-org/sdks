@@ -28,7 +28,6 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
-  BlockNotFoundError,
   erc20Abi,
   erc20Abi_bytes32,
   maxUint256,
@@ -38,7 +37,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
-  mockBlock,
+  extendRpc,
   mockDeploylessRead,
   mockDeploylessReads,
   mockNativeBalance,
@@ -1710,9 +1709,13 @@ describe("vault fetchers", () => {
     expect(allocation.position.market.price).toBe(123n);
   });
 
-  test("fetchAccrualVault composes a vault and its withdraw-queue allocation", async () => {
+  test("fetchAccrualVault composes a vault without pinning latest reads", async () => {
     const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: 1n, timestamp: 5n });
+    extendRpc(handle, async (call, base) => {
+      if (call.method === "eth_getBlockByNumber")
+        return { number: "0x1", timestamp: "0x5" };
+      return base(call);
+    });
     mockDeploylessReads(handle, [
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1769,19 +1772,10 @@ describe("vault fetchers", () => {
       handle.request.mock.calls
         .map(([call]) => call)
         .filter((call) => call.method === "eth_call")
-        .every((call) => call.params?.[1] === "0x1"),
+        .every((call) => call.params?.[1] === "latest"),
     ).toBe(true);
-  });
-
-  test("fetchAccrualVault rejects a pending block that cannot anchor one snapshot", async () => {
-    const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: null, timestamp: 5n });
-
-    await expect(
-      fetchAccrualVault(VAULT, handle.client, { blockTag: "pending" }),
-    ).rejects.toBeInstanceOf(BlockNotFoundError);
-    expect(
-      handle.request.mock.calls.some(([call]) => call.method === "eth_call"),
-    ).toBe(false);
+    expect(handle.request.mock.calls.at(-1)?.[0].method).toBe(
+      "eth_getBlockByNumber",
+    );
   });
 });

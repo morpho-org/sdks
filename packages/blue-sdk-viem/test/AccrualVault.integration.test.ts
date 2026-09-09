@@ -8,10 +8,12 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("AccrualVault", () => {
   test("should accrue same totalAssets", async ({ client }) => {
-    const [vault, accrualVault, block] = await Promise.all([
-      fetchVault(steakUsdc.address, client),
-      fetchAccrualVault(steakUsdc.address, client),
-      client.getBlock(),
+    const block = await client.getBlock();
+    const [vault, accrualVault] = await Promise.all([
+      fetchVault(steakUsdc.address, client, { blockNumber: block.number }),
+      fetchAccrualVault(steakUsdc.address, client, {
+        blockNumber: block.number,
+      }),
     ]);
     const accruedVault = accrualVault.accrueInterest(block.timestamp);
 

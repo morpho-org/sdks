@@ -405,7 +405,7 @@ export async function fetchVaultV2(
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
  * configured liquidity adapter and regular adapters, and force-deallocate penalties. By default it
  * reads the entire tree in a single deployless call and only falls back to sequential multicall
- * reads when that call fails; pass `deployless: "force"` to require the single call, or
+ * reads after a retryable failure; pass `deployless: "force"` to require the single call, or
  * `deployless: false` to use multicall reads directly.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
@@ -413,12 +413,15 @@ export async function fetchVaultV2(
  * `fetchVaultV2` only loads allocations for `MorphoVaultV1Adapter` and
  * `MorphoMarketV1AdapterV2`. Calling `maxDeposit` on the returned `AccrualVaultV2` therefore throws
  * `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2 market adapter liquidity adapter.
+ * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
+ * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
+ * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -428,8 +431,8 @@ export async function fetchVaultV2(
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
  *   unsupported adapter class.
- * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`, or a
- *   multicall read when `deployless: false`).
+ * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`,
+ *   `deployless: false`, or a failed sequential fallback).
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
@@ -737,10 +740,11 @@ function toAccrualAdapter(
  * (equivalent to `deployless: "force"`). It requires every configured adapter factory to be deployed
  * at the queried block.
  *
- * The returned `AccrualVaultV2` is byte-for-byte identical to `fetchAccrualVaultV2`'s output,
- * including the nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter`: its EIP-5267 domain
- * (`eip5267Domain`) and PublicAllocator config (both vault-level and per-market
- * `publicAllocatorConfig`) are read in the same single call, so no field is dropped.
+ * At the same explicit `blockNumber`, the returned `AccrualVaultV2` is byte-for-byte identical to
+ * `fetchAccrualVaultV2`'s output, including the nested MetaMorpho V1 vault of a
+ * `MorphoVaultV1Adapter`: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config (both
+ * vault-level and per-market `publicAllocatorConfig`) are read in the same single call, so no field
+ * is dropped.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for the deployless read.

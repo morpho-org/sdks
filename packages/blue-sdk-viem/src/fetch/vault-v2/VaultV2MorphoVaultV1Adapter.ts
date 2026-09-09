@@ -6,8 +6,8 @@ import {
   UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
-import { type Address, BlockNotFoundError, type Client, erc20Abi } from "viem";
-import { getBlock, getChainId, readContract } from "viem/actions";
+import { type Address, type Client, erc20Abi } from "viem";
+import { getChainId, readContract } from "viem/actions";
 import {
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
@@ -128,25 +128,25 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 }
 
 /**
- * Fetches a MorphoVaultV1Adapter with block-aligned parent-vault state and adapter shares.
+ * Fetches a MorphoVaultV1Adapter with parent-vault allocation state and adapter shares.
  *
- * Resolves the requested block to a number, then reads the adapter, underlying MetaMorpho vault,
- * withdraw-queue allocations, and adapter share balance at that block. The nested
- * `accrualVaultV1` retains unprojected market, loss, and fee accounting from the selected block,
- * so `realAssets(timestamp)` can project the vault accounting once.
+ * Reads the adapter state and parent Vault V2 allocation, the MetaMorpho vault it wraps, and the
+ * adapter's vault share balance. The nested `accrualVaultV1` retains unprojected market, loss, and
+ * fee accounting so `realAssets(timestamp)` can project it. When no `blockNumber` is supplied and
+ * `blockTag` is `"latest"` (the default), separate reads may resolve at different blocks, so nested
+ * entities are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent
+ * snapshot.
  *
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag used to resolve the snapshot; `"pending"` is
- *   unsupported because it has no block number.
+ * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` with adapter shares and unprojected,
- *   block-aligned market allocations, Vault V1 loss, and fee accounting.
- * @throws {viem.BlockNotFoundError} when the selected block has no number, including `"pending"`.
+ * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` with adapter shares and nested Vault
+ *   V1 allocation state for later projection.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example
@@ -169,33 +169,19 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  const resolvedParameters = {
+  const readParameters = {
     ...parameters,
     chainId: parameters.chainId ?? (await getChainId(client)),
-  };
-  const block = await getBlock(
-    client,
-    resolvedParameters.blockNumber !== undefined
-      ? { blockNumber: resolvedParameters.blockNumber }
-      : { blockTag: resolvedParameters.blockTag ?? "latest" },
-  );
-  if (block.number === null) throw new BlockNotFoundError({});
-  const snapshotParameters = {
-    account: resolvedParameters.account,
-    stateOverride: resolvedParameters.stateOverride,
-    deployless: resolvedParameters.deployless,
-    chainId: resolvedParameters.chainId,
-    blockNumber: block.number,
   };
   const adapter = await fetchVaultV2MorphoVaultV1Adapter(
     address,
     client,
-    snapshotParameters,
+    readParameters,
   );
   const vaultV1 = await fetchVault(
     adapter.morphoVaultV1,
     client,
-    snapshotParameters,
+    readParameters,
   );
   const [allocations, shares, parentAllocation] = await Promise.all([
     Promise.all(
@@ -204,19 +190,19 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
           vaultV1.address,
           marketId,
           client,
-          snapshotParameters,
+          readParameters,
         ),
       ),
     ),
     readContract(client, {
-      ...snapshotParameters,
+      ...readParameters,
       address: adapter.morphoVaultV1,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [adapter.address],
     }),
     readContract(client, {
-      ...snapshotParameters,
+      ...readParameters,
       address: adapter.address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "allocation",
