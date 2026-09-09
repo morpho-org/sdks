@@ -76,6 +76,7 @@ const SECOND_MARKET_ID =
 const GROUP_ID =
   "0x000000000000000000000000000000000000000000000000000000000008b8f4";
 const MAKER = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
+const SECOND_MAKER = "0x1111111111111111111111111111111111111111";
 const LOAN_TOKEN = "0xC9A9C45C0eB717f8b5F193Af6bAa05A1c0Ac5078";
 const SECOND_LOAN_TOKEN = "0x1111111111111111111111111111111111111111";
 const COLLATERAL_TOKEN = "0x34Cf890dB685FC536E05652FB41f02090c3fb751";
@@ -1015,6 +1016,62 @@ describe("MidnightApi.fetchBookQuote", () => {
         side: "asks",
         assets: requestedAssets,
         averageWorstPrice: firstPrice,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: quote guards include per-fill settlement rounding", async () => {
+    const smallTake = {
+      ...apiTakeableOffer,
+      units: "1",
+    };
+    const secondSmallTake = {
+      ...smallTake,
+      offer: { ...smallTake.offer, maker: SECOND_MAKER },
+    };
+    const price = TickLib.tickToPrice(smallTake.offer.tick);
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: price.toString(),
+        average_worst_price: price.toString(),
+        available_assets: "2",
+        available_units: "2",
+        takeable_offers: [smallTake, secondSmallTake],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        assets: 2n,
+        averageWorstPrice: price,
+        settlementFee: 0n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: quote guards include the current settlement fee", async () => {
+    const price = TickLib.tickToPrice(apiOffer.tick);
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: price.toString(),
+        average_worst_price: price.toString(),
+        available_assets: apiTakeableOffer.units,
+        available_units: apiTakeableOffer.units,
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: apiTakeableOffer.units,
+        averageWorstPrice: price,
+        settlementFee: 1n,
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
