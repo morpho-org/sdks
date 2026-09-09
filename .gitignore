@@ -10,7 +10,7 @@
 # dependencies
 node_modules
 
-# generated docs (typedoc output, configured in typedoc.json)
+# generated HTML docs; docs/api-markdown is committed for Context7
 docs/api
 
 # testing

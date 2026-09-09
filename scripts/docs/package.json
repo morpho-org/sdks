@@ -1,0 +1,14 @@
+{
+  "name": "@morpho-org/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:html": "typedoc --options ../../typedoc.json",
+    "generate:markdown": "typedoc --options ../../typedoc.json --plugin typedoc-plugin-markdown --out ../../docs/api-markdown"
+  },
+  "devDependencies": {
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.13.0",
+    "typescript": "6.0.3"
+  }
+}

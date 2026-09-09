@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - scripts/docs
 
 catalog:
   typescript: 7.0.2

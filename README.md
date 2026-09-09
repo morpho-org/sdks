@@ -61,6 +61,13 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, contribution workflow, and t
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported security scope.
 
+### API documentation
+
+Generate HTML with `pnpm docs:build` or Markdown with `pnpm docs:build:markdown`.
+The [Markdown API reference](./docs/api-markdown/README.md) is committed for Context7.
+See [Generating API documentation](./docs/api-generation.md) for output locations,
+the docs toolchain, and publishing the reference for Context7.
+
 ## Debugging
 
 Here's a tutorial on how to link a specific package to debug at runtime:
