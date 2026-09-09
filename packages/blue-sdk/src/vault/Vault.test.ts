@@ -129,12 +129,24 @@ describe("AccrualVault", () => {
   test("apy helpers return zero for empty vaults and positive values otherwise", () => {
     const empty = new AccrualVault(vaultInput({ supplyQueue: [] }), []);
     const funded = accrualVault();
+    const zeroUnsupported = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
+    const withZeroUnsupported = new AccrualVault(vaultInput(), [
+      ...funded.allocations.values(),
+      {
+        config: vaultMarketConfig(zeroUnsupported.marketId),
+        position: zeroUnsupported,
+      },
+    ]);
 
     expect(empty.apy).toBe(0);
     expect(empty.getApy()).toBe(0);
     expect(empty.netApy).toBe(0);
     expect(funded.getApy(200n)).toBeGreaterThanOrEqual(0);
     expect(funded.getNetApy(200n)).toBeGreaterThanOrEqual(0);
+    expect(withZeroUnsupported.getApy(200n)).toBe(funded.getApy(200n));
   });
 
   test("APY helpers match known weighted market examples", () => {
@@ -265,6 +277,23 @@ describe("AccrualVault", () => {
     expect(accrued.totalAssets).toBeGreaterThan(0n);
     expect(accrued.totalSupply).toBeGreaterThan(vault.totalSupply);
     expect(accrued.lastTotalAssets).toBe(accrued.totalAssets);
+  });
+
+  test("accrueInterest preserves zero-share positions without accruing their unsupported markets", () => {
+    const position = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
+    const vault = new AccrualVault(vaultInput(), [
+      { config: vaultMarketConfig(position.marketId), position },
+    ]);
+
+    const preserved = vault
+      .accrueInterest(200n)
+      .allocations.get(position.marketId)?.position;
+
+    expect(preserved).not.toBe(position);
+    expect(preserved).toStrictEqual(position);
   });
 
   test("accrueInterest accounts for configured lost assets", () => {

@@ -553,6 +553,7 @@ describe("fetchMarket", () => {
     const market = await fetchMarket(ID, handle.client);
 
     expect(market).toBeInstanceOf(Market);
+    expect(market.chainId).toBe(CHAIN_ID);
     expect(market.params.id).toBe(ID);
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
@@ -588,6 +589,7 @@ describe("fetchMarket", () => {
 
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
+    expect(market.chainId).toBe(CHAIN_ID);
   });
 
   test("continues when the oracle price read reverts", async () => {

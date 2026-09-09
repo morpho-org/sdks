@@ -124,13 +124,22 @@ export function validateUserAddress(
  * @param params.positionData - The accrual position to validate.
  * @param params.expectedMarketId - The market ID the position must belong to.
  * @param params.expectedUser - The user address the position must belong to.
+ * @param params.expectedChainId - Optional chain the fetched snapshot must belong to.
+ * @throws {ChainIdMismatchError} when present snapshot provenance targets another chain.
  */
 export const validateAccrualPosition = (params: {
   positionData: AccrualPosition;
   expectedMarketId: MarketId;
   expectedUser: Address;
+  expectedChainId?: number;
 }): void => {
-  const { positionData, expectedMarketId, expectedUser } = params;
+  const { positionData, expectedMarketId, expectedUser, expectedChainId } =
+    params;
+  if (
+    expectedChainId !== undefined &&
+    positionData.market.chainId !== undefined
+  )
+    validateChainId(positionData.market.chainId, expectedChainId);
   if (positionData.marketId !== expectedMarketId) {
     throw new MarketIdMismatchError(positionData.marketId, expectedMarketId);
   }

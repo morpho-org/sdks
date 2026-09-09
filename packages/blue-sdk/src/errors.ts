@@ -12,6 +12,23 @@ export {
 import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
+/** Thrown when interest projection is requested for an unsupported nonzero IRM. */
+export class UnsupportedMarketIrmError extends Error {
+  /**
+   * @param marketId - Market whose interest cannot be projected.
+   * @param irm - Unsupported interest-rate-model address.
+   */
+  constructor(
+    public readonly marketId: MarketId,
+    public readonly irm: Address,
+  ) {
+    super(
+      `Market "${marketId}" uses unsupported IRM "${irm}". Interest cannot be projected without a supported rate model.`,
+    );
+    this.name = "UnsupportedMarketIrmError";
+  }
+}
+
 /** Error thrown when bytes cannot be decoded into valid Morpho Blue market params. */
 export class InvalidMarketParamsError extends Error {
   constructor(public readonly data: Hex) {

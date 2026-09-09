@@ -9,6 +9,7 @@ import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { computeMinBorrowSharePrice } from "../../helpers/index.js";
 import {
@@ -60,6 +61,7 @@ const baseMarket = (params: MarketParams) =>
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: PRICE,
+    rateAtTarget: 0n,
   });
 
 const makePosition = (params: {
@@ -123,6 +125,34 @@ describe("MorphoBlue.refinance", () => {
     });
     const targetPosition = makePosition({
       market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("0.5", 18),
+      }),
+    ).toThrow(ChainIdMismatchError);
+  });
+
+  test("error: ChainIdMismatchError when target position provenance differs", () => {
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: new Market({
+        ...baseMarket(sourceParams),
+        chainId: mainnet.id,
+      }),
+      user: USER,
+      collateral: parseUnits("1", 18),
+    });
+    const targetPosition = makePosition({
+      market: new Market({
+        ...baseMarket(targetParams),
+        chainId: mainnet.id + 1,
+      }),
       user: USER,
     });
 
@@ -439,11 +469,13 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(NegativeInputError);
   });
 
-  test("behavior: collat-only refinance skips target health validation (no oracle required)", () => {
-    // Target has no price; a collat-only refinance skips the target health check and must succeed.
+  test("behavior: collat-only refinance skips unused market projections", () => {
     const market = makeMarket();
     const positionData = makePosition({
-      market: baseMarket(sourceParams),
+      market: new Market({
+        ...baseMarket(sourceParams),
+        rateAtTarget: undefined,
+      }),
       user: USER,
       collateral: parseUnits("1", 18),
     });
@@ -455,7 +487,7 @@ describe("MorphoBlue.refinance", () => {
       totalBorrowShares: parseUnits("5000000", 12),
       lastUpdate: 1_700_000_000n,
       fee: 0n,
-      // price intentionally omitted
+      // Price and supported IRM data are intentionally omitted.
     });
     const targetPosition = makePosition({
       market: targetMarketNoPrice,
@@ -489,21 +521,21 @@ describe("MorphoBlue.refinance", () => {
 
     const slippageTolerance = parseUnits("0.0001", 18);
 
-    const refi = market.refinance({
-      userAddress: USER,
-      positionData,
-      target: { marketParams: targetParams, positionData: targetPosition },
-      collateralAmount: parseUnits("1", 18),
-      borrowShares: parseUnits("100", 12),
-      slippageTolerance,
-    });
+    const refi = withChainTimestamp(1_700_000_000n, () =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("1", 18),
+        borrowShares: parseUnits("100", 12),
+        slippageTolerance,
+      }),
+    );
     const tx = refi.buildTx();
 
-    // Recompute the entity's intermediate values (accrual deltas cancel for this fixture).
-    const projectedBorrowAssets = sourceMarket.toBorrowAssets(
-      parseUnits("100", 12),
-      "Up",
-    );
+    const projectedBorrowAssets = sourceMarket
+      .accrueInterest(1_700_007_200n)
+      .toBorrowAssets(parseUnits("100", 12), "Up");
     const borrowAssetsAdjusted = MathLib.wMulUp(
       projectedBorrowAssets,
       MathLib.WAD + slippageTolerance,

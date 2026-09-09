@@ -24,6 +24,7 @@ import {
   UnknownTokenError as RawBlueUnknownTokenError,
   UnknownTokenPriceError as RawBlueUnknownTokenPriceError,
   UnknownVaultConfigError as RawBlueUnknownVaultConfigError,
+  UnsupportedMarketIrmError as RawBlueUnsupportedMarketIrmError,
   UnsupportedPermitDomainExtensionsError as RawBlueUnsupportedPermitDomainExtensionsError,
   UnsupportedVaultV2AdapterError as RawBlueUnsupportedVaultV2AdapterError,
   getUnsupportedVaultV2Adapter as rawGetBlueUnsupportedVaultV2Adapter,
@@ -77,6 +78,7 @@ import {
   UnknownBlueTokenError,
   UnknownBlueTokenPriceError,
   UnknownBlueVaultConfigError,
+  UnsupportedBlueMarketIrmError,
   UnsupportedBlueVaultV2AdapterError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/morpho-sdk/errors";
@@ -156,6 +158,7 @@ describe("protocol facades", () => {
     [UnknownBlueTokenError, RawBlueUnknownTokenError],
     [UnknownBlueTokenPriceError, RawBlueUnknownTokenPriceError],
     [UnknownBlueVaultConfigError, RawBlueUnknownVaultConfigError],
+    [UnsupportedBlueMarketIrmError, RawBlueUnsupportedMarketIrmError],
     [UnsupportedBlueVaultV2AdapterError, RawBlueUnsupportedVaultV2AdapterError],
     [
       UnsupportedPermitDomainExtensionsError,

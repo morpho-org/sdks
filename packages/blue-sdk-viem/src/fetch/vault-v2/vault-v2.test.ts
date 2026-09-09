@@ -311,6 +311,7 @@ describe("fetchVaultV2", () => {
     const vault = await fetchVaultV2(VAULT, handle.client);
 
     expect(vault).toBeInstanceOf(VaultV2);
+    expect(vault.chainId).toBe(CHAIN_ID);
     expect(vault.address).toBe(VAULT);
     expect(vault.asset).toBe(ASSET);
     expect(vault.adapters).toEqual([ADAPTER_2]);
@@ -331,6 +332,7 @@ describe("fetchVaultV2", () => {
     });
 
     expect(vault.liquidityAllocations).toBeUndefined();
+    expect(vault.chainId).toBe(CHAIN_ID);
   });
 
   test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
@@ -395,6 +397,7 @@ describe("fetchVaultV2", () => {
     });
 
     expect(vault.liquidityAllocations).toBeUndefined();
+    expect(vault.chainId).toBe(CHAIN_ID);
   });
 
   test.each([
@@ -1855,6 +1858,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     });
 
     expect(vault).toBeInstanceOf(AccrualVaultV2);
+    expect(vault.chainId).toBe(CHAIN_ID);
     expect(vault.address).toBe(VAULT);
     expect(vault.assetBalance).toBe(777n);
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
@@ -1875,6 +1879,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
     expect(marketAdapter.supplyShares[ID]).toBe(99n);
     expect(marketAdapter.markets[0]?.id).toBe(ID);
+    expect(marketAdapter.markets[0]?.chainId).toBe(CHAIN_ID);
   });
 
   test("omits liquidity allocations when the liquidity adapter is unknown", async () => {

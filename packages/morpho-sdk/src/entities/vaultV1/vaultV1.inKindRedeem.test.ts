@@ -180,6 +180,28 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     ).toThrow(InKindRedeemCoverageError);
   });
 
+  test("behavior: skips zero-share markets before accruing interest", () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = withChainTimestamp(now, () =>
+      inKindVaultV1Data({ supplyShares: 0n }),
+    );
+
+    expect(() =>
+      withChainTimestamp(now + 1n, () =>
+        vault.inKindRedeem({
+          amount: 1n,
+          marketParamsList: [inKindMarketParams],
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ),
+    ).toThrow(InKindRedeemCoverageError);
+  });
+
   test("error: validates client chain and vault snapshot address", () => {
     const handle = createMockClient(mainnet);
     const wrongChainVault = handle.client

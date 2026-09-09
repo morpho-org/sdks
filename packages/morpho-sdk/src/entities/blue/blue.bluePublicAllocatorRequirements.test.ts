@@ -15,6 +15,7 @@ import {
   CbbtcUsdcBlue,
   CbbtcUsdcBlueAlt,
 } from "../../../test/fixtures/blue.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   BundlerErrors,
@@ -55,6 +56,7 @@ const makePosition = (
       lastUpdate: 1_700_000_000n,
       fee: 0n,
       price: ORACLE_PRICE_SCALE,
+      rateAtTarget: 0n,
     }),
   );
 
@@ -326,8 +328,8 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(marketParams, mainnet.id);
 
-    const requirements = await market
-      .refinance({
+    const requirements = await withChainTimestamp(1_700_000_000n, () =>
+      market.refinance({
         userAddress: USER,
         positionData: makePosition(marketParams, {
           borrowShares: 10n,
@@ -348,8 +350,8 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
             penalty: 500_000_000_000_000_000n,
           },
         ],
-      })
-      .getRequirements();
+      }),
+    ).getRequirements();
 
     const approval = requirements.find(isRequirementApproval);
     const authorization = requirements.find(isRequirementBlueAuthorization);

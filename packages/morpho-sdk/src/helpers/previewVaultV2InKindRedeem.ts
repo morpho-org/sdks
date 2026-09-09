@@ -43,6 +43,7 @@ export interface VaultV2InKindRedeemMarketPreview {
  * @param params.requestedExitAssets - Positive penalty-inclusive amount the user wants to exit.
  * @param params.timestamp - Timestamp used to accrue Morpho Blue markets before calculating capacity.
  * @returns Frontend-ready market choices, or an empty list when no choices are available.
+ * @throws {UnsupportedBlueMarketIrmError} when an adapter-listed market with positive debt uses an unsupported IRM.
  * @example
  * ```ts
  * import { previewVaultV2InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -74,6 +75,7 @@ export function previewVaultV2InKindRedeem(
   const penalty = vaultData.forceDeallocatePenalties[adapter.address] ?? 0n;
   const availableIdleAssets = vaultData.assetBalance;
   const allocations = adapter.markets
+    .filter((market) => (adapter.supplyShares[market.id] ?? 0n) !== 0n)
     .map((market) => ({
       market,
       allocationAssets: market

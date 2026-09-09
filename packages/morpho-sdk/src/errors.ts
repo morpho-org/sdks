@@ -28,6 +28,7 @@ export {
   /** @deprecated Use UnknownBlueVaultConfigError or the raw protocol subpath. */
   UnknownVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError as UnsupportedBlueMarketIrmError,
   UnsupportedPreLiquidationParamsError as UnsupportedBluePreLiquidationParamsError,
   /** @deprecated Use UnsupportedBluePreLiquidationParamsError or the raw protocol subpath. */
   UnsupportedPreLiquidationParamsError,

@@ -108,6 +108,8 @@ function vaultV1PublicFields(adapter: IAccrualVaultV2Adapter | undefined) {
  * are compared for exact parity alongside every accounting and capacity output.
  */
 function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
+  expect(actual.chainId).toBeDefined();
+  expect(actual.chainId).toBe(expected.chainId);
   expect(actual.address).toBe(expected.address);
   expect(actual._totalAssets).toBe(expected._totalAssets);
   expect(actual.totalSupply).toBe(expected.totalSupply);

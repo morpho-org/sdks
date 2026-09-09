@@ -205,11 +205,21 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   /**
    * Returns a new position derived from this position, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the market's `lastUpdate`.
+   * @returns The interest-accrued position copy.
+   * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    */
   public accrueInterest(timestamp?: BigIntish) {
     return new AccrualPosition(this, this._market.accrueInterest(timestamp));
   }
 
+  /**
+   * Applies a supply to an interest-accrued copy of this position.
+   * @param assets Loan assets to supply, or zero when `shares` is provided.
+   * @param shares Supply shares to mint, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated position and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -223,6 +233,14 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /**
+   * Applies a withdrawal to an interest-accrued copy of this position.
+   * @param assets Loan assets to withdraw, or zero when `shares` is provided.
+   * @param shares Supply shares to burn, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated position and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -248,6 +266,13 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return new AccrualPosition(this, new Market(this._market));
   }
 
+  /**
+   * Withdraws collateral from an interest-accrued copy of this position.
+   * @param assets Collateral assets to withdraw.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated position.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
     if (this._market.price == null)
       throw new BlueErrors.UnknownOraclePrice(this.marketId);
@@ -271,6 +296,14 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return position;
   }
 
+  /**
+   * Applies a borrow to an interest-accrued copy of this position.
+   * @param assets Loan assets to borrow, or zero when `shares` is provided.
+   * @param shares Borrow shares to mint, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated position and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
@@ -290,6 +323,14 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /**
+   * Applies a repayment to an interest-accrued copy of this position.
+   * @param assets Loan assets to repay, or zero when `shares` is provided.
+   * @param shares Borrow shares to burn, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated position and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;

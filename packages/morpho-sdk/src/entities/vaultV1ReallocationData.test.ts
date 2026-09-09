@@ -731,6 +731,47 @@ describe("VaultV1ReallocationData unit coverage", () => {
     ]);
   });
 
+  test.each([
+    { enabled: false, supplyShares: 1_000n * MathLib.WAD },
+    { enabled: true, supplyShares: 0n },
+  ])(
+    "skips unsupported source IRM when enabled=$enabled and supplyShares=$supplyShares",
+    ({ enabled, supplyShares }) => {
+      const input = makeInput({
+        targetSupply: 1_000n * MathLib.WAD,
+        targetBorrow: 500n * MathLib.WAD,
+        sourceSupply: 1_000n * MathLib.WAD,
+        sourceBorrow: 500n * MathLib.WAD,
+      });
+      input.markets![targetParams.id] = new Market({
+        ...input.markets![targetParams.id]!,
+        rateAtTarget: 0n,
+      });
+      input.positions![VAULT]![sourceParams.id] = makePosition(
+        sourceParams.id,
+        supplyShares,
+      );
+      input.vaultMarketConfigs![VAULT]![sourceParams.id] =
+        makeVaultMarketConfig({
+          marketId: sourceParams.id,
+          cap: 10_000n * MathLib.WAD,
+          enabled,
+          maxIn: 0n,
+          maxOut: 10_000n * MathLib.WAD,
+        });
+
+      expect(
+        new VaultV1ReallocationData(input).getMarketPublicReallocations(
+          targetParams.id,
+          {
+            timestamp: TIMESTAMP + 1n,
+            defaultMaxWithdrawalUtilization: MathLib.WAD,
+          },
+        ).withdrawals,
+      ).toEqual([]);
+    },
+  );
+
   test("throws typed errors for impossible direct apply states", () => {
     const baseInput = makeInput({
       targetSupply: 1000n * MathLib.WAD,

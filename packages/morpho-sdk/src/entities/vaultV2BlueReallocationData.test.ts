@@ -103,6 +103,7 @@ const makeMarket = ({
     totalBorrowShares: borrow * 1_000_000n,
     lastUpdate,
     fee: 0n,
+    rateAtTarget: 0n,
   });
 
 interface FixtureOptions {
@@ -961,6 +962,27 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
       ).toStrictEqual([]);
     }
+  });
+
+  test("behavior: ignores unsupported markets outside the reallocation plan", () => {
+    const { data, sourceExpectedAssets } = makeFixture();
+    const unsupportedMarket = new Market({
+      ...data.getMarket(sourceParams.id),
+      params: new MarketParams({ ...sourceParams, irm: OTHER_IRM }),
+      totalBorrowAssets: 1n,
+      totalBorrowShares: 1n,
+      rateAtTarget: undefined,
+    });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: { ...data.markets, [unsupportedMarket.id]: unsupportedMarket },
+    });
+
+    expect(
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }).reallocations[0]?.assets,
+    ).toBe(sourceExpectedAssets);
   });
 
   test.each([

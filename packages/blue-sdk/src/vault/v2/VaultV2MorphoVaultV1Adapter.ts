@@ -111,7 +111,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     super(adapter);
   }
 
+  /** {@inheritDoc IAccrualVaultV2Adapter.realAssets} */
   realAssets(timestamp?: BigIntish) {
+    if (this.shares === 0n) return 0n;
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 

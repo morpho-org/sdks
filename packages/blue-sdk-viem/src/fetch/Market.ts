@@ -77,6 +77,7 @@ export async function fetchMarket(
       });
 
       return new Market({
+        chainId: parameters.chainId,
         params: new MarketParams(marketParams),
         totalSupplyAssets,
         totalBorrowAssets,
@@ -132,6 +133,7 @@ export async function fetchMarket(
   ]);
 
   return new Market({
+    chainId: parameters.chainId,
     params,
     ...market,
     price,

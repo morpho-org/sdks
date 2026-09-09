@@ -880,6 +880,7 @@ export class VaultV2BlueReallocationData
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
    * @returns Flat action-ready reallocations and their post-simulation state.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
@@ -1076,11 +1077,7 @@ export class VaultV2BlueReallocationData
         : BigInt(options.timestamp);
     let data: VaultV2BlueReallocationData = this;
     let simulationContext = context;
-    data.setMarkets(
-      Object.values(data.markets)
-        .filter((market): market is ReadonlyMarketSnapshot => market != null)
-        .map((market) => market.accrueInterest(timestamp)),
-    );
+    data.setMarkets([data.getMarket(marketId).accrueInterest(timestamp)]);
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
     const vaultKeyByLower = new Map<string, Address>(
@@ -1282,15 +1279,21 @@ export class VaultV2BlueReallocationData
                 )
                   continue;
 
-                const expectedSourceSupplyAssets = sourceMarket.toSupplyAssets(
-                  sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
-                );
+                const sourceSupplyShares =
+                  sourceAdapter.supplyShares[sourceMarket.id] ?? 0n;
+                if (sourceSupplyShares === 0n) continue;
+
+                const accruedSourceMarket =
+                  sourceMarket.accrueInterest(timestamp);
+                data.setMarkets([accruedSourceMarket]);
+                const expectedSourceSupplyAssets =
+                  accruedSourceMarket.toSupplyAssets(sourceSupplyShares);
                 const assets = MathLib.min(
                   MathLib.MAX_UINT_128,
                   targetSupplyHeadroom,
                   allocatorHeadroom,
                   expectedSourceSupplyAssets,
-                  sourceMarket.getWithdrawToUtilization(
+                  accruedSourceMarket.getWithdrawToUtilization(
                     maxWithdrawalUtilization,
                   ),
                 );
@@ -1472,6 +1475,7 @@ export class VaultV2BlueReallocationData
    * @param marketId - Target Blue market id.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Reallocatable market and idle assets, or `0n` when none are available; rounding-only shared-cap fits may be conservatively omitted.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
@@ -1531,6 +1535,7 @@ export class VaultV2BlueReallocationData
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Borrowable assets while remaining at or below `utilization`; rounding-only shared-cap fits may be conservatively omitted.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.

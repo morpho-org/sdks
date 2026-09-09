@@ -1,8 +1,8 @@
-import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { Time } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { market, marketInput, marketParams } from "../__test__/fixtures.js";
 import { ORACLE_PRICE_SCALE } from "../constants.js";
-import { BlueErrors } from "../errors.js";
+import { BlueErrors, UnsupportedMarketIrmError } from "../errors.js";
 import { MathLib } from "../math/MathLib.js";
 import { CapacityLimitReason } from "../utils.js";
 import { Market } from "./Market.js";
@@ -21,9 +21,9 @@ describe("Market constructor and getters", () => {
     expect(m.apyAtTarget).toBeGreaterThan(0);
   });
 
-  test("supports idle markets and markets without adaptive rate data", () => {
+  test("supports idle markets without adaptive rate data", () => {
     const m = market({
-      params: marketParams({ collateralToken: ZERO_ADDRESS }),
+      params: MarketParams.idle(marketParams().loanToken),
       rateAtTarget: undefined,
     });
 
@@ -33,6 +33,40 @@ describe("Market constructor and getters", () => {
     expect(m.avgBorrowRate).toBe(0n);
     expect(m.supplyApy).toBe(0);
     expect(m.borrowApy).toBe(0);
+  });
+
+  test("error: UnsupportedMarketIrmError", () => {
+    const unsupported = market({ rateAtTarget: undefined });
+
+    expect(() => unsupported.getEndBorrowRate(101n)).toThrow(
+      UnsupportedMarketIrmError,
+    );
+    expect(() => unsupported.accrueInterest(101n)).toThrow(
+      UnsupportedMarketIrmError,
+    );
+    expect(unsupported.accrueInterest(100n)).not.toBe(unsupported);
+  });
+
+  test("behavior: empty unsupported IRM accrues without interest", () => {
+    const unsupported = market({
+      rateAtTarget: undefined,
+      totalBorrowAssets: 0n,
+      totalBorrowShares: 0n,
+    });
+
+    const accrued = unsupported.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued.totalBorrowAssets).toBe(0n);
+    expect(accrued.totalSupplyAssets).toBe(unsupported.totalSupplyAssets);
+    expect(unsupported.getSupplyApy(101n)).toBe(0);
+    expect(unsupported.getAvgSupplyRate(101n)).toBe(0n);
+    expect(() => unsupported.getSupplyApy(99n)).toThrow(
+      BlueErrors.InvalidInterestAccrual,
+    );
+    expect(() => unsupported.accrueInterest(99n)).toThrow(
+      BlueErrors.InvalidInterestAccrual,
+    );
   });
 
   test("rate helpers reject timestamps before lastUpdate", () => {
@@ -91,7 +125,7 @@ describe("Market constructor and getters", () => {
 
 describe("Market accrueInterest and accounting actions", () => {
   test("accrueInterest returns an updated market and keeps the source unchanged", () => {
-    const m = market({ fee: 0n });
+    const m = market({ chainId: 1, fee: 0n });
     const accrued = m.accrueInterest(200n);
 
     expect(accrued).not.toBe(m);
@@ -100,6 +134,7 @@ describe("Market accrueInterest and accounting actions", () => {
       m.totalSupplyAssets,
     );
     expect(m.lastUpdate).toBe(100n);
+    expect(accrued.chainId).toBe(1);
   });
 
   test("supply rejects inconsistent inputs and accepts assets or shares", () => {
