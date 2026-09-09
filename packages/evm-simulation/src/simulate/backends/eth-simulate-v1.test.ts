@@ -324,6 +324,7 @@ describe.sequential("simulateV1", () => {
     expect(error).toBeInstanceOf(SimulationRevertedError);
     expect(error).not.toBeInstanceOf(ExternalServiceError);
     expect((error as SimulationRevertedError).details).toBe(cause);
+    expect((error as SimulationRevertedError).cause).toBe(cause);
   });
 
   it("throws ExternalServiceError when results is not an array", async () => {
