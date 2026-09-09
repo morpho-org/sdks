@@ -2531,43 +2531,6 @@ const assertRequiredBlueRegistry = ({
   });
 };
 
-/**
- * Rewrites patch keys that differ only by case from a registered wrapped-token key (or from an earlier key
- * of the same patch) onto that key, so `mergeRegistry` compares the two mappings for the same token instead
- * of adding a duplicate entry. Two casing variants of one token inside the same patch must agree on the
- * unwrapped token, otherwise `RegistryValueAlreadyRegisteredError` is thrown.
- */
-const alignUnwrappedTokenKeys = (
-  base: Record<number, Record<`0x${string}`, `0x${string}`>>,
-  patch: Record<number, Record<`0x${string}`, `0x${string}`>>,
-): Record<number, Record<`0x${string}`, `0x${string}`>> =>
-  Object.fromEntries(
-    Object.entries(patch).map(([chainIdString, tokens]) => {
-      const registeredKeys = Object.keys(base[Number(chainIdString)] ?? {});
-      const aligned: Record<string, `0x${string}`> = {};
-
-      for (const [wrapped, unwrapped] of Object.entries(tokens)) {
-        const key =
-          [...registeredKeys, ...Object.keys(aligned)].find((candidate) =>
-            isHexEqual(candidate, wrapped),
-          ) ?? wrapped;
-        const previous = aligned[key];
-
-        if (previous !== undefined && !isHexEqual(previous, unwrapped))
-          throw new RegistryValueAlreadyRegisteredError({
-            label: `unwrappedTokens.${chainIdString}.${key}`,
-            registeredValue: previous,
-            requestedValue: unwrapped,
-            type: "unwrapped token",
-          });
-
-        aligned[key] = previous ?? unwrapped;
-      }
-
-      return [chainIdString, aligned];
-    }),
-  );
-
 const mergeRegistry = <T>({
   base,
   patch,
@@ -2856,10 +2819,45 @@ export function registerCustomAddresses<
   }
 
   if (unwrappedTokens) {
+    // Patch keys that differ only by case from a registered key (or from an earlier key of the same
+    // patch) are rewritten onto that key, so `mergeRegistry` compares values for the same token instead
+    // of adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
+    const alignedUnwrappedTokens: Record<
+      number,
+      Record<`0x${string}`, `0x${string}`>
+    > = Object.fromEntries(
+      Object.entries(unwrappedTokens).map(([chainIdString, tokens]) => {
+        const registeredKeys = Object.keys(
+          unwrappedTokensMapping[Number(chainIdString)] ?? {},
+        );
+        const aligned: Record<string, `0x${string}`> = {};
+
+        for (const [wrapped, unwrapped] of Object.entries(tokens)) {
+          const key =
+            [...registeredKeys, ...Object.keys(aligned)].find((candidate) =>
+              isHexEqual(candidate, wrapped),
+            ) ?? wrapped;
+          const previous = aligned[key];
+
+          if (previous !== undefined && !isHexEqual(previous, unwrapped))
+            throw new RegistryValueAlreadyRegisteredError({
+              label: `unwrappedTokens.${chainIdString}.${key}`,
+              registeredValue: previous,
+              requestedValue: unwrapped,
+              type: "unwrapped token",
+            });
+
+          aligned[key] = previous ?? unwrapped;
+        }
+
+        return [chainIdString, aligned];
+      }),
+    );
+
     unwrappedTokensMapping = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
-        patch: alignUnwrappedTokenKeys(unwrappedTokensMapping, unwrappedTokens),
+        patch: alignedUnwrappedTokens,
         label: "unwrappedTokens",
         type: "unwrapped token",
       }),

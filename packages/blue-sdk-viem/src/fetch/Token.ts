@@ -76,13 +76,14 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const isKnownAddress = (known?: Address) =>
-    known != null && typeof address === "string" && isHexEqual(address, known);
-
-  if (isKnownAddress(NATIVE_ADDRESS)) return Token.native(parameters.chainId);
+  if (typeof address === "string" && isHexEqual(address, NATIVE_ADDRESS))
+    return Token.native(parameters.chainId);
 
   const { wstEth, stEth } = getChainAddresses(parameters.chainId);
-  const isWstEth = isKnownAddress(wstEth);
+  const isWstEth =
+    wstEth != null &&
+    typeof address === "string" &&
+    isHexEqual(address, wstEth);
 
   if (deployless) {
     try {

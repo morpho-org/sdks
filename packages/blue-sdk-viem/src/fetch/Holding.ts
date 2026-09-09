@@ -89,15 +89,12 @@ export async function fetchHolding(
         : 0n,
     });
 
-  const isRegistered = (tokens?: Set<Address>) =>
-    tokens != null &&
-    [...tokens].some((registered) => isHexEqual(registered, token));
-  const isPermissionedBackedToken = isRegistered(
-    permissionedBackedTokens[parameters.chainId],
-  );
-  const isPermissionedWrapperToken = isRegistered(
-    permissionedWrapperTokens[parameters.chainId],
-  );
+  const isPermissionedBackedToken = [
+    ...(permissionedBackedTokens[parameters.chainId] ?? []),
+  ].some((registered) => isHexEqual(registered, token));
+  const isPermissionedWrapperToken = [
+    ...(permissionedWrapperTokens[parameters.chainId] ?? []),
+  ].some((registered) => isHexEqual(registered, token));
 
   if (deployless) {
     const {
