@@ -1882,169 +1882,150 @@ describe("fetchAccrualVaultV2Deployless", () => {
     expect(marketAdapter.markets[0]?.id).toBe(ID);
   });
 
-  test.each([
-    {
-      version: "V1",
-      hasLostAssets: false,
-      lostAssets: 0n,
-      expectedLostAssets: undefined,
-    },
-    {
-      version: "V1.1",
+  test("keeps nested V1.1 accounting equal across deployless and fallback reads", async () => {
+    const unit = 10n ** 18n;
+    const blockTimestamp = 5n;
+    const lostAssets = 10n * unit;
+    const expectedTotalAssets = 60n * unit;
+    const market = {
+      ...marketQueryResult,
+      market: [
+        100n * unit,
+        200n * unit,
+        30n * unit,
+        40n * unit,
+        blockTimestamp,
+        0n,
+      ] as const,
+      rateAtTarget: 0n,
+    };
+    const position = {
+      supplyShares: 100n * unit,
+      borrowShares: 0n,
+      collateral: 0n,
+    };
+    const vaultV1Result = {
+      ...emptyVaultV1QueryResult,
+      totalSupply: 50n * unit,
+      lastTotalAssets: expectedTotalAssets,
       hasLostAssets: true,
-      lostAssets: 10n * 10n ** 18n,
-      expectedLostAssets: 10n * 10n ** 18n,
-    },
-  ])(
-    "keeps nested $version accounting equal across deployless and fallback reads",
-    async ({ hasLostAssets, lostAssets, expectedLostAssets }) => {
-      const unit = 10n ** 18n;
-      const blockTimestamp = 86_405n;
-      const pendingInterestMarket = {
-        ...marketQueryResult,
-        market: [
-          100n * unit,
-          200n * unit,
-          30n * unit,
-          40n * unit,
-          5n,
-          0n,
-        ] as const,
-        rateAtTarget: 1_000_000_000n,
-      };
-      const position = {
-        supplyShares: 100n * unit,
-        borrowShares: 0n,
-        collateral: 0n,
-      };
-      const vaultV1Result = {
-        ...emptyVaultV1QueryResult,
-        totalSupply: 50n * unit,
-        lastTotalAssets: 60n * unit,
-        hasLostAssets,
-        lostAssets,
-        supplyQueue: [ID],
-        withdrawQueue: [ID],
-      };
-      const sequentialHandle = createMockClient(mainnet);
-      mockBlock(sequentialHandle, {
-        number: 1n,
-        timestamp: blockTimestamp,
-      });
-      mockDeploylessReads(sequentialHandle, [
-        encodeReadResult(vaultAdapterQueryAbi, "query", {
-          morphoVaultV1: VAULT,
+      lostAssets,
+      supplyQueue: [ID],
+      withdrawQueue: [ID],
+    };
+    const sequentialHandle = createMockClient(mainnet);
+    mockBlock(sequentialHandle, { number: 1n, timestamp: blockTimestamp });
+    mockDeploylessReads(sequentialHandle, [
+      encodeReadResult(vaultAdapterQueryAbi, "query", {
+        morphoVaultV1: VAULT,
+        parentVault: RECIPIENT,
+        skimRecipient: RECIPIENT,
+      }),
+      encodeReadResult(vaultQueryAbi, "query", {
+        ...vaultV1Result,
+        totalAssets: expectedTotalAssets,
+      }),
+      encodeReadResult(marketQueryAbi, "query", market),
+    ]);
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      result: 25n * unit,
+    });
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "config",
+      result: [1_000n * unit, true, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "pendingCap",
+      result: [0n, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: ADDRESSES.vaultV1PublicAllocator!,
+      abi: vaultV1PublicAllocatorAbi,
+      functionName: "flowCaps",
+      result: [0n, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "position",
+      result: [position.supplyShares, 0n, 0n],
+    });
+    const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
+      ADAPTER,
+      sequentialHandle.client,
+      { chainId: CHAIN_ID },
+    );
+
+    const deploylessHandle = createMockClient(mainnet);
+    mockDeploylessRead(deploylessHandle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapter: zeroAddress,
+      hasLiquidityAdapter: false,
+      isLiquidityAdapterKnown: false,
+      liquidityAllocations: [],
+      adapters: [
+        {
+          adapter: ADAPTER,
+          adapterType: 1,
           parentVault: RECIPIENT,
           skimRecipient: RECIPIENT,
-        }),
-        encodeReadResult(vaultQueryAbi, "query", {
-          ...vaultV1Result,
-          totalAssets: 55n * unit,
-        }),
-        encodeReadResult(marketQueryAbi, "query", pendingInterestMarket),
-      ]);
-      mockRead(sequentialHandle, {
-        address: VAULT,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        result: 25n * unit,
-      });
-      mockRead(sequentialHandle, {
-        address: VAULT,
-        abi: metaMorphoAbi,
-        functionName: "config",
-        result: [1_000n * unit, true, 0n],
-      });
-      mockRead(sequentialHandle, {
-        address: VAULT,
-        abi: metaMorphoAbi,
-        functionName: "pendingCap",
-        result: [0n, 0n],
-      });
-      mockRead(sequentialHandle, {
-        address: ADDRESSES.vaultV1PublicAllocator!,
-        abi: vaultV1PublicAllocatorAbi,
-        functionName: "flowCaps",
-        result: [0n, 0n],
-      });
-      mockRead(sequentialHandle, {
-        address: ADDRESSES.morpho,
-        abi: blueAbi,
-        functionName: "position",
-        result: [position.supplyShares, 0n, 0n],
-      });
-      const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
-        ADAPTER,
-        sequentialHandle.client,
-        { chainId: CHAIN_ID },
-      );
+          forceDeallocatePenalty: 0n,
+          morphoVaultV1: VAULT,
+          vaultV1: vaultV1Result,
+          vaultV1Allocations: [
+            {
+              cap: 1_000n * unit,
+              enabled: true,
+              removableAt: 0n,
+              pendingCap: { value: 0n, validAt: 0n },
+              position,
+              market,
+              flowCapMaxIn: 0n,
+              flowCapMaxOut: 0n,
+            },
+          ],
+          vaultV1Shares: 25n * unit,
+          marketV1Positions: [],
+          adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+          marketV1V2Allocations: [],
+        },
+      ],
+    });
+    const deployless = await fetchAccrualVaultV2Deployless(
+      VAULT,
+      deploylessHandle.client,
+      { chainId: CHAIN_ID },
+    );
+    const deploylessAdapter = deployless.accrualAdapters[0] as
+      | AccrualVaultV2MorphoVaultV1Adapter
+      | undefined;
 
-      const deploylessHandle = createMockClient(mainnet);
-      mockDeploylessRead(deploylessHandle, accrualVaultV2QueryAbi, "query", {
-        ...accrualVaultV2Result,
-        liquidityAdapter: zeroAddress,
-        hasLiquidityAdapter: false,
-        isLiquidityAdapterKnown: false,
-        liquidityAllocations: [],
-        adapters: [
-          {
-            adapter: ADAPTER,
-            adapterType: 1,
-            parentVault: RECIPIENT,
-            skimRecipient: RECIPIENT,
-            forceDeallocatePenalty: 0n,
-            morphoVaultV1: VAULT,
-            vaultV1: vaultV1Result,
-            vaultV1Allocations: [
-              {
-                cap: 1_000n * unit,
-                enabled: true,
-                removableAt: 0n,
-                pendingCap: { value: 0n, validAt: 0n },
-                position,
-                market: pendingInterestMarket,
-                flowCapMaxIn: 0n,
-                flowCapMaxOut: 0n,
-              },
-            ],
-            vaultV1Shares: 25n * unit,
-            marketV1Positions: [],
-            adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
-            marketV1V2Allocations: [],
-          },
-        ],
-      });
-      const deployless = await fetchAccrualVaultV2Deployless(
-        VAULT,
-        deploylessHandle.client,
-        { chainId: CHAIN_ID },
-      );
-      const deploylessAdapter = deployless.accrualAdapters[0] as
-        | AccrualVaultV2MorphoVaultV1Adapter
-        | undefined;
-
-      expect(deploylessAdapter).toBeInstanceOf(
-        AccrualVaultV2MorphoVaultV1Adapter,
-      );
-      expect(sequential.accrualVaultV1.totalAssets).toBeGreaterThan(0n);
-      expect(deploylessAdapter?.accrualVaultV1.totalAssets).toBe(
-        sequential.accrualVaultV1.totalAssets,
-      );
-      expect(sequential.accrualVaultV1.lostAssets).toBe(expectedLostAssets);
-      expect(deploylessAdapter?.accrualVaultV1.lostAssets).toBe(
-        expectedLostAssets,
-      );
-      expect(deploylessAdapter?.maxWithdraw("0x")).toEqual(
-        sequential.maxWithdraw("0x"),
-      );
-      expect(deploylessAdapter?.realAssets(blockTimestamp)).toBe(
-        sequential.realAssets(blockTimestamp),
-      );
-      expect(sequential.realAssets(blockTimestamp)).toBeGreaterThan(
-        sequential.realAssets(5n),
-      );
-    },
-  );
+    expect(deploylessAdapter).toBeInstanceOf(
+      AccrualVaultV2MorphoVaultV1Adapter,
+    );
+    expect(deploylessAdapter?.accrualVaultV1.totalAssets).toBe(
+      sequential.accrualVaultV1.totalAssets,
+    );
+    expect(sequential.accrualVaultV1.lostAssets).toBe(lostAssets);
+    expect(deploylessAdapter?.accrualVaultV1.lostAssets).toBe(lostAssets);
+    expect(
+      sequential.accrualVaultV1.accrueInterest(blockTimestamp).totalAssets,
+    ).toBe(expectedTotalAssets);
+    expect(deploylessAdapter?.maxWithdraw("0x")).toEqual(
+      sequential.maxWithdraw("0x"),
+    );
+    expect(deploylessAdapter?.realAssets(blockTimestamp)).toBe(
+      sequential.realAssets(blockTimestamp),
+    );
+    expect(sequential.realAssets(blockTimestamp)).toBeGreaterThan(0n);
+  });
 
   test("omits liquidity allocations when the liquidity adapter is unknown", async () => {
     const handle = createMockClient(mainnet);

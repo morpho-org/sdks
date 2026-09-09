@@ -1734,8 +1734,8 @@ describe("vault fetchers", () => {
         feeRecipient: USER,
         skimRecipient: RECIPIENT,
         totalSupply: 42n,
-        totalAssets: 43n,
-        lastTotalAssets: 44n,
+        totalAssets: 55n,
+        lastTotalAssets: 55n,
         hasLostAssets: true,
         lostAssets: 55n,
         supplyQueue: [ID],
@@ -1762,7 +1762,8 @@ describe("vault fetchers", () => {
     });
 
     expect(vault).toBeInstanceOf(AccrualVault);
-    expect(vault.totalAssets).toBe(43n);
+    expect(vault.totalAssets).toBe(55n);
+    expect(vault.totalSupply).toBe(42n);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);
     expect(
       handle.request.mock.calls

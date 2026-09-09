@@ -664,7 +664,7 @@ function toAccrualAdapter(
 
       return new AccrualVaultV2MorphoVaultV1Adapter(
         new VaultV2MorphoVaultV1Adapter({ ...base, morphoVaultV1 }),
-        new AccrualVault({ ...vault, totalAssets: undefined }, allocations),
+        new AccrualVault(vault, allocations),
         adapter.vaultV1Shares,
       );
     }

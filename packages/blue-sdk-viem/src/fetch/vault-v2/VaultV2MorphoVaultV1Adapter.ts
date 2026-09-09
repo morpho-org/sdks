@@ -215,7 +215,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
 
   return new AccrualVaultV2MorphoVaultV1Adapter(
     adapter,
-    new AccrualVault({ ...vaultV1, totalAssets: undefined }, allocations),
+    new AccrualVault(vaultV1, allocations),
     shares,
   );
 }

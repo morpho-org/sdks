@@ -203,16 +203,14 @@ export interface CollateralAllocation {
 
 /** Plain input shape for a MetaMorpho vault paired with accrued market allocations. */
 export interface IAccrualVault
-  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {
-  /** Full vault assets, including assets not allocated to Morpho markets. */
-  readonly totalAssets?: bigint;
-}
+  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {}
 
 /** Represents a MetaMorpho vault with accrued market allocation state. */
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * @inheritdoc
-   * Reflects full vault assets when supplied, otherwise the sum of allocation assets.
+   * Reflects the sum of assets of the vault's allocations.
+   * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
    */
   declare totalAssets: bigint;
 
@@ -234,14 +232,13 @@ export class AccrualVault extends Vault implements IAccrualVault {
      */
     allocations: Omit<IVaultMarketAllocation, "proportion">[],
   ) {
-    const allocatedTotal = allocations.reduce(
-      (total, { position }) => total + position.supplyAssets,
-      0n,
-    );
     super({
       ...vault,
       withdrawQueue: allocations.map(({ position }) => position.market.id),
-      totalAssets: vault.totalAssets ?? allocatedTotal,
+      totalAssets: allocations.reduce(
+        (total, { position }) => total + position.supplyAssets,
+        0n,
+      ),
     });
 
     this.allocations = new Map(
@@ -451,45 +448,35 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * ```
    */
   public accrueInterest(timestamp?: BigIntish) {
-    const allocatedBefore = this.allocations
-      .values()
-      .reduce((total, { position }) => total + position.supplyAssets, 0n);
-    const accruedAllocations = this.withdrawQueue.map((marketId) => {
-      const allocation = this.allocations.get(marketId);
-      if (allocation == null) throw new UnknownMarketAllocationError(marketId);
-
-      const { config, position } = allocation;
-      return {
-        config,
-        position: position.accrueInterest(timestamp),
-      };
-    });
-    const allocatedAfter = accruedAllocations.reduce(
-      (total, { position }) => total + position.supplyAssets,
-      0n,
-    );
-    const unaccountedAssets = MathLib.zeroFloorSub(
-      this.totalAssets,
-      allocatedBefore,
-    );
-    const unallocatedAssets =
-      this.lostAssets === undefined ? unaccountedAssets : 0n;
-    const realTotalAssets = allocatedAfter + unallocatedAssets;
-    const lostAssets =
-      this.lostAssets === undefined
-        ? undefined
-        : realTotalAssets <
-            MathLib.zeroFloorSub(this.lastTotalAssets, this.lostAssets)
-          ? this.lastTotalAssets - realTotalAssets
-          : this.lostAssets;
     const vault = new AccrualVault(
-      {
-        ...this,
-        totalAssets: realTotalAssets + (lostAssets ?? 0n),
-        lostAssets,
-      },
-      accruedAllocations,
+      this,
+      // Keep withdraw queue order.
+      this.withdrawQueue.map((marketId) => {
+        const allocation = this.allocations.get(marketId);
+        // Fail loudly rather than silently dropping the market: a stale
+        // `withdrawQueue` entry (e.g., one mutated after construction to
+        // reference a market that is no longer allocated) would otherwise
+        // crash with an opaque "Cannot destructure property 'config' of
+        // 'undefined'" via the non-null assertion below.
+        if (allocation == null)
+          throw new UnknownMarketAllocationError(marketId);
+
+        const { config, position } = allocation;
+        return {
+          config,
+          position: position.accrueInterest(timestamp),
+        };
+      }),
     );
+
+    if (vault.lostAssets != null) {
+      vault.lostAssets += MathLib.max(
+        vault.lastTotalAssets - vault.lostAssets - vault.totalAssets,
+        0n,
+      );
+
+      vault.totalAssets += vault.lostAssets;
+    }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);
 

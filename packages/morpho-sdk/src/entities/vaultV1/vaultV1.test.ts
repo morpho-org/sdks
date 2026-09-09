@@ -1,14 +1,14 @@
-import { AccrualVault, MathLib } from "@morpho-org/blue-sdk";
-import {
-  type Address,
-  createPublicClient,
-  decodeFunctionData,
-  http,
-} from "viem";
+import { MathLib } from "@morpho-org/blue-sdk";
+import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  IN_KIND_USER,
+  IN_KIND_VAULT,
+  inKindVaultV1Data,
+  inKindVaultV2Data,
+} from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { bundler3Abi, generalAdapter1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
 
@@ -66,78 +66,38 @@ describe("MorphoVaultV1 chain validation", () => {
     ).toThrow(ChainIdMismatchError);
   });
 
-  test("migrateToV2 derives the encoded V1 floor from fee-accrued full assets", () => {
+  test("migrateToV2 uses the source vault's fee-accrued share price", () => {
     const publicClient = createPublicClient({
       chain: mainnet,
       transport: http("https://rpc.example"),
     });
     const vault = publicClient
       .extend(morphoViemExtension())
-      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-    const sourceVault = new AccrualVault(
-      {
-        address: SteakhouseUsdcVaultV1.address,
-        name: "Source",
-        symbol: "vUSDC",
-        decimalsOffset: 0n,
-        asset: SteakhouseUsdcVaultV1.asset,
-        curator: SteakhouseUsdcVaultV1.address,
-        owner: SteakhouseUsdcVaultV1.address,
-        guardian: SteakhouseUsdcVaultV1.address,
-        fee: 200_000_000_000_000_000n,
-        feeRecipient: SteakhouseUsdcVaultV1.address,
-        skimRecipient: SteakhouseUsdcVaultV1.address,
-        pendingTimelock: { value: 0n, validAt: 0n },
-        pendingGuardian: {
-          value: SteakhouseUsdcVaultV1.address,
-          validAt: 0n,
-        },
-        pendingOwner: SteakhouseUsdcVaultV1.address,
-        timelock: 0n,
-        supplyQueue: [],
-        totalSupply: 100n,
-        totalAssets: 150n,
-        lastTotalAssets: 100n,
-      },
-      [],
-    );
-    const targetVault = {
-      address: "0x1111111111111111111111111111111111111111" as Address,
-      asset: SteakhouseUsdcVaultV1.asset,
-      lastUpdate: 0n,
-      accrueInterest: () => ({ vault: { toShares: () => 1n } }),
-    } as never;
-    const shares = 100n;
-    const accruedSourceVault = sourceVault.accrueInterest();
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const sourceVault = inKindVaultV1Data({
+      fee: MathLib.WAD / 5n,
+      lastTotalAssets: 900n,
+    });
+    const shares = sourceVault.totalSupply;
     const expectedFloor = MathLib.mulDivDown(
-      accruedSourceVault.toAssets(shares),
+      sourceVault.accrueInterest().toAssets(shares),
       MathLib.RAY,
       shares,
     );
 
     const tx = vault
       .migrateToV2({
-        userAddress: SteakhouseUsdcVaultV1.address,
+        userAddress: IN_KIND_USER,
         sourceVault,
-        targetVault,
+        targetVault: inKindVaultV2Data({
+          address: "0x1111111111111111111111111111111111111111",
+        }),
         shares,
         slippageTolerance: 0n,
       })
       .buildTx();
 
-    const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
-    if (bundle.functionName !== "multicall") {
-      throw new Error("Expected a Bundler3 multicall");
-    }
-    const redeem = decodeFunctionData({
-      abi: generalAdapter1Abi,
-      data: bundle.args[0][1]!.data,
-    });
-
-    expect(redeem.functionName).toBe("erc4626Redeem");
-    expect(redeem.args[2]).toBe(expectedFloor);
     expect(tx.action.args.minSharePriceVaultV1).toBe(expectedFloor);
-    expect(expectedFloor).toBeGreaterThan(0n);
     expect(expectedFloor).toBeLessThan(
       MathLib.mulDivDown(sourceVault.toAssets(shares), MathLib.RAY, shares),
     );

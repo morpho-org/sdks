@@ -30,7 +30,6 @@ function accrualVault({
     vaultInput({
       supplyQueue: includeInSupplyQueue ? [position.marketId] : [],
       totalSupply: 1_000n,
-      totalAssets: position.supplyAssets,
       lastTotalAssets: 50n,
       lostAssets,
     }),
@@ -98,7 +97,6 @@ describe("AccrualVault", () => {
       vaultInput({
         supplyQueue: [firstPosition.marketId, secondPosition.marketId],
         totalSupply: 1_000n,
-        totalAssets: 150n,
       }),
       [
         {
@@ -124,32 +122,12 @@ describe("AccrualVault", () => {
     ).toBe(MathLib.WAD - 1n);
   });
 
-  test("constructor preserves full assets and falls back to allocation assets", () => {
-    const position = accrualPosition({ supplyShares: 100n });
-    const input = vaultInput({ totalAssets: 150n });
-    const allocations = [
-      {
-        config: vaultMarketConfig(position.marketId),
-        position,
-      },
-    ];
-
-    expect(new AccrualVault(input, allocations).totalAssets).toBe(150n);
-    expect(
-      new AccrualVault({ ...input, totalAssets: undefined }, allocations)
-        .totalAssets,
-    ).toBe(position.supplyAssets);
-  });
-
   test("liquidity sums allocation withdraw capacity", () => {
     expect(accrualVault().liquidity).toBe(100n);
   });
 
   test("apy helpers return zero for empty vaults and positive values otherwise", () => {
-    const empty = new AccrualVault(
-      vaultInput({ supplyQueue: [], totalAssets: 0n }),
-      [],
-    );
+    const empty = new AccrualVault(vaultInput({ supplyQueue: [] }), []);
     const funded = accrualVault();
 
     expect(empty.apy).toBe(0);
@@ -182,15 +160,12 @@ describe("AccrualVault", () => {
       fee: 25_0000000000000000n,
     });
     const vault = new AccrualVault(
-      {
-        ...vaultInput({
-          totalSupply: 0n,
-          lastTotalAssets: 0n,
-          supplyQueue: [],
-          fee: 20_0000000000000000n,
-        }),
-        totalAssets: undefined,
-      },
+      vaultInput({
+        totalSupply: 0n,
+        lastTotalAssets: 0n,
+        supplyQueue: [],
+        fee: 20_0000000000000000n,
+      }),
       [
         {
           config: vaultMarketConfig(slowMarket.id, {
@@ -228,10 +203,7 @@ describe("AccrualVault", () => {
   });
 
   test("getAllocationProportion handles empty and missing allocations", () => {
-    const empty = new AccrualVault(
-      vaultInput({ supplyQueue: [], totalAssets: 0n }),
-      [],
-    );
+    const empty = new AccrualVault(vaultInput({ supplyQueue: [] }), []);
     const vault = accrualVault();
     const marketId = vault.withdrawQueue[0]!;
 
@@ -295,38 +267,12 @@ describe("AccrualVault", () => {
     expect(accrued.lastTotalAssets).toBe(accrued.totalAssets);
   });
 
-  test("accrueInterest preserves idle assets without mutating the source", () => {
-    const position = accrualPosition({ supplyShares: 100n });
-    const allocatedBefore = position.supplyAssets;
-    const vault = new AccrualVault(
-      vaultInput({
-        fee: 0n,
-        totalAssets: allocatedBefore + 50n,
-        lastTotalAssets: allocatedBefore + 50n,
-      }),
-      [
-        {
-          config: vaultMarketConfig(position.marketId),
-          position,
-        },
-      ],
-    );
-
-    const accrued = vault.accrueInterest(200n);
-    const allocatedAfter = accrued.allocations.get(position.marketId)!.position
-      .supplyAssets;
-
-    expect(vault.totalAssets).toBe(allocatedBefore + 50n);
-    expect(accrued.totalAssets).toBe(allocatedAfter + 50n);
-  });
-
   test("accrueInterest does not count fetched lost assets twice", () => {
     const position = accrualPosition({ supplyShares: 100n });
     const allocatedAssets = position.supplyAssets;
     const vault = new AccrualVault(
       vaultInput({
         fee: 0n,
-        totalAssets: allocatedAssets + 10n,
         lastTotalAssets: allocatedAssets + 10n,
         lostAssets: 10n,
       }),
@@ -340,7 +286,7 @@ describe("AccrualVault", () => {
 
     const accrued = vault.accrueInterest(position.market.lastUpdate);
 
-    expect(accrued.totalAssets).toBe(vault.totalAssets);
+    expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
     expect(accrued.lostAssets).toBe(10n);
   });
 
@@ -350,7 +296,6 @@ describe("AccrualVault", () => {
     const vault = new AccrualVault(
       vaultInput({
         fee: 0n,
-        totalAssets: allocatedAssets + 10n,
         lastTotalAssets: allocatedAssets + 10n,
         lostAssets: 0n,
       }),
@@ -364,7 +309,7 @@ describe("AccrualVault", () => {
 
     const accrued = vault.accrueInterest(position.market.lastUpdate);
 
-    expect(accrued.totalAssets).toBe(vault.totalAssets);
+    expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
     expect(accrued.lostAssets).toBe(10n);
   });
 
@@ -379,7 +324,6 @@ describe("AccrualVault", () => {
       vaultInput({
         fee: MathLib.WAD / 2n,
         totalSupply: 1_000_000n,
-        totalAssets: lastTotalAssets,
         lastTotalAssets,
         lostAssets: 0n,
       }),

@@ -443,11 +443,5 @@ export async function fetchAccrualVault(
     ),
   );
 
-  return new AccrualVault(
-    vault,
-    allocations.map(({ config, position }) => ({
-      config,
-      position: position.accrueInterest(block.timestamp),
-    })),
-  );
+  return new AccrualVault(vault, allocations).accrueInterest(block.timestamp);
 }
