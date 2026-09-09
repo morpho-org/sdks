@@ -1218,6 +1218,133 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(forwardedQuoteConfig).not.toBe(quoteConfig);
     });
 
+    test("binds WDK's signing chain without splitting atomic dispatch", async () => {
+      // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
+      const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+        chainId: 1,
+        provider: "https://dummy-rpc-url.com",
+        bundlerUrl: "https://dummy-bundler-url.com",
+        safeModulesVersion: "0.3.0",
+        isSponsored: false,
+        useNativeCoins: true,
+      });
+      account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      readContractMock.mockResolvedValue(100_000n);
+      let signingChainId: bigint | undefined;
+      account.sendTransaction = vi.fn(async function (this: object) {
+        (account as unknown as { _chainId: bigint | undefined })._chainId =
+          8453n;
+        const getChainId = Reflect.get(
+          this,
+          "_getChainId",
+        ) as () => Promise<bigint>;
+        signingChainId = await getChainId.call(this);
+        return { hash: "dummy-user-operation-hash", fee: 777n };
+      });
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+      });
+
+      await expect(
+        protocol.supply(
+          { token: TOKEN, amount: 100_000n },
+          { paymasterToken: { address: TOKEN } },
+        ),
+      ).resolves.toEqual({ hash: "dummy-user-operation-hash", fee: 777n });
+
+      expect(signingChainId).toBe(1n);
+      expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, {
+        paymasterToken: { address: TOKEN },
+        nonceKey: 0n,
+      });
+    });
+
+    test("behavior: bypasses WDK's transaction-only quote cache", async () => {
+      const provider = {
+        request: vi.fn(async ({ method }: { method: string }) => {
+          if (method === "eth_chainId") return "0x1";
+          if (method === "eth_call") return "0x0";
+          throw new Error(`Unhandled RPC ${method}`);
+        }),
+      };
+      const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+        chainId: 1,
+        provider,
+        bundlerUrl: "https://dummy-bundler-url.com",
+        safeModulesVersion: "0.3.0",
+        isSponsored: false,
+        useNativeCoins: true,
+      });
+      erc4337Account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+      readContractMock.mockResolvedValue(100_000n);
+
+      const internals = erc4337Account as unknown as {
+        _buildUserOperation: (...args: unknown[]) => Promise<unknown>;
+        _sendUserOperation: (...args: unknown[]) => Promise<string>;
+      };
+      const smartAccount = {
+        entrypointAddress: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+        accountAddress: ADDRESS,
+      };
+      const cachedUserOp = {
+        nonce: 0n,
+        callGasLimit: 1n,
+        verificationGasLimit: 1n,
+        preVerificationGas: 1n,
+        maxFeePerGas: 100n,
+      };
+      const buildUserOperation = vi
+        .spyOn(internals, "_buildUserOperation")
+        .mockResolvedValueOnce({
+          userOp: cachedUserOp,
+          smartAccount,
+          chainId: 1n,
+          mode: "native",
+        })
+        .mockResolvedValueOnce({
+          userOp: { ...cachedUserOp, maxFeePerGas: 200n },
+          smartAccount,
+          chainId: 1n,
+          mode: "native",
+        });
+      vi.spyOn(internals, "_sendUserOperation").mockResolvedValue(
+        "dummy-user-operation-hash",
+      );
+      const sendTransaction = vi.spyOn(erc4337Account, "sendTransaction");
+      const erc4337Protocol = new MorphoProtocolEvm(erc4337Account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+      });
+
+      await expect(
+        erc4337Protocol.quoteSupply(
+          { token: TOKEN, amount: 100_000n },
+          { transactionMaxFee: 400n },
+        ),
+      ).resolves.toEqual({ fee: 360n });
+      await expect(
+        erc4337Protocol.supply(
+          { token: TOKEN, amount: 100_000n },
+          { transactionMaxFee: 1_000n },
+        ),
+      ).resolves.toEqual({
+        hash: "dummy-user-operation-hash",
+        fee: 720n,
+      });
+
+      expect(sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, {
+        transactionMaxFee: 1_000n,
+        nonceKey: 0n,
+      });
+      expect(buildUserOperation).toHaveBeenCalledTimes(2);
+      expect(buildUserOperation.mock.calls[1]?.[1]).toEqual(
+        expect.objectContaining({ transactionMaxFee: 1_000n, nonceKey: 0n }),
+      );
+      expect(buildUserOperation.mock.calls[1]?.[2]).toEqual({ nonce: 0n });
+    });
+
     test.each([
       ["parallel", { parallel: true }],
       ["custom nonce", { nonceKey: "morpho" }],
@@ -1351,9 +1478,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
-    test("should invalidate chain-bound caches when the provider chain changes", async () => {
+    test("reuses same-chain clients after the provider returns", async () => {
       await protocol.getMarketPosition();
       expect(blueMock).toHaveBeenCalledWith(expect.any(Object), 1);
+      expect(morphoViemExtensionMock).toHaveBeenCalledOnce();
 
       mockGetChainId.mockResolvedValue(8453);
 
@@ -1365,10 +1493,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       mockGetChainId.mockResolvedValue(1);
       await protocol.getMarketPosition();
       expect(blueMock).toHaveBeenCalledTimes(2);
-      expect(morphoViemExtensionMock).toHaveBeenCalledTimes(2);
+      expect(morphoViemExtensionMock).toHaveBeenCalledOnce();
     });
 
-    test("shares one context across same-chain operations completing out of order", async () => {
+    test("serializes concurrent chain observations by invocation order", async () => {
       const first = Promise.withResolvers<number>();
       const second = Promise.withResolvers<number>();
       mockGetChainId
@@ -1378,70 +1506,29 @@ describe.sequential("MorphoProtocolEvm", () => {
       const firstPosition = protocol.getMarketPosition();
       const secondPosition = protocol.getMarketPosition();
       second.resolve(1);
-      await expect(secondPosition).resolves.toEqual(
-        expect.objectContaining({ marketId: expect.any(String) }),
-      );
+      await expect(
+        Promise.race([
+          secondPosition.then(() => "settled"),
+          Promise.resolve("pending"),
+        ]),
+      ).resolves.toBe("pending");
       first.resolve(1);
-      await expect(firstPosition).resolves.toEqual(
+      await expect(
+        Promise.all([firstPosition, secondPosition]),
+      ).resolves.toEqual([
         expect.objectContaining({ marketId: expect.any(String) }),
-      );
+        expect.objectContaining({ marketId: expect.any(String) }),
+      ]);
     });
 
-    test("waits for a newer same-chain observation when the older resolves first", async () => {
-      const first = Promise.withResolvers<number>();
-      const second = Promise.withResolvers<number>();
-      mockGetChainId
-        .mockImplementationOnce(() => first.promise)
-        .mockImplementationOnce(() => second.promise);
+    test("recovers after a failed chain observation", async () => {
+      const providerError = new Error("provider unavailable");
+      mockGetChainId.mockRejectedValueOnce(providerError);
 
-      const firstPosition = protocol.getMarketPosition();
-      const secondPosition = protocol.getMarketPosition();
-      first.resolve(1);
-      second.resolve(1);
-
-      await expect(firstPosition).resolves.toEqual(
+      await expect(protocol.getMarketPosition()).rejects.toBe(providerError);
+      await expect(protocol.getMarketPosition()).resolves.toEqual(
         expect.objectContaining({ marketId: expect.any(String) }),
       );
-      await expect(secondPosition).resolves.toEqual(
-        expect.objectContaining({ marketId: expect.any(String) }),
-      );
-    });
-
-    test("rejects conflicting chain observations completing out of order", async () => {
-      const first = Promise.withResolvers<number>();
-      const second = Promise.withResolvers<number>();
-      mockGetChainId
-        .mockImplementationOnce(() => first.promise)
-        .mockImplementationOnce(() => second.promise);
-
-      const firstPosition = protocol.getMarketPosition();
-      const secondPosition = protocol.getMarketPosition();
-      second.resolve(8453);
-      await expect(secondPosition).rejects.toBeInstanceOf(ChainIdMismatchError);
-      first.resolve(1);
-      await expect(firstPosition).rejects.toBeInstanceOf(ChainIdMismatchError);
-    });
-
-    test("rejects dispatch while a newer chain observation is pending", async () => {
-      const dispatchChain = Promise.withResolvers<number>();
-      const newerChain = Promise.withResolvers<number>();
-      mockGetChainId
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(1)
-        .mockImplementationOnce(() => dispatchChain.promise)
-        .mockImplementationOnce(() => newerChain.promise);
-      const supply = protocol.supply({ token: TOKEN, nativeAmount: 100_000n });
-      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
-      const position = protocol.getMarketPosition();
-      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(4));
-
-      dispatchChain.resolve(1);
-      await Promise.resolve();
-      expect(sendRawTransactionMock).not.toHaveBeenCalled();
-
-      newerChain.resolve(8453);
-      await expect(supply).rejects.toBeInstanceOf(ChainIdMismatchError);
-      await expect(position).rejects.toBeInstanceOf(ChainIdMismatchError);
     });
 
     test("does not cache market data resolved after a chain switch", async () => {
@@ -1469,51 +1556,45 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(fetchMarketMock).toHaveBeenCalledTimes(2);
     });
 
-    test("invalidates same-chain caches after an observed switch away and back", async () => {
-      await protocol.getMarketPosition();
-      const priorChainReads = mockGetChainId.mock.calls.length;
-      const switchedChain = Promise.withResolvers<number>();
-      const returnedChain = Promise.withResolvers<number>();
-      mockGetChainId
-        .mockImplementationOnce(() => switchedChain.promise)
-        .mockImplementationOnce(() => returnedChain.promise);
-
-      const switchedPosition = protocol.getMarketPosition();
-      const returnedPosition = protocol.getMarketPosition();
-      await vi.waitFor(() =>
-        expect(mockGetChainId).toHaveBeenCalledTimes(priorChainReads + 2),
-      );
-      returnedChain.resolve(1);
-      await expect(returnedPosition).resolves.toEqual(
-        expect.objectContaining({ marketId: expect.any(String) }),
-      );
-      switchedChain.resolve(8453);
-      await expect(switchedPosition).rejects.toBeInstanceOf(
-        ChainIdMismatchError,
-      );
-
-      const cachedEntities = blueMock.mock.calls.length;
-      await protocol.getMarketPosition();
-      expect(blueMock).toHaveBeenCalledTimes(cachedEntities + 1);
-    });
-
     test("rechecks the chain immediately before native-value dispatch", async () => {
-      mockGetChainId
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(8453);
+      mockGetChainId.mockResolvedValueOnce(1).mockResolvedValueOnce(8453);
       await expect(
         protocol.supply({ token: TOKEN, nativeAmount: 100_000n }),
       ).rejects.toBeInstanceOf(ChainIdMismatchError);
       expect(sendRawTransactionMock).not.toHaveBeenCalled();
     });
 
-    test("rejects a market quote when its completion crosses chains", async () => {
+    test("waits for an older chain observation before dispatch", async () => {
+      const balance = Promise.withResolvers<bigint>();
+      account.getTokenBalance = vi.fn(() => balance.promise);
+      const supply = protocol.supply({ token: TOKEN, amount: 100_000n });
+      await vi.waitFor(() =>
+        expect(account.getTokenBalance).toHaveBeenCalled(),
+      );
+
+      const switchedChain = Promise.withResolvers<number>();
+      const terminalChain = Promise.withResolvers<number>();
       mockGetChainId
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(8453);
+        .mockImplementationOnce(() => switchedChain.promise)
+        .mockImplementationOnce(() => terminalChain.promise);
+      const switchedPosition = protocol.getMarketPosition();
+      balance.resolve(100_000n);
+      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
+
+      terminalChain.resolve(1);
+      await Promise.resolve();
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
+
+      switchedChain.resolve(8453);
+      await expect(switchedPosition).rejects.toBeInstanceOf(
+        ChainIdMismatchError,
+      );
+      await expect(supply).rejects.toBeInstanceOf(ChainIdMismatchError);
+      expect(sendRawTransactionMock).not.toHaveBeenCalled();
+    });
+
+    test("rejects a market quote when its completion crosses chains", async () => {
+      mockGetChainId.mockResolvedValueOnce(1).mockResolvedValueOnce(8453);
       account.quoteSendTransaction = vi
         .fn()
         .mockResolvedValue({ fee: 12_345n });
@@ -1523,7 +1604,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       ).rejects.toBeInstanceOf(ChainIdMismatchError);
     });
 
-    test("rejects requirements resolved after another operation observes a switch", async () => {
+    test("rejects an in-flight operation after out-of-order A-B-A observations", async () => {
       const requirementResult =
         Promise.withResolvers<{ action: { type: string } }[]>();
       supplyAction.getRequirements.mockImplementationOnce(
@@ -1537,26 +1618,42 @@ describe.sequential("MorphoProtocolEvm", () => {
         expect(supplyAction.getRequirements).toHaveBeenCalledOnce(),
       );
 
-      mockGetChainId.mockResolvedValue(8453);
-      await expect(protocol.getMarketPosition()).rejects.toBeInstanceOf(
-        ChainIdMismatchError,
+      const olderObservation = Promise.withResolvers<number>();
+      const newerObservation = Promise.withResolvers<number>();
+      mockGetChainId
+        .mockImplementationOnce(() => olderObservation.promise)
+        .mockImplementationOnce(() => newerObservation.promise);
+      const olderPosition = protocol.getMarketPosition();
+      const newerPosition = protocol.getMarketPosition();
+      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
+
+      newerObservation.resolve(1);
+      await expect(
+        Promise.race([
+          newerPosition.then(() => "settled"),
+          Promise.resolve("pending"),
+        ]),
+      ).resolves.toBe("pending");
+      olderObservation.resolve(8453);
+      await expect(olderPosition).rejects.toBeInstanceOf(ChainIdMismatchError);
+      await expect(newerPosition).resolves.toEqual(
+        expect.objectContaining({ marketId: expect.any(String) }),
       );
+
+      mockGetChainId.mockResolvedValue(1);
       requirementResult.resolve([{ action: { type: "erc20Approval" } }]);
       await expect(requirements).rejects.toBeInstanceOf(ChainIdMismatchError);
     });
 
-    test("shares one chain context across account-data reads", async () => {
-      const vaultChain = Promise.withResolvers<number>();
-      const marketChain = Promise.withResolvers<number>();
+    test("checks account-data reads at the operation boundaries", async () => {
+      const finalChain = Promise.withResolvers<number>();
       mockGetChainId
         .mockResolvedValueOnce(1)
-        .mockImplementationOnce(() => vaultChain.promise)
-        .mockImplementationOnce(() => marketChain.promise);
+        .mockImplementationOnce(() => finalChain.promise);
 
       const accountData = protocol.getAccountData();
-      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
-      vaultChain.resolve(1);
-      marketChain.resolve(1);
+      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(2));
+      finalChain.resolve(1);
 
       await expect(accountData).resolves.toEqual(
         expect.objectContaining({
@@ -1564,70 +1661,11 @@ describe.sequential("MorphoProtocolEvm", () => {
           marketId: new MarketParams(MARKET_PARAMS).id,
         }),
       );
+      expect(mockGetChainId).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("erc-4337 chain binding", () => {
-    test("preserves the invalid chain across out-of-order provider requests", async () => {
-      const first = Promise.withResolvers<number>();
-      const second = Promise.withResolvers<number>();
-      mockGetChainId
-        .mockImplementationOnce(() => first.promise)
-        .mockImplementationOnce(() => second.promise);
-      const handle = createMockClient(mainnet);
-      handle.request.mockImplementation(async ({ method }) => {
-        if (method === "eth_chainId") {
-          const chainId = await mockGetChainId();
-          return `0x${chainId.toString(16)}`;
-        }
-        throw new Error(`Unhandled RPC ${method}`);
-      });
-      const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
-        chainId: 1,
-        provider: {
-          request: ({ method, params }) =>
-            handle.request({
-              method,
-              params: Array.isArray(params) ? params : undefined,
-            }),
-        },
-        bundlerUrl: "https://dummy-bundler-url.com",
-        safeModulesVersion: "0.3.0",
-        isSponsored: false,
-        useNativeCoins: true,
-      });
-      erc4337Account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
-      const erc4337Protocol = new MorphoProtocolEvm(erc4337Account, {
-        chainId: 1,
-        borrowMarketParams: MARKET_PARAMS,
-      });
-
-      await createClientMock.withImplementation(
-        (parameters) =>
-          viem.createClient(
-            parameters as Parameters<typeof viem.createClient>[0],
-          ),
-        async () => {
-          const firstPosition = erc4337Protocol.getMarketPosition();
-          const secondPosition = erc4337Protocol.getMarketPosition();
-          second.resolve(8453);
-          await expect(secondPosition).rejects.toBeInstanceOf(
-            ChainIdMismatchError,
-          );
-          first.resolve(1);
-          await expect(firstPosition).rejects.toBeInstanceOf(
-            ChainIdMismatchError,
-          );
-        },
-      );
-
-      expect(handle.request.mock.calls.map(([call]) => call.method)).toEqual([
-        "eth_chainId",
-        "eth_chainId",
-      ]);
-      expect(Reflect.get(erc4337Protocol, "_erc4337InvalidChainId")).toBe(8453);
-    });
-
     test("rejects a cached account chain before resolving entities", async () => {
       const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 8453,
@@ -1652,7 +1690,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(blueMock).not.toHaveBeenCalled();
     });
 
-    test("requires a fresh account after an observed chain switch", async () => {
+    test("recovers when the provider returns to the configured chain", async () => {
       const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
@@ -1675,24 +1713,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ChainIdMismatchError,
       );
       mockGetChainId.mockResolvedValue(1);
-      await expect(erc4337Protocol.getMarketPosition()).rejects.toBeInstanceOf(
-        ChainIdMismatchError,
-      );
-
-      const freshAccount = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
-        chainId: 1,
-        provider: "https://dummy-rpc-url.com",
-        bundlerUrl: "https://dummy-bundler-url.com",
-        safeModulesVersion: "0.3.0",
-        isSponsored: false,
-        useNativeCoins: true,
-      });
-      freshAccount.getAddress = vi.fn().mockResolvedValue(ADDRESS);
-      const freshProtocol = new MorphoProtocolEvm(freshAccount, {
-        chainId: 1,
-        borrowMarketParams: MARKET_PARAMS,
-      });
-      await expect(freshProtocol.getMarketPosition()).resolves.toEqual(
+      await expect(erc4337Protocol.getMarketPosition()).resolves.toEqual(
         expect.objectContaining({ marketId: expect.any(String) }),
       );
     });

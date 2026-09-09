@@ -296,7 +296,8 @@ interface WdkTransaction extends EvmTransaction {
 
 interface ChainContext {
   readonly chainId: number;
-  readonly generation: number;
+  readonly revision: number;
+  readonly previousChainId: number | undefined;
 }
 
 interface PreparedTransaction {
@@ -534,27 +535,24 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   private readonly _provider: Eip1193Provider;
   private readonly _accountConfiguredChainId: number | undefined;
   private _chainContext: ChainContext | undefined = undefined;
-  private _latestChainObservation:
-    | { readonly chainId: Promise<number> }
-    | undefined = undefined;
-  private _erc4337Context: ChainContext | undefined = undefined;
-  private _erc4337InvalidChainId: number | undefined = undefined;
+  private _latestChainObservation: Promise<ChainContext> | undefined =
+    undefined;
   private _viemClient:
     | {
-        readonly context: ChainContext;
+        readonly chainId: number;
         readonly account: Address;
         readonly value: ViemPublicClient;
       }
     | undefined = undefined;
   private _morphoClient:
     | {
-        readonly context: ChainContext;
+        readonly chainId: number;
         readonly viemClient: ViemPublicClient;
         readonly value: MorphoClientType;
       }
     | undefined = undefined;
   private _marketParams:
-    | { readonly context: ChainContext; readonly value: MarketParams }
+    | { readonly chainId: number; readonly value: MarketParams }
     | undefined = undefined;
 
   /**
@@ -789,10 +787,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const userAddress = await this._getSdkUserAddress(onBehalfOf);
     const vault = await this._getVault(context);
     const accrualVault = await vault.entity.getData();
-    await this._revalidate(context);
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
       throw new Error(
@@ -916,7 +913,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertOptionalAddress("to", to);
 
     const userAddress = (await this._evmAccount.getAddress()) as Address;
-    this._assertCurrent(context);
     if (to !== undefined && !isAddressEqual(to as Address, userAddress)) {
       throw new Error(
         "'to' must equal the wallet account address for Morpho vault withdrawals.",
@@ -925,7 +921,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const vault = await this._getVault(context);
     const accrualVault = await vault.entity.getData();
-    await this._revalidate(context);
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
       throw new Error(
@@ -1137,7 +1132,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const userAddress = await this._getSdkUserAddress(onBehalfOf);
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
@@ -1147,7 +1142,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
-    await this._revalidate(context);
 
     return market.entity.borrow({
       amount: normalizedAmount,
@@ -1317,7 +1311,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const userAddress = await this._getSdkUserAddress(onBehalfOf);
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.loanToken, token as Address)) {
@@ -1327,7 +1321,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
-    await this._revalidate(context);
     const repayAmount =
       normalizedAmount === "max"
         ? { shares: positionData.borrowShares }
@@ -1514,7 +1507,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
 
-    const userAddress = await this._getSdkUserAddress(context, onBehalfOf);
+    const userAddress = await this._getSdkUserAddress(onBehalfOf);
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
@@ -1643,7 +1636,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     this._assertOptionalAddress("to", to);
 
     const userAddress = (await this._evmAccount.getAddress()) as Address;
-    this._assertCurrent(context);
     const market = await this._getMarket(context);
 
     if (!isAddressEqual(market.params.collateralToken, token as Address)) {
@@ -1659,7 +1651,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     const positionData = await market.entity.getPositionData(userAddress);
-    await this._revalidate(context);
 
     return {
       context,
@@ -1700,8 +1691,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    */
   async getVaultPosition(account?: string): Promise<VaultPosition> {
     const context = await this._getVaultContext();
+    const position = await this._getVaultPosition(context, account);
+    await this._revalidate(context);
 
-    return await this._getVaultPosition(context, account);
+    return position;
   }
 
   private async _getVaultPosition(
@@ -1713,10 +1706,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const userAddress =
       (account as Address | undefined) ??
       ((await this._evmAccount.getAddress()) as Address);
-    this._assertCurrent(context);
     const vault = await this._getVault(context);
     const data = await vault.entity.getData();
-    await this._revalidate(context);
     const client = await this._getViemClient(context);
     const shares = await client.readContract({
       address: vault.address,
@@ -1724,7 +1715,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       functionName: "balanceOf",
       args: [userAddress],
     });
-    await this._revalidate(context);
 
     return {
       shares,
@@ -1758,8 +1748,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    */
   async getMarketPosition(account?: string): Promise<MarketPosition> {
     const context = await this._getMarketContext();
+    const position = await this._getMarketPosition(context, account);
+    await this._revalidate(context);
 
-    return await this._getMarketPosition(context, account);
+    return position;
   }
 
   private async _getMarketPosition(
@@ -1771,10 +1763,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const userAddress =
       (account as Address | undefined) ??
       ((await this._evmAccount.getAddress()) as Address);
-    this._assertCurrent(context);
     const market = await this._getMarket(context);
     const position = await market.entity.getPositionData(userAddress);
-    await this._revalidate(context);
 
     return {
       supplyShares: position.supplyShares,
@@ -1860,7 +1850,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }> {
     const target = this._resolveVaultTarget();
     const { address } = target;
-    this._assertCurrent(context);
     this._assertTargetChain(target, context);
     const client = await this._getMorphoClient(context);
     const entity = client.vaultV2(address, context.chainId);
@@ -1874,7 +1863,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }> {
     const params = await this._getMarketParams(context);
     const client = await this._getMorphoClient(context);
-    this._assertCurrent(context);
 
     return {
       params,
@@ -1883,13 +1871,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getMarketParams(context: ChainContext): Promise<MarketParams> {
-    if (this._marketParams?.context === context) {
+    if (this._marketParams?.chainId === context.chainId) {
       return this._marketParams.value;
     }
 
     const target = this._resolveMarketTarget();
 
-    this._assertCurrent(context);
     this._assertTargetChain(target, context);
 
     if ("marketParams" in target) {
@@ -1897,7 +1884,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         target.marketParams instanceof MarketParams
           ? target.marketParams
           : new MarketParams(target.marketParams);
-      this._marketParams = { context, value };
+      this._marketParams = { chainId: context.chainId, value };
       return value;
     }
 
@@ -1912,7 +1899,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       market.params instanceof MarketParams
         ? market.params
         : new MarketParams(market.params);
-    this._marketParams = { context, value };
+    this._marketParams = { chainId: context.chainId, value };
 
     return value;
   }
@@ -1923,7 +1910,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const viemClient = await this._getViemClient(context);
 
     if (
-      this._morphoClient?.context !== context ||
+      this._morphoClient?.chainId !== context.chainId ||
       this._morphoClient.viemClient !== viemClient
     ) {
       const value = viemClient.extend(
@@ -1933,7 +1920,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
           metadata: this._options.metadata,
         }),
       ).morpho;
-      this._morphoClient = { context, viemClient, value };
+      this._morphoClient = { chainId: context.chainId, viemClient, value };
     }
 
     return this._morphoClient.value;
@@ -1963,11 +1950,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     context: ChainContext,
   ): Promise<ViemPublicClient> {
     const address = (await this._evmAccount.getAddress()) as Address;
-    this._assertCurrent(context);
 
     if (
       this._viemClient &&
-      this._viemClient.context === context &&
+      this._viemClient.chainId === context.chainId &&
       isAddressEqual(this._viemClient.account, address)
     ) {
       return this._viemClient.value;
@@ -1978,60 +1964,39 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       chain: this._getViemChain(context.chainId),
       transport: this._getViemTransport(),
     }).extend(publicActions) as ViemPublicClient;
-    this._viemClient = { context, account: address, value };
+    this._viemClient = { chainId: context.chainId, account: address, value };
 
     return value;
   }
 
   private async _getChainContext(): Promise<ChainContext> {
-    const observation = {
-      chainId: createClient({
-        transport: this._getViemTransport(),
-      })
-        .extend(publicActions)
-        .getChainId()
-        .then(Number),
-    };
+    const observedChain = createClient({ transport: this._getViemTransport() })
+      .extend(publicActions)
+      .getChainId()
+      .then(
+        (chainId) => ({ type: "success" as const, chainId: Number(chainId) }),
+        (error: unknown) => ({ type: "failure" as const, error }),
+      );
+    const previousObservation = this._latestChainObservation;
+    const observation = (async () => {
+      await previousObservation?.catch(() => undefined);
+      const result = await observedChain;
+      if (result.type === "failure") throw result.error;
+
+      const observedChainId = result.chainId;
+      const context =
+        this._chainContext?.chainId === observedChainId
+          ? this._chainContext
+          : Object.freeze({
+              chainId: observedChainId,
+              revision: (this._chainContext?.revision ?? 0) + 1,
+              previousChainId: this._chainContext?.chainId,
+            });
+      this._chainContext = context;
+      return context;
+    })();
     this._latestChainObservation = observation;
-    const chainId = await observation.chainId;
-    let latestObservation = observation;
-    let latestChainId = chainId;
-
-    while (latestObservation !== this._latestChainObservation) {
-      const nextObservation = this._latestChainObservation;
-      if (nextObservation === undefined) break;
-      latestObservation = nextObservation;
-      latestChainId = await nextObservation.chainId;
-    }
-
-    if (latestChainId !== chainId) {
-      this._chainContext = Object.freeze({
-        chainId: latestChainId,
-        generation: (this._chainContext?.generation ?? 0) + 1,
-      });
-      if (this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337) {
-        const expectedChainId =
-          this._erc4337Context?.chainId ??
-          this._accountConfiguredChainId ??
-          latestChainId;
-        this._erc4337InvalidChainId ??=
-          latestChainId !== expectedChainId ? latestChainId : chainId;
-        throw new ChainIdMismatchError(
-          this._erc4337InvalidChainId,
-          expectedChainId,
-        );
-      }
-      throw new ChainIdMismatchError(latestChainId, chainId);
-    }
-
-    const context =
-      this._chainContext?.chainId === latestChainId
-        ? this._chainContext
-        : Object.freeze({
-            chainId: latestChainId,
-            generation: (this._chainContext?.generation ?? 0) + 1,
-          });
-    this._chainContext = context;
+    const context = await observation;
     this._assertErc4337Context(context);
     return context;
   }
@@ -2048,21 +2013,18 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return context;
   }
 
-  private _assertCurrent(context: ChainContext): void {
-    if (this._chainContext !== context) {
-      throw new ChainIdMismatchError(
-        this._chainContext?.chainId,
-        context.chainId,
-      );
-    }
-
-    this._assertErc4337Context(context);
-  }
-
   private async _revalidate(context: ChainContext): Promise<void> {
     const current = await this._getChainContext();
-    if (current !== context) {
-      throw new ChainIdMismatchError(current.chainId, context.chainId);
+    if (
+      current.chainId !== context.chainId ||
+      current.revision !== context.revision
+    ) {
+      throw new ChainIdMismatchError(
+        current.chainId === context.chainId
+          ? current.previousChainId
+          : current.chainId,
+        context.chainId,
+      );
     }
   }
 
@@ -2073,35 +2035,20 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const cachedChainId: unknown = Reflect.get(this._evmAccount, "_chainId");
     const accountChainId =
-      typeof cachedChainId === "bigint"
-        ? Number(cachedChainId)
-        : this._accountConfiguredChainId;
-    const expectedChainId =
-      this._erc4337Context?.chainId ?? accountChainId ?? context.chainId;
-
-    if (this._erc4337InvalidChainId !== undefined) {
-      throw new ChainIdMismatchError(
-        this._erc4337InvalidChainId,
-        expectedChainId,
-      );
-    }
+      typeof cachedChainId === "bigint" ? Number(cachedChainId) : undefined;
+    const expectedChainId = this._accountConfiguredChainId ?? accountChainId;
 
     if (
-      (accountChainId !== undefined && accountChainId !== expectedChainId) ||
-      context.chainId !== expectedChainId ||
-      (this._erc4337Context !== undefined && this._erc4337Context !== context)
+      expectedChainId !== undefined &&
+      accountChainId !== undefined &&
+      accountChainId !== expectedChainId
     ) {
-      this._erc4337InvalidChainId =
-        accountChainId !== undefined && accountChainId !== expectedChainId
-          ? accountChainId
-          : context.chainId;
-      throw new ChainIdMismatchError(
-        this._erc4337InvalidChainId,
-        expectedChainId,
-      );
+      throw new ChainIdMismatchError(accountChainId, expectedChainId);
     }
 
-    this._erc4337Context = context;
+    if (expectedChainId !== undefined && context.chainId !== expectedChainId) {
+      throw new ChainIdMismatchError(context.chainId, expectedChainId);
+    }
   }
 
   private _resolveVaultTarget(): VaultTarget {
@@ -2252,11 +2199,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getSdkUserAddress(
-    context: ChainContext,
     onBehalfOf: string | undefined,
   ): Promise<Address> {
     const address = (await this._evmAccount.getAddress()) as Address;
-    this._assertCurrent(context);
 
     if (
       onBehalfOf !== undefined &&
@@ -2278,7 +2223,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     let balance: bigint;
     if (this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337) {
       const client = await this._getViemClient(context);
-      const userAddress = await this._getSdkUserAddress(context, undefined);
+      const userAddress = await this._getSdkUserAddress(undefined);
       balance = await client.readContract({
         address: token,
         abi: erc20Abi,
@@ -2288,7 +2233,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     } else {
       balance = await this._evmAccount.getTokenBalance(token);
     }
-    await this._revalidate(context);
 
     if (balance < amount) {
       throw new Error("Not enough funds to fulfill the operation.");
@@ -2299,8 +2243,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     prepared: PreparedTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
-    await this._revalidate(prepared.context);
-
     if (this._evmAccount instanceof WalletAccountEvmErc4337) {
       const account = this._evmAccount;
       const walletConfig: unknown = Reflect.get(account, "_config");
@@ -2315,30 +2257,34 @@ export default class MorphoProtocolEvm extends LendingProtocol {
           effectiveConfig.nonceKey !== undefined &&
           effectiveConfig.nonceKey !== null) ||
         ("parallel" in effectiveConfig && effectiveConfig.parallel === true);
+      await this._revalidate(prepared.context);
 
-      if (hasNonceLane) {
-        return await account.sendTransaction(prepared.transaction, config);
-      }
+      // WDK's quote cache omits config; a nonce lane forces a fresh build.
+      const operationConfig = hasNonceLane
+        ? config
+        : { ...config, nonceKey: 0n };
+      // WDK reads this protected hook while signing. Bind it to the validated
+      // context so a provider switch cannot change the signature domain.
+      const chainBoundAccount = new Proxy(account, {
+        // biome-ignore lint/complexity/useMaxParams: standard Proxy trap signature
+        get(target, property, receiver) {
+          return property === "_getChainId"
+            ? async () => BigInt(prepared.context.chainId)
+            : Reflect.get(target, property, receiver);
+        },
+      });
 
-      // WDK's quote cache omits config; its default key-0 nonce lane forces a
-      // fresh, config-bound build instead of consuming a cached operation.
-      const cacheProofConfig: Erc4337TransactionConfig & {
-        readonly nonceKey: bigint;
-      } = { ...config, nonceKey: 0n };
-
-      return await account.sendTransaction(
+      return await chainBoundAccount.sendTransaction(
         prepared.transaction,
-        cacheProofConfig,
+        operationConfig,
       );
     }
     if (this._evmAccount instanceof WalletAccountEvm) {
       const { fee } = await this._evmAccount.quoteSendTransaction(
         prepared.transaction,
       );
-      await this._revalidate(prepared.context);
       const client = await this._getViemClient(prepared.context);
       const address = (await this._evmAccount.getAddress()) as Address;
-      this._assertCurrent(prepared.context);
       const transaction = await client.prepareTransactionRequest({
         account: address,
         chainId: prepared.context.chainId,
@@ -2346,7 +2292,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         value: prepared.transaction.value,
         data: prepared.transaction.data,
       });
-      await this._revalidate(prepared.context);
       const signed = await this._evmAccount.signTransaction({
         ...prepared.transaction,
         chainId: prepared.context.chainId,
@@ -2380,7 +2325,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     prepared: PreparedTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<{ fee: bigint }> {
-    await this._revalidate(prepared.context);
     const { fee } =
       this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337
         ? await this._evmAccount.quoteSendTransaction(
