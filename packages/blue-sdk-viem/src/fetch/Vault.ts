@@ -22,6 +22,9 @@ import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
+/** Settled `lostAssets()` read, kept until the vault version is known. */
+type LostAssetsRead = { value: bigint } | { error: unknown };
+
 /**
  * Fetches MetaMorpho vault state, accounting, queues, and public allocator config.
  *
@@ -148,7 +151,7 @@ export async function fetchVault(
     totalSupply,
     totalAssets,
     lastTotalAssets,
-    lostAssets,
+    lostAssetsRead,
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
@@ -238,7 +241,10 @@ export async function fetchVault(
       address,
       abi: metaMorphoAbi,
       functionName: "lostAssets",
-    }).catch(() => undefined),
+    }).then(
+      (value): LostAssetsRead => ({ value }),
+      (error: unknown): LostAssetsRead => ({ error }),
+    ),
     readContract(client, {
       ...parameters,
       address,
@@ -346,6 +352,12 @@ export async function fetchVault(
   if (!isMetaMorpho) {
     throw new UnknownOfFactory(metaMorphoFactory, address);
   }
+
+  // `lostAssets` only exists on MetaMorpho V1.1: a failed read is expected on V1.0
+  // but must not silently downgrade a V1.1 vault to V1.0 accounting.
+  if (isMetaMorphoV1_1 && "error" in lostAssetsRead) throw lostAssetsRead.error;
+  const lostAssets =
+    "value" in lostAssetsRead ? lostAssetsRead.value : undefined;
 
   return new Vault({
     ...config,

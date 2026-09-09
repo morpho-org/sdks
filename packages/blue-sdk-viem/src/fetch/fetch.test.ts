@@ -28,6 +28,7 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  ContractFunctionExecutionError,
   erc20Abi,
   erc20Abi_bytes32,
   maxUint256,
@@ -1688,6 +1689,127 @@ describe("vault fetchers", () => {
     await expect(
       fetchVault(VAULT, handle.client, { chainId: CHAIN_ID }),
     ).rejects.toThrow(UnknownOfFactory);
+  });
+
+  test("fetchVault rethrows a failed lostAssets read on a MetaMorpho V1.1 vault", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, ["0x"]);
+    mockVaultConfigReads(handle);
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "curator",
+      result: RECIPIENT,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "owner",
+      result: USER,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "guardian",
+      result: COLLATERAL,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "timelock",
+      result: 1n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "pendingTimelock",
+      result: [1n, 2n],
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "pendingGuardian",
+      result: [ORACLE, 3n],
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "pendingOwner",
+      result: TOKEN,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "fee",
+      result: 1n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "feeRecipient",
+      result: USER,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "skimRecipient",
+      result: RECIPIENT,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "totalSupply",
+      result: 1n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "totalAssets",
+      result: 1n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "lastTotalAssets",
+      result: 1n,
+    });
+    mockReadFailure(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "lostAssets",
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "supplyQueueLength",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "withdrawQueueLength",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "isAllocator",
+      result: false,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.metaMorphoFactory,
+      abi: metaMorphoFactoryIsMetaMorphoAbi,
+      functionName: "isMetaMorpho",
+      result: true,
+    });
+
+    const error = await fetchVault(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+      deployless: false,
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ContractFunctionExecutionError);
+    expect(error).not.toBeInstanceOf(UnknownOfFactory);
   });
 
   test("fetchVaultMarketAllocation composes market config and accrual position", async () => {
