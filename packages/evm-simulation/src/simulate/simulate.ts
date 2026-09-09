@@ -1,3 +1,8 @@
+import {
+  _try,
+  getChainAddresses,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import { ExternalServiceError } from "../errors.js";
 import type {
   SimulateParams,
@@ -18,7 +23,9 @@ import {
  *
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
  * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20/WETH transfers from per-tx logs → asserts no funds are retained
+ * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
+ * events to the registered wrapped-native token, rejecting them on known tokenless chains,
+ * and retaining signature-based parsing for unknown chains → asserts no funds are retained
  * by `bundler3` or the standalone `bundles` periphery contracts → returns the full result
  * set. The caller reads whichever fields they need:
  *
@@ -82,12 +89,18 @@ export async function simulate(
 ): Promise<SimulationResult> {
   validateInput(params);
 
+  const wNative = _try(
+    () => getChainAddresses(params.chainId).wNative ?? null,
+    UnsupportedChainIdError,
+  );
+
   const simulationTxs = buildSimulationTxs(params);
   const result = await executeSimulation({
     config,
     chainId: params.chainId,
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
+    wNative,
   });
   if (result.calls.length !== simulationTxs.length) {
     throw new ExternalServiceError(
@@ -95,7 +108,10 @@ export async function simulate(
     );
   }
 
-  const transfers = parseTransfers(result.calls, config.logger);
+  const transfers = parseTransfers(result.calls, {
+    wNative,
+    logger: config.logger,
+  });
 
   assertNoBundlerRetention({
     chainId: params.chainId,
