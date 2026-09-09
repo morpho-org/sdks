@@ -142,6 +142,18 @@ describe("PreLiquidationPosition", () => {
     expect(position.market.params.lltv).toBe(market().params.lltv);
   });
 
+  test("behavior: marketId is the base market id, before and after accrual", () => {
+    const position = preLiquidationPosition();
+    const baseId = market().id;
+
+    expect(position.marketId).toBe(baseId);
+    expect(position.marketId).toBe(position.market.id);
+
+    const accrued = position.accrueInterest(market().lastUpdate + 3600n);
+    expect(accrued.marketId).toBe(baseId);
+    expect(accrued.market.id).toBe(baseId);
+  });
+
   test("price-dependent states are undefined when the pre-liquidation oracle price is missing", () => {
     const position = preLiquidationPosition({
       preLiquidationOraclePrice: undefined,

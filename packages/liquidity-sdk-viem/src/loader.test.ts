@@ -622,6 +622,7 @@ describe.sequential("LiquidityLoader.fetch", () => {
     expect(first.withdrawals).toStrictEqual([
       { id: sourceMarketId, vault, assets: 100n },
     ]);
+    expect(first.targetBorrowUtilization).toBe(900000000000000000n);
     expect(second.withdrawals).toStrictEqual([
       { id: sourceMarketId, vault, assets: 1000n },
     ]);

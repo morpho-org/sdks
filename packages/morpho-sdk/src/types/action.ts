@@ -40,6 +40,7 @@ export interface VaultV2WithdrawAction
       vault: Address;
       amount: bigint;
       recipient: Address;
+      onBehalf: Address;
     }
   > {}
 
@@ -50,6 +51,7 @@ export interface VaultV2RedeemAction
       vault: Address;
       shares: bigint;
       recipient: Address;
+      onBehalf: Address;
     }
   > {}
 
@@ -108,6 +110,7 @@ export interface VaultV1WithdrawAction
       vault: Address;
       amount: bigint;
       recipient: Address;
+      onBehalf: Address;
     }
   > {}
 
@@ -118,6 +121,7 @@ export interface VaultV1RedeemAction
       vault: Address;
       shares: bigint;
       recipient: Address;
+      onBehalf: Address;
     }
   > {}
 

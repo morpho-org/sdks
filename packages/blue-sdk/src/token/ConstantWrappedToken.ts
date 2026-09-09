@@ -58,19 +58,21 @@ export class ConstantWrappedToken extends WrappedToken {
     return super.toUnwrappedExactAmountOut(unwrappedAmount, 0n, rounding);
   }
 
-  protected _wrap(amount: bigint) {
-    return MathLib.mulDivDown(
+  protected _wrap(amount: bigint, rounding: RoundingDirection) {
+    return MathLib.mulDiv(
       amount,
       10n ** BigInt(this.decimals),
       10n ** this.underlyingDecimals,
+      rounding,
     );
   }
 
-  protected _unwrap(amount: bigint) {
-    return MathLib.mulDivDown(
+  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
+    return MathLib.mulDiv(
       amount,
       10n ** this.underlyingDecimals,
       10n ** BigInt(this.decimals),
+      rounding,
     );
   }
 }

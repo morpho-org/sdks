@@ -73,7 +73,7 @@ export const vaultV1Withdraw = ({
     ...tx,
     action: {
       type: "vaultV1Withdraw",
-      args: { vault: vaultAddress, amount, recipient },
+      args: { vault: vaultAddress, amount, recipient, onBehalf },
     },
   });
 };

@@ -74,7 +74,7 @@ export const vaultV2Redeem = ({
     ...tx,
     action: {
       type: "vaultV2Redeem",
-      args: { vault: vaultAddress, shares, recipient },
+      args: { vault: vaultAddress, shares, recipient, onBehalf },
     },
   });
 };

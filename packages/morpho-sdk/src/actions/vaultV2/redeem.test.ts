@@ -30,6 +30,7 @@ describe("redeemVaultV2 unit tests", () => {
     expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
     expect(tx.action.args.shares).toBe(shares);
     expect(tx.action.args.recipient).toBe(client.account.address);
+    expect(tx.action.args.onBehalf).toBe(client.account.address);
     expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
     expect(tx.data).toBeDefined();
     expect(tx.value).toBe(0n);
@@ -47,7 +48,7 @@ describe("redeemVaultV2 unit tests", () => {
       args: {
         shares,
         recipient: client.account.address,
-        onBehalf: client.account.address,
+        onBehalf: "0x000000000000000000000000000000000000dEaD",
       },
     });
 
@@ -56,6 +57,9 @@ describe("redeemVaultV2 unit tests", () => {
     expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
     expect(tx.action.args.shares).toBe(shares);
     expect(tx.action.args.recipient).toBe(client.account.address);
+    expect(tx.action.args.onBehalf).toBe(
+      "0x000000000000000000000000000000000000dEaD",
+    );
     expect(tx.to).toBe(KpkWETHVaultV2.address);
     expect(tx.data).toBeDefined();
     expect(tx.value).toBe(0n);

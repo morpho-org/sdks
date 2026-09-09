@@ -74,7 +74,7 @@ export const vaultV2Withdraw = ({
     ...tx,
     action: {
       type: "vaultV2Withdraw",
-      args: { vault: vaultAddress, amount, recipient },
+      args: { vault: vaultAddress, amount, recipient, onBehalf },
     },
   });
 };

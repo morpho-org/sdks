@@ -46,6 +46,31 @@ describe("ConstantWrappedToken", () => {
     );
   });
 
+  test("behavior: honours the rounding direction on inexact conversions", () => {
+    const t = new ConstantWrappedToken(
+      { address: WRAPPED, decimals: 6 },
+      UNDERLYING,
+      18,
+    );
+    // 1.5e12 underlying wei = 1.5 wrapped units
+    const amount = 1_500_000_000_000n;
+
+    expect(t.toWrappedExactAmountIn(amount)).toBe(1n);
+    expect(t.toWrappedExactAmountIn(amount, 0n, "Up")).toBe(2n);
+    expect(t.toUnwrappedExactAmountOut(amount)).toBe(2n);
+    expect(t.toUnwrappedExactAmountOut(amount, 0n, "Down")).toBe(1n);
+
+    const inverse = new ConstantWrappedToken(
+      { address: WRAPPED, decimals: 18 },
+      UNDERLYING,
+      6,
+    );
+    expect(inverse.toUnwrappedExactAmountIn(amount)).toBe(1n);
+    expect(inverse.toUnwrappedExactAmountIn(amount, 0n, "Up")).toBe(2n);
+    expect(inverse.toWrappedExactAmountOut(amount)).toBe(2n);
+    expect(inverse.toWrappedExactAmountOut(amount, 0n, "Down")).toBe(1n);
+  });
+
   test("ignores slippage parameter (always treats as 0)", () => {
     const t = new ConstantWrappedToken(
       { address: WRAPPED, decimals: 18 },

@@ -197,7 +197,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
               startState,
               endState,
               withdrawals,
-              targetBorrowUtilization,
+              targetBorrowUtilization: BigInt(targetBorrowUtilization),
             };
           } catch (error) {
             return Error(
