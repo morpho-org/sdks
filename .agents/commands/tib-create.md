@@ -289,9 +289,9 @@ Run this against the draft and fix what fails:
    review-persona backlink (`AGENTS.md` §10), or the PR is still measured against the superseded
    rule. Note this in the TIB's `Breaking Changes & Migration` or `Acceptance Criteria` so the
    planning step carries it; the edit itself lands in the implementation PR, not the TIB PR.
-4. **Then plan.** Once accepted, run `/extract-plan docs/tibs/TIB-<DATE>-<SLUG>.md "<project name>"`
-   to generate the Linear tickets that carry the implementation detail. Those details live in the
-   tickets — never back in the TIB.
+4. **Then plan.** Once accepted, run `/tib-plan docs/tibs/TIB-<DATE>-<SLUG>.md "<project name>"` to
+   generate the Linear tickets that carry the implementation detail — one ticket per PR, each
+   describing the technical *how*. Those details live in the tickets — never back in the TIB.
 5. **Then leave it alone.** A changed decision gets a new superseding TIB, with `Supersedes` /
    `Superseded by` filled on both. An operational clarification gets a dated addendum. Recurring
    mechanical addenda mean the line was drawn in the wrong place — move the detail out of the brief
