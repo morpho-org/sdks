@@ -1020,26 +1020,24 @@ export namespace OfferUtils {
     const market = Market.from(offer.market);
     if (timestamp < start || timestamp > expiry) return 0n;
     if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
-    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 
-    const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
     const settlementFee = market.getSettlementFee(
       market.timeToMaturity(timestamp),
     );
+    // Validates the settlement fee against the offer price for both cap modes.
+    const { sellerPrice, buyerPrice } = TakeAmountsLib.prices({
+      offer,
+      settlementFee,
+    });
+    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
+
+    const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
     if (!offer.buy) {
-      const { sellerPrice } = TakeAmountsLib.prices({
-        offer,
-        settlementFee,
-      });
       if (sellerPrice === 0n) return MathLib.MAX_UINT_256;
 
       return MathLib.mulDivDown(remainingAssets, MathLib.WAD, sellerPrice);
     }
 
-    const { buyerPrice } = TakeAmountsLib.prices({
-      offer,
-      settlementFee,
-    });
     if (buyerPrice === 0n) return MathLib.MAX_UINT_256;
 
     return ((remainingAssets + 1n) * MathLib.WAD - 1n) / buyerPrice;
