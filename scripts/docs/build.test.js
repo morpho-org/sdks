@@ -18,7 +18,7 @@ let fixture;
 beforeEach(() => {
   fixture = mkdtempSync(join(tmpdir(), "sdk-docs-test-"));
   mkdirSync(join(fixture, "scripts/docs"), { recursive: true });
-  mkdirSync(join(fixture, "docs/api-markdown"), { recursive: true });
+  mkdirSync(join(fixture, "docs/api"), { recursive: true });
   symlinkSync(
     resolve("node_modules"),
     join(fixture, "node_modules"),
@@ -146,7 +146,7 @@ function runBuild() {
 }
 
 function readPages() {
-  const directory = join(fixture, "docs/api-markdown");
+  const directory = join(fixture, "docs/api");
   return Object.fromEntries(
     readdirSync(directory)
       .sort()
@@ -179,16 +179,13 @@ describe("documentation build", () => {
   test("behavior: repeated builds produce identical Markdown and remove stale pages", () => {
     runBuild();
     const first = readPages();
-    writeFileSync(join(fixture, "docs/api-markdown/stale.md"), "stale");
+    writeFileSync(join(fixture, "docs/api/stale.md"), "stale");
     runBuild();
     expect(readPages()).toEqual(first);
   });
 
   test("error: compiler failures preserve the previous reference", () => {
-    writeFileSync(
-      join(fixture, "docs/api-markdown/README.md"),
-      "previous reference",
-    );
+    writeFileSync(join(fixture, "docs/api/README.md"), "previous reference");
     const previous = readPages();
     writeFileSync(
       join(fixture, "packages/example/src/index.ts"),

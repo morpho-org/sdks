@@ -10,7 +10,6 @@
       "!**/coverage",
       "!**/artifacts",
       "!docs/api",
-      "!docs/api-markdown",
       "!.api-docs",
       "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]

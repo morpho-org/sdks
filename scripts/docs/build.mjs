@@ -25,7 +25,7 @@ const work = mkdtempSync(join(workRoot, "run-"));
 const declarations = join(work, "declarations");
 const models = join(work, "models");
 const markdown = join(work, "markdown");
-const destination = join(repo, "docs/api-markdown");
+const destination = join(repo, "docs/api");
 
 try {
   const tsconfig = JSON.parse(

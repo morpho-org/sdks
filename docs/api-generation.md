@@ -1,7 +1,7 @@
 # Generating API documentation
 
 API Extractor and API Documenter generate the committed
-[Markdown API reference](./api-markdown/README.md) from TypeScript declarations
+[Markdown API reference](./api/README.md) from TypeScript declarations
 and source JSDoc. Edit comments using the [JSDoc style guide](./jsdoc-style.md),
 then regenerate the reference. Do not edit generated pages.
 
@@ -15,7 +15,7 @@ pnpm docs:build:markdown
 ```
 
 `pnpm docs:build` is an alias for the same Markdown build. Both commands write
-`docs/api-markdown/`; they no longer generate an HTML website. The generated
+`docs/api/`; they no longer generate an HTML website. The generated
 `README.md` and `index.md` provide the same package index. Old TypeDoc page paths
 are replaced by API Documenter's filenames.
 
@@ -38,7 +38,7 @@ The [build script](../scripts/docs/build.mjs) runs these steps:
    external dependencies from their owning packages. Produce one `.api.json`
    model per documented package.
 5. Run API Documenter over all seven models to generate linked Markdown, normalize
-   line endings to LF, and replace `docs/api-markdown/` after successful generation.
+   line endings to LF, and replace `docs/api/` after successful generation.
 
 API Extractor **bundles its own TypeScript 5.9.3 analysis compiler**. The workspace
 continues to use TypeScript 7.0.2 for compilation and declaration emission. The
@@ -98,7 +98,7 @@ The Markdown reference is committed so Context7 can read it from the repository.
 Local generation does not update Context7 until the changes reach its indexed
 branch.
 
-1. Run `pnpm docs:build:markdown` and commit `docs/api-markdown/` with the API or
+1. Run `pnpm docs:build:markdown` and commit `docs/api/` with the API or
    comment changes.
 2. Merge the PR into the branch Context7 indexes.
 3. If a `context7.json` file limits included folders, include the generated

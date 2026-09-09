@@ -10,9 +10,8 @@
 # dependencies
 node_modules
 
-# documentation intermediates; docs/api-markdown is committed for Context7
+# documentation intermediates; docs/api is committed for Context7
 .api-docs
-docs/api
 
 # testing
 coverage
@@ -68,7 +67,7 @@ yarn-error.log*
 lerna-debug.log*
 
 # Generated API pages include log-related symbol names.
-!/docs/api-markdown/*.md
+!/docs/api/*.md
 
 # Local
 local_*
