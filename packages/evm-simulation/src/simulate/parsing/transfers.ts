@@ -55,7 +55,9 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * **WETH9 dedup assumption — canonical atomic emission.** Dedup for the
  * registered wrapped-native token is scoped to the same tx: a zero-address
  * `Transfer` is suppressed only if its paired `Deposit`/`Withdrawal` appears
- * in the same `calls[txIdx].logs` slice. This is correct for canonical WETH9,
+ * in the same `calls[txIdx].logs` slice. Pairing is one-to-one (each
+ * `Deposit`/`Withdrawal` absolves at most one `Transfer`) and compares
+ * `address`/`topics`/`data` case-insensitively. This is correct for canonical WETH9,
  * which always emits the `Deposit`/
  * `Withdrawal` and the matching `Transfer(0x0, …)` / `Transfer(…, 0x0)`
  * atomically inside a single call frame. A **non-canonical wrapped-native**
@@ -97,9 +99,10 @@ export function parseTransfers(
 
   for (let txIdx = 0; txIdx < calls.length; txIdx++) {
     const logs = calls[txIdx]!.logs;
+    const unpairedWnativeEvents = countWnativeEvents(logs);
     for (const log of logs) {
       try {
-        const topic0 = log.topics[0];
+        const topic0 = log.topics[0]?.toLowerCase();
         if (topic0 === undefined) continue;
 
         switch (topic0) {
@@ -168,16 +171,22 @@ export function parseTransfers(
 
             // WETH9 unwrap dedup: Transfer to zero paired with a Withdrawal of
             // equal amount in the SAME tx.
-            if (toTopic === zeroHash && acceptsWnativeEvent(log.address)) {
-              const paired = logs.some(
-                (other) =>
-                  other.topics[0] === WITHDRAWAL_TOPIC &&
-                  isAddressEqual(other.address, log.address) &&
-                  other.data === log.data &&
-                  other.topics.length === 2 &&
-                  other.topics[1] === fromTopic,
-              );
-              if (paired) continue;
+            if (
+              toTopic.toLowerCase() === zeroHash &&
+              acceptsWnativeEvent(log.address)
+            ) {
+              if (
+                consumeWnativeEvent(
+                  unpairedWnativeEvents,
+                  wnativeEventKey(
+                    WITHDRAWAL_TOPIC,
+                    log.address,
+                    fromTopic,
+                    log.data,
+                  ),
+                )
+              )
+                continue;
               if (
                 wNative !== undefined ||
                 wnativeShapedTokens.has(log.address.toLowerCase())
@@ -188,16 +197,22 @@ export function parseTransfers(
 
             // WETH9 wrap dedup: Transfer from zero paired with a Deposit of
             // equal amount in the SAME tx.
-            if (fromTopic === zeroHash && acceptsWnativeEvent(log.address)) {
-              const paired = logs.some(
-                (other) =>
-                  other.topics[0] === DEPOSIT_TOPIC &&
-                  isAddressEqual(other.address, log.address) &&
-                  other.data === log.data &&
-                  other.topics.length === 2 &&
-                  other.topics[1] === toTopic,
-              );
-              if (paired) continue;
+            if (
+              fromTopic.toLowerCase() === zeroHash &&
+              acceptsWnativeEvent(log.address)
+            ) {
+              if (
+                consumeWnativeEvent(
+                  unpairedWnativeEvents,
+                  wnativeEventKey(
+                    DEPOSIT_TOPIC,
+                    log.address,
+                    toTopic,
+                    log.data,
+                  ),
+                )
+              )
+                continue;
               if (
                 wNative !== undefined ||
                 wnativeShapedTokens.has(log.address.toLowerCase())
@@ -253,12 +268,54 @@ function warnMalformed(
   });
 }
 
+/** Case-insensitive identity of a WETH9 `Deposit`/`Withdrawal` log. */
+// biome-ignore lint/complexity/useMaxParams: flat key over the four pairing fields
+function wnativeEventKey(
+  topic0: Hex,
+  address: Address,
+  account: Hex,
+  data: Hex,
+): string {
+  return `${topic0}:${address.toLowerCase()}:${account.toLowerCase()}:${data.toLowerCase()}`;
+}
+
+/** Count WETH9 `Deposit`/`Withdrawal` logs of one tx, keyed by {@link wnativeEventKey}. */
+function countWnativeEvents(logs: readonly RawLog[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const log of logs) {
+    const topic0 = log.topics[0]?.toLowerCase();
+    const account = log.topics[1];
+    if (
+      (topic0 !== WITHDRAWAL_TOPIC && topic0 !== DEPOSIT_TOPIC) ||
+      log.topics.length !== 2 ||
+      !isTopicHex(account) ||
+      !isUint256Hex(log.data)
+    )
+      continue;
+    const key = wnativeEventKey(topic0, log.address, account, log.data);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Consume one unpaired WETH9 event for `key`; returns whether one was available. */
+function consumeWnativeEvent(
+  counts: Map<string, number>,
+  key: string,
+): boolean {
+  const remaining = counts.get(key);
+  if (remaining === undefined) return false;
+  if (remaining === 1) counts.delete(key);
+  else counts.set(key, remaining - 1);
+  return true;
+}
+
 /** Collect contracts that emit WETH9-shaped events anywhere in the bundle. */
 function collectWnativeShapedTokens(calls: readonly RawCall[]): Set<string> {
   const tokens = new Set<string>();
   for (const call of calls) {
     for (const log of call.logs) {
-      const topic0 = log.topics[0];
+      const topic0 = log.topics[0]?.toLowerCase();
       if (topic0 === WITHDRAWAL_TOPIC || topic0 === DEPOSIT_TOPIC) {
         tokens.add(log.address.toLowerCase());
       }

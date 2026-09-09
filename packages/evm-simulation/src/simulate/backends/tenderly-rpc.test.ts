@@ -501,6 +501,34 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     expect(txs[1]!.input).toBe("0x34");
   });
 
+  it("error: ExternalServiceError when the bundle returns fewer results than transactions", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope([successResult()]),
+    });
+    installFetchMock(fetchMock);
+
+    const promise = simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1, TX2],
+    });
+    await expect(promise).rejects.toBeInstanceOf(ExternalServiceError);
+    await expect(promise).rejects.not.toBeInstanceOf(SimulationRevertedError);
+  });
+
+  it("error: ExternalServiceError when the bundle returns more results than transactions", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope([successResult(), successResult(), successResult()]),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1, TX2] }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+
   it("emits one call per bundle step with its own gas/output/logs", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,

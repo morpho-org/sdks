@@ -122,7 +122,8 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
  * @throws {SimulationValidationError} when `transactions` is empty.
  * @throws {SimulationRevertedError} when any simulated tx reports `status: false`.
  * @throws {ExternalServiceError} on non-2xx response, JSON-RPC envelope error,
- *   schema-validation failure, or fetch-layer failure.
+ *   schema-validation failure, fetch-layer failure, or a bundle response whose
+ *   result count differs from the number of submitted transactions.
  */
 export async function simulateTenderlyRpc(params: {
   config: TenderlyRpcConfig;
@@ -167,6 +168,11 @@ export async function simulateTenderlyRpc(params: {
       signal,
     });
     const results = unwrapResult(bundleEnvelope.parse(json));
+    if (results.length !== transactions.length) {
+      throw new ExternalServiceError(
+        `Tenderly RPC returned ${results.length} result(s) for ${transactions.length} transaction(s)`,
+      );
+    }
     return {
       calls: results.map(toRawCall),
       assetChanges: toAssetChanges(results),

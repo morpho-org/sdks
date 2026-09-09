@@ -565,4 +565,111 @@ describe("parseTransfers", () => {
     expect(result[0]!.to).toBe(zeroAddress);
     expect(logger.warn).not.toHaveBeenCalled();
   });
+
+  test("behavior: WETH9 wrap dedup pairs mixed-case topics/address/data", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const amount = 1_000_000_000_000_000_000n;
+    const upper = (hex: Hex): Hex => `0x${hex.slice(2).toUpperCase()}`;
+    const logs: RawLog[] = [
+      {
+        address: upper(WETH),
+        topics: [upper(DEPOSIT_TOPIC), upper(padAddress(USER))],
+        data: upper(encodeUint256(amount)),
+      },
+      {
+        address: WETH.toLowerCase() as Address,
+        topics: [
+          TRANSFER_TOPIC,
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      token: getAddress(WETH),
+      from: zeroAddress,
+      to: getAddress(USER),
+      amount,
+      txIdx: 0,
+    });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("behavior: one WETH9 Deposit absolves at most one identical mint Transfer", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const amount = 1_000_000_000_000_000_000n;
+    const mint: RawLog = {
+      address: WETH,
+      topics: [TRANSFER_TOPIC, `0x${"0".repeat(64)}` as Hex, padAddress(USER)],
+      data: encodeUint256(amount),
+    };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      mint,
+      mint,
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+    // Deposit + first mint collapse into one; the second mint has no partner.
+    expect(result).toHaveLength(2);
+    expect(result.every((t) => t.from === zeroAddress)).toBe(true);
+    expect(result.every((t) => t.amount === amount)).toBe(true);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("WETH9 dedup miss"),
+      expect.objectContaining({ kind: "mint", txIdx: 0 }),
+    );
+  });
+
+  test("behavior: one WETH9 Withdrawal absolves at most one identical burn Transfer", () => {
+    const amount = 1_000_000_000_000_000_000n;
+    const burn: RawLog = {
+      address: WETH,
+      topics: [TRANSFER_TOPIC, padAddress(USER), `0x${"0".repeat(64)}` as Hex],
+      data: encodeUint256(amount),
+    };
+    const logs: RawLog[] = [
+      burn,
+      {
+        address: WETH,
+        topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+        data: encodeUint256(amount),
+      },
+      burn,
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+    expect(result).toHaveLength(2);
+    expect(result.every((t) => t.to === zeroAddress)).toBe(true);
+  });
+
+  test("behavior: two WETH9 Deposits absolve two identical mint Transfers", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const amount = 1_000_000_000_000_000_000n;
+    const deposit: RawLog = {
+      address: WETH,
+      topics: [DEPOSIT_TOPIC, padAddress(USER)],
+      data: encodeUint256(amount),
+    };
+    const mint: RawLog = {
+      address: WETH,
+      topics: [TRANSFER_TOPIC, `0x${"0".repeat(64)}` as Hex, padAddress(USER)],
+      data: encodeUint256(amount),
+    };
+
+    const result = parseTransfers(
+      [makeCall([deposit, mint, deposit, mint])],
+      logger,
+    );
+    expect(result).toHaveLength(2);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
 });
