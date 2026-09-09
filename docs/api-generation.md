@@ -5,9 +5,21 @@ reachable from the package entry points in [`typedoc.json`](../typedoc.json).
 Edit the source comments using the [JSDoc style guide](./jsdoc-style.md), then
 regenerate the reference. Do not edit generated pages.
 
+## Current compatibility
+
+The repository uses TypeScript 7.0.2 for all tooling. TypeDoc 0.28.20 currently
+does not support its compiler API, so both documentation generation commands
+fail at startup. Support is tracked in
+[TypeDoc #3098](https://github.com/TypeStrong/typedoc/issues/3098).
+
+The committed Markdown is a snapshot previously generated with TypeDoc 0.28.20
+and TypeScript 6.0.3. It is committed for Context7, but regeneration requires
+a TypeDoc release compatible with TypeScript 7.
+
 ## Build locally
 
-Use the repository's Node and pnpm versions, then run from the repository root:
+Once a compatible TypeDoc release is installed, use the repository's Node and
+pnpm versions and run from the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -35,17 +47,11 @@ are reported without failing the build; fix them in the source comments.
 
 ## Toolchain
 
-[`scripts/docs/package.json`](../scripts/docs/package.json) is a private workspace
-containing TypeDoc, `typedoc-plugin-markdown`, and TypeScript 6. TypeDoc 0.28.20
-requires the TypeScript compiler API supplied by TypeScript 6; the SDK workspace
-uses TypeScript 7, whose root module no longer exposes that API. Keeping the docs
-tools together gives TypeDoc a compatible compiler without changing SDK builds.
-TypeScript 7 support is tracked in
-[TypeDoc #3098](https://github.com/TypeStrong/typedoc/issues/3098). Once a compatible
-release is available, upgrade TypeDoc and move the docs tools back to the root
-workspace using the TypeScript catalog.
-The `generate:*` script names keep documentation generation out of recursive
-package builds.
+TypeDoc and `typedoc-plugin-markdown` are development dependencies in the root
+[`package.json`](../package.json). The root scripts invoke `typedoc` directly
+using the workspace's TypeScript catalog. The
+[`tsconfig.docs.json`](../tsconfig.docs.json) configuration selects the documented
+entry points and inherits the repository's compiler settings.
 
 ## Make the reference available to Context7
 

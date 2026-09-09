@@ -63,8 +63,9 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported secur
 
 ### API documentation
 
-Generate HTML with `pnpm docs:build` or Markdown with `pnpm docs:build:markdown`.
 The [Markdown API reference](./docs/api-markdown/README.md) is committed for Context7.
+The commands `pnpm docs:build` (HTML) and `pnpm docs:build:markdown` (Markdown)
+currently await TypeDoc support for TypeScript 7 before they can regenerate it.
 See [Generating API documentation](./docs/api-generation.md) for output locations,
 the docs toolchain, and publishing the reference for Context7.
 

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["packages/*/src/index.ts"],
+  "exclude": ["packages/test", "packages/morpho-test"]
+}
