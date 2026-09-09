@@ -47,16 +47,24 @@ export interface VaultV2DepositAction
     }
   > {}
 
+/** Metadata for an exact-assets Vault V2 withdrawal through VaultBundlesV1. */
 export interface VaultV2WithdrawAction
   extends BaseAction<
     "vaultV2Withdraw",
     {
+      /** Source vault whose shares are burned from the transaction sender. */
       readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
       readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
       readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
       readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}
@@ -135,16 +143,24 @@ export interface VaultV1DepositAction
     }
   > {}
 
+/** Metadata for an exact-assets Vault V1 withdrawal through VaultBundlesV1. */
 export interface VaultV1WithdrawAction
   extends BaseAction<
     "vaultV1Withdraw",
     {
+      /** Source vault whose shares are burned from the transaction sender. */
       readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
       readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
       readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
       readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}

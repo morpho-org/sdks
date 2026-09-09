@@ -115,17 +115,53 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw needs an exact vault-share approval or permit:
+Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the exact share
+allowance returned by `getRequirements()`:
 
 ```typescript
-const { buildTx, getRequirements } = vault.withdraw({
-  amount: 500000000000000000n,
-  userAddress: "0xUser...",
-});
-// One approval transaction to send, or one shares permit to sign when
-// `supportSignature: true`.
-const requirements = await getRequirements();
-const tx = buildTx([sharesPermitSignature]);
+import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  type EIP1193Provider,
+} from "viem";
+import { mainnet } from "viem/chains";
+
+async function withdrawUsdc(provider: EIP1193Provider, supportSignature = false) {
+  const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
+    morphoViemExtension({ supportSignature }),
+  );
+  const walletClient = createWalletClient({ chain: mainnet, transport: custom(provider) });
+  const [userAddress] = await walletClient.requestAddresses();
+  if (!userAddress) throw new Error("Connect a wallet account before withdrawing.");
+  const vault = client.morpho.vaultV2("0x04422053aDDbc9bB2759b248B574e3FCA76Bc145", mainnet.id);
+  const withdrawal = vault.withdraw({ amount: 500_000n, userAddress });
+  const requirements = await withdrawal.getRequirements();
+  const requirement = requirements[0];
+
+  if (requirement && "sign" in requirement) {
+    // With signature support enabled, sign the vault-share permit for this handle.
+    const signedPermit = await requirement.sign(walletClient, userAddress);
+    return walletClient.sendTransaction({
+      ...withdrawal.buildTx([signedPermit]),
+      account: userAddress,
+    });
+  }
+
+  for (const approval of requirements) {
+    if ("to" in approval) {
+      const hash = await walletClient.sendTransaction({ ...approval, account: userAddress });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("The share approval reverted.");
+    }
+  }
+  // Approval is confirmed, or the exact allowance was already in place.
+  return walletClient.sendTransaction({ ...withdrawal.buildTx(), account: userAddress });
+}
+// await withdrawUsdc(provider) returns the withdrawal transaction hash.
+// Pass true as the second argument to use a signed share permit instead of an approval.
 ```
 
 For wNative vaults, pass `nativeAmount` instead of `amount`. The transaction sends that amount as
