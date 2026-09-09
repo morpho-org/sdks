@@ -227,6 +227,8 @@ export interface VaultV1Actions {
    *   no shares.
    * @throws {NegativeInputError} when `slippageTolerance` is negative.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+   * @throws {UnknownBlueMarketAllocationError} when `sourceVault.withdrawQueue` references a market
+   *   absent from `sourceVault.allocations`.
    * @throws {UnsupportedChainIdError} from `getRequirements()` or `buildTx()` when the chain has no
    *   address registry.
    * @throws {viem.BaseError} from `getRequirements()` when an RPC contract read fails.

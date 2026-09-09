@@ -20,6 +20,7 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  BlockNotFoundError,
   encodeAbiParameters,
   encodeErrorResult,
   erc20Abi,
@@ -1586,6 +1587,20 @@ describe("individual adapter fetchers", () => {
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect(adapter.accrualVaultV1.address).toBe(VAULT);
     expect(adapter.shares).toBe(99n);
+  });
+
+  test("fetchAccrualVaultV2MorphoVaultV1Adapter rejects a pending block that cannot anchor one snapshot", async () => {
+    const handle = createMockClient(mainnet);
+    mockBlock(handle, { number: null, timestamp: 0n });
+
+    await expect(
+      fetchAccrualVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
+        blockTag: "pending",
+      }),
+    ).rejects.toBeInstanceOf(BlockNotFoundError);
+    expect(
+      handle.request.mock.calls.some(([call]) => call.method === "eth_call"),
+    ).toBe(false);
   });
 });
 
