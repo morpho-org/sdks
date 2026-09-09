@@ -376,9 +376,13 @@ describe("VaultV2MorphoMarketV1Adapter", () => {
 describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
   test("realAssets sums accrued position supply assets", () => {
     const position = accrualPosition({ supplyShares: 100n });
+    const zeroUnsupported = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
     const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
       { ...adapterBaseInput(), marketParamsList: [position.market.params] },
-      [position],
+      [position, zeroUnsupported],
     );
 
     expect(adapter.realAssets()).toBe(position.supplyAssets);
@@ -482,7 +486,10 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
   });
 
   test("realAssets treats missing supply shares as zero", () => {
-    const m = market();
+    const m = market({
+      params: marketParams({ irm: RECIPIENT }),
+      rateAtTarget: undefined,
+    });
     const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...adapterBaseInput(),
@@ -600,6 +607,13 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
     );
 
     expect(adapter.realAssets(5n)).toBe(15n);
+    expect(
+      new AccrualVaultV2MorphoVaultV1Adapter(
+        { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+        accrualVaultV1,
+        0n,
+      ).realAssets(5n),
+    ).toBe(0n);
     expect(adapter.maxDeposit(EMPTY_HEX, 10n)).toStrictEqual({
       value: 9n,
       limiter: CapacityLimitReason.balance,

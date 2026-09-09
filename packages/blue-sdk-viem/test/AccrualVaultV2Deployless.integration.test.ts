@@ -1,7 +1,5 @@
 import {
   type AccrualVaultV2,
-  AccrualVaultV2MorphoMarketV1Adapter,
-  AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   type IAccrualVaultV2Adapter,
@@ -43,23 +41,12 @@ const marketParams = new MarketParams({
 });
 
 function adapterIdentity(adapter: IAccrualVaultV2Adapter) {
-  const marketChainIds =
-    adapter instanceof AccrualVaultV2MorphoMarketV1Adapter
-      ? adapter.positions.map(({ market }) => market.chainId)
-      : adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
-        ? adapter.markets.map(({ chainId }) => chainId)
-        : adapter instanceof AccrualVaultV2MorphoVaultV1Adapter
-          ? [...adapter.accrualVaultV1.allocations.values()].map(
-              ({ position }) => position.market.chainId,
-            )
-          : [];
   return {
     address: adapter.address,
     type: adapter.type,
     adapterId: adapter.adapterId,
     parentVault: adapter.parentVault,
     skimRecipient: adapter.skimRecipient,
-    marketChainIds,
   };
 }
 
@@ -153,11 +140,6 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
     expected.accrualAdapters.map(adapterIdentity),
   );
   actual.accrualAdapters.forEach((adapter, i) => {
-    expect(
-      adapterIdentity(adapter).marketChainIds.every(
-        (chainId) => chainId === actual.chainId,
-      ),
-    ).toBe(true);
     expect(adapter.realAssets(ACCRUAL_TIMESTAMP)).toBe(
       expected.accrualAdapters[i]?.realAssets(ACCRUAL_TIMESTAMP),
     );

@@ -7,7 +7,6 @@ export type FetchParameters = UnionPick<
 > & {
   /**
    * Chain id used to resolve protocol addresses.
-   * Must match the configured viem client chain; intended only for clients without a chain.
    *
    * @deprecated Configure the viem client's chain instead. This override will be removed in the next major version.
    */

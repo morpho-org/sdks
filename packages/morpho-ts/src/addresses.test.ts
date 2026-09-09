@@ -7,12 +7,9 @@ import {
   type ChainDeployments,
   deployments,
   getChainAddress,
-  getChainAddresses,
-  getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
   registerCustomAddresses,
-  unwrappedTokensMapping,
 } from "./addresses.js";
 import { ChainId } from "./chain.js";
 import {
@@ -110,22 +107,6 @@ describe("getChainAddress", () => {
       UnsupportedChainIdError,
     );
   });
-
-  test.each([2 ** 53, 2 ** 53 + 1, -1, 1.5])(
-    "error: rejects unsafe chain id %s before registry lookup",
-    (chainId) => {
-      expect(() => getChainAddresses(chainId)).toThrow(UnsupportedChainIdError);
-      expect(() => getChainAddress(chainId, "midnight")).toThrow(
-        UnsupportedChainIdError,
-      );
-      expect(() => getUnwrappedToken(randomAddress(), chainId)).toThrow(
-        UnsupportedChainIdError,
-      );
-      expect(() => getPermissionedCoinbaseTokens(chainId)).toThrow(
-        UnsupportedChainIdError,
-      );
-    },
-  );
 
   test("error: UnknownAddressError", () => {
     let error: unknown;
@@ -1112,37 +1093,6 @@ describe("registerCustomAddresses", () => {
     ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-  });
-
-  test.each([2 ** 53, 2 ** 53 + 1, -1, 1.5])(
-    "error: rejects unsafe chain id %s before publication",
-    (chainId) => {
-      expect(() =>
-        registerCustomAddresses({
-          addresses: { [chainId]: createChainAddresses() },
-        }),
-      ).toThrow(UnsupportedChainIdError);
-    },
-  );
-
-  test("error: registration is atomic across every registry", () => {
-    const chainId = 31_337_109;
-    const wrappedToken = Object.keys(
-      unwrappedTokensMapping[ChainId.EthMainnet]!,
-    )[0] as `0x${string}`;
-
-    expect(() =>
-      registerCustomAddresses({
-        addresses: { [chainId]: createChainAddresses() },
-        deployments: { [chainId]: createChainDeployments() },
-        unwrappedTokens: {
-          [ChainId.EthMainnet]: { [wrappedToken]: randomAddress() },
-        },
-      }),
-    ).toThrow(RegistryValueAlreadyRegisteredError);
-
-    expect(addressesRegistry[chainId]).toBeUndefined();
-    expect(deployments[chainId]).toBeUndefined();
   });
 
   test("error: conflicting PublicAllocator addresses", () => {

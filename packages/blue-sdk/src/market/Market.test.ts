@@ -21,7 +21,7 @@ describe("Market constructor and getters", () => {
     expect(m.apyAtTarget).toBeGreaterThan(0);
   });
 
-  test("supports idle markets and markets without adaptive rate data", () => {
+  test("supports idle markets without adaptive rate data", () => {
     const m = market({
       params: MarketParams.idle(marketParams().loanToken),
       rateAtTarget: undefined,
@@ -35,7 +35,7 @@ describe("Market constructor and getters", () => {
     expect(m.borrowApy).toBe(0);
   });
 
-  test("rejects interest projection for an unsupported nonzero IRM", () => {
+  test("error: UnsupportedMarketIrmError", () => {
     const unsupported = market({ rateAtTarget: undefined });
 
     expect(() => unsupported.getEndBorrowRate(101n)).toThrow(
@@ -45,6 +45,28 @@ describe("Market constructor and getters", () => {
       UnsupportedMarketIrmError,
     );
     expect(unsupported.accrueInterest(100n)).not.toBe(unsupported);
+  });
+
+  test("behavior: empty unsupported IRM accrues without interest", () => {
+    const unsupported = market({
+      rateAtTarget: undefined,
+      totalBorrowAssets: 0n,
+      totalBorrowShares: 0n,
+    });
+
+    const accrued = unsupported.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued.totalBorrowAssets).toBe(0n);
+    expect(accrued.totalSupplyAssets).toBe(unsupported.totalSupplyAssets);
+    expect(unsupported.getSupplyApy(101n)).toBe(0);
+    expect(unsupported.getAvgSupplyRate(101n)).toBe(0n);
+    expect(() => unsupported.getSupplyApy(99n)).toThrow(
+      BlueErrors.InvalidInterestAccrual,
+    );
+    expect(() => unsupported.accrueInterest(99n)).toThrow(
+      BlueErrors.InvalidInterestAccrual,
+    );
   });
 
   test("rate helpers reject timestamps before lastUpdate", () => {

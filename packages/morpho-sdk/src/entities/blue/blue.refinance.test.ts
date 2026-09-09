@@ -469,11 +469,13 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(NegativeInputError);
   });
 
-  test("behavior: collat-only refinance skips target health validation (no oracle required)", () => {
-    // Target has no price; a collat-only refinance skips the target health check and must succeed.
+  test("behavior: collat-only refinance skips unused market projections", () => {
     const market = makeMarket();
     const positionData = makePosition({
-      market: baseMarket(sourceParams),
+      market: new Market({
+        ...baseMarket(sourceParams),
+        rateAtTarget: undefined,
+      }),
       user: USER,
       collateral: parseUnits("1", 18),
     });
@@ -485,7 +487,7 @@ describe("MorphoBlue.refinance", () => {
       totalBorrowShares: parseUnits("5000000", 12),
       lastUpdate: 1_700_000_000n,
       fee: 0n,
-      // price intentionally omitted
+      // Price and supported IRM data are intentionally omitted.
     });
     const targetPosition = makePosition({
       market: targetMarketNoPrice,

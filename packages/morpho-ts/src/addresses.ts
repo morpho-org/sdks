@@ -2128,18 +2128,12 @@ type RegistryInput<
       : CustomValue;
 };
 
-const assertSafeChainId = (chainId: number): void => {
-  if (!Number.isSafeInteger(chainId) || chainId < 0) {
-    throw new UnsupportedChainIdError(chainId);
-  }
-};
-
 /**
  * Returns the protocol address registry for a chain.
  *
  * @param chainId - The EIP-155 chain id.
  * @returns The configured protocol, adapter, factory, and token addresses for `chainId`.
- * @throws {UnsupportedChainIdError} when `chainId` is unsafe or has no address registry.
+ * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
  * @example
  * ```ts
  * import { ChainId, getChainAddresses } from "@morpho-org/morpho-ts";
@@ -2149,7 +2143,6 @@ const assertSafeChainId = (chainId: number): void => {
  * ```
  */
 export const getChainAddresses = (chainId: number): ChainAddresses => {
-  assertSafeChainId(chainId);
   const chainAddresses = blueAddresses[chainId];
   if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
 
@@ -2162,7 +2155,7 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * @param chainId - The EIP-155 chain id.
  * @param label - Dot-separated address label to resolve.
  * @returns The configured address at `label`.
- * @throws {UnsupportedChainIdError} when `chainId` is unsafe or has no address registry.
+ * @throws UnsupportedChainIdError when no address registry exists for `chainId`.
  * @throws UnknownAddressError when `chainId` is supported but `label` has no registered address.
  * @example
  * ```ts
@@ -2176,7 +2169,6 @@ export const getChainAddress = (
   chainId: number,
   label: AddressLabel,
 ): `0x${string}` => {
-  assertSafeChainId(chainId);
   const chainAddresses = blueAddresses[chainId];
   if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
 
@@ -2350,7 +2342,6 @@ const _unwrappedTokensMapping: Record<
  * @param wrappedToken - The wrapped token address to resolve.
  * @param chainId - The EIP-155 chain id.
  * @returns The unwrapped token address, or `undefined` when no mapping is registered.
- * @throws {UnsupportedChainIdError} when `chainId` is not a nonnegative safe integer.
  * @example
  * ```ts
  * import { ChainId, getUnwrappedToken, NATIVE_ADDRESS, addresses } from "@morpho-org/morpho-ts";
@@ -2363,7 +2354,6 @@ export function getUnwrappedToken(
   wrappedToken: `0x${string}`,
   chainId: number,
 ) {
-  assertSafeChainId(chainId);
   return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
 
@@ -2408,7 +2398,6 @@ export const permissionedCoinbaseTokens: Record<number, Set<`0x${string}`>> = {
  *
  * @param chainId - The EIP-155 chain id.
  * @returns A set of permissioned wrapped token addresses, or an empty set when none are registered.
- * @throws {UnsupportedChainIdError} when `chainId` is not a nonnegative safe integer.
  * @example
  * ```ts
  * import { ChainId, getPermissionedCoinbaseTokens } from "@morpho-org/morpho-ts";
@@ -2417,10 +2406,8 @@ export const permissionedCoinbaseTokens: Record<number, Set<`0x${string}`>> = {
  * // tokens satisfies Set<`0x${string}`>
  * ```
  */
-export const getPermissionedCoinbaseTokens = (chainId: number) => {
-  assertSafeChainId(chainId);
-  return permissionedCoinbaseTokens[chainId] ?? new Set();
-};
+export const getPermissionedCoinbaseTokens = (chainId: number) =>
+  permissionedCoinbaseTokens[chainId] ?? new Set();
 
 entries(permissionedBackedTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
@@ -2687,7 +2674,6 @@ const withAliases = <
  *
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
- * @throws UnsupportedChainIdError when a registry key is not a nonnegative safe integer.
  * @returns Nothing.
  *
  * @example
@@ -2742,12 +2728,6 @@ export function registerCustomAddresses<
     ChainDeploymentRegistration
   >;
 } = {}) {
-  let nextAddressRegistry: AddressRegistry | undefined;
-  let nextDeploymentRegistry: DeploymentRegistry | undefined;
-  let nextUnwrappedTokensMapping:
-    | Record<number, Record<`0x${string}`, `0x${string}`>>
-    | undefined;
-
   if (customAddresses) {
     const nextRegistry: Record<number, ChainAddresses> = {
       ...addressesRegistry,
@@ -2757,7 +2737,6 @@ export function registerCustomAddresses<
       customAddresses,
     )) {
       const chainId = Number(chainIdString);
-      assertSafeChainId(chainId);
       const registeredEntry = nextRegistry[chainId];
       const requestedEntry = cloneRegistryValue(
         withAliases({
@@ -2786,7 +2765,8 @@ export function registerCustomAddresses<
             });
     }
 
-    nextAddressRegistry = deepFreeze(nextRegistry) as AddressRegistry;
+    addressesRegistry = deepFreeze(nextRegistry) as AddressRegistry;
+    refreshAddressViews();
   }
 
   if (customDeployments) {
@@ -2798,7 +2778,6 @@ export function registerCustomAddresses<
       customDeployments,
     )) {
       const chainId = Number(chainIdString);
-      assertSafeChainId(chainId);
       const registeredEntry = nextRegistry[chainId];
       const requestedEntry = cloneRegistryValue(
         withAliases({
@@ -2827,14 +2806,12 @@ export function registerCustomAddresses<
             });
     }
 
-    nextDeploymentRegistry = deepFreeze(nextRegistry) as DeploymentRegistry;
+    deployments = deepFreeze(nextRegistry) as DeploymentRegistry;
+    refreshDeploymentViews();
   }
 
   if (unwrappedTokens) {
-    for (const chainIdString of Object.keys(unwrappedTokens)) {
-      assertSafeChainId(Number(chainIdString));
-    }
-    nextUnwrappedTokensMapping = deepFreeze(
+    unwrappedTokensMapping = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
         patch: unwrappedTokens,
@@ -2842,17 +2819,5 @@ export function registerCustomAddresses<
         type: "unwrapped token",
       }),
     );
-  }
-
-  if (nextAddressRegistry) {
-    addressesRegistry = nextAddressRegistry;
-    refreshAddressViews();
-  }
-  if (nextDeploymentRegistry) {
-    deployments = nextDeploymentRegistry;
-    refreshDeploymentViews();
-  }
-  if (nextUnwrappedTokensMapping) {
-    unwrappedTokensMapping = nextUnwrappedTokensMapping;
   }
 }

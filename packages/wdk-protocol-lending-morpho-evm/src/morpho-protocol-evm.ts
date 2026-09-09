@@ -492,6 +492,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply result.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, the account lacks funds, or the transaction fails.
    */
   async supply(
@@ -517,6 +518,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    */
   async getSupplyRequirements(
     options: MorphoSupplyOptions,
@@ -533,6 +535,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    */
   async quoteSupply(
     options: MorphoSupplyOptions,
@@ -802,6 +805,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The repay result.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {Error} If the options are invalid, the account lacks funds, or the transaction fails.
    */
   async repay(
@@ -827,6 +831,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    */
   async getRepayRequirements(
     options: MorphoRepayOptions,
@@ -843,6 +848,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    */
   async quoteRepay(
     options: MorphoRepayOptions,

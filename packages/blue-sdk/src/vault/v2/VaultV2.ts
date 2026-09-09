@@ -240,6 +240,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
    * Performance and management fee shares are zero when the corresponding fee recipient cannot receive vault shares.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
+   * @returns The accrued vault copy and minted performance and management fee shares.
+   * @throws {UnsupportedMarketIrmError} when an underlying market with positive debt uses an unsupported IRM.
    */
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(

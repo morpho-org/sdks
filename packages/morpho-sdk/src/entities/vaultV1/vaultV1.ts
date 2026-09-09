@@ -150,6 +150,7 @@ export interface VaultV1Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
@@ -216,6 +217,7 @@ export interface VaultV1Actions {
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
    * @returns {Object} Object with `buildTx` and `getRequirements`.
    * @throws {ChainIdMismatchError} when the client, entity, and present target snapshot provenance differ.
+   * @throws {UnsupportedBlueMarketIrmError} when a target-vault market with positive debt uses an unsupported IRM.
    */
   migrateToV2: (params: {
     userAddress: Address;
@@ -444,6 +446,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       const marketId = MarketUtils.getMarketId(marketParams);
       const allocation = vaultData.allocations.get(marketId);
       if (allocation?.config.enabled !== true) continue;
+      if (allocation.position.supplyShares === 0n) continue;
 
       const market = allocation.position.market.accrueInterest(now);
       const available = market.toSupplyAssets(allocation.position.supplyShares);
@@ -591,9 +594,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     slippageTolerance?: bigint;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    if (targetVault.chainId !== undefined) {
-      validateChainId(targetVault.chainId, this.chainId);
-    }
+    validateChainId(targetVault.chainId ?? this.chainId, this.chainId);
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);

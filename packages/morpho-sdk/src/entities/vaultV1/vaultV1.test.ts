@@ -12,7 +12,7 @@ import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
 
 describe("MorphoVaultV1 chain validation", () => {
-  test("migrateToV2 rejects cross-chain target vault data", () => {
+  test("error: ChainIdMismatchError for cross-chain target vault data", () => {
     const publicClient = createPublicClient({
       chain: mainnet,
       transport: http("https://rpc.example"),

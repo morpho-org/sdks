@@ -12,21 +12,12 @@ export {
 import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
-/** Thrown when returned market parameters do not match the requested market id. */
-export class MarketIdMismatchError extends Error {
-  constructor(
-    public readonly marketId: string,
-    public readonly expectedMarketId: string,
-  ) {
-    super(
-      `Market "${marketId}" does not match expected market "${expectedMarketId}".`,
-    );
-    this.name = "MarketIdMismatchError";
-  }
-}
-
 /** Thrown when interest projection is requested for an unsupported nonzero IRM. */
 export class UnsupportedMarketIrmError extends Error {
+  /**
+   * @param marketId - Market whose interest cannot be projected.
+   * @param irm - Unsupported interest-rate-model address.
+   */
   constructor(
     public readonly marketId: MarketId,
     public readonly irm: Address,

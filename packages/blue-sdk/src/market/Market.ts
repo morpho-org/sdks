@@ -193,7 +193,7 @@ export class Market implements IMarket {
   /**
    * The market's current, instantaneous supply-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getSupplyApy(timestamp)` instead.
-   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
+   * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   get supplyApy() {
     return this.getSupplyApy();
@@ -259,7 +259,7 @@ export class Market implements IMarket {
       );
 
     if (this.rateAtTarget == null) {
-      if (this.params.irm.toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+      if (this.params.irm !== ZERO_ADDRESS) {
         throw new UnsupportedMarketIrmError(this.id, this.params.irm);
       }
       return {
@@ -299,9 +299,14 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
-   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
+   * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
+    if (this.totalBorrowAssets === 0n) {
+      // Validate the timestamp even though supply interest is exactly zero.
+      this.accrueInterest(timestamp);
+      return 0;
+    }
     const borrowRate = this.getEndBorrowRate(timestamp);
 
     return MarketUtils.rateToApy(
@@ -332,9 +337,14 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the average supply rate.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current average supply rate).
-   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
+   * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
+    if (this.totalBorrowAssets === 0n) {
+      // Validate the timestamp even though supply interest is exactly zero.
+      this.accrueInterest(timestamp);
+      return 0n;
+    }
     const borrowRate = this.getAvgBorrowRate(timestamp);
 
     return MathLib.wMulUp(
@@ -349,7 +359,7 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
-   * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
+   * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getAvgSupplyApy(timestamp: BigIntish = Time.timestamp()) {
     return MarketUtils.rateToApy(this.getAvgSupplyRate(timestamp));
@@ -367,6 +377,13 @@ export class Market implements IMarket {
     timestamp = BigInt(timestamp);
 
     if (timestamp === this.lastUpdate) return new Market(this);
+    if (
+      timestamp > this.lastUpdate &&
+      this.rateAtTarget == null &&
+      this.params.irm !== ZERO_ADDRESS &&
+      this.totalBorrowAssets === 0n
+    )
+      return new Market({ ...this, lastUpdate: timestamp });
 
     const { elapsed, avgBorrowRate, endRateAtTarget } =
       this.getAccrualBorrowRates(timestamp);
@@ -387,6 +404,14 @@ export class Market implements IMarket {
     });
   }
 
+  /**
+   * Applies a supply to an interest-accrued copy of this market.
+   * @param assets Loan assets to supply, or zero when `shares` is provided.
+   * @param shares Supply shares to mint, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated market and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
@@ -405,6 +430,14 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  /**
+   * Applies a withdrawal to an interest-accrued copy of this market.
+   * @param assets Loan assets to withdraw, or zero when `shares` is provided.
+   * @param shares Supply shares to burn, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated market and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
@@ -426,6 +459,14 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  /**
+   * Applies a borrow to an interest-accrued copy of this market.
+   * @param assets Loan assets to borrow, or zero when `shares` is provided.
+   * @param shares Borrow shares to mint, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated market and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
@@ -447,6 +488,14 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  /**
+   * Applies a repayment to an interest-accrued copy of this market.
+   * @param assets Loan assets to repay, or zero when `shares` is provided.
+   * @param shares Borrow shares to burn, or zero when `assets` is provided.
+   * @param timestamp Optional accrual timestamp.
+   * @returns The updated market and normalized asset and share amounts.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))

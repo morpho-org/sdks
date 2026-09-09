@@ -8,13 +8,10 @@ import {
   Eip5267Domain,
   getChainAddresses,
   type IAccrualVaultV2Adapter,
-  type IMarketParams,
   type IVaultV2Allocation,
   Market,
   type MarketId,
-  MarketIdMismatchError,
   MarketParams,
-  MarketUtils,
   Position,
   UnknownFactory,
   UnknownOfFactory,
@@ -34,10 +31,9 @@ import {
   type ContractFunctionReturnType,
   erc20Abi,
   type Hash,
-  isAddressEqual,
   zeroAddress,
 } from "viem";
-import { readContract } from "viem/actions";
+import { getChainId, readContract } from "viem/actions";
 import {
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
@@ -57,8 +53,6 @@ import type {
   DeploylessFetchParameters,
   FetchParameters,
 } from "../../types.js";
-import { parseMarketParams } from "../parseMarketParams.js";
-import { resolveReadChainId } from "../resolveReadChainId.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -86,7 +80,6 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2` entity. `liquidityAllocations` is undefined when no liquidity
  *   adapter is configured or when the configured liquidity adapter is unsupported.
- * @throws {viem.ChainMismatchError} when `parameters.chainId` conflicts with the client's chain.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when a recognized liquidity adapter is configured with
@@ -110,14 +103,13 @@ export async function fetchVaultV2(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  const chainId = await resolveReadChainId(client, parameters.chainId);
-  const readParameters = { ...parameters, chainId };
+  parameters.chainId ??= await getChainId(client);
 
   const {
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
     vaultV2Factory,
-  } = getChainAddresses(chainId);
+  } = getChainAddresses(parameters.chainId);
 
   if (!vaultV2Factory) {
     throw new UnknownFactory();
@@ -127,7 +119,7 @@ export async function fetchVaultV2(
     try {
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
-          ...readParameters,
+          ...parameters,
           abi,
           code,
           functionName: "query",
@@ -140,7 +132,7 @@ export async function fetchVaultV2(
         });
 
       return new VaultV2({
-        chainId,
+        chainId: parameters.chainId,
         ...token,
         ...vault,
         address,
@@ -177,89 +169,89 @@ export async function fetchVaultV2(
     performanceFeeRecipient,
     managementFeeRecipient,
   ] = await Promise.all([
-    fetchToken(address, client, { ...readParameters, deployless }),
+    fetchToken(address, client, { ...parameters, deployless }),
 
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address: vaultV2Factory,
       abi: vaultV2FactoryAbi,
       functionName: "isVaultV2",
       args: [address],
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "asset",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "totalSupply",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "_totalAssets",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "performanceFee",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "managementFee",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "virtualShares",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "lastUpdate",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "maxRate",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "liquidityAdapter",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "liquidityData",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "adaptersLength",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "performanceFeeRecipient",
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address,
       abi: vaultV2Abi,
       functionName: "managementFeeRecipient",
@@ -276,7 +268,7 @@ export async function fetchVaultV2(
   ] = await Promise.all([
     performanceFee > 0n
       ? readContract(client, {
-          ...readParameters,
+          ...parameters,
           address,
           abi: vaultV2Abi,
           functionName: "canReceiveShares",
@@ -285,7 +277,7 @@ export async function fetchVaultV2(
       : true,
     managementFee > 0n
       ? readContract(client, {
-          ...readParameters,
+          ...parameters,
           address,
           abi: vaultV2Abi,
           functionName: "canReceiveShares",
@@ -305,7 +297,7 @@ export async function fetchVaultV2(
           abi: morphoVaultV1AdapterFactoryAbi,
           functionName: "isMorphoVaultV1Adapter",
           args: [liquidityAdapter],
-          ...readParameters,
+          ...parameters,
         })
       : undefined,
     morphoMarketV1AdapterV2Factory != null && liquidityAdapter !== zeroAddress
@@ -314,12 +306,12 @@ export async function fetchVaultV2(
           abi: morphoMarketV1AdapterV2FactoryAbi,
           functionName: "isMorphoMarketV1AdapterV2",
           args: [liquidityAdapter],
-          ...readParameters,
+          ...parameters,
         })
       : undefined,
     ...Array.from({ length: Number(adaptersLength) }, (_, i) =>
       readContract(client, {
-        ...readParameters,
+        ...parameters,
         address,
         abi: vaultV2Abi,
         functionName: "adapters",
@@ -356,21 +348,21 @@ export async function fetchVaultV2(
       liquidityAdapterIds.map(async (id) => {
         const [absoluteCap, relativeCap, allocation] = await Promise.all([
           readContract(client, {
-            ...readParameters,
+            ...parameters,
             address,
             abi: vaultV2Abi,
             functionName: "absoluteCap",
             args: [id],
           }),
           readContract(client, {
-            ...readParameters,
+            ...parameters,
             address,
             abi: vaultV2Abi,
             functionName: "relativeCap",
             args: [id],
           }),
           readContract(client, {
-            ...readParameters,
+            ...parameters,
             address,
             abi: vaultV2Abi,
             functionName: "allocation",
@@ -388,7 +380,7 @@ export async function fetchVaultV2(
     );
 
   return new VaultV2({
-    chainId,
+    chainId: parameters.chainId,
     ...token,
     asset,
     _totalAssets,
@@ -434,10 +426,8 @@ export async function fetchVaultV2(
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrual adapters, and
  *   force-deallocate penalties.
- * @throws {viem.ChainMismatchError} when `parameters.chainId` conflicts with the client's chain.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
- * @throws {MarketIdMismatchError} when a nested market response does not match its requested id.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
  *   unsupported adapter class.
  * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`, or a
@@ -463,25 +453,19 @@ export async function fetchAccrualVaultV2(
   // mutates the caller's argument (§2).
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  const chainId = await resolveReadChainId(client, parameters.chainId);
-  const readParameters = { ...parameters, chainId };
+  parameters.chainId ??= await getChainId(client);
 
   // The entire accrual tree can be read in a single deployless call. When it succeeds there is
   // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
   if (deployless) {
     try {
-      return await fetchAccrualVaultV2Deployless(
-        address,
-        client,
-        readParameters,
-      );
+      return await fetchAccrualVaultV2Deployless(address, client, parameters);
     } catch (error) {
       if (deployless === "force") throw error;
       // Deterministic errors would be raised identically by the multicall path — do not retry.
       if (
         error instanceof UnknownFactory ||
         error instanceof UnknownOfFactory ||
-        error instanceof MarketIdMismatchError ||
         error instanceof UnsupportedVaultV2AdapterError
       )
         throw error;
@@ -490,14 +474,14 @@ export async function fetchAccrualVaultV2(
   }
 
   const vaultV2 = await fetchVaultV2(address, client, {
-    ...readParameters,
+    ...parameters,
     deployless,
   });
 
   const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
     [
       readContract(client, {
-        ...readParameters,
+        ...parameters,
         address: vaultV2.asset,
         abi: erc20Abi,
         functionName: "balanceOf",
@@ -505,18 +489,18 @@ export async function fetchAccrualVaultV2(
       }),
       vaultV2.liquidityAdapter !== zeroAddress
         ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, {
-            ...readParameters,
+            ...parameters,
             deployless,
           })
         : undefined,
       ...vaultV2.adapters.map(async (adapter) => {
         const [accrualAdapter, forceDeallocatePenalty] = await Promise.all([
           fetchAccrualVaultV2Adapter(adapter, client, {
-            ...readParameters,
+            ...parameters,
             deployless,
           }),
           readContract(client, {
-            ...readParameters,
+            ...parameters,
             address,
             abi: vaultV2Abi,
             functionName: "forceDeallocatePenalty",
@@ -561,24 +545,21 @@ const AdapterType = {
 } as const;
 
 /** @internal Rebuilds a `Market` from a deployless `GetAccrualVaultV2` market response. */
-// biome-ignore lint/complexity/useMaxParams: internal decoder validates protocol response context
+// biome-ignore lint/complexity/useMaxParams: internal decoder threads fetched chain provenance
 function toMarket(
   response: AccrualVaultV2QueryResponse["adapters"][number]["marketV1Positions"][number]["market"],
-  marketId: MarketId,
   adaptiveCurveIrm: Address,
   chainId: number,
-  marketParams: IMarketParams = response.marketParams,
 ): Market {
-  const params = parseMarketParams(marketId, marketParams);
-
   return new Market({
     chainId,
-    params,
+    params: new MarketParams(response.marketParams),
     ...response.market,
     price: response.hasPrice ? response.price : undefined,
-    rateAtTarget: isAddressEqual(params.irm, adaptiveCurveIrm)
-      ? response.rateAtTarget
-      : undefined,
+    rateAtTarget:
+      response.marketParams.irm === adaptiveCurveIrm
+        ? response.rateAtTarget
+        : undefined,
   });
 }
 
@@ -649,12 +630,7 @@ function toAccrualAdapter(
 
       const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
         const marketId = vaultV1.withdrawQueue[i] as MarketId;
-        const market = toMarket(
-          allocation.market,
-          marketId,
-          adaptiveCurveIrm,
-          chainId,
-        );
+        const market = toMarket(allocation.market, adaptiveCurveIrm, chainId);
 
         return {
           config: new VaultMarketConfig({
@@ -701,14 +677,7 @@ function toAccrualAdapter(
 
     case AdapterType.MorphoMarketV1: {
       const positions = adapter.marketV1Positions.map((entry) => {
-        const marketId = MarketUtils.getMarketId(entry.marketParams);
-        const market = toMarket(
-          entry.market,
-          marketId,
-          adaptiveCurveIrm,
-          chainId,
-          entry.marketParams,
-        );
+        const market = toMarket(entry.market, adaptiveCurveIrm, chainId);
 
         return new AccrualPosition(
           new Position({
@@ -737,12 +706,7 @@ function toAccrualAdapter(
 
     case AdapterType.MorphoMarketV1AdapterV2: {
       const markets = adapter.marketV1V2Allocations.map((entry) =>
-        toMarket(
-          entry.market,
-          entry.marketId as MarketId,
-          adaptiveCurveIrm,
-          chainId,
-        ),
+        toMarket(entry.market, adaptiveCurveIrm, chainId),
       );
 
       return new AccrualVaultV2MorphoMarketV1AdapterV2(
@@ -792,10 +756,8 @@ function toAccrualAdapter(
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrued liquidity and regular
  *   adapters, and force-deallocate penalties.
- * @throws {viem.ChainMismatchError} when `parameters.chainId` conflicts with the client's chain.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
- * @throws {MarketIdMismatchError} when a nested market response does not match its requested id.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an unsupported
  *   adapter class.
  * @throws {viem.BaseError} when the deployless `eth_call` or response decoding fails (no fallback).
@@ -826,7 +788,7 @@ export async function fetchAccrualVaultV2Deployless(
   parameters: FetchParameters = {},
 ) {
   // Do not mutate the caller's object (§2); copy it before defaulting `chainId`.
-  const chainId = await resolveReadChainId(client, parameters.chainId);
+  const chainId = parameters.chainId ?? (await getChainId(client));
   const readParameters = { ...parameters, chainId };
 
   const {

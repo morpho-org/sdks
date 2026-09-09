@@ -6,7 +6,6 @@ import {
   addressesRegistry,
   type ChainAddresses,
   ChainId,
-  MarketIdMismatchError,
   MarketParams,
   marketParamsAbi,
   registerCustomAddresses,
@@ -21,7 +20,6 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
-  ChainMismatchError,
   encodeAbiParameters,
   encodeErrorResult,
   erc20Abi,
@@ -322,17 +320,6 @@ describe("fetchVaultV2", () => {
     expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
   });
 
-  test("rejects a chain override that conflicts with the client", async () => {
-    const handle = createMockClient(mainnet);
-
-    await expect(
-      fetchVaultV2(VAULT, handle.client, {
-        chainId: ChainId.BaseMainnet,
-      }),
-    ).rejects.toBeInstanceOf(ChainMismatchError);
-    expect(handle.request).not.toHaveBeenCalled();
-  });
-
   test("omits deployless liquidity allocations for unknown liquidity adapters", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, vaultV2QueryAbi, "query", {
@@ -349,11 +336,7 @@ describe("fetchVaultV2", () => {
   });
 
   test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
-    const { client } = createMockClient({
-      ...mainnet,
-      id: ChainId.CornMainnet,
-      name: "Corn",
-    });
+    const { client } = createMockClient(mainnet);
 
     await expect(
       fetchVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
@@ -477,11 +460,7 @@ describe("fetchVaultV2", () => {
   );
 
   test("passes zero for missing deployless adapter factories", async () => {
-    const handle = createMockClient({
-      ...mainnet,
-      id: VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID,
-      name: "Vault V2 without adapter factories",
-    });
+    const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, vaultV2QueryAbi, "query", vaultV2Result);
 
     const vault = await fetchVaultV2(VAULT, handle.client, {
@@ -1735,11 +1714,7 @@ describe("fetchAccrualVaultV2", () => {
   });
 
   test("rethrows UnknownFactory without attempting the deployless call", async () => {
-    const { client } = createMockClient({
-      ...mainnet,
-      id: ChainId.CornMainnet,
-      name: "Corn",
-    });
+    const { client } = createMockClient(mainnet);
 
     await expect(
       fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
@@ -1907,71 +1882,6 @@ describe("fetchAccrualVaultV2Deployless", () => {
     expect(marketAdapter.markets[0]?.chainId).toBe(CHAIN_ID);
   });
 
-  test("matches nested adaptive IRM addresses case-insensitively", async () => {
-    const handle = createMockClient(mainnet);
-    const liquidityAdapterInfo = marketV1V2AdapterQueryResult(ADAPTER, 55n);
-    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
-      ...accrualVaultV2Result,
-      liquidityAdapterInfo: {
-        ...liquidityAdapterInfo,
-        marketV1V2Allocations: liquidityAdapterInfo.marketV1V2Allocations.map(
-          (allocation) => ({
-            ...allocation,
-            market: {
-              ...allocation.market,
-              marketParams: [
-                MARKET_PARAMS.loanToken,
-                MARKET_PARAMS.collateralToken,
-                MARKET_PARAMS.oracle,
-                MARKET_PARAMS.irm.toLowerCase() as Address,
-                MARKET_PARAMS.lltv,
-              ],
-            },
-          }),
-        ),
-      },
-    });
-
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client);
-
-    const adapter =
-      vault.accrualLiquidityAdapter as AccrualVaultV2MorphoMarketV1AdapterV2;
-    expect(adapter.markets[0]?.rateAtTarget).toBe(456n);
-  });
-
-  test("rejects a nested market tuple that does not match its requested id", async () => {
-    const handle = createMockClient(mainnet);
-    const idle = MarketParams.idle(ASSET);
-    const mismatchedAdapter = marketV1V2AdapterQueryResult(ADAPTER_2, 99n);
-    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
-      ...accrualVaultV2Result,
-      adapters: [
-        {
-          ...mismatchedAdapter,
-          marketV1V2Allocations: [
-            {
-              ...mismatchedAdapter.marketV1V2Allocations[0],
-              market: {
-                ...marketQueryResult,
-                marketParams: [
-                  idle.loanToken,
-                  idle.collateralToken,
-                  idle.oracle,
-                  idle.irm,
-                  idle.lltv,
-                ],
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    await expect(
-      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toBeInstanceOf(MarketIdMismatchError);
-  });
-
   test("omits liquidity allocations when the liquidity adapter is unknown", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
@@ -2058,11 +1968,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
   });
 
   test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
-    const { client } = createMockClient({
-      ...mainnet,
-      id: ChainId.CornMainnet,
-      name: "Corn",
-    });
+    const { client } = createMockClient(mainnet);
 
     await expect(
       fetchAccrualVaultV2Deployless(VAULT, client, {

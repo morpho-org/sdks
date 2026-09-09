@@ -4,7 +4,6 @@ export {
   IncompleteChainRegistryError,
   InvalidBitLengthError,
   InvalidMarketParamsError,
-  MarketIdMismatchError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnknownDataError,

@@ -1,4 +1,9 @@
-import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import {
+  AccrualVaultV2MorphoMarketV1AdapterV2,
+  Market,
+  MarketParams,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
@@ -183,16 +188,27 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       const vault = handle.client
         .extend(morphoViemExtension())
         .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      const vaultData = inKindVaultV2Data({
+        supplyShares,
+        penalty: 20_000_000_000_000_000n,
+      });
+      const [adapter] = vaultData.accrualAdapters;
+      if (supplyShares === 0n) {
+        if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+          throw new Error("Expected a MorphoMarketV1AdapterV2 fixture");
+        }
+        adapter.markets[0] = new Market({
+          ...adapter.markets[0]!,
+          rateAtTarget: undefined,
+        });
+      }
       let thrown: unknown;
 
       try {
         vault.inKindRedeem({
           amount,
           marketParamsList: [inKindMarketParams],
-          vaultData: inKindVaultV2Data({
-            supplyShares,
-            penalty: 20_000_000_000_000_000n,
-          }),
+          vaultData,
           userAddress: IN_KIND_USER,
         });
       } catch (error) {

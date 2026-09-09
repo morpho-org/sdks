@@ -289,6 +289,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, before deducting the performance fee.
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    */
   get apy() {
     return this.getApy();
@@ -298,6 +299,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, after deducting the performance fee.
    * If interested in the APY at a specific timestamp, use `getNetApy(timestamp)` instead.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    */
   get netApy() {
     return this.getNetApy();
@@ -312,14 +314,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
     if (this.totalAssets === 0n) return 0n;
 
     return (
-      this.allocations
-        .values()
-        .reduce(
-          (total, { position }) =>
-            total +
-            position.market.getAvgSupplyRate(timestamp) * position.supplyAssets,
-          0n,
-        ) / this.totalAssets
+      this.allocations.values().reduce((total, { position }) => {
+        const assets = position.supplyAssets;
+        return assets === 0n
+          ? total
+          : total + position.market.getAvgSupplyRate(timestamp) * assets;
+      }, 0n) / this.totalAssets
     );
   }
 
@@ -327,6 +327,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, before deducting the performance fee,
    * if interest was to be accrued on each market at the given timestamp.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    */
   public getApy(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0;
@@ -338,6 +339,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, after deducting the performance fee,
    * if interest was to be accrued on each market at the given timestamp.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    */
   public getNetApy(timestamp: BigIntish = Time.timestamp()) {
     return MarketUtils.rateToApy(
@@ -431,6 +433,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to each of the vault's market's `lastUpdate`.
    * @returns A new vault whose market positions and fee accounting reflect accrued interest.
    * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an allocation.
+   * @throws {UnsupportedMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    */
   public accrueInterest(timestamp?: BigIntish) {
     const vault = new AccrualVault(
@@ -449,7 +452,10 @@ export class AccrualVault extends Vault implements IAccrualVault {
         const { config, position } = allocation;
         return {
           config,
-          position: position.accrueInterest(timestamp),
+          position:
+            position.supplyShares === 0n
+              ? position.accrueInterest(position.market.lastUpdate)
+              : position.accrueInterest(timestamp),
         };
       }),
     );

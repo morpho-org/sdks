@@ -169,7 +169,7 @@ describe("validateAccrualPosition", () => {
     ).toThrow(AccrualPositionUserMismatchError);
   });
 
-  test("should throw ChainIdMismatchError for cross-chain snapshot provenance", () => {
+  test("error: ChainIdMismatchError for cross-chain snapshot provenance", () => {
     const pos = makePosition({
       market: makeMarket({
         price: ORACLE_PRICE_SCALE,

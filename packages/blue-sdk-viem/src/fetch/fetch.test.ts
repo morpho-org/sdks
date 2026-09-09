@@ -7,11 +7,8 @@ import {
   Eip5267Domain,
   ExchangeRateWrappedToken,
   Holding,
-  type IMarketParams,
   Market,
-  MarketIdMismatchError,
   MarketParams,
-  MarketUtils,
   NATIVE_ADDRESS,
   Position,
   PreLiquidationParams,
@@ -31,7 +28,6 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
-  ChainMismatchError,
   erc20Abi,
   erc20Abi_bytes32,
   maxUint256,
@@ -143,7 +139,7 @@ const metaMorphoFactoryIsMetaMorphoAbi = [
   },
 ] as const;
 
-const marketParamsTuple = (params: IMarketParams = MARKET_PARAMS) =>
+const marketParamsTuple = (params = MARKET_PARAMS) =>
   [
     params.loanToken,
     params.collateralToken,
@@ -563,70 +559,6 @@ describe("fetchMarket", () => {
     expect(market.rateAtTarget).toBe(456n);
   });
 
-  test("rejects a chain override that conflicts with the client", async () => {
-    const handle = createMockClient(mainnet);
-
-    const result = fetchMarket(ID, handle.client, {
-      chainId: ChainId.BaseMainnet,
-    });
-    await expect(result).rejects.toBeInstanceOf(ChainMismatchError);
-    await expect(result).rejects.toMatchObject({
-      metaMessages: [
-        "Current Chain ID:  1",
-        "Expected Chain ID: 8453 – Chain 8453",
-      ],
-    });
-    expect(handle.request).not.toHaveBeenCalled();
-  });
-
-  test("rejects deployless market params that do not match the requested id", async () => {
-    const handle = createMockClient(mainnet);
-    const other = MarketParams.idle(TOKEN);
-    mockDeploylessRead(handle, marketQueryAbi, "query", {
-      marketParams: marketParamsTuple(other),
-      market: marketTuple,
-      hasPrice: false,
-      price: 0n,
-      rateAtTarget: 0n,
-    });
-
-    await expect(fetchMarket(ID, handle.client)).rejects.toThrow(
-      MarketIdMismatchError,
-    );
-  });
-
-  test("matches the adaptive IRM address case-insensitively", async () => {
-    const handle = createMockClient(mainnet);
-    mockDeploylessRead(handle, marketQueryAbi, "query", {
-      marketParams: marketParamsTuple({
-        ...MARKET_PARAMS,
-        irm: MARKET_PARAMS.irm.toLowerCase() as Address,
-      }),
-      market: marketTuple,
-      hasPrice: true,
-      price: 123n,
-      rateAtTarget: 456n,
-    });
-
-    const market = await fetchMarket(ID, handle.client);
-
-    expect(market.rateAtTarget).toBe(456n);
-  });
-
-  test("matches the adaptive IRM address case-insensitively in multicall", async () => {
-    const handle = createMockClient(mainnet);
-    mockMarketReads(handle, {
-      ...MARKET_PARAMS,
-      irm: MARKET_PARAMS.irm.toLowerCase() as Address,
-    });
-
-    const market = await fetchMarket(ID, handle.client, {
-      deployless: false,
-    });
-
-    expect(market.rateAtTarget).toBe(456n);
-  });
-
   test("omits optional deployless price and rate when unavailable", async () => {
     const handle = createMockClient(mainnet);
     const idle = MarketParams.idle(TOKEN);
@@ -658,18 +590,6 @@ describe("fetchMarket", () => {
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
     expect(market.chainId).toBe(CHAIN_ID);
-  });
-
-  test("rejects multicall market params that do not match the requested id", async () => {
-    const handle = createMockClient(mainnet);
-    mockMarketReads(handle, MarketParams.idle(TOKEN));
-
-    await expect(
-      fetchMarket(ID, handle.client, {
-        chainId: CHAIN_ID,
-        deployless: false,
-      }),
-    ).rejects.toThrow(MarketIdMismatchError);
   });
 
   test("continues when the oracle price read reverts", async () => {
@@ -1166,24 +1086,17 @@ describe("fetchMarketParams", () => {
 
   test("fetches unknown market params from Morpho", async () => {
     const handle = createMockClient(mainnet);
-    const rawParams = {
-      loanToken: USER,
-      collateralToken: VAULT,
-      oracle: RECIPIENT,
-      irm: ADDRESSES.adaptiveCurveIrm,
-      lltv: 810000000000000000n,
-    };
-    const id = MarketUtils.getMarketId(rawParams);
+    const id = `0x${"12".repeat(32)}` as typeof ID;
     mockRead(handle, {
       address: ADDRESSES.morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
-      result: marketParamsTuple(rawParams),
+      result: marketParamsTuple(),
     });
 
     const params = await fetchMarketParams(id, handle.client);
 
-    expect(params.id).toBe(id);
+    expect(params.id).toBe(ID);
   });
 });
 

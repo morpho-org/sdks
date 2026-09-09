@@ -1,9 +1,4 @@
-import {
-  addressesRegistry,
-  ChainId,
-  MarketParams,
-  UnsupportedMarketIrmError,
-} from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MarketParams } from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
@@ -105,9 +100,6 @@ describe("augment/Market", () => {
     const value = await Market.fetch(params.id, client);
 
     expect(value).toStrictEqual(expectedData);
-    expect(() => value.accrueInterest(value.lastUpdate + 1n)).toThrow(
-      UnsupportedMarketIrmError,
-    );
   });
 
   test("should fetch market with incorrect oracle", async ({ client }) => {

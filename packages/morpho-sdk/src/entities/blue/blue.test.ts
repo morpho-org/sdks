@@ -155,7 +155,7 @@ describe("MorphoBlue builder = signer freedom", () => {
 });
 
 describe("MorphoBlue validation", () => {
-  test("rejects cross-chain market and position snapshots", () => {
+  test("error: ChainIdMismatchError for cross-chain snapshots", () => {
     const market = noRpcClient
       .extend(morphoViemExtension())
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);

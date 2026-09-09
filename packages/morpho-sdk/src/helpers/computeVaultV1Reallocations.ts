@@ -104,6 +104,7 @@ const capVaultWithdrawals = (
  * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
+ * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
  * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets` — the on-chain call would revert regardless of reallocations.
  * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
@@ -320,6 +321,7 @@ export const computeVaultV1Reallocations = ({
 /**
  * Deprecated name for the Vault V1 amount-aware reallocation planner.
  *
+ * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
  * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
  * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
  */

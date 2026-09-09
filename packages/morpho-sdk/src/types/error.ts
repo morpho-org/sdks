@@ -1,7 +1,4 @@
 import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
-
-export { MarketIdMismatchError } from "@morpho-org/blue-sdk";
-
 import type { Address, Hash } from "viem";
 
 /**
@@ -788,6 +785,15 @@ export class MissingMarketPriceError extends Error {
   constructor(market: string) {
     super(
       `Oracle price unavailable for market ${market}. Cannot validate position health.`,
+    );
+  }
+}
+
+/** Thrown when a `MarketParams.id` does not match the expected market id derived from the other fields. */
+export class MarketIdMismatchError extends Error {
+  constructor(marketId: string, expectedMarketId: string) {
+    super(
+      `Market ${marketId} does not match expected market ${expectedMarketId}`,
     );
   }
 }

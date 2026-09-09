@@ -4,7 +4,6 @@ export {
   InvalidMarketParamsError as InvalidBlueMarketParamsError,
   /** @deprecated Use InvalidBlueMarketParamsError or the raw protocol subpath. */
   InvalidMarketParamsError,
-  MarketIdMismatchError,
   UnknownAddressError,
   UnknownDataError as UnknownBlueDataError,
   /** @deprecated Use UnknownBlueDataError or the raw protocol subpath. */
