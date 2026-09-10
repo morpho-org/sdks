@@ -198,6 +198,7 @@ export interface CollateralAllocation {
   lltvs: Set<bigint>;
   oracles: Set<Address>;
   markets: Set<MarketId>;
+  /** @deprecated Sum `vault.getAllocationProportion(marketId)` over `markets`. */
   proportion: bigint;
 }
 
@@ -477,6 +478,8 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
       vault.totalAssets += vault.lostAssets;
 
+      // The constructor cached proportions against allocated assets only. Adding `lostAssets`
+      // changes their denominator, so recompute them against the final `totalAssets`.
       for (const exposure of vault.collateralAllocations.values()) {
         exposure.proportion = exposure.markets
           .values()

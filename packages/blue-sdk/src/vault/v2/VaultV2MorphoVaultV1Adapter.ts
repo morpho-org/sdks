@@ -7,6 +7,12 @@ export interface IVaultV2MorphoVaultV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
   type?: "VaultV2MorphoVaultV1Adapter";
   morphoVaultV1: Address;
+  /**
+   * Parent Vault V2 allocation for this adapter, when available.
+   *
+   * TODO(vNext-major): make `parentAllocation` required.
+   */
+  readonly parentAllocation?: bigint;
 }
 
 import type { BigIntish, Hash } from "../../types.js";
@@ -55,9 +61,16 @@ export class VaultV2MorphoVaultV1Adapter
   }
 
   public readonly morphoVaultV1: Address;
+  /**
+   * Parent Vault V2 allocation for this adapter, when available.
+   *
+   * TODO(vNext-major): make `parentAllocation` required.
+   */
+  public readonly parentAllocation?: bigint;
 
   constructor({
     morphoVaultV1,
+    parentAllocation,
     ...vaultV2Adapter
   }: IVaultV2MorphoVaultV1Adapter) {
     super({
@@ -69,6 +82,7 @@ export class VaultV2MorphoVaultV1Adapter
     });
 
     this.morphoVaultV1 = morphoVaultV1;
+    this.parentAllocation = parentAllocation;
   }
 
   /**
@@ -108,10 +122,10 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     adapter: IAccrualVaultV2MorphoVaultV1Adapter,
     public accrualVaultV1: AccrualVault,
     public shares: bigint,
-    /** Parent Vault V2 allocation for this adapter, when fetched. */
-    public readonly parentAllocation?: bigint,
+    /** @deprecated Set `adapter.parentAllocation` instead. This parameter will be removed in the next major. */
+    parentAllocation: bigint | undefined = adapter.parentAllocation,
   ) {
-    super(adapter);
+    super({ ...adapter, parentAllocation });
   }
 
   realAssets(timestamp?: BigIntish) {

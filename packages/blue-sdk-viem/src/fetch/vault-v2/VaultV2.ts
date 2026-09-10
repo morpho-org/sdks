@@ -666,10 +666,13 @@ function toAccrualAdapter(
       });
 
       return new AccrualVaultV2MorphoVaultV1Adapter(
-        new VaultV2MorphoVaultV1Adapter({ ...base, morphoVaultV1 }),
+        new VaultV2MorphoVaultV1Adapter({
+          ...base,
+          morphoVaultV1,
+          parentAllocation: adapter.vaultV1ParentAllocation,
+        }),
         new AccrualVault(vault, allocations),
         adapter.vaultV1Shares,
-        adapter.vaultV1ParentAllocation,
       );
     }
 

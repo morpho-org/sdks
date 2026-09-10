@@ -23,7 +23,7 @@ import { fetchAccrualVault } from "../Vault.js";
  * Fetches a MorphoVaultV1Adapter used by VaultV2.
  *
  * Uses the deployless adapter query by default and falls back to factory validation plus adapter
- * state reads when allowed.
+ * state reads when allowed. Includes the parent Vault V2's tracked allocation for the adapter.
  *
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -83,35 +83,46 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     }
   }
 
-  const [isMorphoVaultV1Adapter, parentVault, skimRecipient, morphoVaultV1] =
-    await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address: morphoVaultV1AdapterFactory,
-        abi: morphoVaultV1AdapterFactoryAbi,
-        functionName: "isMorphoVaultV1Adapter",
-        args: [address],
-      }) // Factory may not have been deployed at requested block tag.
-        .catch(() => false),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "parentVault",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "skimRecipient",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "morphoVaultV1",
-      }),
-    ]);
+  const [
+    isMorphoVaultV1Adapter,
+    parentVault,
+    skimRecipient,
+    morphoVaultV1,
+    parentAllocation,
+  ] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address: morphoVaultV1AdapterFactory,
+      abi: morphoVaultV1AdapterFactoryAbi,
+      functionName: "isMorphoVaultV1Adapter",
+      args: [address],
+    }) // Factory may not have been deployed at requested block tag.
+      .catch(() => false),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "parentVault",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "skimRecipient",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "morphoVaultV1",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+    }),
+  ]);
 
   if (!isMorphoVaultV1Adapter) {
     throw new UnknownOfFactory(morphoVaultV1AdapterFactory, address);
@@ -122,6 +133,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     parentVault,
     skimRecipient,
     address,
+    parentAllocation,
   });
 }
 
@@ -174,7 +186,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
     client,
     parameters,
   );
-  const [vaultV1, shares, parentAllocation] = await Promise.all([
+  const [vaultV1, shares] = await Promise.all([
     fetchAccrualVault(adapter.morphoVaultV1, client, parameters),
     readContract(client, {
       ...parameters,
@@ -183,18 +195,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
       functionName: "balanceOf",
       args: [adapter.address],
     }),
-    readContract(client, {
-      ...parameters,
-      address: adapter.address,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "allocation",
-    }),
   ]);
 
-  return new AccrualVaultV2MorphoVaultV1Adapter(
-    adapter,
-    vaultV1,
-    shares,
-    parentAllocation,
-  );
+  return new AccrualVaultV2MorphoVaultV1Adapter(adapter, vaultV1, shares);
 }
