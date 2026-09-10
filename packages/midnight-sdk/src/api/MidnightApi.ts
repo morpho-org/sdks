@@ -339,7 +339,7 @@ export class MidnightApi {
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -801,7 +801,7 @@ export class MidnightApi {
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts

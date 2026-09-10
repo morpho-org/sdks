@@ -1076,6 +1076,30 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
+  test("error: bid quote guards include per-fill settlement rounding", async () => {
+    const smallTake = {
+      ...apiBidTakeableOffer,
+      units: "1",
+    };
+    const secondSmallTake = {
+      ...smallTake,
+      offer: { ...smallTake.offer, maker: SECOND_MAKER },
+    };
+    const sellerPrice = TickLib.tickToPrice(smallTake.offer.tick);
+    const { fetch } = createQuoteFetch([smallTake, secondSmallTake]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        units: 2n,
+        averageWorstPrice: sellerPrice,
+        settlementFee: 0n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: asset quote guards include settlement-only asks", async () => {
     const settlementOnlyTake = {
       ...apiTakeableOffer,
