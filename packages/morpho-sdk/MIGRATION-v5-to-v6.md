@@ -11,19 +11,21 @@ extension or automatic fallback to the v5 route.
 names but now route through the chain's registered VaultBundlesV1 contract instead of Bundler3 and
 GeneralAdapter1.
 
-> **Chain availability.** Vault deposits require the `bundles.vaultBundlesV1` deployment on the
-> target chain. On a registered chain without it, including Fraxtal, both `MorphoVaultV1.deposit()`
-> and `MorphoVaultV2.deposit()` throw `UnknownAddressError` synchronously at handle creation,
+> **Chain availability.** Vault deposits and withdrawals require the `bundles.vaultBundlesV1`
+> deployment on the target chain. On a registered chain without it, including Fraxtal,
+> `MorphoVaultV1.deposit()`, `MorphoVaultV2.deposit()`, `MorphoVaultV1.withdraw()`, and
+> `MorphoVaultV2.withdraw()` throw `UnknownAddressError` synchronously at handle creation,
 > before `getRequirements()` or `buildTx()` can be called. This is a breaking loss of deposit
-> functionality on chains previously supported through Bundler3/GeneralAdapter1; there is no
-> automatic fallback. Confirm coverage before upgrading with
-> `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Stay on v5 if your application needs
-> deposits on an affected chain until VaultBundlesV1 is deployed and registered in the SDK.
+> and withdrawal functionality on chains previously supported through Bundler3/GeneralAdapter1
+> deposits and direct vault withdrawals; there is no automatic fallback. Confirm coverage before
+> upgrading with `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Stay on v5 if your
+> application needs deposits or withdrawals on an affected chain until VaultBundlesV1 is deployed
+> and registered in the SDK.
 
 As checked on 2026-09-07, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
 and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 13 chains: Ethereum,
 Arbitrum, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain, and
-World Chain. Bundler3 availability alone does not imply support for v6 vault deposits.
+World Chain. Bundler3 availability alone does not imply support for v6 vault deposits or withdrawals.
 
 Update deposit inputs as follows:
 
@@ -141,6 +143,11 @@ section below for that method's larger shape change.
 
 The established `withdraw` methods and the `vaultV1Withdraw` / `vaultV2Withdraw` builder names stay
 stable, but now encode one direct VaultBundlesV1 call instead of a direct vault call.
+
+> **Chain availability.** Both entity `withdraw()` methods require `bundles.vaultBundlesV1` and
+> throw `UnknownAddressError` synchronously at handle creation on registered chains without it,
+> including Fraxtal. Stay on v5 if your application needs withdrawals on an affected chain until
+> VaultBundlesV1 is deployed and registered in the SDK, even if your application makes no deposits.
 
 | Flow | v5 input | v6 input |
 | --- | --- | --- |
@@ -366,8 +373,9 @@ const transaction = withdrawal.buildTx(signatures);
 
 ## Upgrade checklist
 
-- Confirm `bundles.vaultBundlesV1` coverage for vault deposits and `bundles.blueBundlesV1` coverage
-  for Blue writes on every chain your application supports.
+- Confirm `bundles.vaultBundlesV1` coverage for vault deposits and withdrawals and
+  `bundles.blueBundlesV1` coverage for Blue writes on every chain your application supports.
+  Stay on v5 if you need vault deposits or withdrawals on a chain without VaultBundlesV1.
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
@@ -378,7 +386,7 @@ const transaction = withdrawal.buildTx(signatures);
 ## Fixed-bundles token requirement APIs
 
 The Blue-only fixed-bundles requirement surface is generalized into a shared surface used by both
-BlueBundlesV1 and the upcoming VaultBundlesV1.
+BlueBundlesV1 and VaultBundlesV1.
 
 | v5 symbol | v6 replacement |
 | --- | --- |

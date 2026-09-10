@@ -623,6 +623,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const slippageTolerance =
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
+    // Fail eagerly if VaultBundlesV1 is unavailable; only validation is needed here.
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     let requiredShareAllowance: bigint | undefined;
     let vaultSnapshot: AccrualVault | undefined;

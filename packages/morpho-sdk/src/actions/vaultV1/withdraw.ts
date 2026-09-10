@@ -1,6 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type Erc2612RequirementSignature,
   type Metadata,
@@ -37,6 +38,7 @@ export interface VaultV1WithdrawParams {
  * @param params - Vault, gross asset amount, share permit, fee, and deadline values.
  * @returns A deep-frozen VaultBundlesV1 withdrawal transaction.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256.
  * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
@@ -56,6 +58,8 @@ export const vaultV1Withdraw = (
   if (params.args.amount <= 0n) {
     throw new NonPositiveInputError("amount", params.args.amount);
   }
+  // Validate the ABI bound before encoding to preserve the SDK's typed errors.
+  validateUint256Field("amount", params.args.amount);
   const common = normalizeBundlesCommonParams(params.args);
   const spender = getChainAddress(
     params.vault.chainId,

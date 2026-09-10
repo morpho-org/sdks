@@ -25,7 +25,6 @@ export {
 } from "./morpho-presets.js";
 export type {
   AccountData,
-  ApprovalOrSignatureRequirement,
   AuthorizationOrSignatureRequirement,
   BlueApprovalOrSignatureRequirement,
   BundlesApprovalOrSignatureRequirement,
@@ -34,13 +33,10 @@ export type {
   MarketPosition,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
-  MorphoErc20SupplyOptions,
   MorphoEvmAccount,
   MorphoExclusiveSupplyOptions,
-  MorphoNativeSupplyOptions,
   MorphoProtocolOptions,
   MorphoRepayOptions,
-  MorphoSupplyOptions,
   MorphoWithdrawCollateralOptions,
   MorphoWithdrawOptions,
   PreparedMorphoSupply,

@@ -1,8 +1,5 @@
-import { getChainAddress, getChainAddresses } from "@morpho-org/blue-sdk";
-import {
-  isPermitSignature,
-  type PermitRequirementSignature,
-} from "@morpho-org/morpho-sdk";
+import { getChainAddress } from "@morpho-org/blue-sdk";
+import type { BundlesTokenRequirementSignature } from "@morpho-org/morpho-sdk";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
 import {
   type Address,
@@ -29,18 +26,12 @@ const DEPOSIT_AMOUNT = 1_000_000n;
 const maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip;
 
 maybeDescribe("MorphoProtocolEvm fork e2e", () => {
-  test.for([
-    "prepared",
-    "legacyApproval",
-    "legacyPermit2",
-    "legacyPermit",
-  ] as const)(
+  test.for(["approval", "permit2", "permit"] as const)(
     "behavior: %s deposits with its matching requirements",
     async (route, { client }) => {
-      const token =
-        route === "legacyPermit" ? getChainAddress(1, "usdc") : USDT;
+      const token = route === "permit" ? getChainAddress(1, "usdc") : USDT;
       const vault =
-        route === "legacyPermit"
+        route === "permit"
           ? "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145"
           : VAULT;
 
@@ -110,16 +101,14 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
       const morpho = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: vault,
-        supportSignature: route === "legacyPermit2" || route === "legacyPermit",
+        supportSignature: route === "permit2" || route === "permit",
       });
       const options = { token, amount: DEPOSIT_AMOUNT };
-      const prepared =
-        route === "prepared" ? await morpho.prepareSupply(options) : undefined;
-      const requirements = prepared
-        ? await prepared.getRequirements()
-        : await morpho.getSupplyRequirements(options, {
-            useSimplePermit: route === "legacyPermit",
-          });
+      const prepared = await morpho.prepareSupply(options);
+      const requirements = await prepared.getRequirements({
+        useSimplePermit: route === "permit",
+        permit2Nonce: 42n,
+      });
       const signingAccount = mnemonicToAccount(SEED);
       expect(signingAccount.address).toBe(accountAddress);
       const walletClient = createWalletClient({
@@ -127,21 +116,26 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
         chain: mainnet,
         transport: http(rpcUrl),
       });
-      let requirementSignature: PermitRequirementSignature | undefined;
+      let requirementSignature: BundlesTokenRequirementSignature | undefined;
 
       for (const requirement of requirements) {
         if ("sign" in requirement) {
           expect(requirement.action.type).toBe(
-            route === "legacyPermit" ? "permit" : "permit2",
+            route === "permit" ? "permit" : "permit2SignatureTransfer",
           );
-          const signature = await requirement.sign(
+          expect(requirement.action.args.spender).toBe(
+            getChainAddress(1, "bundles.vaultBundlesV1"),
+          );
+          requirementSignature = await requirement.sign(
             walletClient,
             accountAddress,
           );
-          if (!isPermitSignature(signature))
-            throw new Error("Expected legacy permit");
-          requirementSignature = signature;
         } else {
+          expect(requirement.action.args.spender).toBe(
+            route === "permit2"
+              ? getChainAddress(1, "permit2")
+              : getChainAddress(1, "bundles.vaultBundlesV1"),
+          );
           const { hash } = await account.sendTransaction({
             to: requirement.to,
             value: requirement.value ?? 0n,
@@ -154,17 +148,21 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
         }
       }
 
-      if (route === "legacyPermit" || route === "legacyPermit2")
+      if (route === "permit" || route === "permit2")
         expect(requirementSignature).toBeDefined();
-      const result = prepared
-        ? await prepared.submit()
-        : await morpho.supply({ ...options, requirementSignature });
+      const result =
+        route === "approval"
+          ? await morpho.supply(options)
+          : await prepared.submit(requirementSignature);
 
       expect(result.hash).toMatch(/^0x[0-9a-fA-F]{64}$/);
       const supplyReceipt = await client.waitForTransactionReceipt({
         hash: result.hash as Hash,
       });
       expect(supplyReceipt.status).toBe("success");
+      expect(supplyReceipt.to?.toLowerCase()).toBe(
+        getChainAddress(1, "bundles.vaultBundlesV1").toLowerCase(),
+      );
       expect(
         await client.readContract({
           address: vault,
@@ -175,93 +173,47 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
       ).toBeGreaterThan(sharesBefore);
     },
   );
-  test.for([
-    { amount: 0n, nativeAmount: 10n ** 15n },
-    { amount: 10n ** 15n, nativeAmount: 10n ** 15n },
-  ])(
-    "behavior: legacy native funding $amount + $nativeAmount mints vault shares",
-    async ({ amount, nativeAmount }, { client }) => {
-      const account = new WalletAccountEvm(SEED, "0'/0/0", {
-        provider: client.transport.url!,
-      });
-      const owner = (await account.getAddress()) as Address;
-      // Keep the public test wallet a plain EOA at the pinned block.
-      await client.setCode({ address: owner, bytecode: "0x" });
-      const token = getChainAddress(1, "wNative");
-      const vault = "0xBb50A5341368751024ddf33385BA8cf61fE65FF9";
-      let nonce = await client.getTransactionCount({ address: owner });
-      const sendTransaction = account.sendTransaction.bind(account);
-      account.sendTransaction = async (transaction) => {
-        if (typeof transaction === "string")
-          return sendTransaction(transaction);
-        const result = await sendTransaction({ ...transaction, nonce });
-        nonce += 1;
-        return result;
-      };
-      await client.setBalance({ address: owner, value: parseEther("10") });
-      if (amount > 0n) {
-        // WETH's payable fallback wraps the ERC-20 portion before the mixed-funded deposit.
-        const funding = await account.sendTransaction({
-          to: token,
-          value: amount,
-          data: "0x",
-        });
-        expect(
-          (
-            await client.waitForTransactionReceipt({
-              hash: funding.hash as Hash,
-            })
-          ).status,
-        ).toBe("success");
-      }
-      const morpho = new MorphoProtocolEvm(account, {
-        chainId: 1,
-        earnVaultAddress: vault,
-      });
-      const options = { token, amount, nativeAmount };
-      const requirements = await morpho.getSupplyRequirements(options);
-      if (amount === 0n) expect(requirements).toEqual([]);
-      for (const requirement of requirements) {
-        if (!("to" in requirement)) throw new Error("Expected approval");
-        expect(requirement.action.args.spender).toBe(
-          getChainAddresses(1).bundler3.generalAdapter1,
-        );
-        expect(requirement.action.args.amount).toBe(amount);
-        const approval = await account.sendTransaction(requirement);
-        expect(
-          (
-            await client.waitForTransactionReceipt({
-              hash: approval.hash as Hash,
-            })
-          ).status,
-        ).toBe("success");
-      }
-      const sharesBefore = await client.readContract({
-        address: vault,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [owner],
-      });
-      const result = await morpho.supply(options);
-      expect(
-        (await client.waitForTransactionReceipt({ hash: result.hash as Hash }))
-          .status,
-      ).toBe("success");
-      const sharesAfter = await client.readContract({
-        address: vault,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [owner],
-      });
-      expect(sharesAfter).toBeGreaterThan(sharesBefore);
-      expect(
-        await client.readContract({
-          address: token,
-          abi: erc20Abi,
-          functionName: "balanceOf",
-          args: [owner],
-        }),
-      ).toBe(0n);
-    },
-  );
+  test("behavior: native funding mints vault shares through VaultBundlesV1", async ({
+    client,
+  }) => {
+    const account = new WalletAccountEvm(SEED, "0'/0/0", {
+      provider: client.transport.url!,
+    });
+    const owner = (await account.getAddress()) as Address;
+    // Keep the public test wallet a plain EOA at the pinned block.
+    await client.setCode({ address: owner, bytecode: "0x" });
+    await client.setBalance({ address: owner, value: parseEther("10") });
+    const token = getChainAddress(1, "wNative");
+    const vault = "0xBb50A5341368751024ddf33385BA8cf61fE65FF9";
+    const morpho = new MorphoProtocolEvm(account, {
+      chainId: 1,
+      earnVaultAddress: vault,
+    });
+    const prepared = await morpho.prepareSupply({
+      token,
+      nativeAmount: 10n ** 15n,
+    });
+    expect(await prepared.getRequirements()).toEqual([]);
+    const sharesBefore = await client.readContract({
+      address: vault,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [owner],
+    });
+    const result = await prepared.submit();
+    const receipt = await client.waitForTransactionReceipt({
+      hash: result.hash as Hash,
+    });
+    expect(receipt.status).toBe("success");
+    expect(receipt.to?.toLowerCase()).toBe(
+      getChainAddress(1, "bundles.vaultBundlesV1").toLowerCase(),
+    );
+    const sharesAfter = await client.readContract({
+      address: vault,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [owner],
+    });
+    expect(sharesAfter).toBeGreaterThan(sharesBefore);
+  });
 });

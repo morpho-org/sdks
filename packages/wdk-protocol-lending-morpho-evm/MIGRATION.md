@@ -1,20 +1,21 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` and introduces prepared vault deposits and withdrawals through `VaultBundlesV1`.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` and migrates vault deposits and withdrawals through `VaultBundlesV1`.
 
-## Vault supply deprecation through 2.x
+## Vault supply migration
 
-The existing `supply`, `getSupplyRequirements`, and `quoteSupply` methods remain functional
-throughout WDK 2.x and are marked `@deprecated`. The exported `MorphoSupplyOptions`,
-`MorphoErc20SupplyOptions`, and `MorphoNativeSupplyOptions` types also remain available.
-These compatibility APIs keep their Bundler3/GeneralAdapter1 route, additive ERC-20/native funding,
-existing GeneralAdapter1 approvals, and option-level ERC-2612 or Permit2 AllowanceTransfer signatures.
-They are scheduled for removal in **3.0**, after the 2.x deprecation period.
+Version 2 removes the Bundler3/GeneralAdapter1 vault deposit route and
+`getSupplyRequirements`. The standard WDK `supply` and `quoteSupply` methods now use
+VaultBundlesV1 with `MorphoExclusiveSupplyOptions` and existing token approvals or native
+funding. Signed deposits use `prepareSupply`. The exported `MorphoSupplyOptions`,
+`MorphoErc20SupplyOptions`, `MorphoNativeSupplyOptions`, and
+`ApprovalOrSignatureRequirement` compatibility types are removed.
 
-New integrations should use `MorphoExclusiveSupplyOptions` with `prepareSupply`, then call the
-same handle's `getRequirements`, `submit`, and `quote`. This successor uses VaultBundlesV1,
-exclusive funding, and Permit2 SignatureTransfer. Its approvals and signatures are specific to
-that route; legacy GeneralAdapter1 approvals and permits cannot fund a prepared deposit.
+Use `MorphoExclusiveSupplyOptions` with `prepareSupply`, then call the same handle's
+`getRequirements`, `submit`, and `quote`. Every vault deposit uses VaultBundlesV1,
+exclusive ERC-20 or native funding, and ERC-2612 or Permit2 SignatureTransfer permits.
+Existing GeneralAdapter1 approvals and Permit2 AllowanceTransfer signatures cannot fund
+these deposits. There is no Bundler3 fallback.
 
 ## Required changes
 
@@ -22,10 +23,10 @@ that route; legacy GeneralAdapter1 approvals and permits cannot fund a prepared 
 - Replace `MorphoBorrowWithVaultV2ReallocationsOptions` with `MorphoBorrowOptions`. The specialized opt-in type and the package's Vault V1 reallocation re-exports were removed.
 - Remove `slippageTolerance` from `MorphoBorrowOptions`, `MorphoRepayOptions`, and Blue collateral-supply inputs. Constructor-level and vault-supply slippage settings now apply only to Morpho Vault V2 flows because BlueBundlesV1 has no Bundler3 share-price bounds.
 - Call `getWithdrawCollateralRequirements` before `withdrawCollateral`. Send the returned authorization transaction, or sign the requirement and pass its result as `requirementSignature`.
-- Use `MorphoCollateralSupplyOptions` for Blue collateral methods and `MorphoExclusiveSupplyOptions` for prepared vault deposits. Both successor types accept either `amount` or `nativeAmount`, never both. Mixing the funding keys throws `MixedBundlesFundingError` (exported by `@morpho-org/morpho-sdk`) for `prepareSupply` and `MixedBlueCollateralFundingError` (exported by this package) for Blue collateral. Deprecated vault supply methods still accept additive funding.
-- Migrate from `getSupplyRequirements(options)` to `prepareSupply(options)`. The returned handle carries `getRequirements(requirementOptions?)`, `submit(requirementSignature?, config?)`, and `quote(requirementSignature?, config?)` over one SDK action. Pass the signed permit to that same handle's `submit` or `quote`; option-level `requirementSignature` remains supported only by deprecated `supply` and `quoteSupply`.
-- When adopting `prepareSupply`, approve `VaultBundlesV1` instead of GeneralAdapter1. Existing GeneralAdapter1 allowances remain usable with the deprecated methods.
-- Prepared vault deposits expire after two hours and enforce the signed permit's deadline; `slippageTolerance` still bounds `maxSharePrice`. Deprecated supply methods retain the legacy Bundler3 execution semantics.
+- Use `MorphoCollateralSupplyOptions` for Blue collateral methods and `MorphoExclusiveSupplyOptions` for prepared vault deposits. Both successor types accept either `amount` or `nativeAmount`, never both. Mixing the funding keys throws `MixedBundlesFundingError` (exported by `@morpho-org/morpho-sdk`) for `prepareSupply` and `MixedBlueCollateralFundingError` (exported by this package) for Blue collateral.
+- Migrate from `getSupplyRequirements(options)` to `prepareSupply(options)`. The returned handle carries `getRequirements(requirementOptions?)`, `submit(requirementSignature?, config?)`, and `quote(requirementSignature?, config?)` over one SDK action. Pass the signed permit to that same handle's `submit` or `quote`. Option-level vault `requirementSignature` is no longer accepted.
+- When adopting `prepareSupply`, approve `VaultBundlesV1` instead of GeneralAdapter1. Existing GeneralAdapter1 allowances no longer fund vault deposits.
+- Prepared vault deposits expire after two hours and enforce the signed permit's deadline; `slippageTolerance` still bounds `maxSharePrice`.
 - Prepared supply methods recheck the live provider chain on every call. Handle `ChainIdMismatchError`, re-exported by this package, if the wallet switches away from the configured vault chain.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls, and to the prepared deposit's `getRequirements`, when selecting Permit2 SignatureTransfer.
 - Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` resolves that requirement before submitting and throws the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
@@ -52,12 +53,7 @@ that route; legacy GeneralAdapter1 approvals and permits cannot fund a prepared 
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
   Vault token and share signatures are passed to `PreparedMorphoSupply.submit` / `.quote`
-  and `PreparedMorphoWithdraw.submit` / `.quote`, respectively.
-  Deprecated vault supplies narrow their option-level signature to `PermitRequirementSignature`,
-  accepting only ERC-2612/Permit2 AllowanceTransfer permits. If a signature variable is typed as
-  the broader `RequirementSignature`, narrow it with `isPermitSignature` from
-  `@morpho-org/morpho-sdk` before passing it to `supply` or `quoteSupply`. They return
-  `ApprovalOrSignatureRequirement` from `getSupplyRequirements`, including Permit2 AllowanceTransfer.
+  and `PreparedMorphoWithdraw.submit` / `.quote`, respectively, as the first argument.
 
 ## Borrow reallocations
 
@@ -158,7 +154,7 @@ if (requirement && "sign" in requirement) {
 
 ## Vault deposits
 
-Deprecated flow, supported throughout 2.x:
+Before (Bundler3 requirements and option-level signatures removed in 2.0):
 
 ```ts
 const options = { token: vaultAsset, amount: 1_000_000n };
@@ -180,7 +176,7 @@ for (const requirement of requirements) {
 await morpho.supply({ ...options, requirementSignature });
 ```
 
-Recommended prepared flow:
+After:
 
 ```ts
 const prepared = await morpho.prepareSupply({ token: vaultAsset, amount: 1_000_000n });
