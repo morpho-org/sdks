@@ -321,7 +321,6 @@ describe("MorphoVaultV2 redeem getRequirements", () => {
         amount,
         spender,
       });
-      expect(await redeem.getRequirements()).toBe(requirements);
       expect(redeem.buildTx()).toEqual(originalTx);
 
       if (supportSignature) {
@@ -350,6 +349,33 @@ describe("MorphoVaultV2 redeem getRequirements", () => {
       }
     },
   );
+
+  test("behavior: re-reads the share allowance after the approval is executed", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
+    const redeem = vault.redeem({ shares: amount, userAddress: IN_KIND_USER });
+
+    expect(await redeem.getRequirements()).toHaveLength(1);
+
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: amount,
+    });
+
+    expect(await redeem.getRequirements()).toEqual([]);
+    expect(countAllowanceReads(handle)).toBe(2);
+  });
 });
 
 describe("MorphoVaultV2 withdraw getRequirements", () => {

@@ -248,7 +248,7 @@ export interface VaultV2Actions {
    *
    * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
-   * `buildTx()`; the requirement is resolved once and re-checked against the deadline on every call.
+   * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
    *
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Exact vault shares to burn.
@@ -694,13 +694,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
       referralFeeRecipient: params.referralFeeRecipient,
     });
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: readonly ActionRequirement[] | undefined;
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return resolvedRequirements;
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
           {
@@ -717,8 +715,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
         if (signatureRequirement?.action.type === "permit") {
           expectedRequirement = signatureRequirement.action;
         }
-        resolvedRequirements = requirements;
-        return resolvedRequirements;
+        return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesRequirementSignature(signatures, {
