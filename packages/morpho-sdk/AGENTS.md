@@ -51,9 +51,15 @@ Protocol terms used across this package's docs and JSDoc:
 - **BlueBundlesV1** — the protocol-owned periphery called directly by the high-level Blue
   write methods. It owns operation ordering, token pulls, optional native wrapping, Morpho
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
-- **VaultBundlesV1** — the protocol-owned fixed periphery called directly by Vault V1 and Vault V2
-  deposit, withdraw, and redeem flows, plus V1-to-V2 migration. It owns token/share pulls, optional
-  native wrapping, referral fees, refunds, and fixed vault operation ordering.
+- **VaultBundlesV1** — standalone protocol-owned fixed periphery for VaultV1/VaultV2 deposits,
+  asset withdrawals, share redemptions, and V1-to-V2 migration. Deposits approve or permit the
+  gross underlying assets to VaultBundlesV1 (ERC-2612 or Permit2 SignatureTransfer), which pulls
+  those assets, deducts any referral fee, and enforces `maxSharePrice`. Withdrawals and redemptions
+  burn the transaction sender's vault shares and pay the net assets to that sender; asset
+  withdrawals require an exact vault-share allowance or embedded ERC-2612 permit for the SDK's
+  deadline- and slippage-derived cap, replacing any different allowance, including an oversized
+  one. That allowance is the only onchain share-burn cap in asset mode. Registered per chain as
+  `bundles.vaultBundlesV1`; its canonical ABI export is `vaultBundlesV1Abi`.
 - **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Its data and low-level helpers remain public, but v6 high-level Blue writes do not accept V1 reallocations.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.

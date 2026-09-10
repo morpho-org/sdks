@@ -8,6 +8,11 @@ import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
 import { createWalletClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
+import {
+  AddressMismatchError,
+  VaultAssetMismatchError,
+  type VaultSharesApprovalOrSignatureRequirement,
+} from "./index.js";
 import MorphoProtocolEvm, {
   type PreparedMorphoWithdraw,
   type RequirementApproval,
@@ -60,6 +65,40 @@ const setup = () => {
 };
 
 describe.sequential("prepared withdrawal adapter", () => {
+  test.each(["withdraw", "quoteWithdraw", "prepareWithdraw"] as const)(
+    "error: AddressMismatchError for another recipient (%s)",
+    async (method) => {
+      const { protocol, action, withdraw, send, quote } = setup();
+
+      await expect(
+        protocol[method]({ ...OPTIONS, to: VAULT }),
+      ).rejects.toBeInstanceOf(AddressMismatchError);
+
+      expect(withdraw).not.toHaveBeenCalled();
+      expect(action.getRequirements).not.toHaveBeenCalled();
+      expect(action.buildTx).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      expect(quote).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(["withdraw", "quoteWithdraw", "prepareWithdraw"] as const)(
+    "error: VaultAssetMismatchError for another token (%s)",
+    async (method) => {
+      const { protocol, action, withdraw, send, quote } = setup();
+
+      await expect(
+        protocol[method]({ ...OPTIONS, token: VAULT }),
+      ).rejects.toBeInstanceOf(VaultAssetMismatchError);
+
+      expect(withdraw).not.toHaveBeenCalled();
+      expect(action.getRequirements).not.toHaveBeenCalled();
+      expect(action.buildTx).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      expect(quote).not.toHaveBeenCalled();
+    },
+  );
+
   test.each(["getRequirements", "submit", "quote"] as const)(
     "error: ChainIdMismatchError after a provider switch (%s)",
     async (method) => {
@@ -206,6 +245,9 @@ describe.sequential("prepared withdrawal adapter", () => {
     const wallet = createWalletClient({ chain: mainnet, transport: http() });
     const prepared = await protocol.prepareWithdraw(OPTIONS);
     const requirements = await prepared.getRequirements();
+    expectTypeOf(requirements).toEqualTypeOf<
+      readonly VaultSharesApprovalOrSignatureRequirement[]
+    >();
     const requirement = requirements[0]!;
     expect(requirement).toHaveProperty("sign");
     if (!("sign" in requirement))
