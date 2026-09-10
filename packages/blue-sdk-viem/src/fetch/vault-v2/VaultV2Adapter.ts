@@ -56,7 +56,7 @@ import {
 export async function fetchVaultV2Adapter(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
@@ -154,7 +154,7 @@ export async function fetchVaultV2Adapter(
 export async function fetchAccrualVaultV2Adapter(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;

@@ -1140,6 +1140,27 @@ describe("fetchUser", () => {
 
     expect(user.isBundlerAuthorized).toBe(false);
   });
+
+  test("behavior: does not write the resolved chainId into caller-owned parameters", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "nonce",
+      result: 0n,
+    });
+    const parameters = {};
+
+    await fetchUser(USER, handle.client, parameters);
+
+    expect(parameters).toStrictEqual({});
+  });
 });
 
 describe("vault fetchers", () => {
@@ -1754,9 +1775,12 @@ describe("vault fetchers", () => {
     mockVaultMarketConfigReads(handle);
     mockPositionReads(handle);
 
-    const vault = await fetchAccrualVault(VAULT, handle.client);
+    const parameters = {};
+
+    const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);
+    expect(parameters).toStrictEqual({});
   });
 });
