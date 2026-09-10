@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
 import { InvalidMidnightApiResponseError } from "../errors.js";
 import { TakeAmountsLib } from "../math/index.js";
 import { Payload } from "../signatures/Payload.js";
@@ -337,9 +337,9 @@ export class MidnightApi {
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
-   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -358,6 +358,8 @@ export class MidnightApi {
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
     const input = params;
+    const settlementFee = BigInt(input.settlementFee ?? 0n);
+    assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
       ...input,
       method: "GET",
@@ -389,7 +391,6 @@ export class MidnightApi {
           : undefined;
     if (averageWorstPrice != null) {
       const guard = BigInt(averageWorstPrice);
-      const settlementFee = BigInt(input.settlementFee ?? 0n);
       let filledUnits = 0n;
       let filledAssets = 0n;
       if ("units" in input && input.units != null) {
@@ -420,20 +421,21 @@ export class MidnightApi {
             offer: take.offer,
             settlementFee,
           });
-          const price = input.side === "asks" ? buyerPrice : sellerPrice;
-          const takeAssets =
+          const makerPrice = input.side === "asks" ? sellerPrice : buyerPrice;
+          const settlementPrice =
+            input.side === "asks" ? buyerPrice : sellerPrice;
+          const takeMakerAssets =
             input.side === "asks"
-              ? MathLib.mulDivUp(take.units, price, MathLib.WAD)
-              : MathLib.mulDivDown(take.units, price, MathLib.WAD);
-          if (takeAssets === 0n) continue;
+              ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
+              : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
 
-          const fillsEntireTake = takeAssets <= remainingAssets;
+          const fillsEntireTake = takeMakerAssets <= remainingAssets;
           const filled = fillsEntireTake
             ? take.units
             : MathLib.mulDiv(
                 remainingAssets,
                 MathLib.WAD,
-                price,
+                makerPrice,
                 input.side === "asks" ? "Down" : "Up",
               );
           if (filled === 0n) continue;
@@ -441,11 +443,13 @@ export class MidnightApi {
           filledUnits += filled;
           filledAssets += MathLib.mulDiv(
             filled,
-            price,
+            settlementPrice,
             MathLib.WAD,
             input.side === "asks" ? "Up" : "Down",
           );
-          remainingAssets = fillsEntireTake ? remainingAssets - takeAssets : 0n;
+          remainingAssets = fillsEntireTake
+            ? remainingAssets - takeMakerAssets
+            : 0n;
         }
       }
       if (filledUnits > 0n) {
@@ -795,9 +799,9 @@ export class MidnightApi {
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
    * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
-   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts

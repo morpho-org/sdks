@@ -1,7 +1,12 @@
 import packageJson from "@morpho-org/midnight-sdk/package.json" with {
   type: "json",
 };
-import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
+import {
+  ChainId,
+  getChainAddress,
+  MathLib,
+  NegativeValueError,
+} from "@morpho-org/morpho-ts";
 import { type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 
@@ -9,6 +14,7 @@ import { createFixtures } from "../__test__/fixtures.js";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
+  SettlementFeeExceedsPriceError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
@@ -242,6 +248,31 @@ const apiTakeableOffer = {
   offer: apiOffer,
   ratifier_data: "0x1234",
 };
+
+const apiBidTakeableOffer = {
+  ...apiTakeableOffer,
+  units: (2n * MathLib.WAD).toString(),
+  offer: {
+    ...apiOffer,
+    buy: true,
+    tick: 5_000,
+    receiver_if_maker_is_seller: ZERO_ADDRESS,
+  },
+};
+
+function createQuoteFetch(
+  takeableOffers: readonly (typeof apiTakeableOffer)[],
+) {
+  return createJsonFetch({
+    data: {
+      average_best_price: "0",
+      average_worst_price: "0",
+      available_assets: "0",
+      available_units: "0",
+      takeable_offers: takeableOffers,
+    },
+  });
+}
 
 const expectedTakeableOffer = {
   marketId: MARKET_ID,
@@ -1031,15 +1062,7 @@ describe("MidnightApi.fetchBookQuote", () => {
       offer: { ...smallTake.offer, maker: SECOND_MAKER },
     };
     const price = TickLib.tickToPrice(smallTake.offer.tick);
-    const { fetch } = createJsonFetch({
-      data: {
-        average_best_price: price.toString(),
-        average_worst_price: price.toString(),
-        available_assets: "2",
-        available_units: "2",
-        takeable_offers: [smallTake, secondSmallTake],
-      },
-    });
+    const { fetch } = createQuoteFetch([smallTake, secondSmallTake]);
 
     await expect(
       MidnightApi.fetchBookQuote({
@@ -1053,28 +1076,121 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
-  test("error: quote guards include the current settlement fee", async () => {
-    const price = TickLib.tickToPrice(apiOffer.tick);
-    const { fetch } = createJsonFetch({
-      data: {
-        average_best_price: price.toString(),
-        average_worst_price: price.toString(),
-        available_assets: apiTakeableOffer.units,
-        available_units: apiTakeableOffer.units,
-        takeable_offers: [apiTakeableOffer],
-      },
-    });
+  test("error: asset quote guards include settlement-only asks", async () => {
+    const settlementOnlyTake = {
+      ...apiTakeableOffer,
+      units: MathLib.WAD.toString(),
+      offer: { ...apiOffer, tick: 0 },
+    };
+    const { fetch } = createQuoteFetch([settlementOnlyTake]);
 
     await expect(
       MidnightApi.fetchBookQuote({
         marketId: MARKET_ID,
         side: "asks",
-        units: apiTakeableOffer.units,
-        averageWorstPrice: price,
+        assets: 1n,
+        averageWorstPrice: 0n,
         settlementFee: 1n,
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("behavior: bid unit guards use the seller settlement price", async () => {
+    const price = TickLib.tickToPrice(apiBidTakeableOffer.offer.tick);
+    const settlementFee = 5_000000000000000n;
+    const sellerPrice = price - settlementFee;
+    const { fetch } = createQuoteFetch([apiBidTakeableOffer]);
+
+    await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "bids",
+      units: MathLib.WAD,
+      averageWorstPrice: sellerPrice,
+      settlementFee,
+      fetch,
+    });
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        units: MathLib.WAD,
+        averageWorstPrice: sellerPrice + 1n,
+        settlementFee,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: bid asset guards include zero seller-price fills", async () => {
+    const buyerPrice = TickLib.tickToPrice(apiBidTakeableOffer.offer.tick);
+    const { fetch } = createQuoteFetch([apiBidTakeableOffer]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        assets: buyerPrice,
+        averageWorstPrice: 1n,
+        settlementFee: buyerPrice,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: asset guards include a final partial fill", async () => {
+    const firstTake = {
+      ...apiTakeableOffer,
+      units: MathLib.WAD.toString(),
+      offer: { ...apiOffer, tick: 3_000 },
+    };
+    const secondTake = {
+      ...firstTake,
+      offer: { ...firstTake.offer, maker: SECOND_MAKER, tick: 5_000 },
+    };
+    const { fetch } = createQuoteFetch([firstTake, secondTake]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        assets: 138_000000000000000n,
+        averageWorstPrice: 141_000000000000000n,
+        settlementFee: 5_000000000000000n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: NegativeValueError", async () => {
+    const { calls, fetch } = createQuoteFetch([]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: 0n,
+        settlementFee: -1n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(NegativeValueError);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("error: SettlementFeeExceedsPriceError", async () => {
+    const price = TickLib.tickToPrice(apiBidTakeableOffer.offer.tick);
+    const { fetch } = createQuoteFetch([apiBidTakeableOffer]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        units: MathLib.WAD,
+        averageWorstPrice: price,
+        settlementFee: price + 1n,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(SettlementFeeExceedsPriceError);
   });
 });
 
