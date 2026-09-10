@@ -45,7 +45,7 @@ export async function fetchVaultMarketAllocation(
   vault: Address,
   marketId: MarketId,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 

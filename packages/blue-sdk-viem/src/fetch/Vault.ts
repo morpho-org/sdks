@@ -407,29 +407,21 @@ export async function fetchVault(
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  const readParameters = {
-    ...parameters,
-    chainId: parameters.chainId ?? (await getChainId(client)),
-  };
+  parameters.chainId ??= await getChainId(client);
 
-  const vault = await fetchVault(address, client, readParameters);
+  const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
     vault.withdrawQueue.map((marketId) =>
-      fetchVaultMarketAllocation(
-        vault.address,
-        marketId,
-        client,
-        readParameters,
-      ),
+      fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
   const block = await getBlock(
     client,
-    readParameters.blockNumber !== undefined
-      ? { blockNumber: readParameters.blockNumber }
-      : { blockTag: readParameters.blockTag ?? "latest" },
+    parameters.blockNumber !== undefined
+      ? { blockNumber: parameters.blockNumber }
+      : { blockTag: parameters.blockTag ?? "latest" },
   );
 
   return new AccrualVault(vault, allocations).accrueInterest(block.timestamp);

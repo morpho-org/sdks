@@ -167,22 +167,16 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  const readParameters = {
-    ...parameters,
-    chainId: parameters.chainId ?? (await getChainId(client)),
-  };
+  parameters.chainId ??= await getChainId(client);
+
   const adapter = await fetchVaultV2MorphoVaultV1Adapter(
     address,
     client,
-    readParameters,
+    parameters,
   );
-  const vaultV1 = await fetchVault(
-    adapter.morphoVaultV1,
-    client,
-    readParameters,
-  );
+  const vaultV1 = await fetchVault(adapter.morphoVaultV1, client, parameters);
   const [allocations, shares, parentAllocation] = await Promise.all([
     Promise.all(
       vaultV1.withdrawQueue.map((marketId) =>
@@ -190,19 +184,19 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
           vaultV1.address,
           marketId,
           client,
-          readParameters,
+          parameters,
         ),
       ),
     ),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address: adapter.morphoVaultV1,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [adapter.address],
     }),
     readContract(client, {
-      ...readParameters,
+      ...parameters,
       address: adapter.address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "allocation",
