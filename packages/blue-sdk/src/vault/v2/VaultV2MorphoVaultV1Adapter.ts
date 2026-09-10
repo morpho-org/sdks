@@ -124,6 +124,8 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   }
 
   maxWithdraw(_data: Hex) {
+    // Vault V2 rejects deallocation when its tracked adapter allocation is zero,
+    // even if the adapter holds residual Vault V1 shares from direct transfers.
     if (this.parentAllocation === 0n)
       return { value: 0n, limiter: CapacityLimitReason.position };
     return this.accrualVaultV1.maxWithdraw(this.shares);

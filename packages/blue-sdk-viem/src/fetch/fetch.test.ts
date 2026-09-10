@@ -37,7 +37,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
-  extendRpc,
   mockDeploylessRead,
   mockDeploylessReads,
   mockNativeBalance,
@@ -1730,13 +1729,8 @@ describe("vault fetchers", () => {
     expect(allocation.position.market.price).toBe(123n);
   });
 
-  test("fetchAccrualVault composes a vault without pinning latest reads", async () => {
+  test("fetchAccrualVault preserves direct latest state without pinning reads", async () => {
     const handle = createMockClient(mainnet);
-    extendRpc(handle, async (call, base) => {
-      if (call.method === "eth_getBlockByNumber")
-        return { number: "0x1", timestamp: "0x5" };
-      return base(call);
-    });
     mockDeploylessReads(handle, [
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1785,7 +1779,8 @@ describe("vault fetchers", () => {
     const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
-    expect(vault.totalAssets).toBe(55n);
+    expect(vault.totalAssets).toBe(0n);
+    expect(vault.lostAssets).toBe(55n);
     expect(vault.totalSupply).toBe(42n);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);
     expect(
@@ -1794,9 +1789,11 @@ describe("vault fetchers", () => {
         .filter((call) => call.method === "eth_call")
         .every((call) => call.params?.[1] === "latest"),
     ).toBe(true);
-    expect(handle.request.mock.calls.at(-1)?.[0].method).toBe(
-      "eth_getBlockByNumber",
-    );
+    expect(
+      handle.request.mock.calls.some(
+        ([call]) => call.method === "eth_getBlockByNumber",
+      ),
+    ).toBe(false);
     expect(parameters).toStrictEqual({ blockTag: "latest" });
   });
 });

@@ -4,4 +4,4 @@
 "@morpho-org/morpho-sdk": minor
 ---
 
-Preserve immutable Blue collateral projections, accrue Vault V1 market, loss, and fee accounting in `fetchAccrualVault` for migration bounds, and ignore residual nested-vault shares when their parent allocation is zero.
+Preserve immutable Blue collateral projections and direct onchain Vault V1 fetch results, project Vault V1 market, loss, and fee accounting when computing migration bounds, and ignore residual nested-vault shares when their parent allocation is zero.

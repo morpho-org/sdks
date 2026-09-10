@@ -1,7 +1,7 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_USER,
   IN_KIND_VAULT,
@@ -84,6 +84,7 @@ describe("MorphoVaultV1 chain validation", () => {
       MathLib.RAY,
       shares,
     );
+    const accrueInterest = vi.spyOn(sourceVault, "accrueInterest");
 
     const tx = vault
       .migrateToV2({
@@ -98,6 +99,7 @@ describe("MorphoVaultV1 chain validation", () => {
       .buildTx();
 
     expect(tx.action.args.minSharePriceVaultV1).toBe(expectedFloor);
+    expect(accrueInterest).toHaveBeenCalledWith(expect.any(BigInt));
     expect(expectedFloor).toBeLessThan(
       MathLib.mulDivDown(sourceVault.toAssets(shares), MathLib.RAY, shares),
     );

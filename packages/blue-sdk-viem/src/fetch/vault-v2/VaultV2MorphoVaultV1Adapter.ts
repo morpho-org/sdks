@@ -1,5 +1,4 @@
 import {
-  AccrualVault,
   AccrualVaultV2MorphoVaultV1Adapter,
   getChainAddresses,
   UnknownFactory,
@@ -18,8 +17,7 @@ import {
   code,
 } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
 import type { DeploylessFetchParameters } from "../../types.js";
-import { fetchVault } from "../Vault.js";
-import { fetchVaultMarketAllocation } from "../VaultMarketAllocation.js";
+import { fetchAccrualVault } from "../Vault.js";
 
 /**
  * Fetches a MorphoVaultV1Adapter used by VaultV2.
@@ -176,18 +174,8 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
     client,
     parameters,
   );
-  const vaultV1 = await fetchVault(adapter.morphoVaultV1, client, parameters);
-  const [allocations, shares, parentAllocation] = await Promise.all([
-    Promise.all(
-      vaultV1.withdrawQueue.map((marketId) =>
-        fetchVaultMarketAllocation(
-          vaultV1.address,
-          marketId,
-          client,
-          parameters,
-        ),
-      ),
-    ),
+  const [vaultV1, shares, parentAllocation] = await Promise.all([
+    fetchAccrualVault(adapter.morphoVaultV1, client, parameters),
     readContract(client, {
       ...parameters,
       address: adapter.morphoVaultV1,
@@ -205,7 +193,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
 
   return new AccrualVaultV2MorphoVaultV1Adapter(
     adapter,
-    new AccrualVault(vaultV1, allocations),
+    vaultV1,
     shares,
     parentAllocation,
   );

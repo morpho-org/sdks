@@ -11,7 +11,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, zeroAddress } from "viem";
 
-import { getBlock, getChainId, readContract } from "viem/actions";
+import { getChainId, readContract } from "viem/actions";
 import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
@@ -370,10 +370,11 @@ export async function fetchVault(
 }
 
 /**
- * Fetches MetaMorpho vault state with accrued market allocations.
+ * Fetches MetaMorpho vault state and market allocations without applying virtual interest.
  *
  * Reads the vault state with `fetchVault`, fetches a `VaultMarketAllocation` for every market in the
- * withdraw queue, then resolves the requested selector for an accrual timestamp. When no
+ * withdraw queue, and returns their direct onchain state. Consumers can call
+ * `AccrualVault.accrueInterest(timestamp)` when they need a virtual projection. When no
  * `blockNumber` is supplied and `blockTag` is `"latest"` (the default), separate reads may resolve
  * at different blocks, so nested entities are not guaranteed synchronized. Pass an explicit
  * `blockNumber` for a block-consistent snapshot.
@@ -386,10 +387,9 @@ export async function fetchVault(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVault` with accrued market, loss, and fee accounting.
+ * @returns The hydrated `AccrualVault` containing direct onchain allocation state.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
- * @throws {BlueErrors.InvalidInterestAccrual} when the block timestamp precedes an allocation market's `lastUpdate`.
  * @example
  * ```ts
  * import type { AccrualVault } from "@morpho-org/blue-sdk";
@@ -417,12 +417,5 @@ export async function fetchAccrualVault(
       fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
-  const block = await getBlock(
-    client,
-    parameters.blockNumber !== undefined
-      ? { blockNumber: parameters.blockNumber }
-      : { blockTag: parameters.blockTag ?? "latest" },
-  );
-
-  return new AccrualVault(vault, allocations).accrueInterest(block.timestamp);
+  return new AccrualVault(vault, allocations);
 }
