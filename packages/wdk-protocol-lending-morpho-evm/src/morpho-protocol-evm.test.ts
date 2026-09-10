@@ -1,5 +1,6 @@
 import * as morphoSdk from "@morpho-org/morpho-sdk";
 import {
+  AddressMismatchError,
   type AuthorizationRequirementSignature,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
@@ -780,9 +781,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           amount: 100_000n,
           to: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
         }),
-      ).rejects.toThrow(
-        "'to' must equal the wallet account address for Morpho vault withdrawals.",
-      );
+      ).rejects.toBeInstanceOf(AddressMismatchError);
     });
 
     test("error: UnresolvedVaultWithdrawRequirementsError", async () => {

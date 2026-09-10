@@ -176,21 +176,63 @@ export interface VaultV1Actions {
     BundlesTokenRequirementsOptions
   >;
   /**
-   * Prepares a withdraw from a VaultV1 (MetaMorpho) contract.
+   * Prepares an exact-assets Vault V1 withdrawal through VaultBundlesV1.
    *
-   * @param {Object} params - The withdraw parameters.
-   * @param {bigint} params.amount - Amount of assets to withdraw.
-   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Headroom applied to the computed share-burn allowance cap (default 0.03%, max 10%).
-   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the withdrawn assets.
-   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
-   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
-   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
-   *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
-   *   satisfied between calls stops being reported, while the derived share cap stays pinned to
-   *   the first resolution.
+   * Reads the vault accrual state on the first `getRequirements()` call, then reads the live
+   * vault-share allowance and, when a signature is needed, the permit nonce on each call.
+   * Captures the requested amount and owner at creation, so later changes to `params` do not
+   * change this handle's requirements or transaction.
+   *
+   * @param params.amount - Positive gross withdrawal in underlying asset base units, before fees.
+   * @param params.userAddress - Share owner that must sign and submit; receives the net assets.
+   * @param params.slippageTolerance - Optional WAD-scaled share-price loss tolerance applied to
+   *   the share cap for MetaMorpho 1.0; MetaMorpho 1.1 retains its lost-assets clamp.
+   *   Defaults to 0.03% and cannot exceed 10%.
+   * @param params.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero;
+   *   rounded down and deducted from the gross withdrawn assets.
+   * @param params.referralFeeRecipient - Optional nonzero recipient required for a positive fee.
+   * @param params.deadline - Optional execution and share-permit deadline in Unix seconds;
+   *   defaults to two hours from handle creation.
+   * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
+   *   which returns a deep-frozen `Transaction<VaultV1WithdrawAction>`. Requirements are empty
+   *   when the allowance equals the cap; otherwise they contain an exact approval or, with
+   *   signature support, an ERC-2612 request. The cap stays pinned to the first resolution while
+   *   each call re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   at any `getRequirements()` call.
+   * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
+   * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds 10%.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed,
+   *   was not resolved for this handle, or has incompatible vault, owner, spender, amount,
+   *   deadline, or nonce values.
+   * @throws {viem.BaseError} when a vault, allowance, or nonce read or transaction encoding fails.
+   * @example
+   * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, type Address } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function prepareUsdcWithdrawal(userAddress: Address) {
+   *   const vaultAddress = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() })
+   *     .extend(morphoViemExtension({ supportSignature: false }));
+   *   const vault = client.morpho.vaultV1(vaultAddress, mainnet.id);
+   *   const action = vault.withdraw({ amount: 1_000_000n, userAddress });
+   *   const requirements = await action.getRequirements();
+   *   // Send and confirm each approval before calling action.buildTx().
+   *   // action.buildTx() returns Readonly<Transaction<VaultV1WithdrawAction>>.
+   *   return { action, requirements }; // Prepared handle and its outstanding share approvals.
+   * }
+   * ```
    */
   withdraw: (params: {
     readonly amount: bigint;
@@ -481,9 +523,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
     readonly referralFeeRecipient?: Address;
     readonly deadline?: bigint;
   }) {
+    const { amount, userAddress } = params;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    if (params.amount <= 0n)
-      throw new NonPositiveInputError("amount", params.amount);
+    if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
+    // Reject values outside the ABI range before resolving any requirements.
+    validateUint256Field("amount", amount);
     const createdAt = Time.timestamp();
     const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
     if (deadline <= createdAt)
@@ -516,7 +560,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
         requiredShareAllowance ??= computeVaultMaxShareAllowance({
           vaultData,
           deadline,
-          assets: params.amount,
+          assets: amount,
           slippageTolerance,
         });
         const requirements = await getVaultBundlesSharesRequirements(
@@ -524,7 +568,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           {
             vaultData,
             version: "vaultV1",
-            owner: params.userAddress,
+            owner: userAddress,
             chainId: this.chainId,
             requiredShareAllowance,
             deadline,
@@ -545,8 +589,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
         return vaultV1Withdraw({
           vault: { chainId: this.chainId, address: this.vault },
           args: {
-            amount: params.amount,
-            userAddress: params.userAddress,
+            amount,
+            userAddress,
             requirementSignature: permit,
             referralFeePct: common.referralFeePct,
             referralFeeRecipient: common.referralFeeRecipient,

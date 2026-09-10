@@ -10,3 +10,7 @@ WDK prepared withdrawals recheck the live provider chain before resolving requir
 Prepared withdrawal requirements expose only approvals or ERC-2612 permits, so signed requirements can be passed directly to `submit` and `quote` without narrowing a legacy Permit2 union.
 
 Withdrawal builders reject asset amounts above uint256 with `InputExceedsMaxError` before encoding. WDK withdrawal options are readonly, including their inherited fields.
+
+Vault withdrawal entities also reject amounts above uint256 before creating a handle or reading requirements. Each handle captures the requested amount and share owner at creation, so later mutation of the caller's options cannot change the approved cap, permit owner, or encoded withdrawal.
+
+WDK withdrawal requirements expose the named `VaultSharesApprovalOrSignatureRequirement` type. Recipient and vault-asset mismatches throw the existing `AddressMismatchError` and `VaultAssetMismatchError` classes, respectively; both are re-exported from the WDK adapter for typed error handling.

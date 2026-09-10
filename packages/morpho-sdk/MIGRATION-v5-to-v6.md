@@ -86,8 +86,6 @@ Deposit action metadata no longer contains `recipient`. It now reports the gross
 The two combined methods require at least one non-zero leg. See the dedicated **Blue refinance**
 section below for that method's larger shape change.
 
-## Update pure action builder inputs and metadata
-
 ## Vault V1 and V2 withdrawals
 
 The established `withdraw` methods and the `vaultV1Withdraw` / `vaultV2Withdraw` builder names stay
@@ -120,6 +118,7 @@ whenever the current allowance differs — including when a larger leftover appr
 its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
 
 ## Blue pure action builder inputs and metadata
+
 Direct action consumers keep the root-barrel builder and parameter-type names, but must replace
 their `args` objects as follows. `metadata` is unchanged.
 

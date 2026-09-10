@@ -35,21 +35,50 @@ export interface VaultV2WithdrawParams {
 /**
  * Encodes an exact-assets Vault V2 withdrawal through VaultBundlesV1.
  *
- * @param params - Vault, gross asset amount, share permit, fee, and deadline values.
- * @returns A deep-frozen VaultBundlesV1 withdrawal transaction.
+ * @param params.vault.chainId - Chain containing the vault and its registered VaultBundlesV1 contract.
+ * @param params.vault.address - Vault V2 whose shares are burned for the withdrawal.
+ * @param params.args.amount - Positive gross withdrawal in underlying asset base units, before fees.
+ * @param params.args.userAddress - Share owner and transaction sender; receives the net withdrawn assets.
+ * @param params.args.recipient - Unsupported; net assets are always paid to the transaction sender.
+ * @param params.args.onBehalf - Unsupported; VaultBundlesV1 always burns the transaction sender's shares.
+ * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
+ *   and the registered VaultBundlesV1 spender. Omit when the exact share allowance is already set.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ *   The fee is rounded down and deducted from the gross withdrawn assets.
+ * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
+ *   when `referralFeePct > 0n`.
+ * @param params.args.deadline - Required positive uint256 Unix timestamp in seconds after which
+ *   execution reverts. This pure builder does not check the current time.
+ * @param params.metadata - Optional analytics metadata appended to the transaction calldata.
+ * @param params.metadata.origin - Hex origin identifier of at most four bytes, with an optional `0x` prefix.
+ * @param params.metadata.timestamp - Optional flag to append the current timestamp; defaults to false.
+ * @returns A deep-frozen `Transaction<VaultV2WithdrawAction>` targeting VaultBundlesV1, with
+ *   `to`, `value: 0n`, `data`, and gross/fee/net withdrawal action metadata.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
  * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
  * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
+ * @throws {viem.BaseError} when transaction encoding fails.
  * @example
  * ```ts
  * import { vaultV2Withdraw } from "@morpho-org/morpho-sdk";
- * import { zeroAddress } from "viem";
+ * import type { Address } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const tx = vaultV2Withdraw({
- *   vault: { chainId: 1, address: zeroAddress },
- *   args: { amount: 1_000_000n, userAddress: zeroAddress, deadline: 1_900_000_000n },
- * });
- * // tx.action.type === "vaultV2Withdraw"
+ * export function buildUsdcWithdrawal(userAddress: Address, deadline: bigint) {
+ *   const vault = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+ *   // Set the exact vault-share allowance before submitting; the entity API derives that cap.
+ *   const tx = vaultV2Withdraw({
+ *     vault: { chainId: mainnet.id, address: vault },
+ *     args: { amount: 1_000_000n, userAddress, deadline },
+ *   });
+ *   // tx satisfies Readonly<Transaction<VaultV2WithdrawAction>>
+ *   return tx;
+ * }
  * ```
  */
 export const vaultV2Withdraw = (
