@@ -190,6 +190,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
+- Reuse semantic helpers exposed by direct dependencies instead of hand-rolling equivalents. When available, use viem's `isAddressEqual` for EVM address equality, and use `_try(accessor, ExpectedError)` for optional typed lookups. Always name the expected errors so unrelated failures propagate, and do not pass an accessor that can legitimately return `undefined` unless successful absence is explicitly tagged (for example with `null`). Lowercasing remains valid when normalization itself—not equality—is the goal, such as normalized map/set keys or deterministic output.
 - Generated code: change generated inputs (`graphql/*.gql`), never edit generated outputs (`src/api/sdk.ts`). Never edit `lib/`.
 - One concern per PR. Tests, JSDoc, and any required semver-relevant changeset land with the change — not as a follow-up.
 

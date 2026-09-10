@@ -31,6 +31,7 @@ vi.mock("../backends/eth-simulate-v1", () => ({
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
+const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
 const txs: SimulationTransaction[] = [
   { from: USER, to: VAULT, data: "0x12" as Hex },
@@ -108,9 +109,13 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
       config: bothBackends(),
       chainId: 1,
       transactions: txs,
+      wNative: WETH,
     });
 
     expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+    expect(mockSimulateV1).toHaveBeenCalledWith(
+      expect.objectContaining({ wNative: WETH }),
+    );
   });
 
   it("does NOT fall back when Tenderly throws SimulationRevertedError", async () => {

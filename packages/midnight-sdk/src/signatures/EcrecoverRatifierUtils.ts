@@ -1227,19 +1227,13 @@ export namespace EcrecoverRatifierUtils {
         }),
       );
     }
-    const items: Payload.Item[] = [];
 
-    for (const offer of tree.offers) {
-      items.push({
-        offer,
-        ratifierData: ratifierData({
-          tree,
-          leafIndex: items.length,
-          signature,
-        }),
-      });
-    }
-
-    return items;
+    return tree.offers.map((offer, leafIndex) => ({
+      offer,
+      ratifierData: encodeRatifierData({
+        signature,
+        ...TreeUtils.buildProof({ tree, leafIndex }),
+      }),
+    }));
   }
 }

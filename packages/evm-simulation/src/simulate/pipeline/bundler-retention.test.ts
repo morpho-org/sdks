@@ -35,12 +35,24 @@ const DAI: Address = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 // Pulled from blue-sdk so tests exercise the real Set membership check.
 const BUNDLER = getAddress(getChainAddresses(1).bundler3.bundler3) as Address;
+// The standalone `bundles` periphery contracts must be guarded like bundler3.
+const bundles = getChainAddresses(1).bundles!;
+const BLUE_BUNDLES = getAddress(bundles.blueBundlesV1!) as Address;
+const VAULT_EXIT_BUNDLES = getAddress(bundles.vaultExitBundlesV1) as Address;
 
 // Synthetic chainIds owned by exactly one case each — see chainAddressOverrides.
 const NO_BUNDLER_CHAIN_ID = 1_000_001;
 const SDK_ERROR_CHAIN_ID = 1_000_002;
+const ONLY_BUNDLES_CHAIN_ID = 1_000_003;
 
+// Neither bundler3 nor bundles cataloged — retention check fully skipped.
 chainAddressOverrides.set(NO_BUNDLER_CHAIN_ID, () => ({
+  ...addressesRegistry[1],
+  bundler3: undefined as never,
+  bundles: undefined,
+}));
+// bundler3 absent but bundles present — the check still guards `bundles`.
+chainAddressOverrides.set(ONLY_BUNDLES_CHAIN_ID, () => ({
   ...addressesRegistry[1],
   bundler3: undefined as never,
 }));
@@ -102,7 +114,7 @@ describe("assertNoBundlerRetention", () => {
     ).not.toThrow();
   });
 
-  it("warns and skips when blue-sdk knows the chain but has no bundler3 config", () => {
+  it("warns and skips when blue-sdk knows the chain but has no bundler3 or bundles config", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     expect(() =>
@@ -115,7 +127,7 @@ describe("assertNoBundlerRetention", () => {
     ).not.toThrow();
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "Chain known to blue-sdk but has no bundler3 config, retention check skipped",
+      "Chain known to blue-sdk but has no bundler3 or bundles config, retention check skipped",
       { chainId: NO_BUNDLER_CHAIN_ID },
     );
   });
@@ -245,7 +257,7 @@ describe("assertNoBundlerRetention", () => {
       }),
     ).not.toThrow();
     expect(logger.warn).toHaveBeenCalledWith(
-      "Simulation detected pre-existing bundler balance being swept",
+      "Simulation detected pre-existing balance being swept from a restricted bundler or bundles contract",
       {
         changes: [
           {
@@ -315,6 +327,85 @@ describe("assertNoBundlerRetention", () => {
       expect(entry.token?.toLowerCase()).toBe(USDC.toLowerCase());
       expect(entry.netRetained).toBe("777");
     }
+  });
+
+  // ─── Bundles periphery ─────────────────────────────────────────────────────
+  // The standalone `bundles` contracts (VaultExitBundlesV1, VaultBundlesV1,
+  // BlueBundlesV1) route user value outside Bundler3 and must be guarded like
+  // the bundler3 registry — retention above dust is a blacklist violation.
+
+  it("behavior: throws when BlueBundlesV1 retains tokens above dust threshold", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BLUE_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+    ).toThrow(BlacklistViolationError);
+  });
+
+  it("behavior: throws when VaultExitBundlesV1 retains tokens above dust threshold", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: DAI,
+          from: USER,
+          to: VAULT_EXIT_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+    ).toThrow(BlacklistViolationError);
+  });
+
+  it("behavior: does not throw when a bundles contract passes tokens through (net zero)", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BLUE_BUNDLES,
+          amount: 1000000n,
+        }),
+        makeTransferLog({
+          token: USDC,
+          from: BLUE_BUNDLES,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+    ).not.toThrow();
+  });
+
+  it("behavior: guards bundles even when the chain has no bundler3 config", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BLUE_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlerRetention({
+        chainId: ONLY_BUNDLES_CHAIN_ID,
+        transfers,
+        assetChanges: [],
+      }),
+    ).toThrow(BlacklistViolationError);
   });
 
   // ─── Native ETH ──────────────────────────────────────────────────────────

@@ -1,3 +1,8 @@
+import {
+  _try,
+  getChainAddresses,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import { ExternalServiceError } from "../errors.js";
 import type {
   SimulateParams,
@@ -18,8 +23,11 @@ import {
  *
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
  * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20/WETH transfers from per-tx logs → asserts no funds are retained
- * by `bundler3` → returns the full result set. The caller reads whichever fields they need:
+ * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
+ * events to the registered wrapped-native token, rejecting them on known tokenless chains,
+ * and retaining signature-based parsing for unknown chains → asserts no funds are retained
+ * by `bundler3` or the standalone `bundles` periphery contracts → returns the full result
+ * set. The caller reads whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
@@ -44,8 +52,9 @@ import {
  *   empty transactions, malformed authorizations).
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
  * @throws {SimulationRevertedError} when the bundle reverts on either backend.
- * @throws {BlacklistViolationError} when the simulation leaves value retained by
- *   a `bundler3` address beyond the dust threshold.
+ * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
+ *   the dust threshold by a restricted `bundler3` address or a `bundles` periphery
+ *   contract (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Never bypassable.
  * @throws {ExternalServiceError} (a) when both backends are unavailable within the
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
@@ -80,12 +89,18 @@ export async function simulate(
 ): Promise<SimulationResult> {
   validateInput(params);
 
+  const wNative = _try(
+    () => getChainAddresses(params.chainId).wNative ?? null,
+    UnsupportedChainIdError,
+  );
+
   const simulationTxs = buildSimulationTxs(params);
   const result = await executeSimulation({
     config,
     chainId: params.chainId,
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
+    wNative,
   });
   if (result.calls.length !== simulationTxs.length) {
     throw new ExternalServiceError(
@@ -93,7 +108,10 @@ export async function simulate(
     );
   }
 
-  const transfers = parseTransfers(result.calls, config.logger);
+  const transfers = parseTransfers(result.calls, {
+    wNative,
+    logger: config.logger,
+  });
 
   assertNoBundlerRetention({
     chainId: params.chainId,
