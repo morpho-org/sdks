@@ -20,6 +20,10 @@
     "blue-bundles-refinance",
     "blue-bundles-supply-withdraw",
     "blue-v2-only-reallocations",
-    "dedupe-vault-chainid-guards"
+    "vault-bundles-deposit",
+    "vault-bundles-prerequisites",
+    "vault-bundles-redeem",
+    "vault-bundles-withdraw",
+    "vault-exit-bundles-inkind-refactor"
   ]
 }

@@ -1,5 +1,75 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0-next.1
+
+### Major Changes
+
+- [#998](https://github.com/morpho-org/sdks/pull/998) [`1c3be9a`](https://github.com/morpho-org/sdks/commit/1c3be9a4c696c63e3a011801864abd1ccc1d6a59) Thanks [@jinmel](https://github.com/jinmel)! - Route Vault V1 and Vault V2 deposits through VaultBundlesV1, including exclusive ERC-20/native funding, referral fees, prepared requirement handles, and fixed-bundle token signatures.
+
+  Native vault deposits reject token permits with `UnexpectedRequirementSignatureError`. WDK
+  collateral supply, requirement, and quote methods consistently reject mixed funding with
+  `MixedBlueCollateralFundingError`.
+
+  Refresh prepared vault requirements after each settled read while deduplicating concurrent calls.
+  WDK prepared supplies revalidate the live provider chain before resolving requirements, quoting,
+  or submitting, and expose the shared `ChainIdMismatchError` for chain mismatches.
+
+  Remove the WDK Bundler3 vault-supply compatibility route, `getSupplyRequirements`, and
+  the `MorphoSupplyOptions`,
+  `MorphoErc20SupplyOptions`, `MorphoNativeSupplyOptions`, and `ApprovalOrSignatureRequirement`
+  exports. The standard WDK `supply` and `quoteSupply` methods now use VaultBundlesV1 with
+  exclusive funding and existing approvals. Use `MorphoExclusiveSupplyOptions` with
+  `prepareSupply` and its `getRequirements`,
+  `submit`, and `quote` methods. Existing GeneralAdapter1 approvals, additive ERC-20/native funding,
+  and Permit2 AllowanceTransfer signatures are no longer supported for vault deposits.
+
+  Reject vault deposit funding and share-price bounds above uint256 with `InputExceedsMaxError`.
+  Prepared Vault V1/V2 deposits reject oversized native amounts before returning requirements.
+
+  WDK prepared supplies reject zero ERC-20/native funding with `NonPositiveInputError` and negative
+  funding with `NegativeInputError` before fetching vault data or constructing the deposit.
+
+  WDK `prepareSupply` throws `VaultAssetMismatchError` when the supplied token differs from the
+  configured vault asset.
+
+- [#997](https://github.com/morpho-org/sdks/pull/997) [`c58f155`](https://github.com/morpho-org/sdks/commit/c58f155d46c89338727c7783bfbeec4ed255f23e) Thanks [@jinmel](https://github.com/jinmel)! - Generalize the fixed-bundles token requirement surface shared by BlueBundlesV1 and VaultBundlesV1,
+  including the distinct Permit2 SignatureTransfer discriminator, explicit unordered nonces, canonical
+  Permit2 approvals, referral-fee math, vault bounds, and registered-spender validation.
+
+  Reject out-of-range uint256 pull amounts in the standalone requirement resolver. Share the
+  canonical `BundleSharesPermit` tuple through the `BundlesSharesPermit` and
+  `VaultExitBundlesV1PermitStruct` compatibility aliases.
+
+  Update the WDK's public token requirement signatures to `BundlesTokenRequirementSignature` from
+  the new morpho-sdk major.
+
+- [#999](https://github.com/morpho-org/sdks/pull/999) [`daf9eeb`](https://github.com/morpho-org/sdks/commit/daf9eebf1f01e2509fba9f41cf1b5f69461cc57c) Thanks [@jinmel](https://github.com/jinmel)! - Route Vault V1 and Vault V2 asset withdrawals through VaultBundlesV1 with exact share-allowance requirements, deadline-aware share caps, referral fees, and reusable prepared withdrawal handles. The share allowance is the only onchain cap on the burn, so an allowance that does not equal the derived cap — including a larger leftover approval — is replaced instead of reused, and `getRequirements()` re-reads the live share allowance and re-validates the deadline on every call, so an approval executed between calls is no longer reported as outstanding. The WDK adapter forwards its configured `slippageTolerance` to vault withdrawals, and its immediate `withdraw(options)` now resolves that requirement before submitting, throwing the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
+
+  WDK prepared withdrawals recheck the live provider chain before resolving requirements, quoting, or submitting. Unsigned withdrawal quotes validate the exact share allowance before estimating gas and throw `UnresolvedVaultWithdrawRequirementsError` when it is missing or oversized. Satisfy the requirements and quote through the same prepared handle, passing its signed share permit when using signatures.
+
+  Prepared withdrawal requirements expose only approvals or ERC-2612 permits, so signed requirements can be passed directly to `submit` and `quote` without narrowing a legacy Permit2 union.
+
+  Withdrawal builders reject asset amounts above uint256 with `InputExceedsMaxError` before encoding. WDK withdrawal options are readonly, including their inherited fields.
+
+  Vault withdrawal entities also reject amounts above uint256 before creating a handle or reading requirements. Each handle captures the requested amount and share owner at creation, so later mutation of the caller's options cannot change the approved cap, permit owner, or encoded withdrawal.
+
+  WDK withdrawal requirements expose the named `VaultSharesApprovalOrSignatureRequirement` type. Recipient and vault-asset mismatches throw the existing `AddressMismatchError` and `VaultAssetMismatchError` classes, respectively; both are re-exported from the WDK adapter for typed error handling.
+
+### Patch Changes
+
+- [#1054](https://github.com/morpho-org/sdks/pull/1054) [`91a6e29`](https://github.com/morpho-org/sdks/commit/91a6e291c8bf7d1c919436eba7bede023cabe8aa) Thanks [@jinmel](https://github.com/jinmel)! - Reuse the shared bundles permit converter for VaultExitBundlesV1 in-kind redemptions while
+  preserving `VaultExitBundlesV1PermitMismatchError`. Deprecate
+  `getVaultExitBundlesV1PermitStruct`, `GetVaultExitBundlesV1PermitStructParams`, and
+  `VaultExitBundlesV1PermitStruct` in favor of `getBundlesSharesPermit` and `BundleSharesPermit`.
+
+  Use `computeVaultMaxShareAllowance` for VaultV1 in-kind redemption requirements. The cap rounds
+  shares up, includes pending performance-fee dilution, and adds the default 0.03% loss buffer for
+  MetaMorpho 1.0 while preserving MetaMorpho 1.1's lost-assets clamp. Both approval and permit
+  requirements use this cap. In-kind redemptions continue to call VaultExitBundlesV1.
+
+- Updated dependencies [[`1c3be9a`](https://github.com/morpho-org/sdks/commit/1c3be9a4c696c63e3a011801864abd1ccc1d6a59), [`c58f155`](https://github.com/morpho-org/sdks/commit/c58f155d46c89338727c7783bfbeec4ed255f23e), [`5b2009e`](https://github.com/morpho-org/sdks/commit/5b2009eb27dbe6bed0b1a10dacb3715b3ac64c91), [`daf9eeb`](https://github.com/morpho-org/sdks/commit/daf9eebf1f01e2509fba9f41cf1b5f69461cc57c), [`91a6e29`](https://github.com/morpho-org/sdks/commit/91a6e291c8bf7d1c919436eba7bede023cabe8aa)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.1
+
 ## 2.0.0-next.0
 
 ### Major Changes
