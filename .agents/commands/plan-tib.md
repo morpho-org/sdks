@@ -1,14 +1,14 @@
-# tib-plan
+# plan-tib
 
 Turn an accepted **TIB** into the disposable **implementation plan** that carries it out: a set of
 Linear tickets, each scoped to **one PR**, each describing **how** the code will be written.
 
-`tib-plan` is the sibling of [`tib-create`](./tib-create.md). They split one decision across two
+`plan-tib` is the sibling of [`tib-create`](./tib-create.md). They split one decision across two
 artifacts:
 
 - **`tib-create` → the TIB.** Frozen, in the repo, answers **what + why**. Contains only
   observable/contractual decisions (signatures, behavior, invariants, rationale).
-- **`tib-plan` → the tickets.** Disposable, in Linear, answers **how**. Contains exactly the
+- **`plan-tib` → the tickets.** Disposable, in Linear, answers **how**. Contains exactly the
   material the TIB deliberately excluded — the "what does NOT belong in a TIB" cheat sheet from
   `tib-create`: files to touch, private signatures, encoder structure, edit order, test file names
   and cases, the changeset and release plumbing.
@@ -19,7 +19,7 @@ artifacts:
 ## Usage
 
 ```
-/tib-plan docs/tibs/TIB-2026-08-25-blue-bundles-v1-sdk-actions.md "BlueBundlesV1 SDK route"
+/plan-tib docs/tibs/TIB-2026-08-25-blue-bundles-v1-sdk-actions.md "BlueBundlesV1 SDK route"
 ```
 
 - `$ARGUMENTS` should contain: `<tib-file-path> [linear-project-name-or-id]`
@@ -27,6 +27,8 @@ artifacts:
 - If **no arguments** are given, ask:
   1. _"Which TIB should I plan? (path under `docs/tibs/`)"_
   2. _"Which Linear project should the tickets land in? (name or ID, or 'new' to create one)"_
+- If the project resolves to `new`, ask for the **new project's name** before planning — never
+  invent one; creation in Step 6 needs it.
 
 The input is normally a TIB, but any structured decision doc (RFC, ADR, design note) works — the
 steps adapt to whatever sections are present.
@@ -38,9 +40,13 @@ steps adapt to whatever sections are present.
 Everything below serves two goals. When a rule seems to conflict, these win:
 
 1. **1 ticket = 1 PR.** A ticket is right-sized when its work lands as a single, independently
-   reviewable, independently releasable PR — carrying its own tests, JSDoc, and changeset. Not
-   smaller (don't split a feature from its tests), not larger (don't fold two package bumps or two
-   release trains into one).
+   reviewable, independently releasable PR — carrying its own tests, JSDoc, and changeset(s). Not
+   smaller (don't split a feature from its tests), not larger (don't fold two release trains into
+   one). A single PR **may** bump several packages when §4/§7 require it to be atomic — an upstream
+   `blue-sdk`/`midnight-sdk` change with its `morpho-sdk` facade audit, or a bump with the
+   maintained dependents whose peer ranges it forces — those are one changeset, not two tickets.
+   Only a **release-train boundary** (something that must publish before something else) forces a
+   split.
 2. **The ticket describes the _how_, technically and concretely.** A competent engineer (or agent)
    should be able to open the ticket and start typing: which files, which signatures, which
    encoder, which ABI/address source, which layer, which tests at which pinned block, which
@@ -77,8 +83,12 @@ separates a real plan from a restatement of the TIB. Do all of it before draftin
 **2b. Ground in the repo** — for every package the TIB's **Scope** names (and every package those
 transitively touch, e.g. a `morpho-sdk` facade over a `blue-sdk` change):
 
-- Read `packages/<pkg>/src/index.ts` — the current public surface, so you name the *actual*
-  symbols/signatures the TIB changes, not invented ones.
+- Read `packages/<pkg>/src/index.ts` **and the subpath barrels the package publishes** — the root
+  index is not the whole surface. `morpho-sdk` also exposes `/blue/*`, `/midnight/*`, `/types`, etc.,
+  each backed by a separate `src/<…>/index.ts` declared in `package.json`'s
+  `exports`/`publishConfig.exports`. Read `publishConfig.exports` and every backing barrel the TIB
+  touches, so you name the *actual* symbols/signatures (facade re-exports included), not invented or
+  stale ones.
 - Read the package's `AGENTS.md` and the root `AGENTS.md` sections the decision touches: layering
   (§1), forbidden patterns (§2), public API & packaging (§4), testing & security invariants (§5),
   releases & deprecation flow (§7).
@@ -113,8 +123,9 @@ This is the core of the command. Build the ticket list from the TIB skeleton + r
 - **Coherent method/feature groups are large.** A five-method route splits into 2–3 tickets by
   method group (e.g. supply/withdraw, then collateral+borrow, then migration), each a self-contained
   PR with its own fork tests — rather than one unreviewably large PR.
-- **A cross-package peer-range widening can land on its own** (e.g. widening a downstream package's
-  `morpho-sdk` peer range once the new major is verified).
+- **A peer-range widening _unrelated_ to the bump being planned can land on its own** — e.g. a
+  downstream package opting into an already-published major it does not strictly need. This does
+  **not** apply to a range update the bump *forces* (see below).
 
 **Keep as ONE ticket (do not over-split):**
 
@@ -124,6 +135,9 @@ This is the core of the command. Build the ticket list from the TIB skeleton + r
 - **A `blue-sdk`/`midnight-sdk` consumer-facing change and its `morpho-sdk` facade audit.** §4
   requires the facade subpath to be audited **in the same PR** as the upstream ABI/address/constant/
   entity/error/type change — so that pairing is one ticket, not two.
+- **A bump and the peer-range updates it _forces_.** When a bump requires maintained dependents to
+  accept the new version (they would otherwise fail to resolve), §4/§7 put those peer-range updates
+  and their changesets in the **same PR** as the bump — one ticket, not a follow-up.
 - **All layers of one atomic behavior** (Client → Entity → Action) when the behavior only makes
   sense whole and has no independently-testable seam.
 
@@ -223,8 +237,9 @@ Implements <TIB-ID> §<section>. One or two lines: what this PR delivers and the
 - **Fork** (`test/<name>.integration.test.ts`, pinned block): <which entrypoints/markets/fixtures;
   which chain; note the RPC env it needs>. Required wherever correctness depends on live onchain
   state; a transport mock is not sufficient there (§2.6, §5).
-- **Security invariants** (§5): <the failing-if-removed test for chainId validation / authorization /
-  accounting / LLTV buffer this PR touches>.
+- **Security invariants** (§5): <the failing-if-removed test for whichever of the six this PR
+  touches — deposit routing, inflation-attack guard, LLTV buffer, chainId validation, authorization,
+  accounting>.
 
 ## Docs & release
 - **JSDoc** (§6) on every new/changed export: description, `@param`, `@returns`, `@throws`, one
@@ -289,8 +304,13 @@ Re-splitting or merging tickets here is normal — the whole plan is disposable.
 
 ### Step 6 — Create in Linear
 
-Once approved, create in this order. Linear MCP tool names differ by connected server — use whichever
-namespace is present:
+Create **only what the user approved in Step 5.** If they chose a subset (e.g. _"create milestone 1
+only"_), the **approved subset** is everything below: create only the approved milestones, only the
+approved tickets, and only relationships whose endpoints are both inside that subset. Never create a
+milestone, issue, or link the user excluded.
+
+Create in this order. Linear MCP tool names differ by connected server — use whichever namespace is
+present:
 
 | Operation        | Self-hosted Linear MCP        | claude.ai Linear connector          |
 | ---------------- | ----------------------------- | ----------------------------------- |
@@ -306,16 +326,19 @@ Always resolve project/team **names to IDs** first (`list_*`) before creating ar
 + Scope + a link to the TIB path; team. If the TIB is still `Proposed`/`Draft`, note the decision may
 change.
 
-**6b. Milestones.** Create in train order: name = the release-train name; description = the TIB's
-release-ordering text for that train; attach to the project.
+**6b. Milestones.** Create the **approved** milestones only, in train order: name = the release-train
+name; description = the TIB's release-ordering text for that train; attach to the project.
 
-**6c. Issues — two passes** (avoids forward-reference gaps):
+**6c. Issues — two passes** (avoids forward-reference gaps), over the **approved tickets only**:
 
-- **Pass 1 — create every issue** in dependency order (no-`blockedBy` first): title, description
-  (the Step 4 template), team, project, milestone, priority, estimate, labels. Default **state =
-  Backlog** unless the user overrides. Store each returned issue ID.
-- **Pass 2 — set relationships**: update each issue with its `blockedBy` / `blocks` using the stored
-  IDs.
+- **Pass 1 — create each approved issue** in dependency order (no-`blockedBy` first): title,
+  description (the Step 4 template), team, project, milestone, priority, estimate, labels. Default
+  **state = Backlog** unless the user overrides. Store each returned issue ID.
+- **Pass 2 — set relationships between created tickets only**: update each issue with its
+  `blockedBy` / `blocks` using the stored IDs. If a dependency points at a ticket **outside** the
+  approved subset (e.g. a deferred later milestone), **skip that link** — never invent or reuse an ID
+  for an uncreated ticket — and record it in Step 7 as a cross-subset dependency the author must wire
+  when the deferred tickets are created.
 
 ### Step 7 — Confirm
 
@@ -340,8 +363,12 @@ Summarize what landed:
 SDK-101 → SDK-103 → SDK-104
 ```
 
+If the user created a subset, list any **deferred cross-subset dependencies** — approved tickets that
+declared a `blockedBy` / `blocks` on a ticket not yet created — so the author wires them when the
+remaining milestones are created.
+
 Then remind the author: the tickets are disposable and regenerable from the TIB — if the code drifts
-from a ticket, fix the ticket or re-run `/tib-plan`; the TIB stays frozen (`tib-create` Step 6.5).
+from a ticket, fix the ticket or re-run `/plan-tib`; the TIB stays frozen (`tib-create` Step 6.5).
 
 ---
 
