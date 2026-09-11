@@ -91,10 +91,9 @@ export interface VaultV2ForceWithdrawPreview {
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
  *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, a
- *   a fee-recipient whose fee mints projected to `feeProjectionTimestamp` reach the lower burn
- *   bound, or an exit whose realized share price rounds down to zero at the default slippage
- *   tolerance (which the entity rejects with
- *   `VaultV2ForceWithdrawZeroSharePriceError`).
+ *   fee-recipient whose fee mints projected to `feeProjectionTimestamp` reach the lower burn bound,
+ *   or an exit whose realized share price rounds down to zero at the default slippage tolerance
+ *   (which the entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
