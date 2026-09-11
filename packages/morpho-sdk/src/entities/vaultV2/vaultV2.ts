@@ -15,6 +15,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
+  selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "../../actions/bundles/common.js";
 import {
@@ -28,8 +29,10 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import {
+  computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
   validateChainId,
+  validateSlippageTolerance,
 } from "../../helpers/index.js";
 import {
   validateNativeVaultAsset,
@@ -67,6 +70,7 @@ import {
   type VaultV2RedeemAction,
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
+import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 export interface VaultV2Actions {
@@ -169,19 +173,76 @@ export interface VaultV2Actions {
     BundlesTokenRequirementsOptions
   >;
   /**
-   * Prepares a withdraw transaction for the VaultV2 contract.
+   * Prepares an exact-assets Vault V2 withdrawal through VaultBundlesV1.
    *
-   * This function constructs the transaction data required to withdraw a specified amount of assets from the vault.
+   * Reads the vault accrual state on the first `getRequirements()` call, then reads the live
+   * vault-share allowance and, when a signature is needed, the permit nonce on each call.
+   * Captures the requested amount and owner at creation, so later changes to `params` do not
+   * change this handle's requirements or transaction.
    *
-   * @param {Object} params - The withdraw parameters.
-   * @param {bigint} params.amount - The amount of assets to withdraw.
-   * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
+   * @param params.amount - Positive gross withdrawal in underlying asset base units, before fees.
+   * @param params.userAddress - Share owner that must sign and submit; receives the net assets.
+   * @param params.slippageTolerance - Optional WAD-scaled share-price loss tolerance applied to
+   *   the share cap.
+   *   Defaults to 0.03% and cannot exceed 10%.
+   * @param params.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero;
+   *   rounded down and deducted from the gross withdrawn assets.
+   * @param params.referralFeeRecipient - Optional nonzero recipient required for a positive fee.
+   * @param params.deadline - Optional execution and share-permit deadline in Unix seconds;
+   *   defaults to two hours from handle creation.
+   * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
+   *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
+   *   when the allowance equals the cap; otherwise they contain an exact approval or, with
+   *   signature support, an ERC-2612 request. The cap stays pinned to the first resolution while
+   *   each call re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   at any `getRequirements()` call.
+   * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
+   * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds 10%.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed,
+   *   was not resolved for this handle, or has incompatible vault, owner, spender, amount,
+   *   deadline, or nonce values.
+   * @throws {viem.BaseError} when a vault, allowance, or nonce read or transaction encoding fails.
+   * @example
+   * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, type Address } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function prepareUsdcWithdrawal(userAddress: Address) {
+   *   const vaultAddress = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() })
+   *     .extend(morphoViemExtension({ supportSignature: false }));
+   *   const vault = client.morpho.vaultV2(vaultAddress, mainnet.id);
+   *   const action = vault.withdraw({ amount: 1_000_000n, userAddress });
+   *   const requirements = await action.getRequirements();
+   *   // Send and confirm each approval before calling action.buildTx().
+   *   // action.buildTx() returns Readonly<Transaction<VaultV2WithdrawAction>>.
+   *   return { action, requirements }; // Prepared handle and its outstanding share approvals.
+   * }
+   * ```
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2WithdrawAction>>;
-  };
+  withdraw: (params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2WithdrawAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares a redeem transaction for the VaultV2 contract.
    *
@@ -481,21 +542,91 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
-  withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
+  withdraw(params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
+    const { amount, userAddress } = params;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    return {
-      buildTx: () =>
-        vaultV2Withdraw({
-          vault: { address: this.vault },
+    if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
+    // Reject values outside the ABI range before resolving any requirements.
+    validateUint256Field("amount", amount);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const slippageTolerance =
+      params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
+    validateSlippageTolerance(slippageTolerance);
+    // Fail eagerly if VaultBundlesV1 is unavailable; only validation is needed here.
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let requiredShareAllowance: bigint | undefined;
+    let vaultSnapshot: AccrualVaultV2 | undefined;
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        // Re-read the live share allowance on every call instead of caching the resolved
+        // requirements: the allowance is the sole cap on the burn, so a caller that executed the
+        // returned approval must see it satisfied on the next call, and an allowance revoked or
+        // raised afterwards must resurface as an outstanding requirement. Only the vault snapshot
+        // and the cap derived from it are pinned, so re-reading cannot move the cap this handle
+        // already committed to; the snapshot is used for immutable identity and permit-domain
+        // fields only.
+        const vaultData = (vaultSnapshot ??= await this.getData());
+        requiredShareAllowance ??= computeVaultMaxShareAllowance({
+          vaultData,
+          deadline,
+          assets: amount,
+          slippageTolerance,
+        });
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData,
+            version: "vaultV2",
+            owner: userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
+          },
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (signatureRequirement?.action.type === "permit") {
+          expectedRequirement = signatureRequirement.action;
+        }
+        return requirements;
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance,
+          expectedRequirement,
+        });
+        return vaultV2Withdraw({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
             amount,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
