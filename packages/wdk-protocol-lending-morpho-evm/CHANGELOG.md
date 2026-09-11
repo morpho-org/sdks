@@ -1,5 +1,17 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 1.3.0
+
+### Minor Changes
+
+- [#1024](https://github.com/morpho-org/sdks/pull/1024) [`8f5000f`](https://github.com/morpho-org/sdks/commit/8f5000f829d86de5b59a42917d0e17321741abe8) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Validate reads, requirements, quotes, and sends against the provider chain at operation boundaries, bind ERC-4337 signing to that validated context, and preserve configured provider failover. Export `ChainIdMismatchError` and `MissingWalletProviderError` for callers handling validation failures.
+
+### Patch Changes
+
+- Updated dependencies [[`f4a0ee8`](https://github.com/morpho-org/sdks/commit/f4a0ee8a0b7be960574246b35c8fb7ec2d2858b3), [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891), [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6), [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01)]:
+  - @morpho-org/morpho-sdk@5.10.0
+  - @morpho-org/blue-sdk-viem@5.5.1
+
 ## 1.2.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.5.1
+
+### Patch Changes
+
+- [#1041](https://github.com/morpho-org/sdks/pull/1041) [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
+
 ## 5.5.0
 
 ### Minor Changes

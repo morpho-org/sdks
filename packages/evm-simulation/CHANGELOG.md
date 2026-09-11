@@ -1,5 +1,15 @@
 # @morpho-org/evm-simulation
 
+## 4.1.6
+
+### Patch Changes
+
+- [#1010](https://github.com/morpho-org/sdks/pull/1010) [`000d92b`](https://github.com/morpho-org/sdks/commit/000d92bc88f6b9370d16dcc3069ffd81fbd85fe8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Extend the simulation retention check to also guard the standalone `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) from the blue-sdk address registry, alongside the existing `bundler3` executor and adapters. Net `(address, token)` retention above `DUST_THRESHOLD` in any of these restricted contracts now raises `BlacklistViolationError`. Chains are skipped only when blue-sdk catalogs neither a `bundler3` nor a `bundles` config.
+
+- [#1005](https://github.com/morpho-org/sdks/pull/1005) [`890d2e3`](https://github.com/morpho-org/sdks/commit/890d2e33855e04d51e93b2133455d68dfc78455f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
+
+- [#1029](https://github.com/morpho-org/sdks/pull/1029) [`9decd4b`](https://github.com/morpho-org/sdks/commit/9decd4b7da0867c01a9240fd0c7658739490b6f2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
+
 ## 4.1.5
 
 ### Patch Changes
