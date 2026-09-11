@@ -117,6 +117,31 @@ whenever the current allowance differs — including when a larger leftover appr
 `getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
 its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
 
+Direct `vaultV1Withdraw` and `vaultV2Withdraw` calls require an explicit `args.authorization`:
+
+```ts
+// After setting the exact share allowance onchain:
+const authorization = { type: "allowance" } as const;
+
+// When embedding a signed ERC-2612 share permit:
+const permitAuthorization = {
+  type: "permit",
+  signature: sharesPermit,
+  shareAllowance: requiredShareAllowance,
+} as const;
+```
+
+The permit branch requires an independently derived `shareAllowance` in **vault-share units**.
+It must equal both amount fields in the signature; it is not the withdrawal's underlying asset
+`amount`. The builder also validates the vault, owner, spender, shared deadline, and nonce
+metadata. Deriving a safe allowance requires vault state, so prefer the entity's
+`withdraw().getRequirements()` and `buildTx()` workflow, which supplies its captured cap.
+
+The unreleased `getBundlesSharesPermit` helper has been replaced by three explicit operations:
+`emptySharesPermit(deadline)` constructs the empty sentinel, `validateSharesPermit(signature,
+expected)` checks all required expectations, and `toSharesPermitStruct(signature)` converts a
+signature to the contract tuple. The converter does not validate the withdrawal context.
+
 ## Blue pure action builder inputs and metadata
 
 Direct action consumers keep the root-barrel builder and parameter-type names, but must replace

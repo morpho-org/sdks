@@ -82,7 +82,7 @@ Options:
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
 - `presets` (object): `{ earn?: string, borrow?: string }`.
 - `slippageTolerance` (bigint): applied to Morpho Vault V2 flows only. BlueBundlesV1 market writes do not expose Bundler3 share-price bounds.
-- `supportSignature` (boolean): enable SDK permit/permit2 requirements.
+- `supportSignature` (boolean): enable SDK permit/permit2 requirements. ERC-4337 vault withdrawals always use share approvals.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
@@ -158,7 +158,7 @@ Requirement entries are one of:
 - Approval transaction: send the returned transaction before the final action.
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
 - Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Prepared vault deposits take theirs on the handle's `submit(requirementSignature)` or `quote(requirementSignature)`.
-- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
+- Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit for EOA accounts when `supportSignature` is enabled — that must be satisfied before `submit()`. Writable and read-only ERC-4337 accounts always receive share approvals because WDK signs with the underlying EOA, which cannot authorize a vault permit owned by the Safe.
 - BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
 
 For withdrawal quotes, keep the same prepared handle: confirm its approval before `prepared.quote()`,

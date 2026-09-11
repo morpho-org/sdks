@@ -1,11 +1,17 @@
 import {
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
+  type MorphoClientType,
   type RequirementSignature,
 } from "@morpho-org/morpho-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
-import { createWalletClient, http } from "viem";
+import {
+  WalletAccountEvmErc4337,
+  WalletAccountReadOnlyEvmErc4337,
+} from "@tetherto/wdk-wallet-evm-erc-4337";
+import { type Client, createWalletClient, http } from "viem";
+import { mnemonicToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
@@ -30,15 +36,35 @@ vi.mock("@morpho-org/morpho-sdk", async (importOriginal) => ({
 const TOKEN = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const VAULT = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
 const OPTIONS = { token: TOKEN, amount: 1_000_000n };
+const SEED =
+  "cook voyage document eight skate token alien guide drink uncle term abuse";
 
-const setup = () => {
+const setup = (
+  accountType: "eoa" | "erc4337" | "readOnlyErc4337" = "eoa",
+  supportSignature = false,
+) => {
   const transport = createMockClient(mainnet);
-  const account = new WalletAccountEvm(
-    "cook voyage document eight skate token alien guide drink uncle term abuse",
-    "0'/0/0",
-    { provider: { request: transport.request } },
-  );
-  const send = vi.spyOn(account, "sendTransaction");
+  const config = {
+    chainId: mainnet.id,
+    provider: { request: transport.request },
+    bundlerUrl: "https://bundler.example.com",
+    safeModulesVersion: "0.3.0",
+    isSponsored: false,
+    useNativeCoins: true,
+  } as const;
+  const account =
+    accountType === "eoa"
+      ? new WalletAccountEvm(SEED, "0'/0/0", config)
+      : accountType === "erc4337"
+        ? new WalletAccountEvmErc4337(SEED, "0'/0/0", config)
+        : new WalletAccountReadOnlyEvmErc4337(
+            mnemonicToAccount(SEED).address,
+            config,
+          );
+  const send =
+    "sendTransaction" in account
+      ? vi.spyOn(account, "sendTransaction")
+      : vi.fn();
   const quote = vi
     .spyOn(account, "quoteSendTransaction")
     .mockResolvedValue({ fee: 12_345n });
@@ -52,19 +78,70 @@ const setup = () => {
     ),
   };
   const withdraw = vi.fn(() => action);
-  extension.mockReturnValue(() => ({
-    morpho: {
-      vaultV2: () => ({ getData: async () => ({ asset: TOKEN }), withdraw }),
-    },
-  }));
+  const deposit = vi.fn((_options: MorphoClientType["options"]) => action);
+  extension.mockClear();
+  extension.mockImplementation(
+    (options: MorphoClientType["options"]) => (viemClient: Client) => ({
+      morpho: {
+        viemClient,
+        options,
+        vaultV2: () => ({
+          getData: async () => ({ asset: TOKEN }),
+          withdraw,
+          deposit: () => deposit(options),
+        }),
+      },
+    }),
+  );
   const protocol = new MorphoProtocolEvm(account, {
     chainId: mainnet.id,
     earnVaultAddress: VAULT,
+    supportSignature,
+    supportDeployless: false,
+    metadata: { origin: "0x1234" },
   });
-  return { transport, action, withdraw, transaction, send, quote, protocol };
+  return {
+    transport,
+    action,
+    withdraw,
+    deposit,
+    transaction,
+    send,
+    quote,
+    protocol,
+  };
 };
 
 describe.sequential("prepared withdrawal adapter", () => {
+  test.for([
+    ["eoa", true, true],
+    ["eoa", false, false],
+    ["erc4337", true, false],
+    ["erc4337", false, false],
+    ["readOnlyErc4337", true, false],
+    ["readOnlyErc4337", false, false],
+  ] as const)(
+    "behavior: selects withdrawal signature support for %s with supportSignature=%s",
+    async ([accountType, configured, expected]) => {
+      const { protocol, deposit } = setup(accountType, configured);
+
+      await protocol.prepareWithdraw(OPTIONS);
+
+      expect(extension).toHaveBeenLastCalledWith({
+        supportSignature: expected,
+        supportDeployless: false,
+        metadata: { origin: "0x1234" },
+      });
+      // Withdrawal overrides must preserve the configured route for other operations.
+      await protocol.prepareSupply(OPTIONS);
+      expect(deposit).toHaveBeenCalledWith({
+        supportSignature: configured,
+        supportDeployless: false,
+        metadata: { origin: "0x1234" },
+      });
+    },
+  );
+
   test.each(["withdraw", "quoteWithdraw", "prepareWithdraw"] as const)(
     "error: AddressMismatchError for another recipient (%s)",
     async (method) => {

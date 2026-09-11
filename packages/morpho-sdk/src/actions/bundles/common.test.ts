@@ -6,14 +6,8 @@ import {
   serializeSignature,
   signatureToCompactSignature,
   toHex,
-  zeroHash,
 } from "viem";
-import { describe, expect, expectTypeOf, test } from "vitest";
-import type {
-  BundleSharesPermit,
-  BundlesSharesPermit,
-  VaultExitBundlesV1PermitStruct,
-} from "../../index.js";
+import { describe, expect, test } from "vitest";
 import {
   type BundlesFundingArgs,
   BundlesPermitMismatchError,
@@ -32,10 +26,9 @@ import {
   UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import {
-  getBundlesSharesPermit,
   getBundlesTokenPermit,
   resolveBundlesFunding,
-  selectBundlesSharesRequirementSignature,
+  selectBundlesSharesAuthorization,
   selectBundlesTokenRequirementSignature,
 } from "./common.js";
 
@@ -81,62 +74,6 @@ describe("resolveBundlesFunding", () => {
     expect(() => resolveBundlesFunding({ nativeAmount: 0n })).toThrow(
       NonPositiveInputError,
     );
-  });
-});
-
-describe("getBundlesSharesPermit", () => {
-  const permit = {
-    args: {
-      owner,
-      asset: vault,
-      amount: 7n,
-      nonce: 9n,
-      deadline: 11n,
-      signature,
-    },
-    action: {
-      type: "permit",
-      args: { spender, amount: 7n, deadline: 11n, nonce: 9n },
-    },
-  } satisfies PermitRequirementSignature;
-
-  test("default", () => {
-    expectTypeOf<
-      ReturnType<typeof getBundlesSharesPermit>
-    >().toEqualTypeOf<BundleSharesPermit>();
-    expectTypeOf<VaultExitBundlesV1PermitStruct>().toEqualTypeOf<BundleSharesPermit>();
-    expectTypeOf<BundlesSharesPermit>().toEqualTypeOf<BundleSharesPermit>();
-    expect(getBundlesSharesPermit({ vault, deadline: 13n })).toEqual({
-      value: 0n,
-      nonce: 0n,
-      deadline: 13n,
-      v: 0,
-      r: zeroHash,
-      s: zeroHash,
-    });
-    expect(
-      getBundlesSharesPermit({
-        vault,
-        owner,
-        spender,
-        amount: 7n,
-        deadline: 13n,
-        requirementSignature: permit,
-      }),
-    ).toMatchObject({ value: 7n, nonce: 9n, deadline: 11n, v: 27 });
-  });
-
-  test("error: BundlesPermitMismatchError", () => {
-    expect(() =>
-      getBundlesSharesPermit({
-        vault,
-        owner,
-        spender,
-        amount: 8n,
-        deadline: 13n,
-        requirementSignature: permit,
-      }),
-    ).toThrow(BundlesPermitMismatchError);
   });
 });
 
@@ -313,7 +250,7 @@ describe("getBundlesTokenPermit", () => {
   });
 });
 
-describe("selectBundlesSharesRequirementSignature", () => {
+describe("selectBundlesSharesAuthorization", () => {
   const permit = {
     args: {
       owner,
@@ -329,29 +266,37 @@ describe("selectBundlesSharesRequirementSignature", () => {
     },
   } satisfies PermitRequirementSignature;
 
+  test("behavior: selects allowance authorization without a signature", () => {
+    expect(
+      selectBundlesSharesAuthorization(undefined, {
+        requiredShareAllowance: undefined,
+      }),
+    ).toEqual({ type: "allowance" });
+  });
+
   test("default", () => {
     expect(
-      selectBundlesSharesRequirementSignature([permit], {
+      selectBundlesSharesAuthorization([permit], {
         requiredShareAllowance: 7n,
         expectedRequirement: permit.action,
       }),
-    ).toEqual(permit);
+    ).toEqual({ type: "permit", signature: permit, shareAllowance: 7n });
   });
 
   test("error: BundlesPermitMismatchError", () => {
     expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
+      selectBundlesSharesAuthorization([permit], {
         requiredShareAllowance: undefined,
       }),
     ).toThrow(BundlesPermitMismatchError);
     expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
+      selectBundlesSharesAuthorization([permit], {
         requiredShareAllowance: 8n,
         expectedRequirement: permit.action,
       }),
     ).toThrow(BundlesPermitMismatchError);
     expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
+      selectBundlesSharesAuthorization([permit], {
         requiredShareAllowance: 7n,
         expectedRequirement: {
           ...permit.action,

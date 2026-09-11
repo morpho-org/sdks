@@ -173,6 +173,12 @@ folded into the call when `supportSignature` is enabled — for exactly that amo
 that does not equal the derived cap, including a larger leftover approval, is replaced rather than
 reused, so the cap holds on every withdrawal.
 
+The pure withdrawal builders take a `VaultWithdrawalAuthorization` discriminated union:
+`{ type: "allowance" }` uses the allowance already onchain; `{ type: "permit", signature,
+shareAllowance }` binds the signed allowance to an explicit share cap. Entities supply their
+captured cap. The share-permit module separates empty-sentinel construction, strict context
+validation, and tuple conversion; omitting a validation expectation cannot disable a check.
+
 **Redeem (V1 & V2)** remains a **direct call** to the vault contract: the user calls
 `redeem(shares, recipient, onBehalf)` directly. No bundler, no VaultBundlesV1, no approval.
 

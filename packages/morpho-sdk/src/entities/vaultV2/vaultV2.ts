@@ -15,7 +15,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
-  selectBundlesSharesRequirementSignature,
+  selectBundlesSharesAuthorization,
   selectBundlesTokenRequirementSignature,
 } from "../../actions/bundles/common.js";
 import {
@@ -609,7 +609,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const permit = selectBundlesSharesRequirementSignature(signatures, {
+        const authorization = selectBundlesSharesAuthorization(signatures, {
           requiredShareAllowance,
           expectedRequirement,
         });
@@ -618,7 +618,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           args: {
             amount,
             userAddress,
-            requirementSignature: permit,
+            authorization,
             referralFeePct: common.referralFeePct,
             referralFeeRecipient: common.referralFeeRecipient,
             deadline,

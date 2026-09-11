@@ -82,6 +82,11 @@ const options = {
 
 ## Vault withdrawal share requirements
 
+ERC-4337 accounts receive exact share approvals even with `supportSignature: true`. This also
+applies to read-only ERC-4337 accounts used to discover requirements. WDK signs typed data with
+the underlying EOA, whose signature cannot authorize an ERC-2612 permit owned by the Safe.
+EOA accounts continue to receive share permits when signatures are enabled.
+
 ```ts
 const prepared = await morpho.prepareWithdraw({ token, amount: 1_000_000n });
 const requirements = await prepared.getRequirements();

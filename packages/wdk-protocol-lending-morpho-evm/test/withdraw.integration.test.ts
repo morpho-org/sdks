@@ -2,6 +2,11 @@ import { getChainAddress } from "@morpho-org/blue-sdk";
 import type { Erc2612RequirementSignature } from "@morpho-org/morpho-sdk";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
 import {
+  WalletAccountEvmErc4337,
+  WalletAccountReadOnlyEvmErc4337,
+} from "@tetherto/wdk-wallet-evm-erc-4337";
+import {
+  type Address,
   createWalletClient,
   erc20Abi,
   type Hash,
@@ -27,6 +32,81 @@ const ASSETS = 1_000_000n;
 describe.skipIf(!process.env.MAINNET_RPC_URL)(
   "prepared withdrawal quotes on a mainnet fork",
   () => {
+    test.for([
+      ["writable", 0n],
+      ["readOnly", maxUint256],
+    ] as const)(
+      "behavior: resolves exact approvals for an ERC-4337 %s owner with signatures enabled",
+      async ([accountType, initialAllowance], { client }) => {
+        const config = {
+          chainId: mainnet.id,
+          provider: client.transport.url!,
+          bundlerUrl: "https://bundler.example.com",
+          safeModulesVersion: "0.3.0",
+          isSponsored: false,
+          useNativeCoins: true,
+        } as const;
+        const signer = mnemonicToAccount(SEED);
+        const account =
+          accountType === "writable"
+            ? new WalletAccountEvmErc4337(SEED, "0'/0/0", config)
+            : new WalletAccountReadOnlyEvmErc4337(signer.address, config);
+        const owner = (await account.getAddress()) as Address;
+        expect(owner).not.toBe(signer.address);
+        const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+        // Impersonate the Safe to exercise real share allowances without an external AA bundler.
+        await client.impersonateAccount({ address: owner });
+        await client.setBalance({ address: owner, value: parseEther("10") });
+        const resetHash = await client.writeContract({
+          account: owner,
+          address: VAULT,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [spender, initialAllowance],
+        });
+        expect(
+          (await client.waitForTransactionReceipt({ hash: resetHash })).status,
+        ).toBe("success");
+        const morpho = new MorphoProtocolEvm(account, {
+          chainId: mainnet.id,
+          earnVaultAddress: VAULT,
+          supportSignature: true,
+        });
+        const prepared = await morpho.prepareWithdraw({
+          token: USDC,
+          amount: ASSETS,
+        });
+
+        const requirements = await prepared.getRequirements();
+
+        expect(requirements).toHaveLength(1);
+        const requirement = requirements[0]!;
+        expect(requirement).not.toHaveProperty("sign");
+        if (!("to" in requirement))
+          throw new Error("Expected a share approval");
+        expect(requirement.to).toBe(VAULT);
+        expect(requirement.action.args.spender).toBe(spender);
+        expect(requirement.action.args.amount).toBeGreaterThan(0n);
+        expect(requirement.action.args.amount).toBeLessThan(maxUint256);
+        const hash = await client.sendTransaction({
+          ...requirement,
+          account: owner,
+        });
+        expect((await client.waitForTransactionReceipt({ hash })).status).toBe(
+          "success",
+        );
+        expect(await prepared.getRequirements()).toEqual([]);
+        expect(
+          await client.readContract({
+            address: VAULT,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [owner, spender],
+          }),
+        ).toBe(requirement.action.args.amount);
+      },
+    );
+
     test.for(["approval", "oversizedApproval", "permit"] as const)(
       "behavior: quotes and submits with satisfied share requirements (%s)",
       async (route, { client }) => {

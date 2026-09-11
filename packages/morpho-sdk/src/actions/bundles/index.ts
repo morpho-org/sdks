@@ -7,8 +7,12 @@ export type {
 } from "./common.js";
 export {
   BundlesPermitKind,
-  getBundlesSharesPermit,
   getBundlesTokenPermit,
   resolveBundlesFunding,
 } from "./common.js";
 export * from "./resolveBundlesTokenRequirements.js";
+export {
+  emptySharesPermit,
+  toSharesPermitStruct,
+  validateSharesPermit,
+} from "./sharesPermit.js";

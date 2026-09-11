@@ -659,6 +659,21 @@ export interface Erc2612RequirementSignature {
   readonly action: PermitAction;
 }
 
+/** Explicit share authorization for a low-level Vault V1 or V2 asset withdrawal. */
+export type VaultWithdrawalAuthorization =
+  | {
+      /** Use the exact vault-share allowance already set onchain. */
+      readonly type: "allowance";
+    }
+  | {
+      /** Embed a signed ERC-2612 share permit. */
+      readonly type: "permit";
+      /** Signed requirement for the vault, owner, spender, allowance, and deadline. */
+      readonly signature: Erc2612RequirementSignature;
+      /** Exact share allowance in share base units, independently derived from the withdrawal. */
+      readonly shareAllowance: bigint;
+    };
+
 /** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
 export interface Permit2AllowanceRequirementSignature {
   readonly args: Readonly<Permit2Args>;

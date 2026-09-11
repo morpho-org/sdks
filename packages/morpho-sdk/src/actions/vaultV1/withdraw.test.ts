@@ -3,11 +3,14 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { decodeFunctionData, maxUint256, zeroHash } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
+  BundlesPermitMismatchError,
+  type Erc2612RequirementSignature,
   InputExceedsMaxError,
   NonPositiveInputError,
+  type VaultWithdrawalAuthorization,
 } from "../../types/index.js";
 import { vaultV1Withdraw } from "./withdraw.js";
 
@@ -24,6 +27,7 @@ describe("vaultV1Withdraw", () => {
     const transaction = vaultV1Withdraw({
       vault: { chainId, address: vault },
       args: {
+        authorization: { type: "allowance" },
         amount: 100n,
         userAddress,
         referralFeePct,
@@ -55,12 +59,116 @@ describe("vaultV1Withdraw", () => {
     });
   });
 
+  test("behavior: permit calldata binds an independently supplied share allowance", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          assets: positiveUint256,
+          shareAllowance: positiveUint256,
+          deadline: positiveUint256,
+        }),
+        ({ assets, shareAllowance, deadline }) => {
+          const signature: Erc2612RequirementSignature = {
+            args: {
+              owner: userAddress,
+              asset: vault,
+              amount: shareAllowance,
+              nonce: 7n,
+              deadline,
+              signature: `0x${"11".repeat(64)}1b`,
+            },
+            action: {
+              type: "permit",
+              args: {
+                spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+                amount: shareAllowance,
+                deadline,
+                nonce: 7n,
+              },
+            },
+          };
+          const tx = vaultV1Withdraw({
+            vault: { chainId, address: vault },
+            args: {
+              amount: assets,
+              userAddress,
+              deadline,
+              authorization: { type: "permit", signature, shareAllowance },
+            },
+          });
+          const decoded = decodeFunctionData({
+            abi: vaultBundlesV1Abi,
+            data: tx.data,
+          });
+          expect(decoded.args?.[1]).toBe(assets);
+          expect(decoded.args?.[3]).toMatchObject({
+            value: shareAllowance,
+            nonce: 7n,
+            deadline,
+            v: 27,
+          });
+          expect(Object.isFrozen(tx)).toBe(true);
+        },
+      ),
+      { numRuns: 50, seed: 20_260_911 },
+    );
+  });
+
+  test.each([99n, 101n, undefined])(
+    "error: BundlesPermitMismatchError for share allowance %s",
+    (shareAllowance) => {
+      const signature: Erc2612RequirementSignature = {
+        args: {
+          owner: userAddress,
+          asset: vault,
+          amount: 100n,
+          nonce: 0n,
+          deadline: 1n,
+          signature: `0x${"11".repeat(64)}1b`,
+        },
+        action: {
+          type: "permit",
+          args: {
+            spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+            amount: 100n,
+            deadline: 1n,
+            nonce: 0n,
+          },
+        },
+      };
+      // Exercise malformed JavaScript input as well as mismatched explicit share caps.
+      const authorization = {
+        type: "permit",
+        signature,
+        shareAllowance,
+      } as VaultWithdrawalAuthorization;
+      expect(() =>
+        vaultV1Withdraw({
+          vault: { chainId, address: vault },
+          args: { amount: 1n, userAddress, deadline: 1n, authorization },
+        }),
+      ).toThrow(BundlesPermitMismatchError);
+    },
+  );
+
+  test("behavior: permit authorization requires a share allowance at the type boundary", () => {
+    expectTypeOf<{
+      readonly type: "permit";
+      readonly signature: Erc2612RequirementSignature;
+    }>().not.toExtend<VaultWithdrawalAuthorization>();
+  });
+
   test("behavior: calldata round-trips across uint256 inputs", () => {
     fc.assert(
       fc.property(positiveUint256, positiveUint256, (amount, deadline) => {
         const transaction = vaultV1Withdraw({
           vault: { chainId, address: vault },
-          args: { amount, userAddress, deadline },
+          args: {
+            authorization: { type: "allowance" },
+            amount,
+            userAddress,
+            deadline,
+          },
         });
         const decoded = decodeFunctionData({
           abi: vaultBundlesV1Abi,
@@ -79,7 +187,12 @@ describe("vaultV1Withdraw", () => {
   test("behavior: accepts maxUint256 assets", () => {
     const transaction = vaultV1Withdraw({
       vault: { chainId, address: vault },
-      args: { amount: maxUint256, userAddress, deadline: 1n },
+      args: {
+        authorization: { type: "allowance" },
+        amount: maxUint256,
+        userAddress,
+        deadline: 1n,
+      },
     });
 
     expect(
@@ -92,7 +205,12 @@ describe("vaultV1Withdraw", () => {
     expect(() =>
       vaultV1Withdraw({
         vault: { chainId, address: vault },
-        args: { amount: maxUint256 + 1n, userAddress, deadline: 1n },
+        args: {
+          authorization: { type: "allowance" },
+          amount: maxUint256 + 1n,
+          userAddress,
+          deadline: 1n,
+        },
       }),
     ).toThrow(InputExceedsMaxError);
   });
@@ -101,7 +219,12 @@ describe("vaultV1Withdraw", () => {
     expect(() =>
       vaultV1Withdraw({
         vault: { chainId, address: vault },
-        args: { amount: 0n, userAddress, deadline: 1n },
+        args: {
+          authorization: { type: "allowance" },
+          amount: 0n,
+          userAddress,
+          deadline: 1n,
+        },
       }),
     ).toThrow(NonPositiveInputError);
   });

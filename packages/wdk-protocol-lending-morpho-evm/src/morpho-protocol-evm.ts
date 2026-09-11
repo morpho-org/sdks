@@ -606,7 +606,7 @@ export interface MorphoProtocolOptions {
   chainId?: number | bigint;
   /** Optional Morpho SDK slippage tolerance in WAD precision for vault flows. */
   slippageTolerance?: bigint;
-  /** Enable Morpho SDK permit/permit2 requirements (default: false). */
+  /** Enable Morpho SDK permit/permit2 requirements (default: false). ERC-4337 vault withdrawals always use share approvals. */
   supportSignature?: boolean;
   /** Enable Morpho SDK deployless reads (default: false). */
   supportDeployless?: boolean;
@@ -1129,7 +1129,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       throw new AddressMismatchError(userAddress, to as Address);
     }
 
-    const vault = await this._getVault();
+    // WDK signs with the underlying EOA, which cannot permit shares owned by its Safe.
+    const vault = await this._getVault(
+      this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337
+        ? { supportSignature: false }
+        : undefined,
+    );
     const accrualVault = await vault.entity.getData();
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
@@ -1145,6 +1150,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   /**
    * Prepares a vault withdrawal once for requirement discovery, signing, quoting, and submission.
+   *
+   * ERC-4337 accounts receive share approvals even when `supportSignature` is enabled, because
+   * their underlying EOA signatures cannot authorize ERC-2612 permits owned by the Safe.
    *
    * @param options - Vault withdrawal options.
    * @returns An immutable operation handle that retains the exact derived vault-share cap.
@@ -2122,7 +2130,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return target.marketId;
   }
 
-  private async _getVault(): Promise<{
+  private async _getVault(options?: {
+    readonly supportSignature: boolean;
+  }): Promise<{
     address: Address;
     entity: ReturnType<MorphoClientType["vaultV2"]>;
   }> {
@@ -2130,7 +2140,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const { address } = target;
     const chainId = await this._getChainId();
     this._assertTargetChain(target, chainId);
-    const client = await this._getMorphoClient();
+    const morphoClient = await this._getMorphoClient();
+    const client = options
+      ? morphoClient.viemClient.extend(
+          morphoViemExtension({ ...morphoClient.options, ...options }),
+        ).morpho
+      : morphoClient;
     const entity = client.vaultV2(address, chainId);
 
     return { address, entity };
