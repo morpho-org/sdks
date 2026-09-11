@@ -20,7 +20,10 @@ export class SimulationRevertedError extends SimulationPackageError {
     public readonly reason: string | undefined,
     public readonly details?: unknown,
   ) {
-    super(reason ?? "Transaction simulation reverted");
+    super(
+      reason ?? "Transaction simulation reverted",
+      details instanceof Error ? { cause: details } : undefined,
+    );
   }
 }
 
