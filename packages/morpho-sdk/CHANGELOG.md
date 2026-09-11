@@ -1,5 +1,21 @@
 # @morpho-org/morpho-sdk
 
+## 5.10.0
+
+### Minor Changes
+
+- [#1053](https://github.com/morpho-org/sdks/pull/1053) [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Compute Midnight quote guards from rounded per-fill settlement amounts and an optional current settlement fee so returned offers cannot imply a worse aggregate price than the requested guard.
+
+### Patch Changes
+
+- [#1020](https://github.com/morpho-org/sdks/pull/1020) [`f4a0ee8`](https://github.com/morpho-org/sdks/commit/f4a0ee8a0b7be960574246b35c8fb7ec2d2858b3) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Correct Midnight taker examples to preserve the caller's requested asset target and explicit unit guard while forwarding the complete fallback offer list.
+
+- [#1022](https://github.com/morpho-org/sdks/pull/1022) [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
+
+- Updated dependencies [[`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891), [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6), [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01)]:
+  - @morpho-org/blue-sdk-viem@5.5.1
+  - @morpho-org/midnight-sdk@1.4.0
+
 ## 5.9.0
 
 ### Minor Changes
