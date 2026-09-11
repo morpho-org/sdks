@@ -134,6 +134,7 @@ export {
   validateUserAddress,
 } from "./helpers/validate.js";
 export {
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,

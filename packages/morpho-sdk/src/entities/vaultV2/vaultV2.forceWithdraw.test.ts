@@ -26,6 +26,7 @@ import { morphoViemExtension } from "../../client/index.js";
 import {
   computeMinForceWithdrawSharePrice,
   computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -910,6 +911,41 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       );
     });
 
+    test("behavior: fee projection clamps distant deadlines to one year", async () => {
+      const now = 1_800_000_000n;
+      const oneYearDeadline = now + Time.s.from.d(365n);
+      const distantDeadline = now + 100n * Time.s.from.d(365n);
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+
+      const buildApproval = async (deadline: bigint) => {
+        const handle = createMockClient(mainnet);
+        mockRequirements(handle);
+        const exit = withChainTimestamp(now, () =>
+          vaultFor(handle, { supportSignature: false }).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          }),
+        );
+        const [approval] = await withChainTimestamp(now, () =>
+          exit.getRequirements(),
+        );
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Expected an ERC-20 approval requirement");
+        }
+        return approval.action.args.amount;
+      };
+
+      await expect(buildApproval(distantDeadline)).resolves.toBe(
+        await buildApproval(oneYearDeadline),
+      );
+    });
+
     test("error: VaultV2ForceWithdrawFeeSharesExceedBurnError when fee mints reach the burn bound", () => {
       const vaultData = vaultV2ExitData({
         managementFee: 40_000_000_000n,
@@ -938,6 +974,18 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       }
       expect(caught.vault).toBe(IN_KIND_VAULT);
       expect(caught.userAddress).toBe(IN_KIND_USER);
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const { vault: nowVaultData } = vaultData.accrueInterest(now);
+      expect(caught.sharesBurnt).toBe(
+        computeVaultV2ForceWithdrawMinSharesBurnt({
+          vaultData: nowVaultData,
+          plan,
+        }),
+      );
       expect(caught.feeShares).toBeGreaterThanOrEqual(caught.sharesBurnt);
     });
 

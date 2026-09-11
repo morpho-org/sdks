@@ -5,6 +5,8 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
+  computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -18,6 +20,8 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly timestamp: bigint;
   /** Optional adapter override; defaults to the vault's sole adapter. */
   readonly adapter?: Address;
+  /** Account that will call `forceWithdraw`; fee-recipient mints are mirrored when provided. */
+  readonly userAddress?: Address;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
 }
@@ -65,13 +69,17 @@ export interface VaultV2ForceWithdrawPreview {
  *   grows the adapter's position, so a forward timestamp reports a `maxExitAssets` the entity will
  *   reject.
  * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
+ * @param params.userAddress - Optional account that will call `forceWithdraw`; when provided,
+ *   fee shares minted to it by the accrual are mirrored exactly as the entity does. Omit only for
+ *   non-fee-recipient users.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
- *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, or an
- *   exit whose realized share price rounds down to zero at the default slippage tolerance (which the
- *   entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`).
+ *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, a
+ *   fee-recipient whose fee mints reach the lower burn bound, or an exit whose realized share price
+ *   rounds down to zero at the default slippage tolerance (which the entity rejects with
+ *   `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
@@ -92,6 +100,7 @@ export function previewVaultV2ForceWithdraw(
     requestedExitAssets,
     timestamp,
     adapter: adapterOverride,
+    userAddress,
     referralFeePct = 0n,
   } = params;
   if (requestedExitAssets <= 0n) return undefined;
@@ -148,12 +157,27 @@ export function previewVaultV2ForceWithdraw(
     deadlineVaultData: accruedVaultData,
     plan,
   });
+  const feeShares = userAddress
+    ? computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: userAddress,
+        timestamp,
+      })
+    : 0n;
+  const minSharesBurnt = userAddress
+    ? computeVaultV2ForceWithdrawMinSharesBurnt({
+        vaultData: accruedVaultData,
+        plan,
+      })
+    : 0n;
+  if (userAddress && feeShares >= minSharesBurnt) return undefined;
+  const sharesBurntForFloor = sharesBurnt - feeShares;
   if (
-    sharesBurnt <= 0n ||
+    sharesBurntForFloor <= 0n ||
     MathLib.mulDivDown(
       plan.withdrawnAssets,
       MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
-      sharesBurnt,
+      sharesBurntForFloor,
     ) <= 0n
   ) {
     return undefined;

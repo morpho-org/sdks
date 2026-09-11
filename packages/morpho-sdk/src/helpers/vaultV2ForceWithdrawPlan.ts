@@ -452,3 +452,38 @@ export function computeVaultV2ForceWithdrawSharesBurnt(params: {
     BigInt(positiveLegs > 0 ? positiveLegs - 1 : 0)
   );
 }
+
+/**
+ * Computes a lower bound of the Vault V2 shares that a force withdrawal burns.
+ *
+ * Each on-chain withdrawal leg rounds its own share conversion up. The tight penalty charge rounds
+ * each penalty down in aggregate, and the penalty burns can raise the share price for later legs
+ * by at most one share. This lower bound is used to reject fee-recipient exits whose fee mints
+ * could reach the burn measured by VaultExitBundlesV1.
+ *
+ * @param params - Lower-bound inputs.
+ * @param params.vaultData - Vault V2 snapshot already accrued to the execution timestamp.
+ * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
+ * @returns A lower bound, in vault shares, of the burn measured by the contract.
+ * @example
+ * ```ts
+ * import { computeVaultV2ForceWithdrawMinSharesBurnt } from "@morpho-org/morpho-sdk";
+ *
+ * const minSharesBurnt = computeVaultV2ForceWithdrawMinSharesBurnt({
+ *   vaultData,
+ *   plan,
+ * });
+ * ```
+ */
+export function computeVaultV2ForceWithdrawMinSharesBurnt(params: {
+  readonly vaultData: AccrualVaultV2;
+  readonly plan: VaultV2ForceWithdrawPlan;
+}): bigint {
+  const { vaultData, plan } = params;
+
+  return vaultData.toShares(
+    plan.withdrawnAssets +
+      MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
+    "Down",
+  );
+}

@@ -66,10 +66,13 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   same reason `penaltyAssets` carries no per-leg rounding slack at a zero penalty, where every chunk
   charges exactly nothing. `maxExitAssets` reports `0` for a snapshot with no exitable capacity
   instead of rounding up to `1`, which is not actually exitable.
-- `computeVaultV2ForceWithdrawFeeSharesMinted` and `VaultV2ForceWithdrawFeeSharesExceedBurnError`
-  account for fee-recipient share mints during force-withdraw planning. A fee-recipient
-  `userAddress` gets a floor from the net share burn and an allowance including its pending fee
-  shares.
+- `computeVaultV2ForceWithdrawFeeSharesMinted`, `computeVaultV2ForceWithdrawMinSharesBurnt`, and
+  `VaultV2ForceWithdrawFeeSharesExceedBurnError` account for fee-recipient share mints during
+  force-withdraw planning. A fee-recipient `userAddress` gets a floor from the net share burn and
+  an allowance including its pending fee shares.
+- `previewVaultV2ForceWithdraw` accepts an optional `userAddress` to mirror fee-recipient mints and
+  rejects exits whose mints reach the lower burn bound. Fee-share allowance projections are capped
+  to one year after handle creation.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
   adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
   `VaultV2ForceWithdrawZeroSharePriceError`, `VaultV2UnsupportedLiquidityAdapterError`, and

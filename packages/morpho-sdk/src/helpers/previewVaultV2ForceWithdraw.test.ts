@@ -2,6 +2,7 @@ import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_FOREIGN_ADAPTER,
+  IN_KIND_USER,
   vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
@@ -280,6 +281,44 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toBeGreaterThan(0n);
 
     expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
+  });
+
+  test("behavior: mirrors fee-recipient mints and returns undefined at the lower burn bound", () => {
+    const vaultData = vaultV2ExitData({
+      managementFee: 40_000_000_000n,
+      feeRecipient: IN_KIND_USER,
+    });
+    const params = {
+      requestedExitAssets: 51n,
+      timestamp: vaultData.lastUpdate + 30n * 24n * 60n * 60n,
+      userAddress: IN_KIND_USER,
+    } as const;
+
+    expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
+    expect(
+      previewVaultV2ForceWithdraw(vaultData, {
+        ...params,
+        userAddress: undefined,
+      }),
+    ).toBeDefined();
+  });
+
+  test("behavior: non-recipient userAddress preserves the preview", () => {
+    const vaultData = vaultV2ExitData({
+      managementFee: 40_000_000_000n,
+      feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+    });
+    const params = {
+      requestedExitAssets: 51n,
+      timestamp: vaultData.lastUpdate + 30n * 24n * 60n * 60n,
+    } as const;
+
+    expect(
+      previewVaultV2ForceWithdraw(vaultData, {
+        ...params,
+        userAddress: IN_KIND_USER,
+      }),
+    ).toEqual(previewVaultV2ForceWithdraw(vaultData, params));
   });
 
   // Out of range the transaction path rejects, so quoting a payout here would overstate what the

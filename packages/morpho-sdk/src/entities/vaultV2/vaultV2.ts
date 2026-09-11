@@ -33,6 +33,7 @@ import {
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
   computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -84,6 +85,10 @@ import {
 } from "../../types/index.js";
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
+
+// One year; the on-chain management fee is capped at 5%/yr so the accrual model stays well-defined
+// inside it.
+const VAULT_V2_FEE_PROJECTION_HORIZON = 365n * 24n * 60n * 60n;
 
 export interface VaultV2Actions {
   /**
@@ -430,7 +435,8 @@ export interface VaultV2Actions {
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
    * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
-   * and an allowance that includes its pending fee shares through the bundle deadline.
+   * and an allowance that includes its pending fee shares through one year after handle creation.
+   * An execution later than that may leave the allowance short by the extra mint and revert safely.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -438,6 +444,8 @@ export interface VaultV2Actions {
    * @param params.userAddress - Account that signs and submits the exit, and receives the assets.
    * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
+   *   For fee recipients, the allowance covers fee shares minted through one year after handle
+   *   creation; a later execution may leave it short by the extra mint and revert safely.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
    * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. Must be
@@ -471,7 +479,7 @@ export interface VaultV2Actions {
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
    * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares minted to a
-   *   fee-recipient `userAddress` reach the upper-bound share burn.
+   *   fee-recipient `userAddress` reach the lower-bound share burn.
    * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -1220,11 +1228,15 @@ export class MorphoVaultV2 implements VaultV2Actions {
       timestamp: now,
     });
     const netSharesBurntNow = sharesBurntNow - feeSharesNow;
-    if (netSharesBurntNow <= 0n) {
+    const minSharesBurntNow = computeVaultV2ForceWithdrawMinSharesBurnt({
+      vaultData: nowVaultData,
+      plan,
+    });
+    if (feeSharesNow >= minSharesBurntNow) {
       throw new VaultV2ForceWithdrawFeeSharesExceedBurnError({
         vault: this.vault,
         userAddress,
-        sharesBurnt: sharesBurntNow,
+        sharesBurnt: minSharesBurntNow,
         feeShares: feeSharesNow,
       });
     }
@@ -1249,7 +1261,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const feeSharesDeadline = computeVaultV2ForceWithdrawFeeSharesMinted({
       vaultData,
       owner: userAddress,
-      timestamp: deadline,
+      timestamp: MathLib.min(deadline, now + VAULT_V2_FEE_PROJECTION_HORIZON),
     });
     // Saturated at `maxUint256`: a tiny accepted floor scales this above the ABI slot, and the
     // approval encoder clamps what it emits — so an uncapped requirement would sit permanently above
