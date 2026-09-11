@@ -320,6 +320,8 @@ export const getBundlesTokenPermit = (params: {
 /**
  * Normalizes a compact or serialized ECDSA signature for bundles permit tuples.
  *
+ * @internal
+ *
  * @param serializedSignature - Compact or serialized ECDSA signature.
  * @param onInvalid - Error factory used when parsing or extracting the recovery identifier fails.
  * @returns The normalized signature tuple.
