@@ -7,7 +7,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2` encode one
   direct VaultBundlesV1 call; `inKindRedeem` encodes the standalone VaultExitBundlesV1 periphery.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` encode one direct VaultBundlesV1 call;
-  `inKindRedeem` targets VaultExitBundlesV1 and force exits remain vault multicalls.
+  `inKindRedeem` and `forceWithdraw` target VaultExitBundlesV1; `forceRedeem` remains a vault multicall.
 - `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.

@@ -435,8 +435,9 @@ export interface VaultV2Actions {
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
    * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
-   * and an allowance that includes its pending fee shares through one year after handle creation.
-   * An execution later than that may leave the allowance short by the extra mint and revert safely.
+   * and a guard against fee mints reaching the lower burn bound by the horizon-clamped deadline.
+   * Its allowance includes the projected fee shares through that same deadline horizon. An execution
+   * later than one year may leave the allowance short by the extra mint and revert safely.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -478,8 +479,8 @@ export interface VaultV2Actions {
    *   which would overrun the contract's unbounded loop.
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
-   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares minted to a
-   *   fee-recipient `userAddress` reach the lower-bound share burn.
+   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares projected for a
+   *   fee-recipient `userAddress` reach the lower-bound share burn at the horizon-clamped deadline.
    * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -1211,11 +1212,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
+    const projectionTimestamp = MathLib.min(
+      deadline,
+      now + VAULT_V2_FEE_PROJECTION_HORIZON,
+    );
     // VaultExitBundlesV1 measures shares as `sharesBefore - balanceAfter`; its first withdrawal
-    // accrues the vault before burning. Use the `now` accrual for the floor and subtract fee shares
-    // minted to this fee-recipient owner from the burn bound.
+    // accrues the vault before burning. Use the `now` accrual for the floor and the projected
+    // horizon-clamped accrual for the fee-mint guard.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
+    );
+    const { vault: projectedVaultData } = vaultData.accrueInterest(
+      MathLib.max(projectionTimestamp, vaultData.lastUpdate),
     );
     const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
       vaultData: nowVaultData,
@@ -1227,19 +1235,27 @@ export class MorphoVaultV2 implements VaultV2Actions {
       owner: userAddress,
       timestamp: now,
     });
-    const netSharesBurntNow = sharesBurntNow - feeSharesNow;
-    const minSharesBurntNow = computeVaultV2ForceWithdrawMinSharesBurnt({
-      vaultData: nowVaultData,
+    const feeSharesProjected = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: projectionTimestamp,
+    });
+    const minSharesBurntProjected = computeVaultV2ForceWithdrawMinSharesBurnt({
+      vaultData: projectedVaultData,
       plan,
     });
-    if (feeSharesNow >= minSharesBurntNow) {
+    // Mints only grow and the burn only shrinks until inclusion, so the projected pair bounds
+    // every execution time in the window.
+    if (feeSharesProjected >= minSharesBurntProjected) {
       throw new VaultV2ForceWithdrawFeeSharesExceedBurnError({
         vault: this.vault,
         userAddress,
-        sharesBurnt: minSharesBurntNow,
-        feeShares: feeSharesNow,
+        sharesBurnt: minSharesBurntProjected,
+        feeShares: feeSharesProjected,
       });
     }
+    // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
+    const netSharesBurntNow = sharesBurntNow - feeSharesNow;
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
@@ -1257,19 +1273,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // share price passed ~1e50 assets/share, which no fixture here can construct.
     validateUint256Field("minSharePriceE27", minSharePriceE27);
     // VaultExitBundlesV1's burn bound includes fee shares minted by the first withdrawal. Add the
-    // deadline-accrued fee shares to the price-floor ceiling so the approval covers that mint.
-    const feeSharesDeadline = computeVaultV2ForceWithdrawFeeSharesMinted({
-      vaultData,
-      owner: userAddress,
-      timestamp: MathLib.min(deadline, now + VAULT_V2_FEE_PROJECTION_HORIZON),
-    });
+    // projected fee shares to the price-floor ceiling so the approval covers that mint.
     // Saturated at `maxUint256`: a tiny accepted floor scales this above the ABI slot, and the
     // approval encoder clamps what it emits — so an uncapped requirement would sit permanently above
     // any allowance the user can actually grant and `getRequirements()` would return the same
     // approval forever. No account can hold or burn more shares than that anyway.
     const requiredShareAllowance = MathLib.min(
       MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
-        feeSharesDeadline,
+        feeSharesProjected,
       maxUint256,
     );
 

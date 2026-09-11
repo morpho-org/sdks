@@ -952,8 +952,8 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         feeRecipient: IN_KIND_USER,
       });
       const now = vaultData.lastUpdate + Time.s.from.d(30n);
+      const deadline = now + Time.s.from.h(2n);
       const handle = createMockClient(mainnet);
-
       let caught: unknown;
       try {
         withChainTimestamp(now, () =>
@@ -961,6 +961,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
             exitAssets: 51n,
             vaultData,
             userAddress: IN_KIND_USER,
+            deadline,
           }),
         );
       } catch (error) {
@@ -979,14 +980,86 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         exitAssets: 51n,
         timestamp: now,
       });
-      const { vault: nowVaultData } = vaultData.accrueInterest(now);
+      const projectionTimestamp = MathLib.min(
+        deadline,
+        now + Time.s.from.d(365n),
+      );
+      const { vault: projectedVaultData } =
+        vaultData.accrueInterest(projectionTimestamp);
       expect(caught.sharesBurnt).toBe(
         computeVaultV2ForceWithdrawMinSharesBurnt({
-          vaultData: nowVaultData,
+          vaultData: projectedVaultData,
           plan,
         }),
       );
-      expect(caught.feeShares).toBeGreaterThanOrEqual(caught.sharesBurnt);
+      expect(caught.feeShares).toBe(
+        computeVaultV2ForceWithdrawFeeSharesMinted({
+          vaultData,
+          owner: IN_KIND_USER,
+          timestamp: projectionTimestamp,
+        }),
+      );
+    });
+
+    test("error: projects fee mints through the deadline", () => {
+      const vaultData = vaultV2ExitData({
+        managementFee: 10_000_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const now = vaultData.lastUpdate + 1n;
+      const shortDeadline = now + 1n;
+      const deadline = now + Time.s.from.h(2n);
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: shortDeadline,
+          }),
+        ),
+      ).not.toThrow();
+
+      let caught: unknown;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          }),
+        );
+      } catch (error) {
+        caught = error;
+      }
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const { vault: projectedVaultData } = vaultData.accrueInterest(deadline);
+      expect(caught).toBeInstanceOf(
+        VaultV2ForceWithdrawFeeSharesExceedBurnError,
+      );
+      if (!(caught instanceof VaultV2ForceWithdrawFeeSharesExceedBurnError)) {
+        throw caught;
+      }
+      expect(caught.feeShares).toBe(
+        computeVaultV2ForceWithdrawFeeSharesMinted({
+          vaultData,
+          owner: IN_KIND_USER,
+          timestamp: deadline,
+        }),
+      );
+      expect(caught.sharesBurnt).toBe(
+        computeVaultV2ForceWithdrawMinSharesBurnt({
+          vaultData: projectedVaultData,
+          plan,
+        }),
+      );
     });
 
     test("error: BundlesPermitMismatchError for an unprepared or changed permit", async () => {

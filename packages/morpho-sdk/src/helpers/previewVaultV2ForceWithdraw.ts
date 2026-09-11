@@ -20,7 +20,12 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly timestamp: bigint;
   /** Optional adapter override; defaults to the vault's sole adapter. */
   readonly adapter?: Address;
-  /** Account that will call `forceWithdraw`; fee-recipient mints are mirrored when provided. */
+  /**
+   * Account that will call `forceWithdraw`; fee-recipient mints are mirrored when provided. The
+   * entity additionally projects the mints to its deadline, so a preview that passes here can still
+   * be rejected by `forceWithdraw` when mints reach the burn before the deadline; pass the intended
+   * deadline as `timestamp` to mirror that.
+   */
   readonly userAddress?: Address;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
@@ -70,8 +75,10 @@ export interface VaultV2ForceWithdrawPreview {
  *   reject.
  * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
  * @param params.userAddress - Optional account that will call `forceWithdraw`; when provided,
- *   fee shares minted to it by the accrual are mirrored exactly as the entity does. Omit only for
- *   non-fee-recipient users.
+ *   fee shares minted to it by the accrual are mirrored exactly as the entity does. The entity
+ *   additionally projects the mints to its deadline, so a preview that passes here can still be
+ *   rejected when mints reach the burn before the deadline; pass the intended deadline as
+ *   `timestamp` to mirror that. Omit only for non-fee-recipient users.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
