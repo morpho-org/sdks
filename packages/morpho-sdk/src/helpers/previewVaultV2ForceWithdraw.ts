@@ -22,11 +22,16 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly adapter?: Address;
   /**
    * Account that will call `forceWithdraw`; fee-recipient mints are mirrored when provided. The
-   * entity additionally projects the mints to its deadline, so a preview that passes here can still
-   * be rejected by `forceWithdraw` when mints reach the burn before the deadline; pass the intended
-   * deadline as `timestamp` to mirror that.
+   * entity projects the mints to its horizon-clamped deadline; pass that as `feeProjectionTimestamp`
+   * to mirror it.
    */
   readonly userAddress?: Address;
+  /**
+   * Timestamp the fee-recipient mint guard is projected to; defaults to `timestamp`. Pass the
+   * intended `forceWithdraw` deadline, clamped like the entity (`min(deadline, now + 1 year)`), to
+   * mirror the entity's guard exactly. Ignored without `userAddress`.
+   */
+  readonly feeProjectionTimestamp?: bigint;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
 }
@@ -76,16 +81,19 @@ export interface VaultV2ForceWithdrawPreview {
  * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
  * @param params.userAddress - Optional account that will call `forceWithdraw`; when provided,
  *   fee shares minted to it by the accrual are mirrored exactly as the entity does. The entity
- *   additionally projects the mints to its deadline, so a preview that passes here can still be
- *   rejected when mints reach the burn before the deadline; pass the intended deadline as
- *   `timestamp` to mirror that. Omit only for non-fee-recipient users.
+ *   projects the mints to its horizon-clamped deadline; pass that as `feeProjectionTimestamp` to
+ *   mirror it. Omit only for non-fee-recipient users.
+ * @param params.feeProjectionTimestamp - Timestamp for the fee-recipient mint guard; defaults to
+ *   `timestamp`. Pass the horizon-clamped `forceWithdraw` deadline to mirror the entity. Ignored
+ *   without `userAddress`.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
  *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, a
- *   fee-recipient whose fee mints reach the lower burn bound, or an exit whose realized share price
- *   rounds down to zero at the default slippage tolerance (which the entity rejects with
+ *   a fee-recipient whose fee mints projected to `feeProjectionTimestamp` reach the lower burn
+ *   bound, or an exit whose realized share price rounds down to zero at the default slippage
+ *   tolerance (which the entity rejects with
  *   `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
  * ```ts
@@ -108,6 +116,7 @@ export function previewVaultV2ForceWithdraw(
     timestamp,
     adapter: adapterOverride,
     userAddress,
+    feeProjectionTimestamp = timestamp,
     referralFeePct = 0n,
   } = params;
   if (requestedExitAssets <= 0n) return undefined;
@@ -171,13 +180,25 @@ export function previewVaultV2ForceWithdraw(
         timestamp,
       })
     : 0n;
-  const minSharesBurnt = userAddress
-    ? computeVaultV2ForceWithdrawMinSharesBurnt({
-        vaultData: accruedVaultData,
-        plan,
-      })
-    : 0n;
-  if (userAddress && feeShares >= minSharesBurnt) return undefined;
+  const effectiveFeeProjectionTimestamp = MathLib.max(
+    timestamp,
+    feeProjectionTimestamp,
+  );
+  if (userAddress) {
+    const { vault: projectedVaultData } = vaultData.accrueInterest(
+      MathLib.max(effectiveFeeProjectionTimestamp, vaultData.lastUpdate),
+    );
+    const feeSharesProjected = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: effectiveFeeProjectionTimestamp,
+    });
+    const minSharesBurntProjected = computeVaultV2ForceWithdrawMinSharesBurnt({
+      vaultData: projectedVaultData,
+      plan,
+    });
+    if (feeSharesProjected >= minSharesBurntProjected) return undefined;
+  }
   const sharesBurntForFloor = sharesBurnt - feeShares;
   if (
     sharesBurntForFloor <= 0n ||

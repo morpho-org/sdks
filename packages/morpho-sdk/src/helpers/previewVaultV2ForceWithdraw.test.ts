@@ -1,10 +1,17 @@
 import { MathLib } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
+import { createMockClient } from "@morpho-org/test/mock";
+import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_FOREIGN_ADAPTER,
   IN_KIND_USER,
+  IN_KIND_VAULT,
   vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
+import { withChainTimestamp } from "../../test/helpers/time.js";
+import { morphoViemExtension } from "../client/index.js";
+import { VaultV2ForceWithdrawFeeSharesExceedBurnError } from "../types/index.js";
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
 import {
   computeVaultV2ForceWithdrawPlan,
@@ -14,6 +21,25 @@ import {
 
 const TWO_PERCENT = 20_000_000_000_000_000n;
 const TEN_PERCENT = 100_000_000_000_000_000n;
+
+const deadlineCrossingFixture = () => {
+  const vaultData = vaultV2ExitData({
+    managementFee: 10_000_000_000_000n,
+    feeRecipient: IN_KIND_USER,
+  });
+  const now = vaultData.lastUpdate + 1n;
+  return {
+    vaultData,
+    now,
+    shortDeadline: now + 1n,
+    deadline: now + Time.s.from.h(2n),
+  };
+};
+
+const vaultFor = (handle: ReturnType<typeof createMockClient>) =>
+  handle.client
+    .extend(morphoViemExtension())
+    .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
 
 describe("previewVaultV2ForceWithdraw", () => {
   test("default", () => {
@@ -301,6 +327,86 @@ describe("previewVaultV2ForceWithdraw", () => {
         userAddress: undefined,
       }),
     ).toBeDefined();
+  });
+
+  test("behavior: projects fee mints without inflating capacity", () => {
+    const { vaultData, now, deadline } = deadlineCrossingFixture();
+    const recipientParams = {
+      requestedExitAssets: 51n,
+      timestamp: now,
+      userAddress: IN_KIND_USER,
+    } as const;
+    const previewAtNow = previewVaultV2ForceWithdraw(
+      vaultData,
+      recipientParams,
+    );
+    const previewAtDeadline = previewVaultV2ForceWithdraw(vaultData, {
+      ...recipientParams,
+      feeProjectionTimestamp: deadline,
+    });
+    const nonRecipientPreview = previewVaultV2ForceWithdraw(
+      vaultV2ExitData({
+        managementFee: 10_000_000_000_000n,
+        feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+      }),
+      recipientParams,
+    );
+
+    expect(previewAtNow).toBeDefined();
+    expect(previewAtDeadline).toBeUndefined();
+    expect(previewAtNow?.maxExitAssets).toBe(
+      nonRecipientPreview?.maxExitAssets,
+    );
+    expect(previewAtNow?.exitAssets).toBe(nonRecipientPreview?.exitAssets);
+  });
+
+  test("behavior: preview fee projection matches the entity guard", () => {
+    const { vaultData, now, shortDeadline, deadline } =
+      deadlineCrossingFixture();
+    const handle = createMockClient(mainnet);
+
+    for (const projectionTimestamp of [shortDeadline, deadline]) {
+      const preview = previewVaultV2ForceWithdraw(vaultData, {
+        requestedExitAssets: 51n,
+        timestamp: now,
+        userAddress: IN_KIND_USER,
+        feeProjectionTimestamp: projectionTimestamp,
+      });
+      let entityRejected = false;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: projectionTimestamp,
+          }),
+        );
+      } catch (error) {
+        entityRejected = true;
+        expect(error).toBeInstanceOf(
+          VaultV2ForceWithdrawFeeSharesExceedBurnError,
+        );
+      }
+
+      expect(preview !== undefined).toBe(!entityRejected);
+    }
+  });
+
+  test("behavior: clamps fee projection behind the capacity timestamp", () => {
+    const { vaultData, now } = deadlineCrossingFixture();
+    const params = {
+      requestedExitAssets: 51n,
+      timestamp: now,
+      userAddress: IN_KIND_USER,
+    } as const;
+
+    expect(
+      previewVaultV2ForceWithdraw(vaultData, {
+        ...params,
+        feeProjectionTimestamp: now - 1n,
+      }),
+    ).toEqual(previewVaultV2ForceWithdraw(vaultData, params));
   });
 
   test("behavior: non-recipient userAddress preserves the preview", () => {

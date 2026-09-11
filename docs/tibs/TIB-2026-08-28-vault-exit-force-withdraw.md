@@ -207,7 +207,9 @@ implementation:
   permits.
 
 Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongside its siblings, and
-`previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`.
+`previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`. The preview separates its
+capacity clock (`timestamp`) from its fee-mint projection clock (`feeProjectionTimestamp`) so a
+fee-recipient quote can mirror the entity's deadline guard without inflating `maxExitAssets`.
 
 ### The simulation
 
