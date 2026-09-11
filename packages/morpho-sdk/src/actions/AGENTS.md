@@ -4,8 +4,10 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Sub-layers
 
-- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `migrateToV2`.
-- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `forceWithdraw` / `forceRedeem`.
+- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2` encode one
+  direct VaultBundlesV1 call; `inKindRedeem` encodes the standalone VaultExitBundlesV1 periphery.
+- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` encode one direct VaultBundlesV1 call;
+  `inKindRedeem` targets VaultExitBundlesV1 and force exits remain vault multicalls.
 - `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
@@ -15,33 +17,33 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
   composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
   authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
-  for VaultExitBundlesV1. The two that must split a signature into a `(v, r, s)` ABI tuple — the
-  BlueBundlesV1 permit/authorization encoders and `getVaultExitBundlesV1PermitStruct` — go through
-  the `@internal` `normalizeEcdsaSignature(serialized, onInvalid)`, so one place owns the 64-byte
-  EIP-2098 / 65-byte parse and the `yParity` → `v` widening while each caller passes the factory for
-  its own typed mismatch error. The Bundler3 helpers need none of this: they forward the serialized
-  signature verbatim into the bundler action args.
+  for VaultExitBundlesV1.
 
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Blue write paths** encode
-   one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Other **direct calls** (vault `withdraw` / `redeem`,
-   Midnight collateral supply / redeem / offer cancellation) encode their target contract call
-   directly. Vault `inKindRedeem` and `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1
-   rather than composing a Bundler3 bundle; `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
+2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 and Vault V2
+   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths**
+   encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
+   redeem / offer cancellation) encode their target contract call directly. Vault `inKindRedeem` and
+   `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 rather than composing a Bundler3 bundle;
+   `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
-## Native wrapping (canonical statement)
+## Native funding (canonical statement)
 
-Only valid for assets/collateral configured as wNative. Vault deposit bundles prepend
-`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value`. Direct
-BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is exclusive with an ERC-20
+Native funding is valid only for assets/collateral configured as wNative; reject it on any other
+asset with the dedicated error. On **Bundler3 paths**, `nativeAmount > 0` prepends
+`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value` from those
+value-carrying calls. On direct **VaultBundlesV1 vault deposits**, encode the gross native amount as
+the deposit assets and send that same amount as `tx.value` to `vaultBundlesV1Deposit`; the
+standalone contract wraps the value internally, so these paths do not add Bundler3 actions or a
+token permit.
+Direct BlueBundlesV1 funding sends the native amount as `tx.value`; it is exclusive with an ERC-20
 token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
-position and takes no native funding. Reject native amounts on non-wNative assets with the dedicated
-error.
+position and takes no native funding.
 
 ## Shared liquidity / reallocations (canonical statement)
 

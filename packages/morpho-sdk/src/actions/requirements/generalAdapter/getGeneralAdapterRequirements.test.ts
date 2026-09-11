@@ -694,10 +694,11 @@ describe("getGeneralAdapterRequirements", () => {
               nonce: 0n,
             },
             action: {
-              type: "permit2TransferFrom",
+              type: "permit2SignatureTransfer",
               args: {
                 spender: generalAdapter1,
                 amount: mockAmount,
+                nonce: 0n,
                 deadline: 1n,
               },
             },

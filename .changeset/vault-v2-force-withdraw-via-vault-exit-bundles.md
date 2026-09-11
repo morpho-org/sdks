@@ -52,8 +52,9 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   an override can no longer opt out of the slippage check. A non-positive override throws
   `NonPositiveInputError`.
 - Referral-fee inputs are validated eagerly at handle creation, before any RPC: `referralFeePct < 0`
-  throws `NegativeInputError`, `referralFeePct >= WAD` throws `InputExceedsMaxError`, and a positive
-  pct with a missing or zero recipient throws `MissingReferralFeeRecipientError`.
+  throws `NegativeInputError`, `referralFeePct >= WAD` throws `ReferralFeePctExceededError` (which
+  extends `InputExceedsMaxError`), and a positive pct with a missing or zero recipient throws
+  `ReferralFeeRecipientMissingError` (aliased as the legacy `MissingReferralFeeRecipientError`).
 - `previewVaultV2ForceWithdraw(vaultData, params)` returns the penalty-free leg, penalised leg,
   penalty, referral fee, net payout, and `maxExitAssets`, with no RPC.
 - `resolveVaultV2ForceWithdrawEligibility`, `computeVaultV2ForceWithdrawPlan`,
@@ -72,8 +73,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   path to an unbounded exit: positive `withdrawnAssets` and `sharesBurnt` are not sufficient, because
   their ratio can still round down to `0` on a vault whose share price has collapsed below `1e-27`
   assets per share — and the contract reads a zero floor as no bound at all. The
-  referral-fee guard reuses the `MissingReferralFeeRecipientError` this major also introduces for the
-  direct BlueBundlesV1 writes. `VaultV2UndecodableLiquidityDataError` reports a
+  referral-fee guard reuses the canonical `ReferralFeeRecipientMissingError` this major also
+  introduces for the direct BlueBundlesV1 writes. `VaultV2UndecodableLiquidityDataError` reports a
   `liquidityData` blob that does not decode as `MarketParams` — the case the contract's `abi.decode`
   reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
   liquidity adapter that is not the vault's sole adapter.

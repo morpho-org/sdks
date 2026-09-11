@@ -32,11 +32,13 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MissingReferralFeeRecipientError,
   NativeAmountOnNonWNativeAssetError,
+  NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
+  ReferralFeePctExceededError,
+  ReferralFeeRecipientMissingError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
@@ -109,9 +111,9 @@ export const validateDeadline = (deadline: bigint): void => {
  *   is only valid alongside a zero `referralFeePct`.
  * @returns The normalized `{ referralFeePct, referralFeeRecipient }` pair.
  * @throws {NegativeInputError} when `referralFeePct` is negative.
- * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contracts reject it
- *   with `PctExceeded`).
- * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD (the contracts reject
+ *   it with `PctExceeded`); it extends `InputExceedsMaxError`, preserving that pattern-match.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @internal
  */
 export const validateReferralFee = (params: {
@@ -126,18 +128,14 @@ export const validateReferralFee = (params: {
     throw new NegativeInputError("referralFeePct", referralFeePct);
   }
   if (referralFeePct >= MathLib.WAD) {
-    throw new InputExceedsMaxError({
-      field: "referralFeePct",
-      value: referralFeePct,
-      max: MathLib.WAD - 1n,
-    });
+    throw new ReferralFeePctExceededError(referralFeePct);
   }
   if (
     referralFeePct > 0n &&
     (params.referralFeeRecipient == null ||
       isAddressEqual(params.referralFeeRecipient, zeroAddress))
   ) {
-    throw new MissingReferralFeeRecipientError(referralFeePct);
+    throw new ReferralFeeRecipientMissingError();
   }
   return {
     referralFeePct,
@@ -311,6 +309,20 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
   }
   if (!isAddressEqual(asset, wNative)) {
     throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
+  }
+};
+
+/** @internal Validates native funding against a vault's wrapped-native asset. */
+export const validateNativeVaultAsset = (
+  chainId: number,
+  vaultAsset: Address,
+): void => {
+  const { wNative } = getChainAddresses(chainId);
+  if (!isDefined(wNative)) {
+    throw new ChainWNativeMissingError(chainId);
+  }
+  if (!isAddressEqual(vaultAsset, wNative)) {
+    throw new NativeAmountOnNonWNativeVaultError(vaultAsset, wNative);
   }
 };
 

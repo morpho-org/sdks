@@ -218,6 +218,147 @@ export const vaultExitBundlesV1Abi = [
   },
 ] as const satisfies Abi;
 
+/**
+ * Pinned ABI for the VaultBundlesV1 entrypoints used by Vault V1 and Vault V2 actions.
+ *
+ * Sourced from `morpho-org/bundles` commit
+ * `f27e7bcf744310303e24faa522b71d702e696686`.
+ */
+export const vaultBundlesV1Abi = [
+  { type: "error", name: "AlreadyInitiated", inputs: [] },
+  { type: "error", name: "DeadlinePassed", inputs: [] },
+  { type: "error", name: "InconsistentAssets", inputs: [] },
+  { type: "error", name: "NotExactlyOneZero", inputs: [] },
+  { type: "error", name: "PctExceeded", inputs: [] },
+  { type: "error", name: "SlippageExceeded", inputs: [] },
+  {
+    type: "function",
+    name: "initiator",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "vaultBundlesV1Deposit",
+    inputs: [
+      { name: "vault", type: "address", internalType: "address" },
+      { name: "assets", type: "uint256", internalType: "uint256" },
+      {
+        name: "maxSharePriceE27",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "assetPermit",
+        type: "tuple",
+        internalType: "struct TokenPermit",
+        components: [
+          { name: "kind", type: "uint8", internalType: "enum PermitKind" },
+          { name: "data", type: "bytes", internalType: "bytes" },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    name: "vaultBundlesV1Withdraw",
+    inputs: [
+      { name: "vault", type: "address", internalType: "address" },
+      { name: "assets", type: "uint256", internalType: "uint256" },
+      { name: "shares", type: "uint256", internalType: "uint256" },
+      {
+        name: "sharesPermit",
+        type: "tuple",
+        internalType: "struct Permit",
+        components: [
+          { name: "value", type: "uint256", internalType: "uint256" },
+          { name: "nonce", type: "uint256", internalType: "uint256" },
+          { name: "deadline", type: "uint256", internalType: "uint256" },
+          { name: "v", type: "uint8", internalType: "uint8" },
+          { name: "r", type: "bytes32", internalType: "bytes32" },
+          { name: "s", type: "bytes32", internalType: "bytes32" },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "vaultBundlesV1Migrate",
+    inputs: [
+      { name: "sourceVault", type: "address", internalType: "address" },
+      { name: "destVault", type: "address", internalType: "address" },
+      {
+        name: "assetsWithdrawn",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "sharesRedeemed",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "destMaxSharePriceE27",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "sharesPermit",
+        type: "tuple",
+        internalType: "struct Permit",
+        components: [
+          { name: "value", type: "uint256", internalType: "uint256" },
+          { name: "nonce", type: "uint256", internalType: "uint256" },
+          { name: "deadline", type: "uint256", internalType: "uint256" },
+          { name: "v", type: "uint8", internalType: "uint8" },
+          { name: "r", type: "bytes32", internalType: "bytes32" },
+          { name: "s", type: "bytes32", internalType: "bytes32" },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const satisfies Abi;
+
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [
   {

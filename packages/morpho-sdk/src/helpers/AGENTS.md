@@ -13,7 +13,8 @@ Per-function contracts (arguments, return shapes, behavior) live as JSDoc on eac
   `MAX_ABSOLUTE_SHARE_PRICE`: capping relaxes an upper bound, so it is safe there, whereas capping a
   `computeMin*SharePrice` floor would *lower* it and weaken the guard for any vault or market whose
   share price grew past the cap. The high-level Blue write methods do not use these helpers or accept
-  slippage inputs.
+  slippage inputs. `computeVaultMaxSharePrice` accrues vault snapshots for fixed-bundle price
+  protection and `grossFromNetAssets` exactly inverts VaultBundlesV1 referral-fee deductions.
   `computeMinForceWithdrawSharePrice` bounds a Vault V2 force withdrawal's realized exit price; it
   takes the plan's withdrawn assets and share-burn upper bound rather than a market, because the
   force-deallocation penalty puts the realized price structurally below the vault share price.

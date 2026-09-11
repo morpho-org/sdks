@@ -61,7 +61,7 @@ export interface BlueWithdrawCollateralParams {
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
  * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
  * @throws {DepositOwnerMismatchError} when the signed authorization owner differs from `userAddress`.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when authorization cannot be bound safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when authorization cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example

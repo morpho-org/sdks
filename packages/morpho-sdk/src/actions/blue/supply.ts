@@ -3,8 +3,8 @@ import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueSupplyAction,
+  BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
@@ -39,7 +39,7 @@ export interface BlueSupplyParams {
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
     /** Optional ERC-2612 or Permit2 SignatureTransfer requirement result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BundlesTokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
   readonly metadata?: Metadata;
@@ -76,7 +76,7 @@ export interface BlueSupplyParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `assets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when the signature kind or encoding is invalid.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature kind or encoding is invalid.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
