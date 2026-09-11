@@ -17,6 +17,7 @@ import {
 import { NonPositiveInputError } from "../types/index.js";
 import {
   computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -543,6 +544,54 @@ describe("computeVaultV2ForceWithdrawSharesBurnt", () => {
         plan,
       }),
     ).toBeGreaterThan(vaultData.toShares(plan.withdrawnAssets, "Up"));
+  });
+});
+
+describe("computeVaultV2ForceWithdrawMinSharesBurnt", () => {
+  test("behavior: lower-bounds the upper share-burn bound for idle-only and multi-market exits", () => {
+    const cases = [
+      {
+        vaultData: vaultV2ExitData({
+          assetBalance: 1_000n,
+          penalty: TWO_PERCENT,
+        }),
+        exitAssets: 100n,
+      },
+      {
+        vaultData: vaultV2ExitData({
+          additionalMarket: true,
+          marketTotalBorrowAssets: 0n,
+          secondMarketTotalBorrowAssets: 0n,
+          penalty: TWO_PERCENT,
+        }),
+        exitAssets: 1_400n,
+      },
+    ];
+
+    for (const { vaultData, exitAssets } of cases) {
+      const plan = planFor({ vaultData, exitAssets });
+      const upper = computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData: vaultData,
+        plan,
+      });
+      expect(
+        computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan }),
+      ).toBeLessThanOrEqual(upper);
+    }
+  });
+
+  test("behavior: equals the withdrawn-asset conversion without deallocation", () => {
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1_000n,
+      penalty: TWO_PERCENT,
+    });
+    const plan = planFor({ vaultData, exitAssets: 100n });
+
+    expect(plan.assetsToDeallocate).toBe(0n);
+    expect(computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })).toBe(
+      vaultData.toShares(plan.withdrawnAssets, "Down"),
+    );
   });
 });
 

@@ -6,13 +6,8 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   type Address,
-  compactSignatureToSignature,
   type Hex,
   isAddressEqual,
-  parseCompactSignature,
-  parseSignature,
-  type Signature,
-  size,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -39,7 +34,10 @@ import {
   UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { normalizeBundlesCommonParams } from "../bundles/common.js";
+import {
+  normalizeBundlesCommonParams,
+  normalizeBundlesSignature,
+} from "../bundles/common.js";
 import {
   type BundlesTokenPermit,
   getBundlesTokenPermit,
@@ -189,35 +187,16 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     });
   }
 
-  const serializedSignature = authorizationSignature.args.signature;
-  let parsed: Signature;
-  try {
-    parsed =
-      size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-  } catch (cause) {
-    throw new BundlesRequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
-      actual: serializedSignature,
-      cause,
-    });
-  }
-  const v =
-    parsed.v ??
-    (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
-  if (v == null) {
-    throw new BundlesRequirementSignatureMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: serializedSignature,
-    });
-  }
+  const signature = normalizeBundlesSignature(
+    authorizationSignature.args.signature,
+    (details) =>
+      new BundlesRequirementSignatureMismatchError({
+        field: "signature",
+        ...details,
+      }),
+  );
   return {
-    signature: { v: Number(v), r: parsed.r, s: parsed.s },
+    signature,
     nonce: authorizationSignature.args.nonce,
     deadline: authorizationSignature.args.deadline,
   };

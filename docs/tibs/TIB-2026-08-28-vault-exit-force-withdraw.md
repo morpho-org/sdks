@@ -285,17 +285,24 @@ The bound is built from the plan, pessimistically on both sides:
 grossDebited     = withdrawnAssets + penaltyAssets                    // penaltyAssets is an upper bound
 positiveLegs     = (assetsToWithdraw > 0) + (penalty > 0 ? penaltyLegs : 0)
                    + (assetsToDeallocate > 0)                          // legs that actually round
-sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)
-
 nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
+feeShares(t)     = fee shares accrueInterest(t) mints to userAddress (0 for non-recipients)
+sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)          // upper bound
+minSharesBurnt(v)= v.toShares(withdrawnAssets + wMulUp(assetsToDeallocate, penalty), "Down") // lower bound
+require feeShares(now) < minSharesBurnt(nowVaultData)   // else VaultV2ForceWithdrawFeeSharesExceedBurnError
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
-                              sharesBurnt(nowVaultData))              // now-accrued burn
-allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27),   // largest burn the price check accepts
-                       maxUint256)                                     // ...saturated to the ABI slot
+                              sharesBurnt(nowVaultData) - feeShares(now))
+allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27)
+                       + feeShares(min(deadline, now + 1 year)), maxUint256)
 ```
 
-`withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, so a
-faithful snapshot never trips the check while the tolerance absorbs benign drift.
+`withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, while
+the lower bound rejects fee-recipient exits whose accounting is unsafe.
+
+The contract reads `sharesBefore` before its first `withdraw`, which mints fee shares to the
+recipients, so for a fee-recipient caller the measured burn is `burn − minted`. Mints are
+non-decreasing in time, so `now` lower-bounds them for the floor and the horizon-clamped deadline
+upper-bounds them for the allowance.
 
 The **price floor** accrues its denominator to `now` (execution time): the raw `lastUpdate` snapshot
 underestimates the burn a stale fee-bearing vault realizes once its first withdrawal accrues pending
