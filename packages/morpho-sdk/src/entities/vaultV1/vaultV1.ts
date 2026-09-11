@@ -2,10 +2,12 @@ import {
   type AccrualVault,
   type AccrualVaultV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  Eip5267Domain,
   getChainAddresses,
   type MarketParams,
   MarketUtils,
   MathLib,
+  Token,
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
@@ -248,7 +250,8 @@ export interface VaultV1Actions {
    *
    * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
-   * `buildTx()`; the requirement is resolved once and re-checked against the deadline on every call.
+   * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
+   * `buildTx()` accepts permits from the latest completed requirement resolution.
    *
    * @param params.shares - Exact vault shares to burn.
    * @param params.userAddress - Account that signs and submits the transaction; VaultBundlesV1
@@ -395,6 +398,8 @@ export interface VaultV1Actions {
    * Exits V1 by assets or shares and atomically deposits the resulting assets into V2 through
    * VaultBundlesV1. Only the destination deposit has an onchain share-price bound. The caller must
    * satisfy the exact source-vault share requirement before building the transaction.
+   * Captures vault identities, permit-domain metadata, and the owner at handle creation.
+   * `buildTx()` accepts permits from the latest completed requirement resolution.
    *
    * @param params.userAddress - Account that signs and submits the transaction; VaultBundlesV1
    *   burns and mints shares for `msg.sender`.
@@ -750,13 +755,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
       referralFeeRecipient: params.referralFeeRecipient,
     });
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let resolvedRequirements: readonly ActionRequirement[] | undefined;
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
         if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
-        if (resolvedRequirements != null) return resolvedRequirements;
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
           {
@@ -770,11 +773,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
-        resolvedRequirements = requirements;
-        return resolvedRequirements;
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
+        return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesRequirementSignature(signatures, {
@@ -1054,6 +1057,22 @@ export class MorphoVaultV1 implements VaultV1Actions {
         slippageTolerance,
       });
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    const { userAddress } = params;
+    const sourceAsset = params.sourceVault.asset;
+    const targetAddress = params.targetVault.address;
+    const targetAsset = params.targetVault.asset;
+    const domain = params.sourceVault.eip5267Domain;
+    const sourceToken = new Token({
+      address: params.sourceVault.address,
+      name: params.sourceVault.name,
+      eip5267Domain:
+        domain == null
+          ? undefined
+          : new Eip5267Domain({
+              ...domain,
+              extensions: [...domain.extensions],
+            }),
+    });
     let expectedRequirement: PermitAction | undefined;
     return Object.freeze({
       getRequirements: async () => {
@@ -1068,9 +1087,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
         const requirements = await getVaultBundlesSharesRequirements(
           this.client.viemClient,
           {
-            vaultData: params.sourceVault,
+            vaultData: sourceToken,
             version: "vaultV1",
-            owner: params.userAddress,
+            owner: userAddress,
             chainId: this.chainId,
             requiredShareAllowance,
             deadline,
@@ -1078,9 +1097,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1092,14 +1112,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: params.sourceVault.asset,
+            asset: sourceAsset,
           },
           args: {
-            targetVault: params.targetVault.address,
-            targetAsset: params.targetVault.asset,
+            targetVault: targetAddress,
+            targetAsset,
             ...(assets != null ? { assets } : { shares: shares ?? 0n }),
             maxSharePriceVaultV2,
-            userAddress: params.userAddress,
+            userAddress,
             requirementSignature: permit,
             referralFeePct: common.referralFeePct,
             referralFeeRecipient: common.referralFeeRecipient,

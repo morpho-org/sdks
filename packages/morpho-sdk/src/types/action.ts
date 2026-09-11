@@ -69,14 +69,20 @@ export interface VaultV2WithdrawAction
     }
   > {}
 
+/** Metadata for an exact-shares Vault V2 redemption through VaultBundlesV1. */
 export interface VaultV2RedeemAction
   extends BaseAction<
     "vaultV2Redeem",
     {
+      /** Source vault whose shares are burned from the transaction sender. */
       readonly vault: Address;
+      /** Exact shares to burn, in vault-share base units. */
       readonly shares: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted from redeemed assets; zero disables it. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}
@@ -165,14 +171,20 @@ export interface VaultV1WithdrawAction
     }
   > {}
 
+/** Metadata for an exact-shares Vault V1 redemption through VaultBundlesV1. */
 export interface VaultV1RedeemAction
   extends BaseAction<
     "vaultV1Redeem",
     {
+      /** Source vault whose shares are burned from the transaction sender. */
       readonly vault: Address;
+      /** Exact shares to burn, in vault-share base units. */
       readonly shares: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted from redeemed assets; zero disables it. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}
@@ -190,19 +202,30 @@ export interface VaultV1InKindRedeemAction
     }
   > {}
 
+/** Metadata for an assets-or-shares Vault V1 to Vault V2 migration through VaultBundlesV1. */
 export interface VaultV1MigrateToV2Action
   extends BaseAction<
     "vaultV1MigrateToV2",
     {
+      /** Source Vault V1 whose shares are burned from the transaction sender. */
       readonly sourceVault: Address;
+      /** Destination Vault V2 receiving net assets; shares are minted to the transaction sender. */
       readonly targetVault: Address;
+      /** Gross assets to withdraw in asset base units; zero in exact-shares mode. */
       readonly assets: bigint;
+      /** Source shares to burn in vault-share base units; zero in exact-assets mode. */
       readonly shares: bigint;
+      /** Maximum destination asset base units per share base unit, scaled by RAY (1e27). */
       readonly maxSharePriceVaultV2: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted before depositing; zero disables it. */
       readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
       readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(assets * referralFeePct / WAD); omitted in exact-shares mode. */
       readonly referralFeeAssets?: bigint;
+      /** Assets deposited: assets minus referralFeeAssets; omitted in exact-shares mode. */
       readonly netAssets?: bigint;
+      /** Execution and source share-permit expiration as a Unix timestamp in seconds. */
       readonly deadline: bigint;
     }
   > {}

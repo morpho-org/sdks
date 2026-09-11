@@ -249,6 +249,7 @@ export interface VaultV2Actions {
    * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
    * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
+   * `buildTx()` accepts permits from the latest completed requirement resolution.
    *
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Exact vault shares to burn.
@@ -712,9 +713,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {

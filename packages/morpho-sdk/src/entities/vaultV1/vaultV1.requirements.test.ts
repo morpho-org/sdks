@@ -14,6 +14,7 @@ import {
   IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV1Data,
+  inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -412,6 +413,105 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
 });
 
 describe("MorphoVaultV1 redeem getRequirements", () => {
+  test.each(["redeem", "migration assets", "migration shares"] as const)(
+    "behavior: %s refreshes allowances and nonces and rejects consumed permits",
+    async (operation) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      const prepared =
+        operation === "redeem"
+          ? vault.redeem({ shares: amount, userAddress: IN_KIND_USER })
+          : vault.migrateToV2({
+              ...(operation === "migration assets"
+                ? { assets: amount }
+                : { shares: amount }),
+              userAddress: IN_KIND_USER,
+              sourceVault: inKindVaultV1Data(),
+              targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
+            });
+      const first = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (first?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const signature = {
+        action: first.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: first.action.args.amount,
+          nonce: 0n,
+          deadline: first.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([signature])).not.toThrow();
+
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 1n,
+      });
+      const refreshed = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (refreshed?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      expect(refreshed.action.args.nonce).toBe(1n);
+      expect(() => prepared.buildTx([signature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      const refreshedSignature = {
+        action: refreshed.action,
+        args: { ...signature.args, nonce: 1n },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([refreshedSignature])).not.toThrow();
+
+      // Simulate the refreshed permit being consumed and establishing the exact allowance.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: first.action.args.amount,
+      });
+      expect(await prepared.getRequirements()).toEqual([]);
+      expect(() => prepared.buildTx([refreshedSignature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      expect(() => prepared.buildTx()).not.toThrow();
+
+      // Revoking that allowance must make the requirement outstanding again.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      expect(await prepared.getRequirements()).toHaveLength(1);
+      expect(countAllowanceReads(handle)).toBe(4);
+    },
+  );
+
   test.each([
     { mutationTiming: "before", supportSignature: false },
     { mutationTiming: "after", supportSignature: false },
@@ -467,7 +567,9 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
         amount,
         spender,
       });
-      expect(await redeem.getRequirements()).toBe(requirements);
+      expect(
+        (await redeem.getRequirements()).map(({ action }) => action),
+      ).toEqual(requirements.map(({ action }) => action));
       expect(redeem.buildTx()).toEqual(originalTx);
 
       if (supportSignature) {
@@ -499,6 +601,92 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
 });
 
 describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
+  test.each([
+    { mode: "assets", timing: "before", mutation: "fields" },
+    { mode: "assets", timing: "after", mutation: "fields" },
+    { mode: "shares", timing: "before", mutation: "fields" },
+    { mode: "shares", timing: "after", mutation: "fields" },
+    { mode: "assets", timing: "before", mutation: "objects" },
+    { mode: "assets", timing: "after", mutation: "objects" },
+    { mode: "shares", timing: "before", mutation: "objects" },
+    { mode: "shares", timing: "after", mutation: "objects" },
+  ] as const)(
+    "behavior: snapshots $mode migration $mutation mutated $timing requirements",
+    async ({ mode, timing, mutation }) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      const params = {
+        ...(mode === "assets" ? { assets: amount } : { shares: amount }),
+        userAddress: IN_KIND_USER as Address,
+        sourceVault: inKindVaultV1Data(),
+        targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
+      };
+      const migration = vault.migrateToV2(params);
+      const originalTx = migration.buildTx();
+      if (timing === "after") await migration.getRequirements();
+
+      params.userAddress = MUTATED_USER;
+      if (mutation === "fields") {
+        Object.assign(params.sourceVault, {
+          address: MUTATED_USER,
+          asset: MUTATED_ASSET,
+        });
+        Object.assign(params.targetVault, {
+          address: IN_KIND_VAULT,
+          asset: MUTATED_ASSET,
+        });
+      } else {
+        params.sourceVault = inKindVaultV1Data({ address: MUTATED_USER });
+        params.targetVault = inKindVaultV2Data({ address: IN_KIND_VAULT });
+      }
+
+      const requirements = await migration.getRequirements();
+      const permit = requirements.find(isRequirementSignature);
+      if (permit?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const allowanceReads = expectReadCall(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+      });
+      expect(allowanceReads).toHaveLength(timing === "after" ? 2 : 1);
+      expect(
+        allowanceReads.every(({ args }) => args?.[0] === IN_KIND_USER),
+      ).toBe(true);
+      expect(migration.buildTx()).toEqual(originalTx);
+      const signature = {
+        action: permit.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: permit.action.args.amount,
+          nonce: 0n,
+          deadline: permit.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(migration.buildTx([signature]).action).toEqual(originalTx.action);
+    },
+  );
+
   const MIGRATION_TARGET_VAULT =
     "0x0000000000000000000000000000000000002003" as const;
   const migrationSnapshot = (address: Address, shares: bigint) =>

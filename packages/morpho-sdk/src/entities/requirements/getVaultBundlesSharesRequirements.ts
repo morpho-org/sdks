@@ -1,4 +1,4 @@
-import type { AccrualVault, AccrualVaultV2 } from "@morpho-org/blue-sdk";
+import type { Token } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
@@ -33,7 +33,7 @@ import {
 export const getVaultBundlesSharesRequirements = async (
   viemClient: Client,
   params: {
-    readonly vaultData: AccrualVault | AccrualVaultV2;
+    readonly vaultData: Token;
     readonly version: "vaultV1" | "vaultV2";
     readonly owner: Address;
     readonly chainId: number;

@@ -266,6 +266,98 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 });
 
 describe("MorphoVaultV2 redeem getRequirements", () => {
+  test.each(["redeem"] as const)(
+    "behavior: %s refreshes allowances and nonces and rejects consumed permits",
+    async () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
+      const prepared = vault.redeem({
+        shares: amount,
+        userAddress: IN_KIND_USER,
+      });
+      const first = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (first?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const signature = {
+        action: first.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: first.action.args.amount,
+          nonce: 0n,
+          deadline: first.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([signature])).not.toThrow();
+
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 1n,
+      });
+      const refreshed = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (refreshed?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      expect(refreshed.action.args.nonce).toBe(1n);
+      expect(() => prepared.buildTx([signature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      const refreshedSignature = {
+        action: refreshed.action,
+        args: { ...signature.args, nonce: 1n },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([refreshedSignature])).not.toThrow();
+
+      // Simulate the refreshed permit being consumed and establishing the exact allowance.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: first.action.args.amount,
+      });
+      expect(await prepared.getRequirements()).toEqual([]);
+      expect(() => prepared.buildTx([refreshedSignature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      expect(() => prepared.buildTx()).not.toThrow();
+
+      // Revoking that allowance must make the requirement outstanding again.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      expect(await prepared.getRequirements()).toHaveLength(1);
+      expect(countAllowanceReads(handle)).toBe(4);
+    },
+  );
+
   test.each([
     { mutationTiming: "before", supportSignature: false },
     { mutationTiming: "after", supportSignature: false },
