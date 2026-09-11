@@ -33,7 +33,9 @@ export interface GetVaultExitBundlesV1PermitStructParams {
 /**
  * Compatibility wrapper for the former VaultExitBundlesV1-specific permit reshaper.
  *
- * @param params - Vault share permit values.
+ * @param params.vault - Vault share token authorized by the permit.
+ * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
+ * @param params.requirementSignature - Optional signed ERC-2612 vault-share requirement.
  * @returns The shared bundles share-permit tuple.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement is incompatible.
  * @deprecated Use `getBundlesSharesPermit`; this wrapper preserves the legacy error identity.
