@@ -112,6 +112,54 @@ export function resolveVaultV2ForceWithdrawEligibility(
   return { type: "eligible", adapter: soleAdapter, liquidityMarketId };
 }
 
+/**
+ * Computes the Vault V2 shares that accruing a vault snapshot mints to its owner as management
+ * and/or performance fees.
+ *
+ * Fee shares are minted to the matching recipient during the first withdrawal after accrual.
+ * When the owner is both recipients, both fee-share amounts are included. Timestamps before the
+ * snapshot's last update are clamped because Vault V2 cannot accrue backwards.
+ *
+ * @param params - Vault fee-share accrual inputs.
+ * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
+ * @param params.owner - Account whose fee-recipient share mints are measured.
+ * @param params.timestamp - Target accrual timestamp, clamped to `vaultData.lastUpdate`.
+ * @returns Shares minted to `owner` by the management and/or performance fees, or `0n` when the
+ *   owner is not a fee recipient.
+ * @example
+ * ```ts
+ * import { computeVaultV2ForceWithdrawFeeSharesMinted } from "@morpho-org/morpho-sdk";
+ *
+ * const feeShares = computeVaultV2ForceWithdrawFeeSharesMinted({
+ *   vaultData,
+ *   owner,
+ *   timestamp,
+ * });
+ * ```
+ */
+export function computeVaultV2ForceWithdrawFeeSharesMinted(params: {
+  readonly vaultData: AccrualVaultV2;
+  readonly owner: Address;
+  readonly timestamp: bigint;
+}): bigint {
+  const {
+    vault: accruedVault,
+    managementFeeShares,
+    performanceFeeShares,
+  } = params.vaultData.accrueInterest(
+    MathLib.max(params.timestamp, params.vaultData.lastUpdate),
+  );
+
+  return (
+    (isAddressEqual(accruedVault.managementFeeRecipient, params.owner)
+      ? managementFeeShares
+      : 0n) +
+    (isAddressEqual(accruedVault.performanceFeeRecipient, params.owner)
+      ? performanceFeeShares
+      : 0n)
+  );
+}
+
 /** Vault V2 force-withdraw amounts derived from a vault snapshot. */
 export interface VaultV2ForceWithdrawPlan {
   /** WAD-scaled force-deallocation penalty the vault charges on this adapter. */

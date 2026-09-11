@@ -492,6 +492,57 @@ describe("vaultV2ForceWithdraw", () => {
     ).toThrow(VaultExitBundlesV1PermitMismatchError);
   });
 
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another spender", () => {
+    const permit = permitWith();
+    expect(() =>
+      vaultV2ForceWithdraw({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          exitAssets: 100n,
+          minSharePriceE27,
+          userAddress,
+          deadline,
+          requirementSignature: {
+            ...permit,
+            action: {
+              type: "permit",
+              args: { spender: adapter, amount: permitAmount, deadline },
+            },
+          },
+        },
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "VaultExitBundlesV1PermitMismatchError",
+        field: "spender",
+      }),
+    );
+  });
+
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
+    expect(() =>
+      vaultV2ForceWithdraw({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          exitAssets: 100n,
+          minSharePriceE27,
+          userAddress,
+          deadline,
+          requirementSignature: permitWith({
+            owner: adapter,
+          }),
+        },
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "VaultExitBundlesV1PermitMismatchError",
+        field: "owner",
+      }),
+    );
+  });
+
   test("error: UnknownAddressError on a chain without VaultExitBundlesV1", () => {
     expect(() =>
       vaultV2ForceWithdraw({

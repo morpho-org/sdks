@@ -454,6 +454,60 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
   }
 }
 
+/**
+ * Thrown when pending fee shares for a Vault V2 fee recipient reach the force-withdraw burn bound.
+ *
+ * VaultExitBundlesV1 measures shares burned after its first withdrawal accrues fees. If the
+ * recipient's fee shares are at least the measured burn bound, its share-price check is skipped or
+ * reverts due to an underflow.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawFeeSharesExceedBurnError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets, vaultData, userAddress });
+ * } catch (error) {
+ *   if (error instanceof VaultV2ForceWithdrawFeeSharesExceedBurnError) {
+ *     console.error(error.sharesBurnt, error.feeShares);
+ *   }
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawFeeSharesExceedBurnError extends Error {
+  /** Vault V2 address being exited. */
+  public readonly vault: Address;
+  /** Fee-recipient account submitting the exit. */
+  public readonly userAddress: Address;
+  /** Upper bound of shares measured as burned by VaultExitBundlesV1. */
+  public readonly sharesBurnt: bigint;
+  /** Fee shares accrued to `userAddress` before the measured burn. */
+  public readonly feeShares: bigint;
+
+  /**
+   * @param params - Fee-share and burn-bound values that make the exit unsafe.
+   * @param params.vault - Vault V2 address being exited.
+   * @param params.userAddress - Fee-recipient account submitting the exit.
+   * @param params.sharesBurnt - Upper bound of shares measured as burned by VaultExitBundlesV1.
+   * @param params.feeShares - Fee shares accrued to `userAddress` before the measured burn.
+   */
+  public constructor(params: {
+    readonly vault: Address;
+    readonly userAddress: Address;
+    readonly sharesBurnt: bigint;
+    readonly feeShares: bigint;
+  }) {
+    super(
+      `Vault V2 "${params.vault}" fee-recipient account "${params.userAddress}" accrues "${params.feeShares}" fee shares, reaching the force-withdraw share-burn bound "${params.sharesBurnt}". VaultExitBundlesV1's share-price check would be skipped or revert. Increase exitAssets or let the vault accrue first.`,
+    );
+    this.vault = params.vault;
+    this.userAddress = params.userAddress;
+    this.sharesBurnt = params.sharesBurnt;
+    this.feeShares = params.feeShares;
+    this.name = "VaultV2ForceWithdrawFeeSharesExceedBurnError";
+  }
+}
+
 /** Thrown when a Vault V2 in-kind redemption rounds to no deallocated assets. */
 export class InKindRedeemZeroDeallocationError extends Error {
   /**

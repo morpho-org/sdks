@@ -32,6 +32,7 @@ import {
   computeMinForceWithdrawSharePrice,
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
+  computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -71,6 +72,7 @@ import {
   type VaultV2ForceRedeemAction,
   type VaultV2ForceWithdrawAction,
   VaultV2ForceWithdrawCoverageError,
+  VaultV2ForceWithdrawFeeSharesExceedBurnError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
@@ -427,6 +429,8 @@ export interface VaultV2Actions {
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
+   * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
+   * and an allowance that includes its pending fee shares through the bundle deadline.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -466,12 +470,16 @@ export interface VaultV2Actions {
    *   which would overrun the contract's unbounded loop.
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
+   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares minted to a
+   *   fee-recipient `userAddress` reach the upper-bound share burn.
    * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when a permit was not produced for this
+   *   prepared operation.
    * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
@@ -1195,11 +1203,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
-    // The price floor's denominator takes the `now`-accrued burn: it must track execution-time
-    // state, not the possibly stale snapshot (the first on-chain withdrawal accrues pending
-    // management fees before burning shares, which would otherwise lift the floor above the faithful
-    // price and trip `SlippageExceeded`). Accrue to `now`, not the caller-chosen `deadline`, so a
-    // long deadline cannot weaken the guard; `slippageTolerance` absorbs the residual drift.
+    // VaultExitBundlesV1 measures shares as `sharesBefore - balanceAfter`; its first withdrawal
+    // accrues the vault before burning. Use the `now` accrual for the floor and subtract fee shares
+    // minted to this fee-recipient owner from the burn bound.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );
@@ -1208,11 +1214,25 @@ export class MorphoVaultV2 implements VaultV2Actions {
       deadlineVaultData: nowVaultData,
       plan,
     });
+    const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: now,
+    });
+    const netSharesBurntNow = sharesBurntNow - feeSharesNow;
+    if (netSharesBurntNow <= 0n) {
+      throw new VaultV2ForceWithdrawFeeSharesExceedBurnError({
+        vault: this.vault,
+        userAddress,
+        sharesBurnt: sharesBurntNow,
+        feeShares: feeSharesNow,
+      });
+    }
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: sharesBurntNow,
+        sharesBurnt: netSharesBurntNow,
         slippageTolerance,
       });
     // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
@@ -1224,19 +1244,20 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // with `exitAssets` bounded above, the derived floor only exceeds `uint256` on a vault whose
     // share price passed ~1e50 assets/share, which no fixture here can construct.
     validateUint256Field("minSharePriceE27", minSharePriceE27);
-    // Size the allowance to the price floor, not to the snapshot burn. The on-chain check accepts
-    // any exit whose realized price stays at or above `minSharePriceE27`, so it can burn up to
-    // `mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn <= exitAssets` and
-    // `withdrawn / burnt >= minSharePriceE27`. A snapshot-tight approval would instead revert on
-    // allowance for exactly the within-tolerance price drop the floor is meant to permit (clearest
-    // on a no-fee vault, where every accrual endpoint collapses to the snapshot burn), nullifying
-    // `slippageTolerance`. This ceiling covers every accepted burn, including fee-share accrual.
+    // VaultExitBundlesV1's burn bound includes fee shares minted by the first withdrawal. Add the
+    // deadline-accrued fee shares to the price-floor ceiling so the approval covers that mint.
+    const feeSharesDeadline = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: deadline,
+    });
     // Saturated at `maxUint256`: a tiny accepted floor scales this above the ABI slot, and the
     // approval encoder clamps what it emits — so an uncapped requirement would sit permanently above
     // any allowance the user can actually grant and `getRequirements()` would return the same
     // approval forever. No account can hold or burn more shares than that anyway.
     const requiredShareAllowance = MathLib.min(
-      MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27),
+      MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
+        feeSharesDeadline,
       maxUint256,
     );
 
@@ -1244,6 +1265,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
+    let expectedRequirement: PermitAction | undefined;
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
@@ -1276,18 +1298,23 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
         if (allowance >= requiredShareAllowance) return [];
         if (this.client.options.supportSignature) {
-          return [
-            encodeVaultSharesPermit({
-              vault: vaultData,
-              version: "vaultV2",
-              spender: vaultExitBundlesV1,
-              owner: userAddress,
-              chainId: this.chainId,
-              nonce,
-              amount: requiredShareAllowance,
-              deadline,
-            }),
-          ];
+          const requirement = encodeVaultSharesPermit({
+            vault: vaultData,
+            version: "vaultV2",
+            spender: vaultExitBundlesV1,
+            owner: userAddress,
+            chainId: this.chainId,
+            nonce,
+            amount: requiredShareAllowance,
+            deadline,
+          });
+          if (
+            isRequirementSignature(requirement) &&
+            requirement.action.type === "permit"
+          ) {
+            expectedRequirement = requirement.action;
+          }
+          return [requirement];
         }
         return [
           encodeErc20Approval({
@@ -1299,8 +1326,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance,
+          expectedRequirement,
         });
         return vaultV2ForceWithdraw({
           vault: { chainId: this.chainId, address: this.vault },

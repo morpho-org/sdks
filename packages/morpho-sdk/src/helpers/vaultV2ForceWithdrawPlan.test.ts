@@ -9,12 +9,14 @@ import { describe, expect, test } from "vitest";
 import {
   IN_KIND_ADAPTER,
   IN_KIND_FOREIGN_ADAPTER,
+  IN_KIND_USER,
   inKindMarketParams,
   secondInKindMarketParams,
   vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
 import { NonPositiveInputError } from "../types/index.js";
 import {
+  computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -541,6 +543,57 @@ describe("computeVaultV2ForceWithdrawSharesBurnt", () => {
         plan,
       }),
     ).toBeGreaterThan(vaultData.toShares(plan.withdrawnAssets, "Up"));
+  });
+});
+
+describe("computeVaultV2ForceWithdrawFeeSharesMinted", () => {
+  test("behavior: returns zero for a non-recipient", () => {
+    const vaultData = vaultV2ExitData({
+      managementFee: 40_000_000_000n,
+      feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+    });
+
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp: vaultData.lastUpdate + 86_400n,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: returns management fee shares for the recipient", () => {
+    const vaultData = vaultV2ExitData({
+      managementFee: 40_000_000_000n,
+      feeRecipient: IN_KIND_USER,
+    });
+    const timestamp = vaultData.lastUpdate + 86_400n;
+    const { managementFeeShares } = vaultData.accrueInterest(timestamp);
+
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp,
+      }),
+    ).toBe(managementFeeShares);
+  });
+
+  test("behavior: returns zero when the timestamp does not advance accrual", () => {
+    const vaultData = vaultV2ExitData({
+      managementFee: 40_000_000_000n,
+      feeRecipient: IN_KIND_USER,
+    });
+
+    for (const timestamp of [vaultData.lastUpdate, vaultData.lastUpdate - 1n]) {
+      expect(
+        computeVaultV2ForceWithdrawFeeSharesMinted({
+          vaultData,
+          owner: IN_KIND_USER,
+          timestamp,
+        }),
+      ).toBe(0n);
+    }
   });
 });
 

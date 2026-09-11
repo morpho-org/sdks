@@ -56,6 +56,7 @@ export {
   validateRequirementSpender,
 } from "./validateRequirementSpender.js";
 export {
+  computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
