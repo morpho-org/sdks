@@ -874,12 +874,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
       });
     }
 
-    const requiredShareAllowance = computeVaultMaxShareAllowance({
-      vaultData,
-      deadline: now,
-      assets: amount,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
+    // Account for pending performance-fee shares before previewing the burn. Once accrued, future
+    // V1 interest cannot lower the share price, so this upper-bounds execution.
+    const requiredShareAllowance = vaultData
+      .accrueInterest(now)
+      .toShares(amount);
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
