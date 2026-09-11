@@ -69,7 +69,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - `computeVaultV2ForceWithdrawFeeSharesMinted`, `computeVaultV2ForceWithdrawMinSharesBurnt`, and
   `VaultV2ForceWithdrawFeeSharesExceedBurnError` account for fee-recipient share mints during
   force-withdraw planning. A fee-recipient `userAddress` gets a floor from the net share burn and
-  an allowance including its pending fee shares.
+  a safety guard projected through the horizon-clamped deadline, plus an allowance including its
+  projected fee shares.
 - `previewVaultV2ForceWithdraw` accepts an optional `userAddress` to mirror fee-recipient mints and
   rejects exits whose mints reach the lower burn bound. Fee-share allowance projections are capped
   to one year after handle creation.

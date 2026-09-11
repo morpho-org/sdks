@@ -289,7 +289,7 @@ nowVaultData     = vaultData.accrueInterest(now)                      // executi
 feeShares(t)     = fee shares accrueInterest(t) mints to userAddress (0 for non-recipients)
 sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)          // upper bound
 minSharesBurnt(v)= v.toShares(withdrawnAssets + wMulUp(assetsToDeallocate, penalty), "Down") // lower bound
-require feeShares(now) < minSharesBurnt(nowVaultData)   // else VaultV2ForceWithdrawFeeSharesExceedBurnError
+require feeShares(T) < minSharesBurnt(accrue(T)), T = min(deadline, now + 1 year) // else VaultV2ForceWithdrawFeeSharesExceedBurnError
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
                               sharesBurnt(nowVaultData) - feeShares(now))
 allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27)
@@ -300,9 +300,9 @@ allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27)
 the lower bound rejects fee-recipient exits whose accounting is unsafe.
 
 The contract reads `sharesBefore` before its first `withdraw`, which mints fee shares to the
-recipients, so for a fee-recipient caller the measured burn is `burn − minted`. Mints are
-non-decreasing in time, so `now` lower-bounds them for the floor and the horizon-clamped deadline
-upper-bounds them for the allowance.
+recipients, so for a fee-recipient caller the measured burn is `burn − minted`. Fee mints only
+grow while the accrued share price only lowers the burn bound, so the horizon-clamped deadline
+`T` bounds the entire execution window.
 
 The **price floor** accrues its denominator to `now` (execution time): the raw `lastUpdate` snapshot
 underestimates the burn a stale fee-bearing vault realizes once its first withdrawal accrues pending

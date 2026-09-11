@@ -174,7 +174,9 @@ export function computeMaxSupplySharePrice(params: {
  * @param params.sharesBurnt - Upper bound of the vault shares the exit burns.
  * @param params.slippageTolerance - Slippage tolerance in WAD (e.g. `0.003e18` = 0.3%).
  * @returns `minSharePriceE27` in RAY scale (1e27).
- * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance >= WAD`.
+ * @throws {NegativeInputError} when `slippageTolerance` is negative.
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` is above
+ *   `MAX_SLIPPAGE_TOLERANCE`.
  * @throws {NonPositiveInputError} when `sharesBurnt` or `withdrawnAssets` is not positive, which
  *   would silently nullify the on-chain bound.
  * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the ratio itself rounds down to zero, which
@@ -197,9 +199,7 @@ export function computeMinForceWithdrawSharePrice(params: {
 }): bigint {
   const { withdrawnAssets, sharesBurnt, slippageTolerance } = params;
 
-  if (slippageTolerance >= MathLib.WAD) {
-    throw new ExcessiveSlippageToleranceError(slippageTolerance);
-  }
+  validateSlippageTolerance(slippageTolerance);
   // A zero on either side would yield `minSharePriceE27 = 0`, i.e. no bound at all.
   if (withdrawnAssets <= 0n) {
     throw new NonPositiveInputError("withdrawnAssets", withdrawnAssets);

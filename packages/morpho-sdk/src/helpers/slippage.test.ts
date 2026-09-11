@@ -10,11 +10,15 @@ import { describe, expect, test } from "vitest";
 import { WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
   ExcessiveSlippageToleranceError,
+  NegativeInputError,
   NonPositiveInputError,
   ShareDivideByZeroError,
   VaultV2ForceWithdrawZeroSharePriceError,
 } from "../types/index.js";
-import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
+import {
+  MAX_ABSOLUTE_SHARE_PRICE,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
 import {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -458,12 +462,32 @@ describe("computeMinForceWithdrawSharePrice", () => {
     ).toBe(1n);
   });
 
-  test("error: ExcessiveSlippageToleranceError when slippage reaches WAD", () => {
+  test("behavior: accepts the maximum slippage tolerance", () => {
+    expect(
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1_000n,
+        sharesBurnt: 1_000n,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      }),
+    ).toBe(MathLib.wToRay(MathLib.WAD - MAX_SLIPPAGE_TOLERANCE));
+  });
+
+  test("error: NegativeInputError when slippage is negative", () => {
     expect(() =>
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: 1_000n,
         sharesBurnt: 1_000n,
-        slippageTolerance: MathLib.WAD,
+        slippageTolerance: -1n,
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: ExcessiveSlippageToleranceError above the SDK maximum", () => {
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1_000n,
+        sharesBurnt: 1_000n,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE + 1n,
       }),
     ).toThrow(ExcessiveSlippageToleranceError);
   });
