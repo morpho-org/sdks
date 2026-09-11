@@ -159,7 +159,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
   - One `@example` block with realistic working code: imports, client setup, the call, expected return.
 - **AI-legibility is first-class.** Identical signatures across V1/V2 where protocols overlap. Discriminated unions with obvious `type` tags. Deterministic outputs verifiable byte-for-byte. Error messages read like instructions an agent can act on without guessing. Protocol-specific terms (`LLTV buffer`, `wNative`, `GeneralAdapter1`, `bundler3`, `PublicAllocator V1`, `BluePublicAllocator`, `MetaMorpho`, `Permit2`, `WAD`) live in the [`packages/morpho-sdk/AGENTS.md`](./packages/morpho-sdk/AGENTS.md) glossary.
 - **Implemented TIBs are historical records.** Do not rewrite a TIB already present on the target branch to follow later code, symbol, or path changes. Keep the TIB's implementation-time names and examples intact. A changed decision gets a new superseding TIB; an operational clarification gets a dated addendum. Only a TIB introduced for the current implementation may be kept in sync with that implementation before it lands.
-- **TypeDoc-generated reference** published per release.
+- **API Extractor + API Documenter reference** generated from emitted declarations and published per release. Run `pnpm docs:build:markdown`; see [`docs/api-generation.md`](./docs/api-generation.md) for the JSDoc compatibility step.
 - **Feedback loop:** if the same question is asked twice, the answer goes into the relevant `AGENTS.md` or JSDoc on the export it concerns.
 
 > Applied by persona: [`documentation`](./.agents/pr-review-engine/agents/documentation.md) (also covers Markdown doc accuracy and pointer integrity across the repo, not just JSDoc).

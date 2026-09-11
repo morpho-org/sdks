@@ -10,8 +10,8 @@
 # dependencies
 node_modules
 
-# generated docs (typedoc output, configured in typedoc.json)
-docs/api
+# documentation intermediates; docs/api is committed for Context7
+.api-docs
 
 # testing
 coverage
@@ -65,6 +65,9 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+
+# Generated API pages include log-related symbol names.
+!/docs/api/*.md
 
 # Local
 local_*
