@@ -1,181 +1,231 @@
-import { parseUnits } from "viem";
-import { describe, expect } from "vitest";
+import { MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256, zeroHash } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, expectTypeOf, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/unit.js";
-import { NonPositiveInputError } from "../../types/index.js";
+  BundlesPermitMismatchError,
+  type Erc2612RequirementSignature,
+  InputExceedsMaxError,
+  NonPositiveInputError,
+  type VaultWithdrawalAuthorization,
+} from "../../types/index.js";
 import { vaultV1Withdraw } from "./withdraw.js";
 
-describe("withdrawVaultV1 unit tests", () => {
-  test("should create withdraw transaction with USDC vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1000", 6);
+const chainId = mainnet.id;
+const vault = "0x0000000000000000000000000000000000000021" as const;
+const userAddress = "0x0000000000000000000000000000000000000022" as const;
+const feeRecipient = "0x0000000000000000000000000000000000000023" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
+describe("vaultV1Withdraw", () => {
+  test("default", () => {
+    const deadline = 1_900_000_000n;
+    const referralFeePct = MathLib.WAD / 4n;
+    const transaction = vaultV1Withdraw({
+      vault: { chainId, address: vault },
       args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
+        authorization: { type: "allowance" },
+        amount: 100n,
+        userAddress,
+        referralFeePct,
+        referralFeeRecipient: feeRecipient,
+        deadline,
+      },
+    });
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
+    );
+    expect(transaction.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        vault,
+        100n,
+        0n,
+        { value: 0n, nonce: 0n, deadline, v: 0, r: zeroHash, s: zeroHash },
+        referralFeePct,
+        feeRecipient,
+        deadline,
+      ],
+    });
+    expect(transaction.action.args).toMatchObject({
+      referralFeeAssets: 25n,
+      netAssets: 75n,
+    });
+  });
+
+  test("behavior: permit calldata binds an independently supplied share allowance", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          assets: positiveUint256,
+          shareAllowance: positiveUint256,
+          deadline: positiveUint256,
+        }),
+        ({ assets, shareAllowance, deadline }) => {
+          const signature: Erc2612RequirementSignature = {
+            args: {
+              owner: userAddress,
+              asset: vault,
+              amount: shareAllowance,
+              nonce: 7n,
+              deadline,
+              signature: `0x${"11".repeat(64)}1b`,
+            },
+            action: {
+              type: "permit",
+              args: {
+                spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+                amount: shareAllowance,
+                deadline,
+                nonce: 7n,
+              },
+            },
+          };
+          const tx = vaultV1Withdraw({
+            vault: { chainId, address: vault },
+            args: {
+              amount: assets,
+              userAddress,
+              deadline,
+              authorization: { type: "permit", signature, shareAllowance },
+            },
+          });
+          const decoded = decodeFunctionData({
+            abi: vaultBundlesV1Abi,
+            data: tx.data,
+          });
+          expect(decoded.args?.[1]).toBe(assets);
+          expect(decoded.args?.[3]).toMatchObject({
+            value: shareAllowance,
+            nonce: 7n,
+            deadline,
+            v: 27,
+          });
+          expect(Object.isFrozen(tx)).toBe(true);
+        },
+      ),
+      { numRuns: 50, seed: 20_260_911 },
+    );
+  });
+
+  test.each([99n, 101n, undefined])(
+    "error: BundlesPermitMismatchError for share allowance %s",
+    (shareAllowance) => {
+      const signature: Erc2612RequirementSignature = {
+        args: {
+          owner: userAddress,
+          asset: vault,
+          amount: 100n,
+          nonce: 0n,
+          deadline: 1n,
+          signature: `0x${"11".repeat(64)}1b`,
+        },
+        action: {
+          type: "permit",
+          args: {
+            spender: getChainAddress(chainId, "bundles.vaultBundlesV1"),
+            amount: 100n,
+            deadline: 1n,
+            nonce: 0n,
+          },
+        },
+      };
+      // Exercise malformed JavaScript input as well as mismatched explicit share caps.
+      const authorization = {
+        type: "permit",
+        signature,
+        shareAllowance,
+      } as VaultWithdrawalAuthorization;
+      expect(() =>
+        vaultV1Withdraw({
+          vault: { chainId, address: vault },
+          args: { amount: 1n, userAddress, deadline: 1n, authorization },
+        }),
+      ).toThrow(BundlesPermitMismatchError);
+    },
+  );
+
+  test("behavior: permit authorization requires a share allowance at the type boundary", () => {
+    expectTypeOf<{
+      readonly type: "permit";
+      readonly signature: Erc2612RequirementSignature;
+    }>().not.toExtend<VaultWithdrawalAuthorization>();
+  });
+
+  test("behavior: calldata round-trips across uint256 inputs", () => {
+    fc.assert(
+      fc.property(positiveUint256, positiveUint256, (amount, deadline) => {
+        const transaction = vaultV1Withdraw({
+          vault: { chainId, address: vault },
+          args: {
+            authorization: { type: "allowance" },
+            amount,
+            userAddress,
+            deadline,
+          },
+        });
+        const decoded = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: transaction.data,
+        });
+        expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+        expect(decoded.args?.[0]).toBe(vault);
+        expect(decoded.args?.[1]).toBe(amount);
+        expect(decoded.args?.[2]).toBe(0n);
+        expect(decoded.args?.[6]).toBe(deadline);
+      }),
+      { numRuns: 50, seed: 20_260_903 },
+    );
+  });
+
+  test("behavior: accepts maxUint256 assets", () => {
+    const transaction = vaultV1Withdraw({
+      vault: { chainId, address: vault },
+      args: {
+        authorization: { type: "allowance" },
+        amount: maxUint256,
+        userAddress,
+        deadline: 1n,
       },
     });
 
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Withdraw");
-    expect(tx.action.args.vault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data })
+        .args?.[1],
+    ).toBe(maxUint256);
   });
 
-  test("should create withdraw transaction with WETH vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("5", 18);
-
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: GauntletWethVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Withdraw");
-    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(GauntletWethVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should allow different recipient and onBehalf addresses", async ({
-    client,
-  }) => {
-    const amount = parseUnits("500", 6);
-    const differentRecipient =
-      "0x1234567890123456789012345678901234567890" as const;
-
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: differentRecipient,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.action.args.recipient).toBe(differentRecipient);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
-  });
-
-  test("should throw NonPositiveInputError when assets is zero", async () => {
+  test("error: InputExceedsMaxError", () => {
     expect(() =>
       vaultV1Withdraw({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
+        vault: { chainId, address: vault },
         args: {
+          authorization: { type: "allowance" },
+          amount: maxUint256 + 1n,
+          userAddress,
+          deadline: 1n,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NonPositiveInputError", () => {
+    expect(() =>
+      vaultV1Withdraw({
+        vault: { chainId, address: vault },
+        args: {
+          authorization: { type: "allowance" },
           amount: 0n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
+          userAddress,
+          deadline: 1n,
         },
       }),
     ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when assets is negative", async () => {
-    expect(() =>
-      vaultV1Withdraw({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
-        args: {
-          amount: -1n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount: parseUnits("100", 6),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const amount = parseUnits("100", 6);
-
-    const txWithout = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    const txWith = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.action.type).toBe("vaultV1Withdraw");
-  });
-
-  test("should encode calldata targeting the vault address directly", async ({
-    client,
-  }) => {
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount: parseUnits("1000", 6),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
   });
 });

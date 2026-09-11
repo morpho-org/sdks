@@ -1,6 +1,6 @@
 import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
-import { permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   expectReadCall,
@@ -8,7 +8,7 @@ import {
 } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   IN_KIND_ASSET,
   IN_KIND_USER,
@@ -260,6 +260,152 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 
     expect(deposit.buildTx([requirementSignature]).action.type).toBe(
       "vaultV2Deposit",
+    );
+  });
+});
+
+describe("MorphoVaultV2 withdraw getRequirements", () => {
+  test.each(["before requirements", "after requirements"] as const)(
+    "behavior: snapshots withdrawal inputs %s are resolved",
+    async (phase) => {
+      const handle = createMockClient(mainnet);
+      const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
+      const params = {
+        amount,
+        userAddress: IN_KIND_USER as Address,
+        deadline: Time.timestamp() + 7_200n,
+      };
+      const reference = vault.withdraw({ ...params });
+      const referenceRequirement = (await reference.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (referenceRequirement?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const withdraw = vault.withdraw(params);
+      if (phase === "after requirements") await withdraw.getRequirements();
+
+      // Mutating caller-owned options must never change the prepared owner, assets, or share cap.
+      params.amount = amount / 2n;
+      params.userAddress = MUTATED_USER;
+      const requirements = await withdraw.getRequirements();
+
+      expect(requirements.find(isRequirementSignature)?.action).toEqual(
+        referenceRequirement.action,
+      );
+      const allowanceReads = expectReadCall(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+      });
+      expect(allowanceReads).toHaveLength(
+        phase === "after requirements" ? 3 : 2,
+      );
+      expect(
+        allowanceReads.every(
+          ({ args }) => args?.[0] === IN_KIND_USER && args[1] === spender,
+        ),
+      ).toBe(true);
+      const signature = {
+        action: referenceRequirement.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: referenceRequirement.action.args.amount,
+          deadline: params.deadline,
+          nonce: 0n,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies BundlesTokenRequirementSignature;
+      expect(withdraw.buildTx([signature])).toEqual(
+        reference.buildTx([signature]),
+      );
+      expect(withdraw.buildTx([signature]).action.args.amount).toBe(amount);
+    },
+  );
+
+  const prepareWithdraw = (handle: ReturnType<typeof createMockClient>) => {
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const getData = vi
+      .spyOn(vault, "getData")
+      .mockResolvedValue(inKindVaultV2Data());
+    return {
+      getData,
+      withdraw: vault.withdraw({ amount, userAddress: IN_KIND_USER }),
+    };
+  };
+
+  test("behavior: re-reads the share allowance after the approval is executed", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const { withdraw } = prepareWithdraw(handle);
+
+    const [approval] = (await withdraw.getRequirements()).filter(
+      isRequirementApproval,
+    );
+    const requiredShareAllowance = approval?.action.args.amount;
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+
+    // The caller executes that approval. Replaying a memoized requirement here would leave the
+    // documented first-time withdrawal flow permanently unresolvable.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: requiredShareAllowance,
+    });
+
+    expect(await withdraw.getRequirements()).toEqual([]);
+  });
+
+  test("behavior: pins the derived share cap across re-resolutions", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const { getData, withdraw } = prepareWithdraw(handle);
+
+    const first = await withdraw.getRequirements();
+    const second = await withdraw.getRequirements();
+
+    // Re-reading the allowance must not retarget the cap this handle already committed to, so
+    // the vault snapshot it was derived from is fetched exactly once.
+    expect(getData).toHaveBeenCalledTimes(1);
+    expect(countAllowanceReads(handle)).toBe(2);
+    expect(
+      second.filter(isRequirementApproval).map(({ action }) => action.args),
+    ).toEqual(
+      first.filter(isRequirementApproval).map(({ action }) => action.args),
     );
   });
 });

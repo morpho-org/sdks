@@ -47,13 +47,25 @@ export interface VaultV2DepositAction
     }
   > {}
 
+/** Metadata for an exact-assets Vault V2 withdrawal through VaultBundlesV1. */
 export interface VaultV2WithdrawAction
   extends BaseAction<
     "vaultV2Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
+      readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
@@ -129,13 +141,25 @@ export interface VaultV1DepositAction
     }
   > {}
 
+/** Metadata for an exact-assets Vault V1 withdrawal through VaultBundlesV1. */
 export interface VaultV1WithdrawAction
   extends BaseAction<
     "vaultV1Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
+      readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
@@ -634,6 +658,21 @@ export interface Erc2612RequirementSignature {
   readonly args: Readonly<PermitArgs>;
   readonly action: PermitAction;
 }
+
+/** Explicit share authorization for a low-level Vault V1 or V2 asset withdrawal. */
+export type VaultWithdrawalAuthorization =
+  | {
+      /** Use the exact vault-share allowance already set onchain. */
+      readonly type: "allowance";
+    }
+  | {
+      /** Embed a signed ERC-2612 share permit. */
+      readonly type: "permit";
+      /** Signed requirement for the vault, owner, spender, allowance, and deadline. */
+      readonly signature: Erc2612RequirementSignature;
+      /** Exact share allowance in share base units, independently derived from the withdrawal. */
+      readonly shareAllowance: bigint;
+    };
 
 /** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
 export interface Permit2AllowanceRequirementSignature {

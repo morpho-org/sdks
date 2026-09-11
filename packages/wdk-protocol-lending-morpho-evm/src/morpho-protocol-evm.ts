@@ -5,11 +5,13 @@ import {
 } from "@morpho-org/blue-sdk";
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
+  AddressMismatchError,
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   type ERC20ApprovalAction,
+  type Erc2612RequirementSignature,
   type Metadata,
   MixedBundlesFundingError,
   type MorphoClientType,
@@ -125,6 +127,10 @@ export type RequirementSignatureRequest<
 export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
+/** An exact vault-share approval or ERC-2612 request for a prepared withdrawal. */
+export type VaultSharesApprovalOrSignatureRequirement =
+  | RequirementApproval
+  | RequirementSignatureRequest<Erc2612RequirementSignature>;
 /** @deprecated Use {@link BundlesApprovalOrSignatureRequirement}. */
 export type BlueApprovalOrSignatureRequirement =
   BundlesApprovalOrSignatureRequirement;
@@ -140,6 +146,22 @@ export class MixedBlueCollateralFundingError extends Error {
       "Morpho Blue collateral supply accepts either 'amount' or 'nativeAmount', not both.",
     );
     this.name = "MixedBlueCollateralFundingError";
+  }
+}
+
+/**
+ * Thrown when an unsigned vault withdrawal or quote still has unresolved VaultBundlesV1 share
+ * requirements, so execution would fail or burn shares under a stale allowance cap.
+ */
+export class UnresolvedVaultWithdrawRequirementsError extends Error {
+  constructor(
+    /** Number of requirements the SDK still expects to be satisfied. */
+    readonly requirementCount: number,
+  ) {
+    super(
+      `Vault withdrawal has unresolved VaultBundlesV1 share-allowance requirements (count ${requirementCount}). Use prepareWithdraw() to satisfy them, then quote or submit through that prepared handle.`,
+    );
+    this.name = "UnresolvedVaultWithdrawRequirementsError";
   }
 }
 
@@ -227,6 +249,13 @@ export type MorphoWithdrawCollateralOptions = Readonly<
   WithdrawOptions & {
     /** Signature returned by a Morpho SDK authorization requirement. */
     requirementSignature?: AuthorizationRequirementSignature;
+  }
+>;
+
+/** Vault withdrawal intent. Use {@link PreparedMorphoWithdraw} to attach a signed share permit. */
+export type MorphoWithdrawOptions = Readonly<
+  WithdrawOptions & {
+    readonly requirementSignature?: never;
   }
 >;
 
@@ -375,6 +404,147 @@ export interface PreparedMorphoSupply {
   ) => Promise<Omit<SupplyResult, "hash">>;
 }
 
+/**
+ * A prepared vault withdrawal whose requirements and transaction share one SDK operation handle.
+ * Every method rechecks the provider chain and throws `ChainIdMismatchError` after a switch
+ * away from the configured vault chain.
+ */
+export interface PreparedMorphoWithdraw {
+  /**
+   * Resolves the exact share approval or ERC-2612 permit requirement for this prepared withdrawal.
+   *
+   * @returns No requirements when the share allowance matches the cap, otherwise an approval
+   *   transaction or ERC-2612 request whose signed result can be passed directly to `submit` or `quote`.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {ExpiredDeadlineError} when requirement resolution happens after the deadline.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
+   * @example
+   * ```ts
+   * import type { PreparedMorphoWithdraw } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { createWalletClient, custom, type EIP1193Provider } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteWithPermit(prepared: PreparedMorphoWithdraw, provider: EIP1193Provider): Promise<{ fee: bigint }> {
+   *   const wallet = createWalletClient({ chain: mainnet, transport: custom(provider) });
+   *   const [owner] = await wallet.requestAddresses();
+   *   if (!owner) throw new Error("Connect the wallet used to prepare this withdrawal.");
+   *   for (const requirement of await prepared.getRequirements()) {
+   *     if ("sign" in requirement) {
+   *       const signature = await requirement.sign(wallet, owner);
+   *       return prepared.quote(signature); // Resolves to { fee: bigint }.
+   *     }
+   *   }
+   *   // Confirm any approval transactions before quoting without a permit.
+   *   return prepared.quote();
+   * }
+   * ```
+   */
+  readonly getRequirements: () => Promise<
+    readonly VaultSharesApprovalOrSignatureRequirement[]
+  >;
+  /**
+   * Submits this prepared withdrawal with its optional signed share permit. When no signature is
+   * given, re-resolves the current VaultBundlesV1 share allowance and rejects rather than
+   * submitting against a stale or oversized leftover allowance.
+   *
+   * @param requirementSignature - Optional ERC-2612 share permit signed from this handle's
+   *   resolved requirements. Omit after confirming the exact share-approval transaction.
+   * @param config - Optional ERC-4337 transaction configuration override; ignored for EOA wallets.
+   * @returns The WDK withdrawal result containing the transaction hash and fee, denominated
+   *   according to the wallet's payment configuration.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
+   *   share allowance does not exactly match the prepared cap.
+   * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
+   * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read or encoding fails.
+   * @throws {Error} when the account is read-only or the wallet rejects or fails to submit.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import { createPublicClient, http, type Hash } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function submitUsdtWithdrawal(
+   *   account: WalletAccountEvm,
+   * ): Promise<WithdrawResult | undefined> {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() });
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: false,
+   *   });
+   *   const prepared = await morpho.prepareWithdraw({ token: USDT, amount: 1_000_000n });
+   *   for (const requirement of await prepared.getRequirements()) {
+   *     if ("sign" in requirement) continue; // Signature support is disabled above.
+   *     const { hash } = await account.sendTransaction({
+   *       to: requirement.to, value: requirement.value, data: requirement.data,
+   *     });
+   *     const receipt = await client.waitForTransactionReceipt({ hash: hash as Hash });
+   *     if (receipt.status !== "success") return; // Stop if the approval reverts.
+   *   }
+   *   const result = await prepared.submit();
+   *   // result satisfies WithdrawResult: { hash: string, fee: bigint }
+   *   return result;
+   * }
+   * ```
+   */
+  readonly submit: (
+    requirementSignature?: Erc2612RequirementSignature,
+    config?: Erc4337TransactionConfig,
+  ) => Promise<WithdrawResult>;
+  /**
+   * Quotes this prepared withdrawal with its optional signed share permit. Without a signature,
+   * re-reads the share allowance and requires it to match the prepared cap before estimating gas.
+   *
+   * @param requirementSignature - Optional share permit signed from this handle's requirements.
+   * @param config - Optional ERC-4337 transaction configuration override.
+   * @returns The withdrawal fee quote without a transaction hash.
+   * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the exact
+   *   share allowance is not in place. Satisfy this handle's requirements before quoting again.
+   * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
+   * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
+   * @throws {Error} when the wallet's fee estimation or transaction simulation fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import { createPublicClient, http, type Hash } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function quoteUsdtWithdrawal(
+   *   account: WalletAccountEvm,
+   * ): Promise<Omit<WithdrawResult, "hash"> | undefined> {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() });
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     presets: { earn: "sky-money-usdt-savings" },
+   *     supportSignature: false,
+   *   });
+   *   const prepared = await morpho.prepareWithdraw({ token: USDT, amount: 1_000_000n });
+   *   for (const requirement of await prepared.getRequirements()) {
+   *     if ("sign" in requirement) continue; // Signature support is disabled above.
+   *     const { hash } = await account.sendTransaction({
+   *       to: requirement.to, value: requirement.value, data: requirement.data,
+   *     });
+   *     const receipt = await client.waitForTransactionReceipt({ hash: hash as Hash });
+   *     if (receipt.status !== "success") return; // Stop if the approval reverts.
+   *   }
+   *   const result = await prepared.quote();
+   *   // result satisfies Omit<WithdrawResult, "hash">: { fee: bigint }
+   *   return result;
+   * }
+   * ```
+   */
+  readonly quote: (
+    requirementSignature?: Erc2612RequirementSignature,
+    config?: Erc4337TransactionConfig,
+  ) => Promise<Omit<WithdrawResult, "hash">>;
+}
+
 export interface Presets {
   /** Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`. */
   earn?: VaultPresetKey | string;
@@ -436,7 +606,7 @@ export interface MorphoProtocolOptions {
   chainId?: number | bigint;
   /** Optional Morpho SDK slippage tolerance in WAD precision for vault flows. */
   slippageTolerance?: bigint;
-  /** Enable Morpho SDK permit/permit2 requirements (default: false). */
+  /** Enable Morpho SDK permit/permit2 requirements (default: false). ERC-4337 vault withdrawals always use share approvals. */
   supportSignature?: boolean;
   /** Enable Morpho SDK deployless reads (default: false). */
   supportDeployless?: boolean;
@@ -881,71 +1051,193 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Withdraws assets from the configured Morpho vault.
    *
+   * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares, so it
+   * needs a share allowance equal to the derived share cap. That allowance is the only cap on the
+   * burn, so this method resolves the prepared withdrawal's requirements first and submits only
+   * when none are outstanding — a leftover allowance above the cap counts as outstanding. Use
+   * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
+   * prepared-operation handle.
+   *
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
-   * @throws {Error} If the options are invalid, the token does not match the configured vault, or the transaction fails.
+   * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
+   * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
+   *   already in place, so the withdrawal must go through {@link prepareWithdraw}.
+   * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
    */
   async withdraw(
-    options: WithdrawOptions,
+    options: MorphoWithdrawOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdraw(options)");
-
-    const tx = await this._getWithdrawTransaction(options);
-
-    return await this._sendTransaction(tx, config);
+    const prepared = await this.prepareWithdraw(options);
+    const requirements = await prepared.getRequirements();
+    if (requirements.length > 0)
+      throw new UnresolvedVaultWithdrawRequirementsError(requirements.length);
+    return await prepared.submit(undefined, config);
   }
 
   /**
-   * Quotes the cost of a vault withdraw transaction.
+   * Quotes a vault withdrawal after checking its exact share-allowance requirement.
+   *
+   * If an approval or permit is needed, use {@link prepareWithdraw}, satisfy its requirements,
+   * and call that same handle's `quote()` or `quote(signedPermit)` to retain its share cap.
    *
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
+   * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
+   * @throws {ChainIdMismatchError} when the provider is on another chain.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is absent.
+   * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
+   * @throws {Error} when the withdrawal options or account configuration are invalid, or quoting fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * export async function quoteWithdrawal(account: WalletAccountReadOnlyEvm) {
+   *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
+   *   // Requires the exact share allowance for this withdrawal to be already in place.
+   *   return morpho.quoteWithdraw({ token: "0xdAC17F958D2ee523a2206206994597C13D831ec7", amount: 1_000_000n });
+   *   // Resolves to { fee: bigint }.
+   * }
+   * ```
    */
   async quoteWithdraw(
-    options: WithdrawOptions,
+    options: MorphoWithdrawOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const tx = await this._getWithdrawTransaction(options);
-
-    return await this._quoteTransaction(tx, config);
+    return await (await this.prepareWithdraw(options)).quote(undefined, config);
   }
 
-  private async _getWithdrawTransaction({
+  private async _getWithdrawAction({
     token,
     amount,
     to,
-  }: WithdrawOptions): Promise<WdkTransaction> {
+  }: MorphoWithdrawOptions) {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("to", to);
 
     const userAddress = (await this._evmAccount.getAddress()) as Address;
     if (to !== undefined && !isAddressEqual(to as Address, userAddress)) {
-      throw new Error(
-        "'to' must equal the wallet account address for Morpho vault withdrawals.",
-      );
+      throw new AddressMismatchError(userAddress, to as Address);
     }
 
-    const vault = await this._getVault();
+    // WDK signs with the underlying EOA, which cannot permit shares owned by its Safe.
+    const vault = await this._getVault(
+      this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337
+        ? { supportSignature: false }
+        : undefined,
+    );
     const accrualVault = await vault.entity.getData();
 
     if (!isAddressEqual(accrualVault.asset, token as Address)) {
-      throw new Error(
-        `Token '${token}' does not match configured vault asset '${accrualVault.asset}'.`,
-      );
+      throw new VaultAssetMismatchError(accrualVault.asset, token as Address);
     }
 
-    return toWdkTransaction(
-      vault.entity
-        .withdraw({
-          amount: normalizedAmount,
-          userAddress,
-        })
-        .buildTx(),
-    );
+    return vault.entity.withdraw({
+      amount: normalizedAmount,
+      userAddress,
+      slippageTolerance: this._options.slippageTolerance,
+    });
+  }
+
+  /**
+   * Prepares a vault withdrawal once for requirement discovery, signing, quoting, and submission.
+   *
+   * ERC-4337 accounts receive share approvals even when `supportSignature` is enabled, because
+   * their underlying EOA signatures cannot authorize ERC-2612 permits owned by the Safe.
+   *
+   * @param options - Vault withdrawal options.
+   * @returns An immutable operation handle that retains the exact derived vault-share cap.
+   * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
+   * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
+   * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
+   * @throws {ExpiredDeadlineError} when requirement resolution happens after the action deadline.
+   * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read fails.
+   * @throws {Error} when an address, token, or account configuration is invalid.
+   * @example
+   * ```ts
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function prepareWithdrawal(account: WalletAccountEvm) {
+   *   const vault = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+   *   const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+   *   const morpho = new MorphoProtocolEvm(account, {
+   *     earnVaultAddress: vault,
+   *     chainId: mainnet.id,
+   *     supportSignature: true,
+   *   });
+   *   return morpho.prepareWithdraw({ token: usdc, amount: 1_000_000n });
+   * }
+   * ```
+   */
+  async prepareWithdraw(
+    options: MorphoWithdrawOptions,
+  ): Promise<PreparedMorphoWithdraw> {
+    const action = await this._getWithdrawAction(options);
+    return Object.freeze({
+      getRequirements: async () => {
+        // Recheck the live chain before using the captured SDK action.
+        await this._getVault();
+        return (await action.getRequirements()) as readonly VaultSharesApprovalOrSignatureRequirement[];
+      },
+      submit: async (
+        requirementSignature?: Erc2612RequirementSignature,
+        config?: Erc4337TransactionConfig,
+      ) => {
+        // Recheck the live chain before validating requirements or submitting the captured action.
+        await this._getVault();
+        this._assertWritable("preparedWithdraw.submit()");
+        if (requirementSignature == null) {
+          const requirements = await action.getRequirements();
+          if (requirements.length > 0) {
+            throw new UnresolvedVaultWithdrawRequirementsError(
+              requirements.length,
+            );
+          }
+        }
+        return await this._sendTransaction(
+          toWdkTransaction(
+            action.buildTx(
+              requirementSignature ? [requirementSignature] : undefined,
+            ),
+          ),
+          config,
+        );
+      },
+      quote: async (
+        requirementSignature?: Erc2612RequirementSignature,
+        config?: Erc4337TransactionConfig,
+      ) => {
+        // Recheck the live chain before reading requirements or estimating the captured action.
+        await this._getVault();
+        if (requirementSignature == null) {
+          const requirements = await action.getRequirements();
+          if (requirements.length > 0) {
+            throw new UnresolvedVaultWithdrawRequirementsError(
+              requirements.length,
+            );
+          }
+        }
+        return await this._quoteTransaction(
+          toWdkTransaction(
+            action.buildTx(
+              requirementSignature ? [requirementSignature] : undefined,
+            ),
+          ),
+          config,
+        );
+      },
+    });
   }
 
   /**
@@ -1838,7 +2130,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return target.marketId;
   }
 
-  private async _getVault(): Promise<{
+  private async _getVault(options?: {
+    readonly supportSignature: boolean;
+  }): Promise<{
     address: Address;
     entity: ReturnType<MorphoClientType["vaultV2"]>;
   }> {
@@ -1846,7 +2140,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const { address } = target;
     const chainId = await this._getChainId();
     this._assertTargetChain(target, chainId);
-    const client = await this._getMorphoClient();
+    const morphoClient = await this._getMorphoClient();
+    const client = options
+      ? morphoClient.viemClient.extend(
+          morphoViemExtension({ ...morphoClient.options, ...options }),
+        ).morpho
+      : morphoClient;
     const entity = client.vaultV2(address, chainId);
 
     return { address, entity };

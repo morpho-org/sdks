@@ -12,7 +12,6 @@ import {
   type Signature,
   size,
   zeroAddress,
-  zeroHash,
 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
@@ -34,7 +33,6 @@ import {
   NonPositiveInputError,
   type Permit2SignatureTransferAction,
   type PermitAction,
-  type PermitRequirementSignature,
   ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
   type RequirementSignature,
@@ -42,6 +40,7 @@ import {
   type TokenRequirementSignature,
   type Transaction,
   UnexpectedRequirementSignatureError,
+  type VaultWithdrawalAuthorization,
 } from "../../types/index.js";
 
 /** Numeric permit kinds consumed by `TokenLib.pullToken`. */
@@ -374,116 +373,6 @@ export const normalizeBundlesSignature = (
 };
 
 /**
- * Converts an optional vault-share ERC-2612 requirement into the ABI-ready Permit tuple.
- *
- * @param params - Vault token, empty-sentinel deadline, and optional signed requirement.
- * @param params.vault - Vault share token authorized by the permit.
- * @param params.deadline - Unix timestamp in seconds used by the empty-permit sentinel.
- * @param params.owner - Optional expected signature owner.
- * @param params.spender - Optional expected fixed bundles contract authorized to pull shares.
- * @param params.amount - Optional exact share allowance in the vault share token's smallest unit.
- * @param params.requirementSignature - Optional signed ERC-2612 share requirement; omit for the empty-permit sentinel.
- * @returns The signed share permit or the contract's empty-permit sentinel.
- * @throws {BundlesPermitMismatchError} when the requirement kind, token, or signature is invalid.
- * @example
- * ```ts
- * import { getBundlesSharesPermit } from "@morpho-org/morpho-sdk";
- * import { zeroAddress } from "viem";
- *
- * const permit = getBundlesSharesPermit({
- *   vault: zeroAddress,
- *   deadline: 1_900_000_000n,
- * });
- * // permit.value === 0n
- * ```
- */
-export const getBundlesSharesPermit = (params: {
-  readonly vault: Address;
-  readonly deadline: bigint;
-  readonly owner?: Address;
-  readonly spender?: Address;
-  readonly amount?: bigint;
-  readonly requirementSignature?: PermitRequirementSignature;
-}): BundleSharesPermit => {
-  const { requirementSignature } = params;
-  if (requirementSignature == null) {
-    return {
-      value: 0n,
-      nonce: 0n,
-      deadline: params.deadline,
-      v: 0,
-      r: zeroHash,
-      s: zeroHash,
-    };
-  }
-  if (requirementSignature.action.type !== "permit") {
-    throw new BundlesPermitMismatchError({
-      field: "type",
-      expected: "permit",
-      actual: requirementSignature.action.type,
-    });
-  }
-  if (!isAddressEqual(requirementSignature.args.asset, params.vault)) {
-    throw new BundlesPermitMismatchError({
-      field: "asset",
-      expected: params.vault,
-      actual: requirementSignature.args.asset,
-    });
-  }
-  if (
-    params.owner != null &&
-    !isAddressEqual(requirementSignature.args.owner, params.owner)
-  ) {
-    throw new BundlesPermitMismatchError({
-      field: "owner",
-      expected: params.owner,
-      actual: requirementSignature.args.owner,
-    });
-  }
-  if (
-    params.spender != null &&
-    !isAddressEqual(requirementSignature.action.args.spender, params.spender)
-  ) {
-    throw new BundlesPermitMismatchError({
-      field: "spender",
-      expected: params.spender,
-      actual: requirementSignature.action.args.spender,
-    });
-  }
-  if (
-    params.amount != null &&
-    (requirementSignature.args.amount !== params.amount ||
-      requirementSignature.action.args.amount !== params.amount)
-  ) {
-    throw new BundlesPermitMismatchError({
-      field: "amount",
-      expected: String(params.amount),
-      actual: String(requirementSignature.args.amount),
-    });
-  }
-  if (
-    (params.owner != null || params.spender != null || params.amount != null) &&
-    requirementSignature.action.args.deadline !==
-      requirementSignature.args.deadline
-  ) {
-    throw new BundlesPermitMismatchError({
-      field: "deadline",
-      expected: String(requirementSignature.args.deadline),
-      actual: String(requirementSignature.action.args.deadline),
-    });
-  }
-  const signature = normalizeBundlesSignature(
-    requirementSignature.args.signature,
-  );
-  return {
-    value: requirementSignature.args.amount,
-    nonce: requirementSignature.args.nonce,
-    deadline: requirementSignature.args.deadline,
-    ...signature,
-  };
-};
-
-/**
  * Selects the one token signature accepted by a bundles-funded call.
  *
  * @internal
@@ -596,25 +485,25 @@ const validatePreparedBundlesRequirementSignature = (
 };
 
 /**
- * Selects the exact ERC-2612 vault-share permit produced for one prepared exit.
+ * Selects explicit allowance funding or the exact ERC-2612 permit for one prepared withdrawal.
  *
  * @internal
  *
  * @param signatures - Signatures passed to the prepared operation's `buildTx` function.
  * @param prepared - Exact share cap and permit requirement captured by this prepared operation.
- * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
+ * @returns Allowance authorization, or a permit paired with the prepared withdrawal's exact share cap.
  * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612, was built for another
  *   share cap, or is supplied before this operation resolves its share cap.
  */
-export const selectBundlesSharesRequirementSignature = (
+export const selectBundlesSharesAuthorization = (
   signatures: readonly RequirementSignature[] | undefined,
   prepared: {
     readonly requiredShareAllowance: bigint | undefined;
     readonly expectedRequirement?: PermitAction;
   },
-): Erc2612RequirementSignature | undefined => {
+): VaultWithdrawalAuthorization => {
   const { permit } = selectRequirementSignatures(signatures, { permit: true });
-  if (permit == null) return undefined;
+  if (permit == null) return { type: "allowance" };
   const { action } = permit;
   if (action.type !== "permit") {
     throw new BundlesPermitMismatchError({
@@ -642,7 +531,11 @@ export const selectBundlesSharesRequirementSignature = (
     selectedPermit,
     prepared.expectedRequirement,
   );
-  return selectedPermit;
+  return {
+    type: "permit",
+    signature: selectedPermit,
+    shareAllowance: prepared.requiredShareAllowance,
+  };
 };
 
 /** @internal Returns the exact referral fee deducted from a fixed gross asset amount. */

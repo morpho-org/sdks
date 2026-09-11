@@ -333,7 +333,7 @@ export class BundlesPermitMismatchError extends Error {
 /**
  * Thrown by the deprecated VaultExitBundlesV1 permit compatibility helper.
  *
- * @deprecated Use {@link BundlesPermitMismatchError} with `getBundlesSharesPermit`.
+ * @deprecated Use {@link BundlesPermitMismatchError} with `validateSharesPermit` and `toSharesPermitStruct`.
  */
 export class VaultExitBundlesV1PermitMismatchError extends BundlesPermitMismatchError {
   public constructor(params: {

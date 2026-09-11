@@ -13,7 +13,7 @@ import {
   AddressMismatchError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
-import { selectBundlesSharesRequirementSignature } from "../../bundles/common.js";
+import { selectBundlesSharesAuthorization } from "../../bundles/common.js";
 import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 
 const vault = "0x0000000000000000000000000000000000002001" as const;
@@ -88,11 +88,11 @@ describe("encodeVaultSharesPermit", () => {
     }
 
     expect(
-      selectBundlesSharesRequirementSignature([signed], {
+      selectBundlesSharesAuthorization([signed], {
         requiredShareAllowance: amount,
         expectedRequirement: action,
       }),
-    ).toEqual(signed);
+    ).toEqual({ type: "permit", signature: signed, shareAllowance: amount });
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {
@@ -110,6 +110,26 @@ describe("encodeVaultSharesPermit", () => {
     await expect(
       requirement.sign(walletClient, account.address),
     ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
+  });
+
+  test("behavior: accepts the VaultBundlesV1 spender", () => {
+    const vaultBundlesV1 = getChainAddress(
+      mainnet.id,
+      "bundles.vaultBundlesV1",
+    );
+
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V1" }),
+        version: "vaultV1",
+        spender: vaultBundlesV1,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 3n,
+        amount,
+        deadline: 1_900_000_000n,
+      }),
+    ).not.toThrow();
   });
 
   test("behavior: snapshots permit inputs before signing", async () => {
