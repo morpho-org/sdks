@@ -69,11 +69,12 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - `computeVaultV2ForceWithdrawFeeSharesMinted`, `computeVaultV2ForceWithdrawMinSharesBurnt`, and
   `VaultV2ForceWithdrawFeeSharesExceedBurnError` account for fee-recipient share mints during
   force-withdraw planning. A fee-recipient `userAddress` gets a floor from the net share burn and
-  a safety guard projected through the horizon-clamped deadline, plus an allowance including its
-  projected fee shares.
+  a safety guard projected through the accepted deadline, plus an allowance including its projected
+  fee shares. Deadlines beyond the one-year fee-projection horizon are rejected.
 - `previewVaultV2ForceWithdraw` accepts optional `userAddress` and `feeProjectionTimestamp` values
   to mirror fee-recipient mints and rejects exits whose projected mints reach the lower burn bound.
-  Fee-share allowance projections are capped to one year after handle creation.
+  Deadlines beyond one year after handle creation are rejected so accepted execution windows remain
+  covered by the fee-share guard and allowance.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
   adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
   `VaultV2ForceWithdrawZeroSharePriceError`, `VaultV2UnsupportedLiquidityAdapterError`, and

@@ -59,6 +59,7 @@ import {
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementSignature,
   type MorphoClientType,
@@ -86,8 +87,8 @@ import {
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
-// One year; the on-chain management fee is capped at 5%/yr so the accrual model stays well-defined
-// inside it.
+// Maximum accepted deadline horizon; the on-chain management fee is capped at 5%/yr so the
+// accrual model stays well-defined inside it.
 const VAULT_V2_FEE_PROJECTION_HORIZON = 365n * 24n * 60n * 60n;
 
 export interface VaultV2Actions {
@@ -435,9 +436,9 @@ export interface VaultV2Actions {
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
    * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
-   * and a guard against fee mints reaching the lower burn bound by the horizon-clamped deadline.
-   * Its allowance includes the projected fee shares through that same deadline horizon. An execution
-   * later than one year may leave the allowance short by the extra mint and revert safely.
+   * and a guard against fee mints reaching the lower burn bound by the deadline. Its allowance
+   * includes the projected fee shares through that same deadline. Deadlines beyond one year after
+   * handle creation are rejected, so the guard and allowance cover the whole accepted window.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -445,8 +446,7 @@ export interface VaultV2Actions {
    * @param params.userAddress - Account that signs and submits the exit, and receives the assets.
    * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
-   *   For fee recipients, the allowance covers fee shares minted through one year after handle
-   *   creation; a later execution may leave it short by the extra mint and revert safely.
+   *   Deadlines more than one year after handle creation are rejected.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
    * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. Must be
@@ -463,7 +463,7 @@ export interface VaultV2Actions {
    * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
    * @throws {InputExceedsMaxError} when `exitAssets`, `deadline`, or the effective
    *   `minSharePriceE27` (supplied or derived) exceeds `uint256`, or when `referralFeePct` is not
-   *   below WAD.
+   *   below WAD, or when `deadline` is more than one year after handle creation.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
@@ -480,7 +480,7 @@ export interface VaultV2Actions {
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
    * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares projected for a
-   *   fee-recipient `userAddress` reach the lower-bound share burn at the horizon-clamped deadline.
+   *   fee-recipient `userAddress` reach the lower-bound share burn at the deadline.
    * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -1154,6 +1154,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
     validateDeadline(deadline);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+    const maxDeadline = now + VAULT_V2_FEE_PROJECTION_HORIZON;
+    if (deadline > maxDeadline) {
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: deadline,
+        max: maxDeadline,
+      });
+    }
 
     const eligibility = resolveVaultV2ForceWithdrawEligibility(
       vaultData,
@@ -1212,13 +1220,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
-    const projectionTimestamp = MathLib.min(
-      deadline,
-      now + VAULT_V2_FEE_PROJECTION_HORIZON,
-    );
+    const projectionTimestamp = deadline;
     // VaultExitBundlesV1 measures shares as `sharesBefore - balanceAfter`; its first withdrawal
     // accrues the vault before burning. Use the `now` accrual for the floor and the projected
-    // horizon-clamped accrual for the fee-mint guard.
+    // deadline accrual for the fee-mint guard.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );

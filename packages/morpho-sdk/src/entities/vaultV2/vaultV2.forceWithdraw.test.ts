@@ -911,39 +911,48 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       );
     });
 
-    test("behavior: fee projection clamps distant deadlines to one year", async () => {
+    test("error: InputExceedsMaxError for a deadline beyond the fee projection horizon", () => {
       const now = 1_800_000_000n;
-      const oneYearDeadline = now + Time.s.from.d(365n);
-      const distantDeadline = now + 100n * Time.s.from.d(365n);
+      const horizon = Time.s.from.d(365n);
+      const horizonDeadline = now + horizon;
+      const distantDeadline = horizonDeadline + 1n;
       const vaultData = vaultV2ExitData({
         penalty: TWO_PERCENT,
         managementFee: 1_000_000_000n,
         feeRecipient: IN_KIND_USER,
       });
 
-      const buildApproval = async (deadline: bigint) => {
-        const handle = createMockClient(mainnet);
-        mockRequirements(handle);
-        const exit = withChainTimestamp(now, () =>
-          vaultFor(handle, { supportSignature: false }).forceWithdraw({
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
             exitAssets: 51n,
             vaultData,
             userAddress: IN_KIND_USER,
-            deadline,
+            deadline: horizonDeadline,
+          }),
+        ),
+      ).not.toThrow();
+
+      let caught: unknown;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: distantDeadline,
           }),
         );
-        const [approval] = await withChainTimestamp(now, () =>
-          exit.getRequirements(),
-        );
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Expected an ERC-20 approval requirement");
-        }
-        return approval.action.args.amount;
-      };
-
-      await expect(buildApproval(distantDeadline)).resolves.toBe(
-        await buildApproval(oneYearDeadline),
-      );
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(InputExceedsMaxError);
+      if (!(caught instanceof InputExceedsMaxError)) {
+        throw caught;
+      }
+      expect(caught.field).toBe("deadline");
+      expect(caught.value).toBe(distantDeadline);
+      expect(caught.max).toBe(horizonDeadline);
     });
 
     test("error: VaultV2ForceWithdrawFeeSharesExceedBurnError when fee mints reach the burn bound", () => {
