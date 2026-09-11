@@ -61,7 +61,16 @@ const setup = () => {
     chainId: mainnet.id,
     earnVaultAddress: VAULT,
   });
-  return { transport, action, withdraw, transaction, send, quote, protocol };
+  return {
+    transport,
+    account,
+    action,
+    withdraw,
+    transaction,
+    send,
+    quote,
+    protocol,
+  };
 };
 
 describe.sequential("prepared withdrawal adapter", () => {
@@ -216,8 +225,32 @@ describe.sequential("prepared withdrawal adapter", () => {
   });
 
   test("behavior: signs an ERC-2612 requirement and passes it directly to quote and submit", async () => {
-    const { protocol, action, send, quote, transaction } = setup();
+    const { protocol, action, send, quote, transaction, transport, account } =
+      setup();
     const owner = "0x405005C7c4422390F4B334F64Cf20E0b767131d0";
+    const hash =
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    transport.request.mockImplementation(async ({ method }) => {
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_fillTransaction") {
+        return {
+          tx: {
+            chainId: "0x1",
+            from: owner,
+            to: transaction.to,
+            input: transaction.data,
+            value: "0x0",
+            gas: "0x5208",
+            gasPrice: "0x3",
+            nonce: "0x0",
+            type: "0x0",
+          },
+        };
+      }
+      if (method === "eth_sendRawTransaction") return hash;
+      throw new Error(`Unhandled RPC ${method}`);
+    });
+    const signTransaction = vi.spyOn(account, "signTransaction");
     const signature = {
       args: {
         owner,
@@ -241,7 +274,6 @@ describe.sequential("prepared withdrawal adapter", () => {
     action.getRequirements.mockResolvedValue([
       { action: signature.action, sign },
     ]);
-    send.mockResolvedValue({ hash: "withdrawal-hash", fee: 12_345n });
     const wallet = createWalletClient({ chain: mainnet, transport: http() });
     const prepared = await protocol.prepareWithdraw(OPTIONS);
     const requirements = await prepared.getRequirements();
@@ -257,7 +289,7 @@ describe.sequential("prepared withdrawal adapter", () => {
     expectTypeOf(signed).toEqualTypeOf<Erc2612RequirementSignature>();
     await expect(prepared.quote(signed)).resolves.toEqual({ fee: 12_345n });
     await expect(prepared.submit(signed)).resolves.toEqual({
-      hash: "withdrawal-hash",
+      hash,
       fee: 12_345n,
     });
 
@@ -266,7 +298,17 @@ describe.sequential("prepared withdrawal adapter", () => {
     expect(action.buildTx).toHaveBeenNthCalledWith(1, [signed]);
     expect(action.buildTx).toHaveBeenNthCalledWith(2, [signed]);
     expect(quote).toHaveBeenCalledWith(transaction);
-    expect(send).toHaveBeenCalledWith(transaction);
+    expect(send).not.toHaveBeenCalled();
+    expect(signTransaction).toHaveBeenCalledWith({
+      ...transaction,
+      chainId: 1,
+      gasLimit: 21_000n,
+      gasPrice: 3n,
+      nonce: 0,
+    });
+    expect(transport.request.mock.calls.map(([call]) => call.method)).toEqual(
+      expect.arrayContaining(["eth_fillTransaction", "eth_sendRawTransaction"]),
+    );
   });
 
   test("behavior: propagates requirement-read failures without estimating gas", async () => {

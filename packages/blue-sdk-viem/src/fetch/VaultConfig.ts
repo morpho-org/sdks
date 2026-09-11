@@ -36,7 +36,7 @@ import { fetchToken } from "./Token.js";
 export async function fetchVaultConfig(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 

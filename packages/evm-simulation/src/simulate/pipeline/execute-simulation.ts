@@ -1,4 +1,4 @@
-import type { BlockTag } from "viem";
+import type { Address, BlockTag } from "viem";
 import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
 import type {
   RawSimulationResult,
@@ -43,8 +43,9 @@ export async function executeSimulation(params: {
   chainId: number;
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
+  wNative?: Address | null;
 }): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber } = params;
+  const { config, chainId, transactions, blockNumber, wNative } = params;
   const chain = resolveChain(config, chainId);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
@@ -80,6 +81,7 @@ export async function executeSimulation(params: {
         chainId,
         transactions,
         blockNumber,
+        wNative,
         signal: AbortSignal.timeout(fallbackBudget),
       });
     }
@@ -95,6 +97,7 @@ export async function executeSimulation(params: {
     chainId,
     transactions,
     blockNumber,
+    wNative,
     signal: AbortSignal.timeout(timeoutMs),
   });
 }
