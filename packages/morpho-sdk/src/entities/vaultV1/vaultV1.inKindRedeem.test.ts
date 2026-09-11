@@ -280,7 +280,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+      args: { spender: IN_KIND_BUNDLER, amount: 500n },
     });
   });
 
@@ -304,7 +304,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 506n },
+      args: { spender: IN_KIND_BUNDLER, amount: 505n },
     });
   });
 
@@ -343,13 +343,13 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(requirement?.action).toMatchObject({
       type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+      args: { spender: IN_KIND_BUNDLER, amount: 500n },
     });
   });
 
   test("behavior: an exact bounded allowance needs no authorization", async () => {
     const handle = createMockClient(mainnet);
-    mockV1Requirements(handle, { allowance: 501n });
+    mockV1Requirements(handle, { allowance: 500n });
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);

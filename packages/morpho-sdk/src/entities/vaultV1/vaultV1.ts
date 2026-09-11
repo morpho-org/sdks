@@ -321,9 +321,9 @@ export interface VaultV1Actions {
    * The caller controls market order and must call `getRequirements()` before `buildTx()` so the
    * RPC-backed Blue-balance and Morpho-deployment checks run. The SDK validates market coverage but
    * intentionally does not validate the user's share balance; size `amount` in asset terms against
-   * `previewRedeem(sharesHeld)`. The share allowance uses the greater rounded-up share preview
-   * before and after accruing pending performance-fee shares. MetaMorpho 1.0 adds the default
-   * 0.03% loss buffer; MetaMorpho 1.1 retains its lost-assets clamp without that buffer.
+   * `previewRedeem(sharesHeld)`. The share allowance first accrues pending performance-fee shares,
+   * then uses the current rounded-up share preview; future interest can only reduce the required
+   * burn.
    *
    * Snapshot state can drift before inclusion, so a later reallocation may still make the on-chain
    * loop under-cover even after pre-flight succeeds.
@@ -871,12 +871,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
       });
     }
 
-    const requiredShareAllowance = computeVaultMaxShareAllowance({
-      vaultData,
-      deadline: now,
-      assets: amount,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
+    // Account for pending performance-fee shares before previewing the burn. Once accrued, future
+    // V1 interest cannot lower the share price, so this upper-bounds execution.
+    const requiredShareAllowance = vaultData
+      .accrueInterest(now)
+      .toShares(amount);
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
