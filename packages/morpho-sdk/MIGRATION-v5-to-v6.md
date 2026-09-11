@@ -69,6 +69,57 @@ Deposit action metadata no longer contains `recipient`. It now reports the gross
 > `validateWriteCommon`). Confirm coverage before upgrading, for example
 > `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
 
+Version 6 also preserves the Vault V1 and Vault V2 method and builder names while routing `deposit`,
+`withdraw`, and `redeem` through VaultBundlesV1. Vault V1 `migrateToV2` uses the same fixed route.
+
+> **Chain availability.** The VaultBundlesV1 route requires the `bundles.vaultBundlesV1` deployment
+> on the target chain. On a registered chain without it (Celo, for example, still registers
+> MetaMorpho and Vault V2 deployments), **every** routed vault write — Vault V1 `deposit`,
+> `withdraw`, `redeem`, and `migrateToV2`, and Vault V2 `deposit`, `withdraw`, and `redeem` — throws
+> `UnknownAddressError` synchronously at handle creation, where v5 built a direct vault or Bundler3
+> call. Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.vaultBundlesV1 != null`. Vault `inKindRedeem` is unaffected:
+> it already routed through `bundles.vaultExitBundlesV1` in v5, and its chain coverage is unchanged.
+
+## Update Vault V1 and Vault V2 methods
+
+| Stable method | v5 input/workflow | v6 input/workflow |
+| --- | --- | --- |
+| `deposit` | Additive `amount` and `nativeAmount`; Bundler3/GeneralAdapter1 requirements. | Supply exactly one of `amount` or `nativeAmount`; optionally set `deadline`, `referralFeePct`, and `referralFeeRecipient`. Token requirements authorize VaultBundlesV1 and may return Permit2 SignatureTransfer. |
+| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `redeem` | Direct vault redemption with no share requirement. | Exact-shares VaultBundlesV1 exit. Optionally set `deadline` and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `migrateToV2` (Vault V1 only) | Share-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Keep the existing `shares` mode or supply the new `assets` alternative; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
+
+`userAddress` now means the account that will submit the transaction. VaultBundlesV1 always deposits
+for, burns shares from, and pays `msg.sender`; arbitrary `recipient` and `onBehalf` values are no
+longer supported. Keep `userAddress` equal to the eventual signer, including when preparing a
+transaction with a public client.
+
+The lazy workflow now applies to Vault V1 exits as well as deposits: await `getRequirements()`, send
+any returned approval transactions or collect the returned signature, and pass collected signatures
+to `buildTx(signatures)`. Deposit requirement options accept `useSimplePermit` and an explicit
+`permit2Nonce`; exit requirements use the vault share token's ERC-2612 permit. The built transaction
+targets VaultBundlesV1 rather than Bundler3 or the vault itself.
+
+Pure builder names remain stable, but their `args` objects change:
+
+| Stable builder | v6 `args` fields |
+| --- | --- |
+| `vaultV1Deposit` | Exclusive `amount`/`nativeAmount`, `maxSharePrice`, `userAddress`, optional bundles token `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1Withdraw` | `amount`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1Redeem` | `shares`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1MigrateToV2` | Exclusive `assets`/`shares`, `targetVault`, `targetAsset`, `maxSharePriceVaultV2`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Deposit` | Exclusive `amount`/`nativeAmount`, `maxSharePrice`, `userAddress`, optional bundles token `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Withdraw` | `amount`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV2Redeem` | `shares`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+
+Every vault builder replaces v5's `recipient` and `onBehalf` with a single `userAddress` that must be
+the eventual `msg.sender`, and `vault` now takes `{ chainId, address }` (plus `asset` on the deposit
+and migration builders) so the builder can resolve the VaultBundlesV1 address for the target chain.
+
+Vault V1 deposit and migration destination bounds are forecast through the selected deadline, so an
+explicit deadline beyond the two-hour default remains covered by the computed maximum share price.
+
 ## Update Blue methods
 
 | Stable method | v5 input | v6 input |
@@ -200,7 +251,7 @@ high-level writes.
 SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
 longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
 requirement path selects Permit2 and `supply(...).getRequirements()` now throws
-`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+`MissingPermit2SignatureTransferNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
 
 ```ts
 const requirements = await market
@@ -209,7 +260,7 @@ const requirements = await market
 ```
 
 Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
-is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
+is single-use; a consumed one throws `Permit2SignatureTransferNonceAlreadyUsedError`). To skip Permit2
 for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
 ERC-2612 permit and needs no nonce.
 
@@ -277,6 +328,47 @@ reallocations.
 The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
 `Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
 `VaultV1Reallocation[]`.
+
+## Update Vault V1 and Vault V2 writes
+
+Vault V1 and Vault V2 keep their existing `deposit`, `withdraw`, and `redeem` names, while Vault V1
+keeps `migrateToV2`. In v6 these methods encode one direct `VaultBundlesV1` call instead of a direct
+ERC-4626 call or Bundler3 multicall.
+
+- Deposits accept exactly one of `amount` and `nativeAmount`. Split a former additive ETH + WETH
+  deposit into two transactions. Classic approvals and ERC-2612 permits now authorize
+  VaultBundlesV1; Permit2 uses SignatureTransfer and requires an explicit unused `permit2Nonce`.
+- Remove `recipient` from deposits and remove `recipient` and `onBehalf` from exits. VaultBundlesV1
+  always operates for and pays `msg.sender`. `userAddress` now means the account that must submit the
+  transaction. A connected builder account may prepare a transaction for a different submitter;
+  identity-bound signature helpers still enforce `userAddress` when signing.
+- `withdraw` and `redeem` now return a full `ActionOutput`. Call `getRequirements()` and satisfy the
+  exact vault-share approval or ERC-2612 permit before calling `buildTx(signatures)`.
+- Vault calls gain `deadline`, `referralFeePct`, and `referralFeeRecipient`. Entity deadlines default
+  to two hours; pure builder callers provide them explicitly. Amounts remain gross, and fixed-asset
+  action metadata reports `referralFeeAssets` and `netAssets`.
+- `migrateToV2` accepts exactly one of `assets` and `shares`, removes `recipient` and source
+  `minSharePriceVaultV1`, and retains only the destination `maxSharePriceVaultV2` bound.
+
+VaultBundlesV1 permits only one call to itself in a transaction. Do not put two vault calls into one
+Safe multisend or EIP-5792 batch; use `migrateToV2` for an atomic V1-to-V2 move. Permissioned Vault
+V2 deployments must allow VaultBundlesV1 in both send-assets and receive-assets gates. Because gates
+can inspect the bundle's transient initiator, validate them by simulating the finalized transaction
+after satisfying requirements rather than by pre-reading the gate.
+
+```ts
+const withdrawal = vault.withdraw({ amount, userAddress });
+const signatures = [];
+for (const requirement of await withdrawal.getRequirements()) {
+  if ("sign" in requirement) {
+    signatures.push(await requirement.sign(walletClient, userAddress));
+  } else {
+    const hash = await walletClient.sendTransaction(requirement);
+    await publicClient.waitForTransactionReceipt({ hash });
+  }
+}
+const transaction = withdrawal.buildTx(signatures);
+```
 
 ## Upgrade checklist
 

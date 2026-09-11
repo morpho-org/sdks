@@ -133,7 +133,7 @@ force the vault to pull assets back to vault level and withdraw/redeem after.
 ## Contract Routing
 
 This is the most important routing decision in the SDK. "Bundled" does not always mean Bundler3:
-Vault deposits, Blue, and Midnight use fixed, protocol-owned bundle contracts directly.
+Vaults, Blue, and Midnight use fixed, protocol-owned bundle contracts directly.
 
 ### Vault deposits: Direct VaultBundlesV1 calls
 
@@ -161,7 +161,10 @@ keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the 
 Each chain must have a registered VaultBundlesV1 deployment; missing deployments throw
 `UnknownAddressError`. Check the [migration guide](./MIGRATION-v5-to-v6.md) for chain availability.
 
-### Withdrawals: VaultBundlesV1; Redeems: Direct vault calls
+Vault V1 `migrateToV2` uses the same fixed contract: it exits the source by exact assets or shares,
+then deposits net assets into Vault V2 with a destination maximum-share-price bound.
+
+### Withdrawals and redemptions: VaultBundlesV1
 
 **Withdraw (V1 & V2)** routes through the chain's registered **VaultBundlesV1** periphery
 contract — not the vault directly, and not through Bundler3/the general adapter. VaultBundlesV1
@@ -173,13 +176,10 @@ folded into the call when `supportSignature` is enabled — for exactly that amo
 that does not equal the derived cap, including a larger leftover approval, is replaced rather than
 reused, so the cap holds on every withdrawal.
 
-**Redeem (V1 & V2)** remains a **direct call** to the vault contract: the user calls
-`redeem(shares, recipient, onBehalf)` directly. No bundler, no VaultBundlesV1, no approval.
-
-**Why no bundler?** Neither operation transfers tokens _from_ the user to the vault, so neither has
-an inflation attack surface. Redeem needs no approval at all; withdraw's exact share allowance
-bounds the burn against share-price loss without requiring the full Bundler3/general-adapter
-composition.
+**Redeem (V1 & V2)** also routes through VaultBundlesV1. The caller grants an exact share
+allowance or signs an embedded ERC-2612 permit. The fixed call redeems the specified shares and
+pays the proceeds, minus an optional referral fee, to the submitting account. It has no
+minimum-assets or source share-price bound.
 
 ### Force Withdrawals and Force Redeems (V2 only): VaultV2 multicall
 
@@ -204,7 +204,7 @@ GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound
 | ------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Deposit (V1 & V2)                     | VaultBundlesV1 | `maxSharePrice` enforcement, exclusive ERC-20/native funding, referral fee, and deadline. |
 | Withdraw (V1 & V2)                    | VaultBundlesV1 | No inflation-attack surface; exact vault-share allowance caps the burn against share-price loss. |
-| Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
+| Redeem (V1 & V2)                      | VaultBundlesV1             | Exact shares with share approval or permit                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
 | `supply` (Blue)                        | BlueBundlesV1             | Pull or wrap loan assets, charge an optional fee, and supply the remainder.                                |
@@ -259,7 +259,7 @@ On-chain data fetching and contract ABIs:
 
 ### Local Bundler Encoding
 
-Vault V1-to-V2 migration and public low-level bundle encoding:
+Explicit low-level bundle encoding:
 
 - **`BundlerAction.encodeBundle(chainId, actions)`** — takes an array of bundler `Action`
   objects (e.g. `erc20TransferFrom`, `erc4626Deposit`, `permit`, `approve2`, `transferFrom2`)
@@ -279,7 +279,7 @@ Shared utilities:
 Before a token-funded action, the user may need an approval or signature. The requirements system
 resolves only the prerequisites consumed by the selected route.
 
-### Vault deposit requirements target VaultBundlesV1
+### Vault requirements target VaultBundlesV1
 
 Vault deposits flow: **user → VaultBundlesV1 → vault**. Requirements cover the gross funding
 amount, before the referral fee. Native deposits return no token requirements.
@@ -298,6 +298,14 @@ After that read settles, the next call refreshes allowance and nonce state using
 `buildTx()` validates signatures against the latest completed resolution; collect and submit the
 signature from that resolution. The handle retains its original deadline and share-price bound.
 
+Withdrawals, redemptions, and V1-to-V2 migrations resolve source-vault share authorization. The
+allowance must equal the resolved share cap; an existing larger allowance is replaced. Asset-mode
+withdrawals re-read allowance on every `getRequirements()` call while keeping their quoted cap
+fixed. Signatures and unsigned approvals use the same VaultBundlesV1 spender.
+
+The low-level `getGeneralAdapterRequirements` resolver remains available for explicit Bundler3
+composition using GeneralAdapter1 and Permit2 AllowanceTransfer.
+
 ### BlueBundlesV1 requirement decision
 
 Blue token requirements resolve against the direct contract route:
@@ -315,7 +323,7 @@ Loan-asset withdrawal, borrow, collateral-withdraw, and migration legs also chec
 authorization is returned as a standalone Morpho transaction or a signable requirement consumed
 inside the BlueBundlesV1 call.
 
-### How signatures flow into VaultBundlesV1 deposits
+### How signatures flow into fixed bundles
 
 Call `requirement.sign(walletClient, userAddress)` for a signable requirement and pass the result
 to the same prepared handle's `buildTx([signature])`. Submit any approval transactions and wait
@@ -333,6 +341,8 @@ uses an empty permit and rejects token signatures.
 
 Direct BlueBundlesV1 writes use the same lazy collection workflow. Their builders additionally
 reshape Morpho authorization signatures into fixed BlueBundlesV1 ABI structs.
+
+Vault exits and migrations encode an ERC-2612 share permit in the fixed VaultBundlesV1 call.
 
 ### Guard functions
 

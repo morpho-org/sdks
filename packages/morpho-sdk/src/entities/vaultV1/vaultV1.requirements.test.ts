@@ -14,11 +14,13 @@ import {
   IN_KIND_USER,
   IN_KIND_VAULT,
   inKindVaultV1Data,
+  inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   BundlesPermitMismatchError,
   type BundlesTokenRequirementSignature,
+  type Erc2612RequirementSignature,
   isRequirementApproval,
   isRequirementSignature,
 } from "../../types/index.js";
@@ -404,6 +406,364 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     expect(countAllowanceReads(handle)).toBe(2);
     expect(
       second.filter(isRequirementApproval).map(({ action }) => action.args),
+    ).toEqual(
+      first.filter(isRequirementApproval).map(({ action }) => action.args),
+    );
+  });
+});
+
+describe("MorphoVaultV1 redeem getRequirements", () => {
+  test.each(["redeem", "migration assets", "migration shares"] as const)(
+    "behavior: %s refreshes allowances and nonces and rejects consumed permits",
+    async (operation) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      const prepared =
+        operation === "redeem"
+          ? vault.redeem({ shares: amount, userAddress: IN_KIND_USER })
+          : vault.migrateToV2({
+              ...(operation === "migration assets"
+                ? { assets: amount }
+                : { shares: amount }),
+              userAddress: IN_KIND_USER,
+              sourceVault: inKindVaultV1Data(),
+              targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
+            });
+      const first = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (first?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const signature = {
+        action: first.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: first.action.args.amount,
+          nonce: 0n,
+          deadline: first.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([signature])).not.toThrow();
+
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 1n,
+      });
+      const refreshed = (await prepared.getRequirements()).find(
+        isRequirementSignature,
+      );
+      if (refreshed?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      expect(refreshed.action.args.nonce).toBe(1n);
+      expect(() => prepared.buildTx([signature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      const refreshedSignature = {
+        action: refreshed.action,
+        args: { ...signature.args, nonce: 1n },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => prepared.buildTx([refreshedSignature])).not.toThrow();
+
+      // Simulate the refreshed permit being consumed and establishing the exact allowance.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: first.action.args.amount,
+      });
+      expect(await prepared.getRequirements()).toEqual([]);
+      expect(() => prepared.buildTx([refreshedSignature])).toThrow(
+        BundlesPermitMismatchError,
+      );
+      expect(() => prepared.buildTx()).not.toThrow();
+
+      // Revoking that allowance must make the requirement outstanding again.
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      expect(await prepared.getRequirements()).toHaveLength(1);
+      expect(countAllowanceReads(handle)).toBe(4);
+    },
+  );
+
+  test.each([
+    { mutationTiming: "before", supportSignature: false },
+    { mutationTiming: "after", supportSignature: false },
+    { mutationTiming: "before", supportSignature: true },
+    { mutationTiming: "after", supportSignature: true },
+  ])(
+    "behavior: snapshots inputs mutated $mutationTiming requirements (supportSignature=$supportSignature)",
+    async ({ mutationTiming, supportSignature }) => {
+      const handle = createMockClient(mainnet);
+      const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      const params: { shares: bigint; userAddress: Address } = {
+        shares: amount,
+        userAddress: IN_KIND_USER,
+      };
+      const redeem = vault.redeem(params);
+      const originalTx = redeem.buildTx();
+
+      if (mutationTiming === "before") {
+        params.shares = amount * 2n;
+        params.userAddress = MUTATED_USER;
+      }
+      const requirements = await redeem.getRequirements();
+      if (mutationTiming === "after") {
+        params.shares = amount * 2n;
+        params.userAddress = MUTATED_USER;
+      }
+
+      expect(
+        expectReadCall(handle, {
+          address: IN_KIND_VAULT,
+          abi: erc20Abi,
+          functionName: "allowance",
+        })[0]?.args,
+      ).toEqual([IN_KIND_USER, spender]);
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action.args).toMatchObject({
+        amount,
+        spender,
+      });
+      expect(
+        (await redeem.getRequirements()).map(({ action }) => action),
+      ).toEqual(requirements.map(({ action }) => action));
+      expect(redeem.buildTx()).toEqual(originalTx);
+
+      if (supportSignature) {
+        const requirement = requirements.find(isRequirementSignature);
+        if (requirement?.action.type !== "permit") {
+          throw new Error("Share permit requirement not found");
+        }
+        const signature = {
+          action: requirement.action,
+          args: {
+            owner: IN_KIND_USER,
+            asset: IN_KIND_VAULT,
+            amount,
+            nonce: 0n,
+            deadline: requirement.action.args.deadline,
+            signature: serializeSignature({
+              r: toHex(1n, { size: 32 }),
+              s: toHex(2n, { size: 32 }),
+              yParity: 0,
+            }),
+          },
+        } satisfies Erc2612RequirementSignature;
+        expect(redeem.buildTx([signature]).action).toEqual(originalTx.action);
+      } else {
+        expect(requirements.filter(isRequirementApproval)).toHaveLength(1);
+      }
+    },
+  );
+});
+
+describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
+  test.each([
+    { mode: "assets", timing: "before", mutation: "fields" },
+    { mode: "assets", timing: "after", mutation: "fields" },
+    { mode: "shares", timing: "before", mutation: "fields" },
+    { mode: "shares", timing: "after", mutation: "fields" },
+    { mode: "assets", timing: "before", mutation: "objects" },
+    { mode: "assets", timing: "after", mutation: "objects" },
+    { mode: "shares", timing: "before", mutation: "objects" },
+    { mode: "shares", timing: "after", mutation: "objects" },
+  ] as const)(
+    "behavior: snapshots $mode migration $mutation mutated $timing requirements",
+    async ({ mode, timing, mutation }) => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      const params = {
+        ...(mode === "assets" ? { assets: amount } : { shares: amount }),
+        userAddress: IN_KIND_USER as Address,
+        sourceVault: inKindVaultV1Data(),
+        targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
+      };
+      const migration = vault.migrateToV2(params);
+      const originalTx = migration.buildTx();
+      if (timing === "after") await migration.getRequirements();
+
+      params.userAddress = MUTATED_USER;
+      if (mutation === "fields") {
+        Object.assign(params.sourceVault, {
+          address: MUTATED_USER,
+          asset: MUTATED_ASSET,
+        });
+        Object.assign(params.targetVault, {
+          address: IN_KIND_VAULT,
+          asset: MUTATED_ASSET,
+        });
+      } else {
+        params.sourceVault = inKindVaultV1Data({ address: MUTATED_USER });
+        params.targetVault = inKindVaultV2Data({ address: IN_KIND_VAULT });
+      }
+
+      const requirements = await migration.getRequirements();
+      const permit = requirements.find(isRequirementSignature);
+      if (permit?.action.type !== "permit")
+        throw new Error("Share permit requirement not found");
+      const allowanceReads = expectReadCall(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+      });
+      expect(allowanceReads).toHaveLength(timing === "after" ? 2 : 1);
+      expect(
+        allowanceReads.every(({ args }) => args?.[0] === IN_KIND_USER),
+      ).toBe(true);
+      expect(migration.buildTx()).toEqual(originalTx);
+      const signature = {
+        action: permit.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: permit.action.args.amount,
+          nonce: 0n,
+          deadline: permit.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(migration.buildTx([signature]).action).toEqual(originalTx.action);
+    },
+  );
+
+  const MIGRATION_TARGET_VAULT =
+    "0x0000000000000000000000000000000000002003" as const;
+  const migrationSnapshot = (address: Address, shares: bigint) =>
+    ({
+      address,
+      asset: IN_KIND_ASSET,
+      toShares: () => shares,
+      accrueInterest: () => ({ toShares: () => shares }),
+    }) as never;
+
+  const prepareMigration = (handle: ReturnType<typeof createMockClient>) =>
+    handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id)
+      .migrateToV2({
+        assets: amount,
+        userAddress: IN_KIND_USER,
+        sourceVault: migrationSnapshot(IN_KIND_VAULT, 10n),
+        targetVault: migrationSnapshot(MIGRATION_TARGET_VAULT, 100n),
+        slippageTolerance: 0n,
+      });
+
+  test("behavior: re-reads the share allowance after the approval is executed", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const migration = prepareMigration(handle);
+
+    const [approval] = (await migration.getRequirements()).filter(
+      isRequirementApproval,
+    );
+    const requiredShareAllowance = approval?.action.args.amount;
+    if (requiredShareAllowance == null)
+      throw new Error("Share approval requirement not found");
+
+    // Assets-mode calldata carries no share limit, so this allowance is the sole cap on the burn.
+    // Replaying a memoized requirement would hide both a satisfied approval and a later change.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: requiredShareAllowance,
+    });
+
+    expect(await migration.getRequirements()).toEqual([]);
+    expect(countAllowanceReads(handle)).toBe(2);
+  });
+
+  test("behavior: pins the derived share cap across re-resolutions", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const migration = prepareMigration(handle);
+
+    const first = await migration.getRequirements();
+
+    // A larger leftover allowance must resurface as an outstanding requirement for the cap this
+    // handle already committed to, never satisfy it.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: amount,
+    });
+
+    expect(
+      (await migration.getRequirements())
+        .filter(isRequirementApproval)
+        .map(({ action }) => action.args),
     ).toEqual(
       first.filter(isRequirementApproval).map(({ action }) => action.args),
     );

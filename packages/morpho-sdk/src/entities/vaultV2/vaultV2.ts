@@ -244,19 +244,64 @@ export interface VaultV2Actions {
     undefined
   >;
   /**
-   * Prepares a redeem transaction for the VaultV2 contract.
+   * Prepares an exact-shares Vault V2 redemption through VaultBundlesV1.
    *
-   * This function constructs the transaction data required to redeem a specified amount of shares from the vault.
+   * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
+   * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
+   * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
+   * `buildTx()` accepts permits from the latest completed requirement resolution.
    *
    * @param {Object} params - The redeem parameters.
-   * @param {bigint} params.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
+   * @param {bigint} params.shares - Exact vault shares to burn.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {NonPositiveInputError} when `shares` is not positive.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   requirement resolution.
+   * @throws {NegativeInputError} when `referralFeePct` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
+   * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance or nonce read fails.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit does not match the
+   *   resolved share cap, spender, owner, nonce, or deadline.
+   * @example
+   * ```ts
+   * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+   *
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const redemption = vault.redeem({ shares: 1_000_000n, userAddress });
+   * const signatures = [];
+   * for (const requirement of await redemption.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(walletClient, userAddress));
+   *   } else {
+   *     const hash = await walletClient.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = redemption.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV2RedeemAction>>
+   * ```
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
-  };
+  redeem: (params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2RedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares an illiquid Vault V2 exit into idle assets and Morpho Blue supply positions.
    *
@@ -629,21 +674,70 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV2Actions.redeem} */
+  redeem(params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    return {
-      buildTx: () =>
-        vaultV2Redeem({
-          vault: { address: this.vault },
+    const { shares, userAddress } = params;
+    if (shares <= 0n) throw new NonPositiveInputError("shares", shares);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData: await this.getData(),
+            version: "vaultV2",
+            owner: userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance: shares,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
+          },
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
+        return requirements;
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance: shares,
+          expectedRequirement,
+        });
+        return vaultV2Redeem({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
             shares,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   /** {@inheritDoc VaultV2Actions.inKindRedeem} */

@@ -4,8 +4,10 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Sub-layers
 
-- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `migrateToV2`.
-- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `forceWithdraw` / `forceRedeem`.
+- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2` encode one
+  direct VaultBundlesV1 call; `inKindRedeem` encodes the standalone VaultExitBundlesV1 periphery.
+- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` encode one direct VaultBundlesV1 call;
+  `inKindRedeem` targets VaultExitBundlesV1 and force exits remain vault multicalls.
 - `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
@@ -20,13 +22,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Blue write paths** encode
-   one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Vault deposits and withdrawals encode one `VaultBundlesV1` call. Withdrawals require the exact
-   share allowance resolved by `getRequirements()` or an embedded shares permit. Other
-   **direct calls** (vault `redeem`,
-   Midnight collateral supply / redeem / offer cancellation) encode their target contract call
-   directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
+2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 and Vault V2
+   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths** encode one
+   registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
+   redeem / offer cancellation) encode their target contract
+   call directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
    Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.

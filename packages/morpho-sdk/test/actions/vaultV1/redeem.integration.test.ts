@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -5,7 +6,10 @@ import {
   isRequirementApproval,
   morphoViemExtension,
 } from "../../../src/index.js";
-import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import {
+  SteakhouseUsdcVaultV1,
+  YearnUsdcVaultV1,
+} from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
@@ -36,6 +40,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         const tx = redeem.buildTx();
 
         await client.sendTransaction(tx);
@@ -101,6 +112,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
+        const redeemRequirements = await redeem.getRequirements();
+        expect(redeemRequirements).toHaveLength(1);
+        const redeemApproval = redeemRequirements[0];
+        if (!isRequirementApproval(redeemApproval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(redeemApproval);
         await client.sendTransaction(redeem.buildTx());
       },
     });
@@ -145,6 +163,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares: redeemShares,
         });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         await client.sendTransaction(redeem.buildTx());
       },
     });
@@ -158,5 +183,74 @@ describe("Redeem VaultV1", () => {
     expect(finalState.morphoAssetBalance).toBeLessThan(
       initialState.morphoAssetBalance,
     );
+  });
+
+  test("behavior: pays the exact referral fee and leaves the user the net proceeds", async ({
+    client,
+  }) => {
+    const shares = parseUnits("1000", 18);
+    const referralFeePct = MathLib.WAD / 10n;
+    const referralFeeRecipient = YearnUsdcVaultV1.address;
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: shares,
+    });
+    const initialReferralBalance = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.asset,
+      owner: referralFeeRecipient,
+    });
+
+    const {
+      vaults: {
+        SteakhouseUsdcVaultV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        vaults: { SteakhouseUsdcVaultV1 },
+      },
+      actionFn: async () => {
+        const vaultV1 = client
+          .extend(morphoViemExtension())
+          .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+        const redeem = vaultV1.redeem({
+          userAddress: client.account.address,
+          shares,
+          referralFeePct,
+          referralFeeRecipient,
+        });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
+        await client.sendTransaction(redeem.buildTx());
+      },
+    });
+    const finalReferralBalance = await client.balanceOf({
+      erc20: SteakhouseUsdcVaultV1.asset,
+      owner: referralFeeRecipient,
+    });
+
+    // Assets leaving the vault and its Morpho supply positions are the gross redemption.
+    const grossAssets =
+      initialState.vaultBalance -
+      finalState.vaultBalance +
+      initialState.morphoAssetBalance -
+      finalState.morphoAssetBalance;
+    const referralFeeAssets = finalReferralBalance - initialReferralBalance;
+    const netAssets =
+      finalState.userAssetBalance - initialState.userAssetBalance;
+
+    expect(finalState.userSharesBalance).toBe(
+      initialState.userSharesBalance - shares,
+    );
+    expect(referralFeeAssets).toBeGreaterThan(0n);
+    expect(referralFeeAssets).toBe(
+      MathLib.mulDivDown(grossAssets, referralFeePct, MathLib.WAD),
+    );
+    expect(netAssets).toBe(grossAssets - referralFeeAssets);
   });
 });

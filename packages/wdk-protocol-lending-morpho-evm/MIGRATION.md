@@ -40,7 +40,7 @@ these deposits. There is no Bundler3 fallback.
 
 ## TypeScript output changes
 
-- `get*Requirements()` returns a readonly array. Treat it as an immutable result instead of
+- Prepared-handle `getRequirements()` returns a readonly array. Treat it as an immutable result instead of
   pushing requirements into it.
 - `RequirementApproval` and `RequirementAuthorization` are readonly transactions.
 - `RequirementSignatureRequest<TSignature>` is now generic. Prepared vault and Blue token requirements use
@@ -52,7 +52,8 @@ these deposits. There is no Bundler3 fallback.
   `BlueApprovalOrSignatureRequirement` remains a deprecated alias of the first.
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
-  Prepared vault deposits take it as the first argument of `PreparedMorphoSupply.submit` / `.quote`.
+  Vault token and share signatures are passed to `PreparedMorphoSupply.submit` / `.quote`
+  and `PreparedMorphoWithdraw.submit` / `.quote`, respectively, as the first argument.
 
 ## Borrow reallocations
 
