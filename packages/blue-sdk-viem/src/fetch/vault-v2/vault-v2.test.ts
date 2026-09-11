@@ -37,12 +37,14 @@ import {
 import {
   blueAbi,
   erc5267Abi,
+  metaMorphoAbi,
   morphoMarketV1AdapterAbi,
   morphoMarketV1AdapterFactoryAbi,
   morphoMarketV1AdapterV2Abi,
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
+  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis.js";
@@ -680,6 +682,7 @@ describe("fetchVaultV2Adapter", () => {
       morphoVaultV1: VAULT,
       parentVault: RECIPIENT,
       skimRecipient: RECIPIENT,
+      parentAllocation: 77n,
     });
 
     const parameters = { chainId: CHAIN_ID };
@@ -692,6 +695,7 @@ describe("fetchVaultV2Adapter", () => {
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoVaultV1Adapter);
     expect((adapter as VaultV2MorphoVaultV1Adapter).morphoVaultV1).toBe(VAULT);
+    expect((adapter as VaultV2MorphoVaultV1Adapter).parentAllocation).toBe(77n);
     expect(parameters).toStrictEqual({ chainId: CHAIN_ID });
   });
 
@@ -909,6 +913,12 @@ describe("individual adapter fetchers", () => {
       functionName: "morphoVaultV1",
       result: VAULT,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 77n,
+    });
 
     const adapter = await fetchVaultV2MorphoVaultV1Adapter(
       ADAPTER,
@@ -917,6 +927,7 @@ describe("individual adapter fetchers", () => {
     );
 
     expect(adapter.morphoVaultV1).toBe(VAULT);
+    expect(adapter.parentAllocation).toBe(77n);
   });
 
   test("fetchVaultV2MorphoVaultV1Adapter uses multicall directly when deployless is disabled", async () => {
@@ -945,6 +956,12 @@ describe("individual adapter fetchers", () => {
       functionName: "morphoVaultV1",
       result: VAULT,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 77n,
+    });
 
     const adapter = await fetchVaultV2MorphoVaultV1Adapter(
       ADAPTER,
@@ -953,6 +970,7 @@ describe("individual adapter fetchers", () => {
     );
 
     expect(adapter.morphoVaultV1).toBe(VAULT);
+    expect(adapter.parentAllocation).toBe(77n);
   });
 
   test("fetchVaultV2MorphoVaultV1Adapter throws UnknownOfFactory on multicall", async () => {
@@ -981,6 +999,12 @@ describe("individual adapter fetchers", () => {
       abi: morphoVaultV1AdapterAbi,
       functionName: "morphoVaultV1",
       result: VAULT,
+    });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 0n,
     });
 
     await expect(
@@ -1014,6 +1038,12 @@ describe("individual adapter fetchers", () => {
       abi: morphoVaultV1AdapterAbi,
       functionName: "morphoVaultV1",
       result: VAULT,
+    });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 0n,
     });
 
     await expect(
@@ -1480,6 +1510,7 @@ describe("individual adapter fetchers", () => {
         morphoVaultV1: VAULT,
         parentVault: RECIPIENT,
         skimRecipient: RECIPIENT,
+        parentAllocation: 77n,
       }),
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1520,13 +1551,15 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
-
     const adapter = await fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {
       chainId: CHAIN_ID,
     });
 
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect((adapter as AccrualVaultV2MorphoVaultV1Adapter).shares).toBe(99n);
+    expect(
+      (adapter as AccrualVaultV2MorphoVaultV1Adapter).parentAllocation,
+    ).toBe(77n);
   });
 
   test("fetchAccrualVaultV2MorphoVaultV1Adapter composes the underlying Vault V1 accrual state", async () => {
@@ -1536,6 +1569,7 @@ describe("individual adapter fetchers", () => {
         morphoVaultV1: VAULT,
         parentVault: RECIPIENT,
         skimRecipient: RECIPIENT,
+        parentAllocation: 0n,
       }),
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1576,7 +1610,6 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
-
     const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       handle.client,
@@ -1586,6 +1619,8 @@ describe("individual adapter fetchers", () => {
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect(adapter.accrualVaultV1.address).toBe(VAULT);
     expect(adapter.shares).toBe(99n);
+    expect(adapter.parentAllocation).toBe(0n);
+    expect(adapter.realAssets()).toBe(0n);
   });
 });
 
@@ -1764,6 +1799,7 @@ function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
     vaultV1: emptyVaultV1QueryResult,
     vaultV1Allocations: [],
     vaultV1Shares: 0n,
+    vaultV1ParentAllocation: 0n,
     marketV1Positions: [],
     adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
     marketV1V2Allocations: [
@@ -1785,6 +1821,7 @@ function marketV1AdapterUncreatedQueryResult(adapter: Address) {
     vaultV1: emptyVaultV1QueryResult,
     vaultV1Allocations: [],
     vaultV1Shares: 0n,
+    vaultV1ParentAllocation: 0n,
     marketV1Positions: [
       {
         marketParams: marketQueryResult.marketParams,
@@ -1880,6 +1917,187 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
     expect(marketAdapter.supplyShares[ID]).toBe(99n);
     expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("ignores residual nested-vault shares under a zero parent allocation", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      adapters: [
+        {
+          adapter: ADAPTER_2,
+          adapterType: 1,
+          parentVault: VAULT,
+          skimRecipient: RECIPIENT,
+          forceDeallocatePenalty: 0n,
+          morphoVaultV1: VAULT,
+          vaultV1: emptyVaultV1QueryResult,
+          vaultV1Allocations: [],
+          vaultV1Shares: 99n,
+          vaultV1ParentAllocation: 0n,
+          marketV1Positions: [],
+          adaptiveCurveIrm: zeroAddress,
+          marketV1V2Allocations: [],
+        },
+      ],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+    const [adapter] = vault.accrualAdapters;
+
+    expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+    expect(
+      (adapter as AccrualVaultV2MorphoVaultV1Adapter).parentAllocation,
+    ).toBe(0n);
+    expect(adapter?.realAssets(0n)).toBe(0n);
+  });
+
+  test("keeps nested V1.1 accounting equal across deployless and fallback reads", async () => {
+    const unit = 10n ** 18n;
+    const blockTimestamp = 5n;
+    const lostAssets = 10n * unit;
+    const expectedTotalAssets = 60n * unit;
+    const market = {
+      ...marketQueryResult,
+      market: [
+        100n * unit,
+        200n * unit,
+        30n * unit,
+        40n * unit,
+        blockTimestamp,
+        0n,
+      ] as const,
+      rateAtTarget: 0n,
+    };
+    const position = {
+      supplyShares: 100n * unit,
+      borrowShares: 0n,
+      collateral: 0n,
+    };
+    const vaultV1Result = {
+      ...emptyVaultV1QueryResult,
+      totalSupply: 50n * unit,
+      lastTotalAssets: expectedTotalAssets,
+      hasLostAssets: true,
+      lostAssets,
+      supplyQueue: [ID],
+      withdrawQueue: [ID],
+    };
+    const sequentialHandle = createMockClient(mainnet);
+    mockDeploylessReads(sequentialHandle, [
+      encodeReadResult(vaultAdapterQueryAbi, "query", {
+        morphoVaultV1: VAULT,
+        parentVault: RECIPIENT,
+        skimRecipient: RECIPIENT,
+        parentAllocation: 30n * unit,
+      }),
+      encodeReadResult(vaultQueryAbi, "query", {
+        ...vaultV1Result,
+        totalAssets: expectedTotalAssets,
+      }),
+      encodeReadResult(marketQueryAbi, "query", market),
+    ]);
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      result: 25n * unit,
+    });
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "config",
+      result: [1_000n * unit, true, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "pendingCap",
+      result: [0n, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: ADDRESSES.vaultV1PublicAllocator!,
+      abi: vaultV1PublicAllocatorAbi,
+      functionName: "flowCaps",
+      result: [0n, 0n],
+    });
+    mockRead(sequentialHandle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "position",
+      result: [position.supplyShares, 0n, 0n],
+    });
+    const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
+      ADAPTER,
+      sequentialHandle.client,
+      { blockNumber: 1n, chainId: CHAIN_ID },
+    );
+
+    const deploylessHandle = createMockClient(mainnet);
+    mockDeploylessRead(deploylessHandle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapter: zeroAddress,
+      hasLiquidityAdapter: false,
+      isLiquidityAdapterKnown: false,
+      liquidityAllocations: [],
+      adapters: [
+        {
+          adapter: ADAPTER,
+          adapterType: 1,
+          parentVault: RECIPIENT,
+          skimRecipient: RECIPIENT,
+          forceDeallocatePenalty: 0n,
+          morphoVaultV1: VAULT,
+          vaultV1: vaultV1Result,
+          vaultV1Allocations: [
+            {
+              cap: 1_000n * unit,
+              enabled: true,
+              removableAt: 0n,
+              pendingCap: { value: 0n, validAt: 0n },
+              position,
+              market,
+              flowCapMaxIn: 0n,
+              flowCapMaxOut: 0n,
+            },
+          ],
+          vaultV1Shares: 25n * unit,
+          vaultV1ParentAllocation: 30n * unit,
+          marketV1Positions: [],
+          adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+          marketV1V2Allocations: [],
+        },
+      ],
+    });
+    const deployless = await fetchAccrualVaultV2Deployless(
+      VAULT,
+      deploylessHandle.client,
+      { blockNumber: 1n, chainId: CHAIN_ID },
+    );
+    const deploylessAdapter = deployless.accrualAdapters[0] as
+      | AccrualVaultV2MorphoVaultV1Adapter
+      | undefined;
+
+    expect(deploylessAdapter).toBeInstanceOf(
+      AccrualVaultV2MorphoVaultV1Adapter,
+    );
+    expect(deploylessAdapter?.accrualVaultV1.totalAssets).toBe(
+      sequential.accrualVaultV1.totalAssets,
+    );
+    expect(sequential.accrualVaultV1.lostAssets).toBe(lostAssets);
+    expect(deploylessAdapter?.accrualVaultV1.lostAssets).toBe(lostAssets);
+    expect(
+      sequential.accrualVaultV1.accrueInterest(blockTimestamp).totalAssets,
+    ).toBe(expectedTotalAssets);
+    expect(deploylessAdapter?.maxWithdraw("0x")).toEqual(
+      sequential.maxWithdraw("0x"),
+    );
+    expect(deploylessAdapter?.realAssets(blockTimestamp)).toBe(
+      sequential.realAssets(blockTimestamp),
+    );
+    expect(sequential.realAssets(blockTimestamp)).toBeGreaterThan(0n);
   });
 
   test("omits liquidity allocations when the liquidity adapter is unknown", async () => {

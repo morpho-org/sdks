@@ -1250,6 +1250,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         parentVault: VAULT,
         skimRecipient: zeroAddress,
         morphoVaultV1: NESTED_VAULT,
+        parentAllocation: 25n,
       },
       nestedVault,
       30n,
@@ -1336,6 +1337,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(clonedNested?.accrualVaultV1.allocations).not.toBe(
       inputNested?.accrualVaultV1.allocations,
     );
+    expect(clonedNested?.parentAllocation).toBe(25n);
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise probe isolation directly.
     const probe = input["applyPublicReallocation"]({

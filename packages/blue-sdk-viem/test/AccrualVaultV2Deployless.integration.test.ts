@@ -13,9 +13,11 @@ import { describe, expect } from "vitest";
 import {
   fetchAccrualVaultV2,
   fetchAccrualVaultV2Deployless,
+  fetchVault,
+  morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
 } from "../src/index.js";
-import { vaultV2Test } from "./setup.js";
+import { testTreehouseEth, vaultV2Test } from "./setup.js";
 import {
   deployMorphoMarketV1Adapter,
   deployVaultV2,
@@ -29,6 +31,7 @@ const ACCRUAL_TIMESTAMP = 2_000_000_000n;
 const vaultV2VaultV1 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
 // VaultV2 whose liquidity adapter is a MorphoMarketV1AdapterV2 (real caps and allocations).
 const vaultV2MarketV1V2 = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
+const lostAssetsVaultV1 = "0x51056b3F809f4cFE17E1A8715B82f5dbbCA5a5A1";
 const rejectingSharesGate = "0x1111111111111111111111111111111111111111";
 const managementFeeRecipient = "0x2222222222222222222222222222222222222222";
 
@@ -93,6 +96,7 @@ function vaultV1PublicFields(adapter: IAccrualVaultV2Adapter | undefined) {
     return undefined;
   const vault = adapter.accrualVaultV1;
   return {
+    parentAllocation: adapter.parentAllocation,
     eip5267Domain: vault.eip5267Domain,
     publicAllocatorConfig: vault.publicAllocatorConfig,
     marketPublicAllocatorConfigs: [...vault.allocations.values()].map(
@@ -361,6 +365,85 @@ describe("fetchAccrualVaultV2Deployless", () => {
         "VaultV2MorphoVaultV1Adapter",
       );
       expectEquivalent(deployless, multicall);
+    },
+  );
+
+  testTreehouseEth(
+    "matches V1.1 accounting and ignores residual shares at zero allocation",
+    async ({ client }) => {
+      const anvilClient = client as AnvilTestClient;
+      const sourceVault = await fetchVault(lostAssetsVaultV1, client);
+      const parentVault = await deployVaultV2(anvilClient, sourceVault.asset);
+      const morphoVaultV1AdapterFactory =
+        addressesRegistry[client.chain.id].morphoVaultV1AdapterFactory!;
+      const creationHash = await client.writeContract({
+        address: morphoVaultV1AdapterFactory,
+        abi: morphoVaultV1AdapterFactoryAbi,
+        functionName: "createMorphoVaultV1Adapter",
+        args: [parentVault, lostAssetsVaultV1],
+      });
+      await client.waitForTransactionReceipt({ hash: creationHash });
+      const adapterAddress = await client.readContract({
+        address: morphoVaultV1AdapterFactory,
+        abi: morphoVaultV1AdapterFactoryAbi,
+        functionName: "morphoVaultV1Adapter",
+        args: [parentVault, lostAssetsVaultV1],
+      });
+      await submitAndAccept(anvilClient, {
+        address: parentVault,
+        abi: vaultV2Abi,
+        functionName: "addAdapter",
+        args: [adapterAddress],
+      });
+      const shares = sourceVault.totalSupply / 1_000n;
+      await client.deal({
+        erc20: lostAssetsVaultV1,
+        account: adapterAddress,
+        amount: shares,
+      });
+      const block = await client.getBlock();
+      const [deploylessVault, sequentialVault] = await Promise.all([
+        fetchAccrualVaultV2Deployless(parentVault, client, {
+          blockNumber: block.number,
+        }),
+        fetchAccrualVaultV2(parentVault, client, {
+          blockNumber: block.number,
+          deployless: false,
+        }),
+      ]);
+      expectEquivalent(deploylessVault, sequentialVault);
+      const deployless = deploylessVault.accrualAdapters.find(
+        (adapter) => adapter.address === adapterAddress,
+      ) as AccrualVaultV2MorphoVaultV1Adapter | undefined;
+      const sequential = sequentialVault.accrualAdapters.find(
+        (adapter) => adapter.address === adapterAddress,
+      ) as AccrualVaultV2MorphoVaultV1Adapter | undefined;
+
+      expect(deployless).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+      expect(sequential).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
+      expect(sequential?.shares).toBe(shares);
+      expect(sequential?.parentAllocation).toBe(0n);
+      expect(sequential?.accrualVaultV1.lostAssets).toBeGreaterThan(0n);
+      expect(deployless?.accrualVaultV1.lostAssets).toBe(
+        sequential?.accrualVaultV1.lostAssets,
+      );
+      expect(deployless?.accrualVaultV1.totalAssets).toBe(
+        sequential?.accrualVaultV1.totalAssets,
+      );
+      expect(deployless?.accrualVaultV1.totalSupply).toBe(
+        sequential?.accrualVaultV1.totalSupply,
+      );
+      expect(deployless?.accrualVaultV1.lastTotalAssets).toBe(
+        sequential?.accrualVaultV1.lastTotalAssets,
+      );
+      expect(deployless?.realAssets(block.timestamp)).toBe(
+        sequential?.realAssets(block.timestamp),
+      );
+      expect(sequential?.realAssets(block.timestamp)).toBe(0n);
+      expect(deployless?.maxWithdraw("0x")).toStrictEqual(
+        sequential?.maxWithdraw("0x"),
+      );
+      expect(sequential?.maxWithdraw("0x").value).toBe(0n);
     },
   );
 

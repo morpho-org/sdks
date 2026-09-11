@@ -136,6 +136,7 @@ struct AdapterResponse {
     VaultV1Response vaultV1;
     VaultV1MarketAllocation[] vaultV1Allocations;
     uint256 vaultV1Shares;
+    uint256 vaultV1ParentAllocation;
     // AdapterType.MorphoMarketV1
     MarketV1Position[] marketV1Positions;
     // AdapterType.MorphoMarketV1AdapterV2
@@ -321,6 +322,7 @@ contract GetAccrualVaultV2 {
             }
 
             res.vaultV1Shares = IERC20(res.morphoVaultV1).balanceOf(adapter);
+            res.vaultV1ParentAllocation = typed.allocation();
         } else if (
             address(morphoMarketV1AdapterFactory) != address(0)
                 && morphoMarketV1AdapterFactory.isMorphoMarketV1Adapter(adapter)

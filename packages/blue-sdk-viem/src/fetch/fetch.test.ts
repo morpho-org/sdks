@@ -1729,7 +1729,7 @@ describe("vault fetchers", () => {
     expect(allocation.position.market.price).toBe(123n);
   });
 
-  test("fetchAccrualVault composes a vault and its withdraw-queue allocation", async () => {
+  test("fetchAccrualVault preserves direct latest state without pinning reads", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [
       encodeReadResult(vaultQueryAbi, "query", {
@@ -1752,8 +1752,8 @@ describe("vault fetchers", () => {
         feeRecipient: USER,
         skimRecipient: RECIPIENT,
         totalSupply: 42n,
-        totalAssets: 43n,
-        lastTotalAssets: 44n,
+        totalAssets: 55n,
+        lastTotalAssets: 55n,
         hasLostAssets: true,
         lostAssets: 55n,
         supplyQueue: [ID],
@@ -1775,12 +1775,25 @@ describe("vault fetchers", () => {
     mockVaultMarketConfigReads(handle);
     mockPositionReads(handle);
 
-    const parameters = {};
-
+    const parameters = { blockTag: "latest" } as const;
     const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
+    expect(vault.totalAssets).toBe(0n);
+    expect(vault.lostAssets).toBe(55n);
+    expect(vault.totalSupply).toBe(42n);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);
-    expect(parameters).toStrictEqual({});
+    expect(
+      handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call")
+        .every((call) => call.params?.[1] === "latest"),
+    ).toBe(true);
+    expect(
+      handle.request.mock.calls.some(
+        ([call]) => call.method === "eth_getBlockByNumber",
+      ),
+    ).toBe(false);
+    expect(parameters).toStrictEqual({ blockTag: "latest" });
   });
 });

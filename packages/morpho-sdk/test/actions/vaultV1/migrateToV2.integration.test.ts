@@ -9,6 +9,7 @@ import {
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
@@ -42,12 +43,14 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        });
+        const migrate = withChainTimestamp(await client.timestamp(), () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          }),
+        );
 
         const requirements = await migrate.getRequirements();
 
@@ -113,12 +116,14 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        });
+        const migrate = withChainTimestamp(await client.timestamp(), () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          }),
+        );
 
         const requirements = await migrate.getRequirements();
 

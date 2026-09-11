@@ -109,19 +109,51 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
       managementFeeRecipientCanReceiveShares;
   }
 
+  /**
+   * Converts Vault V2 shares to underlying assets using the stored pre-accrual totals.
+   *
+   * Pairs `_totalAssets` with `totalSupply` and rounds down. Accrue the vault first when a
+   * post-accrual conversion is required.
+   *
+   * @param shares - Vault shares to convert, in the share token's smallest unit.
+   * @returns The equivalent underlying assets, rounded down to the asset token's smallest unit.
+   * @throws {DivisionByZeroError} when `totalSupply + virtualShares` is zero.
+   * @example
+   * ```ts
+   * import { fetchVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const vault = await fetchVaultV2(vaultV2Address, client);
+   * const assets = vault.toAssets(1_000_000_000_000_000_000n);
+   * // assets satisfies bigint
+   * ```
+   */
   public toAssets(shares: BigIntish) {
     return this._unwrap(shares, "Down");
   }
 
   /**
-   * Converts assets to shares using the stored pre-accrual totals.
+   * Converts underlying assets to Vault V2 shares using the stored pre-accrual totals.
    *
-   * @param assets - Amount of underlying assets.
+   * Pairs `_totalAssets` with `totalSupply`. Accrue the vault first when a post-accrual conversion
+   * is required.
+   *
+   * @param assets - Underlying assets to convert, in the asset token's smallest unit.
    * @param rounding - Optional rounding direction. Defaults to `"Down"`.
-   * @returns The corresponding vault shares.
+   * @returns The equivalent amount of Vault V2 shares, rounded in the requested direction.
    * @example
    * ```ts
-   * const shares = vault.toShares(100n, "Up");
+   * import { fetchVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const vault = await fetchVaultV2(vaultV2Address, client);
+   * const shares = vault.toShares(1_000_000n, "Up");
    * // shares satisfies bigint
    * ```
    */
@@ -169,8 +201,27 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Returns the maximum amount of assets that can be deposited to the vault.
-   * @param assets The maximum amount of assets to deposit.
+   * Returns the vault's deposit capacity for a requested underlying asset amount.
+   *
+   * Returns the requested amount when no liquidity adapter is configured. Otherwise, applies the
+   * liquidity adapter's capacity and every hydrated absolute and relative allocation cap.
+   *
+   * @param assets - Maximum underlying assets to deposit, in the asset token's smallest unit.
+   * @returns A capacity limit containing the depositable asset amount and its binding reason.
+   * @throws {VaultV2Errors.UnsupportedLiquidityAdapter} when a nonzero liquidity adapter lacks
+   *   hydrated adapter state or allocation-cap state.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const vault = await fetchAccrualVaultV2(vaultV2Address, client);
+   * const limit = vault.maxDeposit(1_000_000n);
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
@@ -203,8 +254,30 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Returns the maximum amount of assets that can be withdrawn from the vault.
-   * @param shares The maximum amount of shares to redeem.
+   * Returns the underlying assets withdrawable for a requested Vault V2 share amount.
+   *
+   * Caps the converted assets by the vault's asset balance plus its hydrated liquidity adapter's
+   * withdrawal capacity. A Vault V1 liquidity adapter with zero parent allocation contributes
+   * zero, even when it still holds residual Vault V1 shares.
+   *
+   * @param shares - Maximum Vault V2 shares to redeem, in the share token's smallest unit.
+   * @returns A capacity limit containing the withdrawable asset amount and either the `balance` or
+   *   `liquidity` limiting reason.
+   * @throws {DivisionByZeroError} when `totalSupply + virtualShares` is zero.
+   * @throws {InvalidMarketParamsError} when a configured Morpho Blue market liquidity adapter's
+   *   liquidity data cannot be decoded.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const vault = await fetchAccrualVaultV2(vaultV2Address, client);
+   * const limit = vault.maxWithdraw(1_000_000_000_000_000_000n);
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
@@ -231,9 +304,41 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
-   * Performance and management fee shares are zero when the corresponding fee recipient cannot receive vault shares.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
+   * Projects the vault's interest and fee accounting to a timestamp without mutating this instance.
+   *
+   * Sums the vault's asset balance and every adapter's projected real assets, caps asset growth by
+   * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
+   * zero when its recipient cannot receive vault shares.
+   *
+   * @param timestamp - Accrual timestamp in seconds. Must not precede the vault or any nested
+   *   market's `lastUpdate`.
+   * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,
+   *   and projected management fee shares.
+   * @throws {VaultV2Errors.InvalidInterestAccrual} when `timestamp` precedes this vault's
+   *   `lastUpdate`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a nested Morpho Blue
+   *   market's `lastUpdate`.
+   * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue references a
+   *   market without matching allocation state.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const block = await client.getBlock();
+   * const vault = await fetchAccrualVaultV2(vaultV2Address, client, {
+   *   blockNumber: block.number,
+   * });
+   * const result = vault.accrueInterest(block.timestamp);
+   * // result satisfies {
+   * //   vault: AccrualVaultV2;
+   * //   performanceFeeShares: bigint;
+   * //   managementFeeShares: bigint;
+   * // }
+   * ```
    */
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(
