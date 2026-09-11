@@ -682,12 +682,17 @@ describe("fetchVaultV2Adapter", () => {
       skimRecipient: RECIPIENT,
     });
 
-    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const parameters = { chainId: CHAIN_ID };
+
+    const adapter = await fetchVaultV2Adapter(
+      ADAPTER,
+      handle.client,
+      parameters,
+    );
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoVaultV1Adapter);
     expect((adapter as VaultV2MorphoVaultV1Adapter).morphoVaultV1).toBe(VAULT);
+    expect(parameters).toStrictEqual({ chainId: CHAIN_ID });
   });
 
   test("routes to the MorphoMarketV1 adapter fetcher", async () => {

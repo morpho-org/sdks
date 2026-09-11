@@ -1,4 +1,4 @@
-import { zeroAddress, zeroHash } from "viem";
+import { keccak256, zeroAddress, zeroHash } from "viem";
 import { type OfferStruct, OfferUtils } from "../offers/index.js";
 
 /** @internal Empty protocol offer struct used for Merkle padding. */
@@ -29,7 +29,9 @@ export const EMPTY_OFFER_STRUCT: OfferStruct = {
   continuousFeeCap: 0n,
 };
 
-const EMPTY_OFFER_DEFAULT_GROUP = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
+const EMPTY_OFFER_DEFAULT_GROUP = keccak256(
+  OfferUtils.hashStruct(EMPTY_OFFER_STRUCT),
+);
 
 /** @internal Returns whether an address value is the zero address. */
 export function isZeroAddress(value: string): boolean {
@@ -46,10 +48,10 @@ export function isEmptyOfferStruct(
   offer: OfferStruct,
   options: { readonly allowDefaultGroup?: boolean } = {},
 ): boolean {
+  const group = offer.group.toLowerCase();
   const hasEmptyGroup =
-    offer.group === zeroHash ||
-    (options.allowDefaultGroup === true &&
-      offer.group === EMPTY_OFFER_DEFAULT_GROUP);
+    group === zeroHash ||
+    (options.allowDefaultGroup === true && group === EMPTY_OFFER_DEFAULT_GROUP);
 
   return (
     offer.market.chainId === 0n &&

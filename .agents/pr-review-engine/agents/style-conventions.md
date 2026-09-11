@@ -22,6 +22,7 @@ Per AGENTS.md §8 — mechanical style (Biome enforces what it can; this persona
 - A relative import missing the `.js` suffix (NodeNext) — flag when it would survive Biome but break NodeNext resolution. Architectural impact at the boundary is `module-api-architecture`'s concern; this persona catches the mechanical compliance.
 - A runtime import where `import type { ... }` would do — costs bundle weight, no runtime gain.
 - A local re-declaration of an SDK type (`Address`, `MarketId`, `ChainId`, `BigIntish`) instead of reusing the exported one.
+- A hand-rolled equivalent of a semantic helper exposed by a direct dependency: use viem's `isAddressEqual` for EVM address equality, and use `_try(accessor, ExpectedError)` for optional typed lookups. Require explicit expected errors and preserve the distinction between a caught failure and a successful `undefined` result. Lowercasing remains valid when normalization itself—not equality—is the goal, such as normalized keys or deterministic output.
 - An edit to a generated output (`src/api/sdk.ts`, anything under `lib/`) — change the generated **input** (`graphql/*.gql`) instead.
 
 Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona checks the diff matches):
@@ -35,7 +36,7 @@ Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona
 ## Severity guidance
 
 - **High** — missing changeset on a behavior-affecting source change in a published package, a missing patch bump for a maintained direct runtime dependent that should publish against the bumped dependency, or a package bump whose downstream maintained internal peer ranges were not updated when required (CI release will undercount, integrators get a surprise).
-- **Medium** — Biome violation surviving `pnpm lint`, missing `.js` suffix, runtime import where type-only would do.
+- **Medium** — Biome violation surviving `pnpm lint`, missing `.js` suffix, runtime import where type-only would do, hand-rolled equivalent of an available semantic helper.
 - **Low** — local re-declaration of an SDK type, JSDoc-only diff without a patch changeset, unnecessary changeset.
 
 ## Out-of-scope reminders (for the sub-agent)
