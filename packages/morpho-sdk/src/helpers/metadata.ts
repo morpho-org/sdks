@@ -31,8 +31,8 @@ import type { Metadata } from "../types/index.js";
  * @returns {Object} - A new transaction object with the modified `data` field
  * including the concatenated metadata.
  *
- * If no `data` is present in the original transaction, the function returns
- * the transaction unmodified.
+ * If `data` is missing or canonical empty calldata (`"0x"`), the function
+ * returns the transaction unmodified.
  */
 export function addTransactionMetadata(
   tx: { data: Hex; value: bigint; to: Address },
@@ -40,7 +40,7 @@ export function addTransactionMetadata(
 ) {
   const { data, ..._tx } = tx;
 
-  if (!data) return tx;
+  if (!data || data === "0x") return tx;
 
   const concatItems = [data];
 
