@@ -107,6 +107,11 @@ export {
 } from "./helpers/computeVaultV1Reallocations.js";
 export { addTransactionMetadata } from "./helpers/metadata.js";
 export {
+  type PreviewVaultV2ForceWithdrawParams,
+  previewVaultV2ForceWithdraw,
+  type VaultV2ForceWithdrawPreview,
+} from "./helpers/previewVaultV2ForceWithdraw.js";
+export {
   type PreviewVaultV2InKindRedeemParams,
   previewVaultV2InKindRedeem,
   type VaultV2InKindRedeemMarketPreview,
@@ -114,6 +119,7 @@ export {
 export {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
+  computeMinForceWithdrawSharePrice,
 } from "./helpers/slippage.js";
 export {
   validateAccrualPosition,
@@ -127,3 +133,11 @@ export {
   validateSlippageTolerance,
   validateUserAddress,
 } from "./helpers/validate.js";
+export {
+  computeVaultV2ForceWithdrawMinSharesBurnt,
+  computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
+  resolveVaultV2ForceWithdrawEligibility,
+  type VaultV2ForceWithdrawEligibility,
+  type VaultV2ForceWithdrawPlan,
+} from "./helpers/vaultV2ForceWithdrawPlan.js";

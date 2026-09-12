@@ -7,7 +7,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2` encode one
   direct VaultBundlesV1 call; `inKindRedeem` encodes the standalone VaultExitBundlesV1 periphery.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` encode one direct VaultBundlesV1 call;
-  `inKindRedeem` targets VaultExitBundlesV1 and force exits remain vault multicalls.
+  `inKindRedeem` and `forceWithdraw` target VaultExitBundlesV1; `forceRedeem` remains a vault multicall.
 - `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
@@ -23,12 +23,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
 2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 and Vault V2
-   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths** encode one
-   registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths**
+   encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
    `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
-   redeem / offer cancellation) encode their target contract
-   call directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
-   Bundler3 bundle.
+   redeem / offer cancellation) encode their target contract call directly. Vault `inKindRedeem` and
+   `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 rather than composing a Bundler3 bundle;
+   `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
@@ -65,9 +65,6 @@ remain public only for compatibility and advanced composition. All Vault V1 plan
 composition compatibility surfaces are deprecated and will be removed in the next major. Their
 `VaultV1Reallocation` outputs are not accepted by the high-level Blue write methods; new write
 integrations use `VaultV2BlueReallocation`.
-
-All Vault V1 shared-liquidity inputs and low-level Bundler3 composition are deprecated and will be
-removed in the next major. New integrations use `VaultV2BlueReallocation`.
 
 ## Discriminated unions
 

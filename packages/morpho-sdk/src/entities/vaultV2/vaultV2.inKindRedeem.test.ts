@@ -2,7 +2,7 @@ import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi } from "viem";
+import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -25,6 +25,7 @@ import {
   InKindRedeemCoverageError,
   InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   UnsupportedInKindAdapterError,
@@ -281,6 +282,45 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         deadline: 1n,
       }),
     ).toThrow(ExpiredDeadlineError);
+  });
+
+  // Security invariant (root AGENTS.md §5): the action rejects an out-of-`uint256` deadline, so the
+  // handle must too. Without this the documented `getRequirements()`-before-`buildTx()` flow could
+  // walk a caller through a vault-share approval or permit for a deadline `buildTx()` cannot encode.
+  test("error: InputExceedsMaxError for a deadline above uint256", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NonPositiveInputError for a zero deadline", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    // The contracts read `0` as "unset" rather than "expired", so the shared guard classifies it as
+    // a non-positive input instead of reaching the `ExpiredDeadlineError` staleness check.
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: 0n,
+      }),
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {

@@ -45,7 +45,8 @@ Use Vault V2 BluePublicAllocator actions for new integrations.
 | VaultV1 `migrateToV2` | VaultBundlesV1 | Exit by assets or shares, then deposit net assets into VaultV2 with `maxSharePrice`. |
 | VaultV1/VaultV2 `withdraw` / `redeem` | VaultBundlesV1 | Exact share approval or embedded ERC-2612 shares permit. |
 | VaultV1/VaultV2 `inKindRedeem` | VaultExitBundlesV1 | Fixed standalone periphery call. |
-| VaultV2 `forceWithdraw` / `forceRedeem` | VaultV2 `multicall` | `forceDeallocate` calls followed by withdraw/redeem. |
+| VaultV2 `forceWithdraw` | VaultExitBundlesV1 | Fixed standalone periphery call; the contract computes its own `forceDeallocate` calls and bounds the realized exit share price with `minSharePriceE27`. |
+| VaultV2 `forceRedeem` | VaultV2 `multicall` | Caller-supplied `forceDeallocate` calls followed by `redeem`. |
 | Blue writes | BlueBundlesV1 | One of five fixed direct entrypoints; see below. |
 
 ## Blue writes are not Bundler3 flows
@@ -152,6 +153,15 @@ Callers must therefore await `getRequirements()` and satisfy it before `buildTx(
 
 Vault redemptions also target VaultBundlesV1 and require an exact share approval or permit for
 exactly the shares they burn.
+
+## Force deallocation and force withdrawal are not Bundler3
+
+`vaultV2ForceRedeem` uses the native `multicall` on the VaultV2 contract. `vaultV2ForceWithdraw`
+instead calls the standalone **VaultExitBundlesV1** periphery, which computes its own
+`forceDeallocate` sequence on-chain. Two consequences the multicall path did not have: the user must
+authorize vault shares to VaultExitBundlesV1 (approval or ERC-2612 permit), and the vault's
+`receiveAssetsGate` must allow that periphery as an asset recipient. In exchange the exit carries a
+real `minSharePriceE27` slippage bound the multicall path never had.
 
 ## Code references
 
