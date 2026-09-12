@@ -22,14 +22,15 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly adapter?: Address;
   /**
    * Account that will call `forceWithdraw`; fee-recipient mints are mirrored when provided. The
-   * entity projects the mints to its horizon-clamped deadline; pass that as `feeProjectionTimestamp`
-   * to mirror it.
+   * entity projects the mints to its deadline; pass that as `feeProjectionTimestamp` to mirror it.
    */
   readonly userAddress?: Address;
   /**
    * Timestamp the fee-recipient mint guard is projected to; defaults to `timestamp`. Pass the
-   * intended `forceWithdraw` deadline, clamped like the entity (`min(deadline, now + 1 year)`), to
-   * mirror the entity's guard exactly. Ignored without `userAddress`.
+   * `forceWithdraw` deadline you will submit to mirror the entity's guard exactly. The entity
+   * rejects deadlines more than one year after handle creation (`InputExceedsMaxError`) rather
+   * than clamping them, so a quote projected past that horizon cannot be submitted. Ignored
+   * without `userAddress`.
    */
   readonly feeProjectionTimestamp?: bigint;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
@@ -81,11 +82,12 @@ export interface VaultV2ForceWithdrawPreview {
  * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
  * @param params.userAddress - Optional account that will call `forceWithdraw`; when provided,
  *   fee shares minted to it by the accrual are mirrored exactly as the entity does. The entity
- *   projects the mints to its horizon-clamped deadline; pass that as `feeProjectionTimestamp` to
- *   mirror it. Omit only for non-fee-recipient users.
+ *   projects the mints to its deadline; pass that as `feeProjectionTimestamp` to mirror it. Omit
+ *   only for non-fee-recipient users.
  * @param params.feeProjectionTimestamp - Timestamp for the fee-recipient mint guard; defaults to
- *   `timestamp`. Pass the horizon-clamped `forceWithdraw` deadline to mirror the entity. Ignored
- *   without `userAddress`.
+ *   `timestamp`. Pass the `forceWithdraw` deadline you will submit; the entity rejects deadlines
+ *   more than one year after handle creation (`InputExceedsMaxError`) instead of clamping them, so
+ *   keep the deadline itself within that horizon. Ignored without `userAddress`.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
