@@ -12,6 +12,7 @@ import {
   type Address,
   type Client,
   erc20Abi,
+  isAddressEqual,
   maxUint256,
   zeroAddress,
 } from "viem";
@@ -68,7 +69,7 @@ export async function fetchHolding(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (token === NATIVE_ADDRESS)
+  if (isAddressEqual(token, NATIVE_ADDRESS))
     return new Holding({
       user,
       token,
@@ -88,6 +89,13 @@ export async function fetchHolding(
           })
         : 0n,
     });
+
+  const isPermissionedBackedToken = [
+    ...(permissionedBackedTokens[parameters.chainId] ?? []),
+  ].some((registered) => isAddressEqual(registered, token));
+  const isPermissionedWrapperToken = [
+    ...(permissionedWrapperTokens[parameters.chainId] ?? []),
+  ].some((registered) => isAddressEqual(registered, token));
 
   if (deployless) {
     const {
@@ -118,8 +126,8 @@ export async function fetchHolding(
           morpho,
           permit2,
           generalAdapter1,
-          !!permissionedBackedTokens[parameters.chainId]?.has(token),
-          !!permissionedWrapperTokens[parameters.chainId]?.has(token),
+          isPermissionedBackedToken,
+          isPermissionedWrapperToken,
         ],
       });
 
@@ -195,7 +203,7 @@ export async function fetchHolding(
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[parameters.chainId]?.has(token)
+    isPermissionedBackedToken
       ? readContract(client, {
           ...parameters,
           abi: wrappedBackedTokenAbi,
@@ -209,7 +217,7 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !permissionedWrapperTokens[parameters.chainId!]?.has(token)),
+    }).catch(() => !isPermissionedWrapperToken),
   ]);
 
   const holding = new Holding({

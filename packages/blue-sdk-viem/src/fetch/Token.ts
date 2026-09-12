@@ -13,6 +13,7 @@ import {
   erc20Abi,
   erc20Abi_bytes32,
   hexToString,
+  isAddressEqual,
   isHex,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -75,14 +76,17 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
+  if (typeof address === "string" && isAddressEqual(address, NATIVE_ADDRESS))
+    return Token.native(parameters.chainId);
 
   const { wstEth, stEth } = getChainAddresses(parameters.chainId);
+  const isWstEth =
+    wstEth != null &&
+    typeof address === "string" &&
+    isAddressEqual(address, wstEth);
 
   if (deployless) {
     try {
-      const isWstEth = address === wstEth;
-
       const token = await readContract(client, {
         ...parameters,
         abi,
@@ -195,20 +199,15 @@ export async function fetchToken(
     eip5267Domain,
   };
 
-  switch (address) {
-    case wstEth: {
-      if (stEth) {
-        const stEthPerWstEth = await readContract(client, {
-          ...parameters,
-          address: wstEth!,
-          abi: wstEthAbi,
-          functionName: "stEthPerToken",
-        });
+  if (isWstEth && wstEth != null && stEth != null) {
+    const stEthPerWstEth = await readContract(client, {
+      ...parameters,
+      address: wstEth,
+      abi: wstEthAbi,
+      functionName: "stEthPerToken",
+    });
 
-        return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
-      }
-      break;
-    }
+    return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
   }
 
   const unwrapToken = getUnwrappedToken(address, parameters.chainId);
