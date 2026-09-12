@@ -106,7 +106,8 @@ export const deployVaultV2 = async (
  *
  * Produces the only vault shape `VaultExitBundlesV1` Vault V2 exits accept: `adaptersLength() == 1`
  * and a markets-based adapter. Returns the vault, its adapter, and a helper that allocates the
- * caller's deposit across markets.
+ * caller's deposit across markets. Optionally configures the vault's annual management fee for the
+ * test account.
  */
 export const setUpSingleAdapterVaultV2 = async (
   client: AnvilTestClient,
@@ -115,6 +116,7 @@ export const setUpSingleAdapterVaultV2 = async (
     readonly markets: readonly MarketParams[];
     readonly forceDeallocatePenalty?: bigint;
     readonly liquidityMarket?: MarketParams;
+    readonly managementFee?: bigint;
   },
 ) => {
   const vault = await deployVaultV2(client, params.asset);
@@ -179,6 +181,24 @@ export const setUpSingleAdapterVaultV2 = async (
         abi: vaultV2Abi,
         functionName: "setForceDeallocatePenalty",
         args: [adapter, params.forceDeallocatePenalty],
+      }),
+    });
+  }
+  if (params.managementFee != null) {
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setManagementFeeRecipient",
+        args: [client.account.address],
+      }),
+    });
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setManagementFee",
+        args: [params.managementFee],
       }),
     });
   }
