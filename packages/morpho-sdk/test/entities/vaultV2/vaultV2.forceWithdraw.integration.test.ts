@@ -1,4 +1,5 @@
 import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -7,18 +8,22 @@ import {
   decodeErrorResult,
   erc20Abi,
   isHex,
+  parseEventLogs,
   parseUnits,
   RpcRequestError,
+  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../../src/abis.js";
 import {
+  computeVaultV2ForceWithdrawFeeSharesMinted,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
   previewVaultV2ForceWithdraw,
   VaultV2ForceWithdrawCoverageError,
+  VaultV2ForceWithdrawFeeSharesExceedBurnError,
   vaultV2ForceWithdraw,
 } from "../../../src/index.js";
 import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../../fixtures/blue.js";
@@ -306,6 +311,161 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     expect(finalRecipientAssets - initialRecipientAssets).toBe(
       preview.referralFeeAssets,
     );
+  });
+
+  test("behavior: a fee-recipient exit stays faithful to the on-chain fee mint", async ({
+    client,
+  }) => {
+    const requestedExitAssets = parseUnits("900", 6);
+    const managementFee = parseUnits("4", 16) / Time.s.from.y(1n);
+    const { vault: vaultAddress, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: USDC,
+        markets: setupMarkets,
+        forceDeallocatePenalty: ONE_PERCENT,
+        managementFee,
+      });
+    await depositAndAllocate({
+      assets: parseUnits("1000", 6),
+      perMarket: [
+        { market: CbbtcUsdcBlue, assets: parseUnits("600", 6) },
+        { market: WbtcUsdcSourceMarket, assets: parseUnits("400", 6) },
+      ],
+    });
+
+    await client.setNextBlockTimestamp({
+      timestamp: (await client.timestamp()) + Time.s.from.d(30n),
+    });
+    await client.mine({ blocks: 1 });
+
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV2(vaultAddress, mainnet.id);
+    const vaultData = await vault.getData();
+    const now = (await client.timestamp()) + 60n;
+    const deadline = now + 3_600n;
+    const exit = withChainTimestamp(now, () =>
+      vault.forceWithdraw({
+        exitAssets: requestedExitAssets,
+        vaultData,
+        userAddress: client.account.address,
+        deadline,
+      }),
+    );
+    const preview = previewVaultV2ForceWithdraw(vaultData, {
+      requestedExitAssets,
+      timestamp: now,
+      userAddress: client.account.address,
+      feeProjectionTimestamp: deadline,
+    });
+    if (preview == null) throw new Error("Expected an exitable vault");
+    const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: client.account.address,
+      timestamp: now,
+    });
+    expect(feeSharesNow).toBeGreaterThan(0n);
+
+    const initial = await balances(client, vaultAddress);
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+    if (!isRequirementApproval(approval)) {
+      throw new Error("VaultExitBundlesV1 approval requirement not found");
+    }
+    await client.sendTransaction(approval);
+    await client.setNextBlockTimestamp({ timestamp: now });
+    const receipt = await client.waitForTransactionReceipt({
+      hash: await client.sendTransaction(exit.buildTx()),
+    });
+
+    const transfers = parseEventLogs({
+      abi: erc20Abi,
+      eventName: "Transfer",
+      logs: receipt.logs.filter(
+        (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
+      ),
+    });
+    const minted = transfers
+      .filter(
+        ({ args }) =>
+          args.from === zeroAddress &&
+          args.to.toLowerCase() === client.account.address.toLowerCase(),
+      )
+      .reduce((total, { args }) => total + args.value, 0n);
+    const grossBurnt = transfers
+      .filter(
+        ({ args }) =>
+          args.from.toLowerCase() === client.account.address.toLowerCase() &&
+          args.to === zeroAddress,
+      )
+      .reduce((total, { args }) => total + args.value, 0n);
+
+    const final = await balances(client, vaultAddress);
+    expect(minted).toBe(feeSharesNow);
+    const measured = initial.shares - final.shares;
+    expect(measured).toBe(grossBurnt - minted);
+    expect(measured).toBeGreaterThan(0n);
+    expect(final.assets - initial.assets).toBe(preview.netAssets);
+    expect(grossBurnt).toBeLessThanOrEqual(approval.action.args.amount);
+    expect((preview.netAssets * 10n ** 27n) / measured).toBeGreaterThanOrEqual(
+      exit.buildTx().action.args.minSharePriceE27,
+    );
+  });
+
+  test("error: VaultV2ForceWithdrawFeeSharesExceedBurnError when the fee mint reaches the burn bound", async ({
+    client,
+  }) => {
+    const requestedExitAssets = parseUnits("1", 6);
+    const managementFee = parseUnits("4", 16) / Time.s.from.y(1n);
+    const { vault: vaultAddress, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: USDC,
+        markets: setupMarkets,
+        forceDeallocatePenalty: ONE_PERCENT,
+        managementFee,
+      });
+    await depositAndAllocate({
+      assets: parseUnits("1000", 6),
+      perMarket: [
+        { market: CbbtcUsdcBlue, assets: parseUnits("600", 6) },
+        { market: WbtcUsdcSourceMarket, assets: parseUnits("400", 6) },
+      ],
+    });
+
+    await client.setNextBlockTimestamp({
+      timestamp: (await client.timestamp()) + Time.s.from.d(30n),
+    });
+    await client.mine({ blocks: 1 });
+
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV2(vaultAddress, mainnet.id);
+    const vaultData = await vault.getData();
+    const now = (await client.timestamp()) + 60n;
+    const deadline = now + 3_600n;
+    const preview = previewVaultV2ForceWithdraw(vaultData, {
+      requestedExitAssets,
+      timestamp: now,
+      userAddress: client.account.address,
+    });
+    const nonRecipientPreview = previewVaultV2ForceWithdraw(vaultData, {
+      requestedExitAssets,
+      timestamp: now,
+    });
+    // Without the guard, the contract would measure `sharesBefore - balanceAfter` as zero or underflow.
+    expect(preview).toBeUndefined();
+    expect(nonRecipientPreview).toBeDefined();
+    expect(() =>
+      withChainTimestamp(now, () =>
+        vault.forceWithdraw({
+          exitAssets: requestedExitAssets,
+          vaultData,
+          userAddress: client.account.address,
+          deadline,
+        }),
+      ),
+    ).toThrow(VaultV2ForceWithdrawFeeSharesExceedBurnError);
   });
 
   test("behavior: the derived minSharePriceE27 does not reject a faithful exit", async ({
