@@ -1507,6 +1507,7 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
+        hasPublicAllocator: true,
         publicAllocatorConfig: {
           admin: zeroAddress,
           fee: 0n,
@@ -1563,6 +1564,7 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
+        hasPublicAllocator: true,
         publicAllocatorConfig: {
           admin: zeroAddress,
           fee: 0n,

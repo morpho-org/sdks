@@ -32,6 +32,7 @@ import {
   erc20Abi_bytes32,
   maxUint256,
   stringToHex,
+  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -1325,6 +1326,7 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
+      hasPublicAllocator: true,
       publicAllocatorConfig: {
         admin: USER,
         fee: 45n,
@@ -1369,6 +1371,7 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
+      hasPublicAllocator: false,
       publicAllocatorConfig: {
         admin: USER,
         fee: 45n,
@@ -1379,6 +1382,43 @@ describe("vault fetchers", () => {
     const vault = await fetchVault(VAULT, handle.client, {
       chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
     });
+
+    expect(vault.publicAllocatorConfig).toBeUndefined();
+  });
+
+  test("fetchVault omits deployless public allocator config when the vault has not enabled the public allocator", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, vaultQueryAbi, "query", {
+      config: {
+        asset: TOKEN,
+        symbol: "vMOCK",
+        name: "Vault Mock",
+        decimals: 18n,
+        decimalsOffset: 2n,
+        eip5267Domain: DOMAIN,
+      },
+      owner: USER,
+      curator: RECIPIENT,
+      guardian: COLLATERAL,
+      timelock: 37n,
+      pendingTimelock: { value: 38n, validAt: 39n },
+      pendingGuardian: { value: ORACLE, validAt: 40n },
+      pendingOwner: TOKEN,
+      fee: 41n,
+      feeRecipient: USER,
+      skimRecipient: RECIPIENT,
+      totalSupply: 42n,
+      totalAssets: 43n,
+      lastTotalAssets: 44n,
+      hasLostAssets: false,
+      lostAssets: 0n,
+      supplyQueue: [ID],
+      withdrawQueue: [ID],
+      hasPublicAllocator: false,
+      publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
+    });
+
+    const vault = await fetchVault(VAULT, handle.client);
 
     expect(vault.publicAllocatorConfig).toBeUndefined();
   });
@@ -1758,6 +1798,7 @@ describe("vault fetchers", () => {
         lostAssets: 55n,
         supplyQueue: [ID],
         withdrawQueue: [ID],
+        hasPublicAllocator: true,
         publicAllocatorConfig: {
           admin: USER,
           fee: 45n,
