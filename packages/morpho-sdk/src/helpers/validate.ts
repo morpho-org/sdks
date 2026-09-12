@@ -84,22 +84,44 @@ export const validateMidnightMarketChainId = (
  * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
- * Used internally by the signature requirements (`encodeErc20Permit`,
- * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
- * the signing flow is the only path where an account/address mismatch
- * is a real security concern (rather than just an integrator footgun).
+ * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
+ * backs the permit, Permit2, Blue authorization, and Midnight offer-root
+ * signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
+ * signer: the signing flow is
+ * the only path where an account/address mismatch is a real security concern
+ * (rather than just an integrator footgun).
  *
  * Transaction builders no longer call this helper — callers are
  * responsible for keeping `userAddress` aligned with the signing account
  * at the builder layer.
  *
- * Throws {@link MissingClientPropertyError} if the client has no account.
- * Throws {@link AddressMismatchError} if the client account differs from
- * `userAddress`.
- *
  * @param clientAccountAddress - The client's account address; if undefined,
  *   `MissingClientPropertyError` is thrown.
  * @param userAddress - The user address provided by the caller.
+ * @returns Nothing; narrows `clientAccountAddress` to a defined `Address` when
+ *   it is present and equal to `userAddress`.
+ * @throws {MissingClientPropertyError} when the client has no connected account.
+ * @throws {AddressMismatchError} when the client account differs from
+ *   `userAddress`.
+ * @example
+ * ```ts
+ * import { createWalletClient, http } from "viem";
+ * import { privateKeyToAccount } from "viem/accounts";
+ * import { mainnet } from "viem/chains";
+ * import { validateUserAddress } from "@morpho-org/morpho-sdk";
+ *
+ * const account = privateKeyToAccount("0x...");
+ * const walletClient = createWalletClient({
+ *   account,
+ *   chain: mainnet,
+ *   transport: http(),
+ * });
+ *
+ * // Inside a `sign()` flow, before producing a typed-data signature:
+ * validateUserAddress(walletClient.account?.address, account.address);
+ * // Passes when the connected account equals the expected signer;
+ * // throws if the wallet has no account or signs for a different address.
+ * ```
  */
 export function validateUserAddress(
   clientAccountAddress: Address | undefined,
