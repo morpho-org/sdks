@@ -455,7 +455,7 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
 }
 
 /**
- * Thrown when fee shares projected to the horizon-clamped deadline reach the lower force-withdraw
+ * Thrown when fee shares projected to the accepted deadline reach the lower force-withdraw
  * burn bound at that time.
  *
  * VaultExitBundlesV1 measures shares burned after its first withdrawal accrues fees. If the
@@ -482,7 +482,7 @@ export class VaultV2ForceWithdrawFeeSharesExceedBurnError extends Error {
   public readonly userAddress: Address;
   /** Lower bound of shares measured as burned by VaultExitBundlesV1. */
   public readonly sharesBurnt: bigint;
-  /** Fee shares projected for `userAddress` at the horizon-clamped deadline. */
+  /** Fee shares projected for `userAddress` at the accepted deadline. */
   public readonly feeShares: bigint;
 
   /**
@@ -490,7 +490,7 @@ export class VaultV2ForceWithdrawFeeSharesExceedBurnError extends Error {
    * @param params.vault - Vault V2 address being exited.
    * @param params.userAddress - Fee-recipient account submitting the exit.
    * @param params.sharesBurnt - Lower bound of shares measured as burned by VaultExitBundlesV1.
-   * @param params.feeShares - Fee shares projected for `userAddress` at the horizon-clamped deadline.
+   * @param params.feeShares - Fee shares projected for `userAddress` at the accepted deadline.
    */
   public constructor(params: {
     readonly vault: Address;
