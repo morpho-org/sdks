@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  globSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, parse, relative } from "node:path";
 import process from "node:process";
 import { inspect } from "node:util";
@@ -144,6 +151,16 @@ export const ${config.bytecodeExportName} =
 `,
   );
   writtenFiles.push(outputPath);
+}
+
+const writtenFileSet = new Set(writtenFiles);
+for (const outputPath of globSync(
+  join(packageDir, "src", "queries", "**", "*.ts"),
+)) {
+  if (parse(outputPath).base === "index.ts" || writtenFileSet.has(outputPath))
+    continue;
+
+  unlinkSync(outputPath);
 }
 
 if (writtenFiles.length > 0) {

@@ -25,7 +25,7 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r --if-present build",
-    "build:ci": "pnpm -r --if-present --filter './packages/**' build",
+    "build:ci": "$npm_execpath verify:deployless-artifacts && pnpm -r --if-present --filter './packages/**' build",
     "lint": "biome check && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address",
     "lint:ci": "biome check --config-path=biome.ci.json && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
@@ -38,7 +38,8 @@
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
     "changeset": "changeset",
     "version": "changeset version && node scripts/release/generate-midnight-package-version.mjs",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "verify:deployless-artifacts": "pnpm --filter @morpho-org/blue-sdk-viem compile && pnpm --filter @morpho-org/midnight-sdk compile && git diff --exit-code HEAD -- packages/blue-sdk-viem/src/queries packages/midnight-sdk/src/queries && test -z \"$(git ls-files --others --exclude-standard -- packages/blue-sdk-viem/src/queries packages/midnight-sdk/src/queries)\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
