@@ -403,7 +403,7 @@ export async function fetchVault(
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 

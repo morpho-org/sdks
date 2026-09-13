@@ -90,7 +90,7 @@ new MorphoProtocolEvm(account, options)
 
 Options:
 
-- `chainId` (number | bigint): required when using explicit Morpho targets; guards transaction building against wallet chain switches.
+- `chainId` (number | bigint): required when using explicit Morpho targets; validates reads, requirements, quotes, and sends against provider/target chain mismatches and switches.
 - `earnVaultAddress` (string): explicit Morpho vault address.
 - `borrowMarketParams` (object): explicit Morpho Blue market params.
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
@@ -99,7 +99,9 @@ Options:
 - `supportSignature` (boolean): enable SDK permit/permit2 requirements.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
-Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
+Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter checks the provider at the start and terminal boundary of each operation. EOA transactions are signed for that chain and verified before broadcast; ERC-4337 preparation, signing, and broadcast execute atomically through WDK with the signing chain bound to the validated context.
+
+ERC-4337 accounts cache chain-bound UserOperation state. If an account has already cached another chain, create a fresh wallet account and `MorphoProtocolEvm` adapter before continuing.
 
 Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collateral methods accept `MorphoCollateralSupplyOptions`; both types require exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
 
