@@ -89,7 +89,7 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 // Maximum accepted deadline horizon; the on-chain management fee is capped at 5%/yr so the
 // accrual model stays well-defined inside it.
-const VAULT_V2_FEE_PROJECTION_HORIZON = 365n * 24n * 60n * 60n;
+const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
 export interface VaultV2Actions {
   /**
@@ -479,9 +479,9 @@ export interface VaultV2Actions {
    *   which would overrun the contract's unbounded loop.
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
-   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares projected for a
-   *   fee-recipient `userAddress` reach the lower-bound share burn at the deadline.
-   * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
+   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares are minted to a
+   *   fee-recipient `userAddress` and reach the lower-bound share burn at the deadline.
+   * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
@@ -1249,9 +1249,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
       vaultData: projectedVaultData,
       plan,
     });
-    // Mints only grow and the burn only shrinks until inclusion, so the projected pair bounds
-    // every execution time in the window.
-    if (feeSharesProjected >= minSharesBurntProjected) {
+    // When fee shares are minted, the projected pair bounds every execution time in the window.
+    if (
+      feeSharesProjected > 0n &&
+      feeSharesProjected >= minSharesBurntProjected
+    ) {
       throw new VaultV2ForceWithdrawFeeSharesExceedBurnError({
         vault: this.vault,
         userAddress,

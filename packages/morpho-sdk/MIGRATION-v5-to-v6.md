@@ -4,8 +4,9 @@ Version 6 keeps the Blue entity at `client.morpho.blue(marketParams, chainId)` a
 write-method names while routing them through five direct BlueBundlesV1 entrypoints. Blue reads and
 versioned reallocation-data helpers remain on the same entity. There is no parallel BlueBundlesV1
 extension or automatic fallback to the v5 route. Version 6 also reshapes Vault V2 `forceWithdraw`
-to route through the standalone `VaultExitBundlesV1` periphery. This guide covers both breaking
-changes; other v6 breaks are documented by their own changesets as they land.
+to route through the standalone `VaultExitBundlesV1` periphery. This guide covers the Blue write
+rerouting and the Vault V2 `forceWithdraw` route replacement alongside the other v6 breaks
+documented in the sections below.
 
 ## Vault V1 and Vault V2 deposits
 

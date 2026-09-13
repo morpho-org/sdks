@@ -14,6 +14,7 @@ import { morphoViemExtension } from "../client/index.js";
 import { VaultV2ForceWithdrawFeeSharesExceedBurnError } from "../types/index.js";
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
 import {
+  computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -307,6 +308,37 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toBeGreaterThan(0n);
 
     expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
+  });
+
+  test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 1_000n,
+      totalSupply: 1n,
+    });
+    const params = {
+      requestedExitAssets: 1n,
+      timestamp: vaultData.lastUpdate + 1n,
+      userAddress: IN_KIND_USER,
+    } as const;
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+    if (eligibility.type !== "eligible") {
+      throw new Error(
+        `Expected an eligible fixture, got "${eligibility.type}"`,
+      );
+    }
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: eligibility.adapter,
+      liquidityMarketId: eligibility.liquidityMarketId,
+      exitAssets: params.requestedExitAssets,
+      timestamp: params.timestamp,
+    });
+
+    expect(computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })).toBe(
+      0n,
+    );
+    expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeDefined();
   });
 
   test("behavior: mirrors fee-recipient mints and returns undefined at the lower burn bound", () => {

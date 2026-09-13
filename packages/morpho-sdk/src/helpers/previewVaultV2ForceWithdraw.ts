@@ -93,7 +93,8 @@ export interface VaultV2ForceWithdrawPreview {
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
  *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, a
- *   fee-recipient whose fee mints projected to `feeProjectionTimestamp` reach the lower burn bound,
+ *   fee-recipient whose positive fee mints projected to `feeProjectionTimestamp` reach the lower
+ *   burn bound,
  *   or an exit whose realized share price rounds down to zero at the default slippage tolerance
  *   (which the entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`).
  * @example
@@ -198,7 +199,12 @@ export function previewVaultV2ForceWithdraw(
       vaultData: projectedVaultData,
       plan,
     });
-    if (feeSharesProjected >= minSharesBurntProjected) return undefined;
+    if (
+      feeSharesProjected > 0n &&
+      feeSharesProjected >= minSharesBurntProjected
+    ) {
+      return undefined;
+    }
   }
   const sharesBurntForFloor = sharesBurnt - feeShares;
   if (

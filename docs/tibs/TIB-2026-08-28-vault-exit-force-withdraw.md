@@ -189,7 +189,7 @@ forceWithdraw({
 `buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind TIB's
 Considered Alternatives §5. Only `getRequirements()` is async.
 
-**Helpers** — three new pure exports, deliberately split so the numeric core has exactly one
+**Helpers** — five new pure exports, deliberately split so the numeric core has exactly one
 implementation:
 
 - `resolveVaultV2ForceWithdrawEligibility(vaultData, adapter?)` returns a **discriminated union**
@@ -205,6 +205,10 @@ implementation:
   authorized allowance is *not* this value — it is read off the price floor itself (see below), so it
   covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
   permits.
+- `computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })` — lower burn bound (Down
+  rounding) the fee guard compares against.
+- `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp })` —
+  management/performance fee shares the first withdrawal mints to `owner` at `timestamp`.
 
 Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongside its siblings, and
 `previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`. The preview separates its
@@ -372,8 +376,8 @@ Every `require`, every unchecked array index, and every nested call was walked o
 | **`panic 0x32`** — the loop indexes past the market list | `coveredAssets >= assetsToDeallocate` | `VaultV2ForceWithdrawCoverageError { required, covered, maxExitAssets }` **(new)** |
 | silent no-op that still consumes the permit | `withdrawnAssets > 0` | `VaultV2ForceWithdrawZeroWithdrawalError` **(new)** |
 | a negative fee is not an encodable `uint256` | `referralFeePct >= 0` | `NegativeInputError` *(reused)* |
-| `PctExceeded` | `referralFeePct < WAD` | `InputExceedsMaxError` *(reused)* |
-| `safeTransfer` to `address(0)` | `referralFeePct > 0 ⇒ recipient ≠ zeroAddress` | `MissingReferralFeeRecipientError` **(new)** |
+| `PctExceeded` | `referralFeePct < WAD` | `ReferralFeePctExceededError` *(new; extends `InputExceedsMaxError`)* |
+| `safeTransfer` to `address(0)` | `referralFeePct > 0 ⇒ recipient ≠ zeroAddress` | `ReferralFeeRecipientMissingError` **(canonical; `MissingReferralFeeRecipientError` kept as a deprecated alias)** |
 | `DeadlinePassed` / `PermitDeadlineExpired` | `deadline > now`, at creation **and** again before `getRequirements()` reads | `ExpiredDeadlineError` *(reused)* |
 | the `SlippageExceeded` guard silently passes — the contract reads `minSharePriceE27 == 0` as "no bound" | a supplied `minSharePriceE27` override is `> 0` | `NonPositiveInputError` *(reused)* |
 | — | `exitAssets > 0` | `NonPositiveInputError` *(reused)* |

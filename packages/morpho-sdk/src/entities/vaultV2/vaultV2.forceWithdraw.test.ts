@@ -849,6 +849,33 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       expect(recipientFloor).toBeGreaterThan(nonRecipientFloor);
     });
 
+    test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {
+      const vaultData = vaultV2ExitData({
+        assetBalance: 1n,
+        totalAssets: 1_000n,
+        totalSupply: 1n,
+      });
+      const now = vaultData.lastUpdate + 1n;
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 1n,
+        timestamp: now,
+      });
+
+      expect(
+        computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan }),
+      ).toBe(0n);
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
+            exitAssets: 1n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        ),
+      ).not.toThrow();
+    });
+
     test("behavior: fee-recipient allowance includes fee shares through the deadline", async () => {
       const now = 1_800_000_000n;
       const deadline = now + Time.s.from.d(30n);

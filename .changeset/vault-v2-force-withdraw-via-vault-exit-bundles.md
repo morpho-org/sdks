@@ -72,7 +72,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   a safety guard projected through the accepted deadline, plus an allowance including its projected
   fee shares. Deadlines beyond the one-year fee-projection horizon are rejected.
 - `previewVaultV2ForceWithdraw` accepts optional `userAddress` and `feeProjectionTimestamp` values
-  to mirror fee-recipient mints and rejects exits whose projected mints reach the lower burn bound.
+  to mirror fee-recipient mints and rejects exits when fee shares are minted to `userAddress` and
+  reach the lower burn bound.
   Deadlines beyond one year after handle creation are rejected so accepted execution windows remain
   covered by the fee-share guard and allowance.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the

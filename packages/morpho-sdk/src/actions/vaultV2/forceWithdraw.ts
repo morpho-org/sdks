@@ -72,7 +72,7 @@ export interface VaultV2ForceWithdrawParams {
  * @throws {NegativeInputError} when `referralFeePct` or `minSharePriceE27` is negative.
  * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contract rejects it
  *   with `PctExceeded`), or when `exitAssets`, `deadline`, or `minSharePriceE27` exceeds `uint256`.
- * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind,
