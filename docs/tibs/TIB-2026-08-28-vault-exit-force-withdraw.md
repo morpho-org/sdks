@@ -294,7 +294,9 @@ positiveLegs     = (assetsToWithdraw > 0) + (penalty > 0 ? penaltyLegs : 0)
 nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
 feeShares(t)     = fee shares accrueInterest(t) mints to userAddress (0 for non-recipients)
 sharesBurnt(v)   = v.toShares(grossDebited, "Up") + max(0, positiveLegs - 1)          // upper bound
-minSharesBurnt(v)= v.toShares(withdrawnAssets + wMulUp(assetsToDeallocate, penalty), "Down") // lower bound
+minSharesBurnt(v)= v.toShares(min(withdrawnAssets + wMulUp(assetsToDeallocate, penalty),
+                              exitAssets - 1), "Down")                // lower bound, split-invariant:
+                                                                       // any split debits within 1 + penalty (< 2) of exitAssets
 require deadline <= now + 1 year
 require feeShares(deadline) < minSharesBurnt(accrue(deadline)) // else VaultV2ForceWithdrawFeeSharesExceedBurnError
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
