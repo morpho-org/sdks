@@ -347,6 +347,37 @@ share price. `forceRedeem` is unchanged and stays on the vault multicall.
 | `tx.to` is the vault | `tx.to` is `VaultExitBundlesV1` |
 | No approval needed (the vault burned `msg.sender`'s own shares) | A vault-share allowance or ERC-2612 permit **to `VaultExitBundlesV1`** is now required |
 
+### Pure action
+
+The pure action's call shape changes alongside the entity method:
+
+```ts
+// v5
+vaultV2ForceWithdraw({
+  vault: { address: vaultAddress },
+  args: {
+    deallocations: [{ adapter, marketParams, amount: 500_000n }],
+    withdraw: { amount: 500_000n, recipient },
+    onBehalf,
+  },
+});
+
+// v6
+vaultV2ForceWithdraw({
+  vault: { chainId, address: vaultAddress },
+  args: {
+    adapter,
+    exitAssets: 500_000n,
+    minSharePriceE27,
+    userAddress,
+    deadline,
+  },
+});
+```
+
+`chainId` is now required so the action can resolve the registered periphery address and apply
+`chainId` validation.
+
 Migration steps:
 
 - Fetch a `vaultData` snapshot (`vault.getData()`) and pass it in. The vault must have exactly one

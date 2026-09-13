@@ -164,6 +164,8 @@ export function computeVaultV2ForceWithdrawFeeSharesMinted(params: {
 export interface VaultV2ForceWithdrawPlan {
   /** WAD-scaled force-deallocation penalty the vault charges on this adapter. */
   readonly penalty: bigint;
+  /** Penalty-inclusive amount requested from the vault. */
+  readonly exitAssets: bigint;
   /** Penalty-free leg, withdrawn before any force deallocation. */
   readonly assetsToWithdraw: bigint;
   /** Penalised leg, force-deallocated from the adapter's markets. */
@@ -344,6 +346,7 @@ export function computeVaultV2ForceWithdrawPlan(params: {
 
   return {
     penalty,
+    exitAssets,
     assetsToWithdraw,
     assetsToDeallocate,
     // `sum(ceil(assetsᵢ·penalty/WAD)) <= ceil(sum(assetsᵢ)·penalty/WAD) + legs - 1`. The per-leg
@@ -456,10 +459,9 @@ export function computeVaultV2ForceWithdrawSharesBurnt(params: {
 /**
  * Computes a lower bound of the Vault V2 shares that a force withdrawal burns.
  *
- * Each on-chain withdrawal leg rounds its own share conversion up. The tight penalty charge rounds
- * each penalty down in aggregate, and the penalty burns can raise the share price for later legs
- * by at most one share. This lower bound is used to reject fee-recipient exits whose fee mints
- * could reach the burn measured by VaultExitBundlesV1.
+ * The penalty-free/penalised split can move as liquidity accrues between planning and inclusion.
+ * This lower bound is used to reject fee-recipient exits whose fee mints could reach the burn
+ * measured by VaultExitBundlesV1, independently of that split.
  *
  * @param params - Lower-bound inputs.
  * @param params.vaultData - Vault V2 snapshot already accrued to the execution timestamp.
@@ -481,9 +483,15 @@ export function computeVaultV2ForceWithdrawMinSharesBurnt(params: {
 }): bigint {
   const { vaultData, plan } = params;
 
+  // The penalty-free/penalised split moves as the liquidity market accrues, but any split debits
+  // within `1 + penalty` (< 2 asset units) of `exitAssets`, so `exitAssets - 1` lower-bounds every
+  // execution-time split.
   return vaultData.toShares(
-    plan.withdrawnAssets +
-      MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
+    MathLib.min(
+      plan.withdrawnAssets +
+        MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
+      MathLib.zeroFloorSub(plan.exitAssets, 1n),
+    ),
     "Down",
   );
 }

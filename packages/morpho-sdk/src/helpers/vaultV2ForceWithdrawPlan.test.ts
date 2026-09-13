@@ -139,6 +139,7 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
 
     expect(plan).toEqual({
       penalty: TWO_PERCENT,
+      exitAssets: 51n,
       assetsToWithdraw: 0n,
       // floor(51 * 1e18 / 1.02e18) === 50
       assetsToDeallocate: 50n,
@@ -581,7 +582,7 @@ describe("computeVaultV2ForceWithdrawMinSharesBurnt", () => {
     }
   });
 
-  test("behavior: equals the withdrawn-asset conversion without deallocation", () => {
+  test("behavior: applies one asset of split-invariance slack without deallocation", () => {
     const vaultData = vaultV2ExitData({
       assetBalance: 1_000n,
       penalty: TWO_PERCENT,
@@ -590,8 +591,51 @@ describe("computeVaultV2ForceWithdrawMinSharesBurnt", () => {
 
     expect(plan.assetsToDeallocate).toBe(0n);
     expect(computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })).toBe(
-      vaultData.toShares(plan.withdrawnAssets, "Down"),
+      vaultData.toShares(plan.exitAssets - 1n, "Down"),
     );
+  });
+
+  test("behavior: lower bound is invariant across the liquidity-accrual split transition", () => {
+    const firstVaultData = vaultV2ExitData({
+      additionalMarket: true,
+      liquidityAdapter: "sole",
+      marketTotalBorrowAssets: 1_000n,
+      penalty: TWO_PERCENT,
+    });
+    const secondVaultData = vaultV2ExitData({
+      additionalMarket: true,
+      liquidityAdapter: "sole",
+      marketTotalBorrowAssets: 999n,
+      penalty: TWO_PERCENT,
+    });
+    const firstPlan = planFor({ vaultData: firstVaultData, exitAssets: 2n });
+    const secondPlan = planFor({ vaultData: secondVaultData, exitAssets: 2n });
+    const firstGross = firstPlan.withdrawnAssets + firstPlan.penaltyAssets;
+    const secondGross = secondPlan.withdrawnAssets + secondPlan.penaltyAssets;
+
+    expect(firstPlan).toMatchObject({
+      assetsToWithdraw: 0n,
+      assetsToDeallocate: 1n,
+      penaltyAssets: 1n,
+    });
+    expect(secondPlan).toMatchObject({
+      assetsToWithdraw: 1n,
+      assetsToDeallocate: 0n,
+      penaltyAssets: 0n,
+    });
+    expect(secondGross).toBe(firstGross - 1n);
+    expect(
+      computeVaultV2ForceWithdrawMinSharesBurnt({
+        vaultData: firstVaultData,
+        plan: firstPlan,
+      }),
+    ).toBe(firstVaultData.toShares(1n, "Down"));
+    expect(
+      computeVaultV2ForceWithdrawMinSharesBurnt({
+        vaultData: secondVaultData,
+        plan: secondPlan,
+      }),
+    ).toBe(secondVaultData.toShares(1n, "Down"));
   });
 });
 
