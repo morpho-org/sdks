@@ -310,15 +310,19 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   /**
    * Returns a new vault derived from this vault, whose interest — together with
    * that of every adapter, market, and position it holds — has been accrued up to
-   * the given timestamp, so the entire returned entity graph shares one
-   * `lastUpdate`. Adapters that do not implement `accrueInterest` are left at
-   * their pre-accrual state. Passing the vault's own `lastUpdate` (a no-op
-   * accrual) stays valid even when a nested market was poked more recently or a
-   * nested withdraw queue is stale, mirroring the pre-accrual behavior of
-   * returning without touching adapters; advancing to a strictly greater
-   * `timestamp` that a nested market cannot reach instead throws. Performance and
-   * management fee shares are zero when the corresponding fee recipient cannot
-   * receive vault shares.
+   * the given timestamp, so the returned entity graph shares one `lastUpdate`.
+   * Some built-in nested state is intentionally left at its pre-accrual
+   * `lastUpdate` and must not be read as part of the shared snapshot: adapters
+   * that do not implement `accrueInterest`; zero-allocation Vault V1 adapters
+   * (which contribute no assets, so their nested markets are never accrued); and a
+   * liquidity adapter that is not among `accrualAdapters` when it cannot reach the
+   * timestamp (its assets do not feed the vault total). Passing the vault's own
+   * `lastUpdate` (a no-op accrual) stays valid even when a nested market was poked
+   * more recently or a nested withdraw queue is stale, mirroring the pre-accrual
+   * behavior of returning without touching adapters; advancing to a strictly
+   * greater `timestamp` that a contributing nested market cannot reach instead
+   * throws. Performance and management fee shares are zero when the corresponding
+   * fee recipient cannot receive vault shares.
    * @param timestamp The timestamp at which to accrue interest. Must be greater
    * than or equal to the vault's `lastUpdate`. When it is strictly greater it must
    * also be greater than or equal to each underlying market's `lastUpdate`, since
