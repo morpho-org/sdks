@@ -265,6 +265,27 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(tx.action.args.minSharePriceE27).toBe(override);
   });
 
+  test("behavior: a positive floor remains valid when the max-slippage threshold rounds to zero", () => {
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 0n,
+      totalSupply: 950_000_000_000_000_000_000_000_000n,
+    });
+    const build = (minSharePriceE27?: bigint) =>
+      vaultFor(createMockClient(mainnet))
+        .forceWithdraw({
+          exitAssets: 1n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27,
+        })
+        .buildTx();
+
+    expect(build().action.args.minSharePriceE27).toBe(1n);
+    expect(build(1n).action.args.minSharePriceE27).toBe(1n);
+    expect(() => build(0n)).toThrow(NonPositiveInputError);
+  });
+
   // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
   // must never be able to silently disable the guard this path exists to add.
   test.each([0n, -1n])(

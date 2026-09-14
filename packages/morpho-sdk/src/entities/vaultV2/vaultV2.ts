@@ -1270,11 +1270,16 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
     const netSharesBurntNow = sharesBurntNow - feeSharesNow;
-    const minAllowedSharePriceE27 = computeMinForceWithdrawSharePrice({
-      withdrawnAssets: plan.withdrawnAssets,
-      sharesBurnt: netSharesBurntNow,
-      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
-    });
+    // The maximum-slippage threshold only bounds the override; unlike the transaction floor it may
+    // round to zero, in which case every positive override is acceptable.
+    const minAllowedSharePriceE27 = MathLib.max(
+      1n,
+      MathLib.mulDivDown(
+        plan.withdrawnAssets,
+        MathLib.wToRay(MathLib.WAD - MAX_SLIPPAGE_TOLERANCE),
+        netSharesBurntNow,
+      ),
+    );
     if (
       minSharePriceE27Override != null &&
       minSharePriceE27Override < minAllowedSharePriceE27
