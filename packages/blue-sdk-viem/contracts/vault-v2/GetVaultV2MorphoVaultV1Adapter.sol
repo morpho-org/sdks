@@ -8,6 +8,7 @@ struct VaultV2MorphoVaultV1AdapterResponse {
     address morphoVaultV1;
     address parentVault;
     address skimRecipient;
+    uint256 parentAllocation;
 }
 
 error UnknownOfFactory(address factory, address adapter);
@@ -25,5 +26,6 @@ contract GetVaultV2MorphoVaultV1Adapter {
         res.morphoVaultV1 = adapter.morphoVaultV1();
         res.parentVault = adapter.parentVault();
         res.skimRecipient = adapter.skimRecipient();
+        res.parentAllocation = adapter.allocation();
     }
 }
