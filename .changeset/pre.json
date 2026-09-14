@@ -20,6 +20,18 @@
     "blue-bundles-refinance",
     "blue-bundles-supply-withdraw",
     "blue-v2-only-reallocations",
-    "dedupe-vault-chainid-guards"
+    "bundles-retention-check",
+    "calm-midnight-targets",
+    "copy-fetch-parameters",
+    "evm-simulation-native-sentinel-normalization",
+    "filter-wrapped-native-events",
+    "quiet-books-settle",
+    "stable-wdk-chain-context",
+    "tidy-ratifier-trees",
+    "vault-bundles-deposit",
+    "vault-bundles-prerequisites",
+    "vault-bundles-redeem",
+    "vault-bundles-withdraw",
+    "vault-exit-bundles-inkind-refactor"
   ]
 }
