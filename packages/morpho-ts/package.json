@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "2.10.0",
+  "version": "2.11.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -38,14 +38,14 @@
     "lib"
   ],
   "scripts": {
-    "prepublish": "$npm_execpath build",
-    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "prepublish": "pnpm build",
+    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {

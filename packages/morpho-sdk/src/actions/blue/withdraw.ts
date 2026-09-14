@@ -35,6 +35,7 @@ export interface BlueWithdrawParams {
      * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
      * computed via `MorphoBlue.getVaultV1Reallocations({ operation: "withdraw", amount })` or directly
      * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
+     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
      */
     reallocations?: BlueReallocationPlan;
     /**
@@ -75,7 +76,7 @@ export interface BlueWithdrawParams {
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
  * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
- *   execute before withdrawing.
+ *   execute before withdrawing. Vault V1 inputs are deprecated; use Vault V2 for new integrations.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.

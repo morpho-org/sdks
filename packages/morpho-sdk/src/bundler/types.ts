@@ -24,6 +24,9 @@ export interface Authorization {
 
 /**
  * Public allocator withdrawal input used by a `reallocateTo` Bundler3 action.
+ *
+ * @deprecated Vault V1 PublicAllocator composition will be removed in the next major. Use Vault V2
+ * BluePublicAllocator actions.
  */
 export interface InputReallocation {
   /** Market to withdraw liquidity from. */
@@ -201,7 +204,13 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
-  /** PublicAllocator reallocation to `supplyMarket` from `vault` withdrawals while paying `fee`; `skipRevert` controls Bundler3 revert handling. */
+  /**
+   * PublicAllocator reallocation to `supplyMarket` from `vault` withdrawals while paying `fee`;
+   * `skipRevert` controls Bundler3 revert handling.
+   *
+   * @deprecated Vault V1 PublicAllocator composition will be removed in the next major. Use Vault V2
+   * BluePublicAllocator actions.
+   */
   readonly reallocateTo: [
     vault: Address,
     fee: bigint,

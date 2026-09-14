@@ -1,5 +1,13 @@
 # @morpho-org/test
 
+## 2.10.0
+
+### Minor Changes
+
+- [#941](https://github.com/morpho-org/sdks/pull/941) [`86bf42c`](https://github.com/morpho-org/sdks/commit/86bf42ca1ecf167da2cb4674d4f05f785d49c5d9) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Stop retrying failed JSON-RPC requests from Vitest clients to local Anvil processes so transport errors surface without duplicating RPC work.
+
+  Support Anvil's Optimism Karst hardfork so Base fork tests can execute Osaka EVM bytecode with Foundry v1.8.0.
+
 ## 2.9.0
 
 ### Minor Changes

@@ -31,6 +31,9 @@ jobs:
     uses: ./.github/workflows/build.yml
 
   test:
+    concurrency:
+      group: morpho-sdk-rpc-tests
+      queue: max
     permissions:
       contents: read
 

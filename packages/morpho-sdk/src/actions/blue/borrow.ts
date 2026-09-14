@@ -28,7 +28,10 @@ export interface BlueBorrowParams {
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
-    /** Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing. */
+    /**
+     * Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing.
+     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
+     */
     reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -58,7 +61,7 @@ export interface BlueBorrowParams {
  * @param params.args.receiver - Address that receives the borrowed assets.
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
  * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
- *   execute before borrowing.
+ *   execute before borrowing. Vault V1 inputs are deprecated; use Vault V2 for new integrations.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.

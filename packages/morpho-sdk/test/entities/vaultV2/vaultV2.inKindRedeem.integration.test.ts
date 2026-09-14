@@ -29,6 +29,7 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../../fixtures/blue.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { withChainTimestamp } from "../../helpers/time.js";
 import { createVaultV2 } from "../../helpers/vaultV2.js";
 
@@ -258,7 +259,21 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       throw new Error("Vault V2 shares permit requirement not found");
     }
     const permit = await permitRequirement.sign(client, client.account.address);
-    await client.sendTransaction(exit.buildTx([permit]));
+    // Snapshot the exit around the VaultExitBundlesV1 transaction: testInvariants
+    // asserts no bundler or bundle periphery contract strands the vault
+    // asset/shares or the underlying market tokens, so its result is unused.
+    await testInvariants({
+      client,
+      params: {
+        markets: Object.fromEntries(
+          marketParamsList.map((params, index) => [`market${index}`, params]),
+        ),
+        vaults: { exited: { address: vaultAddress, asset: USDC } },
+      },
+      actionFn: async () => {
+        await client.sendTransaction(exit.buildTx([permit]));
+      },
+    });
 
     const finalVaultShares = await client.readContract({
       address: vaultAddress,
@@ -404,7 +419,17 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
     await client.sendTransaction(approval);
-    await client.sendTransaction(exit.buildTx());
+    // Idle exit still routes through VaultExitBundlesV1: testInvariants asserts
+    // the periphery strands neither the vault shares nor the underlying asset.
+    await testInvariants({
+      client,
+      params: {
+        vaults: { exited: { address: vaultAddress, asset: USDC } },
+      },
+      actionFn: async () => {
+        await client.sendTransaction(exit.buildTx());
+      },
+    });
 
     const finalVaultShares = await client.readContract({
       address: vaultAddress,

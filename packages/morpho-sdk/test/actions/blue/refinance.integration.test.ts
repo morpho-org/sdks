@@ -141,8 +141,11 @@ describe("RefinanceBlue (fork)", () => {
       borrowAmount,
     });
 
-    // Mine a few blocks to accrue source interest — shares-mode must overshoot to cover it.
-    await client.mine({ blocks: 200 });
+    // Advance time to accrue source interest without mining hundreds of forked blocks.
+    await client.setNextBlockTimestamp({
+      timestamp: (await client.timestamp()) + 200n,
+    });
+    await client.mine({ blocks: 1 });
 
     const {
       markets: {

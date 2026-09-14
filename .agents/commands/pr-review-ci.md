@@ -42,15 +42,21 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that all three branch/SHA fields are non-empty AND not whitespace-only (use `[ -z "${X//[[:space:]]/}" ]` — bare `[ -z "$X" ]` lets whitespace pass). If `state` is not `OPEN`, inform the user and stop. Then `git fetch origin`.
+Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that all three branch/SHA fields are non-empty AND not whitespace-only (use `[ -z "${X//[[:space:]]/}" ]` — bare `[ -z "$X" ]` lets whitespace pass). If `state` is not `OPEN`, inform the user and stop. Then fetch the base branch and the PR head by pull ref (works for fork PRs, where `<HEAD_BRANCH>` does not exist under `origin`):
+
+```bash
+git fetch origin <BASE_BRANCH> "+refs/pull/<PR_NUMBER>/head:refs/remotes/origin/pr/<PR_NUMBER>"
+```
+
+Verify `git rev-parse origin/pr/<PR_NUMBER>` equals `<HEAD_SHA>`; if not, the PR moved mid-run — stop and report. Also verify `git rev-parse HEAD` equals `<HEAD_SHA>` (the engine reads full file contents from the worktree, so it must be at the reviewed revision); if not, run `git checkout --detach <HEAD_SHA>` before continuing.
 
 ## Steps 3–6: Shared review base
 
 **Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
-- `<DIFF_SOURCE>` = `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`)
-- `<HEAD_REF>` = `origin/<HEAD_BRANCH>`
-- `<INTENT_CONTEXT>` = the PR title + body (from `PR_JSON` in Step 2) followed by the changed-commit messages (`git log --format='%h %s%n%b' $(git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>)..origin/<HEAD_BRANCH>`), so agents can tell a deliberate, documented change from a regression.
+- `<DIFF_SOURCE>` = `pr` (use `origin/<BASE_BRANCH>...origin/pr/<PR_NUMBER>`)
+- `<HEAD_REF>` = `origin/pr/<PR_NUMBER>`
+- `<INTENT_CONTEXT>` = the PR title + body (from `PR_JSON` in Step 2) followed by the changed-commit messages (`git log --format='%h %s%n%b' $(git merge-base origin/<BASE_BRANCH> origin/pr/<PR_NUMBER>)..origin/pr/<PR_NUMBER>`), so agents can tell a deliberate, documented change from a regression.
 
 Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated, each carrying `snapped_line`), `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>` (count + names), `<COUNTS>` (severity totals), `<DROPPED_COUNTS>`, `<TOTAL_AGENTS_LAUNCHED>`. These flow into Step 7. CI mode is stateless — it does **not** read or write the findings ledger (a fresh verdict every run).
 

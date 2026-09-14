@@ -16,17 +16,24 @@ describe.sequential("addTransactionMetadata", () => {
     vi.restoreAllMocks();
   });
 
-  test("returns the tx unchanged when data is empty (falsy)", () => {
-    // The implementation short-circuits on `!data`. The literal "0x" is truthy,
-    // so the function still processes it; only an empty/undefined data returns
-    // the input verbatim. Casting an empty string to `Hex` mirrors how
-    // upstream code paths treat "missing data" (zero-byte calldata).
+  test("returns the tx unchanged when data is empty", () => {
     const tx = {
       to: TO,
       value: 0n,
       data: "" as Hex,
     };
     expect(addTransactionMetadata(tx, { origin: "" })).toBe(tx);
+  });
+
+  test('returns the tx unchanged when data is canonical empty calldata ("0x")', () => {
+    const tx = {
+      to: TO,
+      value: 1n,
+      data: "0x" as Hex,
+    };
+    expect(
+      addTransactionMetadata(tx, { origin: "cafe", timestamp: true }),
+    ).toBe(tx);
   });
 
   test("treats metadata.timestamp = false the same as omitted", () => {

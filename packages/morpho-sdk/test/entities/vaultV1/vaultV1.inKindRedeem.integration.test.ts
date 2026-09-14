@@ -9,6 +9,7 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { withChainTimestamp } from "../../helpers/time.js";
 
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
@@ -72,7 +73,22 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
     await client.sendTransaction(approval);
-    await client.sendTransaction(exit.buildTx());
+    // Snapshot the exit around the transaction that routes through
+    // VaultExitBundlesV1: testInvariants asserts that no bundler or bundle
+    // periphery contract strands the vault asset/shares or the underlying market
+    // tokens, so its return value is unused here.
+    await testInvariants({
+      client,
+      params: {
+        markets: Object.fromEntries(
+          marketParamsList.map((params, index) => [`market${index}`, params]),
+        ),
+        vaults: { SteakhouseUsdcVaultV1 },
+      },
+      actionFn: async () => {
+        await client.sendTransaction(exit.buildTx());
+      },
+    });
 
     const finalVaultShares = await client.readContract({
       address: SteakhouseUsdcVaultV1.address,
@@ -140,7 +156,20 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       throw new Error("VaultExitBundlesV1 permit requirement not found");
     }
     const permit = await permitRequirement.sign(client, client.account.address);
-    await client.sendTransaction(exit.buildTx([permit]));
+    // See the approval-path test: testInvariants asserts the bundle periphery
+    // strands nothing across the VaultExitBundlesV1 transaction.
+    await testInvariants({
+      client,
+      params: {
+        markets: Object.fromEntries(
+          marketParamsList.map((params, index) => [`market${index}`, params]),
+        ),
+        vaults: { SteakhouseUsdcVaultV1 },
+      },
+      actionFn: async () => {
+        await client.sendTransaction(exit.buildTx([permit]));
+      },
+    });
 
     const finalVaultShares = await client.readContract({
       address: SteakhouseUsdcVaultV1.address,

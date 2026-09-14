@@ -3,18 +3,30 @@ name: Publish
 on:
   workflow_call:
 
+# Least privilege at the workflow level. Only the publish-only job below
+# escalates to `contents: write` + `id-token: write`, and it runs no
+# untrusted dependency/tool code (see the job comments for the threat model).
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
-  publish:
+  # ---------------------------------------------------------------------------
+  # Unprivileged build + pack. This job installs dependencies (running the
+  # allowlisted lifecycle build scripts), compiles every package with `tsc`,
+  # and packs the exact publishable bytes into per-package tarballs. It has
+  # NO `id-token: write` and NO `contents: write`, so a compromised dependency
+  # lifecycle script, `tsc`, or the Changesets/npm CLIs cannot mint an npm
+  # trusted-publishing OIDC token, exfiltrate one, or push to the repo. All
+  # code that is not first-party runs here, behind that trust boundary.
+  pack:
     if: github.ref_name == 'main' || github.ref_name == 'next'
-    name: Publish
+    name: Build & pack
     runs-on: ubuntu-latest
-    environment: prod
+    permissions:
+      contents: read
     outputs:
-      has_tags: ${{ steps.publish-packages.outputs.has_tags }}
+      has_changesets: ${{ steps.pending-changesets.outputs.has_changesets }}
+      has_tarballs: ${{ steps.pack.outputs.has_tarballs }}
     env:
       CI: true
       HUSKY: 0
@@ -32,38 +44,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          registry-url: https://registry.npmjs.org
-          scope: '@morpho-org'
-
-      # Trusted publishing requires npm >= 11.5.1. Pin a known-good npm 11 release
-      # so hosted-runner npm bundle changes do not affect release provenance.
-      - run: npm install -g npm@11.11.0
-
-      - name: Record privileged-step baseline
-        id: privileged-baseline
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Capture this BEFORE `pnpm install` runs dependency lifecycle
-          # scripts. The publish step configures a token-authenticated `origin`
-          # remote and then runs `compute-pending-tag.mjs`, which imports the
-          # other release helper modules, so hash every module reachable from
-          # it. Recording the baseline pre-install means install-time tampering
-          # is caught by the later verification step; recording it post-install
-          # would bake that tampering into the baseline itself.
-          helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-
-          {
-            echo "helper_sha=${helper_sha}"
-            echo "trusted_path=${PATH}"
-          } >> "${GITHUB_OUTPUT}"
 
       - run: pnpm install --frozen-lockfile
 
@@ -90,190 +70,294 @@ jobs:
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
 
-      - name: Verify release helper scripts
+      - name: Build packages
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        run: pnpm build:ci
+
+      - name: Pack publishable tarballs
+        id: pack
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
-        env:
-          BASH_ENV: /dev/null
-          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
-          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
-          PATH="${TRUSTED_PATH}"
-          export PATH
 
-          env -i \
-            BASH_ENV=/dev/null \
-            EXPECTED_HELPER_SHA="${EXPECTED_HELPER_SHA}" \
-            LANG="${LANG:-C.UTF-8}" \
-            PATH="${TRUSTED_PATH}" \
-            PWD="${PWD}" \
-            SHELL="${SHELL:-/bin/bash}" \
-            TMPDIR="${TMPDIR:-/tmp}" \
-            bash --noprofile --norc <<'BASH'
+          out="${RUNNER_TEMP}/tarballs"
+          mkdir -p "$out"
+
+          # Pack every non-private workspace package. `pnpm pack` performs the
+          # workspace-protocol replacement (workspace:^ -> ^x.y.z) exactly like
+          # `changeset publish` would. The `lib/` shipped is the one built by the
+          # step above: no package defines a `prepack` or `prepare` hook (the
+          # lifecycle scripts `pnpm pack` would actually run), and the legacy
+          # `prepublish` hook is not run by `pnpm pack`, so nothing rebuilds here.
+          # `pnpm pack` strips lifecycle scripts from the packed manifest.
+          while IFS= read -r -d '' manifest; do
+            dir="$(dirname "$manifest")"
+            is_private="$(cd "$dir" && node -p "require('./package.json').private === true")"
+            if [ "$is_private" = "true" ]; then
+              continue
+            fi
+            ( cd "$dir" && pnpm pack --pack-destination "$out" )
+          done < <(find packages -mindepth 2 -maxdepth 2 -name package.json -not -path '*/node_modules/*' -print0)
+
+          # Digest the exact bytes handed to the privileged job. The publish job
+          # re-verifies this manifest before it publishes anything.
+          ( cd "$out" && sha256sum ./*.tgz | tee SHA256SUMS )
+
+          if ls "$out"/*.tgz >/dev/null 2>&1; then
+            echo "has_tarballs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tarballs=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload release tarballs
+        if: steps.pack.outputs.has_tarballs == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Privileged publish-only job. It carries `id-token: write` (npm trusted
+  # publishing) and `contents: write` (package tags), but runs NO untrusted
+  # code: it does a fresh checkout of github.sha, uses the npm bundled with the
+  # pinned Node for trusted publishing (nothing is fetched at run time),
+  # consumes ONLY the tarball artifact from the unprivileged job, verifies its
+  # digests with first-party tooling, and confirms `.git/hooks/` holds only samples before
+  # any credentialed operation. There is no `pnpm install` of the dependency
+  # tree, no dependency lifecycle scripts, no `tsc` rebuild, and no Changesets
+  # CLI here — so nothing that could be swapped by a supply-chain compromise
+  # ever coexists with the OIDC/write credentials.
+  publish:
+    name: Publish
+    needs: pack
+    if: needs.pack.outputs.has_tarballs == 'true'
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      has_tags: ${{ steps.publish-packages.outputs.has_tags }}
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Harden git and reject enabled hooks
+        shell: bash
+        run: |
           set -euo pipefail
 
-          actual_helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::Release helper scripts under scripts/release changed after the trusted baseline (during install)."
+          # Split-job boundary requirement: only sample hooks may exist before
+          # any credentialed step runs, and hooks are forced off regardless.
+          if find .git/hooks -type f ! -name '*.sample' | grep -q .; then
+            echo "::error::Enabled git hooks found under .git/hooks; refusing to publish."
             exit 1
           fi
-          BASH
 
-      - name: Publish packages
-        if: steps.pending-changesets.outputs.has_changesets == 'false'
+          git config core.hooksPath /dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          scope: '@morpho-org'
+
+      # Trusted publishing (OIDC provenance) requires npm >= 11.5.1. Use the npm
+      # bundled with the pinned Node (.nvmrc) instead of fetching one at run time
+      # into this credentialed job — otherwise an unpinned registry tarball would
+      # become the npm binary that performs the OIDC exchange. Fail closed if the
+      # bundled npm is too old.
+      - name: Assert bundled npm supports trusted publishing
         shell: bash
-        env:
-          BASH_ENV: /dev/null
-          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
-          PATH="${TRUSTED_PATH}"
-          export PATH
-          : > "$GITHUB_ENV"
-          : > "$GITHUB_PATH"
+          ver="$(npm --version)"
+          node -e '
+            const [a, b, c] = process.argv[1].split(".").map(Number);
+            const ok = a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1)));
+            if (!ok) {
+              console.error(`::error::npm ${process.argv[1]} < 11.5.1; trusted publishing unavailable`);
+              process.exit(1);
+            }
+          ' "$ver"
+          echo "Using bundled npm $ver"
+
+      - name: Download release tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/tarballs
+
+      - name: Verify tarball digests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "${RUNNER_TEMP}/tarballs"
+          test -f SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Publish packages
+        shell: bash
+        run: |
+          set -euo pipefail
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
             publish_tag="next"
           fi
 
-          release_env_file="$(mktemp)"
-          trap 'rm -f "$release_env_file"' EXIT
+          # Trusted publish allowlist, derived from the attested source tree
+          # (this job's fresh checkout of github.sha). A tampered pack job cannot
+          # make us publish a name/version that is not declared at this commit.
+          declare -A expected
+          while IFS=$'\t' read -r pkg_name pkg_version; do
+            expected["$pkg_name"]="$pkg_version"
+          done < <(node -e '
+            const { readdirSync, readFileSync, existsSync } = require("node:fs");
+            for (const dir of readdirSync("packages")) {
+              const manifest = `packages/${dir}/package.json`;
+              if (!existsSync(manifest)) continue;
+              const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+              if (pkg.private === true) continue;
+              process.stdout.write(`${pkg.name}\t${pkg.version}\n`);
+            }
+          ')
 
-          # Changesets hardcodes package git tags as `name@version`; disable
-          # those tags and create the repository's `name-vversion` tags below.
-          # Run publish with an explicit environment allowlist and the trusted
-          # pre-install PATH. This drops values persisted by previous steps
-          # through $GITHUB_ENV or $GITHUB_PATH, including Node loader variables
-          # such as NODE_OPTIONS, while preserving the GitHub OIDC/provenance
-          # metadata that pnpm/npm need for trusted publishing.
-          env -i \
-            ACTIONS_ID_TOKEN_REQUEST_TOKEN="${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
-            ACTIONS_ID_TOKEN_REQUEST_URL="${ACTIONS_ID_TOKEN_REQUEST_URL:-}" \
-            BASH_ENV=/dev/null \
-            CI="${CI}" \
-            GITHUB_ACTIONS="${GITHUB_ACTIONS:-}" \
-            GITHUB_API_URL="${GITHUB_API_URL:-}" \
-            GITHUB_ENV="$release_env_file" \
-            GITHUB_EVENT_NAME="${GITHUB_EVENT_NAME:-}" \
-            GITHUB_EVENT_PATH="${GITHUB_EVENT_PATH:-}" \
-            GITHUB_GRAPHQL_URL="${GITHUB_GRAPHQL_URL:-}" \
-            GITHUB_REF="${GITHUB_REF:-}" \
-            GITHUB_REF_NAME="${GITHUB_REF_NAME:-}" \
-            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
-            GITHUB_REPOSITORY_ID="${GITHUB_REPOSITORY_ID:-}" \
-            GITHUB_REPOSITORY_OWNER_ID="${GITHUB_REPOSITORY_OWNER_ID:-}" \
-            GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-}" \
-            GITHUB_RUN_ID="${GITHUB_RUN_ID:-}" \
-            GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER:-}" \
-            GITHUB_SERVER_URL="${GITHUB_SERVER_URL:-}" \
-            GITHUB_SHA="${GITHUB_SHA:-}" \
-            GITHUB_WORKFLOW="${GITHUB_WORKFLOW:-}" \
-            GITHUB_WORKFLOW_REF="${GITHUB_WORKFLOW_REF:-}" \
-            GITHUB_WORKFLOW_SHA="${GITHUB_WORKFLOW_SHA:-}" \
-            GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-$PWD}" \
-            HOME="${HOME}" \
-            HUSKY=0 \
-            LANG="${LANG:-C.UTF-8}" \
-            NPM_CONFIG_PROVENANCE=true \
-            NPM_CONFIG_REGISTRY=https://registry.npmjs.org \
-            PATH="${TRUSTED_PATH}" \
-            PNPM_CONFIG_PROVENANCE=true \
-            PNPM_CONFIG_REGISTRY=https://registry.npmjs.org \
-            PWD="${PWD}" \
-            RUNNER_ENVIRONMENT="${RUNNER_ENVIRONMENT:-}" \
-            RUNNER_TEMP="${RUNNER_TEMP}" \
-            SHELL="${SHELL:-/bin/bash}" \
-            TMPDIR="${TMPDIR:-/tmp}" \
-            npm_config_provenance=true \
-            npm_config_registry=https://registry.npmjs.org \
-            pnpm_config_provenance=true \
-            pnpm_config_registry=https://registry.npmjs.org \
-            pnpm release --tag "$publish_tag" --no-git-tag
+          # Inventory the received tarballs by reading name/version from inside
+          # each, rejecting duplicates.
+          #
+          # npm's manifest reader (pacote) strips the leading path component of
+          # every tar entry, so a tarball smuggling a second top-level directory
+          # (e.g. `zzz/package.json`) can make `npm publish` ship a different
+          # name/version than a naive read of `package/package.json` — defeating
+          # the allowlist below. We close that structurally: reject any tarball
+          # that is not a single-rooted `package/` archive with exactly one
+          # `package/package.json` and no symlink/hardlink/device entries. Once
+          # that invariant holds there is exactly one manifest in the archive, so
+          # the literal read below is the same manifest npm will publish. (A
+          # registry-aware `npm publish --dry-run` cannot be used for this: it
+          # errors on versions already on the registry, which the idempotent
+          # rerun path relies on being publishable-or-skippable.)
+          declare -A received_version
+          declare -A received_tarball
+          shopt -s nullglob
+          for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
+            entries="$(tar -tzf "$tgz")"
+            # Count-based checks (not `grep -q`) so behaviour is identical across
+            # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
+            #
+            # Reject non-canonical entry paths first: pacote normalizes `.`/`..`
+            # segments and `//` before resolving the manifest, so an entry like
+            # `package/./package.json` aliases onto the root `package.json` after
+            # the leading component is stripped — it would be published while the
+            # exact-path checks below still read the benign `package/package.json`.
+            noncanon="$(printf '%s\n' "$entries" | grep -cE '(^|/)\.\.?(/|$)|//' || true)"
+            if [ "$noncanon" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${noncanon} non-canonical path(s) (., .., //); refusing to publish."
+              exit 1
+            fi
+            outside="$(printf '%s\n' "$entries" | grep -cvE '^package(/|$)' || true)"
+            if [ "$outside" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${outside} entr(y/ies) outside package/; refusing to publish."
+              exit 1
+            fi
+            pj_count="$(printf '%s\n' "$entries" | grep -cxE 'package/package\.json' || true)"
+            if [ "$pj_count" != "1" ]; then
+              echo "::error::Tarball ${tgz##*/} must contain exactly one package/package.json (found ${pj_count}); refusing to publish."
+              exit 1
+            fi
+            irregular="$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)"
+            if [ "$irregular" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} contains ${irregular} non-regular entr(y/ies) (symlink/hardlink/device); refusing to publish."
+              exit 1
+            fi
 
-      - name: Verify release helper scripts after publish
-        if: steps.pending-changesets.outputs.has_changesets == 'false'
-        shell: bash
-        env:
-          BASH_ENV: /dev/null
-          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
-          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
-        run: |
-          set -euo pipefail
-          PATH="${TRUSTED_PATH}"
-          export PATH
-          : > "$GITHUB_ENV"
-          : > "$GITHUB_PATH"
+            tmpd="$(mktemp -d)"
+            tar -xzf "$tgz" -C "$tmpd" package/package.json
+            name="$(node -p "require('${tmpd}/package/package.json').name")"
+            version="$(node -p "require('${tmpd}/package/package.json').version")"
+            rm -rf "$tmpd"
 
-          actual_helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::Release helper scripts under scripts/release changed after publish."
-            exit 1
-          fi
+            if [ -n "${received_version[$name]:-}" ]; then
+              echo "::error::Duplicate tarball for ${name} in the artifact."
+              exit 1
+            fi
+            received_version["$name"]="$version"
+            received_tarball["$name"]="$tgz"
+          done
+
+          # Require an exact bijection between the source's non-private packages
+          # and the received tarballs (name AND version), fail-closed BEFORE any
+          # publish or tag. A tampered pack job therefore cannot omit, add, or
+          # re-version a target and still have us publish/tag a partial set
+          # (which would otherwise leave a git tag + GitHub release for a version
+          # that was never published to npm).
+          for name in "${!expected[@]}"; do
+            if [ "${received_version[$name]:-}" != "${expected[$name]}" ]; then
+              echo "::error::Missing or mismatched tarball for ${name}@${expected[$name]} at ${GITHUB_SHA} (got '${received_version[$name]:-<none>}')."
+              exit 1
+            fi
+          done
+          for name in "${!received_version[@]}"; do
+            if [ -z "${expected[$name]:-}" ]; then
+              echo "::error::Unexpected tarball ${name}@${received_version[$name]} not declared in source at ${GITHUB_SHA}."
+              exit 1
+            fi
+          done
+
+          # Publish, skipping versions already on the registry (idempotent reruns).
+          published=0
+          for name in "${!received_version[@]}"; do
+            version="${received_version[$name]}"
+            tgz="${received_tarball[$name]}"
+
+            if npm view "${name}@${version}" version \
+              --registry https://registry.npmjs.org >/dev/null 2>&1; then
+              echo "Already on registry: ${name}@${version} — skipping."
+              continue
+            fi
+
+            # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
+            # publishes explicit and future-proof; `--registry` overrides any
+            # `publishConfig.registry` in the packed manifest so a tampered pack
+            # job cannot redirect the OIDC audience away from npmjs.
+            echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
+            npm publish "$tgz" \
+              --provenance \
+              --access public \
+              --tag "$publish_tag" \
+              --ignore-scripts \
+              --registry https://registry.npmjs.org
+            published=$((published + 1))
+          done
+          echo "Published ${published} package(s)."
 
       - name: Prepare package tags
         id: publish-packages
-        if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
         env:
-          BASH_ENV: /dev/null
-          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
           GH_TOKEN: ${{ github.token }}
-          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
-          PATH="${TRUSTED_PATH}"
-          export PATH
-
-          env -i \
-            BASH_ENV=/dev/null \
-            EXPECTED_HELPER_SHA="${EXPECTED_HELPER_SHA}" \
-            GH_TOKEN="${GH_TOKEN}" \
-            GITHUB_ENV="${GITHUB_ENV}" \
-            GITHUB_OUTPUT="${GITHUB_OUTPUT}" \
-            GITHUB_PATH="${GITHUB_PATH}" \
-            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
-            HOME="${HOME}" \
-            LANG="${LANG:-C.UTF-8}" \
-            PATH="${TRUSTED_PATH}" \
-            PWD="${PWD}" \
-            RUNNER_TEMP="${RUNNER_TEMP}" \
-            SHELL="${SHELL:-/bin/bash}" \
-            TMPDIR="${TMPDIR:-/tmp}" \
-            bash --noprofile --norc <<'BASH'
-          set -euo pipefail
-          : > "$GITHUB_ENV"
-          : > "$GITHUB_PATH"
-
-          actual_helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::Release helper scripts under scripts/release changed before tag preparation."
-            exit 1
-          fi
+          git config core.hooksPath /dev/null
 
           local_tags="$(mktemp)"
           remote_tags="$(mktemp)"
           pending_tags="${RUNNER_TEMP}/pending-package-tags.txt"
-          trap 'rm -f "$local_tags" "$remote_tags"' EXIT
 
           reset_origin_url() {
             git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
@@ -317,37 +401,15 @@ jobs:
           else
             echo "has_tags=false" >> "$GITHUB_OUTPUT"
           fi
-          BASH
 
       - name: Push package tags
         if: steps.publish-packages.outputs.has_tags == 'true'
         shell: bash
         env:
-          BASH_ENV: /dev/null
           GH_TOKEN: ${{ github.token }}
-          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
-          PATH="${TRUSTED_PATH}"
-          export PATH
-
-          env -i \
-            BASH_ENV=/dev/null \
-            GH_TOKEN="${GH_TOKEN}" \
-            GITHUB_ENV="${GITHUB_ENV}" \
-            GITHUB_PATH="${GITHUB_PATH}" \
-            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
-            HOME="${HOME}" \
-            LANG="${LANG:-C.UTF-8}" \
-            PATH="${TRUSTED_PATH}" \
-            PWD="${PWD}" \
-            RUNNER_TEMP="${RUNNER_TEMP}" \
-            SHELL="${SHELL:-/bin/bash}" \
-            TMPDIR="${TMPDIR:-/tmp}" \
-            bash --noprofile --norc <<'BASH'
-          set -euo pipefail
-          : > "$GITHUB_ENV"
-          : > "$GITHUB_PATH"
+          git config core.hooksPath /dev/null
 
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
@@ -363,7 +425,6 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap reset_origin_url EXIT
           git -c core.hooksPath=/dev/null push --no-verify --atomic origin "${refs[@]}"
-          BASH
 
       - name: Upload package tag list
         if: steps.publish-packages.outputs.has_tags == 'true'

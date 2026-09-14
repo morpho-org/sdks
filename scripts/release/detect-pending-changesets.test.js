@@ -62,6 +62,69 @@ describe("listPendingChangesets", () => {
       join(changesetDir, "alpha.md"),
     ]);
   });
+
+  test("behavior: pre mode excludes already-prereleased changesets", () => {
+    const root = createTempDir();
+    const changesetDir = join(root, ".changeset");
+    mkdirSync(changesetDir);
+    // Both markdown files survive `changeset version` in pre mode, but only the
+    // recorded one has been rolled into a prerelease already.
+    writeFileSync(join(changesetDir, "alpha.md"), "---\n");
+    writeFileSync(join(changesetDir, "beta.md"), "---\n");
+    writeFileSync(
+      join(changesetDir, "pre.json"),
+      JSON.stringify({ mode: "pre", tag: "next", changesets: ["alpha"] }),
+    );
+
+    expect(listPendingChangesets({ changesetDir })).toEqual([
+      join(changesetDir, "beta.md"),
+    ]);
+  });
+
+  test("behavior: pre mode with all changesets recorded is empty", () => {
+    const root = createTempDir();
+    const changesetDir = join(root, ".changeset");
+    mkdirSync(changesetDir);
+    writeFileSync(join(changesetDir, "alpha.md"), "---\n");
+    writeFileSync(join(changesetDir, "beta.md"), "---\n");
+    writeFileSync(
+      join(changesetDir, "pre.json"),
+      JSON.stringify({
+        mode: "pre",
+        tag: "next",
+        changesets: ["alpha", "beta"],
+      }),
+    );
+
+    expect(listPendingChangesets({ changesetDir })).toEqual([]);
+  });
+
+  test("behavior: exit mode keeps recorded changesets pending", () => {
+    const root = createTempDir();
+    const changesetDir = join(root, ".changeset");
+    mkdirSync(changesetDir);
+    writeFileSync(join(changesetDir, "alpha.md"), "---\n");
+    writeFileSync(
+      join(changesetDir, "pre.json"),
+      JSON.stringify({ mode: "exit", tag: "next", changesets: ["alpha"] }),
+    );
+
+    expect(listPendingChangesets({ changesetDir })).toEqual([
+      join(changesetDir, "alpha.md"),
+    ]);
+  });
+
+  test("error: invalid pre state JSON", () => {
+    const root = createTempDir();
+    const changesetDir = join(root, ".changeset");
+    mkdirSync(changesetDir);
+    writeFileSync(join(changesetDir, "alpha.md"), "---\n");
+    writeFileSync(join(changesetDir, "pre.json"), "{ not json");
+
+    expect(() => listPendingChangesets({ changesetDir })).toThrow(
+      /Invalid Changesets pre state/,
+    );
+  });
 });
 
 describe("getGitHubOutput", () => {

@@ -27,6 +27,7 @@ export type {
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs as BlueAuthorizationTypedDataArgs,
+  /** @deprecated Args for the deprecated getDaiPermitTypedData; scheduled for removal in the next major. */
   DaiPermitArgs,
   DeploylessFetchParameters as BlueDeploylessFetchParameters,
   /** @deprecated Use `BlueDeploylessFetchParameters` or the raw `/blue/types` subpath. */

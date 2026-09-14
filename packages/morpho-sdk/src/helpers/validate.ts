@@ -347,6 +347,8 @@ export const validateRepayShares = (params: {
  * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
+ * @deprecated Vault V1 PublicAllocator validation will be removed in the next major. Use Vault V2
+ * reallocations for new integrations.
  * @example
  * ```ts
  * import type { BlueMarketId } from "@morpho-org/morpho-sdk/types";

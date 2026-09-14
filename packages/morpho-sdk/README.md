@@ -159,6 +159,10 @@ const tx = buildTx(signatures);
 
 The LLTV buffer guards against instant liquidation.
 
+> All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
+> composition are deprecated and will be removed in the next major. Use Vault V2
+> BluePublicAllocator reallocations.
+
 ### Midnight: take a fixed-rate offer
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.

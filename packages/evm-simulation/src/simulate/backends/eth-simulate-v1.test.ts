@@ -1,5 +1,6 @@
 import {
   type Address,
+  ExecutionRevertedError,
   ethAddress,
   type Hex,
   maxUint256,
@@ -12,8 +13,13 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
 } from "../../errors.js";
-import { makeTransferLog } from "../../test-helpers/index.js";
+import {
+  encodeUint256,
+  makeTransferLog,
+  padAddress,
+} from "../../test-helpers/index.js";
 import type { SimulationTransaction } from "../../types.js";
+import { WITHDRAWAL_TOPIC } from "../parsing/transfers.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
 type MockSimulateCalls = (args: SimulateCallsParameters) => Promise<unknown>;
@@ -303,6 +309,24 @@ describe.sequential("simulateV1", () => {
     ).rejects.toThrow(SimulationRevertedError);
   });
 
+  it("maps a node-level ExecutionRevertedError to SimulationRevertedError", async () => {
+    const cause = new ExecutionRevertedError({
+      message: "execution reverted: insufficient collateral",
+    });
+    mockSimulateCalls.mockRejectedValueOnce(cause);
+
+    const error = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).not.toBeInstanceOf(ExternalServiceError);
+    expect((error as SimulationRevertedError).details).toBe(cause);
+    expect((error as SimulationRevertedError).cause).toBe(cause);
+  });
+
   it("throws ExternalServiceError when results is not an array", async () => {
     mockSimulateCalls.mockResolvedValueOnce({ results: null });
 
@@ -380,6 +404,34 @@ describe.sequential("simulateV1", () => {
       { account: USER, changes: [{ token: USDC, diff: -1_000_000n }] },
       { account: VAULT, changes: [{ token: USDC, diff: 1_000_000n }] },
     ]);
+  });
+
+  test("behavior: ignores WETH9 events in assetChanges on known tokenless chains", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            {
+              address: USDC,
+              topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+              data: encodeUint256(1_000n),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+      wNative: null,
+    });
+
+    expect(result.assetChanges).toEqual([]);
   });
 
   it("nets inbound and outbound transfers of the same token to zero and drops it", async () => {
