@@ -274,7 +274,9 @@ Every signable requirement action (`PermitAction`, `Permit2Action`,
 carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be signed with any signer:
 
 ```ts
-const [requirement] = await output.getRequirements();
+const requirement = (await output.getRequirements()).find(isRequirementSignature);
+if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
+
 const signature = await remoteSigner.signTypedData(requirement.action.typedData);
 const signed = await requirement.withSignature(signature, owner);
 const tx = output.buildTx(signed);

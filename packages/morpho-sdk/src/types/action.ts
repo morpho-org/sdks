@@ -810,7 +810,9 @@ type RequirementResult<
  *
  * @example
  * ```ts
- * const [requirement] = await output.getRequirements();
+ * const requirement = (await output.getRequirements()).find(isRequirementSignature);
+ * if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
+ *
  * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
  * const signed = await requirement.withSignature(signature, owner);
  * const tx = output.buildTx(signed);
