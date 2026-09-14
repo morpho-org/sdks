@@ -989,6 +989,52 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test.each([
     ["allocator capacity", { allocatorTargetCap: 0n }],
     [
+      "adapter absolute capacity",
+      {
+        idle: 1n,
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral absolute capacity",
+      {
+        idle: 1n,
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "adapter relative capacity",
+      {
+        idle: 1n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral relative capacity",
+      {
+        idle: 1n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
       "market absolute capacity",
       {
         targetPositionAssets: 100n,
@@ -1043,36 +1089,40 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     },
   );
 
-  test("behavior: full target absolute cap permits a deposit that does not increase allocation after rounding", () => {
-    const { data, targetAdapterMarketCapId } = makeFixture({
-      targetSupply: 5n,
-      targetTotalSupplyShares: 1_000_000n,
-      targetPositionAssets: 3n,
-      sourceSupply: 1n,
-      targetCaps: [
-        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
-        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
-        { absoluteCap: 3n, relativeCap: MathLib.WAD },
-      ],
-    });
+  test.each([0n, -2n])(
+    "behavior: full target absolute caps preserve rounding and signed allocation changes with %s untracked assets",
+    (targetUntracked) => {
+      const { data, targetAdapterMarketCapId } = makeFixture({
+        targetSupply: 5n,
+        targetTotalSupplyShares: 1_000_000n,
+        targetPositionAssets: 3n,
+        targetUntracked,
+        sourceSupply: 1n,
+        targetCaps: [
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+        ],
+      });
 
-    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+      const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
-    expect(result.reallocations).toHaveLength(1);
-    expect(result.reallocations[0]?.assets).toBe(1n);
-    expect(
-      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
-    ).toBe(3n);
-  });
+      expect(result.reallocations).toHaveLength(1);
+      expect(result.reallocations[0]?.assets).toBe(1n);
+      expect(
+        result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+      ).toBe(3n);
+    },
+  );
 
-  test("behavior: zero target relative cap permits a deposit that rounds to zero allocation", () => {
+  test("behavior: zero target relative caps permit a deposit that rounds to zero allocation", () => {
     const { data } = makeFixture({
       targetSupply: 2n,
       targetTotalSupplyShares: 1_000_000n,
       sourceSupply: 1n,
       targetCaps: [
-        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
-        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: 0n },
+        { absoluteCap: 10_000n, relativeCap: 0n },
         { absoluteCap: 10_000n, relativeCap: 0n },
       ],
     });
@@ -1084,6 +1134,51 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(reallocations).toHaveLength(1);
     expect(reallocations[0]?.assets).toBe(1n);
   });
+
+  test.each([
+    [
+      "adapter",
+      {
+        sourceAdapter: TARGET_ADAPTER,
+        targetCaps: [
+          { absoluteCap: 1_100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral",
+      {
+        sourceMarketParams: new MarketParams({
+          ...sourceParams,
+          collateralToken: targetParams.collateralToken,
+        }),
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 1_100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+  ] satisfies readonly (readonly [string, FixtureOptions])[])(
+    "behavior: source withdrawal frees a full shared %s cap",
+    (_, options) => {
+      const { data, sourceExpectedAssets } = makeFixture({
+        ...options,
+        targetPositionAssets: 100n,
+      });
+
+      const { reallocations } = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        { timestamp: TIMESTAMP + 1n },
+      );
+
+      expect(reallocations).toHaveLength(1);
+      expect(reallocations[0]?.assets).toBe(sourceExpectedAssets);
+      expect(reallocations[0]?.from.type).toBe("market");
+    },
+  );
 
   test("error: UnsupportedMarketIrmError when source projection is required", () => {
     const { data } = makeFixture({ sourceBorrow: 1n });

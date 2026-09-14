@@ -874,9 +874,9 @@ export class VaultV2BlueReallocationData
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
    * considered. Targets with no remaining supply or allocator capacity are skipped before
-   * projecting source interest. Supply-share limits, target-market absolute caps, and zero
-   * relative caps are checked against a one-asset deposit, preserving deposits whose
-   * allocation does not increase after rounding.
+   * projecting source interest. Supply-share limits and target absolute or zero relative caps
+   * are checked against a one-asset deposit. Shared cap IDs that a source withdrawal can reduce
+   * remain eligible, as do deposits whose allocation does not increase after rounding.
    *
    * Shared-cap discovery is conservative. Operation planning searches at most
    * 1,024 base units above its targeted amount for the nearest executable fit.
@@ -1192,13 +1192,12 @@ export class VaultV2BlueReallocationData
               vaultAddress,
               adapterMarketCapId,
             );
-            if (
-              [
-                adapterCapAllocation,
-                collateralCapAllocation,
-                adapterMarketCapAllocation,
-              ].some(({ absoluteCap }) => absoluteCap === 0n)
-            )
+            const targetAllocations = [
+              adapterCapAllocation,
+              collateralCapAllocation,
+              adapterMarketCapAllocation,
+            ];
+            if (targetAllocations.some(({ absoluteCap }) => absoluteCap === 0n))
               continue;
 
             const expectedSupplyAssets = targetMarket.toSupplyAssets(
@@ -1215,19 +1214,29 @@ export class VaultV2BlueReallocationData
             const minimumAllocation = minimumSupply.market.toSupplyAssets(
               (adapter.supplyShares[marketId] ?? 0n) + minimumSupply.shares,
             );
+            const minimumAllocationChange =
+              minimumAllocation - adapterMarketCapAllocation.allocation;
+            const blockedTargetIds = targetAllocations
+              .filter(({ allocation, absoluteCap, relativeCap }) => {
+                const nextAllocation = allocation + minimumAllocationChange;
+                return (
+                  nextAllocation > absoluteCap ||
+                  (relativeCap === 0n && nextAllocation > 0n)
+                );
+              })
+              .map(({ id }) => id);
             if (
               targetSupplyHeadroom === 0n ||
               allocatorHeadroom === 0n ||
               minimumSupply.market.totalSupplyShares > MathLib.MAX_UINT_128 ||
-              minimumAllocation > adapterMarketCapAllocation.absoluteCap ||
-              (adapterMarketCapAllocation.relativeCap === 0n &&
-                minimumAllocation > 0n)
+              blockedTargetIds.includes(adapterMarketCapId)
             )
               continue;
 
             if (
               publicAllocatorConfig.canPullFromIdle &&
-              availableIdleAssets > 0n
+              availableIdleAssets > 0n &&
+              blockedTargetIds.length === 0
             ) {
               const assets = MathLib.min(
                 MathLib.MAX_UINT_128,
@@ -1302,6 +1311,10 @@ export class VaultV2BlueReallocationData
                 const sourceSupplyShares =
                   sourceAdapter.supplyShares[sourceMarket.id] ?? 0n;
                 if (sourceSupplyShares === 0n) continue;
+
+                // A withdrawal can create target headroom only for shared cap IDs.
+                if (blockedTargetIds.some((id) => !sourceIds.includes(id)))
+                  continue;
 
                 const accruedSourceMarket =
                   sourceMarket.accrueInterest(timestamp);
