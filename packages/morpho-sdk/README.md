@@ -28,7 +28,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **VaultV1** (MetaMorpho) | `deposit`, `withdraw`, `redeem`, `migrateToV2` | VaultBundlesV1 |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **VaultV2** | `deposit`, `withdraw`, `redeem` | VaultBundlesV1 |
-| | `forceWithdraw`, `forceRedeem` | Vault multicall |
+| | `forceWithdraw` | VaultExitBundlesV1 |
+| | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
@@ -42,10 +43,13 @@ Robinhood Chain. Custom deployments can still be configured with `registerCustom
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
-writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits and
-exits use the same shape for token or exact share authorization. Vault `inKindRedeem` additionally
-checks live Blue liquidity. Calling `buildTx()` directly skips RPC-backed pre-flight checks.
-`forceWithdraw` and `forceRedeem` remain direct Vault V2 multicalls without prerequisites.
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits,
+`withdraw`, and `redeem` use the same shape for token or exact vault-share authorization to
+VaultBundlesV1. Vault `inKindRedeem` and `forceWithdraw` use it so callers can await
+`getRequirements()` to check share authorization to VaultExitBundlesV1 — and, for `inKindRedeem`,
+live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directly skips those
+RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
+prerequisites.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -212,10 +216,6 @@ instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePri
 > low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
 > will be removed in the next major.
 
-> All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
-> composition are deprecated and will be removed in the next major. Use Vault V2
-> BluePublicAllocator reallocations.
-
 ### Midnight: take a fixed-rate offer
 
 Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
@@ -280,8 +280,8 @@ graph LR
         V2W --> VBV1
         V2R --> VBV1
         V2IKR -->|direct call| VEB
-        V2FW -->|multicall| V2C[VaultV2 Contract]
-        V2FR -->|multicall| V2C
+        V2FW -->|direct call| VEB
+        V2FR -->|multicall| V2C[VaultV2 Contract]
     end
 
     subgraph Blue Flow

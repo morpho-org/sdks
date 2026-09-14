@@ -6,15 +6,17 @@ import {
   encodeAbiParameters,
   type Hex,
   isAddressEqual,
-  maxUint256,
   parseCompactSignature,
   parseSignature,
   type Signature,
   size,
-  zeroAddress,
   zeroHash,
 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  validateDeadline,
+  validateReferralFee,
+} from "../../helpers/validate.js";
 import {
   AmbiguousRequirementSignaturesError,
   type BaseAction,
@@ -27,7 +29,6 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
-  InputExceedsMaxError,
   type Metadata,
   MixedBundlesFundingError,
   NegativeInputError,
@@ -35,8 +36,6 @@ import {
   type Permit2SignatureTransferAction,
   type PermitAction,
   type PermitRequirementSignature,
-  ReferralFeePctExceededError,
-  ReferralFeeRecipientMissingError,
   type RequirementSignature,
   selectRequirementSignatures,
   type TokenRequirementSignature,
@@ -123,34 +122,12 @@ const EMPTY_TOKEN_PERMIT: BundlesTokenPermit = {
 export const normalizeBundlesCommonParams = (
   params: BundlesCommonParams,
 ): NormalizedBundlesCommonParams => {
-  if (params.deadline <= 0n) {
-    throw new NonPositiveInputError("deadline", params.deadline);
-  }
-  if (params.deadline > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "deadline",
-      value: params.deadline,
-      max: maxUint256,
-    });
-  }
-  const referralFeePct = params.referralFeePct ?? 0n;
-  if (referralFeePct < 0n) {
-    throw new NegativeInputError("referralFeePct", referralFeePct);
-  }
-  if (referralFeePct >= MathLib.WAD) {
-    throw new ReferralFeePctExceededError(referralFeePct);
-  }
-  if (
-    referralFeePct > 0n &&
-    (params.referralFeeRecipient == null ||
-      isAddressEqual(params.referralFeeRecipient, zeroAddress))
-  ) {
-    throw new ReferralFeeRecipientMissingError();
-  }
+  validateDeadline(params.deadline);
+  const { referralFeePct, referralFeeRecipient } = validateReferralFee(params);
   return {
     deadline: params.deadline,
     referralFeePct,
-    referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
+    referralFeeRecipient,
   };
 };
 
@@ -340,9 +317,24 @@ export const getBundlesTokenPermit = (params: {
   };
 };
 
-/** @internal Normalizes a compact or serialized ECDSA signature for bundles permit tuples. */
+/**
+ * Normalizes a compact or serialized ECDSA signature for bundles permit tuples.
+ *
+ * @internal
+ *
+ * @param serializedSignature - Compact or serialized ECDSA signature.
+ * @param onInvalid - Error factory used when parsing or extracting the recovery identifier fails.
+ * @returns The normalized signature tuple.
+ * @throws {BundlesPermitMismatchError} when the signature is malformed.
+ */
 export const normalizeBundlesSignature = (
   serializedSignature: Hex,
+  onInvalid: (details: {
+    readonly expected: string;
+    readonly actual: Hex;
+    readonly cause?: unknown;
+  }) => Error = (details) =>
+    new BundlesPermitMismatchError({ field: "signature", ...details }),
 ): { readonly v: number; readonly r: Hex; readonly s: Hex } => {
   let parsed: Signature;
   try {
@@ -353,8 +345,7 @@ export const normalizeBundlesSignature = (
           )
         : parseSignature(serializedSignature);
   } catch (cause) {
-    throw new BundlesPermitMismatchError({
-      field: "signature",
+    throw onInvalid({
       expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
       actual: serializedSignature,
       cause,
@@ -364,8 +355,7 @@ export const normalizeBundlesSignature = (
     parsed.v ??
     (parsed.yParity == null ? undefined : BigInt(parsed.yParity + 27));
   if (normalizedV == null) {
-    throw new BundlesPermitMismatchError({
-      field: "signature",
+    throw onInvalid({
       expected: "a signature containing v or yParity",
       actual: serializedSignature,
     });
@@ -643,6 +633,66 @@ export const selectBundlesSharesRequirementSignature = (
     prepared.expectedRequirement,
   );
   return selectedPermit;
+};
+
+/**
+ * Selects the ERC-2612 vault-share permit for one exit from its immutable operation fields alone.
+ *
+ * @internal
+ *
+ * @param signatures - Signatures passed to the operation's `buildTx` function.
+ * @param expected - Immutable spender, amount, and deadline required by the operation.
+ * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
+ * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612 or its spender, amount or
+ *   deadline differ from the operation's. The nonce is not checked here: it is onchain state the
+ *   vault's `permit` verifies at execution.
+ */
+export const selectBundlesSharesPermitSignature = (
+  signatures: readonly RequirementSignature[] | undefined,
+  expected: {
+    readonly spender: Address;
+    readonly amount: bigint;
+    readonly deadline: bigint;
+  },
+): Erc2612RequirementSignature | undefined => {
+  const { permit } = selectRequirementSignatures(signatures, { permit: true });
+  if (permit == null) return undefined;
+  const { action } = permit;
+  if (action.type !== "permit") {
+    throw new BundlesPermitMismatchError({
+      field: "type",
+      expected: "permit",
+      actual: action.type,
+    });
+  }
+  if (!isAddressEqual(action.args.spender, expected.spender)) {
+    throw new BundlesPermitMismatchError({
+      field: "spender",
+      expected: expected.spender,
+      actual: action.args.spender,
+    });
+  }
+  if (
+    permit.args.amount !== expected.amount ||
+    action.args.amount !== expected.amount
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "amount",
+      expected: String(expected.amount),
+      actual: String(permit.args.amount),
+    });
+  }
+  if (
+    permit.args.deadline !== expected.deadline ||
+    action.args.deadline !== expected.deadline
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "deadline",
+      expected: String(expected.deadline),
+      actual: String(permit.args.deadline),
+    });
+  }
+  return { args: permit.args, action };
 };
 
 /** @internal Returns the exact referral fee deducted from a fixed gross asset amount. */

@@ -41,6 +41,7 @@ import {
   validateSlippageTolerance,
 } from "../../helpers/index.js";
 import {
+  validateDeadline,
   validateNativeVaultAsset,
   validateUint256Field,
 } from "../../helpers/validate.js";
@@ -341,8 +342,9 @@ export interface VaultV1Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `amount` is not positive.
+   * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {InKindRedeemCoverageError} when the ordered list cannot cover `amount` without
@@ -836,6 +838,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    // Reject the same bounds the action enforces, before `getRequirements()` can walk the caller
+    // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
+    validateDeadline(deadline);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
 
     const vaultExitBundlesV1 = getChainAddress(
