@@ -736,6 +736,18 @@ describe("addressesRegistry", () => {
       "0x77788033B22CEaB8D51Ec8F9dFD4a40E54F380B0",
       5_314_109n,
     ],
+    [
+      ChainId.MonadMainnet,
+      "permit2",
+      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      0n,
+    ],
+    [
+      ChainId.StableMainnet,
+      "permit2",
+      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      0n,
+    ],
   ] as const)(
     "behavior: matches the deployments registry for %i %s",
     (...[chainId, label, address, deploymentBlock]) => {
