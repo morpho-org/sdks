@@ -246,23 +246,25 @@ Update simulations and analytics for the v6 action-field changes. Do not assert
 Bundler3/GeneralAdapter1 destinations or inspect Bundler3 sub-actions for these
 high-level writes.
 
-### Permit2 SignatureTransfer requires an explicit nonce
+### Permit2 SignatureTransfer resolves the nonce automatically
 
-SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
-longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
-requirement path selects Permit2 and `supply(...).getRequirements()` now throws
-`MissingPermit2SignatureTransferNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+SignatureTransfer consumes an owner-global unordered nonce rather than an allowance. For a client
+with `supportSignature: true`, the default supply requirement path selects Permit2 and
+`supply(...).getRequirements()` resolves the lowest unused nonce for `userAddress` automatically — no
+nonce argument is required:
 
 ```ts
 const requirements = await market
   .supply({ userAddress, assets, deadline })
-  .getRequirements({ permit2Nonce });
+  .getRequirements();
 ```
 
-Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
-is single-use; a consumed one throws `Permit2SignatureTransferNonceAlreadyUsedError`). To skip Permit2
-for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
-ERC-2612 permit and needs no nonce.
+Pass `getRequirements({ permit2Nonce })` to pin an explicit `uint256` whose Permit2 `nonceBitmap` bit
+is still unset for `userAddress` (each nonce is single-use; a consumed one throws
+`Permit2SignatureTransferNonceAlreadyUsedError`). An owner whose every nonce at or after the scan
+start is consumed throws `NoUnusedPermit2NonceError`. To skip Permit2 for ERC-2612 tokens, pass
+`getRequirements({ useSimplePermit: true })`, which prefers a one-signature ERC-2612 permit and needs
+no nonce.
 
 ## Blue refinance
 
@@ -396,7 +398,7 @@ BlueBundlesV1 and VaultBundlesV1.
 | `Permit2TransferFromAction` / `Permit2TransferFromRequirementSignature` | `Permit2SignatureTransferAction` / `Permit2SignatureTransferRequirementSignature` |
 | `isPermit2TransferFromSignature` | `isPermit2SignatureTransferSignature` |
 | `selectRequirementSignatures` option and result field `permit2TransferFrom` | `permit2SignatureTransfer` |
-| `MissingPermit2TransferFromNonceError` | `MissingPermit2SignatureTransferNonceError` (old name kept as a `@deprecated` alias) |
+| `MissingPermit2TransferFromNonceError` | Removed — the nonce is resolved automatically; catch `NoUnusedPermit2NonceError` only if every nonce is consumed |
 | `Permit2TransferFromNonceAlreadyUsedError` | `Permit2SignatureTransferNonceAlreadyUsedError` (old name kept as a `@deprecated` alias) |
 
 Update call sites and `switch`/discriminated-union checks on `action.type` to the new

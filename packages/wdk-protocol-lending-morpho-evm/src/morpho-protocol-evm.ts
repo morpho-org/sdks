@@ -270,13 +270,13 @@ export interface PreparedMorphoSupply {
    * @param requirementOptions - Optional token requirement preferences.
    * @param requirementOptions.useSimplePermit - Optional preference for ERC-2612; unsupported
    *   tokens fall back to Permit2 or direct approval.
-   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce; required when
-   *   Permit2 SignatureTransfer is selected. Allocate a distinct nonce per pending operation.
+   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce. Defaults to the
+   *   lowest unused nonce when omitted; allocate a distinct nonce per pending operation.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when the prepared deposit's execution deadline has passed.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
    * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
@@ -1700,7 +1700,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
@@ -1927,7 +1927,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
