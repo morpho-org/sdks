@@ -294,6 +294,19 @@ const liquidity = (data: VaultV1ReallocationData, marketId: MarketId) =>
   data.getMarket(marketId).liquidity;
 
 describe("VaultV1ReallocationData public allocator integration", () => {
+  test("error: identifies an invalid default withdrawal ceiling", () => {
+    try {
+      makeFixture().computeVaultV1Reallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: parseEther("1") + 1n,
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InputExceedsMaxError);
+      expect(error).toMatchObject({ field: "defaultMaxWithdrawalUtilization" });
+      return;
+    }
+    expect.fail("Expected an invalid default ceiling to throw");
+  });
+
   test.each([
     "computeVaultV1Reallocations",
     "getMarketPublicReallocations",

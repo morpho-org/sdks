@@ -405,7 +405,10 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     if (!enabled) return { withdrawals: [], data: this };
 
     // Validate every supplied ceiling, including overrides for unused markets.
-    resolveMaxWithdrawalUtilization(defaultMaxWithdrawalUtilization);
+    resolveMaxWithdrawalUtilization(
+      defaultMaxWithdrawalUtilization,
+      "defaultMaxWithdrawalUtilization",
+    );
     for (const utilization of Object.values(maxWithdrawalUtilization)) {
       // Reject invalid deprecated map entries before any withdrawal planning.
       resolveMaxWithdrawalUtilization(utilization);

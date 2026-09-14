@@ -143,6 +143,23 @@ function makeMockState({
 // ---------------------------------------------------------------------------
 
 describe("computeVaultV1Reallocations", () => {
+  test("error: identifies an invalid default withdrawal ceiling", () => {
+    try {
+      computeVaultV1Reallocations({
+        reallocationData: makeMockState(),
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: MathLib.WAD,
+        options: { defaultMaxWithdrawalUtilization: MathLib.WAD + 1n },
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InputExceedsMaxError);
+      expect(error).toMatchObject({ field: "defaultMaxWithdrawalUtilization" });
+      return;
+    }
+    expect.fail("Expected an invalid default ceiling to throw");
+  });
+
   test("behavior: preserves the deprecated planner alias", () => {
     expect(computeReallocations).toBe(computeVaultV1Reallocations);
   });

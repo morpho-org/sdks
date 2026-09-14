@@ -169,10 +169,14 @@ export const computeVaultV1Reallocations = ({
   readonly options?: ReallocationComputeOptions;
 }): readonly VaultV1Reallocation[] => {
   if (options?.enabled === false) return [];
-  for (const utilization of [
+  // Reject invalid defaults even when the operation needs no reallocations.
+  resolveMaxWithdrawalUtilization(
     options?.defaultMaxWithdrawalUtilization,
-    ...Object.values(options?.maxWithdrawalUtilization ?? {}),
-  ]) {
+    "defaultMaxWithdrawalUtilization",
+  );
+  for (const utilization of Object.values(
+    options?.maxWithdrawalUtilization ?? {},
+  )) {
     // Reject invalid ceilings even when the operation needs no reallocations.
     resolveMaxWithdrawalUtilization(utilization);
   }
