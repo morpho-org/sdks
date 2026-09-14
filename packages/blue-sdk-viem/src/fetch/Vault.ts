@@ -370,20 +370,24 @@ export async function fetchVault(
 }
 
 /**
- * Fetches MetaMorpho vault state with accrued market allocations.
+ * Fetches MetaMorpho vault state and market allocations without applying virtual interest.
  *
- * Reads the vault state with `fetchVault`, then fetches an accrued `VaultMarketAllocation` for every
- * market in the withdraw queue.
+ * Reads the vault state with `fetchVault`, fetches a `VaultMarketAllocation` for every market in the
+ * withdraw queue, and returns their direct onchain state. Consumers can call
+ * `AccrualVault.accrueInterest(timestamp)` when they need a virtual projection. When no
+ * `blockNumber` is supplied and `blockTag` is `"latest"` (the default), separate reads may resolve
+ * at different blocks, so nested entities are not guaranteed synchronized. Pass an explicit
+ * `blockNumber` for a block-consistent snapshot.
  *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVault` entity with accrued market allocations.
+ * @returns The hydrated `AccrualVault` containing direct onchain allocation state.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
  * @example
@@ -413,6 +417,5 @@ export async function fetchAccrualVault(
       fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
-
   return new AccrualVault(vault, allocations);
 }
