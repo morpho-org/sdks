@@ -5,6 +5,7 @@ import {
   decodeFunctionData,
   getAddress,
   maxUint256,
+  serializeSignature,
   zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
@@ -12,6 +13,8 @@ import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
   EmptyMarketParamsListError,
   NonPositiveInputError,
+  type PermitRequirementSignature,
+  VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 import { vaultV1InKindRedeem } from "./inKindRedeem.js";
 
@@ -21,6 +24,28 @@ const vault = "0x0000000000000000000000000000000000000002" as const;
 const userAddress = "0x0000000000000000000000000000000000000004" as const;
 const vaultExitBundlesV1 =
   "0x0000000000000000000000000000000000000005" as const;
+const permit: PermitRequirementSignature = {
+  args: {
+    owner: userAddress,
+    nonce: 7n,
+    asset: vault,
+    signature: serializeSignature({
+      r: `0x${"11".repeat(32)}`,
+      s: `0x${"22".repeat(32)}`,
+      yParity: 1,
+    }),
+    amount: 125n,
+    deadline: 1_900_000_000n,
+  },
+  action: {
+    type: "permit",
+    args: {
+      spender: vaultExitBundlesV1,
+      amount: 125n,
+      deadline: 1_900_000_000n,
+    },
+  },
+};
 const marketParams = new MarketParams({
   loanToken: "0x0000000000000000000000000000000000000006",
   collateralToken: "0x0000000000000000000000000000000000000007",
@@ -124,6 +149,51 @@ describe("vaultV1InKindRedeem", () => {
     `);
     expect(Object.isFrozen(tx)).toBe(true);
     expect(Object.isFrozen(marketParams)).toBe(false);
+  });
+
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
+    expect(() =>
+      vaultV1InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            args: {
+              ...permit.args,
+              owner: blue,
+            },
+          },
+        },
+      }),
+    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+  });
+
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another spender", () => {
+    expect(() =>
+      vaultV1InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                spender: blue,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(VaultExitBundlesV1PermitMismatchError);
   });
 
   test("behavior: calldata round-trips across valid primitive inputs", () => {

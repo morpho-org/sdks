@@ -1,7 +1,7 @@
 import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, maxUint256 } from "viem";
+import { type Address, erc20Abi, maxUint256, serializeSignature } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -17,6 +17,7 @@ import {
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  BundlesPermitMismatchError,
   ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
@@ -24,6 +25,7 @@ import {
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   VaultAddressMismatchError,
   VaultIsBlueFeeRecipientError,
   VaultMorphoMismatchError,
@@ -348,13 +350,13 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     });
   });
 
-  test("behavior: a greater bounded allowance needs no authorization", async () => {
+  test("behavior: oversized allowance is replaced by an exact approval", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const requirements = await vault
+    const [approval] = await vault
       .inKindRedeem({
         amount: 500n,
         marketParamsList: [inKindMarketParams],
@@ -363,8 +365,100 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(requirements).toEqual([]);
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+    });
   });
+
+  test("behavior: oversized allowance is replaced by an exact permit", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, { allowance: 1_000n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const [requirement] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(requirement?.action).toMatchObject({
+      type: "permit",
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+    });
+  });
+
+  test.each(["spender", "amount", "deadline"] as const)(
+    "error: BundlesPermitMismatchError for a different %s",
+    async (field) => {
+      const handle = createMockClient(mainnet);
+      mockV1Requirements(handle, { allowance: 0n });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      const exit = vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: 1_900_000_000n,
+      });
+      const [requirement] = await exit.getRequirements();
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const permit: PermitRequirementSignature = {
+        args: {
+          owner: IN_KIND_USER,
+          nonce: 7n,
+          asset: IN_KIND_VAULT,
+          signature: serializeSignature({
+            r: `0x${"11".repeat(32)}`,
+            s: `0x${"22".repeat(32)}`,
+            yParity: 1,
+          }),
+          amount: requirement.action.args.amount,
+          deadline: requirement.action.args.deadline,
+        },
+        action: requirement.action,
+      };
+      const mismatchedPermit: PermitRequirementSignature = {
+        ...permit,
+        args: {
+          ...permit.args,
+          amount: field === "amount" ? 502n : permit.args.amount,
+          deadline:
+            field === "deadline" ? 1_900_000_001n : permit.args.deadline,
+        },
+        action: {
+          ...permit.action,
+          args: {
+            ...permit.action.args,
+            spender:
+              field === "spender" ? IN_KIND_USER : permit.action.args.spender,
+            amount: field === "amount" ? 502n : permit.action.args.amount,
+            deadline:
+              field === "deadline"
+                ? 1_900_000_001n
+                : permit.action.args.deadline,
+          },
+        },
+      };
+
+      let thrown: unknown;
+      try {
+        exit.buildTx([mismatchedPermit]);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(BundlesPermitMismatchError);
+      expect(thrown).toMatchObject({ field });
+    },
+  );
 
   test("behavior: signature path emits a bounded V1 permit", async () => {
     const handle = createMockClient(mainnet);

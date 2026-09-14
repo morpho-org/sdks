@@ -68,7 +68,6 @@ import {
   type Permit2SignatureTransferAction,
   type PermitAction,
   type RequirementSignature,
-  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
@@ -337,6 +336,9 @@ export interface VaultV2Actions {
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
+   * In-kind exits require an exact vault-share allowance or embedded permit for the computed cap;
+   * any different allowance, including an oversized one, is replaced before the exit.
+   *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
    * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets;
@@ -365,7 +367,7 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, owner, spender, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -1055,7 +1057,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
             required: peak,
           });
         }
-        if (allowance >= requiredShareAllowance) return [];
+        // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
+        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`,
+        // so only an exact match skips the approval or permit that resets it to the computed cap.
+        if (allowance === requiredShareAllowance) return [];
         if (this.client.options.supportSignature) {
           return [
             encodeVaultSharesPermit({
@@ -1080,8 +1085,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
         });
         return vaultV2InKindRedeem({
           vault: { chainId: this.chainId, address: this.vault },
