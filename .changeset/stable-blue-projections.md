@@ -1,6 +1,6 @@
 ---
 "@morpho-org/blue-sdk": minor
-"@morpho-org/blue-sdk-viem": patch
+"@morpho-org/blue-sdk-viem": minor
 "@morpho-org/morpho-sdk": minor
 ---
 
