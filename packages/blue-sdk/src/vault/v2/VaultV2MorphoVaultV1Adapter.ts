@@ -1,5 +1,11 @@
 import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
-
+import type { BigIntish, Hash } from "../../types.js";
+import { CapacityLimitReason } from "../../utils.js";
+import type { AccrualVault } from "../Vault.js";
+import type {
+  IAccrualVaultV2Adapter,
+  IVaultV2Adapter,
+} from "./VaultV2Adapter.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
 /** Plain input shape for a Vault V2 adapter investing in a MetaMorpho V1 vault. */
@@ -14,14 +20,6 @@ export interface IVaultV2MorphoVaultV1Adapter
    */
   readonly parentAllocation?: bigint;
 }
-
-import type { BigIntish, Hash } from "../../types.js";
-import { CapacityLimitReason } from "../../utils.js";
-import type { AccrualVault } from "../Vault.js";
-import type {
-  IAccrualVaultV2Adapter,
-  IVaultV2Adapter,
-} from "./VaultV2Adapter.js";
 
 /** Represents a Vault V2 adapter investing in a MetaMorpho V1 vault. */
 export class VaultV2MorphoVaultV1Adapter
