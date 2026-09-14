@@ -550,19 +550,23 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
 
     // Doubling the bound is unreachable: the realized price cannot exceed the vault share price.
     const derived = exit.buildTx().action.args.minSharePriceE27;
+    const tx = vaultV2ForceWithdraw({
+      vault: { chainId: mainnet.id, address: vaultAddress },
+      args: {
+        adapter,
+        exitAssets,
+        minSharePriceE27: derived * 2n,
+        userAddress: client.account.address,
+        deadline: (await client.timestamp()) + 3_600n,
+      },
+    });
     const thrown = await client
-      .sendTransaction(
-        vaultV2ForceWithdraw({
-          vault: { chainId: mainnet.id, address: vaultAddress },
-          args: {
-            adapter,
-            exitAssets,
-            minSharePriceE27: derived * 2n,
-            userAddress: client.account.address,
-            deadline: (await client.timestamp()) + 3_600n,
-          },
-        }),
-      )
+      .call({
+        account: client.account,
+        to: tx.to,
+        data: tx.data,
+        value: tx.value,
+      })
       .then(
         () => undefined,
         (error: unknown) => error,

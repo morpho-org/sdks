@@ -399,10 +399,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * letting a long deadline silently weaken the guard; `slippageTolerance` absorbs the residual drift
  * until inclusion. Pass distinct snapshots to bound the burn across an accrual window.
  *
- * This is **not** the share allowance to authorize: derive that from the price floor
- * (`mulDivUp(exitAssets, RAY, minSharePriceE27)`), the largest burn the on-chain check accepts. This
- * share-burn bound would under-approve by the slippage band and revert a within-tolerance exit on
- * allowance.
+ * This is **not** the share allowance to authorize. The price floor's denominator is this bound
+ * minus `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`: the
+ * contract measures the *net* burn, which fee mints to `owner` shrink. The allowance is
+ * `min(mulDivUp(exitAssets, RAY, minSharePriceE27) + computeVaultV2ForceWithdrawFeeSharesMinted({
+ * vaultData, owner, timestamp: deadline }), maxUint256)`: the permit pays for the *gross* burn.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
@@ -412,7 +413,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example
  * ```ts
- * import { computeVaultV2ForceWithdrawSharesBurnt } from "@morpho-org/morpho-sdk";
+ * import { MathLib } from "@morpho-org/blue-sdk";
+ * import {
+ *   computeVaultV2ForceWithdrawFeeSharesMinted,
+ *   computeVaultV2ForceWithdrawSharesBurnt,
+ * } from "@morpho-org/morpho-sdk";
  *
  * const { vault: nowVaultData } = vaultData.accrueInterest(now);
  * const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
@@ -420,7 +425,21 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *   deadlineVaultData: nowVaultData,
  *   plan,
  * });
- * // sharesBurnt is the denominator for computeMinForceWithdrawSharePrice
+ * const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+ *   vaultData,
+ *   owner,
+ *   timestamp: now,
+ * });
+ * const sharesBurntForFloor = sharesBurnt - feeSharesNow;
+ * const requiredShareAllowance = MathLib.min(
+ *   MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
+ *     computeVaultV2ForceWithdrawFeeSharesMinted({
+ *       vaultData,
+ *       owner,
+ *       timestamp: deadline,
+ *     }),
+ *   maxUint256,
+ * );
  * ```
  */
 export function computeVaultV2ForceWithdrawSharesBurnt(params: {

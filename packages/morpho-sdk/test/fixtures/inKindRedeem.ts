@@ -173,8 +173,11 @@ export const inKindVaultV2Data = (params?: {
   readonly secondMarketTotalBorrowAssets?: bigint;
   readonly rateAtTarget?: bigint;
   readonly maxRate?: bigint;
+  readonly performanceFee?: bigint;
   readonly managementFee?: bigint;
   readonly feeRecipient?: Address;
+  readonly performanceFeeRecipient?: Address;
+  readonly managementFeeRecipient?: Address;
   readonly adapters?: "single" | "empty" | "legacy";
   readonly additionalMarket?: boolean;
   /**
@@ -291,10 +294,12 @@ export const inKindVaultV2Data = (params?: {
       liquidityAdapter,
       liquidityData,
       liquidityAllocations: undefined,
-      performanceFee: 0n,
+      performanceFee: params?.performanceFee ?? 0n,
       managementFee: params?.managementFee ?? 0n,
-      performanceFeeRecipient: params?.feeRecipient ?? IN_KIND_USER,
-      managementFeeRecipient: params?.feeRecipient ?? IN_KIND_USER,
+      performanceFeeRecipient:
+        params?.performanceFeeRecipient ?? params?.feeRecipient ?? IN_KIND_USER,
+      managementFeeRecipient:
+        params?.managementFeeRecipient ?? params?.feeRecipient ?? IN_KIND_USER,
     },
     params?.liquidityAdapter === "sole" ? adapter : undefined,
     adapters,

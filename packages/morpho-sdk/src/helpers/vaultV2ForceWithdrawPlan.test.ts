@@ -3,7 +3,7 @@ import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -670,6 +670,64 @@ describe("computeVaultV2ForceWithdrawFeeSharesMinted", () => {
         timestamp,
       }),
     ).toBe(managementFeeShares);
+  });
+
+  test("behavior: counts performance-fee mints for the performance-fee recipient", () => {
+    const vaultData = vaultV2ExitData({
+      maxRate: MathLib.WAD,
+      rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      performanceFee: 100_000_000_000_000_000n,
+      performanceFeeRecipient: IN_KIND_USER,
+      managementFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+    });
+    const timestamp = vaultData.lastUpdate + Time.s.from.y(1n);
+    const { performanceFeeShares } = vaultData.accrueInterest(timestamp);
+
+    expect(performanceFeeShares).toBeGreaterThan(0n);
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp,
+      }),
+    ).toBe(performanceFeeShares);
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_ADAPTER,
+        timestamp,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: sums management and performance mints for a recipient of both", () => {
+    const vaultData = vaultV2ExitData({
+      maxRate: MathLib.WAD,
+      rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      performanceFee: 100_000_000_000_000_000n,
+      managementFee: 1_000_000_000n,
+      feeRecipient: IN_KIND_USER,
+    });
+    const timestamp = vaultData.lastUpdate + Time.s.from.y(1n);
+    const { managementFeeShares, performanceFeeShares } =
+      vaultData.accrueInterest(timestamp);
+
+    expect(performanceFeeShares).toBeGreaterThan(0n);
+    expect(managementFeeShares).toBeGreaterThan(0n);
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp,
+      }),
+    ).toBe(managementFeeShares + performanceFeeShares);
+    expect(
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_ADAPTER,
+        timestamp,
+      }),
+    ).toBe(0n);
   });
 
   test("behavior: returns zero when the timestamp does not advance accrual", () => {
