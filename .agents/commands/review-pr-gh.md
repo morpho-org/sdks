@@ -1,19 +1,19 @@
-# pr-review-gh
+# review-pr-gh
 
 Local PR review. Posts an inline GitHub review as a `COMMENT` (never auto-approves or requests changes — leave that decision to humans). Optionally schedules a 2-minute watcher cron via `--watch`.
 
 ## Usage
 
 ```
-/pr-review-gh <PR_NUMBER>
-/pr-review-gh <PR_NUMBER> --watch
+/review-pr-gh <PR_NUMBER>
+/review-pr-gh <PR_NUMBER> --watch
 ```
 
 Pre-conditions:
 
 - A `<PR_NUMBER>` is required.
-- Must run **locally** (NOT in CI). If `CI=true` or `GITHUB_ACTIONS=true`, abort and tell the user to use `/pr-review-ci` instead.
-- `--local` is not supported (use `/pr-review-local` for that).
+- Must run **locally** (NOT in CI). If `CI=true` or `GITHUB_ACTIONS=true`, abort and tell the user to use `/review-pr-ci` instead.
+- `--local` is not supported (use `/review-pr-local` for that).
 
 If `--watch` is passed, the skill is not complete until Step 9's CronCreate succeeds and you report the job ID.
 
@@ -21,11 +21,11 @@ If `--watch` is passed, the skill is not complete until Step 9's CronCreate succ
 
 ```bash
 if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
-  echo "pr-review-gh is for local PR review. Use /pr-review-ci in CI." >&2
+  echo "review-pr-gh is for local PR review. Use /review-pr-ci in CI." >&2
   exit 1
 fi
 if [ -z "${1:-}" ]; then
-  echo "pr-review-gh requires a PR number." >&2
+  echo "review-pr-gh requires a PR number." >&2
   exit 1
 fi
 ```
@@ -34,7 +34,7 @@ Parse `<OWNER>` and `<REPO>` from `git remote get-url origin`. If `--watch` was 
 
 ## Step 2: Fetch PR details
 
-Same as `/pr-review-ci` Step 2: `gh pr view <PR_NUMBER>`, capture and validate `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, ensure `state == OPEN`. Use whitespace-only validation. Then `git fetch origin`.
+Same as `/review-pr-ci` Step 2: `gh pr view <PR_NUMBER>`, capture and validate `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, ensure `state == OPEN`. Use whitespace-only validation. Then `git fetch origin`.
 
 ## Steps 3–6: Shared review base
 
@@ -48,7 +48,7 @@ Steps 3–6 produce: `<FINDINGS>` (each carrying `snapped_line`), `<DROPPED_FIND
 
 ## Step 6b: Findings ledger (PR-keyed, stateful)
 
-So re-reviews of an evolving PR don't re-surface findings already seen or deferred, merge this run's `<FINDINGS>` into a persisted ledger keyed by PR number (distinct from `/pr-review-local`'s `branch-<name>` key). The ledger lives **outside** the repo:
+So re-reviews of an evolving PR don't re-surface findings already seen or deferred, merge this run's `<FINDINGS>` into a persisted ledger keyed by PR number (distinct from `/review-pr-local`'s `branch-<name>` key). The ledger lives **outside** the repo:
 
 ```bash
 slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')   # owner/repo
@@ -56,7 +56,7 @@ LEDGER_DIR=${FACETS_LEDGER_DIR:-$HOME/.claude/facets/reviews}
 LEDGER="$LEDGER_DIR/${slug%%/*}-${slug##*/}-pr<PR_NUMBER>.json"
 # Write the <FINDINGS> array to /tmp first, then:
 node .agents/pr-review-engine/scripts/findings-ledger.ts \
-  --ledger "$LEDGER" --findings /tmp/pr-review-gh-<PR_NUMBER>-findings.json --head-sha "<HEAD_SHA>" --write \
+  --ledger "$LEDGER" --findings /tmp/review-pr-gh-<PR_NUMBER>-findings.json --head-sha "<HEAD_SHA>" --write \
   || echo "findings-ledger failed; continuing with the plain (stateless) review output." >&2
 ```
 
@@ -64,7 +64,7 @@ Drop every `suppressed` (wontfix) finding from the posted comments; tag `net_new
 
 ## Step 7: Post the review as `COMMENT`
 
-Build a JSON object at `/tmp/pr-review-gh-<PR_NUMBER>-comments.json`:
+Build a JSON object at `/tmp/review-pr-gh-<PR_NUMBER>-comments.json`:
 
 ```json
 {
@@ -193,15 +193,15 @@ CYCLE START:
    Without this, a watched PR reposts findings already marked `wontfix` or seen before on every new commit, defeating the stateful re-review. Merge the cycle's <FINDINGS> into the PR-keyed ledger (git-only; the ledger lives outside the repo):
    Run: slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
    set LEDGER = ${FACETS_LEDGER_DIR:-$HOME/.claude/facets/reviews}/${slug%%/*}-${slug##*/}-pr<PR_NUMBER>.json
-   Write the cycle <FINDINGS> array to /tmp/pr-review-gh-<PR_NUMBER>-cycle-findings.json, then:
-   node <REPO_PATH>/.agents/pr-review-engine/scripts/findings-ledger.ts --ledger "$LEDGER" --findings /tmp/pr-review-gh-<PR_NUMBER>-cycle-findings.json --head-sha ${CYCLE_HEAD_SHA} --write || echo "ledger merge failed; posting the plain stateless review." >&2
+   Write the cycle <FINDINGS> array to /tmp/review-pr-gh-<PR_NUMBER>-cycle-findings.json, then:
+   node <REPO_PATH>/.agents/pr-review-engine/scripts/findings-ledger.ts --ledger "$LEDGER" --findings /tmp/review-pr-gh-<PR_NUMBER>-cycle-findings.json --head-sha ${CYCLE_HEAD_SHA} --write || echo "ledger merge failed; posting the plain stateless review." >&2
    The merge prints net_new / recurring / resolved / suppressed. Drop every `suppressed` (wontfix) finding from the comments[] built in step 6, and tag `net_new` findings as **[NEW]** in their comment body. If the merge command fails, post the plain review (no NEW/suppressed handling).
 
 6. POST REVIEW to GitHub as a single atomic call:
-   Build a JSON file at /tmp/pr-review-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.
+   Build a JSON file at /tmp/review-pr-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.
    If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete." to the body.
-   Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/pr-review-gh-<PR_NUMBER>-cycle.json — abort cycle if non-zero exit.
-   Clean up: rm -f /tmp/pr-review-gh-<PR_NUMBER>-cycle.json
+   Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/review-pr-gh-<PR_NUMBER>-cycle.json — abort cycle if non-zero exit.
+   Clean up: rm -f /tmp/review-pr-gh-<PR_NUMBER>-cycle.json
 
 7. Say "Sentinel: WATCH_REVIEW_DONE — PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low)."
 

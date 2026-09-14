@@ -1,11 +1,11 @@
-# pr-describe
+# describe-pr
 
 Generate a PR description for the current branch.
 
 ## Usage
 
 ```
-/pr-describe
+/describe-pr
 ```
 
 ## Instructions
