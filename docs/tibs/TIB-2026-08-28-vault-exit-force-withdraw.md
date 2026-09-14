@@ -136,6 +136,9 @@ if (referralFeeAssets > 0) safeTransfer(asset, referralFeeRecipient, referralFee
 safeTransfer(asset, msg.sender, withdrawn - referralFeeAssets);
 ```
 
+When `referralFeeRecipient == msg.sender`, the referral fee is paid back to the exiting account, so
+its balance delta is the full `withdrawn` amount.
+
 **The load-bearing consequence:** the user is debited roughly `exitAssets` worth of shares but
 receives `assetsToWithdraw + assetsToDeallocate ≤ exitAssets`. The gap is the force-deallocation
 penalty — which `VaultV2.forceDeallocate` charges as `mulDivUp(assets, penalty, WAD)` burned from

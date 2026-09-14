@@ -4,6 +4,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { isAddressEqual } from "viem";
 import {
   computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawMinSharesBurnt,
@@ -35,6 +36,9 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly feeProjectionTimestamp?: bigint;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
+  /** Optional referral fee recipient. When it equals `userAddress`, the fee is paid back to the
+   * exiting account and `netAssets` includes it. */
+  readonly referralFeeRecipient?: Address;
 }
 
 /** Frontend-ready preview of a Vault V2 force withdrawal through VaultExitBundlesV1. */
@@ -61,7 +65,8 @@ export interface VaultV2ForceWithdrawPreview {
   readonly penaltyAssets: bigint;
   /** Assets routed to the referral fee recipient. */
   readonly referralFeeAssets: bigint;
-  /** Assets the user actually receives, net of penalty and referral fee. */
+  /** Assets the exiting account actually receives: `withdrawnAssets` minus the referral fee, unless
+   * the fee is paid back to `userAddress` itself. */
   readonly netAssets: bigint;
 }
 
@@ -89,6 +94,8 @@ export interface VaultV2ForceWithdrawPreview {
  *   more than one year after handle creation (`InputExceedsMaxError`) instead of clamping them, so
  *   keep the deadline itself within that horizon. Ignored without `userAddress`.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
+ * @param params.referralFeeRecipient - Optional referral fee recipient. When it equals
+ *   `userAddress`, the fee is paid back to the exiting account and `netAssets` includes it.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
@@ -120,6 +127,7 @@ export function previewVaultV2ForceWithdraw(
     userAddress,
     feeProjectionTimestamp = timestamp,
     referralFeePct = 0n,
+    referralFeeRecipient,
   } = params;
   if (requestedExitAssets <= 0n) return undefined;
   // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
@@ -223,6 +231,10 @@ export function previewVaultV2ForceWithdraw(
     referralFeePct,
     MathLib.WAD,
   );
+  const selfPaidReferralFee =
+    userAddress != null &&
+    referralFeeRecipient != null &&
+    isAddressEqual(userAddress, referralFeeRecipient);
 
   return {
     maxExitAssets: capacity.maxExitAssets,
@@ -235,6 +247,8 @@ export function previewVaultV2ForceWithdraw(
     // break reconciliation with `exitAssets` for a multi-market exit.
     penaltyAssets: MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
     referralFeeAssets,
-    netAssets: plan.withdrawnAssets - referralFeeAssets,
+    netAssets: selfPaidReferralFee
+      ? plan.withdrawnAssets
+      : plan.withdrawnAssets - referralFeeAssets,
   };
 }

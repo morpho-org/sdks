@@ -163,18 +163,59 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toBeLessThanOrEqual(preview?.exitAssets ?? 0n);
   });
 
-  test("behavior: deducts the referral fee from the net assets", () => {
+  test("behavior: self-paid referral fee is added back to netAssets", () => {
     const preview = previewVaultV2ForceWithdraw(
       vaultV2ExitData({ assetBalance: 100n, penalty: 0n }),
       {
         requestedExitAssets: 100n,
         timestamp: 0n,
         referralFeePct: TEN_PERCENT,
+        referralFeeRecipient: IN_KIND_USER,
+        userAddress: IN_KIND_USER,
       },
     );
 
     expect(preview).toMatchObject({
       assetsToWithdraw: 100n,
+      assetsToDeallocate: 0n,
+      referralFeeAssets: 10n,
+      netAssets: 100n,
+    });
+    expect(preview?.netAssets).toBe(
+      (preview?.assetsToWithdraw ?? 0n) + (preview?.assetsToDeallocate ?? 0n),
+    );
+  });
+
+  test("behavior: third-party referral fee is subtracted", () => {
+    const preview = previewVaultV2ForceWithdraw(
+      vaultV2ExitData({ assetBalance: 100n, penalty: 0n }),
+      {
+        requestedExitAssets: 100n,
+        timestamp: 0n,
+        referralFeePct: TEN_PERCENT,
+        referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+      },
+    );
+
+    expect(preview).toMatchObject({
+      assetsToWithdraw: 100n,
+      referralFeeAssets: 10n,
+      netAssets: 90n,
+    });
+  });
+
+  test("behavior: referral fee is subtracted without a userAddress", () => {
+    const preview = previewVaultV2ForceWithdraw(
+      vaultV2ExitData({ assetBalance: 100n, penalty: 0n }),
+      {
+        requestedExitAssets: 100n,
+        timestamp: 0n,
+        referralFeePct: TEN_PERCENT,
+        referralFeeRecipient: IN_KIND_USER,
+      },
+    );
+
+    expect(preview).toMatchObject({
       referralFeeAssets: 10n,
       netAssets: 90n,
     });
