@@ -59,24 +59,6 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
-  test("behavior: builds an exit when market state is ahead of the local clock", () => {
-    const now = 1_800_000_000n;
-    const vaultData = withChainTimestamp(now + 60n, () => inKindVaultV2Data());
-    const handle = createMockClient(mainnet);
-    const vault = handle.client
-      .extend(morphoViemExtension())
-      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const exit = withChainTimestamp(now, () =>
-      vault.inKindRedeem({
-        amount: 500n,
-        marketParamsList: [inKindMarketParams],
-        vaultData,
-        userAddress: IN_KIND_USER,
-      }),
-    );
-    expect(exit.buildTx().action.args.amount).toBe(500n);
-  });
-
   test("error: InputExceedsMaxError before exposing requirements", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

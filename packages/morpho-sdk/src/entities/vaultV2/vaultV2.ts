@@ -526,7 +526,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       soleAdapter.markets.map((market) => [
         market.id,
         market
-          .accrueInterest(MathLib.max(now, market.lastUpdate))
+          .accrueInterest(now)
           .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );
