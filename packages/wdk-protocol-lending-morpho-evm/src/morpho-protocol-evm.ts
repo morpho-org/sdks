@@ -164,7 +164,10 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
-  /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
+  /**
+   * Explicit unused Permit2 SignatureTransfer nonce. Defaults to the lowest unused nonce for the
+   * owner when omitted; set it only when concurrent flows must partition nonces themselves.
+   */
   readonly permit2Nonce?: bigint;
 }
 
