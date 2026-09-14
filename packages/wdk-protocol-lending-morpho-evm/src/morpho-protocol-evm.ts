@@ -1142,7 +1142,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         const operationRequirementOptions =
           requirementOptions === undefined
             ? undefined
-            : { ...requirementOptions };
+            : {
+                useSimplePermit: requirementOptions.useSimplePermit,
+                permit2Nonce: requirementOptions.permit2Nonce,
+              };
         // Recheck the live chain before using the captured SDK action.
         await this._revalidate(context);
         const requirements = (await action.getRequirements(
