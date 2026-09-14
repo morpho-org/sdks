@@ -290,7 +290,7 @@ For ERC-20 deposits, `getBundlesTokenRequirements` resolves the selected route:
 | --- | --- |
 | `supportSignature: false` (default) | Check ERC-20 allowance to VaultBundlesV1. Return an exact approval if insufficient, preceded by a zero reset for tokens that require it. |
 | `supportSignature: true`, `useSimplePermit: true`, compatible ERC-2612 token | Read the token nonce and metadata; return a signable permit naming VaultBundlesV1. |
-| Signature support with canonical Permit2 available | Check the ERC-20 allowance to Permit2 and the owner nonce bitmap. Return any required Permit2 approval and a SignatureTransfer requirement naming VaultBundlesV1. An explicit unused `permit2Nonce` is mandatory. |
+| Signature support with canonical Permit2 available | Check the ERC-20 allowance to Permit2 and the owner nonce bitmap. Return any required Permit2 approval and a SignatureTransfer requirement naming VaultBundlesV1. The SDK resolves the lowest unused `permit2Nonce` by default; pass one explicitly to override. |
 | No available signature route | Fall back to the classic VaultBundlesV1 approval check. |
 
 Concurrent `getRequirements()` calls share one in-flight read and its first caller's options.

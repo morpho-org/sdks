@@ -234,7 +234,8 @@ The destinations are different:
 
 - Classic ERC-20 approvals and ERC-2612 permits now authorize BlueBundlesV1.
 - Permit2 keeps its ERC-20 approval on canonical Permit2, but the SignatureTransfer payload names
-  BlueBundlesV1 as spender. Explicit Permit2 nonces are now required — see the subsection below.
+  BlueBundlesV1 as spender. The SDK resolves the lowest unused Permit2 nonce by default — see the
+  subsection below.
 - Morpho authorization now grants BlueBundlesV1 operator rights instead of GeneralAdapter1.
 - Without signature support, saturated full-repay requirements use the token's reusable maximum
   allowance so a later bounded debt quote remains covered; BlueBundlesV1 still refunds unused
@@ -339,7 +340,8 @@ ERC-4626 call or Bundler3 multicall.
 
 - Deposits accept exactly one of `amount` and `nativeAmount`. Split a former additive ETH + WETH
   deposit into two transactions. Classic approvals and ERC-2612 permits now authorize
-  VaultBundlesV1; Permit2 uses SignatureTransfer and requires an explicit unused `permit2Nonce`.
+  VaultBundlesV1; Permit2 uses SignatureTransfer with a nonce the SDK resolves by default (pass
+  `permit2Nonce` to override).
 - Remove `recipient` from deposits and remove `recipient` and `onBehalf` from exits. VaultBundlesV1
   always operates for and pays `msg.sender`. `userAddress` now means the account that must submit the
   transaction. A connected builder account may prepare a transaction for a different submitter;

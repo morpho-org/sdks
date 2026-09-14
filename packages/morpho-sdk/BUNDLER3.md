@@ -93,7 +93,8 @@ sender, which must match `userAddress`.
 
 Classic approvals and ERC-2612 permits target VaultBundlesV1. Permit2 uses SignatureTransfer:
 the ERC-20 prerequisite targets canonical Permit2, and the signed transfer names VaultBundlesV1
-as spender with an explicit unused `permit2Nonce`. Native funding needs no token requirements and
+as spender with a `permit2Nonce` the SDK resolves by default (pass one explicitly to override).
+Native funding needs no token requirements and
 rejects token signatures. The same prepared handle resolves requirements and builds the deposit;
 its accepted signature is encoded into the fixed call's token permit.
 
