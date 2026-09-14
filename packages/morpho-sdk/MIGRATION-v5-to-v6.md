@@ -239,9 +239,9 @@ The destinations are different:
 - Permit2 keeps its ERC-20 approval on canonical Permit2, but the SignatureTransfer payload names
   BlueBundlesV1 as spender. Explicit Permit2 nonces are now required — see the subsection below.
 - Morpho authorization now grants BlueBundlesV1 operator rights instead of GeneralAdapter1.
-- Without signature support, saturated full-repay requirements use the token's reusable maximum
-  allowance so a later bounded debt quote remains covered; BlueBundlesV1 still refunds unused
-  transaction funding.
+- Without signature support, full-repay requirements approve exactly the derived `maxRepayAssets`
+  funding cap; pass `approvalAmount` to `getRequirements()` to keep a reusable allowance.
+  BlueBundlesV1 still refunds unused transaction funding.
 - The built transaction's `to` is BlueBundlesV1, not Bundler3, and calldata contains one fixed
   BlueBundlesV1 entrypoint rather than a `BundlerAction[]` multicall.
 

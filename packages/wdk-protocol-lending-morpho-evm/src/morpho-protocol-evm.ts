@@ -162,7 +162,7 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
   }
 }
 
-/** Controls token requirements for prepared vault deposits and Blue writes. */
+/** Controls token requirements for Blue loan and collateral writes. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
@@ -170,7 +170,8 @@ export interface RequirementOptions {
   readonly permit2Nonce?: bigint;
   /**
    * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
-   * as `maxUint256`. Ignored by signature paths.
+   * as `maxUint256`. Applies only to Blue loan/collateral token requirements; ignored by vault
+   * deposit handles and signature paths.
    */
   readonly approvalAmount?: bigint;
 }
@@ -279,8 +280,6 @@ export interface PreparedMorphoSupply {
    *   tokens fall back to Permit2 or direct approval.
    * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce; required when
    *   Permit2 SignatureTransfer is selected. Allocate a distinct nonce per pending operation.
-   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
-   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
@@ -1714,6 +1713,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
@@ -1954,6 +1955,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
