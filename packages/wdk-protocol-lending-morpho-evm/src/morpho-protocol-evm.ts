@@ -1698,7 +1698,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
+   *   defaults to the lowest unused nonce when omitted.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
@@ -1923,7 +1924,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
+   *   defaults to the lowest unused nonce when omitted.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.

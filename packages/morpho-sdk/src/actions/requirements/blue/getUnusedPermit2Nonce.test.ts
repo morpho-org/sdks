@@ -15,6 +15,7 @@ import {
   ChainIdMismatchError,
   InputExceedsMaxError,
   NegativeInputError,
+  NoUnusedPermit2NonceError,
 } from "../../../types/index.js";
 import { getUnusedPermit2Nonce } from "./getUnusedPermit2Nonce.js";
 
@@ -112,5 +113,18 @@ describe("getUnusedPermit2Nonce", () => {
         startNonce: maxUint256 + 1n,
       }),
     ).rejects.toBeInstanceOf(InputExceedsMaxError);
+  });
+
+  test("error: NoUnusedPermit2NonceError when every nonce at or after startNonce is consumed", async () => {
+    // Start at the final nonce so a single bitmap word (its high bit set) exhausts the scan range;
+    // this is the error getBundlesTokenRequirements/getRequirements() propagates when auto-resolving.
+    const handle = mockBitmap(1n << 255n);
+    await expect(
+      getUnusedPermit2Nonce(handle.client, {
+        owner,
+        chainId: mainnet.id,
+        startNonce: maxUint256,
+      }),
+    ).rejects.toBeInstanceOf(NoUnusedPermit2NonceError);
   });
 });
