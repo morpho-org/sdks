@@ -12,6 +12,7 @@ import {
   ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
+  MAX_TOKEN_APPROVALS,
   type Metadata,
   MixedBundlesFundingError,
   type MorphoClientType,
@@ -54,6 +55,7 @@ import {
   custom,
   erc20Abi,
   erc4626Abi,
+  getAddress,
   isAddress,
   isAddressEqual,
   maxUint256,
@@ -160,12 +162,18 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
   }
 }
 
-/** Controls token requirements for prepared vault deposits and Blue writes. */
+/** Controls token requirements for Blue loan and collateral writes. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
   /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
   readonly permit2Nonce?: bigint;
+  /**
+   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
+   * as `maxUint256`. Applies only to Blue loan/collateral token requirements; ignored by vault
+   * deposit handles and signature paths.
+   */
+  readonly approvalAmount?: bigint;
 }
 
 /** Fields shared by ERC-20 and native Morpho Vault supply operations. */
@@ -1134,7 +1142,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         const operationRequirementOptions =
           requirementOptions === undefined
             ? undefined
-            : { ...requirementOptions };
+            : {
+                useSimplePermit: requirementOptions.useSimplePermit,
+                permit2Nonce: requirementOptions.permit2Nonce,
+              };
         // Recheck the live chain before using the captured SDK action.
         await this._revalidate(context);
         const requirements = (await action.getRequirements(
@@ -1689,8 +1700,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * A max repay without signature support may return the token's reusable maximum approval so
-   * rebuilding the bounded debt quote before submission cannot make the prior allowance insufficient.
+   * A max repay without a signature defaults to the token's reusable maximum approval because this
+   * adapter rebuilds the bounded debt quote; pass `requirementOptions.approvalAmount` to override.
    *
    * @param options.token - Address of the configured market's loan token.
    * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
@@ -1699,10 +1710,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
    * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
@@ -1739,9 +1754,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
+    const market = await this._getMarket(context);
     const action = await this._getRepayAction(context, operationOptions);
+    const approvalAmount =
+      operationRequirementOptions?.approvalAmount ??
+      (operationOptions.amount === "max"
+        ? // The adapter rebuilds the debt quote with fresh deadline and state at submission,
+          // so an exact allowance from requirement time could be short by accrued interest.
+          (MAX_TOKEN_APPROVALS[context.chainId]?.[
+            getAddress(market.params.loanToken)
+          ] ?? maxUint256)
+        : undefined);
     const requirements = await action.getRequirements(
-      operationRequirementOptions,
+      approvalAmount === undefined
+        ? operationRequirementOptions
+        : { ...operationRequirementOptions, approvalAmount },
     );
     await this._revalidate(context);
 
@@ -1924,11 +1951,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example

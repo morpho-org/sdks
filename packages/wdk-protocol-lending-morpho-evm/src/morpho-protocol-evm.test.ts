@@ -121,9 +121,16 @@ const borrowAction = {
   buildTx: vi.fn().mockReturnValue(BORROW_TX),
 };
 const repayAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
+  getRequirements: vi.fn((options?: RequirementOptions) =>
+    Promise.resolve([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { amount: options?.approvalAmount ?? 100_000n },
+        },
+      },
+    ]),
+  ),
   buildTx: vi.fn().mockReturnValue(REPAY_TX),
 };
 const supplyCollateralAction = {
@@ -1354,10 +1361,53 @@ describe.sequential("MorphoProtocolEvm", () => {
       >();
       const requirements = await promise;
 
-      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(requirements).toEqual([
+        { action: { type: "erc20Approval", args: { amount: 100_000n } } },
+      ]);
       expect(repayAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );
+    });
+
+    test("behavior: max repay without signature defaults to the reusable approval cap", async () => {
+      const requirements = await protocol.getRepayRequirements({
+        token: TOKEN,
+        amount: "max",
+      });
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: viem.maxUint256 },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount: viem.maxUint256,
+      });
+    });
+
+    test("behavior: exact-asset repay approves the exact amount", async () => {
+      const requirements = await protocol.getRepayRequirements({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: 100_000n },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith(undefined);
+    });
+
+    test("behavior: explicit approvalAmount overrides the default", async () => {
+      const approvalAmount = 123_456n;
+      const requirements = await protocol.getRepayRequirements(
+        { token: TOKEN, amount: "max" },
+        { approvalAmount },
+      );
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: approvalAmount },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount,
+      });
     });
 
     test("should fold a token signature and its deadline into max repay", async () => {

@@ -57,8 +57,8 @@ required snapshot cannot prove the buffered position safe.
 - `repay` and `repayWithdrawCollateral` fund the bounded loan-token amount derived from the
   selected repay mode, `positionData`, and deadline, and request Morpho authorization when
   `collateralAssets > 0n`. Share-mode deadlines cannot exceed the two-hour funding quote horizon.
-  A saturated full repay without signature support requests the token's reusable maximum allowance,
-  while the encoded call remains bounded by the derived `maxRepayAssets` and refunds unused funding.
+  A full repay funds exactly the derived `maxRepayAssets` (deadline-accrued debt plus referral fee);
+  a reusable allowance is opt-in through `approvalAmount`.
 - `withdrawCollateral` delegates to the repay path with no repay leg, so it funds no loan token; it
   requests only Morpho authorization.
 - `withdraw` and `refinance` request Morpho authorization.
