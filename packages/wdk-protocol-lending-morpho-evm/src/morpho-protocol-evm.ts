@@ -1089,7 +1089,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     supportSignature: true,
    *   });
    *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
-   *   // Keep this explicit nonce unique and unused for the owner. USDT falls back to Permit2.
+   *   // Optional: omit permit2Nonce to use the lowest unused nonce. USDT falls back to Permit2.
    *   const requirements = await prepared.getRequirements({
    *     useSimplePermit: true,
    *     permit2Nonce: 42n,
