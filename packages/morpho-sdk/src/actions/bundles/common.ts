@@ -635,6 +635,66 @@ export const selectBundlesSharesRequirementSignature = (
   return selectedPermit;
 };
 
+/**
+ * Selects the ERC-2612 vault-share permit for one exit from its immutable operation fields alone.
+ *
+ * @internal
+ *
+ * @param signatures - Signatures passed to the operation's `buildTx` function.
+ * @param expected - Immutable spender, amount, and deadline required by the operation.
+ * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
+ * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612 or its spender, amount or
+ *   deadline differ from the operation's. The nonce is not checked here: it is onchain state the
+ *   vault's `permit` verifies at execution.
+ */
+export const selectBundlesSharesPermitSignature = (
+  signatures: readonly RequirementSignature[] | undefined,
+  expected: {
+    readonly spender: Address;
+    readonly amount: bigint;
+    readonly deadline: bigint;
+  },
+): Erc2612RequirementSignature | undefined => {
+  const { permit } = selectRequirementSignatures(signatures, { permit: true });
+  if (permit == null) return undefined;
+  const { action } = permit;
+  if (action.type !== "permit") {
+    throw new BundlesPermitMismatchError({
+      field: "type",
+      expected: "permit",
+      actual: action.type,
+    });
+  }
+  if (!isAddressEqual(action.args.spender, expected.spender)) {
+    throw new BundlesPermitMismatchError({
+      field: "spender",
+      expected: expected.spender,
+      actual: action.args.spender,
+    });
+  }
+  if (
+    permit.args.amount !== expected.amount ||
+    action.args.amount !== expected.amount
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "amount",
+      expected: String(expected.amount),
+      actual: String(permit.args.amount),
+    });
+  }
+  if (
+    permit.args.deadline !== expected.deadline ||
+    action.args.deadline !== expected.deadline
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "deadline",
+      expected: String(expected.deadline),
+      actual: String(permit.args.deadline),
+    });
+  }
+  return { args: permit.args, action };
+};
+
 /** @internal Returns the exact referral fee deducted from a fixed gross asset amount. */
 export const getBundlesReferralFeeAssets = (
   assets: bigint,

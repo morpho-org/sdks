@@ -35,6 +35,7 @@ import {
   getBundlesSharesPermit,
   getBundlesTokenPermit,
   resolveBundlesFunding,
+  selectBundlesSharesPermitSignature,
   selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "./common.js";
@@ -360,6 +361,88 @@ describe("selectBundlesSharesRequirementSignature", () => {
       }),
     ).toThrow(BundlesPermitMismatchError);
   });
+});
+
+describe("selectBundlesSharesPermitSignature", () => {
+  const permit = {
+    args: {
+      owner,
+      asset: vault,
+      amount: 7n,
+      nonce: 9n,
+      deadline: 11n,
+      signature,
+    },
+    action: {
+      type: "permit",
+      args: { spender, amount: 7n, deadline: 11n, nonce: 9n },
+    },
+  } satisfies PermitRequirementSignature;
+  const expected = { spender, amount: 7n, deadline: 11n };
+
+  test("default", () => {
+    expect(selectBundlesSharesPermitSignature([permit], expected)).toEqual(
+      permit,
+    );
+    expect(selectBundlesSharesPermitSignature(undefined, expected)).toBe(
+      undefined,
+    );
+  });
+
+  test("error: BundlesPermitMismatchError for a non-ERC-2612 permit", () => {
+    const permit2 = {
+      args: {
+        ...permit.args,
+        expiration: 12n,
+      },
+      action: {
+        type: "permit2",
+        args: {
+          spender,
+          amount: 7n,
+          deadline: 11n,
+          expiration: 12n,
+        },
+      },
+    } satisfies Permit2AllowanceRequirementSignature;
+    expect(() =>
+      selectBundlesSharesPermitSignature([permit2], expected),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "type",
+      }),
+    );
+  });
+
+  test.each([
+    ["spender", { spender: owner }],
+    ["amount", { amount: 8n }],
+    ["deadline", { deadline: 12n }],
+  ] as const)(
+    "error: BundlesPermitMismatchError for a different %s",
+    (field, change) => {
+      expect(() =>
+        selectBundlesSharesPermitSignature(
+          [
+            {
+              args: { ...permit.args, ...change },
+              action: {
+                ...permit.action,
+                args: { ...permit.action.args, ...change },
+              },
+            },
+          ],
+          expected,
+        ),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field,
+        }),
+      );
+    },
+  );
 });
 
 describe("selectBundlesTokenRequirementSignature", () => {

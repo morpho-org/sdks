@@ -33,7 +33,6 @@ import {
 } from "../../helpers/index.js";
 import {
   AdapterNotPartOfVaultError,
-  BundlesPermitMismatchError,
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
   ExcessiveSlippageToleranceError,
@@ -1098,7 +1097,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       );
     });
 
-    test("error: BundlesPermitMismatchError for an unprepared or changed permit", async () => {
+    test("behavior: an equivalent handle builds the same signed transaction without getRequirements()", async () => {
       const now = 1_800_000_000n;
       const handle = createMockClient(mainnet);
       mockRequirements(handle, { nonce: 0n });
@@ -1131,20 +1130,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           }),
         },
       } satisfies Erc2612RequirementSignature;
-      expect(() =>
-        exit.buildTx([
-          {
-            ...signature,
-            action: {
-              ...signature.action,
-              args: {
-                ...signature.action.args,
-                amount: signature.action.args.amount + 1n,
-              },
-            },
-          },
-        ]),
-      ).toThrow(BundlesPermitMismatchError);
       expect(() => exit.buildTx([signature])).not.toThrow();
 
       const freshExit = withChainTimestamp(now, () =>
@@ -1154,12 +1139,155 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           userAddress: IN_KIND_USER,
         }),
       );
-      expect(() => freshExit.buildTx([signature])).toThrowError(
-        expect.objectContaining({
-          name: "BundlesPermitMismatchError",
-          field: "nonce",
+      const tx = exit.buildTx([signature]);
+      const freshTx = freshExit.buildTx([signature]);
+      expect({
+        data: freshTx.data,
+        to: freshTx.to,
+        value: freshTx.value,
+      }).toEqual({
+        data: tx.data,
+        to: tx.to,
+        value: tx.value,
+      });
+    });
+
+    test("error: BundlesPermitMismatchError for a permit with a different amount, deadline or spender", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { nonce: 0n });
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
         }),
       );
+      const requirements = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const requirement = requirements.find(isRequirementSignature);
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const signature = {
+        action: requirement.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: requirement.action.args.amount,
+          nonce: 0n,
+          deadline: requirement.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            args: {
+              ...signature.args,
+              amount: signature.args.amount + 1n,
+            },
+            action: {
+              ...signature.action,
+              args: {
+                ...signature.action.args,
+                amount: signature.action.args.amount + 1n,
+              },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "amount",
+        }),
+      );
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            args: {
+              ...signature.args,
+              deadline: signature.args.deadline + 1n,
+            },
+            action: {
+              ...signature.action,
+              args: {
+                ...signature.action.args,
+                deadline: signature.action.args.deadline + 1n,
+              },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "deadline",
+        }),
+      );
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            action: {
+              ...signature.action,
+              args: { ...signature.action.args, spender: IN_KIND_USER },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "spender",
+        }),
+      );
+    });
+
+    test("behavior: does not reject a permit whose nonce differs from the live nonce", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { nonce: 0n });
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const requirements = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const requirement = requirements.find(isRequirementSignature);
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const signature = {
+        action: {
+          ...requirement.action,
+          args: { ...requirement.action.args, nonce: 1n },
+        },
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: requirement.action.args.amount,
+          nonce: 1n,
+          deadline: requirement.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+
+      expect(() => exit.buildTx([signature])).not.toThrow();
     });
 
     test("behavior: rejects an exit the adapter's markets cannot cover", () => {

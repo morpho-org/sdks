@@ -23,6 +23,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - `tx.to` is now VaultExitBundlesV1 rather than the vault.
 - **New prerequisite: a vault-share allowance or ERC-2612 permit to VaultExitBundlesV1.** The
   multicall path needed none because the vault burned `msg.sender`'s own shares.
+- `forceWithdraw` `buildTx` validates the permit against the operation's spender, amount, and
+  deadline only; it no longer requires `getRequirements()` on the same handle.
 - `VaultV2ForceWithdrawAction.args` is reshaped: `deallocations` and `withdraw` are gone; `adapter`,
   `exitAssets`, `minSharePriceE27`, `referralFeePct`, `referralFeeRecipient`, and `deadline` are new.
 - The caller no longer chooses markets or their order.

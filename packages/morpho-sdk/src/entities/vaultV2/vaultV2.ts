@@ -15,6 +15,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
+  selectBundlesSharesPermitSignature,
   selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "../../actions/bundles/common.js";
@@ -487,8 +488,9 @@ export interface VaultV2Actions {
    * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when a permit was not produced for this
-   *   prepared operation.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
+   *   deadline differs from this operation. Any handle built from the same inputs accepts the
+   *   permit; the nonce is verified onchain by the vault's `permit`.
    * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
@@ -1295,7 +1297,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    let expectedRequirement: PermitAction | undefined;
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
@@ -1338,12 +1339,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
             amount: requiredShareAllowance,
             deadline,
           });
-          if (
-            isRequirementSignature(requirement) &&
-            requirement.action.type === "permit"
-          ) {
-            expectedRequirement = requirement.action;
-          }
           return [requirement];
         }
         return [
@@ -1356,9 +1351,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const permit = selectBundlesSharesRequirementSignature(signatures, {
-          requiredShareAllowance,
-          expectedRequirement,
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
         });
         return vaultV2ForceWithdraw({
           vault: { chainId: this.chainId, address: this.vault },
