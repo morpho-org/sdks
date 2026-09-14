@@ -1,5 +1,14 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.6.1
+
+### Patch Changes
+
+- [#1045](https://github.com/morpho-org/sdks/pull/1045) [`c6756ed`](https://github.com/morpho-org/sdks/commit/c6756eddc5c4f9b60f966e5ab2eb0403000a6874) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deployless `fetchVault` now reports `publicAllocatorConfig` as `undefined` when the vault has not enabled the chain's PublicAllocator as an allocator, matching the multicall path. Previously the deployless path returned a zeroed `{ admin, fee, accruedFee }` config whenever the chain had a PublicAllocator, which made Vault V1 shared-liquidity planning treat the vault as reallocatable. The generated `GetVault` query ABI gains a `hasPublicAllocator` flag.
+
+- Updated dependencies [[`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd)]:
+  - @morpho-org/morpho-ts@2.12.0
+
 ## 5.6.0
 
 ### Minor Changes
