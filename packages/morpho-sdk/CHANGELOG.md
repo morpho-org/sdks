@@ -1,5 +1,33 @@
 # @morpho-org/morpho-sdk
 
+## 5.10.0
+
+### Minor Changes
+
+- [#1053](https://github.com/morpho-org/sdks/pull/1053) [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Compute Midnight quote guards from rounded per-fill settlement amounts and an optional current settlement fee so returned offers cannot imply a worse aggregate price than the requested guard.
+
+- [#1027](https://github.com/morpho-org/sdks/pull/1027) [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Preserve immutable Blue collateral projections and direct onchain Vault V1 fetch results, project Vault V1 market, loss, and fee accounting when computing migration bounds, deprecate cached collateral-allocation proportions and the positional nested-vault parent-allocation constructor argument, and ignore residual nested-vault shares when their parent allocation is zero.
+
+### Patch Changes
+
+- [#1020](https://github.com/morpho-org/sdks/pull/1020) [`f4a0ee8`](https://github.com/morpho-org/sdks/commit/f4a0ee8a0b7be960574246b35c8fb7ec2d2858b3) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Correct Midnight taker examples to preserve the caller's requested asset target and explicit unit guard while forwarding the complete fallback offer list.
+
+- [#1042](https://github.com/morpho-org/sdks/pull/1042) [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compare token addresses case-insensitively: `getUnwrappedToken` resolves lowercased wrapped-token addresses against the checksummed registry (and re-registering the same mapping under a different casing no longer creates a duplicate key), while `fetchHolding`/`fetchToken` now detect permissioned Backed/wrapper tokens, wstETH, and the native token regardless of the caller's address casing.
+
+- [#1049](https://github.com/morpho-org/sdks/pull/1049) [`2c973f5`](https://github.com/morpho-org/sdks/commit/2c973f522e394722d056e808524dabe731ea0c6d) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `OfferUtils.getConsumableUnits` now validates the settlement fee against the offer price before returning unit-capped capacity, so a unit-capped buy offer whose fee exceeds its price throws `SettlementFeeExceedsPriceError` instead of being reported as consumable.
+
+- [#1048](https://github.com/morpho-org/sdks/pull/1048) [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Floor `totalBorrowAssets` at zero in `Market.repay` when a full-share repayment rounds borrow assets up above the market total, instead of throwing a `bigint` underflow. Mirrors the protocol's `zeroFloorSub` accounting.
+
+- [#1047](https://github.com/morpho-org/sdks/pull/1047) [`b293635`](https://github.com/morpho-org/sdks/commit/b293635fca0ff8fcc9c3817db4e231b2e07a3142) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Preserve canonical empty calldata when adding transaction metadata so value-bearing calls keep their `receive()` semantics.
+
+- [#1022](https://github.com/morpho-org/sdks/pull/1022) [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`2c973f5`](https://github.com/morpho-org/sdks/commit/2c973f522e394722d056e808524dabe731ea0c6d), [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1), [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01)]:
+  - @morpho-org/morpho-ts@2.11.2
+  - @morpho-org/blue-sdk-viem@5.6.0
+  - @morpho-org/blue-sdk@6.8.0
+  - @morpho-org/midnight-sdk@1.4.0
+
 ## 5.9.0
 
 ### Minor Changes
