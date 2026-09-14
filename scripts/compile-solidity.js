@@ -157,7 +157,13 @@ const writtenFileSet = new Set(writtenFiles);
 for (const outputPath of globSync(
   join(packageDir, "src", "queries", "**", "*.ts"),
 )) {
-  if (parse(outputPath).base === "index.ts" || writtenFileSet.has(outputPath))
+  if (
+    parse(outputPath).base === "index.ts" ||
+    writtenFileSet.has(outputPath) ||
+    !readFileSync(outputPath, "utf8").startsWith(
+      `/** @internal ${config.describeArtifact(parse(outputPath).name)} ABI. */`,
+    )
+  )
     continue;
 
   unlinkSync(outputPath);
