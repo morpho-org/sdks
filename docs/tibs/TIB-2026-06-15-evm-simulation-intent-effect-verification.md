@@ -5,14 +5,14 @@
 | **Status** | Proposed                                                        |
 | **Date**   | 2026-06-15                                                      |
 | **Author** | @foulques                                                       |
-| **Scope**  | Package: `evm-simulation`; app: Vaults (`morpho-apps/vvrm-app`) |
+| **Scope**  | Package: `evm-simulation`; consumers: Vaults frontend and write API |
 
 ---
 
 ## Context
 
-Transaction creation is moving from the `morpho-org/morpho-apps` frontend to an independent API.
-The frontend must check its output against the user's intent before confirmation.
+Transaction creation is moving from the `morpho-org/morpho-apps` frontend to an independent write
+API. The frontend must check its output against the user's intent.
 
 `evm-simulation` executes ordered transactions and returns calls, transfers and net asset changes.
 Tenderly runs first when configured; `eth_simulateV1` handles service failures, not reverts.
@@ -39,17 +39,18 @@ shared-liquidity operations require success. Unsigned previews substitute approv
 
 ## Proposed Solution
 
-Use `eth_simulateV1` only; remove Tenderly, including fallback. Derive checks from frontend intent
-and independent reads in the frontend-owned simulation service. Apply retention checks individually
-to Bundles V1 contracts, retaining legacy checks until their routes migrate.
+Use `eth_simulateV1` only; remove Tenderly and fallback. Both consumers call the SDK directly with
+their RPC client. The write API runs only the first simulation, without signatures, to check the
+transaction against submitted intent before returning it. The frontend independently previews,
+checks actual signing requests, then simulates finalized transactions with signatures before submission.
 
 ### Input and output
 
-Extend frontend `getSimulate` / `checkSimulation`, `/api/simulate`, and SDK `simulate`:
+The write API and frontend pass the same intent inputs to SDK `simulate`:
 
 | Input | Contents |
 | --- | --- |
-| `chainId`, `account`, `transactions` | Chain, connected user, ordered prerequisites/final transactions |
+| `chainId`, `account`, `transactions` | Chain, user, ordered preview or final transactions |
 | `intent.flow`, relevant IDs | Vault/market; source/target for migration/refinance (Aave source = underlying); selected market for V2 IKR, ordered markets for V1 IKR |
 | `intent.amount` | Assets/shares amount or MAX; separate collateral/debt amounts for combined flows. Full V1 migration needs none; AutoDeleverage takes `enabled` |
 | `intent.maxReallocationFee` | Default zero; user-accepted native allocator fee cap |
@@ -58,15 +59,15 @@ Extend frontend `getSimulate` / `checkSimulation`, `/api/simulate`, and SDK `sim
 Native funding is always allowed: use ERC-20 first, native for the remainder, preserving the gas
 reserve. Lasting approvals are always accepted within the SDK's fixed flow/spender caps.
 
-Before signing, the same rules additionally receive `request`: the actual approval/typed data.
-Intent comes from the form, never the transaction API. Owner/recipient are the connected user.
-The SDK derives tokens, spenders, routes, conversions, rounding, slippage, fees and deadline bounds;
-reuse public SDK math and Vaults defaults. Bind transaction sender, target/entrypoint and selected
-vault/market IDs to that intent. No expected-change/cap arrays. MAX resolves against pinned state;
-it never means infinite approval. Use `bigint` internally, decimal strings over HTTP.
+The frontend also supplies `request`: actual approval/typed data before signing. Intent comes from
+the form, never generated transaction metadata. Owner/recipient are the connected user.
+The SDK independently derives tokens, spenders, routes, conversions, rounding, slippage, fees and
+deadline bounds using public SDK math and Vaults defaults. Bind sender, target/entrypoint and
+vault/market IDs to intent. No expected-change/cap arrays. MAX resolves against pinned state, never
+infinite approval. Use `bigint` internally, decimal strings over HTTP.
 
-Preserve calls, transfers and asset changes. Add `blockNumber`, `simulationTimestamp`, `checks` (rule, subject, expected,
-observed), `allowanceChanges` (owner/token/spender, before/after amount and Permit2 expiry/nonce),
+Preserve calls, transfers and asset changes. Add `blockNumber`, `simulationTimestamp`,
+`checks` (rule, subject, expected, observed), `allowanceChanges` (owner/token/spender, before/after amount and Permit2 expiry/nonce),
 and `authorizationChanges` (authorizer/operator, before/after boolean), including unchanged entries.
 Throw typed errors for mismatches, unsupported flows or missing evidence.
 
@@ -84,9 +85,9 @@ balances unchanged. SDK-derived floors/caps replace per-flow allowance subtracti
 | Expected Morpho operator authorization or unchanged | GA1 authorization is true when required; AutoDeleverage's canonical operator gets the selected boolean; otherwise unchanged |
 | Permit2 invariants | Current signed path: correct owner/token/spender, exact gross grant, managed amount ends zero, nonce advances once, expiry `MAX_UINT48`, bounded signature deadline. Token→Permit2 separately obeys the lasting cap |
 
-Requests must match SDK-derived spenders, amounts and deadlines; signed grants must consume their
-nonces. Fresh funding for a 100-USDC deposit requires a 100-USDC grant and zero remainder. An IKR allowance
-of 101 shares with a one-share residual cap accepts a 100-share burn.
+Requests must match SDK-derived spenders, amounts and deadlines; signed grants consume their nonces.
+Fresh 100-USDC funding requires a 100-USDC grant and zero remainder. A 101-share IKR allowance with
+a one-share residual cap accepts a 100-share burn.
 
 Events discover temporary/unexpected changes; reads prove residual permission. Approve 100, spend
 40: 60 may remain without another event. Approve then revoke: equal endpoints hide the grant.
@@ -138,14 +139,11 @@ was found. Reward claims link to external apps. Approval prerequisites are cover
 
 | Area | Work |
 | --- | --- |
-| Frontend + API route | Carry minimal independent intent and observed checks through preview/preflight; wire every action row |
-| SDK flow rules | Derive assets, permission identities and caps from intent/state; reuse public math/registries and fixed flow defaults; reject unsupported variants |
-| Backend | Remove Tenderly config/fallback; require `eth_simulateV1` support |
-| Asset checks | Read expected balances before/after; compare spends, receipts, extra changes; never treat missing evidence as zero |
-| Permission checks | Implement the six shared invariants; read known/discovered ERC-20, Permit2 and Morpho permissions before/after; missing is not zero |
-| Wallet flow | Check requests before prompting and actual finalized transactions/prerequisites; synthetic approvals remain previews. Normalize IKR allowances above the residual cap |
-| Enforcement | Block mismatches and incomplete evidence; the existing blacklist-only no-bypass rule is insufficient |
-| Bundle retention | Release/consume main's standalone `bundles` guard: published 4.1.3 **and 4.1.5** scan only `bundler3`. Internal native transfers already work |
+| Consumers | Integrate the stages above into the write API and every wired frontend flow |
+| SDK rules/backend | Derive flow checks from intent/state; reject unsupported variants; remove Tenderly configuration/backend |
+| Asset checks | Read expected balances before/after; compare spends, receipts and extra changes; missing is not zero |
+| Permission checks | Read known/discovered ERC-20, Permit2 and Morpho permissions before/after; enforce shared invariants and IKR allowance normalization |
+| Bundle retention | Release/consume main's standalone `bundles` guard; published 4.1.3 **and 4.1.5** scan only `bundler3`. Keep legacy guards until routes migrate. Internal native transfers already work |
 | Tests | Cover every row/invariant, deterministic replay, omitted/extra changes, wrong recipients/spenders, refunds, rounding, fees, oversized existing IKR approvals and no-bypass behavior |
 
 ## Considered Alternatives
@@ -174,8 +172,8 @@ the consumer. Intent plus shared SDK invariants needs fewer parameters and accep
 
 ## Acceptance Criteria
 
-Every wired flow enforces expected changes and retention through `eth_simulateV1`; missing evidence
-or mismatches block confirmation. V1 in-kind redemption remains explicitly unwired until added.
+Both consumers enforce their verification stages: mismatches or missing evidence block API output
+or frontend submission. No bypass. V1 in-kind redemption remains app-unwired.
 
 ## Assumptions & Constraints
 
@@ -186,8 +184,9 @@ simulation, not later execution.
 
 ## Security
 
-Wallet changes cannot prove Morpho position credits; their validation/display remains frontend-owned.
-Final simulation cannot undo approvals/signatures already granted: check requests before signing.
+Morpho position-credit validation/display stays frontend-owned. Unsigned previews may substitute
+approvals for permits; they cannot prove signatures or final permission/nonce changes, or replace
+frontend checks. Check requests before signing: final simulation cannot undo granted authority.
 
 ## References
 
