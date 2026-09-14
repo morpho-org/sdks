@@ -80,9 +80,8 @@ function accrualVaultV2(
 
 describe("VaultV2", () => {
   test("constructor stores all v2 fields and derives adapters from input", () => {
-    const vault = new VaultV2(vaultV2Input({ chainId: 1 }));
+    const vault = new VaultV2(vaultV2Input());
 
-    expect(vault.chainId).toBe(1);
     expect(vault.asset).toBe(vaultV2Input().asset);
     expect(vault._totalAssets).toBe(1_000n);
     expect(vault.totalSupply).toBe(1_000n);
@@ -243,12 +242,11 @@ describe("AccrualVaultV2.accrueInterest", () => {
   });
 
   test("returns a copy without fees when elapsed is zero", () => {
-    const vault = accrualVaultV2(undefined, { chainId: 1 });
+    const vault = accrualVaultV2();
     const result = vault.accrueInterest(100n);
 
     expect(result.vault).not.toBe(vault);
     expect(result.vault._totalAssets).toBe(vault._totalAssets);
-    expect(result.vault.chainId).toBe(1);
     expect(result.performanceFeeShares).toBe(0n);
     expect(result.managementFeeShares).toBe(0n);
   });

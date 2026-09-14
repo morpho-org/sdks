@@ -22,7 +22,6 @@ import {
   computeMaxSupplySharePrice,
 } from "../../helpers/index.js";
 import {
-  ChainIdMismatchError,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
@@ -155,33 +154,6 @@ describe("MorphoBlue builder = signer freedom", () => {
 });
 
 describe("MorphoBlue validation", () => {
-  test("error: ChainIdMismatchError for cross-chain snapshots", () => {
-    const market = noRpcClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const marketData = new Market({
-      ...makePosition().market,
-      chainId: mainnet.id + 1,
-    });
-    const currentPosition = makePosition();
-    const positionData = new AccrualPosition(
-      currentPosition,
-      new Market({ ...currentPosition.market, chainId: mainnet.id + 1 }),
-    );
-
-    expect(() =>
-      market.supply({ amount: 1n, userAddress: USER, marketData }),
-    ).toThrow(ChainIdMismatchError);
-    expect(() =>
-      market.refinance({
-        userAddress: USER,
-        positionData,
-        target: { marketParams: MARKET_PARAMS, positionData: currentPosition },
-        collateralAmount: 1n,
-      }),
-    ).toThrow(ChainIdMismatchError);
-  });
-
   test("supplyCollateral rejects invalid amounts", () => {
     const market = noRpcClient
       .extend(morphoViemExtension())

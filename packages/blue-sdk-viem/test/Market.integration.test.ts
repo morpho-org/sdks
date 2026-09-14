@@ -14,7 +14,6 @@ const { usdc_wstEth, usdc_idle, eth_wstEth, crvUsd_stkcvx2BTC } =
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
     const expectedData = new Market({
-      chainId: ChainId.EthMainnet,
       params: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
@@ -33,7 +32,6 @@ describe("augment/Market", () => {
 
   test("should fetch price and rate if idle market", async ({ client }) => {
     const expectedData = new Market({
-      chainId: ChainId.EthMainnet,
       params: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -85,7 +83,6 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
-      chainId: ChainId.EthMainnet,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -115,7 +112,6 @@ describe("augment/Market", () => {
     });
 
     const expectedData = new Market({
-      chainId: ChainId.EthMainnet,
       params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,

@@ -125,7 +125,7 @@ describe("Market constructor and getters", () => {
 
 describe("Market accrueInterest and accounting actions", () => {
   test("accrueInterest returns an updated market and keeps the source unchanged", () => {
-    const m = market({ chainId: 1, fee: 0n });
+    const m = market({ fee: 0n });
     const accrued = m.accrueInterest(200n);
 
     expect(accrued).not.toBe(m);
@@ -134,7 +134,6 @@ describe("Market accrueInterest and accounting actions", () => {
       m.totalSupplyAssets,
     );
     expect(m.lastUpdate).toBe(100n);
-    expect(accrued.chainId).toBe(1);
   });
 
   test("supply rejects inconsistent inputs and accepts assets or shares", () => {

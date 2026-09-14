@@ -221,7 +221,7 @@ export interface VaultV1Actions {
    *   `DEFAULT_SLIPPAGE_TOLERANCE` and cannot exceed 10%.
    * @returns Lazy approval or permit resolution through `getRequirements()` and a synchronous
    *   `buildTx()` returning a deep-frozen `Transaction<VaultV1MigrateToV2Action>`.
-   * @throws {ChainIdMismatchError} when the client, entity, and present target snapshot provenance differ.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and target assets differ.
@@ -650,7 +650,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
     slippageTolerance?: bigint;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateChainId(targetVault.chainId ?? this.chainId, this.chainId);
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);

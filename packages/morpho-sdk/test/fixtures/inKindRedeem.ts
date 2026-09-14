@@ -151,7 +151,6 @@ export const inKindVaultV1Data = (params?: {
 };
 
 export const inKindVaultV2Data = (params?: {
-  readonly chainId?: number;
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
@@ -235,7 +234,6 @@ export const inKindVaultV2Data = (params?: {
 
   return new AccrualVaultV2(
     {
-      chainId: params?.chainId,
       address,
       name: "In Kind V2",
       symbol: "ikV2",

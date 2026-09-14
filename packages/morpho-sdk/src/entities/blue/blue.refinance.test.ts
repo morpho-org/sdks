@@ -138,34 +138,6 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(ChainIdMismatchError);
   });
 
-  test("error: ChainIdMismatchError when target position provenance differs", () => {
-    const market = makeMarket();
-    const positionData = makePosition({
-      market: new Market({
-        ...baseMarket(sourceParams),
-        chainId: mainnet.id,
-      }),
-      user: USER,
-      collateral: parseUnits("1", 18),
-    });
-    const targetPosition = makePosition({
-      market: new Market({
-        ...baseMarket(targetParams),
-        chainId: mainnet.id + 1,
-      }),
-      user: USER,
-    });
-
-    expect(() =>
-      market.refinance({
-        userAddress: USER,
-        positionData,
-        target: { marketParams: targetParams, positionData: targetPosition },
-        collateralAmount: parseUnits("0.5", 18),
-      }),
-    ).toThrow(ChainIdMismatchError);
-  });
-
   test("error: RefinanceSameMarketError when source and target are the same market", () => {
     const market = makeMarket();
     const positionData = makePosition({

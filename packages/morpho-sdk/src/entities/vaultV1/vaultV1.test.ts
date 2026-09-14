@@ -13,25 +13,6 @@ import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
 
 describe("MorphoVaultV1 chain validation", () => {
-  test("error: ChainIdMismatchError for cross-chain target vault data", () => {
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http("https://rpc.example"),
-    });
-    const vault = publicClient
-      .extend(morphoViemExtension())
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-
-    expect(() =>
-      vault.migrateToV2({
-        userAddress: IN_KIND_USER,
-        sourceVault: inKindVaultV1Data(),
-        targetVault: inKindVaultV2Data({ chainId: mainnet.id + 1 }),
-        shares: 1n,
-      }),
-    ).toThrow(ChainIdMismatchError);
-  });
-
   test("getData throws ChainIdMismatchError when client chain differs", async () => {
     const publicClient = createPublicClient({
       chain: mainnet,

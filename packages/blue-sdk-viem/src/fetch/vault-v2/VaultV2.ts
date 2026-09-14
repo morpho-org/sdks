@@ -132,7 +132,6 @@ export async function fetchVaultV2(
         });
 
       return new VaultV2({
-        chainId: parameters.chainId,
         ...token,
         ...vault,
         address,
@@ -380,7 +379,6 @@ export async function fetchVaultV2(
     );
 
   return new VaultV2({
-    chainId: parameters.chainId,
     ...token,
     asset,
     _totalAssets,
@@ -548,14 +546,11 @@ const AdapterType = {
 } as const;
 
 /** @internal Rebuilds a `Market` from a deployless `GetAccrualVaultV2` market response. */
-// biome-ignore lint/complexity/useMaxParams: internal decoder threads fetched chain provenance
 function toMarket(
   response: AccrualVaultV2QueryResponse["adapters"][number]["marketV1Positions"][number]["market"],
   adaptiveCurveIrm: Address,
-  chainId: number,
 ): Market {
   return new Market({
-    chainId,
     params: new MarketParams(response.marketParams),
     ...response.market,
     price: response.hasPrice ? response.price : undefined,
@@ -572,7 +567,6 @@ function toAccrualAdapter(
   adapter: AccrualVaultV2QueryResponse["adapters"][number],
   adaptiveCurveIrm: Address,
   publicAllocator: Address | undefined,
-  chainId: number,
 ): IAccrualVaultV2Adapter {
   const base = {
     address: adapter.adapter,
@@ -633,7 +627,7 @@ function toAccrualAdapter(
 
       const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
         const marketId = vaultV1.withdrawQueue[i] as MarketId;
-        const market = toMarket(allocation.market, adaptiveCurveIrm, chainId);
+        const market = toMarket(allocation.market, adaptiveCurveIrm);
 
         return {
           config: new VaultMarketConfig({
@@ -684,7 +678,7 @@ function toAccrualAdapter(
 
     case AdapterType.MorphoMarketV1: {
       const positions = adapter.marketV1Positions.map((entry) => {
-        const market = toMarket(entry.market, adaptiveCurveIrm, chainId);
+        const market = toMarket(entry.market, adaptiveCurveIrm);
 
         return new AccrualPosition(
           new Position({
@@ -713,7 +707,7 @@ function toAccrualAdapter(
 
     case AdapterType.MorphoMarketV1AdapterV2: {
       const markets = adapter.marketV1V2Allocations.map((entry) =>
-        toMarket(entry.market, adaptiveCurveIrm, chainId),
+        toMarket(entry.market, adaptiveCurveIrm),
       );
 
       return new AccrualVaultV2MorphoMarketV1AdapterV2(
@@ -843,7 +837,6 @@ export async function fetchAccrualVaultV2Deployless(
   }
 
   const vaultV2 = new VaultV2({
-    chainId,
     ...response.token,
     asset: response.asset,
     _totalAssets: response._totalAssets,
@@ -873,12 +866,11 @@ export async function fetchAccrualVaultV2Deployless(
         response.liquidityAdapterInfo,
         adaptiveCurveIrm,
         publicAllocator,
-        chainId,
       )
     : undefined;
 
   const accrualAdapters = response.adapters.map((adapter) =>
-    toAccrualAdapter(adapter, adaptiveCurveIrm, publicAllocator, chainId),
+    toAccrualAdapter(adapter, adaptiveCurveIrm, publicAllocator),
   );
 
   const forceDeallocatePenalties = Object.fromEntries(

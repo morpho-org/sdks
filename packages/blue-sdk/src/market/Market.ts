@@ -31,8 +31,6 @@ export interface MaxPositionCapacities {
 
 /** Plain input shape for a Morpho Blue market. */
 export interface IMarket {
-  /** Chain provenance when the snapshot was fetched from RPC. */
-  readonly chainId?: number;
   params: IMarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
@@ -48,8 +46,6 @@ export interface IMarket {
  * Represents a lending market on Morpho Blue.
  */
 export class Market implements IMarket {
-  /** Chain provenance when the snapshot was fetched from RPC. */
-  public readonly chainId?: number;
   /**
    * The market's params.
    */
@@ -94,7 +90,6 @@ export class Market implements IMarket {
   public rateAtTarget?: bigint;
 
   constructor({
-    chainId,
     params,
     totalSupplyAssets,
     totalBorrowAssets,
@@ -105,7 +100,6 @@ export class Market implements IMarket {
     price,
     rateAtTarget,
   }: IMarket) {
-    this.chainId = chainId;
     this.params =
       params instanceof MarketParams ? params : new MarketParams(params);
     this.totalSupplyAssets = totalSupplyAssets;

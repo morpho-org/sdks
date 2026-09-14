@@ -1,7 +1,8 @@
 ---
 "@morpho-org/blue-sdk": minor
-"@morpho-org/blue-sdk-viem": patch
 "@morpho-org/morpho-sdk": minor
+"@morpho-org/evm-simulation": patch
+"@morpho-org/wdk-protocol-lending-morpho-evm": patch
 ---
 
-Track fetched Blue snapshot chain provenance, reject cross-chain action inputs, and fail closed when positive debt requires an unsupported nonzero interest-rate model.
+Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
