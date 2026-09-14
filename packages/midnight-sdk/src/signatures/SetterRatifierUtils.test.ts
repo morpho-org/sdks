@@ -1,8 +1,9 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { GroupUtils } from "./GroupUtils.js";
+import { RatifierUtils } from "./RatifierUtils.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -68,6 +69,24 @@ describe("SetterRatifierUtils.ratify", () => {
         proof: decoded.proof,
       }),
     ).toBe(true);
+  });
+
+  test("behavior: does not revalidate per offer", () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maxUnits: 1n, ratifier: setterRatifier }),
+      baseOffer({ maxAssets: 0n, maxUnits: 2n, ratifier: setterRatifier }),
+    ]);
+    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+
+    try {
+      SetterRatifierUtils.ratify({ tree });
+
+      expect(
+        normalize.mock.calls.filter(([params]) => params.tree === tree),
+      ).toHaveLength(1);
+    } finally {
+      normalize.mockRestore();
+    }
   });
 
   test("error: InvalidTreeError mixed ratifiers", () => {

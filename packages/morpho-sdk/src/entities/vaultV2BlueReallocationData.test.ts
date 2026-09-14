@@ -1250,10 +1250,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         parentVault: VAULT,
         skimRecipient: zeroAddress,
         morphoVaultV1: NESTED_VAULT,
+        parentAllocation: 25n,
       },
       nestedVault,
       30n,
-      25n,
     );
     const fixtureVault = data.getVault(VAULT);
     const inputVault = new AccrualVaultV2(

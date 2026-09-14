@@ -9,14 +9,9 @@ import {
   VaultConfig,
   type VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import {
-  type Address,
-  BlockNotFoundError,
-  type Client,
-  zeroAddress,
-} from "viem";
+import { type Address, type Client, zeroAddress } from "viem";
 
-import { getBlock, getChainId, readContract } from "viem/actions";
+import { getChainId, readContract } from "viem/actions";
 import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
@@ -375,27 +370,26 @@ export async function fetchVault(
 }
 
 /**
- * Fetches a block-aligned MetaMorpho vault snapshot accrued to the selected block timestamp.
+ * Fetches MetaMorpho vault state and market allocations without applying virtual interest.
  *
- * Resolves the requested block to a number, reads the vault and every withdraw-queue allocation at
- * that block, then accrues market interest, lost-asset accounting, and performance-fee shares to
- * the block timestamp.
+ * Reads the vault state with `fetchVault`, fetches a `VaultMarketAllocation` for every market in the
+ * withdraw queue, and returns their direct onchain state. Consumers can call
+ * `AccrualVault.accrueInterest(timestamp)` when they need a virtual projection. When no
+ * `blockNumber` is supplied and `blockTag` is `"latest"` (the default), separate reads may resolve
+ * at different blocks, so nested entities are not guaranteed synchronized. Pass an explicit
+ * `blockNumber` for a block-consistent snapshot.
  *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag used to resolve the snapshot; `"pending"` is
- *   unsupported because it has no block number.
+ * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
- * @returns The hydrated `AccrualVault` whose allocations, `totalAssets`, `totalSupply`, and
- *   `lastTotalAssets` reflect accrual at the selected block timestamp.
- * @throws {viem.BlockNotFoundError} when the selected block has no number, including `"pending"`.
+ * @returns The hydrated `AccrualVault` containing direct onchain allocation state.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
- * @throws {BlueErrors.InvalidInterestAccrual} when the block timestamp precedes an allocation market's `lastUpdate`.
  * @example
  * ```ts
  * import type { AccrualVault } from "@morpho-org/blue-sdk";
@@ -413,38 +407,15 @@ export async function fetchVault(
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  const resolvedParameters = {
-    ...parameters,
-    chainId: parameters.chainId ?? (await getChainId(client)),
-  };
+  parameters.chainId ??= await getChainId(client);
 
-  const block = await getBlock(
-    client,
-    resolvedParameters.blockNumber !== undefined
-      ? { blockNumber: resolvedParameters.blockNumber }
-      : { blockTag: resolvedParameters.blockTag ?? "latest" },
-  );
-  if (block.number === null) throw new BlockNotFoundError({});
-  const snapshotParameters = {
-    account: resolvedParameters.account,
-    stateOverride: resolvedParameters.stateOverride,
-    deployless: resolvedParameters.deployless,
-    chainId: resolvedParameters.chainId,
-    blockNumber: block.number,
-  };
-  const vault = await fetchVault(address, client, snapshotParameters);
+  const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
     vault.withdrawQueue.map((marketId) =>
-      fetchVaultMarketAllocation(
-        vault.address,
-        marketId,
-        client,
-        snapshotParameters,
-      ),
+      fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
-
-  return new AccrualVault(vault, allocations).accrueInterest(block.timestamp);
+  return new AccrualVault(vault, allocations);
 }

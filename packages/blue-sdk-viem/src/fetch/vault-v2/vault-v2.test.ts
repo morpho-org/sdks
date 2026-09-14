@@ -20,7 +20,6 @@ import {
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
-  BlockNotFoundError,
   encodeAbiParameters,
   encodeErrorResult,
   erc20Abi,
@@ -31,7 +30,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
-  mockBlock,
   mockDeploylessRead,
   mockDeploylessReads,
   mockReadFailure,
@@ -684,14 +682,21 @@ describe("fetchVaultV2Adapter", () => {
       morphoVaultV1: VAULT,
       parentVault: RECIPIENT,
       skimRecipient: RECIPIENT,
+      parentAllocation: 77n,
     });
 
-    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const parameters = { chainId: CHAIN_ID };
+
+    const adapter = await fetchVaultV2Adapter(
+      ADAPTER,
+      handle.client,
+      parameters,
+    );
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoVaultV1Adapter);
     expect((adapter as VaultV2MorphoVaultV1Adapter).morphoVaultV1).toBe(VAULT);
+    expect((adapter as VaultV2MorphoVaultV1Adapter).parentAllocation).toBe(77n);
+    expect(parameters).toStrictEqual({ chainId: CHAIN_ID });
   });
 
   test("routes to the MorphoMarketV1 adapter fetcher", async () => {
@@ -908,6 +913,12 @@ describe("individual adapter fetchers", () => {
       functionName: "morphoVaultV1",
       result: VAULT,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 77n,
+    });
 
     const adapter = await fetchVaultV2MorphoVaultV1Adapter(
       ADAPTER,
@@ -916,6 +927,7 @@ describe("individual adapter fetchers", () => {
     );
 
     expect(adapter.morphoVaultV1).toBe(VAULT);
+    expect(adapter.parentAllocation).toBe(77n);
   });
 
   test("fetchVaultV2MorphoVaultV1Adapter uses multicall directly when deployless is disabled", async () => {
@@ -944,6 +956,12 @@ describe("individual adapter fetchers", () => {
       functionName: "morphoVaultV1",
       result: VAULT,
     });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 77n,
+    });
 
     const adapter = await fetchVaultV2MorphoVaultV1Adapter(
       ADAPTER,
@@ -952,6 +970,7 @@ describe("individual adapter fetchers", () => {
     );
 
     expect(adapter.morphoVaultV1).toBe(VAULT);
+    expect(adapter.parentAllocation).toBe(77n);
   });
 
   test("fetchVaultV2MorphoVaultV1Adapter throws UnknownOfFactory on multicall", async () => {
@@ -980,6 +999,12 @@ describe("individual adapter fetchers", () => {
       abi: morphoVaultV1AdapterAbi,
       functionName: "morphoVaultV1",
       result: VAULT,
+    });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 0n,
     });
 
     await expect(
@@ -1013,6 +1038,12 @@ describe("individual adapter fetchers", () => {
       abi: morphoVaultV1AdapterAbi,
       functionName: "morphoVaultV1",
       result: VAULT,
+    });
+    mockRead(handle, {
+      address: ADAPTER,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "allocation",
+      result: 0n,
     });
 
     await expect(
@@ -1456,7 +1487,6 @@ describe("individual adapter fetchers", () => {
 
   test("fetchAccrualVaultV2Adapter routes to the Vault V1 accrual fetcher", async () => {
     const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: 1n, timestamp: 0n });
     mockRead(handle, {
       address: ADDRESSES.morphoVaultV1AdapterFactory,
       abi: morphoVaultV1AdapterFactoryAbi,
@@ -1480,6 +1510,7 @@ describe("individual adapter fetchers", () => {
         morphoVaultV1: VAULT,
         parentVault: RECIPIENT,
         skimRecipient: RECIPIENT,
+        parentAllocation: 77n,
       }),
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1520,13 +1551,6 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
-    mockRead(handle, {
-      address: ADAPTER,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "allocation",
-      result: 77n,
-    });
-
     const adapter = await fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {
       chainId: CHAIN_ID,
     });
@@ -1540,12 +1564,12 @@ describe("individual adapter fetchers", () => {
 
   test("fetchAccrualVaultV2MorphoVaultV1Adapter composes the underlying Vault V1 accrual state", async () => {
     const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: 1n, timestamp: 0n });
     mockDeploylessReads(handle, [
       encodeReadResult(vaultAdapterQueryAbi, "query", {
         morphoVaultV1: VAULT,
         parentVault: RECIPIENT,
         skimRecipient: RECIPIENT,
+        parentAllocation: 0n,
       }),
       encodeReadResult(vaultQueryAbi, "query", {
         config: {
@@ -1586,13 +1610,6 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
-    mockRead(handle, {
-      address: ADAPTER,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "allocation",
-      result: 0n,
-    });
-
     const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       handle.client,
@@ -1604,20 +1621,6 @@ describe("individual adapter fetchers", () => {
     expect(adapter.shares).toBe(99n);
     expect(adapter.parentAllocation).toBe(0n);
     expect(adapter.realAssets()).toBe(0n);
-  });
-
-  test("fetchAccrualVaultV2MorphoVaultV1Adapter rejects a pending block that cannot anchor one snapshot", async () => {
-    const handle = createMockClient(mainnet);
-    mockBlock(handle, { number: null, timestamp: 0n });
-
-    await expect(
-      fetchAccrualVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        blockTag: "pending",
-      }),
-    ).rejects.toBeInstanceOf(BlockNotFoundError);
-    expect(
-      handle.request.mock.calls.some(([call]) => call.method === "eth_call"),
-    ).toBe(false);
   });
 });
 
@@ -1983,12 +1986,12 @@ describe("fetchAccrualVaultV2Deployless", () => {
       withdrawQueue: [ID],
     };
     const sequentialHandle = createMockClient(mainnet);
-    mockBlock(sequentialHandle, { number: 1n, timestamp: blockTimestamp });
     mockDeploylessReads(sequentialHandle, [
       encodeReadResult(vaultAdapterQueryAbi, "query", {
         morphoVaultV1: VAULT,
         parentVault: RECIPIENT,
         skimRecipient: RECIPIENT,
+        parentAllocation: 30n * unit,
       }),
       encodeReadResult(vaultQueryAbi, "query", {
         ...vaultV1Result,
@@ -2001,12 +2004,6 @@ describe("fetchAccrualVaultV2Deployless", () => {
       abi: erc20Abi,
       functionName: "balanceOf",
       result: 25n * unit,
-    });
-    mockRead(sequentialHandle, {
-      address: ADAPTER,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "allocation",
-      result: 30n * unit,
     });
     mockRead(sequentialHandle, {
       address: VAULT,
@@ -2035,7 +2032,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       sequentialHandle.client,
-      { chainId: CHAIN_ID },
+      { blockNumber: 1n, chainId: CHAIN_ID },
     );
 
     const deploylessHandle = createMockClient(mainnet);
@@ -2077,7 +2074,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const deployless = await fetchAccrualVaultV2Deployless(
       VAULT,
       deploylessHandle.client,
-      { chainId: CHAIN_ID },
+      { blockNumber: 1n, chainId: CHAIN_ID },
     );
     const deploylessAdapter = deployless.accrualAdapters[0] as
       | AccrualVaultV2MorphoVaultV1Adapter

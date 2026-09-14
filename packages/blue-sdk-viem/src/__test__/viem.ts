@@ -12,9 +12,6 @@ import {
   numberToHex,
   toFunctionSelector,
   toFunctionSignature,
-  toHex,
-  zeroAddress,
-  zeroHash,
 } from "viem";
 
 type ReadFunctionName<abi extends Abi> = ContractFunctionName<
@@ -74,44 +71,6 @@ export function mockDeploylessRead<
   ...read: [abi: abi, functionName: fn, result: unknown]
 ) {
   mockDeploylessReads(handle, [encodeReadResult(...read)]);
-}
-
-/** Mock a complete RPC block response while preserving other handlers. @internal */
-export function mockBlock(
-  handle: MockClientHandle<Chain>,
-  block: { readonly number: bigint | null; readonly timestamp: bigint },
-) {
-  const base = handle.request.getMockImplementation();
-  if (base == null) throw new Error("mock client has no base implementation");
-
-  handle.request.mockImplementation(async (call) => {
-    if (call.method === "eth_getBlockByNumber") {
-      return {
-        baseFeePerGas: toHex(0n),
-        difficulty: toHex(0n),
-        extraData: "0x",
-        gasLimit: toHex(30_000_000n),
-        gasUsed: toHex(0n),
-        hash: block.number === null ? null : zeroHash,
-        logsBloom: `0x${"00".repeat(256)}`,
-        miner: zeroAddress,
-        mixHash: zeroHash,
-        nonce: "0x0000000000000000",
-        number: block.number === null ? null : toHex(block.number),
-        parentHash: zeroHash,
-        receiptsRoot: zeroHash,
-        sha3Uncles: zeroHash,
-        size: toHex(0n),
-        stateRoot: zeroHash,
-        timestamp: toHex(block.timestamp),
-        totalDifficulty: toHex(0n),
-        transactions: [],
-        transactionsRoot: zeroHash,
-        uncles: [],
-      };
-    }
-    return base(call);
-  });
 }
 
 /**

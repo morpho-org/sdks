@@ -65,10 +65,10 @@ import {
 
 export interface VaultV1Actions {
   /**
-   * Fetches the latest vault data with accrued interest.
+   * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest vault data.
+   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
    */
   getData: (
     parameters?: FetchParameters,
@@ -212,7 +212,7 @@ export interface VaultV1Actions {
    * @param params - Migration parameters.
    * @param params.userAddress - Account whose Vault V1 shares are migrated and that receives Vault
    *   V2 shares.
-   * @param params.sourceVault - Pre-fetched Vault V1 accrual snapshot for this entity.
+   * @param params.sourceVault - Pre-fetched Vault V1 state with market allocations for local accrual.
    * @param params.targetVault - Pre-fetched Vault V2 accrual snapshot with the same underlying
    *   asset.
    * @param params.shares - Positive number of Vault V1 shares to migrate.
@@ -662,8 +662,17 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     validateSlippageTolerance(slippageTolerance);
 
-    // V1 redeem accrues pending performance fees before converting shares to assets.
-    const accruedSourceVault = sourceVault.accrueInterest();
+    // V1 redeem accrues pending market interest and performance fees before converting shares.
+    const sourceAccrualTimestamp = sourceVault.allocations
+      .values()
+      .reduce(
+        (timestamp, { position }) =>
+          MathLib.max(timestamp, position.market.lastUpdate),
+        Time.timestamp(),
+      );
+    const accruedSourceVault = sourceVault.accrueInterest(
+      sourceAccrualTimestamp,
+    );
     const v1RefAssets = accruedSourceVault.toAssets(shares);
     const minSharePriceVaultV1 = MathLib.mulDivDown(
       v1RefAssets,

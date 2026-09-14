@@ -610,10 +610,13 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
 
   test("ignores residual shares when the parent allocation is zero", () => {
     const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
-      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      {
+        ...adapterBaseInput(),
+        morphoVaultV1: RECIPIENT,
+        parentAllocation: 0n,
+      },
       {} as AccrualVault,
       10n,
-      0n,
     );
 
     expect(adapter.realAssets()).toBe(0n);
@@ -621,5 +624,17 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
       value: 0n,
       limiter: CapacityLimitReason.position,
     });
+  });
+
+  test("supports the deprecated parent allocation constructor argument", () => {
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      {} as AccrualVault,
+      10n,
+      0n,
+    );
+
+    expect(adapter.parentAllocation).toBe(0n);
+    expect(adapter.realAssets()).toBe(0n);
   });
 });

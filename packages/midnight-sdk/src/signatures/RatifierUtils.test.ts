@@ -1,7 +1,7 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
-import { InvalidTreeError } from "../errors.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { RatifierUtils as RootRatifierUtils } from "../index.js";
 import { OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
@@ -131,6 +131,103 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     expect(tree.root).toBe(root);
     expect(tree.height).toBe(1);
     expect(ratifier).toBe(ecrecoverRatifier);
+  });
+
+  test("error: hidden padded offer", () => {
+    const visible = Group.create([baseOffer({ maxAssets: 0n })]).offers[0]!;
+    const hidden = Group.create([baseOffer({ maxAssets: 0n, tick: 6_000n })])
+      .offers[0]!;
+    const paddedOffers = [
+      OfferUtils.toStruct({ offer: visible }),
+      OfferUtils.toStruct({ offer: hidden }),
+    ];
+    const leaves = paddedOffers.map(OfferUtils.hashStruct);
+
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: {
+          offers: [visible],
+          paddedOffers,
+          leaves,
+          root: TreeUtils.hashNode(leaves[0]!, leaves[1]!),
+          height: 1,
+        },
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: empty visible offer", () => {
+    const visible = Group.create([baseOffer({ maxAssets: 0n })]).offers[0]!;
+    const { group, market, ...fields } = EMPTY_OFFER_STRUCT;
+    Object.assign(visible.market, market);
+    Object.assign(visible, fields);
+    Object.defineProperty(visible, "group", { value: group });
+    const leaf = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
+
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: {
+          offers: [visible],
+          paddedOffers: [EMPTY_OFFER_STRUCT],
+          leaves: [leaf],
+          root: leaf,
+          height: 0,
+        },
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: empty visible standalone offer", () => {
+    const visible = baseOffer({ maxAssets: 0n });
+    const { group, market, ...fields } = EMPTY_OFFER_STRUCT;
+    Object.assign(visible.market, market);
+    Object.assign(visible, fields);
+
+    expect(visible.group).not.toBe(group);
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: visible,
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test.each(["offer", "leaf", "root", "height"] as const)(
+    "error: altered %s",
+    (field) => {
+      const tree = Tree.create([
+        baseOffer({ maxAssets: 0n, tick: 4_000n }),
+        baseOffer({ maxAssets: 0n, tick: 5_000n }),
+      ]);
+      const altered = {
+        offers: field === "offer" ? tree.offers.slice().reverse() : tree.offers,
+        paddedOffers: tree.paddedOffers,
+        leaves:
+          field === "leaf" ? [tree.leaves[1]!, tree.leaves[0]!] : tree.leaves,
+        root: field === "root" ? tree.leaves[0]! : tree.root,
+        height: field === "height" ? 0 : tree.height,
+      };
+
+      expect(() =>
+        RatifierUtils.normalizeRatifierTree({
+          tree: altered,
+          label: "Ecrecover",
+        }),
+      ).toThrow(InvalidTreeError);
+    },
+  );
+
+  test("error: InvalidTreeHeightError", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: { ...tree, height: 21 },
+        label: "Ecrecover",
+      }),
+    ).toThrow(InvalidTreeHeightError);
   });
 
   test("behavior: normalizes stale standalone groups in raw inputs", () => {

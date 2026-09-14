@@ -34,7 +34,7 @@ import type { FetchParameters } from "../types.js";
 export async function fetchUser(
   address: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  { ...parameters }: FetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 

@@ -8,15 +8,17 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("AccrualVault", () => {
   test("should accrue same totalAssets", async ({ client }) => {
-    const [vault, accrualVault, block] = await Promise.all([
-      fetchVault(steakUsdc.address, client),
-      fetchAccrualVault(steakUsdc.address, client),
-      client.getBlock(),
+    const block = await client.getBlock();
+    const [vault, accrualVault] = await Promise.all([
+      fetchVault(steakUsdc.address, client, { blockNumber: block.number }),
+      fetchAccrualVault(steakUsdc.address, client, {
+        blockNumber: block.number,
+      }),
     ]);
     const accruedVault = accrualVault.accrueInterest(block.timestamp);
 
     expect(vault.totalAssets).toEqual(accruedVault.totalAssets);
-    expect(accrualVault.totalAssets).toEqual(accruedVault.totalAssets);
+    expect(accrualVault.totalAssets).not.toEqual(accruedVault.totalAssets);
   });
 
   testTreehouseEth(
@@ -32,16 +34,21 @@ describe("AccrualVault", () => {
         (total, { position }) => total + position.supplyAssets,
         0n,
       );
-      const reaccruedVault = accrualVault.accrueInterest(block.timestamp);
+      const accruedVault = accrualVault.accrueInterest(block.timestamp);
+      const accruedAllocatedAssets = [
+        ...accruedVault.allocations.values(),
+      ].reduce((total, { position }) => total + position.supplyAssets, 0n);
+      const reaccruedVault = accruedVault.accrueInterest(block.timestamp);
 
       expect(vault.lostAssets).toBeGreaterThan(0n);
       expect(accrualVault.lostAssets).toBe(vault.lostAssets);
-      expect(accrualVault.totalAssets).toBe(vault.totalAssets);
-      expect(accrualVault.totalAssets).toBe(
-        allocatedAssets + (accrualVault.lostAssets ?? 0n),
+      expect(accrualVault.totalAssets).toBe(allocatedAssets);
+      expect(accruedVault.totalAssets).toBe(vault.totalAssets);
+      expect(accruedVault.totalAssets).toBe(
+        accruedAllocatedAssets + (accruedVault.lostAssets ?? 0n),
       );
-      expect(reaccruedVault.totalAssets).toBe(accrualVault.totalAssets);
-      expect(reaccruedVault.totalSupply).toBe(accrualVault.totalSupply);
+      expect(reaccruedVault.totalAssets).toBe(accruedVault.totalAssets);
+      expect(reaccruedVault.totalSupply).toBe(accruedVault.totalSupply);
     },
   );
 });
