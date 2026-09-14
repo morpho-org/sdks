@@ -483,12 +483,20 @@ export class Market implements IMarket {
   }
 
   /**
-   * Applies a repayment to an interest-accrued copy of this market.
-   * @param assets Loan assets to repay, or zero when `shares` is provided.
-   * @param shares Borrow shares to burn, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated market and normalized asset and share amounts.
+   * Simulates a repayment on this market and returns the resulting market state.
+   * Exactly one of `assets` or `shares` must be non-zero.
+   * When repaying by shares, the repaid `assets` are rounded up and may exceed
+   * `totalBorrowAssets`; the market total is then floored at zero, mirroring `Morpho.repay`.
+   * @param assets The amount of loan assets to repay (`0n` when repaying by shares).
+   * @param shares The amount of borrow shares to repay (`0n` when repaying by assets).
+   * @param timestamp The timestamp at which to accrue interest before repaying. Defaults to `lastUpdate`.
+   * @returns The accrued market after repayment, along with the resolved `assets` and `shares` repaid.
+   * @throws {BlueErrors.InconsistentInput} If both or neither of `assets` and `shares` are non-zero.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * const { market: after, assets } = market.repay(0n, position.borrowShares);
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
@@ -502,7 +510,10 @@ export class Market implements IMarket {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toBorrowAssets(shares, "Up");
 
-    market.totalBorrowAssets -= assets;
+    market.totalBorrowAssets = MathLib.zeroFloorSub(
+      market.totalBorrowAssets,
+      assets,
+    );
     market.totalBorrowShares -= shares;
 
     return { market, assets, shares };
