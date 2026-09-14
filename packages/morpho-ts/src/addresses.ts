@@ -6,7 +6,7 @@ import {
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
-import { deepFreeze, entries } from "./utils.js";
+import { deepFreeze, entries, fromEntries, isHexEqual, keys } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *
@@ -2339,6 +2339,8 @@ const _unwrappedTokensMapping: Record<
 /**
  * Returns the unwrapped token mapped to a wrapped token on a chain.
  *
+ * Lookup is case-insensitive: the registry keys are checksummed, but callers may pass a lowercased address.
+ *
  * @param wrappedToken - The wrapped token address to resolve.
  * @param chainId - The EIP-155 chain id.
  * @returns The unwrapped token address, or `undefined` when no mapping is registered.
@@ -2354,7 +2356,13 @@ export function getUnwrappedToken(
   wrappedToken: `0x${string}`,
   chainId: number,
 ) {
-  return unwrappedTokensMapping[chainId]?.[wrappedToken];
+  const mapping = unwrappedTokensMapping[chainId];
+  if (mapping == null || wrappedToken == null) return undefined;
+
+  return (
+    mapping[wrappedToken] ??
+    entries(mapping).find(([key]) => isHexEqual(key, wrappedToken))?.[1]
+  );
 }
 
 /**
@@ -2811,10 +2819,42 @@ export function registerCustomAddresses<
   }
 
   if (unwrappedTokens) {
+    // Patch keys that differ only by case from a registered key (or from an earlier key of the same
+    // patch) are rewritten onto that key, and values that differ only by case from the registered
+    // value are rewritten onto that value, so `mergeRegistry` compares the same token instead of
+    // adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
+    const alignedUnwrappedTokens = fromEntries(
+      entries(unwrappedTokens).map(([chainIdString, tokens]) => {
+        const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
+        const registeredKeys = keys(registered);
+        const aligned: Record<`0x${string}`, `0x${string}`> = {};
+
+        for (const [wrapped, unwrapped] of entries(tokens)) {
+          const key =
+            [...registeredKeys, ...keys(aligned)].find((candidate) =>
+              isHexEqual(candidate, wrapped),
+            ) ?? wrapped;
+          const previous = aligned[key] ?? registered[key];
+
+          if (previous !== undefined && !isHexEqual(previous, unwrapped))
+            throw new RegistryValueAlreadyRegisteredError({
+              label: `unwrappedTokens.${chainIdString}.${key}`,
+              registeredValue: previous,
+              requestedValue: unwrapped,
+              type: "unwrapped token",
+            });
+
+          aligned[key] = previous ?? unwrapped;
+        }
+
+        return [chainIdString, aligned] as const;
+      }),
+    );
+
     unwrappedTokensMapping = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
-        patch: unwrappedTokens,
+        patch: alignedUnwrappedTokens,
         label: "unwrappedTokens",
         type: "unwrapped token",
       }),
