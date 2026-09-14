@@ -213,12 +213,37 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Applies a supply to an interest-accrued copy of this position.
-   * @param assets Loan assets to supply, or zero when `shares` is provided.
-   * @param shares Supply shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated position and normalized asset and share amounts.
+   * Projects a market supply into a new accrued position without changing this position.
+   *
+   * @param assets - Supplied loan assets, or `0n` when `shares` specifies the amount.
+   * @param shares - Minted supply shares, or `0n` when `assets` specifies the amount.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @returns The new accrued position, supplied assets, and minted supply shares after rounding.
+   * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { zeroAddress } from "viem";
+   *
+   * const position = new AccrualPosition(
+   *   { user: zeroAddress, supplyShares: 100n, borrowShares: 50n, collateral: 200n },
+   *   {
+   *     params: markets[ChainId.EthMainnet].eth_wstEth,
+   *     totalSupplyAssets: 400n,
+   *     totalBorrowAssets: 200n,
+   *     totalSupplyShares: 400n,
+   *     totalBorrowShares: 200n,
+   *     lastUpdate: 0n,
+   *     fee: 0n,
+   *     price: ORACLE_PRICE_SCALE,
+   *   },
+   * );
+   * const result = position.supply(10n, 0n);
+   * // result satisfies { position: AccrualPosition; assets: bigint; shares: bigint }
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
@@ -234,12 +259,39 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Applies a withdrawal to an interest-accrued copy of this position.
-   * @param assets Loan assets to withdraw, or zero when `shares` is provided.
-   * @param shares Supply shares to burn, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated position and normalized asset and share amounts.
+   * Projects a market withdrawal into a new accrued position without changing this position.
+   *
+   * @param assets - Withdrawn loan assets, or `0n` when `shares` specifies the amount.
+   * @param shares - Burned supply shares, or `0n` when `assets` specifies the amount.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @returns The new accrued position, withdrawn assets, and burned supply shares after rounding.
+   * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
+   * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
+   * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's supply shares.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { zeroAddress } from "viem";
+   *
+   * const position = new AccrualPosition(
+   *   { user: zeroAddress, supplyShares: 100n, borrowShares: 50n, collateral: 200n },
+   *   {
+   *     params: markets[ChainId.EthMainnet].eth_wstEth,
+   *     totalSupplyAssets: 400n,
+   *     totalBorrowAssets: 200n,
+   *     totalSupplyShares: 400n,
+   *     totalBorrowShares: 200n,
+   *     lastUpdate: 0n,
+   *     fee: 0n,
+   *     price: ORACLE_PRICE_SCALE,
+   *   },
+   * );
+   * const result = position.withdraw(10n, 0n);
+   * // result satisfies { position: AccrualPosition; assets: bigint; shares: bigint }
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
@@ -260,18 +312,66 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  /**
+   * Projects a collateral supply into a new accrued position without changing this position.
+   *
+   * @param assets - Collateral assets to add.
+   * @returns A new accrued position with the increased collateral balance.
+   * @example
+   * ```ts
+   * import { ChainId } from "@morpho-org/blue-sdk";
+   * import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const market = markets[ChainId.EthMainnet].eth_wstEth;
+   * const position = await fetchAccrualPosition(zeroAddress, market.id, client);
+   * const projected = position.supplyCollateral(1_000_000_000_000_000_000n);
+   * // projected satisfies AccrualPosition
+   * ```
+   */
   public supplyCollateral(assets: bigint) {
-    this.collateral += assets;
+    const position = new AccrualPosition(this, this._market);
+    position.collateral += assets;
 
-    return new AccrualPosition(this, new Market(this._market));
+    return position;
   }
 
   /**
-   * Withdraws collateral from an interest-accrued copy of this position.
-   * @param assets Collateral assets to withdraw.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated position.
+   * Projects a collateral withdrawal into a new accrued position without changing this position.
+   *
+   * @param assets - Collateral assets to withdraw.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @returns A new accrued position with the reduced collateral balance.
+   * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
+   * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's collateral.
+   * @throws {BlueErrors.InsufficientCollateral} when the projected position would be unhealthy.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { zeroAddress } from "viem";
+   *
+   * const position = new AccrualPosition(
+   *   { user: zeroAddress, supplyShares: 100n, borrowShares: 50n, collateral: 200n },
+   *   {
+   *     params: markets[ChainId.EthMainnet].eth_wstEth,
+   *     totalSupplyAssets: 400n,
+   *     totalBorrowAssets: 200n,
+   *     totalSupplyShares: 400n,
+   *     totalBorrowShares: 200n,
+   *     lastUpdate: 0n,
+   *     fee: 0n,
+   *     price: ORACLE_PRICE_SCALE,
+   *   },
+   * );
+   * const projected = position.withdrawCollateral(10n);
+   * // projected satisfies AccrualPosition
+   * ```
    */
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
     if (this._market.price == null)
@@ -297,12 +397,40 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Applies a borrow to an interest-accrued copy of this position.
-   * @param assets Loan assets to borrow, or zero when `shares` is provided.
-   * @param shares Borrow shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated position and normalized asset and share amounts.
+   * Projects a market borrow into a new accrued position without changing this position.
+   *
+   * @param assets - Borrowed loan assets, or `0n` when `shares` specifies the amount.
+   * @param shares - Minted borrow shares, or `0n` when `assets` specifies the amount.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @returns The new accrued position, borrowed assets, and minted borrow shares after rounding.
+   * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
+   * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
+   * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
+   * @throws {BlueErrors.InsufficientCollateral} when the projected position would be unhealthy.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { zeroAddress } from "viem";
+   *
+   * const position = new AccrualPosition(
+   *   { user: zeroAddress, supplyShares: 100n, borrowShares: 50n, collateral: 200n },
+   *   {
+   *     params: markets[ChainId.EthMainnet].eth_wstEth,
+   *     totalSupplyAssets: 400n,
+   *     totalBorrowAssets: 200n,
+   *     totalSupplyShares: 400n,
+   *     totalBorrowShares: 200n,
+   *     lastUpdate: 0n,
+   *     fee: 0n,
+   *     price: ORACLE_PRICE_SCALE,
+   *   },
+   * );
+   * const result = position.borrow(10n, 0n);
+   * // result satisfies { position: AccrualPosition; assets: bigint; shares: bigint }
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
@@ -324,12 +452,38 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Applies a repayment to an interest-accrued copy of this position.
-   * @param assets Loan assets to repay, or zero when `shares` is provided.
-   * @param shares Borrow shares to burn, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
-   * @returns The updated position and normalized asset and share amounts.
+   * Projects a market repayment into a new accrued position without changing this position.
+   *
+   * @param assets - Repaid loan assets, or `0n` when `shares` specifies the amount.
+   * @param shares - Burned borrow shares, or `0n` when `assets` specifies the amount.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @returns The new accrued position, repaid assets, and burned borrow shares after rounding.
+   * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
+   * @throws {BlueErrors.InsufficientPosition} when the repayment exceeds the position's borrow shares.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { zeroAddress } from "viem";
+   *
+   * const position = new AccrualPosition(
+   *   { user: zeroAddress, supplyShares: 100n, borrowShares: 50n, collateral: 200n },
+   *   {
+   *     params: markets[ChainId.EthMainnet].eth_wstEth,
+   *     totalSupplyAssets: 400n,
+   *     totalBorrowAssets: 200n,
+   *     totalSupplyShares: 400n,
+   *     totalBorrowShares: 200n,
+   *     lastUpdate: 0n,
+   *     fee: 0n,
+   *     price: ORACLE_PRICE_SCALE,
+   *   },
+   * );
+   * const result = position.repay(10n, 0n);
+   * // result satisfies { position: AccrualPosition; assets: bigint; shares: bigint }
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {

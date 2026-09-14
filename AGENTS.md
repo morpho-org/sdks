@@ -25,7 +25,7 @@ The three pillars: **layering, modularity, testability**. Everything else (types
 | **Client** | no | no | no | factory for entities |
 | **Entity** | yes (RPC) | no | yes | lazy `{ buildTx, getRequirements }` |
 | **Action** | no | yes | **no** | deep-frozen `Transaction` |
-| **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | new objects |
+| **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | per-function contract |
 
 Cross-layer leaks (entities encoding calldata, actions reading state, helpers depending on entities) are an API design failure, not an implementation detail. Redesign the boundary; do not add a shortcut.
 
@@ -50,7 +50,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 ### Stateless, immutable, composable
 
 - `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
-- Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers return new objects, never mutate inputs.
+- Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers never mutate inputs; they may return an input or reuse an existing object unless their documented contract explicitly requires a fresh object.
 - Do not use classes as value bags. If a type has no meaningful behavior beyond construction, copying, or a one-line conversion, model it as a `type`/`interface` and use local pure conversion where needed. Classes are for typed errors and domain objects with real behavior.
 - Never `deepFreeze` a class instance. Use readonly fields/types for API intent. `deepFreeze` is reserved for function outputs that are expected to be immutable descriptors submitted onchain or signed immediately after construction.
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
@@ -190,6 +190,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
+- Reuse semantic helpers exposed by direct dependencies instead of hand-rolling equivalents. When available, use viem's `isAddressEqual` for EVM address equality, and use `_try(accessor, ExpectedError)` for optional typed lookups. Always name the expected errors so unrelated failures propagate, and do not pass an accessor that can legitimately return `undefined` unless successful absence is explicitly tagged (for example with `null`). Lowercasing remains valid when normalization itself—not equality—is the goal, such as normalized map/set keys or deterministic output.
 - Generated code: change generated inputs (`graphql/*.gql`), never edit generated outputs (`src/api/sdk.ts`). Never edit `lib/`.
 - One concern per PR. Tests, JSDoc, and any required semver-relevant changeset land with the change — not as a follow-up.
 
