@@ -628,20 +628,35 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(InputExceedsMaxError);
     });
 
+    // The fixture's 2:1 share-to-asset ratio makes the uncapped allowance exceed the uint256 ABI slot.
     test("behavior: saturates the derived share allowance at uint256", async () => {
       const handle = createMockClient(mainnet);
-      mockRequirements(handle, { allowance: maxUint256 });
       const exitAssets = maxUint256;
+      const vaultData = vaultV2ExitData({
+        assetBalance: exitAssets * 2n,
+        totalSupply: 2_000n,
+      });
+      mockRequirements(handle, { allowance: maxUint256 - 1n });
 
-      const requirements = await vaultFor(handle)
-        .forceWithdraw({
-          exitAssets,
-          vaultData: vaultV2ExitData({ assetBalance: exitAssets * 2n }),
-          userAddress: IN_KIND_USER,
-        })
+      const requirements = await vaultFor(handle, {
+        supportSignature: false,
+      })
+        .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
         .getRequirements();
 
-      expect(requirements).toHaveLength(0);
+      expect(requirements).toHaveLength(1);
+      const [approval] = requirements;
+      if (!approval || !isRequirementApproval(approval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+      expect(approval.action.args.amount).toBe(maxUint256);
+
+      mockRequirements(handle, { allowance: maxUint256 });
+      expect(
+        await vaultFor(handle, { supportSignature: false })
+          .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+          .getRequirements(),
+      ).toHaveLength(0);
     });
 
     test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {

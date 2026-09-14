@@ -471,7 +471,7 @@ export class ForceWithdrawSharePriceBelowFloorError extends Error {
     readonly floorE27: bigint;
   }) {
     super(
-      `Force-withdraw share price floor ${params.minSharePriceE27} is below the minimum allowed ${params.floorE27} (max slippage tolerance). Raise minSharePriceE27 or use slippageTolerance.`,
+      `Force-withdraw share price floor "${params.minSharePriceE27}" is below the minimum allowed "${params.floorE27}" (max slippage tolerance). Raise minSharePriceE27 or use slippageTolerance.`,
     );
     this.minSharePriceE27 = params.minSharePriceE27;
     this.floorE27 = params.floorE27;

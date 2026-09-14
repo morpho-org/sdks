@@ -423,8 +423,10 @@ export interface VaultV2Actions {
    * and permit nonce are read on-chain.
    *
    * The SDK derives a conservative lower bound on the realized exit share price from the snapshot
-   * and `slippageTolerance`. A supplied `minSharePriceE27` may only tighten that bound and must be
-   * at least the floor derived at `MAX_SLIPPAGE_TOLERANCE`. The bound rejects a share price drop,
+   * and `slippageTolerance`. A supplied `minSharePriceE27` replaces the tolerance-derived bound
+   * (it may be tighter or looser) but must be at least the floor derived at
+   * `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection. The bound
+   * rejects a share price drop,
    * a penalty increase, and liquidity shifting from the penalty-free leg to the penalised leg. It
    * does **not** cover the referral fee, which the contract deducts afterwards.
    *
@@ -453,8 +455,9 @@ export interface VaultV2Actions {
    *   Deadlines more than one year after handle creation are rejected.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
-   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. It may only
-   *   tighten the bound and must be at least the floor derived at `MAX_SLIPPAGE_TOLERANCE`.
+   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. It replaces
+   *   the tolerance-derived bound and may be tighter or looser, but must be at least the floor
+   *   derived at `MAX_SLIPPAGE_TOLERANCE`.
    * @param params.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
    *   `referralFeeRecipient`. Defaults to `0n`.
    * @param params.referralFeeRecipient - Optional referral fee recipient, required when
