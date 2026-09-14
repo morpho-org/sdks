@@ -24,7 +24,7 @@ beforeEach(() => {
     join(fixture, "node_modules"),
     "junction",
   );
-  for (const name of ["build.mjs", "comments.mjs", "model.mjs"])
+  for (const name of ["build.mjs", "bundle.mjs", "comments.mjs", "model.mjs"])
     copyFileSync(
       resolve("scripts/docs", name),
       join(fixture, "scripts/docs", name),
@@ -158,16 +158,24 @@ describe("documentation build", () => {
   test("default", () => {
     runBuild();
     const pages = readPages();
-    const page = pages["example.build.md"];
+    expect(Object.keys(pages)).toEqual([
+      "README.md",
+      "example.md",
+      "shared.md",
+    ]);
+    const page = pages["example.md"];
+    expect(page).toContain('<a name="example.build"></a>');
     expect(page).toContain("Amount in the smallest unit.");
     expect(page).toContain("The scaled amount.");
     expect(page).toContain("`RangeError` when the amount is negative.");
     expect(page).toContain(
       "```ts\n// @internal here is example text.\nconst amount = build({ amount: 2n });\n```",
     );
-    expect(page).toContain("shared.amount.md");
+    expect(page).toContain("](./shared.md#shared.amount)");
+    expect(page).toContain("](#example.build)");
     expect(page).not.toContain("(not declared)");
-    expect(pages["README.md"]).toBe(pages["index.md"]);
+    expect(page).not.toContain("[Home](");
+    expect(pages["README.md"]).toContain("](./example.md)");
     expect(Object.keys(pages).some((name) => name.includes("hiddenby"))).toBe(
       false,
     );

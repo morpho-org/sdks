@@ -15,9 +15,9 @@ pnpm docs:build:markdown
 ```
 
 `pnpm docs:build` is an alias for the same Markdown build. Both commands write
-`docs/api/`; they no longer generate an HTML website. The generated
-`README.md` and `index.md` provide the same package index. Old TypeDoc page paths
-are replaced by API Documenter's filenames.
+`docs/api/`; they no longer generate an HTML website. The output is one Markdown
+file per documented package (`docs/api/<package>.md`) plus a `README.md` package
+index, so the committed reference stays small enough to review.
 
 When changing public APIs or their JSDoc comments, regenerate the Markdown and
 commit the resulting changes in the same PR.
@@ -37,8 +37,13 @@ The [build script](../scripts/docs/build.mjs) runs these steps:
    configuration. Resolve workspace imports to the emitted declarations and
    external dependencies from their owning packages. Produce one `.api.json`
    model per documented package.
-5. Run API Documenter over all seven models to generate linked Markdown, normalize
-   line endings to LF, and replace `docs/api/` after successful generation.
+5. Run API Documenter over all seven models to generate linked Markdown and
+   normalize line endings to LF.
+6. [Bundle](../scripts/docs/bundle.mjs) API Documenter's per-symbol pages into
+   one file per package. Each page becomes a section introduced by an HTML
+   anchor named after the original page (`<a name="blue-sdk.market"></a>`), and
+   links are rewritten to `#anchor` within a package or `./other.md#anchor`
+   across packages. Replace `docs/api/` after successful generation.
 
 API Extractor **bundles its own TypeScript 5.9.3 analysis compiler**. The workspace
 continues to use TypeScript 7.0.2 for compilation and declaration emission. The

@@ -14,6 +14,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Extractor, ExtractorConfig } from "@microsoft/api-extractor";
+import { bundlePages } from "./bundle.mjs";
 import { normalizeDeclarationComments } from "./comments.mjs";
 import { filterDocModel } from "./model.mjs";
 
@@ -25,6 +26,7 @@ const work = mkdtempSync(join(workRoot, "run-"));
 const declarations = join(work, "declarations");
 const models = join(work, "models");
 const markdown = join(work, "markdown");
+const bundled = join(work, "bundled");
 const destination = join(repo, "docs/api");
 
 try {
@@ -229,26 +231,23 @@ try {
     ],
     { cwd: repo, stdio: "inherit" },
   );
-  for (const name of readdirSync(markdown)) {
-    const path = join(markdown, name);
-    writeFileSync(
-      path,
-      `${readFileSync(path, "utf8")
+  const pages = Object.fromEntries(
+    readdirSync(markdown).map((name) => [
+      name,
+      readFileSync(join(markdown, name), "utf8")
         .replaceAll("\r\n", "\n")
-        .replace(/[\t ]+$/gm, "")
-        .trimEnd()}\n`,
-    );
-  }
-  writeFileSync(
-    join(markdown, "README.md"),
-    readFileSync(join(markdown, "index.md")),
+        .replace(/[\t ]+$/gm, ""),
+    ]),
   );
+  mkdirSync(bundled);
+  for (const [name, contents] of Object.entries(bundlePages(pages)))
+    writeFileSync(join(bundled, name), contents);
 
   // Publish only after every package and the renderer succeed; keep the old reference on failure.
   const previous = join(work, "previous");
   if (existsSync(destination)) renameSync(destination, previous);
   try {
-    renameSync(markdown, destination);
+    renameSync(bundled, destination);
   } catch (error) {
     if (existsSync(previous)) renameSync(previous, destination);
     throw error;
