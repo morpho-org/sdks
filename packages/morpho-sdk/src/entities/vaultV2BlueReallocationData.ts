@@ -873,7 +873,10 @@ export class VaultV2BlueReallocationData
    * utilization defaults to 90% and is configurable through
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
-   * considered.
+   * considered. Targets with no remaining supply or allocator capacity are skipped before
+   * projecting source interest. Supply-share limits, target-market absolute caps, and zero
+   * relative caps are checked against a one-asset deposit, preserving deposits whose
+   * allocation does not increase after rounding.
    *
    * Shared-cap discovery is conservative. Operation planning searches at most
    * 1,024 base units above its targeted amount for the nearest executable fit.
@@ -1141,6 +1144,7 @@ export class VaultV2BlueReallocationData
             MathLib.MAX_UINT_128,
             targetMarket.totalSupplyAssets,
           );
+          const minimumSupply = targetMarket.supply(1n, 0n);
           const rawCandidates: VaultV2BlueReallocation[] = [];
 
           // Missing nested allocator state means the snapshot is incomplete, so
@@ -1208,6 +1212,18 @@ export class VaultV2BlueReallocationData
             const allocatorHeadroom = marketPublicAllocatorConfig.getMaxIn(
               adapterMarketCapAllocation.allocation + untracked,
             );
+            const minimumAllocation = minimumSupply.market.toSupplyAssets(
+              (adapter.supplyShares[marketId] ?? 0n) + minimumSupply.shares,
+            );
+            if (
+              targetSupplyHeadroom === 0n ||
+              allocatorHeadroom === 0n ||
+              minimumSupply.market.totalSupplyShares > MathLib.MAX_UINT_128 ||
+              minimumAllocation > adapterMarketCapAllocation.absoluteCap ||
+              (adapterMarketCapAllocation.relativeCap === 0n &&
+                minimumAllocation > 0n)
+            )
+              continue;
 
             if (
               publicAllocatorConfig.canPullFromIdle &&

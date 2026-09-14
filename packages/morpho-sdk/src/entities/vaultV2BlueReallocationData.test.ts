@@ -13,6 +13,7 @@ import {
   MarketParams,
   MathLib,
   SharesMath,
+  UnsupportedMarketIrmError,
   UnsupportedVaultV2AdapterError,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
@@ -983,6 +984,125 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         timestamp: TIMESTAMP + 1n,
       }).reallocations[0]?.assets,
     ).toBe(sourceExpectedAssets);
+  });
+
+  test.each([
+    ["allocator capacity", { allocatorTargetCap: 0n }],
+    [
+      "market absolute capacity",
+      {
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "market relative capacity",
+      {
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+        ],
+      },
+    ],
+    [
+      "uint128 supply share capacity",
+      { targetTotalSupplyShares: MathLib.MAX_UINT_128 },
+    ],
+    [
+      "uint128 supply capacity",
+      {
+        targetSupply: MathLib.MAX_UINT_128,
+        targetTotalSupplyShares: MathLib.MAX_UINT_128,
+      },
+    ],
+  ] satisfies readonly (readonly [string, FixtureOptions])[])(
+    "behavior: skips unsupported source IRM with zero target %s",
+    (_, options) => {
+      const { data } = makeFixture({ ...options, sourceBorrow: 1n });
+      const snapshot = new VaultV2BlueReallocationData({
+        ...data,
+        markets: {
+          ...data.markets,
+          [sourceParams.id]: new Market({
+            ...data.getMarket(sourceParams.id),
+            rateAtTarget: undefined,
+          }),
+        },
+      });
+
+      expect(
+        snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+          timestamp: TIMESTAMP + 1n,
+        }).reallocations,
+      ).toEqual([]);
+    },
+  );
+
+  test("behavior: full target absolute cap permits a deposit that does not increase allocation after rounding", () => {
+    const { data, targetAdapterMarketCapId } = makeFixture({
+      targetSupply: 5n,
+      targetTotalSupplyShares: 1_000_000n,
+      targetPositionAssets: 3n,
+      sourceSupply: 1n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 3n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(1n);
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(3n);
+  });
+
+  test("behavior: zero target relative cap permits a deposit that rounds to zero allocation", () => {
+    const { data } = makeFixture({
+      targetSupply: 2n,
+      targetTotalSupplyShares: 1_000_000n,
+      sourceSupply: 1n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: 0n },
+      ],
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(reallocations).toHaveLength(1);
+    expect(reallocations[0]?.assets).toBe(1n);
+  });
+
+  test("error: UnsupportedMarketIrmError when source projection is required", () => {
+    const { data } = makeFixture({ sourceBorrow: 1n });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [sourceParams.id]: new Market({
+          ...data.getMarket(sourceParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    expect(() =>
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }),
+    ).toThrow(UnsupportedMarketIrmError);
   });
 
   test.each([

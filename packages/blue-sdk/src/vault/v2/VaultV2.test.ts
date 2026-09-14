@@ -383,7 +383,10 @@ describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
       [position, zeroUnsupported],
     );
 
-    expect(adapter.realAssets()).toBe(position.supplyAssets);
+    const timestamp = position.market.lastUpdate + 1n;
+    expect(adapter.realAssets(timestamp)).toBe(
+      position.accrueInterest(timestamp).supplyAssets,
+    );
   });
 
   test("maxDeposit is limited by balance", () => {
@@ -498,7 +501,7 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
       [m],
     );
 
-    expect(adapter.realAssets()).toBe(0n);
+    expect(adapter.realAssets(m.lastUpdate + 1n)).toBe(0n);
   });
 
   test("maxDeposit is limited by balance", () => {

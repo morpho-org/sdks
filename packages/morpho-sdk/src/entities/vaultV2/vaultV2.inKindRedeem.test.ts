@@ -205,12 +205,14 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       let thrown: unknown;
 
       try {
-        vault.inKindRedeem({
-          amount,
-          marketParamsList: [inKindMarketParams],
-          vaultData,
-          userAddress: IN_KIND_USER,
-        });
+        withChainTimestamp(vaultData.lastUpdate + 1n, () =>
+          vault.inKindRedeem({
+            amount,
+            marketParamsList: [inKindMarketParams],
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        );
       } catch (error) {
         thrown = error;
       }

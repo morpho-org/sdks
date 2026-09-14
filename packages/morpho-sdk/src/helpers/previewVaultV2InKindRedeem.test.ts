@@ -103,7 +103,12 @@ describe("previewVaultV2InKindRedeem", () => {
       rateAtTarget: undefined,
     });
 
-    expect(previewInKind(vaultData, 1n)).toEqual([]);
+    expect(
+      previewVaultV2InKindRedeem(vaultData, {
+        requestedExitAssets: 1n,
+        timestamp: adapter.markets[0]!.lastUpdate + 1n,
+      }),
+    ).toEqual([]);
   });
 
   test("behavior: omits choices that round to no effective exit", () => {

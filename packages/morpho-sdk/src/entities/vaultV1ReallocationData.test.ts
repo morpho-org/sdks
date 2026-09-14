@@ -10,6 +10,7 @@ import {
   MarketParams,
   MathLib,
   Position,
+  UnsupportedMarketIrmError,
   Vault,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
@@ -778,6 +779,63 @@ describe("VaultV1ReallocationData unit coverage", () => {
             timestamp: TIMESTAMP + 1n,
             defaultMaxWithdrawalUtilization: MathLib.WAD,
           },
+        ).withdrawals,
+      ).toEqual([]);
+    },
+  );
+
+  test.each([
+    { reason: "zero allocator inflow cap", maxIn: 0n },
+    { reason: "zero vault cap", cap: 0n },
+    {
+      reason: "exhausted vault cap",
+      cap: 500n * MathLib.WAD,
+      supplyShares: 1_000n * MathLib.WAD,
+    },
+  ])(
+    "behavior: skips unsupported source IRM with target $reason",
+    ({
+      maxIn = 10_000n * MathLib.WAD,
+      cap = 10_000n * MathLib.WAD,
+      supplyShares = 0n,
+    }) => {
+      const input = makeInput({
+        targetSupply: 1_000n * MathLib.WAD,
+        targetBorrow: 500n * MathLib.WAD,
+        sourceSupply: 1_000n * MathLib.WAD,
+        sourceBorrow: 500n * MathLib.WAD,
+      });
+      input.markets![targetParams.id] = new Market({
+        ...input.markets![targetParams.id]!,
+        rateAtTarget: 0n,
+      });
+      const options = {
+        timestamp: TIMESTAMP + 1n,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      };
+      expect(() =>
+        new VaultV1ReallocationData(input).computeVaultV1Reallocations(
+          targetParams.id,
+          options,
+        ),
+      ).toThrow(UnsupportedMarketIrmError);
+
+      input.positions![VAULT]![targetParams.id] = makePosition(
+        targetParams.id,
+        supplyShares,
+      );
+      input.vaultMarketConfigs![VAULT]![targetParams.id] =
+        makeVaultMarketConfig({
+          marketId: targetParams.id,
+          cap,
+          maxIn,
+          maxOut: 0n,
+        });
+
+      expect(
+        new VaultV1ReallocationData(input).computeVaultV1Reallocations(
+          targetParams.id,
+          options,
         ).withdrawals,
       ).toEqual([]);
     },
