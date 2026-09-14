@@ -68,6 +68,14 @@ describe("SimulationRevertedError", () => {
   it("attaches optional details payload", () => {
     const err = new SimulationRevertedError("x", { raw: "tenderly response" });
     expect(err.details).toEqual({ raw: "tenderly response" });
+    expect(err.cause).toBeUndefined();
+  });
+
+  it("forwards an Error details payload as cause", () => {
+    const cause = new Error("execution reverted");
+    const err = new SimulationRevertedError("x", cause);
+    expect(err.details).toBe(cause);
+    expect(err.cause).toBe(cause);
   });
 });
 
