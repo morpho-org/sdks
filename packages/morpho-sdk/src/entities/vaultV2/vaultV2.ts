@@ -367,7 +367,8 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit names another spender, amount, or deadline than the prepared cap.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612
+   *   or names another spender, amount, or deadline than the prepared cap.
    * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, owner, spender, or signature encoding.
    * @example
    * ```ts

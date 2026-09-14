@@ -151,6 +151,32 @@ describe("vaultV1InKindRedeem", () => {
     expect(Object.isFrozen(marketParams)).toBe(false);
   });
 
+  test("behavior: encodes a matching permit's signature fields", () => {
+    const tx = vaultV1InKindRedeem({
+      vault: { chainId, address: vault },
+      args: {
+        amount: 100n,
+        marketParamsList: [marketParams],
+        userAddress,
+        deadline: 1_900_000_000n,
+        requirementSignature: permit,
+      },
+    });
+    const decoded = decodeFunctionData({
+      abi: vaultExitBundlesV1Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args?.[3]).toMatchObject({
+      value: 125n,
+      nonce: 7n,
+      deadline: 1_900_000_000n,
+      v: 28,
+      r: `0x${"11".repeat(32)}`,
+      s: `0x${"22".repeat(32)}`,
+    });
+  });
+
   test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
     expect(() =>
       vaultV1InKindRedeem({
