@@ -466,6 +466,33 @@ describe("AccrualVaultV2.accrueInterest", () => {
       UnknownMarketAllocationError,
     );
   });
+
+  test("behavior: a liquidity-only adapter that cannot reach the timestamp is left untouched", () => {
+    // A liquidity adapter absent from `accrualAdapters` does not feed the vault's
+    // total-assets reduction, so — as before nested accrual existed — advancing
+    // the vault must leave it at its pre-accrual state rather than throwing when
+    // it cannot be accrued to the timestamp.
+    const liquidityOnly = accrualAdapter({
+      accrueInterest: () => {
+        throw new BlueErrors.InvalidInterestAccrual(
+          new MarketParams(marketParams()).id,
+          101n,
+          105n,
+        );
+      },
+    });
+    const vault = new AccrualVaultV2(
+      vaultV2Input(),
+      liquidityOnly,
+      [],
+      100n,
+      {},
+    );
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBe(liquidityOnly);
+  });
 });
 
 describe("VaultV2Adapter", () => {

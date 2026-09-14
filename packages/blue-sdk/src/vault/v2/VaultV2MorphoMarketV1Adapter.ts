@@ -216,22 +216,37 @@ export class AccrualVaultV2MorphoMarketV1Adapter
    * position's market `lastUpdate`.
    * @example
    * ```ts
-   * import { AccrualVaultV2MorphoMarketV1Adapter } from "@morpho-org/blue-sdk";
-   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-   * import { createPublicClient, http } from "viem";
-   * import { base } from "viem/chains";
+   * import {
+   *   AccrualPosition,
+   *   AccrualVaultV2MorphoMarketV1Adapter,
+   *   MarketParams,
+   * } from "@morpho-org/blue-sdk";
+   * import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
    *
-   * const client = createPublicClient({ chain: base, transport: http() });
-   * const vault = await fetchAccrualVaultV2(
-   *   "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
-   *   client,
+   * const marketParams = MarketParams.idle(ZERO_ADDRESS);
+   * const position = new AccrualPosition(
+   *   { user: ZERO_ADDRESS, supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+   *   {
+   *     params: marketParams,
+   *     totalSupplyAssets: 0n,
+   *     totalBorrowAssets: 0n,
+   *     totalSupplyShares: 0n,
+   *     totalBorrowShares: 0n,
+   *     lastUpdate: 1_700_000_000n,
+   *     fee: 0n,
+   *   },
    * );
-   * const adapter = vault.accrualAdapters.find(
-   *   (a): a is AccrualVaultV2MorphoMarketV1Adapter =>
-   *     a instanceof AccrualVaultV2MorphoMarketV1Adapter,
-   * )!;
-   * const accrued = adapter.accrueInterest(adapter.positions[0]!.market.lastUpdate);
-   * // accrued.positions[0]!.market.lastUpdate === the passed timestamp
+   * const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+   *   {
+   *     address: ZERO_ADDRESS,
+   *     parentVault: ZERO_ADDRESS,
+   *     skimRecipient: ZERO_ADDRESS,
+   *     marketParamsList: [marketParams],
+   *   },
+   *   [position],
+   * );
+   * const accrued = adapter.accrueInterest(position.market.lastUpdate);
+   * // accrued.positions[0]!.market.lastUpdate === position.market.lastUpdate
    * ```
    */
   accrueInterest(timestamp: BigIntish) {

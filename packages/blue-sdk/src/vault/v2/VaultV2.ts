@@ -387,6 +387,14 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         throw error;
       }
     });
+    // The liquidity adapter is hydrated separately and, unless it also appears in
+    // `accrualAdapters`, does not feed the total-assets reduction below — before
+    // nested accrual existed it was never inspected during accrual and so never
+    // threw. Accruing it is therefore best-effort at any `elapsed`: when it cannot
+    // reach `timestamp` (an ahead market or a stale nested queue) leave it at its
+    // pre-accrual state rather than throwing. A liquidity adapter that also feeds
+    // the totals is present in `accrualAdapters`, where the map above already
+    // surfaces the same inconsistency for an advancing timestamp.
     let accrualLiquidityAdapter = this.accrualLiquidityAdapter;
     if (accrualLiquidityAdapter?.accrueInterest != null) {
       try {
@@ -395,9 +403,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       } catch (error) {
         if (
           !(
-            elapsed === 0n &&
-            (error instanceof BlueErrors.InvalidInterestAccrual ||
-              error instanceof UnknownMarketAllocationError)
+            error instanceof BlueErrors.InvalidInterestAccrual ||
+            error instanceof UnknownMarketAllocationError
           )
         )
           throw error;
