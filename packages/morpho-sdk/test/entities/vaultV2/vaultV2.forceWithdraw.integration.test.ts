@@ -270,6 +270,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       requestedExitAssets: exitAssets,
       timestamp: await client.timestamp(),
       referralFeePct: TEN_PERCENT,
+      referralFeeRecipient,
     });
     if (preview == null) throw new Error("Expected an exitable vault");
     expect(preview.referralFeeAssets).toBeGreaterThan(0n);
