@@ -332,8 +332,9 @@ export interface VaultV1Actions {
    * Snapshot state can drift before inclusion, so a later reallocation may still make the on-chain
    * loop under-cover even after pre-flight succeeds.
    *
-   * In-kind exits require an exact vault-share allowance or embedded permit for the computed cap;
-   * any different allowance, including an oversized one, is replaced before the exit.
+   * In-kind exits require an exact vault-share allowance for the computed cap. An ERC-2612 permit
+   * is emitted only to raise an insufficient allowance; an oversized allowance is always reset
+   * with an onchain approval before the exit.
    *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Asset-denominated amount to exit.
@@ -953,10 +954,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
           });
         }
         // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
-        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`,
-        // so only an exact match skips the approval or permit that resets it to the computed cap.
+        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`.
         if (allowance === requiredShareAllowance) return [];
-        if (this.client.options.supportSignature) {
+        // A lowering permit can be skipped after its nonce is consumed, so oversized allowances
+        // must be reset with an onchain approval.
+        if (
+          allowance < requiredShareAllowance &&
+          this.client.options.supportSignature
+        ) {
           return [
             encodeVaultSharesPermit({
               vault: vaultData,

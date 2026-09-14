@@ -28,6 +28,7 @@ import {
   InKindRedeemZeroDeallocationError,
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
+  isRequirementApproval,
   NonPositiveInputError,
   type PermitRequirementSignature,
   UnsupportedInKindAdapterError,
@@ -459,7 +460,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     });
   });
 
-  test("behavior: oversized allowance is replaced by an exact permit", async () => {
+  test("behavior: resets an oversized allowance with an onchain approval even when signatures are supported", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
@@ -474,9 +475,12 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(requirement?.action).toMatchObject({
-      type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+    if (!requirement || !isRequirementApproval(requirement)) {
+      throw new Error("Expected an ERC-20 approval requirement");
+    }
+    expect(requirement.action.args).toEqual({
+      spender: IN_KIND_BUNDLER,
+      amount: 501n,
     });
   });
 
