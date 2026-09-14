@@ -732,11 +732,21 @@ describe("VaultV1ReallocationData unit coverage", () => {
   });
 
   test.each([
-    { enabled: false, supplyShares: 1_000n * MathLib.WAD },
-    { enabled: true, supplyShares: 0n },
+    { reason: "disabled market", enabled: false },
+    { reason: "zero supply shares", supplyShares: 0n },
+    { reason: "zero withdrawal cap", maxOut: 0n },
+    {
+      reason: "missing allocator configuration",
+      withPublicAllocatorConfig: false,
+    },
   ])(
-    "skips unsupported source IRM when enabled=$enabled and supplyShares=$supplyShares",
-    ({ enabled, supplyShares }) => {
+    "behavior: skips unsupported source IRM with $reason",
+    ({
+      enabled = true,
+      supplyShares = 1_000n * MathLib.WAD,
+      maxOut = 10_000n * MathLib.WAD,
+      withPublicAllocatorConfig = true,
+    }) => {
       const input = makeInput({
         targetSupply: 1_000n * MathLib.WAD,
         targetBorrow: 500n * MathLib.WAD,
@@ -757,7 +767,8 @@ describe("VaultV1ReallocationData unit coverage", () => {
           cap: 10_000n * MathLib.WAD,
           enabled,
           maxIn: 0n,
-          maxOut: 10_000n * MathLib.WAD,
+          maxOut,
+          withPublicAllocatorConfig,
         });
 
       expect(

@@ -343,6 +343,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * Returned `data` normalizes `vault.publicAllocatorConfig.accruedFee` to the
    * on-chain `reallocateTo` fee semantics: one fee charge per vault with at
    * least one computed withdrawal.
+   * Sources with zero allocator withdrawal capacity are skipped before interest projection.
    *
    * @param marketId - Target market to supply with shared liquidity.
    * @param options - Optional allocator discovery options.
@@ -699,7 +700,9 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
         .map((srcMarketId) => {
           const withdrawal = _try(() => {
             const srcConfig = this.getVaultMarketConfig(vault, srcMarketId);
-            if (!srcConfig.enabled) return { id: srcMarketId, assets: 0n };
+            const maxOut = srcConfig.publicAllocatorConfig?.maxOut ?? 0n;
+            if (!srcConfig.enabled || maxOut === 0n)
+              return { id: srcMarketId, assets: 0n };
 
             const rawSrcPosition = this.getAccrualPosition(vault, srcMarketId);
             if (rawSrcPosition.supplyShares === 0n)
@@ -720,7 +723,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
                 targetUtilizationLiquidity,
                 suppliable,
                 publicAllocatorConfig?.maxIn ?? 0n,
-                srcConfig.publicAllocatorConfig?.maxOut ?? 0n,
+                maxOut,
               ),
             };
           }, UnknownDataError);
