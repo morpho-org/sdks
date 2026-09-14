@@ -36,7 +36,10 @@ import {
   getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
-import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
+import {
+  signAndVerifyTypedData,
+  verifyTypedDataSignature,
+} from "../../helpers/signAndVerifyTypedData.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
@@ -68,6 +71,7 @@ import {
   NegativeInputError,
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
+  type RequirementTypedData,
   selectRequirementSignatures,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
@@ -1160,7 +1164,9 @@ export class MorphoMidnight {
         primaryType: treeTypedData.primaryType,
         message: treeTypedData.message,
       });
-      const action: MidnightOfferRootSignatureAction = {
+      const action: MidnightOfferRootSignatureAction & {
+        readonly typedData: RequirementTypedData;
+      } = {
         type: "midnightOfferRootSignature",
         args: {
           root: data.tree.root,
@@ -1168,6 +1174,27 @@ export class MorphoMidnight {
           offers: data.tree.offers.length,
         },
         typedData,
+      };
+
+      // Both signing paths must register the ratification payload `buildTx()` submits.
+      const toSignature = async (signature: Hex, owner: Address) => {
+        const items = await EcrecoverRatifierUtils.ratify({
+          tree: data.tree,
+          account: owner,
+          signature,
+        });
+        const payload = await Payload.encode(items);
+        params.signedPayloads.set(signature.toLowerCase(), payload);
+
+        return deepFreeze({
+          args: {
+            owner,
+            root: data.tree.root,
+            signature,
+            payload,
+          },
+          action,
+        });
       };
 
       requirements.push({
@@ -1179,23 +1206,12 @@ export class MorphoMidnight {
             typedData,
           });
 
-          const items = await EcrecoverRatifierUtils.ratify({
-            tree: data.tree,
-            account: userAddress,
-            signature,
-          });
-          const payload = await Payload.encode(items);
-          params.signedPayloads.set(signature.toLowerCase(), payload);
+          return toSignature(signature, userAddress);
+        },
+        async withSignature(signature: Hex, userAddress: Address) {
+          await verifyTypedDataSignature({ userAddress, typedData, signature });
 
-          return deepFreeze({
-            args: {
-              owner: userAddress,
-              root: data.tree.root,
-              signature,
-              payload,
-            },
-            action,
-          });
+          return toSignature(signature, userAddress);
         },
       });
       return requirements;

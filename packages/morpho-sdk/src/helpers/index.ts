@@ -25,7 +25,10 @@ export {
   type VaultV2InKindRedeemMarketPreview,
 } from "./previewVaultV2InKindRedeem.js";
 export { grossFromNetAssets } from "./referralFee.js";
-export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
+export {
+  signAndVerifyTypedData,
+  verifyTypedDataSignature,
+} from "./signAndVerifyTypedData.js";
 export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,

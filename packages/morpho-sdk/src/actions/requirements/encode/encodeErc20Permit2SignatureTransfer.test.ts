@@ -13,6 +13,7 @@ import { describe, expect, test } from "vitest";
 import {
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  InvalidSignatureError,
   NegativeInputError,
   NonPositiveInputError,
   UnsupportedErc20ApprovalSpenderError,
@@ -190,7 +191,6 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
     const requirement = encodeErc20Permit2SignatureTransfer(base());
 
     const typedData = requirement.action.typedData;
-    if (typedData == null) throw new Error("Expected action.typedData");
     const externalSignature = await signTypedData(walletClient, {
       ...typedData,
       account,
@@ -205,5 +205,32 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
         signature: externalSignature,
       }),
     ).resolves.toBe(true);
+  });
+
+  test("behavior: withSignature matches sign()", async () => {
+    const requirement = encodeErc20Permit2SignatureTransfer(base());
+    const signature = await account.signTypedData(requirement.action.typedData);
+
+    const external = await requirement.withSignature(
+      signature,
+      account.address,
+    );
+    const signed = await requirement.sign(walletClient, account.address);
+
+    expect(external).toEqual(signed);
+    expect(external.args.owner).toBe(account.address);
+    expect(Object.isFrozen(external)).toBe(true);
+  });
+
+  test("error: withSignature throws InvalidSignatureError for another signer", async () => {
+    const requirement = encodeErc20Permit2SignatureTransfer(base());
+    const signature = await account.signTypedData(requirement.action.typedData);
+
+    await expect(
+      requirement.withSignature(
+        signature,
+        "0x0000000000000000000000000000000000000001",
+      ),
+    ).rejects.toBeInstanceOf(InvalidSignatureError);
   });
 });

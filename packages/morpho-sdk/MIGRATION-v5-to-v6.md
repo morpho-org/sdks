@@ -275,13 +275,19 @@ carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be signed
 
 ```ts
 const [requirement] = await output.getRequirements();
-const signature = await walletClient.signTypedData(requirement.action.typedData);
+const signature = await remoteSigner.signTypedData(requirement.action.typedData);
+const signed = await requirement.withSignature(signature, owner);
+const tx = output.buildTx(signed);
 ```
 
-Signing `typedData` yourself skips `sign()`'s recover-and-verify step; the caller owns
-verification. For the Midnight offer-root requirement, `sign()` also derives the ratification
-payload that `buildTx()` submits, so wrap remote signers in a viem custom account
-(`toAccount({ address, signTypedData })`) and pass that wallet client to `sign()` instead.
+`requirement.action.typedData` is typed as required on a `Requirement`, so no null check is
+needed. `withSignature(signature, userAddress)` is the external-signer counterpart of `sign()`:
+it verifies that `signature` recovers to `userAddress` (`InvalidSignatureError` otherwise),
+rejects a `userAddress` that differs from the owner embedded in ERC-2612 / authorization payloads
+(`AddressMismatchError`), and returns the same deep-frozen `RequirementSignature` that `sign()`
+does, so `buildTx()` accepts it unchanged. For the Midnight offer-root requirement it also derives
+the ratification payload that `buildTx()` submits, so raw `typedData` signatures must go through
+`withSignature()` (or `sign()`) before being passed to `buildTx()`.
 
 Because the permit and authorization payloads embed the owner and are built eagerly, two exported
 low-level encoders take a new required `owner` parameter, and `getGeneralAdapterRequirementsPermit`

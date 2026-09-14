@@ -169,7 +169,6 @@ describe("encodeErc20Permit2Approve", () => {
       });
 
       const typedData = permit.action.typedData;
-      if (typedData == null) throw new Error("Expected action.typedData");
 
       expect(typedData.primaryType).toBe("PermitSingle");
       expect(typedData.domain).toMatchObject({
@@ -200,7 +199,6 @@ describe("encodeErc20Permit2Approve", () => {
       });
 
       const typedData = permit.action.typedData;
-      if (typedData == null) throw new Error("Expected action.typedData");
       const externalSignature = await signTypedData(client, {
         ...typedData,
         account: client.account,
@@ -215,6 +213,54 @@ describe("encodeErc20Permit2Approve", () => {
           signature: externalSignature,
         }),
       ).toBe(true);
+    });
+  });
+
+  describe("withSignature", () => {
+    test("default", async ({ client }) => {
+      const userAddress = client.account.address;
+      const permit = encodeErc20Permit2Approve({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+      const signature = await signTypedData(client, {
+        ...permit.action.typedData,
+        account: client.account,
+      });
+
+      const external = await permit.withSignature(signature, userAddress);
+      const signed = await permit.sign(client, userAddress);
+
+      expect(external).toEqual(signed);
+      expect(external.args.owner).toBe(userAddress);
+      expect(external.action).toBe(permit.action);
+      expect(Object.isFrozen(external)).toBe(true);
+    });
+
+    test("error: InvalidSignatureError when signature does not recover userAddress", async ({
+      client,
+    }) => {
+      const permit = encodeErc20Permit2Approve({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+      const signature = await signTypedData(client, {
+        ...permit.action.typedData,
+        account: client.account,
+      });
+
+      await expect(
+        permit.withSignature(
+          signature,
+          "0x0000000000000000000000000000000000000001",
+        ),
+      ).rejects.toBeInstanceOf(InvalidSignatureError);
     });
   });
 

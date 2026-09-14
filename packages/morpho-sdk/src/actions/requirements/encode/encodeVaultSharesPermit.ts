@@ -1,12 +1,15 @@
 import { type Address, Eip5267Domain, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type WalletClient, zeroHash } from "viem";
-import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { type Hex, type WalletClient, zeroHash } from "viem";
+import {
+  signAndVerifyTypedData,
+  verifyTypedDataSignature,
+} from "../../../helpers/signAndVerifyTypedData.js";
 import { validateUserAddress } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import type {
-  PermitAction,
+  Erc2612RequirementSignature,
   PermitRequirementSignature,
   Requirement,
 } from "../../../types/index.js";
@@ -36,7 +39,8 @@ export interface EncodeVaultSharesPermitParams {
  *
  * Vault V1 uses the standard token permit domain. Vault V2 uses its protocol-specific domain with
  * only `chainId` and `verifyingContract`. The requirement's `action.typedData` holds the EIP-712
- * payload so it can be signed with any signer instead of `sign()`.
+ * payload so it can be signed with any signer; `withSignature()` verifies such a signature and
+ * returns the same `RequirementSignature`.
  *
  * @param params.vault - Vault share token, including V1 permit-domain metadata when available.
  * @param params.version - Vault generation selecting the standard V1 or two-field V2 domain.
@@ -46,15 +50,15 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
- * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
- *   can be embedded in fixed vault-bundles calldata.
+ * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` or
+ *   `withSignature()` result can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a registered fixed vault-bundles contract.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet has no account.
- * @throws {AddressMismatchError} from `sign()` when the signer differs from `owner`, or when the
- *   wallet account differs from the signer.
+ * @throws {AddressMismatchError} from `sign()` / `withSignature()` when the signer differs from
+ *   `owner`, or from `sign()` when the wallet account differs from the signer.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet targets another chain.
- * @throws {InvalidSignatureError} from `sign()` when signature recovery fails.
+ * @throws {InvalidSignatureError} from `sign()` / `withSignature()` when signature recovery fails.
  * @throws {InvalidPermitDomainChainIdError} when a Vault V1 permit domain targets another chain or omits `chainId`.
  * @throws {InvalidPermitDomainVerifyingContractError} when a Vault V1 permit domain targets another token or omits `verifyingContract`.
  * @throws {UnsupportedPermitDomainExtensionsError} when a Vault V1 permit domain advertises unsupported extensions.
@@ -139,7 +143,7 @@ export const encodeVaultSharesPermit = (
     ),
   );
 
-  const action: PermitAction = {
+  const action: Requirement<Erc2612RequirementSignature>["action"] = {
     type: "permit",
     args: {
       spender,
@@ -149,6 +153,19 @@ export const encodeVaultSharesPermit = (
     },
     typedData,
   };
+
+  const toSignature = (signature: Hex) =>
+    deepFreeze({
+      args: {
+        owner,
+        signature,
+        deadline,
+        amount,
+        asset: vault.address,
+        nonce,
+      },
+      action,
+    });
 
   return {
     action,
@@ -161,17 +178,13 @@ export const encodeVaultSharesPermit = (
         typedData,
       });
 
-      return deepFreeze({
-        args: {
-          owner,
-          signature,
-          deadline,
-          amount,
-          asset: vault.address,
-          nonce,
-        },
-        action,
-      });
+      return toSignature(signature);
+    },
+    async withSignature(signature: Hex, userAddress: Address) {
+      validateUserAddress(userAddress, owner);
+      await verifyTypedDataSignature({ userAddress, typedData, signature });
+
+      return toSignature(signature);
     },
   };
 };

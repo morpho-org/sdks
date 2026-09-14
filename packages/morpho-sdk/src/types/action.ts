@@ -629,6 +629,12 @@ export interface MidnightOfferRootSignatureArgs {
   readonly payload: Hex;
 }
 
+/** EIP-712 payload carried by a signable requirement action. */
+export type RequirementTypedData = TypedDataDefinition<
+  Record<string, unknown>,
+  string
+>;
+
 export interface PermitAction
   extends BaseAction<
     "permit",
@@ -643,12 +649,12 @@ export interface PermitAction
   /**
    * EIP-712 payload to sign for this permit, ready to pass to any signer
    * (`walletClient.signTypedData(...)`, `account.signTypedData(...)`, or a remote/EIP-712 signer).
-   * Always populated on requirements the SDK returns from `getRequirements()`; optional only so
-   * hand-built action metadata (e.g. test fixtures) need not supply it. The payload is deep-frozen;
-   * `sign()` signs this exact payload, and obtaining the signature another way skips its
-   * recover-and-verify step, so the caller is responsible for verification.
+   * Required on {@link Requirement.action}; optional here only so hand-built action metadata
+   * (e.g. test fixtures) need not supply it. The payload is deep-frozen and `sign()` signs this
+   * exact payload. Feed an externally produced signature back through
+   * {@link Requirement.withSignature} to obtain the {@link RequirementSignature} `buildTx()` consumes.
    */
-  readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly typedData?: RequirementTypedData;
 }
 
 export interface Permit2Action
@@ -657,7 +663,7 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {
   /** EIP-712 payload to sign for this Permit2 AllowanceTransfer. See {@link PermitAction.typedData}. */
-  readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly typedData?: RequirementTypedData;
 }
 
 /** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
@@ -672,7 +678,7 @@ export interface Permit2SignatureTransferAction
     }
   > {
   /** EIP-712 payload to sign for this Permit2 SignatureTransfer. See {@link PermitAction.typedData}. */
-  readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly typedData?: RequirementTypedData;
 }
 
 /**
@@ -685,7 +691,7 @@ export interface AuthorizationAction
     { authorized: Address; isAuthorized: boolean; deadline: bigint }
   > {
   /** EIP-712 payload to sign for this Morpho authorization. See {@link PermitAction.typedData}. */
-  readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly typedData?: RequirementTypedData;
 }
 
 /** Metadata for a Midnight offer-root signature request. */
@@ -701,14 +707,12 @@ export interface MidnightOfferRootSignatureAction
   /**
    * EIP-712 offer-tree payload to sign for this Midnight ratification. See {@link PermitAction.typedData}.
    *
-   * Unlike token permits and Morpho authorization, a bare signature over this payload is not
-   * enough to build the submit-offers transaction: `sign()` also derives the ratification payload
-   * (`MidnightOfferRootSignature.args.payload`) that `buildTx()` submits to the mempool. To sign
-   * with a remote or custom signer, wrap it in a viem custom account (`toAccount({ address,
-   * signTypedData })`) and pass that wallet client to `sign()`. Use `typedData` here for display
-   * or verification.
+   * A bare signature over this payload is not enough to build the submit-offers transaction:
+   * `sign()` and `withSignature()` also derive the ratification payload
+   * (`MidnightOfferRootSignature.args.payload`) that `buildTx()` submits to the mempool, so an
+   * external signature must be passed through {@link Requirement.withSignature}.
    */
-  readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly typedData?: RequirementTypedData;
 }
 
 /** Action metadata supported by signature requirements. */
@@ -796,12 +800,21 @@ type RequirementResult<
 /**
  * A signable approval / authorization requirement. `sign()` returns the matching
  * {@link RequirementSignature}; `action` describes the requirement without signing and carries the
- * EIP-712 `typedData` payload so an integrator can produce the signature with any signer.
+ * EIP-712 `typedData` payload so an integrator can produce the signature with any signer, then
+ * exchange it for the same {@link RequirementSignature} through `withSignature()`.
  *
  * Generic over the signature it produces so permit encoders narrow to
  * {@link PermitRequirementSignature} and the authorization encoder to
  * {@link AuthorizationRequirementSignature}; the two-parameter form is kept for
  * Midnight action requirements that are parameterized by action and args.
+ *
+ * @example
+ * ```ts
+ * const [requirement] = await output.getRequirements();
+ * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
+ * const signed = await requirement.withSignature(signature, owner);
+ * const tx = output.buildTx(signed);
+ * ```
  */
 export interface Requirement<
   TSignatureOrAction extends
@@ -809,11 +822,24 @@ export interface Requirement<
     | SignatureRequirementAction = RequirementSignature,
   TArgs extends RequirementSignatureArgs | undefined = undefined,
 > {
+  /** Signs `action.typedData` with `client`, verifies the signature recovers `userAddress`, and returns the signed requirement. */
   sign: (
     client: WalletClient,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
-  action: RequirementResult<TSignatureOrAction, TArgs>["action"];
+  /**
+   * Wraps a signature over `action.typedData` produced by any signer into the same signed
+   * requirement `sign()` returns, after verifying it recovers `userAddress` (and, for owner-bound
+   * requirements, that `userAddress` is the owner). Midnight also derives the ratification payload.
+   */
+  withSignature: (
+    signature: Hex,
+    userAddress: Address,
+  ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
+  /** Requirement metadata; `typedData` is always populated on SDK-built requirements. */
+  action: RequirementResult<TSignatureOrAction, TArgs>["action"] & {
+    readonly typedData: RequirementTypedData;
+  };
 }
 
 /** Bundler3 token signature requirement. */

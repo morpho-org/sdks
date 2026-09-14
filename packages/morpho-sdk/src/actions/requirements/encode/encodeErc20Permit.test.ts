@@ -269,7 +269,6 @@ describe("encodeErc20Permit", () => {
       });
 
       const typedData = permit.action.typedData;
-      if (typedData == null) throw new Error("Expected action.typedData");
 
       expect(typedData.primaryType).toBe("Permit");
       expect(typedData.domain).toMatchObject({
@@ -301,7 +300,6 @@ describe("encodeErc20Permit", () => {
       });
 
       const typedData = permit.action.typedData;
-      if (typedData == null) throw new Error("Expected action.typedData");
       const externalSignature = await signTypedData(client, {
         ...typedData,
         account: client.account,
@@ -316,6 +314,80 @@ describe("encodeErc20Permit", () => {
           signature: externalSignature,
         }),
       ).toBe(true);
+    });
+  });
+
+  describe("withSignature", () => {
+    test("default", async ({ client }) => {
+      const userAddress = client.account.address;
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        owner: userAddress,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+      const signature = await signTypedData(client, {
+        ...permit.action.typedData,
+        account: client.account,
+      });
+
+      const external = await permit.withSignature(signature, userAddress);
+      const signed = await permit.sign(client, userAddress);
+
+      expect(external).toEqual(signed);
+      expect(external.action).toBe(permit.action);
+      expect(Object.isFrozen(external)).toBe(true);
+      expect(Object.isFrozen(external.args)).toBe(true);
+    });
+
+    test("error: AddressMismatchError when signer is not the owner", async ({
+      client,
+    }) => {
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        owner: client.account.address,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+      const signature = await signTypedData(client, {
+        ...permit.action.typedData,
+        account: client.account,
+      });
+
+      await expect(
+        permit.withSignature(
+          signature,
+          "0x0000000000000000000000000000000000000001",
+        ),
+      ).rejects.toBeInstanceOf(AddressMismatchError);
+    });
+
+    test("error: InvalidSignatureError when signature does not recover owner", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+      const wrongSigner = privateKeyToAccount(
+        "0x0000000000000000000000000000000000000000000000000000000000000002",
+      );
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        owner: userAddress,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+      const signature = await wrongSigner.signTypedData(
+        permit.action.typedData,
+      );
+
+      await expect(
+        permit.withSignature(signature, userAddress),
+      ).rejects.toBeInstanceOf(InvalidSignatureError);
     });
   });
 });

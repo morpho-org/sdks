@@ -1,10 +1,13 @@
 import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import type { WalletClient } from "viem";
-import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import type { Hex, WalletClient } from "viem";
+import {
+  signAndVerifyTypedData,
+  verifyTypedDataSignature,
+} from "../../../helpers/signAndVerifyTypedData.js";
 import type {
-  Permit2Action,
+  Permit2AllowanceRequirementSignature,
   PermitRequirementSignature,
   Requirement,
 } from "../../../types/index.js";
@@ -22,8 +25,9 @@ interface EncodeErc20Permit2ApproveParams {
  * Builds a Permit2 `Requirement` that, once signed, lets GeneralAdapter1 pull `amount` of `token`
  * via the Permit2 contract.
  *
- * The requirement's `action.typedData` holds the EIP-712 payload so it can be signed with any signer
- * instead of `sign()`. Deadline defaults to two hours from `Time.timestamp()`.
+ * The requirement's `action.typedData` holds the EIP-712 payload so it can be signed with any
+ * signer; `withSignature()` verifies such a signature and returns the same `RequirementSignature`.
+ * Deadline defaults to two hours from `Time.timestamp()`.
  *
  * @param params - Permit2 encoding parameters.
  * @param params.token - ERC-20 token address.
@@ -32,10 +36,11 @@ interface EncodeErc20Permit2ApproveParams {
  * @param params.nonce - The user's current Permit2 nonce for `(token, GeneralAdapter1)`.
  * @param params.expiration - Permit2-managed allowance expiration timestamp.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
- *   `sign(client, userAddress)` produces the deep-frozen signature.
+ *   `sign(client, userAddress)` or `withSignature(signature, userAddress)` produces the
+ *   deep-frozen signature.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
- * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @throws {InvalidSignatureError} from `sign()` / `withSignature()` when EIP-712 verification fails.
  * @example
  * ```ts
  * import { encodeErc20Permit2Approve } from "@morpho-org/morpho-sdk";
@@ -83,7 +88,7 @@ export const encodeErc20Permit2Approve = (
     ),
   );
 
-  const action: Permit2Action = {
+  const action: Requirement<Permit2AllowanceRequirementSignature>["action"] = {
     type: "permit2",
     args: {
       spender: generalAdapter1,
@@ -94,6 +99,20 @@ export const encodeErc20Permit2Approve = (
     typedData,
   };
 
+  const toSignature = (signature: Hex, owner: Address) =>
+    deepFreeze({
+      args: {
+        owner,
+        signature,
+        deadline,
+        amount,
+        asset: token,
+        expiration,
+        nonce,
+      },
+      action,
+    });
+
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
@@ -103,18 +122,12 @@ export const encodeErc20Permit2Approve = (
         typedData,
       });
 
-      return deepFreeze({
-        args: {
-          owner: userAddress,
-          signature,
-          deadline,
-          amount,
-          asset: token,
-          expiration,
-          nonce,
-        },
-        action,
-      });
+      return toSignature(signature, userAddress);
+    },
+    async withSignature(signature: Hex, userAddress: Address) {
+      await verifyTypedDataSignature({ userAddress, typedData, signature });
+
+      return toSignature(signature, userAddress);
     },
   };
 };

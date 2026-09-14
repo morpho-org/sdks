@@ -50,6 +50,41 @@ export const signAndVerifyTypedData = async (params: {
     account,
   });
 
+  await verifyTypedDataSignature({ userAddress, typedData, signature });
+
+  return signature;
+};
+
+/**
+ * Verifies that an EIP-712 signature produced elsewhere (remote signer, hardware wallet, account
+ * abstraction) recovers `userAddress` for `typedData`.
+ *
+ * Use inside requirement `withSignature(...)` callbacks so an externally produced signature goes
+ * through the same recover-and-verify step as `sign()` before it reaches transaction builders.
+ *
+ * @param params - Verification parameters.
+ * @param params.userAddress - Address expected to own the signature.
+ * @param params.typedData - EIP-712 typed data that was signed.
+ * @param params.signature - Signature to verify.
+ * @throws {InvalidSignatureError} when the signature does not recover to `userAddress`.
+ * @example
+ * ```ts
+ * import { verifyTypedDataSignature } from "@morpho-org/morpho-sdk";
+ *
+ * await verifyTypedDataSignature({
+ *   userAddress: owner,
+ *   typedData: requirement.action.typedData,
+ *   signature,
+ * });
+ * ```
+ */
+export const verifyTypedDataSignature = async (params: {
+  readonly userAddress: Address;
+  readonly typedData: TypedDataDefinition<Record<string, unknown>, string>;
+  readonly signature: Hex;
+}): Promise<void> => {
+  const { userAddress, typedData, signature } = params;
+
   const isValid = await verifyTypedData({
     ...typedData,
     address: userAddress,
@@ -59,6 +94,4 @@ export const signAndVerifyTypedData = async (params: {
   if (!isValid) {
     throw new InvalidSignatureError();
   }
-
-  return signature;
 };
