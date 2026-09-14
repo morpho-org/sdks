@@ -810,6 +810,24 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
     expect(accrued.shares).toBe(10n);
   });
 
+  test("accrueInterest leaves a zero-allocation adapter untouched", () => {
+    // A zero-allocation adapter contributes no assets, so accrueInterest must
+    // not inspect its nested vault — matching `realAssets`, which short-circuits
+    // to 0n — and must never throw for its economically inactive markets.
+    const accrualVaultV1 = {
+      accrueInterest: () => {
+        throw new Error("nested vault must not be accrued");
+      },
+    } as unknown as AccrualVault;
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT, parentAllocation: 0n },
+      accrualVaultV1,
+      10n,
+    );
+
+    expect(adapter.accrueInterest(5n)).toBe(adapter);
+  });
+
   test("ignores residual shares when the parent allocation is zero", () => {
     const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
       {

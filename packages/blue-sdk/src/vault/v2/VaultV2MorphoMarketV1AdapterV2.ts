@@ -226,15 +226,20 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
    * market's `lastUpdate`.
    * @example
    * ```ts
-   * import { fetchAccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk-viem";
+   * import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    * import { createPublicClient, http } from "viem";
    * import { base } from "viem/chains";
    *
    * const client = createPublicClient({ chain: base, transport: http() });
-   * const adapter = await fetchAccrualVaultV2MorphoMarketV1AdapterV2(
-   *   "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+   * const vault = await fetchAccrualVaultV2(
+   *   "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C",
    *   client,
    * );
+   * const adapter = vault.accrualAdapters.find(
+   *   (a): a is AccrualVaultV2MorphoMarketV1AdapterV2 =>
+   *     a instanceof AccrualVaultV2MorphoMarketV1AdapterV2,
+   * )!;
    * const accrued = adapter.accrueInterest(adapter.markets[0]!.lastUpdate);
    * // accrued.markets[0]!.lastUpdate === the passed timestamp
    * ```

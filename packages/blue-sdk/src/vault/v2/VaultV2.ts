@@ -335,10 +335,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
+   * import { base } from "viem/chains";
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    *
-   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const client = createPublicClient({ chain: base, transport: http() });
    * const vaultAddress = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
    * const vault = await fetchAccrualVaultV2(vaultAddress, client);
    * const { vault: accrued, performanceFeeShares } = vault.accrueInterest(

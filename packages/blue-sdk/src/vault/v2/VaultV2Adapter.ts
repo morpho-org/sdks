@@ -56,15 +56,15 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
+   * import { base } from "viem/chains";
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    *
-   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const client = createPublicClient({ chain: base, transport: http() });
    * const vaultAddress = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
    * const vault = await fetchAccrualVaultV2(vaultAddress, client);
    * const [adapter] = vault.accrualAdapters;
-   * const accrued = adapter?.accrueInterest(vault.lastUpdate);
-   * // accrued.realAssets(vault.lastUpdate) reflects state at the shared timestamp
+   * const accrued = adapter?.accrueInterest?.(vault.lastUpdate);
+   * // accrued?.realAssets(vault.lastUpdate) reflects state at the shared timestamp
    * ```
    */
   accrueInterest?(timestamp: BigIntish): IAccrualVaultV2Adapter;
