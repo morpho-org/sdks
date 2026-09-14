@@ -739,9 +739,9 @@ CYCLE START:
 
    Pre-condition B — no orphan watcher stash from a crashed prior cycle. Capture `git stash list` and its exit code separately (do NOT pipe with `|| true` — that would mask a `git stash list` failure as "no orphans"):
    set CYCLE_STASH_LIST = `cd <REPO_PATH> && git stash list --format='%gs'` — abort cycle (WATCH_TRANSIENT_ERROR) if `git stash list` exits non-zero (corrupted stash store, missing .git/refs/stash, lock contention).
-   set CYCLE_ORPHAN_STASHES = `printf '%s' "${CYCLE_STASH_LIST}" | grep -E 'fix-pr watcher: lint-aborted cycle' || true`
+   set CYCLE_ORPHAN_STASHES = `printf '%s' "${CYCLE_STASH_LIST}" | grep -E '(fix-pr|pr-fix) watcher: lint-aborted cycle' || true`
    set CYCLE_ORPHAN_COUNT = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | grep -c '.' || true`
-   If ${CYCLE_ORPHAN_COUNT:-0} > 0: capture a single-line summary for the sentinel (the orphan list is multi-line — emit only the count + first match's subject in the sentinel itself, full list to stderr): set CYCLE_ORPHAN_FIRST = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | head -n1`. Print the full list with `printf '%s\n' "${CYCLE_ORPHAN_STASHES}" >&2`. Then say (single grep-able line): "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (${CYCLE_ORPHAN_COUNT} orphan watcher stash(es) detected; first: ${CYCLE_ORPHAN_FIRST}). A prior cycle crashed between stash-push and stash-drop. Resolve manually: list current orphan refs with \`git stash list --format='%gd %gs' | grep -F 'fix-pr watcher: lint-aborted cycle'\`, then drop each one HIGHEST-INDEX-FIRST (e.g. \`git stash drop stash@{2}\` then \`stash@{1}\` then \`stash@{0}\`) so positional refs of remaining stashes don't shift mid-loop. \`git stash drop\` accepts only stash refs, NOT commit SHAs." and end.
+   If ${CYCLE_ORPHAN_COUNT:-0} > 0: capture a single-line summary for the sentinel (the orphan list is multi-line — emit only the count + first match's subject in the sentinel itself, full list to stderr): set CYCLE_ORPHAN_FIRST = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | head -n1`. Print the full list with `printf '%s\n' "${CYCLE_ORPHAN_STASHES}" >&2`. Then say (single grep-able line): "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (${CYCLE_ORPHAN_COUNT} orphan watcher stash(es) detected; first: ${CYCLE_ORPHAN_FIRST}). A prior cycle crashed between stash-push and stash-drop. Resolve manually: list current orphan refs with \`git stash list --format='%gd %gs' | grep -E '(fix-pr|pr-fix) watcher: lint-aborted cycle'\`, then drop each one HIGHEST-INDEX-FIRST (e.g. \`git stash drop stash@{2}\` then \`stash@{1}\` then \`stash@{0}\`) so positional refs of remaining stashes don't shift mid-loop. \`git stash drop\` accepts only stash refs, NOT commit SHAs." and end.
 
    Then run: cd <REPO_PATH> && git fetch origin && gh pr checkout <PR_NUMBER> — abort cycle on any non-zero exit.
    (`gh pr checkout` is cross-fork-safe — it handles fork PRs and existing local branches.)
@@ -813,7 +813,7 @@ MERGEEOF
    ```bash
    # 1. Find unreachable stash commits.
    git fsck --unreachable --no-reflogs 2>/dev/null | grep '^unreachable commit' | awk '{print $3}' | while read sha; do
-     git log -1 --format='%H %s' "$sha" | grep -q 'fix-pr watcher: lint-aborted cycle' && echo "$sha"
+     git log -1 --format='%H %s' "$sha" | grep -qE '(fix-pr|pr-fix) watcher: lint-aborted cycle' && echo "$sha"
    done
 
    # 2. Apply (or just inspect) the SHA you want.
