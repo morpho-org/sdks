@@ -105,7 +105,7 @@ describe("AccrualPosition state transitions", () => {
     const position = accrualPosition();
     const result = position.supplyCollateral(10n);
 
-    expect(position.collateral).toBe(210n);
+    expect(position.collateral).toBe(200n);
     expect(result).not.toBe(position);
     expect(result.collateral).toBe(210n);
   });
