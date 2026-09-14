@@ -1689,8 +1689,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * A max repay without signature support may return the token's reusable maximum approval so
-   * rebuilding the bounded debt quote before submission cannot make the prior allowance insufficient.
+   * A max repay requests an approval for the exact deadline-accrued `maxRepayAssets`; reusable
+   * allowances remain available through the underlying Morpho SDK's `approvalAmount` option.
    *
    * @param options.token - Address of the configured market's loan token.
    * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.

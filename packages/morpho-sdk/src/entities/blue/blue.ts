@@ -18,7 +18,7 @@ import {
   fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, getAddress, isAddressEqual, maxUint256 } from "viem";
+import { type Address, isAddressEqual, maxUint256 } from "viem";
 import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1PublicAllocations,
@@ -42,7 +42,6 @@ import {
 import {
   computeVaultV1Reallocations,
   DEFAULT_LLTV_BUFFER,
-  MAX_TOKEN_APPROVALS,
   validateAccrualPosition,
   validateChainId,
   validatePositionHealth,
@@ -618,8 +617,8 @@ export interface BlueActions {
    * saturated full close; the entity derives `maxRepayAssets` from debt projected through the
    * requested deadline plus the referral fee, and the contract refunds unused funding. A
    * previously signed share-mode cap remains valid when it still covers the fresh derived minimum.
-   * Saturated full-repay requirements use the token's reusable maximum allowance when signatures
-   * are disabled, while the transaction itself remains bounded by the derived cap.
+   * Full-repay requirements fund exactly the derived `maxRepayAssets`; pass `approvalAmount` to
+   * request a reusable allowance instead. The transaction remains bounded by the derived cap.
    * Share-mode deadlines cannot exceed the two-hour quote horizon. Blue authorization is required
    * only for collateral withdrawal. Pure repay uses `maxLtv = maxUint256`; withdrawals use buffered
    * LLTV. No Bundler3 share-price or `slippageTolerance` input exists.
@@ -1704,17 +1703,7 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.loanToken,
                   amount: maxRepayAssets,
-                  // A caller-requested reusable approval wins; a full repay otherwise defaults to
-                  // the token's reusable cap. Checksum the key so a differently-cased loan token
-                  // (common from subgraphs/APIs) resolves that cap instead of falling back to
-                  // maxUint256, which UNI/ONDO/COMP/FLUID reject.
-                  approvalAmount:
-                    requirementsParams?.approvalAmount ??
-                    (saturatedRepay
-                      ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
-                          getAddress(this.marketParams.loanToken)
-                        ] ?? maxUint256)
-                      : undefined),
+                  approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
                   useSimplePermit: requirementsParams?.useSimplePermit,
