@@ -11,7 +11,11 @@ import {
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
-import { VaultV2Errors } from "../../errors.js";
+import {
+  BlueErrors,
+  UnknownMarketAllocationError,
+  VaultV2Errors,
+} from "../../errors.js";
 import { MarketParams, marketParamsAbi } from "../../market/MarketParams.js";
 import { MathLib } from "../../math/MathLib.js";
 import { CapacityLimitReason } from "../../utils.js";
@@ -400,6 +404,67 @@ describe("AccrualVaultV2.accrueInterest", () => {
       (accrued.accrualAdapters[0] as AccrualVaultV2MorphoMarketV1Adapter)
         .positions[0]?.market.lastUpdate,
     ).toBe(105n);
+  });
+
+  test("error: BlueErrors.InvalidInterestAccrual when advancing past an ahead nested market", () => {
+    // Advancing the vault to 101 (elapsed > 0) while a nested market sits ahead
+    // at 105 cannot yield a graph that shares one timestamp. The inconsistency
+    // must surface rather than silently returning a mixed-timestamp graph.
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      {
+        ...adapterBaseInput(),
+        marketParamsList: [new MarketParams(marketParams())],
+      },
+      [accrualPosition({ supplyShares: 100n }, { lastUpdate: 105n })],
+    );
+    const vault = accrualVaultV2(adapter);
+
+    expect(() => vault.accrueInterest(101n)).toThrow(
+      BlueErrors.InvalidInterestAccrual,
+    );
+  });
+
+  test("behavior: a no-op accrual keeps an adapter whose nested queue is stale", () => {
+    // At elapsed 0 (accruing to the vault's own `lastUpdate`), a nested V1
+    // adapter whose withdraw queue lacks matching allocation state throws
+    // UnknownMarketAllocationError. This no-op call stayed valid before nested
+    // accrual existed, so it must not throw and must keep the adapter untouched.
+    const staleAdapter = accrualAdapter({
+      accrueInterest: () => {
+        throw new UnknownMarketAllocationError(
+          new MarketParams(marketParams()).id,
+        );
+      },
+    });
+    const vault = accrualVaultV2(staleAdapter);
+
+    const {
+      vault: accrued,
+      performanceFeeShares,
+      managementFeeShares,
+    } = vault.accrueInterest(100n);
+
+    expect(accrued.accrualAdapters[0]).toBe(staleAdapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(staleAdapter);
+    expect(performanceFeeShares).toBe(0n);
+    expect(managementFeeShares).toBe(0n);
+  });
+
+  test("error: UnknownMarketAllocationError when advancing with a stale nested queue", () => {
+    // The stale-queue tolerance is limited to the elapsed-0 no-op: advancing the
+    // vault must still surface a nested adapter's UnknownMarketAllocationError.
+    const staleAdapter = accrualAdapter({
+      accrueInterest: () => {
+        throw new UnknownMarketAllocationError(
+          new MarketParams(marketParams()).id,
+        );
+      },
+    });
+    const vault = accrualVaultV2(staleAdapter);
+
+    expect(() => vault.accrueInterest(101n)).toThrow(
+      UnknownMarketAllocationError,
+    );
   });
 });
 

@@ -193,6 +193,16 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * queue references a market without an allocation.
    * @example
    * ```ts
+   * import { fetchAccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
+   *   "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
+   *   client,
+   * );
+   * const timestamp = (await client.getBlock()).timestamp;
    * const accrued = adapter.accrueInterest(timestamp);
    * // accrued.realAssets(timestamp) reflects the V1 vault's assets at `timestamp`
    * ```

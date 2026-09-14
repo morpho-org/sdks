@@ -60,6 +60,7 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    *
    * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
    * const vault = await fetchAccrualVaultV2(vaultAddress, client);
    * const [adapter] = vault.accrualAdapters;
    * const accrued = adapter?.accrueInterest(vault.lastUpdate);

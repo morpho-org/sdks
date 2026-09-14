@@ -1,5 +1,9 @@
 import { type Address, type Hex, zeroAddress } from "viem";
-import { BlueErrors, VaultV2Errors } from "../../errors.js";
+import {
+  BlueErrors,
+  UnknownMarketAllocationError,
+  VaultV2Errors,
+} from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, Hash } from "../../types.js";
@@ -307,12 +311,14 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * Returns a new vault derived from this vault, whose interest — together with
    * that of every adapter, market, and position it holds — has been accrued up to
    * the given timestamp, so the entire returned entity graph shares one
-   * `lastUpdate`. Adapters that do not implement `accrueInterest`, and adapters
-   * already ahead of `timestamp` (a market cannot be accrued backwards), are left
-   * at their pre-accrual state rather than throwing — so passing the vault's own
-   * `lastUpdate` stays valid even when a nested market was poked more recently.
-   * Performance and management fee shares are zero when the corresponding fee
-   * recipient cannot receive vault shares.
+   * `lastUpdate`. Adapters that do not implement `accrueInterest` are left at
+   * their pre-accrual state. Passing the vault's own `lastUpdate` (a no-op
+   * accrual) stays valid even when a nested market was poked more recently or a
+   * nested withdraw queue is stale, mirroring the pre-accrual behavior of
+   * returning without touching adapters; advancing to a strictly greater
+   * `timestamp` that a nested market cannot reach instead throws. Performance and
+   * management fee shares are zero when the corresponding fee recipient cannot
+   * receive vault shares.
    * @param timestamp The timestamp at which to accrue interest. Must be greater
    * than or equal to the vault's `lastUpdate`. When it is strictly greater it must
    * also be greater than or equal to each underlying market's `lastUpdate`, since
@@ -333,6 +339,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    *
    * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
    * const vault = await fetchAccrualVaultV2(vaultAddress, client);
    * const { vault: accrued, performanceFeeShares } = vault.accrueInterest(
    *   vault.lastUpdate,
@@ -355,18 +362,28 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     // Accrue every nested adapter (and the liquidity adapter) to the same
     // timestamp, so the returned vault exposes an entity graph that shares one
     // `lastUpdate` rather than pre-accrual market state. Adapters that predate
-    // `accrueInterest`, and adapters already ahead of `timestamp` (a market
-    // cannot be accrued backwards), are left at their pre-accrual state. Leaving
-    // ahead adapters as-is preserves the pre-nested-accrual behavior of a
-    // `timestamp === vault.lastUpdate` call that a more recently poked market
-    // would otherwise make throw; when `elapsed > 0` the `realAssets` call below
-    // still surfaces that `InvalidInterestAccrual`.
+    // `accrueInterest` are left at their pre-accrual state.
+    //
+    // Error suppression is limited to the `elapsed === 0n` no-op re-accrual to
+    // the vault's own `lastUpdate`, which historically returned before touching
+    // any adapter: there an adapter that cannot reach `timestamp` is kept as-is
+    // — a market poked more recently (`InvalidInterestAccrual`, a market cannot
+    // be accrued backwards) or a stale nested withdraw queue
+    // (`UnknownMarketAllocationError`) — so the call stays valid. When
+    // `elapsed > 0n` the caller asked to advance the whole graph to `timestamp`,
+    // so a nested market that cannot reach it is a genuine inconsistency and the
+    // error propagates instead of yielding a silent mixed-timestamp graph.
     const accrualAdapters = this.accrualAdapters.map((adapter) => {
       if (adapter.accrueInterest == null) return adapter;
       try {
         return adapter.accrueInterest(timestamp);
       } catch (error) {
-        if (error instanceof BlueErrors.InvalidInterestAccrual) return adapter;
+        if (
+          elapsed === 0n &&
+          (error instanceof BlueErrors.InvalidInterestAccrual ||
+            error instanceof UnknownMarketAllocationError)
+        )
+          return adapter;
         throw error;
       }
     });
@@ -376,7 +393,14 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         accrualLiquidityAdapter =
           accrualLiquidityAdapter.accrueInterest(timestamp);
       } catch (error) {
-        if (!(error instanceof BlueErrors.InvalidInterestAccrual)) throw error;
+        if (
+          !(
+            elapsed === 0n &&
+            (error instanceof BlueErrors.InvalidInterestAccrual ||
+              error instanceof UnknownMarketAllocationError)
+          )
+        )
+          throw error;
       }
     }
 
