@@ -1,15 +1,14 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, maxUint256, type WalletClient } from "viem";
+import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { validateDeadline } from "../../../helpers/validate.js";
 import {
   type AuthorizationAction,
   type AuthorizationRequirementSignature,
   ChainIdMismatchError,
   ExpiredDeadlineError,
-  InputExceedsMaxError,
-  NonPositiveInputError,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -83,16 +82,7 @@ export const encodeBlueSignatureAuthorization = async (
   // `getBlueAuthorizationRequirement` resolver guards. An omitted deadline defaults to two hours
   // from now and is always valid.
   if (params.deadline != null) {
-    if (params.deadline <= 0n) {
-      throw new NonPositiveInputError("deadline", params.deadline);
-    }
-    if (params.deadline > maxUint256) {
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: params.deadline,
-        max: maxUint256,
-      });
-    }
+    validateDeadline(params.deadline);
     const timestamp = Time.timestamp();
     if (params.deadline <= timestamp) {
       throw new ExpiredDeadlineError(params.deadline, timestamp);

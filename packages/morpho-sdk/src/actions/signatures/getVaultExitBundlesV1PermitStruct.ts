@@ -26,6 +26,10 @@ export interface GetVaultExitBundlesV1PermitStructParams {
   readonly vault: Address;
   /** Bundle deadline used by the empty-permit sentinel. */
   readonly deadline: bigint;
+  /** Optional expected owner of the signed permit. */
+  readonly owner?: Address;
+  /** Optional expected spender of the signed permit. */
+  readonly spender?: Address;
   /** Optional signed bounded ERC-2612 requirement. */
   readonly requirementSignature?: PermitRequirementSignature;
 }
@@ -35,6 +39,8 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  *
  * @param params.vault - Vault share token authorized by the permit.
  * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
+ * @param params.owner - Optional expected owner of the signed permit.
+ * @param params.spender - Optional expected spender of the signed permit.
  * @param params.requirementSignature - Optional signed ERC-2612 vault-share requirement.
  * @returns The shared bundles share-permit tuple.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement is incompatible.
