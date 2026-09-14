@@ -526,6 +526,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param marketId - Target market that would receive the liquidity.
    * @param options - Optional allocator discovery options.
    * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getPublicReallocationLiquidity`.
@@ -587,6 +589,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param utilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getAvailableLiquidityToUtilization`.
