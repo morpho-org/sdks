@@ -823,7 +823,7 @@ export interface Requirement<
   TArgs extends RequirementSignatureArgs | undefined = undefined,
 > {
   /** Signs `action.typedData` with `client`, verifies the signature recovers `userAddress`, and returns the signed requirement. */
-  sign: (
+  readonly sign: (
     client: WalletClient,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
@@ -831,13 +831,15 @@ export interface Requirement<
    * Wraps a signature over `action.typedData` produced by any signer into the same signed
    * requirement `sign()` returns, after verifying it recovers `userAddress` (and, for owner-bound
    * requirements, that `userAddress` is the owner). Midnight also derives the ratification payload.
+   * Verification is offline ECDSA recovery, so `userAddress` must be an EOA; ERC-1271 contract-wallet
+   * signatures are not verified and are rejected.
    */
-  withSignature: (
+  readonly withSignature: (
     signature: Hex,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
   /** Requirement metadata; `typedData` is always populated on SDK-built requirements. */
-  action: RequirementResult<TSignatureOrAction, TArgs>["action"] & {
+  readonly action: RequirementResult<TSignatureOrAction, TArgs>["action"] & {
     readonly typedData: RequirementTypedData;
   };
 }
@@ -976,7 +978,9 @@ export function isRequirementSignature(requirement: unknown): boolean {
     typeof requirement === "object" &&
     requirement !== null &&
     "sign" in requirement &&
-    typeof requirement.sign === "function"
+    typeof requirement.sign === "function" &&
+    "withSignature" in requirement &&
+    typeof requirement.withSignature === "function"
   );
 }
 

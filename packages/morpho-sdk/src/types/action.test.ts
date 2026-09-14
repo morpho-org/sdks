@@ -1,12 +1,14 @@
 import type { Address, Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  type ActionRequirement,
   type AnyRequirementSignature,
   type AuthorizationRequirementSignature,
   isAuthorizationSignature,
   isMidnightOfferRootSignature,
   isPermit2SignatureTransferSignature,
   isPermitSignature,
+  isRequirementSignature,
   type MidnightOfferRootSignature,
   type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
@@ -159,6 +161,39 @@ describe("isMidnightOfferRootSignature", () => {
 
   test("behavior: false for authorization", () => {
     expect(isMidnightOfferRootSignature(authorizationSignature)).toBe(false);
+  });
+});
+
+describe("isRequirementSignature", () => {
+  test("default: true when sign and withSignature are callable", () => {
+    expect(
+      isRequirementSignature({
+        sign: async () => permitSignature,
+        withSignature: async () => permitSignature,
+        action: permitSignature.action,
+      } as unknown as ActionRequirement),
+    ).toBe(true);
+  });
+
+  test("behavior: false without withSignature", () => {
+    expect(
+      isRequirementSignature({
+        sign: async () => permitSignature,
+        action: permitSignature.action,
+      } as unknown as ActionRequirement),
+    ).toBe(false);
+  });
+
+  test("behavior: false for a call requirement or undefined", () => {
+    expect(
+      isRequirementSignature({
+        to: SPENDER,
+        value: 0n,
+        data: "0x",
+        action: { type: "erc20Approval", args: {} },
+      } as unknown as ActionRequirement),
+    ).toBe(false);
+    expect(isRequirementSignature(undefined)).toBe(false);
   });
 });
 

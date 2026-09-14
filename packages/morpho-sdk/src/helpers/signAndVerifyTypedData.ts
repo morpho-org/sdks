@@ -56,17 +56,20 @@ export const signAndVerifyTypedData = async (params: {
 };
 
 /**
- * Verifies that an EIP-712 signature produced elsewhere (remote signer, hardware wallet, account
- * abstraction) recovers `userAddress` for `typedData`.
+ * Verifies that an EIP-712 signature produced elsewhere (remote signer, hardware wallet) recovers
+ * `userAddress` for `typedData`.
  *
  * Use inside requirement `withSignature(...)` callbacks so an externally produced signature goes
  * through the same recover-and-verify step as `sign()` before it reaches transaction builders.
+ * Verification is offline ECDSA recovery: `userAddress` must be an EOA. ERC-1271 contract-wallet
+ * signatures cannot be checked without an RPC client and are rejected.
  *
  * @param params - Verification parameters.
- * @param params.userAddress - Address expected to own the signature.
+ * @param params.userAddress - EOA expected to own the signature.
  * @param params.typedData - EIP-712 typed data that was signed.
  * @param params.signature - Signature to verify.
- * @throws {InvalidSignatureError} when the signature does not recover to `userAddress`.
+ * @returns Resolves without a value once the signature is verified.
+ * @throws {InvalidSignatureError} when the signature is malformed or does not recover to `userAddress`.
  * @example
  * ```ts
  * import { verifyTypedDataSignature } from "@morpho-org/morpho-sdk";
@@ -85,11 +88,16 @@ export const verifyTypedDataSignature = async (params: {
 }): Promise<void> => {
   const { userAddress, typedData, signature } = params;
 
-  const isValid = await verifyTypedData({
-    ...typedData,
-    address: userAddress,
-    signature,
-  });
+  let isValid: boolean;
+  try {
+    isValid = await verifyTypedData({
+      ...typedData,
+      address: userAddress,
+      signature,
+    });
+  } catch (cause) {
+    throw new InvalidSignatureError(cause);
+  }
 
   if (!isValid) {
     throw new InvalidSignatureError();

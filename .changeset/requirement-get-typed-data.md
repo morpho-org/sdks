@@ -24,7 +24,10 @@ in ERC-2612 / Morpho-authorization payloads (`AddressMismatchError`), and return
 deep-frozen `RequirementSignature` shape as `sign()` so the result feeds straight into `buildTx()`.
 For the Midnight offer-root requirement it additionally derives and registers the ratification
 payload that `buildTx()` consumes, so external signers no longer need to go through `sign()`.
-The verification helper is exported as `verifyTypedDataSignature`.
+Verification is offline ECDSA recovery, so the signer must be an EOA (ERC-1271 contract-wallet
+signatures are rejected); malformed signatures surface as `InvalidSignatureError` with the parsing
+failure as `cause`. The verification helper is exported as `verifyTypedDataSignature`, and
+`isRequirementSignature()` now also requires the `withSignature` callback.
 
 Because the permit/authorization payload embeds the owner, and it is now built when the requirement
 is created, two low-level exported encoders take a new required `owner` parameter:

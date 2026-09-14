@@ -287,7 +287,9 @@ rejects a `userAddress` that differs from the owner embedded in ERC-2612 / autho
 (`AddressMismatchError`), and returns the same deep-frozen `RequirementSignature` that `sign()`
 does, so `buildTx()` accepts it unchanged. For the Midnight offer-root requirement it also derives
 the ratification payload that `buildTx()` submits, so raw `typedData` signatures must go through
-`withSignature()` (or `sign()`) before being passed to `buildTx()`.
+`withSignature()` (or `sign()`) before being passed to `buildTx()`. Verification is offline ECDSA
+recovery (as in `sign()`), so `userAddress` must be an EOA: ERC-1271 smart-contract-wallet
+signatures are not verified and are rejected with `InvalidSignatureError`.
 
 Because the permit and authorization payloads embed the owner and are built eagerly, two exported
 low-level encoders take a new required `owner` parameter, and `getGeneralAdapterRequirementsPermit`
