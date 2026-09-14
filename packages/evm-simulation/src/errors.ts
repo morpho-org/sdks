@@ -20,7 +20,10 @@ export class SimulationRevertedError extends SimulationPackageError {
     public readonly reason: string | undefined,
     public readonly details?: unknown,
   ) {
-    super(reason ?? "Transaction simulation reverted");
+    super(
+      reason ?? "Transaction simulation reverted",
+      details instanceof Error ? { cause: details } : undefined,
+    );
   }
 }
 
@@ -31,7 +34,7 @@ interface RetainedAsset {
 }
 
 /**
- * Funds would flow to bundler3 contract addresses. Never bypassable.
+ * Funds would flow to restricted bundler3 or bundles contract addresses. Never bypassable.
  *
  * @remarks
  * The guard proves this for the simulated run, which now executes at a non-zero

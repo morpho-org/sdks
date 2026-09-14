@@ -203,6 +203,8 @@ export type FetchBookQuoteParams = MidnightApiConfig & {
   readonly marketId: Hash;
   /** Book side to quote. */
   readonly side: MidnightApiBookSide;
+  /** Current WAD-scaled settlement fee used for local guard validation. Defaults to zero. */
+  readonly settlementFee?: BigIntish;
 } & (MidnightApiQuoteAssetsTarget | MidnightApiQuoteUnitsTarget) &
   (
     | MidnightApiQuoteAverageWorstPriceGuard

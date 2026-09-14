@@ -65,10 +65,10 @@ import {
 
 export interface VaultV1Actions {
   /**
-   * Fetches the latest vault data with accrued interest.
+   * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest vault data.
+   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
    */
   getData: (
     parameters?: FetchParameters,
@@ -203,18 +203,74 @@ export interface VaultV1Actions {
     undefined
   >;
   /**
-   * Prepares a full migration from VaultV1 to VaultV2.
+   * Prepares an atomic migration of Vault V1 shares to Vault V2 through bundler3.
    *
-   * Redeems all V1 shares and atomically deposits the resulting assets into V2
-   * via bundler3. Computes slippage-protected share prices for both legs.
+   * Accrues the source snapshot before converting V1 shares to assets so pending Vault V1
+   * performance-fee shares are reflected in both migration bounds. Projects the target Vault V2
+   * two hours forward when computing the deposit-leg maximum share price.
    *
-   * @param {Object} params - The migration parameters.
-   * @param {Address} params.userAddress - User address initiating the migration.
-   * @param {AccrualVault} params.sourceVault - Pre-fetched V1 vault data.
-   * @param {AccrualVaultV2} params.targetVault - Pre-fetched V2 vault data.
-   * @param {bigint} params.shares - User's V1 share balance to migrate.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @param params - Migration parameters.
+   * @param params.userAddress - Account whose Vault V1 shares are migrated and that receives Vault
+   *   V2 shares.
+   * @param params.sourceVault - Pre-fetched Vault V1 state with market allocations for local accrual.
+   * @param params.targetVault - Pre-fetched Vault V2 accrual snapshot with the same underlying
+   *   asset.
+   * @param params.shares - Positive number of Vault V1 shares to migrate.
+   * @param params.slippageTolerance - Optional WAD-scaled tolerance; defaults to
+   *   `DEFAULT_SLIPPAGE_TOLERANCE` and cannot exceed 10%.
+   * @returns Lazy approval or permit resolution through `getRequirements()` and a synchronous
+   *   `buildTx()` returning a deep-frozen `Transaction<VaultV1MigrateToV2Action>`.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
+   * @throws {VaultAssetMismatchError} when the source and target assets differ.
+   * @throws {NonPositiveInputError} when `shares` is not positive or the target projection yields
+   *   no shares.
+   * @throws {NegativeInputError} when `slippageTolerance` is negative.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+   * @throws {UnknownBlueMarketAllocationError} when `sourceVault.withdrawQueue` references a market
+   *   absent from `sourceVault.allocations`.
+   * @throws {UnsupportedChainIdError} from `getRequirements()` or `buildTx()` when the chain has no
+   *   address registry.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC contract read fails.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is
+   *   supplied.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when several permit signatures
+   *   are supplied.
+   * @throws {DepositAssetMismatchError} from `buildTx()` when a supplied permit targets another
+   *   token.
+   * @throws {DepositAmountMismatchError} from `buildTx()` when a supplied permit covers another
+   *   amount.
+   * @throws {Permit2ExpirationMissingError} from `buildTx()` when a Permit2 signature lacks an
+   *   expiration.
+   * @example
+   * ```ts
+   * import {
+   *   morphoViemExtension,
+   *   type Transaction,
+   *   type VaultV1MigrateToV2Action,
+   * } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
+   *   morphoViemExtension(),
+   * );
+   * const sourceVaultAddress = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+   * const targetVaultAddress = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+   * const userAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+   * const source = client.morpho.vaultV1(sourceVaultAddress, mainnet.id);
+   * const [sourceVault, targetVault] = await Promise.all([
+   *   source.getData(),
+   *   client.morpho.vaultV2(targetVaultAddress, mainnet.id).getData(),
+   * ]);
+   * const { buildTx } = source.migrateToV2({
+   *   userAddress,
+   *   sourceVault,
+   *   targetVault,
+   *   shares: 1_000_000n,
+   * });
+   * const tx: Readonly<Transaction<VaultV1MigrateToV2Action>> = buildTx();
+   * ```
    */
   migrateToV2: (params: {
     userAddress: Address;
@@ -576,6 +632,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
+  /** {@inheritDoc VaultV1Actions.migrateToV2} */
   migrateToV2({
     userAddress,
     sourceVault,
@@ -605,8 +662,18 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     validateSlippageTolerance(slippageTolerance);
 
-    // Compute minSharePriceVaultV1 for V1 redeem (slippage downward)
-    const v1RefAssets = sourceVault.toAssets(shares);
+    // V1 redeem accrues pending market interest and performance fees before converting shares.
+    const sourceAccrualTimestamp = sourceVault.allocations
+      .values()
+      .reduce(
+        (timestamp, { position }) =>
+          MathLib.max(timestamp, position.market.lastUpdate),
+        Time.timestamp(),
+      );
+    const accruedSourceVault = sourceVault.accrueInterest(
+      sourceAccrualTimestamp,
+    );
+    const v1RefAssets = accruedSourceVault.toAssets(shares);
     const minSharePriceVaultV1 = MathLib.mulDivDown(
       v1RefAssets,
       MathLib.wToRay(MathLib.WAD - slippageTolerance),

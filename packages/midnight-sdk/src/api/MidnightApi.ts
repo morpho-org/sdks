@@ -1,10 +1,11 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
 import { InvalidMidnightApiResponseError } from "../errors.js";
-import { TickLib } from "../math/index.js";
+import { TakeAmountsLib } from "../math/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
   buildBookPath,
-  mapBookMarket,
+  mapBoundBookMarket,
+  mapBoundBooks,
   mapBoundTakeableOffers,
   mapPriceLevel,
   parseValidationResponse,
@@ -152,7 +153,7 @@ export class MidnightApi {
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -186,7 +187,7 @@ export class MidnightApi {
 
     return {
       cursor: response.cursor,
-      data: response.data.map(mapBookMarket),
+      data: mapBoundBooks(response.data, input.marketIds),
     };
   }
 
@@ -202,7 +203,7 @@ export class MidnightApi {
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Book snapshot mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when the returned book's `market_id` does not match, or cannot be derived from, its own market params, or when it differs from the requested `marketId`.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -227,7 +228,7 @@ export class MidnightApi {
     });
 
     return {
-      data: mapBookMarket(response.data),
+      data: mapBoundBookMarket(response.data, input.marketId),
     };
   }
 
@@ -331,12 +332,15 @@ export class MidnightApi {
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
    * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -354,6 +358,8 @@ export class MidnightApi {
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
     const input = params;
+    const settlementFee = BigInt(input.settlementFee ?? 0n);
+    assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
       ...input,
       method: "GET",
@@ -386,47 +392,73 @@ export class MidnightApi {
     if (averageWorstPrice != null) {
       const guard = BigInt(averageWorstPrice);
       let filledUnits = 0n;
-      let weightedPrice = 0n;
+      let filledAssets = 0n;
       if ("units" in input && input.units != null) {
         let remainingUnits = BigInt(input.units);
         for (const take of takeableOffers) {
           if (remainingUnits === 0n) break;
-          const price = TickLib.tickToPrice(take.offer.tick);
+          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
+            offer: take.offer,
+            settlementFee,
+          });
+          const price = input.side === "asks" ? buyerPrice : sellerPrice;
           const filled =
             take.units < remainingUnits ? take.units : remainingUnits;
           filledUnits += filled;
-          weightedPrice += filled * price;
+          filledAssets += MathLib.mulDiv(
+            filled,
+            price,
+            MathLib.WAD,
+            input.side === "asks" ? "Up" : "Down",
+          );
           remainingUnits -= filled;
         }
       } else {
         let remainingAssets = BigInt(input.assets);
         for (const take of takeableOffers) {
           if (remainingAssets === 0n) break;
-          const price = TickLib.tickToPrice(take.offer.tick);
-          const takeAssets =
+          const { buyerPrice, sellerPrice } = TakeAmountsLib.prices({
+            offer: take.offer,
+            settlementFee,
+          });
+          const makerPrice = input.side === "asks" ? sellerPrice : buyerPrice;
+          const settlementPrice =
+            input.side === "asks" ? buyerPrice : sellerPrice;
+          const takeMakerAssets =
             input.side === "asks"
-              ? MathLib.mulDivUp(take.units, price, MathLib.WAD)
-              : MathLib.mulDivDown(take.units, price, MathLib.WAD);
-          if (takeAssets === 0n) continue;
+              ? MathLib.mulDivUp(take.units, makerPrice, MathLib.WAD)
+              : MathLib.mulDivDown(take.units, makerPrice, MathLib.WAD);
 
-          const fillsEntireTake = takeAssets <= remainingAssets;
+          const fillsEntireTake = takeMakerAssets <= remainingAssets;
           const filled = fillsEntireTake
             ? take.units
             : MathLib.mulDiv(
                 remainingAssets,
                 MathLib.WAD,
-                price,
+                makerPrice,
                 input.side === "asks" ? "Down" : "Up",
               );
           if (filled === 0n) continue;
 
           filledUnits += filled;
-          weightedPrice += filled * price;
-          remainingAssets = fillsEntireTake ? remainingAssets - takeAssets : 0n;
+          filledAssets += MathLib.mulDiv(
+            filled,
+            settlementPrice,
+            MathLib.WAD,
+            input.side === "asks" ? "Up" : "Down",
+          );
+          remainingAssets = fillsEntireTake
+            ? remainingAssets - takeMakerAssets
+            : 0n;
         }
       }
       if (filledUnits > 0n) {
-        const averagePrice = MathLib.mulDivDown(weightedPrice, 1n, filledUnits);
+        const averagePrice = MathLib.mulDiv(
+          filledAssets,
+          MathLib.WAD,
+          filledUnits,
+          input.side === "asks" ? "Up" : "Down",
+        );
         const violatesGuard =
           input.side === "asks" ? averagePrice > guard : averagePrice < guard;
         if (violatesGuard) {
@@ -642,7 +674,7 @@ export class MidnightApi {
    * @param params.cursor - Optional opaque pagination cursor from a previous response.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -670,7 +702,7 @@ export class MidnightApi {
    * @param params.depth - Optional maximum levels returned per side.
    * @returns Book snapshot mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when the returned book's `market_id` does not match, or cannot be derived from, its own market params, or when it differs from the requested `marketId`.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -765,9 +797,12 @@ export class MidnightApi {
    * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
    * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
+   * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
