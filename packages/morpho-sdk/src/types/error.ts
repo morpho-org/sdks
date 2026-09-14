@@ -455,7 +455,7 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
 }
 
 /** Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor. */
-export class ForceWithdrawSharePriceBelowFloorError extends Error {
+export class VaultV2ForceWithdrawSharePriceBelowFloorError extends Error {
   /** Supplied force-withdraw share-price floor. */
   public readonly minSharePriceE27: bigint;
   /** Minimum share-price floor allowed at maximum SDK slippage tolerance. */
@@ -475,7 +475,7 @@ export class ForceWithdrawSharePriceBelowFloorError extends Error {
     );
     this.minSharePriceE27 = params.minSharePriceE27;
     this.floorE27 = params.floorE27;
-    this.name = "ForceWithdrawSharePriceBelowFloorError";
+    this.name = "VaultV2ForceWithdrawSharePriceBelowFloorError";
   }
 }
 

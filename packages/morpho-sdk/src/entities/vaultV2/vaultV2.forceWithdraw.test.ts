@@ -38,7 +38,6 @@ import {
   type Erc2612RequirementSignature,
   ExcessiveSlippageToleranceError,
   ExpiredDeadlineError,
-  ForceWithdrawSharePriceBelowFloorError,
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
@@ -48,6 +47,7 @@ import {
   VaultAddressMismatchError,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   VaultV2SingleAdapterRequiredError,
   VaultV2UndecodableLiquidityDataError,
@@ -197,7 +197,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(build(MathLib.WAD / 100n)).toBeLessThan(build(0n));
   });
 
-  test("error: ForceWithdrawSharePriceBelowFloorError", () => {
+  test("error: VaultV2ForceWithdrawSharePriceBelowFloorError", () => {
     const handle = createMockClient(mainnet);
     expect(() =>
       vaultFor(handle).forceWithdraw({
@@ -206,7 +206,41 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         userAddress: IN_KIND_USER,
         minSharePriceE27: 1n,
       }),
-    ).toThrow(ForceWithdrawSharePriceBelowFloorError);
+    ).toThrow(VaultV2ForceWithdrawSharePriceBelowFloorError);
+
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    let caught: unknown;
+    try {
+      withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet)).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: floorE27 - 1n,
+        }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(
+      VaultV2ForceWithdrawSharePriceBelowFloorError,
+    );
+    if (!(caught instanceof VaultV2ForceWithdrawSharePriceBelowFloorError)) {
+      throw caught;
+    }
+    expect(caught.floorE27).toBe(floorE27);
+    expect(caught.minSharePriceE27).toBe(floorE27 - 1n);
   });
 
   test("behavior: override at or above the max-slippage floor is accepted and encoded", async () => {

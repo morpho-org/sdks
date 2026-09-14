@@ -59,7 +59,6 @@ import {
   type Deallocation,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
-  ForceWithdrawSharePriceBelowFloorError,
   InKindRedeemCoverageError,
   InKindRedeemZeroDeallocationError,
   InputExceedsMaxError,
@@ -78,6 +77,7 @@ import {
   type VaultV2ForceWithdrawAction,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
@@ -486,8 +486,8 @@ export interface VaultV2Actions {
    *   which would overrun the contract's unbounded loop.
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
-   * @throws {ForceWithdrawSharePriceBelowFloorError} when a supplied `minSharePriceE27` is below
-   *   the floor derived at `MAX_SLIPPAGE_TOLERANCE`.
+   * @throws {VaultV2ForceWithdrawSharePriceBelowFloorError} when a supplied `minSharePriceE27`
+   *   is below the floor derived at `MAX_SLIPPAGE_TOLERANCE`.
    * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares are minted to a
    *   fee-recipient `userAddress` and reach the lower-bound share burn at the deadline.
    * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
@@ -1273,24 +1273,23 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
     const netSharesBurntNow = sharesBurntNow - feeSharesNow;
-    // The maximum-slippage threshold only bounds the override; unlike the transaction floor it may
-    // round to zero, in which case every positive override is acceptable.
-    const minAllowedSharePriceE27 = MathLib.max(
-      1n,
-      MathLib.mulDivDown(
-        plan.withdrawnAssets,
-        MathLib.wToRay(MathLib.WAD - MAX_SLIPPAGE_TOLERANCE),
-        netSharesBurntNow,
-      ),
-    );
-    if (
-      minSharePriceE27Override != null &&
-      minSharePriceE27Override < minAllowedSharePriceE27
-    ) {
-      throw new ForceWithdrawSharePriceBelowFloorError({
-        minSharePriceE27: minSharePriceE27Override,
-        floorE27: minAllowedSharePriceE27,
-      });
+    if (minSharePriceE27Override != null) {
+      // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
+      // may round to zero, in which case every positive override is acceptable.
+      const minAllowedSharePriceE27 = MathLib.max(
+        1n,
+        MathLib.mulDivDown(
+          plan.withdrawnAssets,
+          MathLib.wToRay(MathLib.WAD - MAX_SLIPPAGE_TOLERANCE),
+          netSharesBurntNow,
+        ),
+      );
+      if (minSharePriceE27Override < minAllowedSharePriceE27) {
+        throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          minSharePriceE27: minSharePriceE27Override,
+          floorE27: minAllowedSharePriceE27,
+        });
+      }
     }
     const minSharePriceE27 =
       minSharePriceE27Override ??
