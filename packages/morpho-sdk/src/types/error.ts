@@ -406,7 +406,10 @@ export {
   BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
 };
 
-/** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
+/**
+ * @deprecated No longer thrown: getBundlesTokenRequirements resolves an unused nonce when none
+ *   is provided.
+ */
 export class MissingPermit2SignatureTransferNonceError extends Error {
   public constructor() {
     super(

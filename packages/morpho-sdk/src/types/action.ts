@@ -562,7 +562,7 @@ export type BundlesFundingArgs =
 export interface BundlesTokenRequirementsOptions {
   /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
   readonly permit2Nonce?: bigint;
 }
 
