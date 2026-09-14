@@ -4,7 +4,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { isAddressEqual } from "viem";
+import { isAddressEqual, maxUint256, zeroAddress } from "viem";
 import {
   computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawMinSharesBurnt,
@@ -36,8 +36,9 @@ export interface PreviewVaultV2ForceWithdrawParams {
   readonly feeProjectionTimestamp?: bigint;
   /** Optional WAD-scaled referral fee percentage. Defaults to `0n`. */
   readonly referralFeePct?: bigint;
-  /** Optional referral fee recipient. When it equals `userAddress`, the fee is paid back to the
-   * exiting account and `netAssets` includes it. */
+  /** Optional referral fee recipient. Required when `referralFeePct` is positive, as the entity
+   * enforces (`ReferralFeeRecipientMissingError`). When it equals `userAddress`, the fee is paid
+   * back to the exiting account and `netAssets` includes it. */
   readonly referralFeeRecipient?: Address;
 }
 
@@ -94,16 +95,19 @@ export interface VaultV2ForceWithdrawPreview {
  *   more than one year after handle creation (`InputExceedsMaxError`) instead of clamping them, so
  *   keep the deadline itself within that horizon. Ignored without `userAddress`.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
- * @param params.referralFeeRecipient - Optional referral fee recipient. When it equals
- *   `userAddress`, the fee is paid back to the exiting account and `netAssets` includes it.
+ * @param params.referralFeeRecipient - Optional referral fee recipient. Required when
+ *   `referralFeePct` is positive, as the entity enforces (`ReferralFeeRecipientMissingError`).
+ *   When it equals `userAddress`, the fee is paid back to the exiting account and `netAssets`
+ *   includes it.
  * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
  *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
  *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
- *   `referralFeePct` outside `[0, WAD)`, a non-positive request, a request that yields nothing, a
- *   fee-recipient whose positive fee mints projected to `feeProjectionTimestamp` reach the lower
- *   burn bound,
- *   or an exit whose realized share price rounds down to zero at the default slippage tolerance
- *   (which the entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`).
+ *   `referralFeePct` outside `[0, WAD)`, a positive `referralFeePct` without a non-zero
+ *   `referralFeeRecipient`, a non-positive request, a request that yields nothing, a fee-recipient
+ *   whose positive fee mints projected to `feeProjectionTimestamp` reach the lower burn bound, an
+ *   exit whose realized share price rounds down to zero at the default slippage tolerance (which
+ *   the entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`), or whose derived default
+ *   floor cannot fit `uint256`.
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
@@ -133,6 +137,13 @@ export function previewVaultV2ForceWithdraw(
   // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
   // deliver — above `withdrawnAssets` for a negative fee, non-positive at or beyond WAD.
   if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) return undefined;
+  if (
+    referralFeePct > 0n &&
+    (referralFeeRecipient == null ||
+      isAddressEqual(referralFeeRecipient, zeroAddress))
+  ) {
+    return undefined;
+  }
 
   const eligibility = resolveVaultV2ForceWithdrawEligibility(
     vaultData,
@@ -174,7 +185,9 @@ export function previewVaultV2ForceWithdraw(
   // realized price is a single RAY-unit, yet the default tolerance scales that below 1 and rounds it
   // to zero — so the entity would reject with `VaultV2ForceWithdrawZeroSharePriceError` the very
   // `exitAssets` this preview handed back. A caller passing a larger tolerance still relies on the
-  // entity's own guard.
+  // entity's own guard. The entity validates this derived value with
+  // `validateUint256Field("minSharePriceE27")`, which throws `InputExceedsMaxError` when it
+  // cannot fit uint256.
   const { vault: accruedVaultData } = vaultData.accrueInterest(
     MathLib.max(timestamp, vaultData.lastUpdate),
   );
@@ -215,14 +228,15 @@ export function previewVaultV2ForceWithdraw(
     }
   }
   const sharesBurntForFloor = sharesBurnt - feeShares;
-  if (
-    sharesBurntForFloor <= 0n ||
-    MathLib.mulDivDown(
-      plan.withdrawnAssets,
-      MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
-      sharesBurntForFloor,
-    ) <= 0n
-  ) {
+  const defaultMinSharePriceE27 =
+    sharesBurntForFloor > 0n
+      ? MathLib.mulDivDown(
+          plan.withdrawnAssets,
+          MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
+          sharesBurntForFloor,
+        )
+      : 0n;
+  if (defaultMinSharePriceE27 <= 0n || defaultMinSharePriceE27 > maxUint256) {
     return undefined;
   }
 

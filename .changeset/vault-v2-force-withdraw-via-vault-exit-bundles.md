@@ -77,7 +77,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - `previewVaultV2ForceWithdraw` accepts optional `userAddress`, `feeProjectionTimestamp`, and
   `referralFeeRecipient` values to mirror fee-recipient mints and referral payouts; when the
   referral fee is paid to `userAddress` itself, `netAssets` includes that self-paid fee. It rejects
-  exits when fee shares are minted to `userAddress` and reach the lower burn bound.
+  exits when fee shares are minted to `userAddress` and reach the lower burn bound, when a positive
+  referral fee has no non-zero recipient, or when its derived default floor does not fit `uint256`.
   Deadlines beyond one year after handle creation are rejected so accepted execution windows remain
   covered by the fee-share guard and allowance.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the

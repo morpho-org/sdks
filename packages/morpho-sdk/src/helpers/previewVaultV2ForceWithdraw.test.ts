@@ -1,6 +1,7 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
+import { zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -221,6 +222,27 @@ describe("previewVaultV2ForceWithdraw", () => {
     });
   });
 
+  test("behavior: returns undefined for a positive referral fee without a recipient", () => {
+    expect(
+      previewVaultV2ForceWithdraw(vaultV2ExitData({ penalty: 0n }), {
+        requestedExitAssets: 51n,
+        timestamp: 0n,
+        referralFeePct: TEN_PERCENT,
+      }),
+    ).toBeUndefined();
+  });
+
+  test("behavior: returns undefined for a positive referral fee with a zero recipient", () => {
+    expect(
+      previewVaultV2ForceWithdraw(vaultV2ExitData({ penalty: 0n }), {
+        requestedExitAssets: 51n,
+        timestamp: 0n,
+        referralFeePct: TEN_PERCENT,
+        referralFeeRecipient: zeroAddress,
+      }),
+    ).toBeUndefined();
+  });
+
   test("behavior: accepts an explicit adapter override", () => {
     const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
     const adapter = vaultData.accrualAdapters[0]?.address;
@@ -349,6 +371,23 @@ describe("previewVaultV2ForceWithdraw", () => {
     ).toBeGreaterThan(0n);
 
     expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
+  });
+
+  test("behavior: returns undefined when the default floor exceeds uint256", () => {
+    const preview = previewVaultV2ForceWithdraw(
+      vaultV2ExitData({
+        totalAssets: 2n ** 250n,
+        totalSupply: 1n,
+        marketTotalAssets: 2n ** 250n,
+        marketTotalBorrowAssets: 0n,
+      }),
+      {
+        requestedExitAssets: 2n ** 240n,
+        timestamp: 0n,
+      },
+    );
+
+    expect(preview).toBeUndefined();
   });
 
   test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {
