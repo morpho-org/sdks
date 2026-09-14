@@ -45,7 +45,7 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
   marketId: MarketId,
   client: Client,
-  parameters: FetchParameters = {},
+  { ...parameters }: FetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 

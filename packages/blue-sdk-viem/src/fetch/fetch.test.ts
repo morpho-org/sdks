@@ -457,6 +457,44 @@ describe("fetchToken", () => {
     );
   });
 
+  test("behavior: matches wstETH and unwrap tokens case-insensitively", async () => {
+    const handle = createMockClient(mainnet);
+    const wstEth = ADDRESSES.wstEth.toLowerCase() as Address;
+    mockTokenReads(handle, wstEth, {
+      symbol: "wstETH",
+      name: "Wrapped liquid staked Ether 2.0",
+    });
+    mockRead(handle, {
+      address: ADDRESSES.wstEth,
+      abi: wstEthAbi,
+      functionName: "stEthPerToken",
+      result: 1_000000000000000000n,
+    });
+    const wbIB01 = ADDRESSES.wbIB01.toLowerCase() as Address;
+    mockTokenReads(handle, wbIB01, {
+      symbol: "wBIB01",
+      name: "Wrapped BIB01",
+    });
+
+    const [wstEthToken, wbIB01Token] = await Promise.all([
+      fetchToken(wstEth, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: false,
+      }),
+      fetchToken(wbIB01, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: false,
+      }),
+    ]);
+
+    expect(wstEthToken).toBeInstanceOf(ExchangeRateWrappedToken);
+    expect(wstEthToken.address).toBe(wstEth);
+    expect(wbIB01Token).toBeInstanceOf(ConstantWrappedToken);
+    expect((wbIB01Token as ConstantWrappedToken).underlying).toBe(
+      ADDRESSES.bIB01,
+    );
+  });
+
   test("returns undefined metadata when every optional ERC20 read fails", async () => {
     const handle = createMockClient(mainnet);
     for (const abi of [erc20Abi, erc20Abi_bytes32]) {
@@ -923,6 +961,62 @@ describe("fetchHolding", () => {
     expect(holding.canTransfer).toBe(false);
   });
 
+  test("behavior: matches permissioned backed tokens case-insensitively", async () => {
+    const handle = createMockClient(mainnet);
+    const token = ADDRESSES.wbIB01.toLowerCase() as Address;
+    const whitelist = RECIPIENT;
+
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      result: 20n,
+    });
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 21n,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.permit2,
+      abi: permit2Abi,
+      functionName: "allowance",
+      result: [22n, 23, 24],
+    });
+    mockReadFailure(handle, {
+      address: token,
+      abi: erc2612Abi,
+      functionName: "nonces",
+    });
+    mockRead(handle, {
+      address: token,
+      abi: wrappedBackedTokenAbi,
+      functionName: "whitelistControllerAggregator",
+      result: whitelist,
+    });
+    mockRead(handle, {
+      address: token,
+      abi: permissionedErc20WrapperAbi,
+      functionName: "hasPermission",
+      result: true,
+    });
+    mockRead(handle, {
+      address: whitelist,
+      abi: whitelistControllerAggregatorV2Abi,
+      functionName: "isWhitelisted",
+      result: false,
+    });
+
+    const holding = await fetchHolding(USER, token, handle.client, {
+      chainId: CHAIN_ID,
+      deployless: false,
+    });
+
+    expect(holding.token).toBe(token);
+    expect(holding.canTransfer).toBe(false);
+  });
+
   test("uses zero permit2 allowance when the chain has no Permit2 address", async () => {
     const handle = createMockClient(mainnet);
     const zeroGAddresses = addressesRegistry[ChainId.ZeroGMainnet];
@@ -1140,6 +1234,27 @@ describe("fetchUser", () => {
     const user = await fetchUser(USER, handle.client);
 
     expect(user.isBundlerAuthorized).toBe(false);
+  });
+
+  test("behavior: does not write the resolved chainId into caller-owned parameters", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.morpho,
+      abi: blueAbi,
+      functionName: "nonce",
+      result: 0n,
+    });
+    const parameters = {};
+
+    await fetchUser(USER, handle.client, parameters);
+
+    expect(parameters).toStrictEqual({});
   });
 });
 
@@ -1748,7 +1863,7 @@ describe("vault fetchers", () => {
     expect(allocation.position.market.price).toBe(123n);
   });
 
-  test("fetchAccrualVault composes a vault and its withdraw-queue allocation", async () => {
+  test("fetchAccrualVault preserves direct latest state without pinning reads", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [
       encodeReadResult(vaultQueryAbi, "query", {
@@ -1771,8 +1886,8 @@ describe("vault fetchers", () => {
         feeRecipient: USER,
         skimRecipient: RECIPIENT,
         totalSupply: 42n,
-        totalAssets: 43n,
-        lastTotalAssets: 44n,
+        totalAssets: 55n,
+        lastTotalAssets: 55n,
         hasLostAssets: true,
         lostAssets: 55n,
         supplyQueue: [ID],
@@ -1795,9 +1910,25 @@ describe("vault fetchers", () => {
     mockVaultMarketConfigReads(handle);
     mockPositionReads(handle);
 
-    const vault = await fetchAccrualVault(VAULT, handle.client);
+    const parameters = { blockTag: "latest" } as const;
+    const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
+    expect(vault.totalAssets).toBe(0n);
+    expect(vault.lostAssets).toBe(55n);
+    expect(vault.totalSupply).toBe(42n);
     expect(vault.allocations.get(ID)?.marketId).toBe(ID);
+    expect(
+      handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call")
+        .every((call) => call.params?.[1] === "latest"),
+    ).toBe(true);
+    expect(
+      handle.request.mock.calls.some(
+        ([call]) => call.method === "eth_getBlockByNumber",
+      ),
+    ).toBe(false);
+    expect(parameters).toStrictEqual({ blockTag: "latest" });
   });
 });
