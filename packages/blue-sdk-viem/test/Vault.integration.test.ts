@@ -172,4 +172,34 @@ describe("augment/Vault", () => {
       expect(forced).toStrictEqual(multicall);
     },
   );
+
+  test2(
+    "behavior: forced deployless omits publicAllocatorConfig when the vault has not enabled the allocator",
+    async ({ client }) => {
+      const publicAllocator =
+        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator;
+      const owner = await client.readContract({
+        address: steakPaxg.address,
+        abi: metaMorphoAbi,
+        functionName: "owner",
+      });
+
+      await client.setBalance({ address: owner, value: BigInt(1e18) });
+      await client.writeContract({
+        account: owner,
+        address: steakPaxg.address,
+        abi: metaMorphoAbi,
+        functionName: "setIsAllocator",
+        args: [publicAllocator, false],
+      });
+
+      const [forced, multicall] = await Promise.all([
+        Vault.fetch(steakPaxg.address, client, { deployless: "force" }),
+        Vault.fetch(steakPaxg.address, client, { deployless: false }),
+      ]);
+
+      expect(forced.publicAllocatorConfig).toBeUndefined();
+      expect(forced).toStrictEqual(multicall);
+    },
+  );
 });

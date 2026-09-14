@@ -24,8 +24,8 @@
     "lib"
   ],
   "scripts": {
-    "prepublish": "$npm_execpath build",
-    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "prepublish": "pnpm build",
+    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "test": "vitest --root ../.. --project evm-simulation",

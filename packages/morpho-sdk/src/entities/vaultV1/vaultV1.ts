@@ -81,10 +81,10 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 export interface VaultV1Actions {
   /**
-   * Fetches the latest vault data with accrued interest.
+   * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest vault data.
+   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
    */
   getData: (
     parameters?: FetchParameters,
