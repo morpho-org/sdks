@@ -1,5 +1,9 @@
 import { type Address, type Hex, zeroAddress } from "viem";
-import { VaultV2Errors } from "../../errors.js";
+import {
+  BlueErrors,
+  UnknownMarketAllocationError,
+  VaultV2Errors,
+} from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, Hash } from "../../types.js";
@@ -304,51 +308,50 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Projects the vault's interest and fee accounting to a timestamp without mutating this instance.
-   *
-   * Sums the vault's asset balance and every adapter's projected real assets, caps asset growth by
-   * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
-   * zero when its recipient cannot receive vault shares.
-   *
-   * @param timestamp - Accrual timestamp in seconds. Must not precede the vault or any nested
-   *   market's `lastUpdate`.
-   * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,
-   *   and projected management fee shares.
-   * @throws {VaultV2Errors.InvalidInterestAccrual} when `timestamp` precedes this vault's
-   *   `lastUpdate`.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a nested Morpho Blue
-   *   market's `lastUpdate`.
-   * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue references a
-   *   market without matching allocation state.
+   * Returns a new vault derived from this vault, whose interest — together with
+   * that of every adapter, market, and position it holds — has been accrued up to
+   * the given timestamp, so the returned entity graph shares one `lastUpdate`.
+   * Some built-in nested state is intentionally left at its pre-accrual
+   * `lastUpdate` and must not be read as part of the shared snapshot: adapters
+   * that do not implement `accrueInterest`; zero-allocation Vault V1 adapters
+   * (which contribute no assets, so their nested markets are never accrued); and a
+   * liquidity adapter that is not among `accrualAdapters` when it cannot reach the
+   * timestamp (its assets do not feed the vault total). Passing the vault's own
+   * `lastUpdate` (a no-op accrual) stays valid even when a nested market was poked
+   * more recently or a nested withdraw queue is stale, mirroring the pre-accrual
+   * behavior of returning without touching adapters; advancing to a strictly
+   * greater `timestamp` that a contributing nested market cannot reach instead
+   * throws. Performance and management fee shares are zero when the corresponding
+   * fee recipient cannot receive vault shares.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to the vault's `lastUpdate`. When it is strictly greater it must
+   * also be greater than or equal to each underlying market's `lastUpdate`, since
+   * computing the accrued total assets accrues every market to `timestamp`.
+   * @returns An object with the accrued `vault` (a new `AccrualVaultV2`) and the
+   * `performanceFeeShares` and `managementFeeShares` minted by the accrual.
+   * @throws {VaultV2Errors.InvalidInterestAccrual} when `timestamp` precedes the
+   * vault's `lastUpdate`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` is strictly
+   * greater than the vault's `lastUpdate` but precedes an underlying market's
+   * `lastUpdate`.
+   * @throws {UnknownMarketAllocationError} when a nested MetaMorpho V1 adapter's
+   * withdraw queue references a market without an allocation.
    * @example
    * ```ts
-   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    * import { createPublicClient, http } from "viem";
    * import { base } from "viem/chains";
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
    *
    * const client = createPublicClient({ chain: base, transport: http() });
-   * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
-   * const block = await client.getBlock();
-   * const vault = await fetchAccrualVaultV2(vaultV2Address, client, {
-   *   blockNumber: block.number,
-   * });
-   * const result = vault.accrueInterest(block.timestamp);
-   * // result satisfies {
-   * //   vault: AccrualVaultV2;
-   * //   performanceFeeShares: bigint;
-   * //   managementFeeShares: bigint;
-   * // }
+   * const vaultAddress = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const vault = await fetchAccrualVaultV2(vaultAddress, client);
+   * const { vault: accrued, performanceFeeShares } = vault.accrueInterest(
+   *   vault.lastUpdate,
+   * );
+   * // accrued.toAssets(accrued.totalSupply) reflects assets at vault.lastUpdate
    * ```
    */
   public accrueInterest(timestamp: BigIntish) {
-    const vault = new AccrualVaultV2(
-      this,
-      this.accrualLiquidityAdapter,
-      this.accrualAdapters,
-      this.assetBalance,
-      this.forceDeallocatePenalties,
-    );
-
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
@@ -359,6 +362,66 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         timestamp,
         this.lastUpdate,
       );
+
+    // Accrue every nested adapter (and the liquidity adapter) to the same
+    // timestamp, so the returned vault exposes an entity graph that shares one
+    // `lastUpdate` rather than pre-accrual market state. Adapters that predate
+    // `accrueInterest` are left at their pre-accrual state.
+    //
+    // Error suppression is limited to the `elapsed === 0n` no-op re-accrual to
+    // the vault's own `lastUpdate`, which historically returned before touching
+    // any adapter: there an adapter that cannot reach `timestamp` is kept as-is
+    // — a market poked more recently (`InvalidInterestAccrual`, a market cannot
+    // be accrued backwards) or a stale nested withdraw queue
+    // (`UnknownMarketAllocationError`) — so the call stays valid. When
+    // `elapsed > 0n` the caller asked to advance the whole graph to `timestamp`,
+    // so a nested market that cannot reach it is a genuine inconsistency and the
+    // error propagates instead of yielding a silent mixed-timestamp graph.
+    const accrualAdapters = this.accrualAdapters.map((adapter) => {
+      if (adapter.accrueInterest == null) return adapter;
+      try {
+        return adapter.accrueInterest(timestamp);
+      } catch (error) {
+        if (
+          elapsed === 0n &&
+          (error instanceof BlueErrors.InvalidInterestAccrual ||
+            error instanceof UnknownMarketAllocationError)
+        )
+          return adapter;
+        throw error;
+      }
+    });
+    // The liquidity adapter is hydrated separately and, unless it also appears in
+    // `accrualAdapters`, does not feed the total-assets reduction below — before
+    // nested accrual existed it was never inspected during accrual and so never
+    // threw. Accruing it is therefore best-effort at any `elapsed`: when it cannot
+    // reach `timestamp` (an ahead market or a stale nested queue) leave it at its
+    // pre-accrual state rather than throwing. A liquidity adapter that also feeds
+    // the totals is present in `accrualAdapters`, where the map above already
+    // surfaces the same inconsistency for an advancing timestamp.
+    let accrualLiquidityAdapter = this.accrualLiquidityAdapter;
+    if (accrualLiquidityAdapter?.accrueInterest != null) {
+      try {
+        accrualLiquidityAdapter =
+          accrualLiquidityAdapter.accrueInterest(timestamp);
+      } catch (error) {
+        if (
+          !(
+            error instanceof BlueErrors.InvalidInterestAccrual ||
+            error instanceof UnknownMarketAllocationError
+          )
+        )
+          throw error;
+      }
+    }
+
+    const vault = new AccrualVaultV2(
+      this,
+      accrualLiquidityAdapter,
+      accrualAdapters,
+      this.assetBalance,
+      this.forceDeallocatePenalties,
+    );
 
     // Corresponds to the `firstTotalAssets == 0` onchain check.
     if (elapsed === 0n)
@@ -403,7 +466,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;
-    vault.lastUpdate = BigInt(timestamp);
+    vault.lastUpdate = timestamp;
 
     return { vault, performanceFeeShares, managementFeeShares };
   }

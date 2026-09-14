@@ -215,6 +215,42 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     );
   }
 
+  /**
+   * Returns a new adapter whose underlying markets have been accrued up to the
+   * given timestamp.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to each market's `lastUpdate`.
+   * @returns A new `AccrualVaultV2MorphoMarketV1AdapterV2` with every market
+   * accrued to `timestamp`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a
+   * market's `lastUpdate`.
+   * @example
+   * ```ts
+   * import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const vault = await fetchAccrualVaultV2(
+   *   "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C",
+   *   client,
+   * );
+   * const adapter = vault.accrualAdapters.find(
+   *   (a): a is AccrualVaultV2MorphoMarketV1AdapterV2 =>
+   *     a instanceof AccrualVaultV2MorphoMarketV1AdapterV2,
+   * )!;
+   * const accrued = adapter.accrueInterest(adapter.markets[0]!.lastUpdate);
+   * // accrued.markets[0]!.lastUpdate === the passed timestamp
+   * ```
+   */
+  accrueInterest(timestamp: BigIntish) {
+    return new AccrualVaultV2MorphoMarketV1AdapterV2(
+      this,
+      this.markets.map((market) => market.accrueInterest(timestamp)),
+    );
+  }
+
   maxDeposit(_data: Hex, assets: BigIntish) {
     return {
       value: BigInt(assets),
