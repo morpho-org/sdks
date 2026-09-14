@@ -1,5 +1,20 @@
 # @morpho-org/blue-sdk
 
+## 6.8.0
+
+### Minor Changes
+
+- [#1027](https://github.com/morpho-org/sdks/pull/1027) [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Preserve immutable Blue collateral projections and direct onchain Vault V1 fetch results, project Vault V1 market, loss, and fee accounting when computing migration bounds, deprecate cached collateral-allocation proportions and the positional nested-vault parent-allocation constructor argument, and ignore residual nested-vault shares when their parent allocation is zero.
+
+### Patch Changes
+
+- [#1042](https://github.com/morpho-org/sdks/pull/1042) [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compare token addresses case-insensitively: `getUnwrappedToken` resolves lowercased wrapped-token addresses against the checksummed registry (and re-registering the same mapping under a different casing no longer creates a duplicate key), while `fetchHolding`/`fetchToken` now detect permissioned Backed/wrapper tokens, wstETH, and the native token regardless of the caller's address casing.
+
+- [#1048](https://github.com/morpho-org/sdks/pull/1048) [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Floor `totalBorrowAssets` at zero in `Market.repay` when a full-share repayment rounds borrow assets up above the market total, instead of throwing a `bigint` underflow. Mirrors the protocol's `zeroFloorSub` accounting.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2)]:
+  - @morpho-org/morpho-ts@2.11.2
+
 ## 6.7.0
 
 ### Minor Changes
