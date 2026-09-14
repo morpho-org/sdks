@@ -1,241 +1,198 @@
-# TIB-2026-06-15: EVM simulation — verify declared intent and effective result
+# TIB-2026-06-15: EVM simulation — first-party change checks
 
-| Field      | Value                                    |
-| ---------- | ---------------------------------------- |
-| **Status** | Proposed                                 |
-| **Date**   | 2026-06-15                               |
-| **Author** | @foulques                                |
-| **Scope**  | Packages: `evm-simulation`, `morpho-sdk` |
+| Field      | Value                                                           |
+| ---------- | --------------------------------------------------------------- |
+| **Status** | Proposed                                                        |
+| **Date**   | 2026-06-15                                                      |
+| **Author** | @foulques                                                       |
+| **Scope**  | Package: `evm-simulation`; app: Vaults (`morpho-apps/vvrm-app`) |
 
 ---
 
 ## Context
 
-`evm-simulation` previews transactions and checks that bundler3 retains no value. That is useful,
-but it is not a safety verdict. A transaction can still request the wrong signature, hide an unsafe
-nested call, leave an unexpected approval behind, under-deliver assets, or leave a Morpho position
-too close to liquidation.
+Transaction creation is moving from the `morpho-org/morpho-apps` frontend to an independent API.
+The frontend must check its output against the user's intent before confirmation.
 
-These risks appear at two different moments. Before signing, the user needs assurance that the
-requested authority matches the intended chain, signer, route, assets, recipients, and limits.
-After simulation, the caller needs assurance that the realized balances, positions, fees, and
-authorizations match the package-defined effects of the selected interaction and the consumer's
-bounds. Neither view is sufficient alone.
+`evm-simulation` executes ordered transactions and returns calls, transfers and net asset changes.
+Tenderly runs first when configured; `eth_simulateV1` handles service failures, not reverts.
+Tenderly recently omitted an `assetChanges` entry, failing a check. This third-party reliance
+is not clearly announced to users.
+
+Audit: `morpho-apps@8a0afba`, SDK `5.5.0`, simulation `4.1.3` (2026-09-14).
+The app still builds locally and sends only chain ID and transactions. **Asset reporting exists;
+expected asset/allowance comparisons do not.** Previews display shares/positions; final preflight
+checks success. Generic failures are bypassable except retention errors; in-kind exits and
+shared-liquidity operations require success. Unsigned previews substitute approvals for permits.
 
 ## Goals / Non-Goals
 
 **Goals**
 
-- Add an opt-in, fail-closed safety verdict covering declared intent and simulated effects.
-- Prevent unsafe signature requests before the wallet prompt.
-- Apply protocol-aware checks and conservative economic defaults.
-- Preserve existing preview behavior for callers that do not opt in.
+- First-party asset and permission checks derived from independent frontend intent.
+- Cover every Vaults action below and each deterministic Bundles V1 contract.
 
 **Non-Goals**
 
-- General-purpose protocol decoding, price-oracle valuation, or cross-asset fairness checks.
-- Safe, ERC-4337, EIP-7702, `DELEGATECALL`, bridge, or cross-chain verification in the first
-  release.
-- Support for non-standard ERC-20 behavior such as rebasing or fee-on-transfer.
-- Automatic remediation, transaction rewriting, signing, or execution.
-- Package-wide coverage on day one. Midnight and VaultExitBundlesV1 require later scope.
+- SDK market checks (position health) or state checks (resulting position values).
+- General signature/call-graph verification or new transaction-building abstractions.
 
 ## Proposed Solution
 
-Add a separate verified path with two mandatory gates:
+Use `eth_simulateV1` only; remove Tenderly, including fallback. Derive checks from frontend intent
+and independent reads in the frontend-owned simulation service. Apply retention checks individually
+to Bundles V1 contracts, retaining legacy checks until their routes migrate.
 
-1. **Declared-intent verification** authenticates what the user is asked to sign or send.
-2. **Effective-result verification** checks that the exact simulated transaction stays within the
-   package-defined effect contract for the authenticated interaction.
+### Input and output
 
-A verified result exists only when both gates complete. Unsafe input, unsupported execution, or
-incomplete evidence fails closed; warnings never substitute for a verdict.
+Extend frontend `getSimulate` / `checkSimulation`, `/api/simulate`, and SDK `simulate`:
 
-The existing preview remains unchanged. Verified simulation must not require a vendor-specific
-service, and switching evidence providers can never turn a revert or unsafe verdict into a safe
-one.
+| Input | Contents |
+| --- | --- |
+| `chainId`, `account`, `transactions` | Chain, connected user, ordered prerequisites/final transactions |
+| `intent.flow`, relevant IDs | Vault/market; source/target for migration/refinance (Aave source = underlying); selected market for V2 IKR, ordered markets for V1 IKR |
+| `intent.amount` | Assets/shares amount or MAX; separate collateral/debt amounts for combined flows. Full V1 migration needs none; AutoDeleverage takes `enabled` |
+| `intent.maxReallocationFee` | Default zero; user-accepted native allocator fee cap |
+| `blockNumber` (optional) | SDK pins reference state when omitted |
 
-### Supported scope and routes
+Native funding is always allowed: use ERC-20 first, native for the remainder, preserving the gas
+reserve. Lasting approvals are always accepted within the SDK's fixed flow/spender caps.
 
-Delivery remains vaults first, then markets:
+Before signing, the same rules additionally receive `request`: the actual approval/typed data.
+Intent comes from the form, never the transaction API. Owner/recipient are the connected user.
+The SDK derives tokens, spenders, routes, conversions, rounding, slippage, fees and deadline bounds;
+reuse public SDK math and Vaults defaults. Bind transaction sender, target/entrypoint and selected
+vault/market IDs to that intent. No expected-change/cap arrays. MAX resolves against pinned state;
+it never means infinite approval. Use `bigint` internally, decimal strings over HTTP.
 
-- **Vault milestone:** canonical Vault V1 and Vault V2 deposit, mint, withdraw, and redeem flows.
-- **Morpho Blue milestone:** the canonical high-level route for the supported SDK major. For
-  `morpho-sdk` 6, that route is BlueBundlesV1, including its funding and Morpho authorization
-  targets. The legacy Bundler3/GeneralAdapter1 route is separate compatibility scope, never an
-  automatic fallback.
+Preserve calls, transfers and asset changes. Add `blockNumber`, `simulationTimestamp`, `checks` (rule, subject, expected,
+observed), `allowanceChanges` (owner/token/spender, before/after amount and Permit2 expiry/nonce),
+and `authorizationChanges` (authorizer/operator, before/after boolean), including unchanged entries.
+Throw typed errors for mismatches, unsupported flows or missing evidence.
 
-### Gate 1 — declared intent
+### Shared invariants
 
-The consumer identifies the interaction and supplies the authority-bearing artifacts:
+Every flow spends only selected inputs, receives required outputs and leaves other covered wallet
+balances unchanged. SDK-derived floors/caps replace per-flow allowance subtraction.
 
-| Consumer input | Requirement | Default |
+| Invariant | SDK rule |
+| --- | --- |
+| Bundle retention dust limit | Net retention at each bundle/adapter ≤SDK dust threshold, separately per token/native asset |
+| IKR headroom below residual cap | Rounded burn bounds and deadline determine grant/residual caps; final VaultExitBundlesV1 allowance ≤residual cap. Reset/revoke any existing excess |
+| Lasting approval below accepted cap | Fresh exact funding ends at zero; reused approval ends ≤starting value. Persistent approvals are accepted up to fixed caps: token→Permit2 `MAX_UINT160`; balance-MAX Aave aToken→GA1 `MAX_UINT256` |
+| Unchanged unrelated permission | Covered permissions outside the flow stay unchanged; reject discovered unexpected grants, including temporary ones |
+| Expected Morpho operator authorization or unchanged | GA1 authorization is true when required; AutoDeleverage's canonical operator gets the selected boolean; otherwise unchanged |
+| Permit2 invariants | Current signed path: correct owner/token/spender, exact gross grant, managed amount ends zero, nonce advances once, expiry `MAX_UINT48`, bounded signature deadline. Token→Permit2 separately obeys the lasting cap |
+
+Requests must match SDK-derived spenders, amounts and deadlines; signed grants must consume their
+nonces. Fresh funding for a 100-USDC deposit requires a 100-USDC grant and zero remainder. An IKR allowance
+of 101 shares with a one-share residual cap accepts a 100-share burn.
+
+Events discover temporary/unexpected changes; reads prove residual permission. Approve 100, spend
+40: 60 may remain without another event. Approve then revoke: equal endpoints hide the grant.
+Spending can also emit Approval events; these are not necessarily new grants.
+
+### Action coverage
+
+**Every row needs expected asset/permission comparisons.** In-kind exits additionally check receipts
+after confirmation today. Keep existing onchain deposit slippage guards.
+
+`A` = assets, `S` = shares; SDK derives ERC-20 funding `D` and native funding `N`. Exclude gas;
+allocator fees must match the route and accepted cap. **Funding** uses the shared rules;
+**operator** means GA1 authorization. Other permissions stay unchanged; bundle dust limits apply throughout.
+
+| Flow / amount selection | SDK-derived asset checks | Permission rule |
 | --- | --- | --- |
-| Interaction | Supported operation type; source and target protocol positions; amounts and asset-or-share mode for each selected leg; funder, owner, on-behalf account, and receiver; supported route options | None for required values; canonical route and no optional legs or reallocations |
-| Chain and identities | Exact chain ID, bundle sender, and expected signer or signers | None |
-| Signing request | Exact typed data for every wallet request; omitted only when the interaction requires no signature | Empty |
-| Transaction intent | Complete transactions and every committed callback payload once available | None |
-| External execution policy | For each external executor: chain, address, role, and supported call semantics | Empty; no external executor is trusted |
+| V1/V2 deposit: assets; ERC-20/native/mixed | Underlying `−D`, native `−N`, shares ≥floor for `A = D + N`; native-only leaves wallet wrapped-native unchanged | Funding |
+| V1/V2 withdrawal: exact assets, liquidity-limited MAX | Underlying `+A`; share burn ≤cap | Unchanged: direct own-share withdrawal |
+| V1/V2 redemption: full/exact shares | Vault shares `−S`; underlying ≥floor | Unchanged |
+| V2 force withdrawal | Exact net receipt; cap combined withdrawal/penalty share burns | Unchanged |
+| V2 force redemption | Burn selected redeem shares plus penalty shares; underlying ≥floor; deliberate share headroom may remain | Unchanged |
+| V2 in-kind redemption: assets/MAX | Bound share burn and idle receipt; remaining value becomes Morpho supply positions | IKR cap |
+| V1→V2 migration: full | All V1 shares `−S`; V2 shares ≥floor; wallet underlying unchanged | Funding |
+| Aave V3→V2: partial / liquidity-limited MAX | Literal aToken spend, respecting token rounding; V2 shares ≥floor; underlying unchanged | Funding |
+| Aave V3→V2: balance-limited MAX | Drain actual accrued aToken balance; V2 shares ≥floor; underlying unchanged | Fixed lasting cap |
+| Supply loan assets | Loan token `−D`, native `−N`; no ERC-20 position token received | Funding |
+| Withdraw supplied assets: exact assets | Loan token `+A` | Operator |
+| Withdraw supplied assets: MAX/exact shares | Loan-token receipt ≥floor for selected supply shares | Operator |
+| Supply collateral | Collateral `−D`, native `−N` | Funding |
+| Borrow | Loan token `+A` | Operator |
+| Supply collateral + borrow | Combine collateral funding and loan receipt | Funding + operator |
+| Repay: exact assets | Loan token `−D`, native `−N` | Funding |
+| Repay: MAX/exact shares | Bound gross pull and refund from accrued debt; native `−N`; refunds remain loan token/wrapped-native | Funding uses gross pull, not net repayment |
+| Withdraw collateral | Collateral `+A` | Unchanged: direct Morpho call |
+| Repay + withdraw collateral: exact / MAX | Respective repayment effects above plus collateral `+A` | Funding + operator |
+| Refinance: collateral-only / partial debt | Wallet token balances unchanged, apart from allocator fee | Operator; no funding |
+| Refinance: full debt/exact shares | No wallet token debit; bounded positive loan-token dust may return; allocator fee | Operator; no funding |
+| Wrap legacy MORPHO: bundler / debug direct route | Legacy token `−A`, new token `+A` | Legacy token funding to GA1 / approval to wrapper |
+| AutoDeleverage: enable / disable | Token balances unchanged | Morpho permission to canonical pre-liquidation contract becomes true / false |
+| V1 in-kind redemption: SDK-supported, app unwired | Bound V1-share burn; received value becomes Morpho supply positions | IKR cap; frontend journey also missing |
 
-The gate succeeds only when all of the following hold:
+The SDK derives normal/force exits and deallocation order from cash-exit intent; in-kind exit is a
+separate choice. Repay MAX derives gross funding with the existing two-hour interest buffer.
 
-- Every transaction, nested call, optional call, and callback is inside the supported execution
-  scope. Callback payloads match their commitments.
-- The transaction chain and bundle sender, decoded operation, selected legs, targets, amounts,
-  modes, accounts, and recipients match the interaction. Every call required by its canonical
-  route is present, and no extra call is present.
-- Every Morpho contract, spender, and operator matches the pinned chain registry and selected
-  protocol route. A trusted router or callback role grants no additional authority.
-- Every signature request matches its supported schema, domain, chain, verifying contract, signer,
-  owner or authorizer, token, spender or operator, amount, nonce, and time bounds, and corresponds
-  to exactly one grant required by the selected interaction.
-- External executors match the complete supplied policy. An address alone is not sufficient, and
-  the policy may narrow trust but can never add an allowed effect.
-- There are no unmatched signatures, grants unrelated to the interaction, malformed calls, opaque
-  leaves, or unsupported envelopes.
+No current standalone mint, revoke, native unwrap, swap, multiply or repay-with-collateral journey
+was found. Reward claims link to external apps. Approval prerequisites are covered above.
 
-The initial signature scope is EIP-2612, the Permit2 mechanism used by the selected route, and
-Morpho authorization in the Blue milestone. Other permit or account-signature schemes remain
-unsupported until explicitly scoped.
+### Required implementation changes
 
-A successful gate binds the interaction and its parameters to the exact signing and transaction
-intent. Existing Morpho signing flows must be able to run this gate before displaying the wallet
-prompt.
-
-### Gate 2 — effective result
-
-The consumer does not supply expected balance or position deltas. The package owns a fixed,
-exhaustive effect contract for each supported interaction; consumers cannot replace or extend it.
-The consumer supplies the interaction and exact transaction once through Gate 1, then supplies
-only the resulting signatures and optional economic bounds for Gate 2:
-
-| Consumer input | Requirement | Default |
-| --- | --- | --- |
-| Authenticated intent | Successful Gate 1 result binding the interaction to the exact sendable transaction | None |
-| Signatures | Every signature produced from the authenticated requests | Empty when none are required |
-| Maximum adverse conversion slippage | Optional per-asset limit on a variable input excess or output shortfall, relative to the canonical conversion at simulation start | 0.5% (50 bps) |
-| Maximum share-price or accrual drift | Optional limit for each protocol asset/share conversion | 0.03% (3 bps) |
-| Maximum additional protocol or reallocation fee | Optional absolute cap for each fee asset | Zero; network gas excluded |
-| Maximum resulting LTV | Optional limit for each affected debt position | LLTV minus 0.5 percentage points, floored at zero, for risk-increasing operations; pre-simulation LTV for pure risk-reducing operations |
-
-Omitted bounds use these defaults. Consumers may override slippage, must explicitly accept every
-non-zero fee, and may only tighten the package's LTV ceiling. When both slippage limits apply to one
-variable leg, the tighter one wins. Economic inputs can never relax trust, recipient,
-authorization, or retention invariants.
-
-The package-defined effect contracts are:
-
-| Interaction | Exact effects | Bounded effects |
-| --- | --- | --- |
-| Vault deposit | The funder spends the selected asset amount | The receiver's raw-share increase cannot fall below the canonical conversion after the applicable slippage bounds |
-| Vault mint | The receiver gains the selected raw-share amount | The funder's asset spend cannot exceed the canonical conversion after the applicable slippage bounds |
-| Vault withdraw | The receiver gains the selected asset amount | The owner's raw-share burn cannot exceed the canonical conversion after the applicable slippage bounds |
-| Vault redeem | The owner's selected raw-share amount is burned | The receiver's asset gain cannot fall below the canonical conversion after the applicable slippage bounds |
-| Blue supply | The funder spends the selected loan-asset amount | The on-behalf position's supply-share increase must respect the applicable conversion bounds |
-| Blue withdraw | In asset mode, the receiver gains the selected loan-asset amount; in share mode, the on-behalf position burns the selected supply-share amount | The unselected asset-or-share counter-leg must respect the applicable conversion bounds |
-| Blue supply collateral | The funder spends and the on-behalf position gains the selected collateral amount | None |
-| Blue borrow | The receiver gains the selected loan-asset amount | The on-behalf position's debt-share increase must respect the applicable conversion bounds and resulting-LTV limit |
-| Blue repay | In asset mode, the funder spends the selected loan-asset amount; in share mode, the on-behalf position burns the selected debt-share amount | The unselected asset-or-share counter-leg must respect the applicable conversion bounds |
-| Blue withdraw collateral | The on-behalf position loses and the receiver gains the selected collateral amount | The resulting position must respect the applicable LTV limit |
-| Blue supply collateral and borrow | The exact effects of both selected legs occur | Only the borrow debt-share increase and resulting LTV are bounded |
-| Blue repay and withdraw collateral | The exact effects of both selected legs occur | The repay counter-leg and resulting LTV use their respective bounds |
-| Blue refinance | The selected collateral amount moves from source to target; asset mode moves the selected loan-asset debt from source to target; share mode burns the selected source debt shares | Only share-mode target-debt overshoot may vary, within the conversion and accrual bounds; fees and both resulting positions stay within their respective bounds; no unrelated position changes |
-
-The effect contract also fixes every supported route overlay. Native wrapping conserves the selected
-amount and leaves no router residue. Reallocations move only the selected liquidity between the
-named markets and charge only the accepted fee asset and amount. Required allowance,
-authorization, and nonce changes are exact. An overlay omitted from the interaction's package rule
-fails rather than becoming consumer-configurable.
-
-At the end of simulation, all of the following must hold:
-
-- Every simulated transaction and call succeeds without a revert. The transaction and recovered
-  signers match the authenticated intent exactly, and all required execution and final-state
-  evidence is present.
-- Every required effect occurs in the permitted direction and amount, every variable leg stays
-  within its supplied or default bound, and no observed change falls outside the package-defined
-  effects, bounded accrual, or route overlays. Network-gas deltas are excluded from effect
-  matching, and different assets are never netted into one value judgment.
-- Derived Morpho Blue supply assets round down and derived debt assets round up.
-- Every realized recipient matches the interaction's receiver or other package-defined recipient.
-- Every protocol or reallocation charge stays within the cap for its actual asset. PublicAllocator
-  V1 fees are native-token charges; Vault V2 BluePublicAllocator penalties are loan-token charges.
-- Final ERC-20 allowances by owner and spender, Permit2 allowances by owner, token, and spender
-  including amount, expiration, and nonce, and Morpho authorizations by authorizer and operator
-  match the package-defined post-state exactly. Unchanged pre-existing grants are not side effects;
-  persistent authority is allowed only when the interaction contract permits it for the selected
-  route.
-- Guarded vault deposits preserve the canonical share-price inflation protection.
-- Risk-increasing operations finish at or below their accepted LTV limit. Pure repayment and
-  collateral addition do not worsen LTV, allowing incremental recovery from an already-unsafe
-  position.
-- The existing bundler-retention invariant still passes.
-
-A successful result reports the authenticated interaction and matched package-defined effects
-alongside the ordinary simulation result. It certifies the simulated transaction at that state; it
-does not turn a direct exit or other snapshot into an execution-time slippage guarantee.
-
-### Compatibility and release
-
-The change is additive, leaves existing simulation callers unchanged, and keeps the two packages
-decoupled. It follows the repository's existing dependency and release policy.
+| Area | Work |
+| --- | --- |
+| Frontend + API route | Carry minimal independent intent and observed checks through preview/preflight; wire every action row |
+| SDK flow rules | Derive assets, permission identities and caps from intent/state; reuse public math/registries and fixed flow defaults; reject unsupported variants |
+| Backend | Remove Tenderly config/fallback; require `eth_simulateV1` support |
+| Asset checks | Read expected balances before/after; compare spends, receipts, extra changes; never treat missing evidence as zero |
+| Permission checks | Implement the six shared invariants; read known/discovered ERC-20, Permit2 and Morpho permissions before/after; missing is not zero |
+| Wallet flow | Check requests before prompting and actual finalized transactions/prerequisites; synthetic approvals remain previews. Normalize IKR allowances above the residual cap |
+| Enforcement | Block mismatches and incomplete evidence; the existing blacklist-only no-bypass rule is insufficient |
+| Bundle retention | Release/consume main's standalone `bundles` guard: published 4.1.3 **and 4.1.5** scan only `bundler3`. Internal native transfers already work |
+| Tests | Cover every row/invariant, deterministic replay, omitted/extra changes, wrong recipients/spenders, refunds, rounding, fees, oversized existing IKR approvals and no-bypass behavior |
 
 ## Considered Alternatives
 
-- **Consumer-authored effect vectors:** rejected because they duplicate protocol semantics at every
-  call site and can bless an incomplete or incorrect outcome. Interaction parameters and economic
-  bounds express everything the consumer should decide.
-- **Balance effects only:** rejected because a zero balance change can still leave a future-drain
-  authorization.
-- **Static intent only:** rejected because it cannot prove realized amounts, fees, debt, or health.
-- **A new tracing backend:** rejected because the missing capability is safety policy, not another
-  execution engine.
-- **Changing the existing preview:** rejected because it would turn an additive safety feature
-  into a compatibility break.
-- **Warnings or incomplete verdicts:** rejected because an ignored branch would become a security
-  bypass.
+### Alternative 1: Original two-gate verifier
+
+Separate signature/intent verification followed by detailed protocol effects.
+
+**Why rejected:** General signature/call-graph analysis exceeds bounded flow and permission checks.
+
+### Alternative 2: Market and state checks in the SDK
+
+**Why rejected:** Their primary purpose is UI results for human confirmation. The frontend is their
+only consumer; no integrator need justifies extracting its simulation/reads. Keeping them there
+allows faster iteration; moving them would not reduce trust assumptions or improve safety.
+
+### Alternative 3: Tenderly fallback or asset-only checks
+
+**Why rejected:** Tenderly preserves undisclosed third-party reliance and missing-change failures;
+asset-only checks miss permissions to spend later.
+
+### Alternative 4: Frontend-authored expected-change arrays
+
+**Why rejected:** Generic bounds and exact allowance arithmetic duplicate deterministic rules in
+the consumer. Intent plus shared SDK invariants needs fewer parameters and accepts bounded residuals.
 
 ## Acceptance Criteria
 
-- Consumers provide a supported interaction and its parameters, not an arbitrary expected-effect
-  vector. Adding or changing an effect contract requires a package release.
-- Unsafe or mismatched signature intent is rejected before a wallet prompt.
-- Canonical Vault and Blue routes pass only with their registered spenders, operators, recipients,
-  and supported signature mechanisms.
-- Nested, callback-triggered, unknown, and externally routed calls obey the same trust boundary.
-- Realized assets, positions, fees, recipients, and authorizations match the selected interaction's
-  package-defined effect contract; missing evidence cannot produce a verified result.
-- PublicAllocator V1 native fees and BluePublicAllocator loan-token penalties use separate
-  per-asset limits.
-- Risk-increasing operations respect the buffered LTV ceiling, while pure repayment and collateral
-  addition can improve an already-unsafe position incrementally.
-- Every evidence provider enforces the same verdict, the legacy preview remains unchanged, and
-  repository-standard tests prove every supported path and security invariant.
+Every wired flow enforces expected changes and retention through `eth_simulateV1`; missing evidence
+or mismatches block confirmation. V1 in-kind redemption remains explicitly unwired until added.
 
 ## Assumptions & Constraints
 
-- A backend must expose sufficient evidence for every applicable check. Otherwise verification is
-  unavailable.
-- Protocol addresses and ABIs remain pinned in maintained SDK packages.
-- Verification certifies the simulated transaction at a particular state, not future state
-  changes. On-chain limits remain the final protection where available.
-- The first release assumes standard ERC-20 semantics and measures each asset independently.
+Identical intent, transactions and reference state produce identical checks. Derive simulation time
+from the pinned block, never the wall clock. Trust remains in the chain RPC and supported tokens;
+events cannot enumerate hidden allowances. Guarantees cover identified accounts/permissions in
+simulation, not later execution.
 
 ## Security
 
-The safety boundary includes every authority granted and every effect realized. A trusted outer
-call cannot hide an untrusted inner target, and a legitimate role cannot substitute for an exact
-address. Approvals and authorizations outside the selected interaction's effect contract fail even
-when balances return to their starting values.
-
-Vault inflation resistance, bundler retention, recipient checks, route-specific authorization,
-and position health are mandatory. User-selected economic bounds never disable them.
+Wallet changes cannot prove Morpho position credits; their validation/display remains frontend-owned.
+Final simulation cannot undo approvals/signatures already granted: check requests before signing.
 
 ## References
 
-- [`eth_simulateV1` Execution API](https://ethereum.github.io/execution-apis/api/methods/eth_simulateV1/)
-- [BlueBundlesV1 routing decision](https://github.com/morpho-org/sdks/blob/main/docs/tibs/TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
-- [TIB-2026-05-19](./TIB-2026-05-19-marketv1-supply-withdraw-loan-asset.md)
-- [Permit2](https://github.com/Uniswap/permit2)
-- [EVM simulation expansion](https://linear.app/morpho-labs/project/evm-simulation-expansion-15b5c85f08d6/overview)
-- Root [engineering rules](../../AGENTS.md)
+- [EVM simulation safety priorities](https://app.notion.com/p/morpho-labs/EVM-simulation-safety-priorities-3d6d69939e6d8145bc9deb1b0be31ae8)
+- [Audited Vaults app](https://github.com/morpho-org/morpho-apps/tree/8a0afba42cb24a2eb472e9368809ac880db90a91/apps/vvrm-app): `src/services/simulate`, `src/hooks/operation/market/v2`, vault review dialogs and withdrawal hooks
+- [Pinned funding rules](https://unpkg.com/@morpho-org/morpho-sdk@5.5.0/lib/esm/actions/requirements/generalAdapter/getGeneralAdapterRequirements.js)
+- [Published retention guard](https://unpkg.com/@morpho-org/evm-simulation@4.1.5/lib/esm/simulate/pipeline/bundler-retention.js) · [expanded guard on main](https://github.com/morpho-org/sdks/blob/6ad775fc794b1b164fef5defaf10f2d32a889fd1/packages/evm-simulation/src/simulate/pipeline/bundler-retention.ts#L107)
+- [`eth_simulateV1`](https://ethereum.github.io/execution-apis/api/methods/eth_simulateV1/) · [ERC-20 allowance/event behavior](https://docs.openzeppelin.com/contracts/5.x/api/token/erc20#ERC20-transferFrom-address-address-uint256-)
