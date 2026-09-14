@@ -1145,6 +1145,21 @@ export class MorphoMidnight {
 
     if (data.ratifierType === "ecrecover") {
       const chainId = this.chainId;
+      // The offer-tree EIP-712 payload is signed over the tree, not the signer, so it is fully
+      // determined at build time and stored on the action for external signing.
+      const treeTypedData = EcrecoverRatifierUtils.typedData({
+        tree: data.tree,
+        chainId,
+      });
+      const typedData: TypedDataDefinition<
+        Record<string, unknown>,
+        "OfferTree"
+      > = {
+        domain: treeTypedData.domain,
+        types: treeTypedData.types,
+        primaryType: treeTypedData.primaryType,
+        message: treeTypedData.message,
+      };
       const action: MidnightOfferRootSignatureAction = {
         type: "midnightOfferRootSignature",
         args: {
@@ -1152,28 +1167,16 @@ export class MorphoMidnight {
           ratifier: data.ratifier,
           offers: data.tree.offers.length,
         },
+        typedData,
       };
 
       requirements.push({
         action,
         async sign(client: WalletClient, userAddress: Address) {
-          const typedData = EcrecoverRatifierUtils.typedData({
-            tree: data.tree,
-            chainId,
-          });
-          const typedDataDefinition: TypedDataDefinition<
-            Record<string, unknown>,
-            "OfferTree"
-          > = {
-            domain: typedData.domain,
-            types: typedData.types,
-            primaryType: typedData.primaryType,
-            message: typedData.message,
-          };
           const signature = await signAndVerifyTypedData({
             client,
             userAddress,
-            typedData: typedDataDefinition,
+            typedData,
           });
 
           const items = await EcrecoverRatifierUtils.ratify({

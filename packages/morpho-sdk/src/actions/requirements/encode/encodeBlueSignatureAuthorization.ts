@@ -3,7 +3,10 @@ import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import { validateDeadline } from "../../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateUserAddress,
+} from "../../../helpers/validate.js";
 import {
   type AuthorizationAction,
   type AuthorizationRequirementSignature,
@@ -14,11 +17,13 @@ import {
 
 /** Parameters for {@link encodeBlueSignatureAuthorization}. */
 interface EncodeBlueSignatureAuthorizationParams {
+  /** Account granting the authorization and signing it (the Morpho `authorizer`). */
+  owner: Address;
   /** Operator to authorize on Morpho, such as GeneralAdapter1 or BlueBundlesV1. */
   authorized: Address;
   /** Target chain id; must match `viemClient.chain.id`. */
   chainId: number;
-  /** The signer's current Morpho authorization nonce. */
+  /** The owner's current Morpho authorization nonce. */
   nonce: bigint;
   /** Whether to grant (`true`, default) or revoke (`false`) the authorization. */
   isAuthorized?: boolean;
@@ -33,23 +38,27 @@ interface EncodeBlueSignatureAuthorizationParams {
  *
  * The returned `Requirement.sign()` produces the EIP-712 signature over Morpho's `Authorization`
  * typed data, verifies it against the connected account, and returns a deep-frozen
- * `RequirementSignature` the selected transaction route consumes. Deadline defaults to two hours
- * from `Time.timestamp()`.
+ * `RequirementSignature` the selected transaction route consumes. The requirement's
+ * `action.typedData` holds that EIP-712 payload so it can be signed with any signer instead of
+ * `sign()`. Deadline defaults to two hours from `Time.timestamp()`.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Authorization encoding parameters.
+ * @param params.owner - Account granting the authorization and signing it (the Morpho `authorizer`).
  * @param params.authorized - Operator to authorize, such as GeneralAdapter1 or BlueBundlesV1.
  * @param params.chainId - Target chain id.
- * @param params.nonce - The signer's current Morpho authorization nonce.
+ * @param params.nonce - The owner's current Morpho authorization nonce.
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
  * @param params.deadline - Optional signature deadline in seconds.
- * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
+ * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
+ *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
  * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
  * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
- * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
+ * @throws {AddressMismatchError} from `sign()` when the signer differs from `owner`, or when the
+ *   client account differs from the signer.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
@@ -59,18 +68,19 @@ interface EncodeBlueSignatureAuthorizationParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeBlueSignatureAuthorization(client, {
+ *   owner,
  *   authorized: generalAdapter1,
  *   chainId: 1,
  *   nonce: 0n,
  * });
- * // requirement satisfies Requirement
+ * // Sign it yourself: await walletClient.signTypedData(requirement.action.typedData);
  * ```
  */
 export const encodeBlueSignatureAuthorization = async (
   viemClient: Client,
   params: EncodeBlueSignatureAuthorizationParams,
 ): Promise<Requirement<AuthorizationRequirementSignature>> => {
-  const { authorized, chainId, nonce, isAuthorized = true } = params;
+  const { owner, authorized, chainId, nonce, isAuthorized = true } = params;
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
@@ -91,18 +101,23 @@ export const encodeBlueSignatureAuthorization = async (
 
   const deadline = params.deadline ?? Time.timestamp() + Time.s.from.h(2n);
 
+  const typedData = getAuthorizationTypedData(
+    { authorizer: owner, authorized, isAuthorized, nonce, deadline },
+    chainId,
+  );
+
   const action: AuthorizationAction = {
     type: "authorization",
     args: { authorized, isAuthorized, deadline },
+    typedData,
   };
 
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const typedData = getAuthorizationTypedData(
-        { authorizer: userAddress, authorized, isAuthorized, nonce, deadline },
-        chainId,
-      );
+      // The authorizer is fixed at build time (the fetched nonce is owner-specific), so a different
+      // signer cannot produce a valid authorization for it.
+      validateUserAddress(userAddress, owner);
       const signature = await signAndVerifyTypedData({
         client,
         userAddress,
@@ -111,7 +126,7 @@ export const encodeBlueSignatureAuthorization = async (
 
       return deepFreeze({
         args: {
-          owner: userAddress,
+          owner,
           authorized,
           isAuthorized,
           nonce,

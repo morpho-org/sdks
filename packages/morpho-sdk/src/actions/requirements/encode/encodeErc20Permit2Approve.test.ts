@@ -1,7 +1,8 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, isHex } from "viem";
+import { type Address, isHex, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { signTypedData } from "viem/actions";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { test } from "../../../../test/unit.js";
@@ -14,6 +15,7 @@ import { encodeErc20Permit2Approve } from "./encodeErc20Permit2Approve.js";
 describe("encodeErc20Permit2Approve", () => {
   const {
     usdc,
+    permit2,
     bundler3: { generalAdapter1 },
   } = addressesRegistry[mainnet.id];
 
@@ -154,7 +156,69 @@ describe("encodeErc20Permit2Approve", () => {
         expectedDeadline + tolerance,
       );
     });
+  });
 
+  describe("action.typedData", () => {
+    test("default", () => {
+      const permit = encodeErc20Permit2Approve({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+
+      const typedData = permit.action.typedData;
+      if (typedData == null) throw new Error("Expected action.typedData");
+
+      expect(typedData.primaryType).toBe("PermitSingle");
+      expect(typedData.domain).toMatchObject({
+        name: "Permit2",
+        chainId: mainnet.id,
+        verifyingContract: permit2,
+      });
+      expect(typedData.message).toMatchObject({
+        details: {
+          token: usdc,
+          amount: mockAmount,
+          nonce: Number(mockNonce),
+        },
+        spender: generalAdapter1,
+      });
+    });
+
+    test("behavior: signing action.typedData externally matches sign()", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+      const permit = encodeErc20Permit2Approve({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+
+      const typedData = permit.action.typedData;
+      if (typedData == null) throw new Error("Expected action.typedData");
+      const externalSignature = await signTypedData(client, {
+        ...typedData,
+        account: client.account,
+      });
+      const signed = await permit.sign(client, userAddress);
+
+      expect(externalSignature).toEqual(signed.args.signature);
+      expect(
+        await verifyTypedData({
+          ...typedData,
+          address: userAddress,
+          signature: externalSignature,
+        }),
+      ).toBe(true);
+    });
+  });
+
+  describe("action", () => {
     test("should have correct action structure", async () => {
       const permit = encodeErc20Permit2Approve({
         token: usdc,

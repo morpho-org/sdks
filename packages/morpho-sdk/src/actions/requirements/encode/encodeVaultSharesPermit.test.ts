@@ -56,7 +56,7 @@ describe("encodeVaultSharesPermit", () => {
     });
     const signed = await requirement.sign(walletClient, account.address);
 
-    expect(signed.action).toEqual({
+    expect(signed.action).toMatchObject({
       type: "permit",
       args: { spender, amount, deadline: 1_900_000_000n, nonce: 9n },
     });
@@ -93,6 +93,83 @@ describe("encodeVaultSharesPermit", () => {
         expectedRequirement: action,
       }),
     ).toEqual(signed);
+  });
+
+  test("action.typedData carries the Vault V2 shares-permit payload", () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: 1_900_000_000n,
+    });
+
+    const typedData = requirement.action.typedData;
+    if (typedData == null) throw new Error("Expected action.typedData");
+
+    expect(typedData.primaryType).toBe("Permit");
+    expect(typedData.types).toEqual(permitTypes);
+    expect(typedData.domain).toMatchObject({
+      chainId: mainnet.id,
+      verifyingContract: vault,
+    });
+    expect(typedData.message).toMatchObject({
+      owner: account.address,
+      spender,
+      value: amount,
+      nonce: 9n,
+      deadline: 1_900_000_000n,
+    });
+  });
+
+  test("error: sign throws AddressMismatchError when signer differs from owner", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: 1_900_000_000n,
+    });
+
+    await expect(
+      requirement.sign(
+        walletClient,
+        "0x1111111111111111111111111111111111111111",
+      ),
+    ).rejects.toBeInstanceOf(AddressMismatchError);
+  });
+
+  test("behavior: signing action.typedData externally matches sign()", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: 1_900_000_000n,
+    });
+
+    const typedData = requirement.action.typedData;
+    if (typedData == null) throw new Error("Expected action.typedData");
+    const externalSignature = await account.signTypedData(typedData);
+    const signed = await requirement.sign(walletClient, account.address);
+
+    expect(externalSignature).toEqual(signed.args.signature);
+    await expect(
+      verifyTypedData({
+        ...typedData,
+        address: account.address,
+        signature: externalSignature,
+      }),
+    ).resolves.toBe(true);
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {

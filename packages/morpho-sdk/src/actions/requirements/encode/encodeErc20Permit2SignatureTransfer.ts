@@ -34,7 +34,8 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * Builds a Permit2 SignatureTransfer requirement for a direct fixed-bundles token pull.
  *
  * Unlike Permit2 AllowanceTransfer, this signs a one-time `uint256` amount and unordered nonce;
- * it has no managed allowance expiration.
+ * it has no managed allowance expiration. The requirement's `action.typedData` holds the EIP-712
+ * payload so it can be signed with any signer instead of `sign()`.
  *
  * @param params - SignatureTransfer parameters.
  * @param params.token - ERC-20 token pulled through Permit2.
@@ -43,7 +44,8 @@ export interface EncodeErc20Permit2SignatureTransferParams {
  * @param params.chainId - Target chain id.
  * @param params.nonce - Unused Permit2 unordered nonce.
  * @param params.deadline - Signature expiration timestamp in seconds.
- * @returns A requirement whose `sign(client, userAddress)` returns a deep-frozen signature result.
+ * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose
+ *   `sign(client, userAddress)` returns a deep-frozen signature result.
  * @throws {NegativeInputError} when `amount` or `nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
  * @throws {InputExceedsMaxError} when `amount`, `nonce`, or `deadline` exceeds `uint256`.
@@ -112,24 +114,28 @@ export const encodeErc20Permit2SignatureTransfer = (
   // this exported encoder is reachable directly, so it must reject the same unsupported chain itself.
   getChainAddress(chainId, "permit2"); // throws UnknownAddressError when Permit2 is unregistered
 
+  // Permit2 SignatureTransfer signs over `PermitTransferFrom` (permitted, spender, nonce,
+  // deadline), which does not include the owner, so the payload is fully determined at build time.
+  const typedData = getPermit2TransferFromTypedData(
+    {
+      erc20: token,
+      allowance: amount,
+      spender,
+      nonce,
+      deadline,
+    },
+    chainId,
+  );
+
   const action: Permit2SignatureTransferAction = {
     type: "permit2SignatureTransfer",
     args: { spender, amount, nonce, deadline },
+    typedData,
   };
 
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const typedData = getPermit2TransferFromTypedData(
-        {
-          erc20: token,
-          allowance: amount,
-          spender,
-          nonce,
-          deadline,
-        },
-        chainId,
-      );
       const signature = await signAndVerifyTypedData({
         client,
         userAddress,

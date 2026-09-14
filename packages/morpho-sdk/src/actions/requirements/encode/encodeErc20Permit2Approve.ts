@@ -22,7 +22,8 @@ interface EncodeErc20Permit2ApproveParams {
  * Builds a Permit2 `Requirement` that, once signed, lets GeneralAdapter1 pull `amount` of `token`
  * via the Permit2 contract.
  *
- * Deadline defaults to two hours from `Time.timestamp()`.
+ * The requirement's `action.typedData` holds the EIP-712 payload so it can be signed with any signer
+ * instead of `sign()`. Deadline defaults to two hours from `Time.timestamp()`.
  *
  * @param params - Permit2 encoding parameters.
  * @param params.token - ERC-20 token address.
@@ -30,7 +31,8 @@ interface EncodeErc20Permit2ApproveParams {
  * @param params.chainId - Target chain id.
  * @param params.nonce - The user's current Permit2 nonce for `(token, GeneralAdapter1)`.
  * @param params.expiration - Permit2-managed allowance expiration timestamp.
- * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
+ * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
+ *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
@@ -65,6 +67,20 @@ export const encodeErc20Permit2Approve = (
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
 
+  // Permit2 AllowanceTransfer signs over `PermitSingle` (token, spender, expiration, nonce), which
+  // does not include the owner, so the payload is fully determined at build time.
+  const typedData = getPermit2PermitTypedData(
+    {
+      spender: generalAdapter1,
+      allowance: amount,
+      erc20: token,
+      nonce: Number(nonce),
+      deadline,
+      expiration: Number(expiration),
+    },
+    chainId,
+  );
+
   const action: Permit2Action = {
     type: "permit2",
     args: {
@@ -73,22 +89,12 @@ export const encodeErc20Permit2Approve = (
       deadline,
       expiration,
     },
+    typedData,
   };
 
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const typedData = getPermit2PermitTypedData(
-        {
-          spender: generalAdapter1,
-          allowance: amount,
-          erc20: token,
-          nonce: Number(nonce),
-          deadline,
-          expiration: Number(expiration),
-        },
-        chainId,
-      );
       const signature = await signAndVerifyTypedData({
         client,
         userAddress,

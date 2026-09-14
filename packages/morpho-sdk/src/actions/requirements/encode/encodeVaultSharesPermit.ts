@@ -35,7 +35,8 @@ export interface EncodeVaultSharesPermitParams {
  * Builds the bounded ERC-2612 shares-permit requirement used by an in-kind vault exit.
  *
  * Vault V1 uses the standard token permit domain. Vault V2 uses its protocol-specific domain with
- * only `chainId` and `verifyingContract`.
+ * only `chainId` and `verifyingContract`. The requirement's `action.typedData` holds the EIP-712
+ * payload so it can be signed with any signer instead of `sign()`.
  *
  * @param params.vault - Vault share token, including V1 permit-domain metadata when available.
  * @param params.version - Vault generation selecting the standard V1 or two-field V2 domain.
@@ -45,11 +46,13 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
- * @returns A requirement whose `sign()` result can be embedded in fixed vault-bundles calldata.
+ * @returns A requirement whose `action.typedData` is the EIP-712 payload and whose `sign()` result
+ *   can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a registered fixed vault-bundles contract.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet has no account.
- * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `owner`.
+ * @throws {AddressMismatchError} from `sign()` when the signer differs from `owner`, or when the
+ *   wallet account differs from the signer.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet targets another chain.
  * @throws {InvalidSignatureError} from `sign()` when signature recovery fails.
  * @throws {InvalidPermitDomainChainIdError} from `sign()` when a Vault V1 permit domain targets another chain or omits `chainId`.
@@ -122,6 +125,18 @@ export const encodeVaultSharesPermit = (
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
+  const typedData = getPermitTypedData(
+    {
+      owner,
+      spender,
+      allowance: amount,
+      nonce,
+      deadline,
+      erc20: vault,
+    },
+    chainId,
+  );
+
   const action: PermitAction = {
     type: "permit",
     args: {
@@ -130,6 +145,7 @@ export const encodeVaultSharesPermit = (
       deadline,
       nonce,
     },
+    typedData,
   };
 
   return {
@@ -137,20 +153,6 @@ export const encodeVaultSharesPermit = (
     async sign(client: WalletClient, userAddress: Address) {
       // The bundle spends msg.sender's shares, so another signer cannot authorize this exit.
       validateUserAddress(userAddress, owner);
-      const permit = {
-        owner,
-        spender,
-        allowance: amount,
-        nonce,
-        deadline,
-      };
-      const typedData = getPermitTypedData(
-        {
-          ...permit,
-          erc20: vault,
-        },
-        chainId,
-      );
       const signature = await signAndVerifyTypedData({
         client,
         userAddress,
