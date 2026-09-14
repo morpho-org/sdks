@@ -12,6 +12,7 @@ import {
   ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
+  MAX_TOKEN_APPROVALS,
   type Metadata,
   MixedBundlesFundingError,
   type MorphoClientType,
@@ -54,6 +55,7 @@ import {
   custom,
   erc20Abi,
   erc4626Abi,
+  getAddress,
   isAddress,
   isAddressEqual,
   maxUint256,
@@ -166,6 +168,11 @@ export interface RequirementOptions {
   readonly useSimplePermit?: boolean;
   /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
   readonly permit2Nonce?: bigint;
+  /**
+   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
+   * as `maxUint256`. Ignored by signature paths.
+   */
+  readonly approvalAmount?: bigint;
 }
 
 /** Fields shared by ERC-20 and native Morpho Vault supply operations. */
@@ -272,6 +279,8 @@ export interface PreparedMorphoSupply {
    *   tokens fall back to Permit2 or direct approval.
    * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce; required when
    *   Permit2 SignatureTransfer is selected. Allocate a distinct nonce per pending operation.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
@@ -1689,8 +1698,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * A max repay requests an approval for the exact deadline-accrued `maxRepayAssets`; reusable
-   * allowances remain available through the underlying Morpho SDK's `approvalAmount` option.
+   * A max repay without a signature defaults to the token's reusable maximum approval because this
+   * adapter rebuilds the bounded debt quote; pass `requirementOptions.approvalAmount` to override.
    *
    * @param options.token - Address of the configured market's loan token.
    * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
@@ -1699,6 +1708,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
    * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
@@ -1739,9 +1750,21 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
+    const market = await this._getMarket(context);
     const action = await this._getRepayAction(context, operationOptions);
+    const approvalAmount =
+      operationRequirementOptions?.approvalAmount ??
+      (operationOptions.amount === "max"
+        ? // The adapter rebuilds the debt quote with fresh deadline and state at submission,
+          // so an exact allowance from requirement time could be short by accrued interest.
+          (MAX_TOKEN_APPROVALS[context.chainId]?.[
+            getAddress(market.params.loanToken)
+          ] ?? maxUint256)
+        : undefined);
     const requirements = await action.getRequirements(
-      operationRequirementOptions,
+      approvalAmount === undefined
+        ? operationRequirementOptions
+        : { ...operationRequirementOptions, approvalAmount },
     );
     await this._revalidate(context);
 
@@ -1924,6 +1947,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
