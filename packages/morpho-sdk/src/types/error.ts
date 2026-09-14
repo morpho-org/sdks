@@ -454,6 +454,31 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
   }
 }
 
+/** Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor. */
+export class ForceWithdrawSharePriceBelowFloorError extends Error {
+  /** Supplied force-withdraw share-price floor. */
+  public readonly minSharePriceE27: bigint;
+  /** Minimum share-price floor allowed at maximum SDK slippage tolerance. */
+  public readonly floorE27: bigint;
+
+  /**
+   * @param params - Supplied and minimum allowed share-price floors.
+   * @param params.minSharePriceE27 - Supplied force-withdraw share-price floor.
+   * @param params.floorE27 - Minimum floor derived at maximum SDK slippage tolerance.
+   */
+  public constructor(params: {
+    readonly minSharePriceE27: bigint;
+    readonly floorE27: bigint;
+  }) {
+    super(
+      `Force-withdraw share price floor ${params.minSharePriceE27} is below the minimum allowed ${params.floorE27} (max slippage tolerance). Raise minSharePriceE27 or use slippageTolerance.`,
+    );
+    this.minSharePriceE27 = params.minSharePriceE27;
+    this.floorE27 = params.floorE27;
+    this.name = "ForceWithdrawSharePriceBelowFloorError";
+  }
+}
+
 /**
  * Thrown when fee shares projected to the accepted deadline reach the lower force-withdraw
  * burn bound at that time.

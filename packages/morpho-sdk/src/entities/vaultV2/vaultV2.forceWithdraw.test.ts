@@ -29,6 +29,7 @@ import {
   computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
+  MAX_SLIPPAGE_TOLERANCE,
   resolveVaultV2ForceWithdrawEligibility,
 } from "../../helpers/index.js";
 import {
@@ -37,6 +38,7 @@ import {
   type Erc2612RequirementSignature,
   ExcessiveSlippageToleranceError,
   ExpiredDeadlineError,
+  ForceWithdrawSharePriceBelowFloorError,
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
@@ -195,18 +197,72 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(build(MathLib.WAD / 100n)).toBeLessThan(build(0n));
   });
 
-  test("behavior: an explicit minSharePriceE27 overrides the derived bound", () => {
+  test("error: ForceWithdrawSharePriceBelowFloorError", () => {
     const handle = createMockClient(mainnet);
+    expect(() =>
+      vaultFor(handle).forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: 1n,
+      }),
+    ).toThrow(ForceWithdrawSharePriceBelowFloorError);
+  });
+
+  test("behavior: override at or above the max-slippage floor is accepted and encoded", async () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now, () =>
+      vaultFor(handle, { supportSignature: false }).forceWithdraw({
+        exitAssets: 51n,
+        vaultData,
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: floorE27,
+      }),
+    );
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+
+    expect(exit.buildTx().action.args.minSharePriceE27).toBe(floorE27);
+    if (!approval || !isRequirementApproval(approval)) {
+      throw new Error("Expected an ERC-20 approval requirement");
+    }
+    expect(approval.action.args.amount).toBeLessThan(maxUint256);
+  });
+
+  test("behavior: override above the default floor tightens the bound", () => {
+    const handle = createMockClient(mainnet);
+    const defaultFloor = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+      })
+      .buildTx().action.args.minSharePriceE27;
+    const override = defaultFloor + 1n;
     const tx = vaultFor(handle)
       .forceWithdraw({
         exitAssets: 51n,
         vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
         userAddress: IN_KIND_USER,
-        minSharePriceE27: 123n,
+        minSharePriceE27: override,
       })
       .buildTx();
 
-    expect(tx.action.args.minSharePriceE27).toBe(123n);
+    expect(tx.action.args.minSharePriceE27).toBe(override);
   });
 
   // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
@@ -551,27 +607,19 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(InputExceedsMaxError);
     });
 
-    // The allowance is `mulDivUp(exitAssets, RAY, minSharePriceE27)`, so a floor of `1n` scales it
-    // past the ABI slot. The approval encoder clamps what it emits, so an uncapped requirement would
-    // sit permanently above any grantable allowance and `getRequirements()` would never converge.
     test("behavior: saturates the derived share allowance at uint256", async () => {
       const handle = createMockClient(mainnet);
       mockRequirements(handle, { allowance: maxUint256 });
-      // `mulDivUp(exitAssets, RAY, 1n)` overflows uint256 once `exitAssets > maxUint256 / RAY`, so
-      // give the vault enough idle to cover an exit that large penalty-free.
-      const exitAssets = (maxUint256 / MathLib.RAY) * 2n;
+      const exitAssets = maxUint256;
 
       const requirements = await vaultFor(handle)
         .forceWithdraw({
           exitAssets,
           vaultData: vaultV2ExitData({ assetBalance: exitAssets * 2n }),
           userAddress: IN_KIND_USER,
-          minSharePriceE27: 1n,
         })
         .getRequirements();
 
-      // Uncapped this would demand ~2e77 shares, which no allowance can satisfy — so
-      // `getRequirements()` would keep emitting the same approval forever.
       expect(requirements).toHaveLength(0);
     });
 
