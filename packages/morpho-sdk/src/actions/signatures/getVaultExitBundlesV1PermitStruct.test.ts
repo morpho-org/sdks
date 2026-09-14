@@ -70,8 +70,11 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
     { deadline: 0n, error: NonPositiveInputError },
     { deadline: maxUint256 + 1n, error: InputExceedsMaxError },
   ])(
-    "error: rejects unencodable permit deadline $deadline",
+    "error: rejects unencodable bundle and permit deadline $deadline",
     ({ deadline, error }) => {
+      expect(() =>
+        getVaultExitBundlesV1PermitStruct({ vault, deadline }),
+      ).toThrow(error);
       expect(() =>
         getVaultExitBundlesV1PermitStruct({
           vault,

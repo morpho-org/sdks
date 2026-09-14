@@ -3,13 +3,15 @@ import {
   compactSignatureToSignature,
   type Hex,
   isAddressEqual,
+  maxUint256,
   parseCompactSignature,
   parseSignature,
   size,
   zeroHash,
 } from "viem";
-import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import {
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
@@ -70,13 +72,25 @@ export interface GetVaultExitBundlesV1PermitStructParams {
 export const getVaultExitBundlesV1PermitStruct = (
   params: GetVaultExitBundlesV1PermitStructParams,
 ): VaultExitBundlesV1PermitStruct => {
-  const deadline = validateInKindDeadline(params.deadline);
   const { requirementSignature } = params;
+  for (const deadline of [
+    params.deadline,
+    requirementSignature?.args.deadline,
+  ]) {
+    if (deadline == null) continue;
+    if (deadline <= 0n) throw new NonPositiveInputError("deadline", deadline);
+    if (deadline > maxUint256)
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: deadline,
+        max: maxUint256,
+      });
+  }
   if (requirementSignature == null) {
     return {
       value: 0n,
       nonce: 0n,
-      deadline,
+      deadline: params.deadline,
       v: 0,
       r: zeroHash,
       s: zeroHash,
@@ -97,9 +111,6 @@ export const getVaultExitBundlesV1PermitStruct = (
       actual: requirementSignature.args.asset,
     });
   }
-  const permitDeadline = validateInKindDeadline(
-    requirementSignature.args.deadline,
-  );
   const signature = (() => {
     try {
       const serializedSignature = requirementSignature.args.signature;
@@ -130,7 +141,7 @@ export const getVaultExitBundlesV1PermitStruct = (
   return {
     value: requirementSignature.args.amount,
     nonce: requirementSignature.args.nonce,
-    deadline: permitDeadline,
+    deadline: requirementSignature.args.deadline,
     v: Number(normalizedV),
     r,
     s,

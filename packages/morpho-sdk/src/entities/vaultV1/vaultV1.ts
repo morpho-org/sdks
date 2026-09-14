@@ -14,7 +14,7 @@ import {
   metaMorphoAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual } from "viem";
+import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -31,7 +31,6 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
-import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -43,6 +42,7 @@ import {
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
@@ -488,7 +488,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
     // Reject unencodable deadlines before exposing approvals or permits.
-    validateInKindDeadline(deadline);
+    if (deadline > maxUint256)
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: deadline,
+        max: maxUint256,
+      });
 
     const vaultExitBundlesV1 = getChainAddress(
       this.chainId,

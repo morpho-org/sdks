@@ -3,7 +3,6 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import {
   type Metadata,
   NonPositiveInputError,
@@ -72,7 +71,8 @@ export const vaultV2InKindRedeem = ({
   Transaction<VaultV2InKindRedeemAction>
 > => {
   if (args.amount <= 0n) throw new NonPositiveInputError("amount", args.amount);
-  const deadline = validateInKindDeadline(args.deadline);
+  if (args.deadline <= 0n)
+    throw new NonPositiveInputError("deadline", args.deadline);
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const marketParamsList = args.marketParamsList.map((marketParams) => ({
     loanToken: marketParams.loanToken,
@@ -83,7 +83,7 @@ export const vaultV2InKindRedeem = ({
   }));
   const sharesPermit = getVaultExitBundlesV1PermitStruct({
     vault: vault.address,
-    deadline,
+    deadline: args.deadline,
     requirementSignature: args.requirementSignature,
   });
   let tx = {
@@ -98,7 +98,7 @@ export const vaultV2InKindRedeem = ({
         marketParamsList,
         args.amount,
         sharesPermit,
-        deadline,
+        args.deadline,
       ],
     }),
   };
@@ -114,7 +114,7 @@ export const vaultV2InKindRedeem = ({
         amount: args.amount,
         marketParamsList,
         onBehalf: args.userAddress,
-        deadline,
+        deadline: args.deadline,
       },
     },
   });
