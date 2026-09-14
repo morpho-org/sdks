@@ -267,6 +267,36 @@ is single-use; a consumed one throws `Permit2SignatureTransferNonceAlreadyUsedEr
 for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
 ERC-2612 permit and needs no nonce.
 
+### Signature requirements expose `action.typedData`; low-level encoders take `owner`
+
+Every signable requirement action (`PermitAction`, `Permit2Action`,
+`Permit2SignatureTransferAction`, `AuthorizationAction`, `MidnightOfferRootSignatureAction`) now
+carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be signed with any signer:
+
+```ts
+const [requirement] = await output.getRequirements();
+const signature = await walletClient.signTypedData(requirement.action.typedData);
+```
+
+Signing `typedData` yourself skips `sign()`'s recover-and-verify step; the caller owns
+verification. For the Midnight offer-root requirement, `sign()` also derives the ratification
+payload that `buildTx()` submits, so wrap remote signers in a viem custom account
+(`toAccount({ address, signTypedData })`) and pass that wallet client to `sign()` instead.
+
+Because the permit and authorization payloads embed the owner and are built eagerly, two exported
+low-level encoders take a new required `owner` parameter, and `getGeneralAdapterRequirementsPermit`
+forwards it. Their `sign(client, userAddress)` rejects a `userAddress` different from `owner` with
+`AddressMismatchError`.
+
+| v5 call | v6 call |
+| --- | --- |
+| `encodeErc20Permit(client, { token, spender, amount, chainId, nonce })` | `encodeErc20Permit(client, { token, owner, spender, amount, chainId, nonce })` |
+| `encodeBlueSignatureAuthorization(client, { authorized, isAuthorized, chainId, nonce })` | `encodeBlueSignatureAuthorization(client, { owner, authorized, isAuthorized, chainId, nonce })` |
+| `getGeneralAdapterRequirementsPermit(client, { token, chainId, args, nonce })` | `getGeneralAdapterRequirementsPermit(client, { token, owner, chainId, args, nonce })` |
+
+High-level entity flows (`client.morpho.blue(...)`, vault deposits, Midnight) already supply the
+owner and need no changes.
+
 ## Blue refinance
 
 The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call

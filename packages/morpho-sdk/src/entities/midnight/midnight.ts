@@ -1154,12 +1154,12 @@ export class MorphoMidnight {
       const typedData: TypedDataDefinition<
         Record<string, unknown>,
         "OfferTree"
-      > = {
+      > = deepFreeze({
         domain: treeTypedData.domain,
         types: treeTypedData.types,
         primaryType: treeTypedData.primaryType,
         message: treeTypedData.message,
-      };
+      });
       const action: MidnightOfferRootSignatureAction = {
         type: "midnightOfferRootSignature",
         args: {

@@ -644,9 +644,9 @@ export interface PermitAction
    * EIP-712 payload to sign for this permit, ready to pass to any signer
    * (`walletClient.signTypedData(...)`, `account.signTypedData(...)`, or a remote/EIP-712 signer).
    * Always populated on requirements the SDK returns from `getRequirements()`; optional only so
-   * hand-built action metadata (e.g. test fixtures) need not supply it. `sign()` signs this exact
-   * payload; obtaining the signature this way skips its recover-and-verify step, so the caller is
-   * responsible for verification.
+   * hand-built action metadata (e.g. test fixtures) need not supply it. The payload is deep-frozen;
+   * `sign()` signs this exact payload, and obtaining the signature another way skips its
+   * recover-and-verify step, so the caller is responsible for verification.
    */
   readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
 }
@@ -698,7 +698,16 @@ export interface MidnightOfferRootSignatureAction
       readonly offers: number;
     }
   > {
-  /** EIP-712 offer-tree payload to sign for this Midnight ratification. See {@link PermitAction.typedData}. */
+  /**
+   * EIP-712 offer-tree payload to sign for this Midnight ratification. See {@link PermitAction.typedData}.
+   *
+   * Unlike token permits and Morpho authorization, a bare signature over this payload is not
+   * enough to build the submit-offers transaction: `sign()` also derives the ratification payload
+   * (`MidnightOfferRootSignature.args.payload`) that `buildTx()` submits to the mempool. To sign
+   * with a remote or custom signer, wrap it in a viem custom account (`toAccount({ address,
+   * signTypedData })`) and pass that wallet client to `sign()`. Use `typedData` here for display
+   * or verification.
+   */
   readonly typedData?: TypedDataDefinition<Record<string, unknown>, string>;
 }
 

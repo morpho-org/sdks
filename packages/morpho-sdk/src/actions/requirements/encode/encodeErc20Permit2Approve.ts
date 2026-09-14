@@ -69,16 +69,18 @@ export const encodeErc20Permit2Approve = (
 
   // Permit2 AllowanceTransfer signs over `PermitSingle` (token, spender, expiration, nonce), which
   // does not include the owner, so the payload is fully determined at build time.
-  const typedData = getPermit2PermitTypedData(
-    {
-      spender: generalAdapter1,
-      allowance: amount,
-      erc20: token,
-      nonce: Number(nonce),
-      deadline,
-      expiration: Number(expiration),
-    },
-    chainId,
+  const typedData = deepFreeze(
+    getPermit2PermitTypedData(
+      {
+        spender: generalAdapter1,
+        allowance: amount,
+        erc20: token,
+        nonce: Number(nonce),
+        deadline,
+        expiration: Number(expiration),
+      },
+      chainId,
+    ),
   );
 
   const action: Permit2Action = {

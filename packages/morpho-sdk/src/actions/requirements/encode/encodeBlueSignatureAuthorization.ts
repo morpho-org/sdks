@@ -101,9 +101,11 @@ export const encodeBlueSignatureAuthorization = async (
 
   const deadline = params.deadline ?? Time.timestamp() + Time.s.from.h(2n);
 
-  const typedData = getAuthorizationTypedData(
-    { authorizer: owner, authorized, isAuthorized, nonce, deadline },
-    chainId,
+  const typedData = deepFreeze(
+    getAuthorizationTypedData(
+      { authorizer: owner, authorized, isAuthorized, nonce, deadline },
+      chainId,
+    ),
   );
 
   const action: AuthorizationAction = {

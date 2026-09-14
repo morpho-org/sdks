@@ -125,16 +125,18 @@ export const encodeVaultSharesPermit = (
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
-  const typedData = getPermitTypedData(
-    {
-      owner,
-      spender,
-      allowance: amount,
-      nonce,
-      deadline,
-      erc20: vault,
-    },
-    chainId,
+  const typedData = deepFreeze(
+    getPermitTypedData(
+      {
+        owner,
+        spender,
+        allowance: amount,
+        nonce,
+        deadline,
+        erc20: vault,
+      },
+      chainId,
+    ),
   );
 
   const action: PermitAction = {

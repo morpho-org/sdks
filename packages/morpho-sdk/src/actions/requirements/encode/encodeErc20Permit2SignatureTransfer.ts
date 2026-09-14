@@ -116,15 +116,17 @@ export const encodeErc20Permit2SignatureTransfer = (
 
   // Permit2 SignatureTransfer signs over `PermitTransferFrom` (permitted, spender, nonce,
   // deadline), which does not include the owner, so the payload is fully determined at build time.
-  const typedData = getPermit2TransferFromTypedData(
-    {
-      erc20: token,
-      allowance: amount,
-      spender,
-      nonce,
-      deadline,
-    },
-    chainId,
+  const typedData = deepFreeze(
+    getPermit2TransferFromTypedData(
+      {
+        erc20: token,
+        allowance: amount,
+        spender,
+        nonce,
+        deadline,
+      },
+      chainId,
+    ),
   );
 
   const action: Permit2SignatureTransferAction = {

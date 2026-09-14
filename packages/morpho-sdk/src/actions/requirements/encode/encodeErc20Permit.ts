@@ -119,16 +119,18 @@ export const encodeErc20Permit = async (
     deployless: supportDeployless,
   });
 
-  const typedData = getPermitTypedData(
-    {
-      erc20: tokenData,
-      owner,
-      spender,
-      allowance: amount,
-      nonce,
-      deadline,
-    },
-    chainId,
+  const typedData = deepFreeze(
+    getPermitTypedData(
+      {
+        erc20: tokenData,
+        owner,
+        spender,
+        allowance: amount,
+        nonce,
+        deadline,
+      },
+      chainId,
+    ),
   );
 
   const action: PermitAction = {

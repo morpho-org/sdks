@@ -282,6 +282,9 @@ describe("encodeErc20Permit", () => {
         value: mockAmount,
         nonce: mockNonce,
       });
+      expect(Object.isFrozen(typedData)).toBe(true);
+      expect(Object.isFrozen(typedData.message)).toBe(true);
+      expect(Object.isFrozen(typedData.domain)).toBe(true);
     });
 
     test("behavior: signing action.typedData externally matches sign()", async ({
