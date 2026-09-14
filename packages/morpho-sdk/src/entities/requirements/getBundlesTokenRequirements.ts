@@ -10,7 +10,6 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import { resolveBundlesTokenRequirements } from "../../actions/bundles/index.js";
-import { getUnusedPermit2Nonce } from "../../actions/requirements/blue/getUnusedPermit2Nonce.js";
 import { encodeErc20Permit } from "../../actions/requirements/encode/encodeErc20Permit.js";
 import {
   validateChainId,
@@ -26,6 +25,7 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
+import { getUnusedPermit2Nonce } from "./getUnusedPermit2Nonce.js";
 
 /** Parameters for {@link getBundlesTokenRequirements}. */
 export interface GetBundlesTokenRequirementsParams {

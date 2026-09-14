@@ -16,7 +16,7 @@ import {
   InputExceedsMaxError,
   NegativeInputError,
   NoUnusedPermit2NonceError,
-} from "../../../types/index.js";
+} from "../../types/index.js";
 import { getUnusedPermit2Nonce } from "./getUnusedPermit2Nonce.js";
 
 const permit2 = addressesRegistry[mainnet.id].permit2;
