@@ -402,9 +402,28 @@ export class Market implements IMarket {
    * Applies a supply to an interest-accrued copy of this market.
    * @param assets Loan assets to supply, or zero when `shares` is provided.
    * @param shares Supply shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
    * @returns The updated market and normalized asset and share amounts.
+   * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @example
+   * ```ts
+   * import { ChainId, getChainAddress, Market, MarketParams } from "@morpho-org/blue-sdk";
+   *
+   * const market = new Market({
+   *   params: MarketParams.idle(getChainAddress(ChainId.EthMainnet, "usdc")),
+   *   totalSupplyAssets: 0n,
+   *   totalBorrowAssets: 0n,
+   *   totalSupplyShares: 0n,
+   *   totalBorrowShares: 0n,
+   *   lastUpdate: 1_700_000_000n,
+   *   fee: 0n,
+   * });
+   * const result = market.supply(1_000_000n, 0n);
+   * // result satisfies { market: Market; assets: bigint; shares: bigint }
+   * // result.assets === 1_000_000n; result.shares === 1_000_000_000_000n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
