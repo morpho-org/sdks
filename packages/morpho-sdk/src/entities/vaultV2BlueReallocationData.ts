@@ -24,9 +24,9 @@ import { type Address, type Hash, isAddressEqual } from "viem";
 import {
   DEFAULT_MAX_REALLOCATION_PENALTY,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
-  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   MAX_REALLOCATION_PENALTY,
 } from "../helpers/constant.js";
+import { resolveMaxWithdrawalUtilization } from "../helpers/utilization.js";
 import type {
   VaultV2BluePublicAllocatorOptions,
   VaultV2BlueReallocation,
@@ -181,19 +181,6 @@ const getAdapterIds = (
   const ids = adapter.ids(market.params);
   cache.set(key, ids);
   return ids;
-};
-
-const resolveMaxWithdrawalUtilization = (value: bigint | undefined) => {
-  const utilization = value ?? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION;
-  if (utilization < 0n)
-    throw new NegativeInputError("maxWithdrawalUtilization", utilization);
-  if (utilization > MathLib.WAD)
-    throw new InputExceedsMaxError({
-      field: "maxWithdrawalUtilization",
-      value: utilization,
-      max: MathLib.WAD,
-    });
-  return utilization;
 };
 
 const resolveMaxPenalty = (value: bigint | undefined) => {

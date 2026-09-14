@@ -26,6 +26,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -169,6 +170,7 @@ export interface VaultV2Actions {
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
    *   penalty-adjusted amount rounds to zero deallocated assets.
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
+   * @throws {InputExceedsMaxError} when the deadline exceeds uint256.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {InKindRedeemRequiresSingleAdapterError} when the vault does not have one adapter.
@@ -476,6 +478,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+    // Reject unencodable deadlines before exposing approvals or permits.
+    validateInKindDeadline(deadline);
     if (vaultData.accrualAdapters.length !== 1) {
       throw new InKindRedeemRequiresSingleAdapterError(
         this.vault,
@@ -517,7 +521,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       soleAdapter.markets.map((market) => [
         market.id,
         market
-          .accrueInterest(now)
+          .accrueInterest(MathLib.max(now, market.lastUpdate))
           .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );

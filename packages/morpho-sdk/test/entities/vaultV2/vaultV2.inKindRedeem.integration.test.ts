@@ -243,7 +243,10 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
 
     expect(vaultData.forceDeallocatePenalties[adapterAddress]).toBe(penalty);
     expect(marketParamsList).toHaveLength(2);
-    const exit = withChainTimestamp(await client.timestamp(), () =>
+    // A local clock behind every fetched market must still allow the real exit.
+    const localTimestamp =
+      MathLib.min(...adapter.markets.map((market) => market.lastUpdate)) - 1n;
+    const exit = withChainTimestamp(localTimestamp, () =>
       vault.inKindRedeem({
         amount,
         marketParamsList,

@@ -8,6 +8,7 @@ import {
   size,
   zeroHash,
 } from "viem";
+import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import {
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
@@ -51,6 +52,8 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
  * @param params.requirementSignature - Optional signed bounded ERC-2612 requirement.
  * @returns The VaultExitBundlesV1 permit tuple.
+ * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
+ * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
  * @example
  * ```ts
@@ -67,12 +70,13 @@ export interface GetVaultExitBundlesV1PermitStructParams {
 export const getVaultExitBundlesV1PermitStruct = (
   params: GetVaultExitBundlesV1PermitStructParams,
 ): VaultExitBundlesV1PermitStruct => {
+  const deadline = validateInKindDeadline(params.deadline);
   const { requirementSignature } = params;
   if (requirementSignature == null) {
     return {
       value: 0n,
       nonce: 0n,
-      deadline: params.deadline,
+      deadline,
       v: 0,
       r: zeroHash,
       s: zeroHash,
@@ -93,6 +97,9 @@ export const getVaultExitBundlesV1PermitStruct = (
       actual: requirementSignature.args.asset,
     });
   }
+  const permitDeadline = validateInKindDeadline(
+    requirementSignature.args.deadline,
+  );
   const signature = (() => {
     try {
       const serializedSignature = requirementSignature.args.signature;
@@ -123,7 +130,7 @@ export const getVaultExitBundlesV1PermitStruct = (
   return {
     value: requirementSignature.args.amount,
     nonce: requirementSignature.args.nonce,
-    deadline: requirementSignature.args.deadline,
+    deadline: permitDeadline,
     v: Number(normalizedV),
     r,
     s,

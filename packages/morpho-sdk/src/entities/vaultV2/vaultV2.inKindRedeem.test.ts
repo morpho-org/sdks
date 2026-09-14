@@ -2,7 +2,7 @@ import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi } from "viem";
+import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -25,6 +25,7 @@ import {
   InKindRedeemCoverageError,
   InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   UnsupportedInKindAdapterError,
@@ -58,6 +59,40 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
+  test("behavior: builds an exit when market state is ahead of the local clock", () => {
+    const now = 1_800_000_000n;
+    const vaultData = withChainTimestamp(now + 60n, () => inKindVaultV2Data());
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const exit = withChainTimestamp(now, () =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData,
+        userAddress: IN_KIND_USER,
+      }),
+    );
+    expect(exit.buildTx().action.args.amount).toBe(500n);
+  });
+
+  test("error: InputExceedsMaxError before exposing requirements", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("default", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

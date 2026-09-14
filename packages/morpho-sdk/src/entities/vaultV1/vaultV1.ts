@@ -31,6 +31,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { validateInKindDeadline } from "../../helpers/validateInKindDeadline.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -153,6 +154,7 @@ export interface VaultV1Actions {
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
+   * @throws {InputExceedsMaxError} when the deadline exceeds uint256.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {InKindRedeemCoverageError} when the ordered list cannot cover `amount` without
@@ -485,6 +487,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+    // Reject unencodable deadlines before exposing approvals or permits.
+    validateInKindDeadline(deadline);
 
     const vaultExitBundlesV1 = getChainAddress(
       this.chainId,

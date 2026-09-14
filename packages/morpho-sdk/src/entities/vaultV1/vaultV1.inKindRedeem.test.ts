@@ -1,7 +1,7 @@
 import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi } from "viem";
+import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -21,6 +21,7 @@ import {
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   VaultAddressMismatchError,
@@ -69,6 +70,22 @@ const mockV1Requirements = (
 };
 
 describe("MorphoVaultV1.inKindRedeem", () => {
+  test("error: InputExceedsMaxError before exposing requirements", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("default: builds the V1 action from distinct market coverage", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
