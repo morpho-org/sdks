@@ -11,6 +11,7 @@ import {
   UnknownTokenPriceError,
   UnknownVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError,
   UnsupportedPreLiquidationParamsError,
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
@@ -26,6 +27,13 @@ describe("error classes", () => {
     expect(err).toBeInstanceOf(Error);
     expect(err.data).toBe("0xabcd");
     expect(err.message).toContain("0xabcd");
+  });
+
+  test("UnsupportedMarketIrmError preserves the market and IRM", () => {
+    const error = new UnsupportedMarketIrmError(MARKET_ID, ADDRESS);
+
+    expect(error.marketId).toBe(MARKET_ID);
+    expect(error.irm).toBe(ADDRESS);
   });
 
   test("UnknownTokenError extends UnknownDataError", () => {
