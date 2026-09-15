@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "../helpers/constant.js";
 import {
+  InputExceedsMaxError,
+  NegativeInputError,
   type PublicAllocatorOptions,
   type PublicReallocation,
   UnknownReallocationMarketError,
@@ -104,6 +106,71 @@ describe("VaultV1ReallocationData.getPublicReallocationLiquidity", () => {
 });
 
 describe("VaultV1ReallocationData.getAvailableLiquidityToUtilization", () => {
+  test.each(["default", "per-market"] as const)(
+    "error: validates unused ceilings with a %s supply target",
+    (target) => {
+      const supplyOptions =
+        target === "default"
+          ? { defaultSupplyTargetUtilization: NINETY_PERCENT }
+          : { supplyTargetUtilization: { [targetParams.id]: NINETY_PERCENT } };
+      for (const [value, ErrorClass] of [
+        [-1n, NegativeInputError],
+        [MathLib.WAD + 1n, InputExceedsMaxError],
+      ] as const) {
+        for (const field of [
+          "defaultMaxWithdrawalUtilization",
+          "maxWithdrawalUtilization",
+        ] as const) {
+          const ceilingOptions =
+            field === "defaultMaxWithdrawalUtilization"
+              ? { defaultMaxWithdrawalUtilization: value }
+              : { maxWithdrawalUtilization: { [sourceParamsA.id]: value } };
+          expect(() =>
+            makeData().getAvailableLiquidityToUtilization(
+              targetParams.id,
+              EIGHTY_PERCENT,
+              { ...supplyOptions, ...ceilingOptions },
+            ),
+          ).toThrow(
+            expect.objectContaining({ constructor: ErrorClass, field, value }),
+          );
+        }
+      }
+    },
+  );
+
+  test.each([0n, MathLib.WAD])(
+    "behavior: accepts unused boundary ceiling %s",
+    (value) => {
+      expect(
+        makeData().getAvailableLiquidityToUtilization(
+          targetParams.id,
+          EIGHTY_PERCENT,
+          {
+            defaultSupplyTargetUtilization: NINETY_PERCENT,
+            defaultMaxWithdrawalUtilization: value,
+            maxWithdrawalUtilization: { [sourceParamsA.id]: value },
+          },
+        ),
+      ).toBe(300n * MathLib.WAD);
+    },
+  );
+
+  test("behavior: disabled planning ignores withdrawal ceilings", () => {
+    expect(
+      makeData().getAvailableLiquidityToUtilization(
+        targetParams.id,
+        EIGHTY_PERCENT,
+        {
+          enabled: false,
+          defaultSupplyTargetUtilization: NINETY_PERCENT,
+          defaultMaxWithdrawalUtilization: -1n,
+          maxWithdrawalUtilization: { [sourceParamsA.id]: MathLib.WAD + 1n },
+        },
+      ),
+    ).toBe(300n * MathLib.WAD);
+  });
+
   test("default: own headroom + scaled available liquidity", () => {
     // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
     // supplyTarget set to 90% (not > target) → scaled liquidity 0.9·200 = 180 is

@@ -638,6 +638,20 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
   ): bigint {
+    if (options?.enabled !== false) {
+      // Reject invalid defaults even when only the market's own liquidity is returned.
+      resolveMaxWithdrawalUtilization(
+        options?.defaultMaxWithdrawalUtilization,
+        "defaultMaxWithdrawalUtilization",
+      );
+      for (const ceiling of Object.values(
+        options?.maxWithdrawalUtilization ?? {},
+      )) {
+        // Validate unused per-market overrides before the supply-target early return.
+        resolveMaxWithdrawalUtilization(ceiling);
+      }
+    }
+
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
     // Below the allocator's trigger, no reallocation happens: own headroom only.
