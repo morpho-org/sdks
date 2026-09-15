@@ -727,6 +727,7 @@ describe("getGeneralAdapterRequirements", () => {
         mockClient,
         {
           token: usdc,
+          owner: mockFrom,
           chainId: mainnet.id,
           args: { amount: mockAmount },
           nonce: 0n,

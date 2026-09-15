@@ -175,6 +175,7 @@ export const getBundlesTokenRequirements = async (
         return [
           await encodeErc20Permit(viemClient, {
             token: params.token,
+            owner: params.owner,
             spender: params.spender,
             amount: params.amount,
             chainId: params.chainId,

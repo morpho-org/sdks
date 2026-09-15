@@ -1,5 +1,5 @@
 import type { InputMarketParams } from "@morpho-org/blue-sdk";
-import type { Address, Hex, WalletClient } from "viem";
+import type { Address, Hex, TypedDataDefinition, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
 import {
   AmbiguousRequirementSignaturesError,
@@ -664,6 +664,12 @@ export interface MidnightOfferRootSignatureArgs {
   readonly payload: Hex;
 }
 
+/** EIP-712 payload carried by a signable requirement action. */
+export type RequirementTypedData = TypedDataDefinition<
+  Record<string, unknown>,
+  string
+>;
+
 export interface PermitAction
   extends BaseAction<
     "permit",
@@ -674,13 +680,24 @@ export interface PermitAction
       /** Permit nonce captured by a prepared requirement, when available. */
       readonly nonce?: bigint;
     }
-  > {}
+  > {
+  /**
+   * EIP-712 payload `sign()` signs for this permit, exposed so it can be inspected or displayed
+   * before signing. Required on {@link Requirement.action}; optional here only so hand-built action
+   * metadata (e.g. test fixtures) need not supply it. The payload is deep-frozen and `sign()` signs
+   * this exact payload.
+   */
+  readonly typedData?: RequirementTypedData;
+}
 
 export interface Permit2Action
   extends BaseAction<
     "permit2",
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
-  > {}
+  > {
+  /** EIP-712 payload to sign for this Permit2 AllowanceTransfer. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
 
 /** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
 export interface Permit2SignatureTransferAction
@@ -692,7 +709,10 @@ export interface Permit2SignatureTransferAction
       readonly nonce: bigint;
       readonly deadline: bigint;
     }
-  > {}
+  > {
+  /** EIP-712 payload to sign for this Permit2 SignatureTransfer. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
 
 /**
  * Signable Morpho authorization requirement. Its `authorized` operator is route-specific:
@@ -702,7 +722,10 @@ export interface AuthorizationAction
   extends BaseAction<
     "authorization",
     { authorized: Address; isAuthorized: boolean; deadline: bigint }
-  > {}
+  > {
+  /** EIP-712 payload to sign for this Morpho authorization. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
 
 /** Metadata for a Midnight offer-root signature request. */
 export interface MidnightOfferRootSignatureAction
@@ -713,7 +736,17 @@ export interface MidnightOfferRootSignatureAction
       readonly ratifier: Address;
       readonly offers: number;
     }
-  > {}
+  > {
+  /**
+   * EIP-712 offer-tree payload `sign()` signs for this Midnight ratification, exposed so it can be
+   * inspected or displayed before signing. See {@link PermitAction.typedData}.
+   *
+   * A bare signature over this payload is not enough to build the submit-offers transaction:
+   * `sign()` also derives the ratification payload (`MidnightOfferRootSignature.args.payload`) that
+   * `buildTx()` submits to the mempool.
+   */
+  readonly typedData?: RequirementTypedData;
+}
 
 /** Action metadata supported by signature requirements. */
 export type SignatureRequirementAction =
@@ -799,12 +832,23 @@ type RequirementResult<
 
 /**
  * A signable approval / authorization requirement. `sign()` returns the matching
- * {@link RequirementSignature}; `action` describes the requirement without signing.
+ * {@link RequirementSignature}; `action` describes the requirement without signing and carries the
+ * EIP-712 `typedData` payload so an integrator can inspect or display it before signing.
  *
  * Generic over the signature it produces so permit encoders narrow to
  * {@link PermitRequirementSignature} and the authorization encoder to
  * {@link AuthorizationRequirementSignature}; the two-parameter form is kept for
  * Midnight action requirements that are parameterized by action and args.
+ *
+ * @example
+ * ```ts
+ * const requirement = (await output.getRequirements()).find(isRequirementSignature);
+ * if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
+ *
+ * const typedData = requirement.action.typedData; // exact EIP-712 payload `sign()` will sign
+ * const signed = await requirement.sign(walletClient, owner);
+ * const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
+ * ```
  */
 export interface Requirement<
   TSignatureOrAction extends
@@ -812,11 +856,15 @@ export interface Requirement<
     | SignatureRequirementAction = RequirementSignature,
   TArgs extends RequirementSignatureArgs | undefined = undefined,
 > {
-  sign: (
+  /** Signs `action.typedData` with `client`, verifies the signature recovers `userAddress`, and returns the signed requirement. */
+  readonly sign: (
     client: WalletClient,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
-  action: RequirementResult<TSignatureOrAction, TArgs>["action"];
+  /** Requirement metadata; `typedData` is always populated on SDK-built requirements. */
+  readonly action: RequirementResult<TSignatureOrAction, TArgs>["action"] & {
+    readonly typedData: RequirementTypedData;
+  };
 }
 
 /** Bundler3 token signature requirement. */

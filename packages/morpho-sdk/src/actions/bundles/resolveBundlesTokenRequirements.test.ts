@@ -221,7 +221,7 @@ describe("resolveBundlesTokenRequirements", () => {
       args: { spender: permit2, amount: maxUint256 },
     });
     expect(isRequirementSignature(requirements[1])).toBe(true);
-    expect(requirements[1]?.action).toEqual({
+    expect(requirements[1]?.action).toMatchObject({
       type: "permit2SignatureTransfer",
       args: { spender, amount, nonce: 257n, deadline },
     });

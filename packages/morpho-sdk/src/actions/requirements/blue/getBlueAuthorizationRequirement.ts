@@ -147,6 +147,7 @@ export const getBlueAuthorizationRequirement = async (params: {
     }
 
     return encodeBlueSignatureAuthorization(viemClient, {
+      owner: userAddress,
       authorized,
       chainId,
       nonce,
