@@ -24,8 +24,6 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
-- Vault V1 shared-liquidity types were removed in v6. Direct Vault V1 actions and canonical raw
-  protocol exports remain separate from this planner surface.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
 

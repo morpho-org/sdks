@@ -66,8 +66,7 @@ builders stay synchronous and encode-only.
 - High-level Blue writes expose no `slippageTolerance`, `minSharePrice`, or `maxSharePrice` input.
   BlueBundlesV1 cannot enforce Bundler3 share-price bounds.
 - Write reallocations are Vault V2 `VaultV2BlueReallocation` calls only. They map to the contract's
-  `PublicAllocations` and execute unconditionally. PublicAllocator V1 planning and low-level
-  composition helpers were removed in v6.
+  `PublicAllocations` and execute unconditionally.
 
 Requirement details live in [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md). Reallocation
 mapping is canonical in

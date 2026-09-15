@@ -23,6 +23,5 @@ action repeats validation before encoding.
 
 `getVaultV2BlueReallocationData` fetches the inputs accepted by high-level writes.
 `VaultV2BlueReallocationData` owns the BluePublicAllocator state model. Public maps are readable
-snapshots for inspection; state transitions stay on methods and return cloned instances. Vault V1
-shared-liquidity data and planning methods were removed in v6. Action encoding stays outside every
-entity fetch path.
+snapshots for inspection; state transitions stay on methods and return cloned instances. Action
+encoding stays outside every entity fetch path.

@@ -60,10 +60,6 @@ withdraw assets mode, the withdrawn amount). Migration instead adds penalties to
 which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
 separate GeneralAdapter1 funding requirement.
 
-PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders were
-removed in v6. Direct Vault V1 flows and canonical raw ABI, address, fetch, and config exports
-remain; shared-liquidity integrations use `VaultV2BlueReallocation`.
-
 ## Discriminated unions
 
 All action interfaces extend `BaseAction<TType, TArgs>` and discriminate on `type`. To add a new operation, see [`types/AGENTS.md`](../types/AGENTS.md#adding-a-new-operation).
