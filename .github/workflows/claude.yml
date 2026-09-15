@@ -202,12 +202,21 @@ jobs:
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
-        # JavaScript action: keep $GITHUB_ENV-injected loader/node options out of its node process too.
+        # JavaScript action: keep $GITHUB_ENV-injected loader, node, proxy and CA overrides out of its node process.
         env:
           LD_PRELOAD: ''
           LD_AUDIT: ''
           LD_LIBRARY_PATH: ''
           NODE_OPTIONS: ''
+          NODE_EXTRA_CA_CERTS: ''
+          NODE_TLS_REJECT_UNAUTHORIZED: ''
+          NODE_USE_ENV_PROXY: ''
+          HTTP_PROXY: ''
+          HTTPS_PROXY: ''
+          NO_PROXY: ''
+          http_proxy: ''
+          https_proxy: ''
+          no_proxy: ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
