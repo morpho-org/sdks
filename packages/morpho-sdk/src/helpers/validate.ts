@@ -8,13 +8,18 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
+import {
+  type Address,
+  isAddress,
+  isAddressEqual,
+  maxUint128,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
-  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
-  BundlerErrors,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
@@ -27,11 +32,13 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MixedReallocationVersionsError,
   NativeAmountOnNonWNativeAssetError,
+  NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
+  ReferralFeePctExceededError,
+  ReferralFeeRecipientMissingError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
@@ -56,6 +63,84 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   if (normalizedIdA > normalizedIdB) return 1;
   if (normalizedIdA < normalizedIdB) return -1;
   return 0;
+};
+
+/**
+ * Rejects a `bigint` field that falls outside the unsigned 256-bit ABI range so a direct caller
+ * gets the SDK's typed error instead of viem's `IntegerOutOfRangeError` at encode time. `maxUint256`
+ * stays valid — it is the accepted `maxLtv` / full-repay `repayShares` sentinel.
+ *
+ * @param field - Field name surfaced in the thrown error.
+ * @param value - Candidate value; must be in `[0, maxUint256]`.
+ * @returns Nothing when `value` is within range.
+ * @throws {NegativeInputError} when `value` is negative.
+ * @throws {InputExceedsMaxError} when `value` exceeds `maxUint256`.
+ * @internal
+ */
+export const validateUint256Field = (field: string, value: bigint): void => {
+  if (value < 0n) throw new NegativeInputError(field, value);
+  if (value > maxUint256) {
+    throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+  }
+};
+
+/**
+ * Rejects a deadline that no periphery can honour: the contracts read `0` as "unset" and the ABI
+ * slot is a `uint256`. Callers that also need the deadline to be in the future layer their own
+ * `ExpiredDeadlineError` on top — this check stays clock-free so transaction builders can use it.
+ *
+ * @param deadline - Candidate deadline, in seconds.
+ * @returns Nothing when `deadline` is a positive `uint256`.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds `maxUint256`.
+ * @internal
+ */
+export const validateDeadline = (deadline: bigint): void => {
+  if (deadline <= 0n) throw new NonPositiveInputError("deadline", deadline);
+  validateUint256Field("deadline", deadline);
+};
+
+/**
+ * Validates an optional referral fee and returns the pair every referral-fee-bearing periphery
+ * encodes. Shared by the direct BlueBundlesV1 writes and the VaultExitBundlesV1 force withdrawal,
+ * whose contracts apply the same `[0, WAD)` bound and both transfer the fee unconditionally.
+ *
+ * @param params - Referral fee inputs.
+ * @param params.referralFeePct - Optional WAD-scaled fee share. Defaults to `0n`.
+ * @param params.referralFeeRecipient - Optional fee recipient. Defaults to the zero address, which
+ *   is only valid alongside a zero `referralFeePct`.
+ * @returns The normalized `{ referralFeePct, referralFeeRecipient }` pair.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD (the contracts reject
+ *   it with `PctExceeded`); it extends `InputExceedsMaxError`, preserving that pattern-match.
+ * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+ * @internal
+ */
+export const validateReferralFee = (params: {
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+}): {
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+} => {
+  const referralFeePct = params.referralFeePct ?? 0n;
+  if (referralFeePct < 0n) {
+    throw new NegativeInputError("referralFeePct", referralFeePct);
+  }
+  if (referralFeePct >= MathLib.WAD) {
+    throw new ReferralFeePctExceededError(referralFeePct);
+  }
+  if (
+    referralFeePct > 0n &&
+    (params.referralFeeRecipient == null ||
+      isAddressEqual(params.referralFeeRecipient, zeroAddress))
+  ) {
+    throw new ReferralFeeRecipientMissingError();
+  }
+  return {
+    referralFeePct,
+    referralFeeRecipient: params.referralFeeRecipient ?? zeroAddress,
+  };
 };
 
 /**
@@ -84,22 +169,44 @@ export const validateMidnightMarketChainId = (
  * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
- * Used internally by the signature requirements (`encodeErc20Permit`,
- * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
- * the signing flow is the only path where an account/address mismatch
- * is a real security concern (rather than just an integrator footgun).
+ * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
+ * backs the permit, Permit2, Blue authorization, and Midnight offer-root
+ * signature flows) and by `encodeVaultSharesPermit`, to enforce builder =
+ * signer: the signing flow is
+ * the only path where an account/address mismatch is a real security concern
+ * (rather than just an integrator footgun).
  *
  * Transaction builders no longer call this helper — callers are
  * responsible for keeping `userAddress` aligned with the signing account
  * at the builder layer.
  *
- * Throws {@link MissingClientPropertyError} if the client has no account.
- * Throws {@link AddressMismatchError} if the client account differs from
- * `userAddress`.
- *
  * @param clientAccountAddress - The client's account address; if undefined,
  *   `MissingClientPropertyError` is thrown.
  * @param userAddress - The user address provided by the caller.
+ * @returns Nothing; narrows `clientAccountAddress` to a defined `Address` when
+ *   it is present and equal to `userAddress`.
+ * @throws {MissingClientPropertyError} when the client has no connected account.
+ * @throws {AddressMismatchError} when the client account differs from
+ *   `userAddress`.
+ * @example
+ * ```ts
+ * import { createWalletClient, http } from "viem";
+ * import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+ * import { mainnet } from "viem/chains";
+ * import { validateUserAddress } from "@morpho-org/morpho-sdk";
+ *
+ * const account = privateKeyToAccount(generatePrivateKey());
+ * const walletClient = createWalletClient({
+ *   account,
+ *   chain: mainnet,
+ *   transport: http(),
+ * });
+ *
+ * // Inside a `sign()` flow, before producing a typed-data signature:
+ * validateUserAddress(walletClient.account?.address, account.address);
+ * // Passes when the connected account equals the expected signer;
+ * // throws if the wallet has no account or signs for a different address.
+ * ```
  */
 export function validateUserAddress(
   clientAccountAddress: Address | undefined,
@@ -224,6 +331,20 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
   }
   if (!isAddressEqual(asset, wNative)) {
     throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
+  }
+};
+
+/** @internal Validates native funding against a vault's wrapped-native asset. */
+export const validateNativeVaultAsset = (
+  chainId: number,
+  vaultAsset: Address,
+): void => {
+  const { wNative } = getChainAddresses(chainId);
+  if (!isDefined(wNative)) {
+    throw new ChainWNativeMissingError(chainId);
+  }
+  if (!isAddressEqual(vaultAsset, wNative)) {
+    throw new NativeAmountOnNonWNativeVaultError(vaultAsset, wNative);
   }
 };
 
@@ -405,6 +526,17 @@ export const validateVaultV2BlueReallocations = (
   const penaltyByVault = new Map<string, bigint>();
 
   for (const reallocation of reallocations) {
+    // Reject non-object entries and Vault V1-shaped entries (which carry
+    // `withdrawals`/`fee`) with a typed, instructive error instead of a raw
+    // TypeError or a misleading `to.adapter` address error.
+    if (
+      typeof reallocation !== "object" ||
+      reallocation === null ||
+      "withdrawals" in reallocation ||
+      "fee" in reallocation
+    ) {
+      throw new InvalidReallocationShapeError();
+    }
     if (
       typeof reallocation.vault !== "string" ||
       !isAddress(reallocation.vault)
@@ -495,66 +627,6 @@ export const validateVaultV2BlueReallocations = (
       );
     }
   }
-};
-
-/**
- * Validates and normalizes a homogeneous Blue reallocation plan.
- *
- * @param params - Validation parameters.
- * @param params.reallocations - Optional Vault V1 or Vault V2 reallocation plan.
- * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
- * @param params.chainId - Chain whose allocator deployment is required for a V2 plan.
- * @returns The validated plan tagged with its allocator version.
- * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
- * @internal
- */
-export const validateAndNormalizeReallocations = ({
-  reallocations,
-  targetMarketId,
-  chainId,
-}: {
-  readonly reallocations: BlueReallocationPlan | undefined;
-  readonly targetMarketId: MarketId;
-  readonly chainId: number;
-}) => {
-  const vaultV1Reallocations: VaultV1Reallocation[] = [];
-  const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
-
-  for (const reallocation of reallocations ?? []) {
-    if (typeof reallocation !== "object" || reallocation === null) {
-      throw new InvalidReallocationShapeError();
-    }
-    if ("from" in reallocation === "withdrawals" in reallocation) {
-      throw new InvalidReallocationShapeError();
-    }
-    if ("withdrawals" in reallocation) {
-      vaultV1Reallocations.push(reallocation);
-    } else {
-      vaultV2Reallocations.push(reallocation);
-    }
-  }
-
-  if (vaultV1Reallocations.length > 0 && vaultV2Reallocations.length > 0) {
-    throw new MixedReallocationVersionsError();
-  }
-  if (vaultV2Reallocations.length > 0) {
-    validateVaultV2BlueReallocations(vaultV2Reallocations, targetMarketId);
-    if (getChainAddresses(chainId).vaultV2BluePublicAllocator == null) {
-      throw new BundlerErrors.UnexpectedAction(
-        vaultV2Reallocations[0]?.from.type === "market"
-          ? "vaultV2BluePublicAllocatorReallocate"
-          : "vaultV2BluePublicAllocatorAllocateFromIdle",
-        chainId,
-      );
-    }
-    return {
-      type: "vaultV2Blue" as const,
-      reallocations: vaultV2Reallocations,
-    };
-  }
-
-  validateReallocations(vaultV1Reallocations, targetMarketId);
-  return { type: "vaultV1" as const, reallocations: vaultV1Reallocations };
 };
 
 /**

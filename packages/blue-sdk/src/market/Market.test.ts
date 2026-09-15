@@ -1,8 +1,8 @@
-import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { Time } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { market, marketInput, marketParams } from "../__test__/fixtures.js";
 import { ORACLE_PRICE_SCALE } from "../constants.js";
-import { BlueErrors } from "../errors.js";
+import { BlueErrors, UnsupportedMarketIrmError } from "../errors.js";
 import { MathLib } from "../math/MathLib.js";
 import { CapacityLimitReason } from "../utils.js";
 import { Market } from "./Market.js";
@@ -21,9 +21,9 @@ describe("Market constructor and getters", () => {
     expect(m.apyAtTarget).toBeGreaterThan(0);
   });
 
-  test("supports idle markets and markets without adaptive rate data", () => {
+  test("supports idle markets without adaptive rate data", () => {
     const m = market({
-      params: marketParams({ collateralToken: ZERO_ADDRESS }),
+      params: MarketParams.idle(marketParams().loanToken),
       rateAtTarget: undefined,
     });
 
@@ -35,12 +35,49 @@ describe("Market constructor and getters", () => {
     expect(m.borrowApy).toBe(0);
   });
 
-  test("rate helpers reject timestamps before lastUpdate", () => {
+  test("error: UnsupportedMarketIrmError", () => {
+    const unsupported = market({ rateAtTarget: undefined });
+
+    expect(() => unsupported.getEndBorrowRate(101n)).toThrow(
+      UnsupportedMarketIrmError,
+    );
+    expect(() => unsupported.accrueInterest(101n)).toThrow(
+      UnsupportedMarketIrmError,
+    );
+    expect(unsupported.accrueInterest(100n)).not.toBe(unsupported);
+  });
+
+  test("behavior: empty unsupported IRM accrues without interest", () => {
+    const unsupported = market({
+      rateAtTarget: undefined,
+      totalBorrowAssets: 0n,
+      totalBorrowShares: 0n,
+    });
+
+    const accrued = unsupported.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued.totalBorrowAssets).toBe(0n);
+    expect(accrued.totalSupplyAssets).toBe(unsupported.totalSupplyAssets);
+    expect(unsupported.getSupplyApy(101n)).toBe(0);
+    expect(unsupported.getAvgSupplyRate(101n)).toBe(0n);
+    expect(unsupported.getSupplyApy(99n)).toBe(0);
+    expect(unsupported.getAvgSupplyRate(99n)).toBe(0n);
+    expect(unsupported.accrueInterest(99n)).toStrictEqual(unsupported);
+  });
+
+  test.each([
+    "getEndBorrowRate",
+    "getAvgBorrowRate",
+    "getBorrowApy",
+    "getSupplyApy",
+    "getAvgBorrowApy",
+    "getAvgSupplyRate",
+    "getAvgSupplyApy",
+  ] as const)("behavior: %s uses lastUpdate for past timestamps", (method) => {
     const m = market();
 
-    expect(() => m.getEndBorrowRate(99n)).toThrow(
-      BlueErrors.InvalidInterestAccrual,
-    );
+    expect(m[method](99n)).toBe(m[method](m.lastUpdate));
   });
 
   test("average APY helpers use average borrow and supply rates", () => {
@@ -90,6 +127,29 @@ describe("Market constructor and getters", () => {
 });
 
 describe("Market accrueInterest and accounting actions", () => {
+  test.each([undefined, 0n, MathLib.WAD / 100_000n])(
+    "behavior: past and equal accrual preserves snapshots with rateAtTarget %s",
+    (rateAtTarget) => {
+      const m = market({ rateAtTarget });
+
+      for (const timestamp of [-1n, 99n, 99, "99", m.lastUpdate]) {
+        const accrued = m.accrueInterest(timestamp);
+
+        expect(accrued).not.toBe(m);
+        expect(accrued).toStrictEqual(m);
+      }
+    },
+  );
+
+  test.each(["supply", "withdraw", "borrow", "repay"] as const)(
+    "behavior: %s applies the operation without past accrual",
+    (method) => {
+      const m = market({ rateAtTarget: undefined });
+
+      expect(m[method](1n, 0n, 99n)).toStrictEqual(m[method](1n, 0n));
+    },
+  );
+
   test("accrueInterest returns an updated market and keeps the source unchanged", () => {
     const m = market({ fee: 0n });
     const accrued = m.accrueInterest(200n);
@@ -148,6 +208,24 @@ describe("Market accrueInterest and accounting actions", () => {
     expect(() => m.repay(1n, 1n)).toThrow(BlueErrors.InconsistentInput);
     expect(m.repay(100n, 0n).assets).toBe(100n);
     expect(m.repay(0n, 100n).shares).toBe(100n);
+  });
+
+  test("repay floors total borrow assets at zero when rounded-up assets exceed the total", () => {
+    const m = market({
+      totalBorrowAssets: 1n,
+      totalBorrowShares: 3_000_000n,
+    });
+
+    const {
+      market: repaid,
+      assets,
+      shares,
+    } = m.repay(0n, 3_000_000n, m.lastUpdate);
+
+    expect(assets).toBe(2n);
+    expect(shares).toBe(3_000_000n);
+    expect(repaid.totalBorrowAssets).toBe(0n);
+    expect(repaid.totalBorrowShares).toBe(0n);
   });
 });
 

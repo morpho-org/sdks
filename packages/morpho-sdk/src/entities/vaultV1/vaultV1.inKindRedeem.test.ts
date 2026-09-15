@@ -87,16 +87,22 @@ describe("MorphoVaultV1.inKindRedeem", () => {
   });
 
   test("default: builds the V1 action from distinct market coverage", () => {
+    const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const exit = vault.inKindRedeem({
-      amount: 1_500n,
-      marketParamsList: [inKindMarketParams, secondInKindMarketParams],
-      vaultData: inKindVaultV1Data({ additionalMarket: true }),
-      userAddress: IN_KIND_USER,
-    });
+    const vaultData = withChainTimestamp(now, () =>
+      inKindVaultV1Data({ additionalMarket: true }),
+    );
+    const exit = withChainTimestamp(now + 1n, () =>
+      vault.inKindRedeem({
+        amount: 1_500n,
+        marketParamsList: [inKindMarketParams, secondInKindMarketParams],
+        vaultData,
+        userAddress: IN_KIND_USER,
+      }),
+    );
 
     expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
   });
@@ -197,6 +203,31 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     ).toThrow(InKindRedeemCoverageError);
   });
 
+  test("behavior: skips zero-share markets before accruing interest", () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = withChainTimestamp(now, () =>
+      inKindVaultV1Data({ supplyShares: 0n }),
+    );
+    vaultData.allocations.get(
+      inKindMarketParams.id,
+    )!.position.market.rateAtTarget = undefined;
+
+    expect(() =>
+      withChainTimestamp(now + 1n, () =>
+        vault.inKindRedeem({
+          amount: 1n,
+          marketParamsList: [inKindMarketParams],
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ),
+    ).toThrow(InKindRedeemCoverageError);
+  });
+
   test("error: validates client chain and vault snapshot address", () => {
     const handle = createMockClient(mainnet);
     const wrongChainVault = handle.client
@@ -258,6 +289,45 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     ).toThrow(ExpiredDeadlineError);
   });
 
+  // Security invariant (root AGENTS.md §5): the action rejects an out-of-`uint256` deadline, so the
+  // handle must too. Without this the documented `getRequirements()`-before-`buildTx()` flow could
+  // walk a caller through a vault-share approval or permit for a deadline `buildTx()` cannot encode.
+  test("error: InputExceedsMaxError for a deadline above uint256", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NonPositiveInputError for a zero deadline", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+
+    // The contracts read `0` as "unset" rather than "expired", so the shared guard classifies it as
+    // a non-positive input instead of reaching the `ExpiredDeadlineError` staleness check.
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: 0n,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
   test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
     const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
@@ -297,7 +367,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 500n },
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
     });
   });
 
@@ -321,7 +391,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 505n },
+      args: { spender: IN_KIND_BUNDLER, amount: 506n },
     });
   });
 
@@ -360,13 +430,13 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(requirement?.action).toMatchObject({
       type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: 500n },
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
     });
   });
 
   test("behavior: an exact bounded allowance needs no authorization", async () => {
     const handle = createMockClient(mainnet);
-    mockV1Requirements(handle, { allowance: 500n });
+    mockV1Requirements(handle, { allowance: 501n });
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);

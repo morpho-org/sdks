@@ -107,6 +107,7 @@ const capVaultWithdrawals = (
  * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
+ * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
  * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
  * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
@@ -129,7 +130,6 @@ const capVaultWithdrawals = (
  *   transport: http(),
  * }).extend(morphoViemExtension());
  *
- * const userAddress = "0x000000000000000000000000000000000000dEaD";
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
@@ -145,14 +145,9 @@ const capVaultWithdrawals = (
  *   amount: borrowAmount,
  *   options: { timestamp: block.timestamp },
  * });
- * const positionData = await market.getPositionData(userAddress);
- * const borrow = market.borrow({
- *   userAddress,
- *   amount: borrowAmount,
- *   positionData,
- *   reallocations,
- * });
- * // borrow.buildTx() includes any required PublicAllocator reallocations.
+ * // Encode `reallocations` explicitly with
+ * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // High-level Blue writes accept Vault V2 reallocations only.
  * ```
  */
 export const computeVaultV1Reallocations = ({
@@ -336,6 +331,7 @@ export const computeVaultV1Reallocations = ({
 /**
  * Deprecated name for the Vault V1 amount-aware reallocation planner.
  *
+ * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
  * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
  * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
  *

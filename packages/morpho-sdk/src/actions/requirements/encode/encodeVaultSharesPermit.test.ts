@@ -13,6 +13,7 @@ import {
   AddressMismatchError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
+import { selectBundlesSharesRequirementSignature } from "../../bundles/common.js";
 import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 
 const vault = "0x0000000000000000000000000000000000002001" as const;
@@ -57,7 +58,7 @@ describe("encodeVaultSharesPermit", () => {
 
     expect(signed.action).toEqual({
       type: "permit",
-      args: { spender, amount, deadline: 1_900_000_000n },
+      args: { spender, amount, deadline: 1_900_000_000n, nonce: 9n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
@@ -67,6 +68,31 @@ describe("encodeVaultSharesPermit", () => {
       deadline: 1_900_000_000n,
     });
     expect(signed.args.signature).toMatch(/^0x[0-9a-f]{130}$/);
+  });
+
+  test("behavior: the signed permit is consumable by the bundles shares selector", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: 1_900_000_000n,
+    });
+    const signed = await requirement.sign(walletClient, account.address);
+    const { action } = signed;
+    if (action.type !== "permit") {
+      throw new Error(`expected an ERC-2612 permit action, got ${action.type}`);
+    }
+
+    expect(
+      selectBundlesSharesRequirementSignature([signed], {
+        requiredShareAllowance: amount,
+        expectedRequirement: action,
+      }),
+    ).toEqual(signed);
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {
@@ -84,6 +110,26 @@ describe("encodeVaultSharesPermit", () => {
     await expect(
       requirement.sign(walletClient, account.address),
     ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
+  });
+
+  test("behavior: accepts the VaultBundlesV1 spender", () => {
+    const vaultBundlesV1 = getChainAddress(
+      mainnet.id,
+      "bundles.vaultBundlesV1",
+    );
+
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V1" }),
+        version: "vaultV1",
+        spender: vaultBundlesV1,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 3n,
+        amount,
+        deadline: 1_900_000_000n,
+      }),
+    ).not.toThrow();
   });
 
   test("behavior: snapshots permit inputs before signing", async () => {

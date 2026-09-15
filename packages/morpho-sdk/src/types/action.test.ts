@@ -5,8 +5,10 @@ import {
   type AuthorizationRequirementSignature,
   isAuthorizationSignature,
   isMidnightOfferRootSignature,
+  isPermit2SignatureTransferSignature,
   isPermitSignature,
   type MidnightOfferRootSignature,
+  type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
   selectRequirementSignatures,
 } from "./action.js";
@@ -56,6 +58,27 @@ const permit2Signature: PermitRequirementSignature = {
     signature: SIGNATURE,
   },
 };
+
+const permit2SignatureTransferSignature: Permit2SignatureTransferRequirementSignature =
+  {
+    action: {
+      type: "permit2SignatureTransfer",
+      args: {
+        spender: SPENDER,
+        amount: 1n,
+        nonce: 0n,
+        deadline: 1_900_000_000n,
+      },
+    },
+    args: {
+      owner: OWNER,
+      asset: TOKEN,
+      amount: 1n,
+      nonce: 0n,
+      deadline: 1_900_000_000n,
+      signature: SIGNATURE,
+    },
+  };
 
 const authorizationSignature: AuthorizationRequirementSignature = {
   action: {
@@ -113,6 +136,18 @@ describe("isAuthorizationSignature", () => {
   });
 });
 
+describe("isPermit2SignatureTransferSignature", () => {
+  test("default: true for Permit2 SignatureTransfer", () => {
+    expect(
+      isPermit2SignatureTransferSignature(permit2SignatureTransferSignature),
+    ).toBe(true);
+  });
+
+  test("behavior: false for Permit2 AllowanceTransfer", () => {
+    expect(isPermit2SignatureTransferSignature(permit2Signature)).toBe(false);
+  });
+});
+
 describe("isMidnightOfferRootSignature", () => {
   test("default: true for a Midnight offer-root signature", () => {
     expect(isMidnightOfferRootSignature(midnightOfferRootSignature)).toBe(true);
@@ -150,6 +185,7 @@ describe("selectRequirementSignatures", () => {
       }),
     ).toEqual({
       permit: permitSignature,
+      permit2SignatureTransfer: undefined,
       authorization: authorizationSignature,
       midnightOfferRoot: undefined,
     });
@@ -166,6 +202,7 @@ describe("selectRequirementSignatures", () => {
       selectRequirementSignatures([], { permit: true, authorization: true }),
     ).toEqual({
       permit: undefined,
+      permit2SignatureTransfer: undefined,
       authorization: undefined,
       midnightOfferRoot: undefined,
     });
@@ -178,9 +215,31 @@ describe("selectRequirementSignatures", () => {
       }),
     ).toEqual({
       permit: undefined,
+      permit2SignatureTransfer: undefined,
       authorization: undefined,
       midnightOfferRoot: midnightOfferRootSignature,
     });
+  });
+
+  test("behavior: extracts a Permit2 SignatureTransfer", () => {
+    expect(
+      selectRequirementSignatures([permit2SignatureTransferSignature], {
+        permit2SignatureTransfer: true,
+      }),
+    ).toEqual({
+      permit: undefined,
+      permit2SignatureTransfer: permit2SignatureTransferSignature,
+      authorization: undefined,
+      midnightOfferRoot: undefined,
+    });
+  });
+
+  test("error: UnexpectedRequirementSignatureError on an unconsumed Permit2 SignatureTransfer", () => {
+    expect(() =>
+      selectRequirementSignatures([permit2SignatureTransferSignature], {
+        authorization: true,
+      }),
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("error: AmbiguousRequirementSignaturesError on duplicate permits", () => {

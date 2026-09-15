@@ -1,149 +1,78 @@
+import type { Address } from "viem";
 import {
-  type Address,
-  compactSignatureToSignature,
-  type Hex,
-  isAddressEqual,
-  maxUint256,
-  parseCompactSignature,
-  parseSignature,
-  size,
-  zeroHash,
-} from "viem";
-import {
-  InputExceedsMaxError,
-  NonPositiveInputError,
+  BundlesPermitMismatchError,
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
+import {
+  type BundleSharesPermit,
+  getBundlesSharesPermit,
+} from "../bundles/common.js";
 
-/** Permit tuple consumed by VaultExitBundlesV1. */
-export interface VaultExitBundlesV1PermitStruct {
-  /** Vault-share allowance authorized by the permit. */
-  readonly value: bigint;
-  /** Vault permit nonce signed by the owner. */
-  readonly nonce: bigint;
-  /** Timestamp after which the permit is invalid. */
-  readonly deadline: bigint;
-  /** ECDSA recovery identifier, or zero for the empty-permit sentinel. */
-  readonly v: number;
-  /** ECDSA signature `r`, or zero for the empty-permit sentinel. */
-  readonly r: Hex;
-  /** ECDSA signature `s`, or zero for the empty-permit sentinel. */
-  readonly s: Hex;
-}
+/**
+ * Compatibility alias for the canonical {@link BundleSharesPermit} tuple consumed by VaultExitBundlesV1.
+ *
+ * @deprecated Use {@link BundleSharesPermit}.
+ */
+export type VaultExitBundlesV1PermitStruct = BundleSharesPermit;
 
-/** Parameters for {@link getVaultExitBundlesV1PermitStruct}. */
+/**
+ * Parameters for {@link getVaultExitBundlesV1PermitStruct}.
+ *
+ * @deprecated Use the parameters of `getBundlesSharesPermit`.
+ */
 export interface GetVaultExitBundlesV1PermitStructParams {
   /** Vault share token authorized by the permit. */
   readonly vault: Address;
   /** Bundle deadline used by the empty-permit sentinel. */
   readonly deadline: bigint;
+  /** Optional expected owner of the signed permit. */
+  readonly owner?: Address;
+  /** Optional expected spender of the signed permit. */
+  readonly spender?: Address;
   /** Optional signed bounded ERC-2612 requirement. */
   readonly requirementSignature?: PermitRequirementSignature;
 }
 
 /**
- * Returns the permit struct consumed by VaultExitBundlesV1 from an optional vault-share
- * requirement signature.
- *
- * Without a signature, returns the contract's empty-permit sentinel. With a signature, validates
- * the ERC-2612 kind and vault asset before splitting the serialized signature.
- * Owner, spender, deadline, nonce, and cryptographic validity are verified onchain by the vault.
+ * Compatibility wrapper for the former VaultExitBundlesV1-specific permit reshaper.
  *
  * @param params.vault - Vault share token authorized by the permit.
  * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
- * @param params.requirementSignature - Optional signed bounded ERC-2612 requirement.
- * @returns The VaultExitBundlesV1 permit tuple.
+ * @param params.owner - Optional expected owner of the signed permit.
+ * @param params.spender - Optional expected spender of the signed permit.
+ * @param params.requirementSignature - Optional signed ERC-2612 vault-share requirement.
+ * @returns The shared bundles share-permit tuple.
  * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
  * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement is incompatible.
+ * @deprecated Use `getBundlesSharesPermit`; this wrapper preserves the legacy error identity.
  * @example
  * ```ts
  * import { getVaultExitBundlesV1PermitStruct } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress } from "viem";
  *
  * const permit = getVaultExitBundlesV1PermitStruct({
- *   vault,
- *   deadline,
- *   requirementSignature,
+ *   vault: zeroAddress,
+ *   deadline: 1_900_000_000n,
  * });
- * // permit satisfies VaultExitBundlesV1PermitStruct
+ * // permit.value === 0n
  * ```
  */
 export const getVaultExitBundlesV1PermitStruct = (
   params: GetVaultExitBundlesV1PermitStructParams,
 ): VaultExitBundlesV1PermitStruct => {
-  const { requirementSignature } = params;
-  for (const deadline of [
-    params.deadline,
-    requirementSignature?.args.deadline,
-  ]) {
-    if (deadline == null) continue;
-    if (deadline <= 0n) throw new NonPositiveInputError("deadline", deadline);
-    if (deadline > maxUint256)
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: deadline,
-        max: maxUint256,
-      });
-  }
-  if (requirementSignature == null) {
-    return {
-      value: 0n,
-      nonce: 0n,
-      deadline: params.deadline,
-      v: 0,
-      r: zeroHash,
-      s: zeroHash,
-    };
-  }
-
-  if (requirementSignature.action.type !== "permit") {
-    throw new VaultExitBundlesV1PermitMismatchError({
-      field: "type",
-      expected: "permit",
-      actual: requirementSignature.action.type,
-    });
-  }
-  if (!isAddressEqual(requirementSignature.args.asset, params.vault)) {
-    throw new VaultExitBundlesV1PermitMismatchError({
-      field: "asset",
-      expected: params.vault,
-      actual: requirementSignature.args.asset,
-    });
-  }
-  const signature = (() => {
-    try {
-      const serializedSignature = requirementSignature.args.signature;
-      return size(serializedSignature) === 64
-        ? compactSignatureToSignature(
-            parseCompactSignature(serializedSignature),
-          )
-        : parseSignature(serializedSignature);
-    } catch (cause) {
+  try {
+    return getBundlesSharesPermit(params);
+  } catch (cause) {
+    if (cause instanceof BundlesPermitMismatchError) {
       throw new VaultExitBundlesV1PermitMismatchError({
-        field: "signature",
-        expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
-        actual: requirementSignature.args.signature,
+        field: cause.field,
+        expected: cause.expected,
+        actual: cause.actual,
         cause,
       });
     }
-  })();
-
-  const { r, s, v, yParity } = signature;
-  const normalizedV = v ?? (yParity == null ? undefined : BigInt(yParity + 27));
-  if (normalizedV == null) {
-    throw new VaultExitBundlesV1PermitMismatchError({
-      field: "signature",
-      expected: "a signature containing v or yParity",
-      actual: requirementSignature.args.signature,
-    });
+    throw cause;
   }
-  return {
-    value: requirementSignature.args.amount,
-    nonce: requirementSignature.args.nonce,
-    deadline: requirementSignature.args.deadline,
-    v: Number(normalizedV),
-    r,
-    s,
-  };
 };

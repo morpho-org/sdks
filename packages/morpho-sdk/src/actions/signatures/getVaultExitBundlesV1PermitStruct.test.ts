@@ -10,6 +10,7 @@ import {
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  BundlesPermitMismatchError,
   InputExceedsMaxError,
   NonPositiveInputError,
   type PermitRequirementSignature,
@@ -232,7 +233,10 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
     if (!(thrown instanceof VaultExitBundlesV1PermitMismatchError))
       throw thrown;
     expect(thrown.field).toBe("signature");
-    expect(thrown.cause).toBeInstanceOf(Error);
+    expect(thrown.cause).toBeInstanceOf(BundlesPermitMismatchError);
+    if (!(thrown.cause instanceof BundlesPermitMismatchError))
+      throw thrown.cause;
+    expect(thrown.cause.cause).toBeInstanceOf(Error);
   });
 
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {

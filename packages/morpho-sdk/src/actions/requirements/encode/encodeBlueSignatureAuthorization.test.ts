@@ -5,6 +5,7 @@ import {
   createWalletClient,
   http,
   isHex,
+  maxUint256,
   verifyTypedData,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -13,6 +14,9 @@ import { describe, expect, test } from "vitest";
 import {
   AddressMismatchError,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
 
@@ -78,6 +82,39 @@ describe("encodeBlueSignatureAuthorization", () => {
         signature: signed.args.signature,
       }),
     ).resolves.toBe(true);
+  });
+
+  test("error: NonPositiveInputError when deadline is not positive", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(), {
+        authorized: generalAdapter1,
+        chainId: mainnet.id,
+        nonce: 0n,
+        deadline: 0n,
+      }),
+    ).rejects.toBeInstanceOf(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError when deadline exceeds uint256", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(), {
+        authorized: generalAdapter1,
+        chainId: mainnet.id,
+        nonce: 0n,
+        deadline: maxUint256 + 1n,
+      }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+  });
+
+  test("error: ExpiredDeadlineError when deadline is in the past", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(), {
+        authorized: generalAdapter1,
+        chainId: mainnet.id,
+        nonce: 0n,
+        deadline: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 
   test("behavior: supports revocation via isAuthorized=false", async () => {

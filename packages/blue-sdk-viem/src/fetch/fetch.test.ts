@@ -32,6 +32,7 @@ import {
   erc20Abi_bytes32,
   maxUint256,
   stringToHex,
+  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -453,6 +454,44 @@ describe("fetchToken", () => {
     expect(token).toBeInstanceOf(ExchangeRateWrappedToken);
     expect((token as ExchangeRateWrappedToken).underlying).toBe(
       ADDRESSES.stEth,
+    );
+  });
+
+  test("behavior: matches wstETH and unwrap tokens case-insensitively", async () => {
+    const handle = createMockClient(mainnet);
+    const wstEth = ADDRESSES.wstEth.toLowerCase() as Address;
+    mockTokenReads(handle, wstEth, {
+      symbol: "wstETH",
+      name: "Wrapped liquid staked Ether 2.0",
+    });
+    mockRead(handle, {
+      address: ADDRESSES.wstEth,
+      abi: wstEthAbi,
+      functionName: "stEthPerToken",
+      result: 1_000000000000000000n,
+    });
+    const wbIB01 = ADDRESSES.wbIB01.toLowerCase() as Address;
+    mockTokenReads(handle, wbIB01, {
+      symbol: "wBIB01",
+      name: "Wrapped BIB01",
+    });
+
+    const [wstEthToken, wbIB01Token] = await Promise.all([
+      fetchToken(wstEth, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: false,
+      }),
+      fetchToken(wbIB01, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: false,
+      }),
+    ]);
+
+    expect(wstEthToken).toBeInstanceOf(ExchangeRateWrappedToken);
+    expect(wstEthToken.address).toBe(wstEth);
+    expect(wbIB01Token).toBeInstanceOf(ConstantWrappedToken);
+    expect((wbIB01Token as ConstantWrappedToken).underlying).toBe(
+      ADDRESSES.bIB01,
     );
   });
 
@@ -922,6 +961,62 @@ describe("fetchHolding", () => {
     expect(holding.canTransfer).toBe(false);
   });
 
+  test("behavior: matches permissioned backed tokens case-insensitively", async () => {
+    const handle = createMockClient(mainnet);
+    const token = ADDRESSES.wbIB01.toLowerCase() as Address;
+    const whitelist = RECIPIENT;
+
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      result: 20n,
+    });
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 21n,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.permit2,
+      abi: permit2Abi,
+      functionName: "allowance",
+      result: [22n, 23, 24],
+    });
+    mockReadFailure(handle, {
+      address: token,
+      abi: erc2612Abi,
+      functionName: "nonces",
+    });
+    mockRead(handle, {
+      address: token,
+      abi: wrappedBackedTokenAbi,
+      functionName: "whitelistControllerAggregator",
+      result: whitelist,
+    });
+    mockRead(handle, {
+      address: token,
+      abi: permissionedErc20WrapperAbi,
+      functionName: "hasPermission",
+      result: true,
+    });
+    mockRead(handle, {
+      address: whitelist,
+      abi: whitelistControllerAggregatorV2Abi,
+      functionName: "isWhitelisted",
+      result: false,
+    });
+
+    const holding = await fetchHolding(USER, token, handle.client, {
+      chainId: CHAIN_ID,
+      deployless: false,
+    });
+
+    expect(holding.token).toBe(token);
+    expect(holding.canTransfer).toBe(false);
+  });
+
   test("uses zero permit2 allowance when the chain has no Permit2 address", async () => {
     const handle = createMockClient(mainnet);
     const zeroGAddresses = addressesRegistry[ChainId.ZeroGMainnet];
@@ -1325,6 +1420,7 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
+      hasPublicAllocator: true,
       publicAllocatorConfig: {
         admin: USER,
         fee: 45n,
@@ -1369,6 +1465,7 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
+      hasPublicAllocator: false,
       publicAllocatorConfig: {
         admin: USER,
         fee: 45n,
@@ -1379,6 +1476,43 @@ describe("vault fetchers", () => {
     const vault = await fetchVault(VAULT, handle.client, {
       chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
     });
+
+    expect(vault.publicAllocatorConfig).toBeUndefined();
+  });
+
+  test("fetchVault omits deployless public allocator config when the vault has not enabled the public allocator", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, vaultQueryAbi, "query", {
+      config: {
+        asset: TOKEN,
+        symbol: "vMOCK",
+        name: "Vault Mock",
+        decimals: 18n,
+        decimalsOffset: 2n,
+        eip5267Domain: DOMAIN,
+      },
+      owner: USER,
+      curator: RECIPIENT,
+      guardian: COLLATERAL,
+      timelock: 37n,
+      pendingTimelock: { value: 38n, validAt: 39n },
+      pendingGuardian: { value: ORACLE, validAt: 40n },
+      pendingOwner: TOKEN,
+      fee: 41n,
+      feeRecipient: USER,
+      skimRecipient: RECIPIENT,
+      totalSupply: 42n,
+      totalAssets: 43n,
+      lastTotalAssets: 44n,
+      hasLostAssets: false,
+      lostAssets: 0n,
+      supplyQueue: [ID],
+      withdrawQueue: [ID],
+      hasPublicAllocator: false,
+      publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
+    });
+
+    const vault = await fetchVault(VAULT, handle.client);
 
     expect(vault.publicAllocatorConfig).toBeUndefined();
   });
@@ -1758,6 +1892,7 @@ describe("vault fetchers", () => {
         lostAssets: 55n,
         supplyQueue: [ID],
         withdrawQueue: [ID],
+        hasPublicAllocator: true,
         publicAllocatorConfig: {
           admin: USER,
           fee: 45n,

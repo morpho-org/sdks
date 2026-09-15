@@ -89,6 +89,7 @@ export async function fetchVault(
         lostAssets,
         supplyQueue,
         withdrawQueue,
+        hasPublicAllocator,
         publicAllocatorConfig,
       } = await readContract(client, {
         ...parameters,
@@ -118,8 +119,9 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
-        publicAllocatorConfig:
-          vaultV1PublicAllocator != null ? publicAllocatorConfig : undefined,
+        publicAllocatorConfig: hasPublicAllocator
+          ? publicAllocatorConfig
+          : undefined,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,

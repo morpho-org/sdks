@@ -45,6 +45,7 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 ### Accounting and protocol invariants
 
 - Asset/share conversions with the wrong rounding direction or stale total-assets/total-supply source.
+- Regressions in the [Blue accrual timestamp contract](../../../packages/blue-sdk/AGENTS.md): earlier/equal timestamps must preserve market/position state and skip IRM projection; Vault V2 also returns zero fees at/before its own `lastUpdate`. Never rewind newer nested markets or reject past timestamps. Preserve Vault V1 loss/fee reconciliation and unsupported-IRM errors for rate queries.
 - Missing or inverted `minSharePrice` / `maxSharePrice` protection on deposit/borrow/repay paths; loss of the inflation-attack guard from the documented route.
 - LLTV, LLTV-buffer, WAD, or `ORACLE_PRICE_SCALE` math that changes units or compares scaled values directly to unscaled values.
 - Partial-vs-full repay semantics drift: asset repay where share repay is required, upper-bound transfer missing, or over-repayment not handled as the protocol expects.
