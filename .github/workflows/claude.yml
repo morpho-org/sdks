@@ -146,6 +146,7 @@ jobs:
           LD_PRELOAD: ''
           LD_AUDIT: ''
           LD_LIBRARY_PATH: ''
+          NODE_OPTIONS: ''
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
@@ -185,6 +186,7 @@ jobs:
           LD_PRELOAD: ''
           LD_AUDIT: ''
           LD_LIBRARY_PATH: ''
+          NODE_OPTIONS: ''
         # Same empty-environment invocation and integrity check as above; the script refuses inputs
         # outside RUNNER_TEMP (or non-regular files) and writes `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: >-
@@ -200,6 +202,12 @@ jobs:
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
+        # JavaScript action: keep $GITHUB_ENV-injected loader/node options out of its node process too.
+        env:
+          LD_PRELOAD: ''
+          LD_AUDIT: ''
+          LD_LIBRARY_PATH: ''
+          NODE_OPTIONS: ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
