@@ -1184,6 +1184,31 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     },
   );
 
+  test("behavior: skips unsupported zero-share sources", () => {
+    const { data } = makeFixture({
+      sourceBorrow: 1n,
+      sourcePositionShares: 0n,
+      // Keep tracked allocations positive to reach the zero-share guard.
+      sourceUntracked: -1n,
+    });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [sourceParams.id]: new Market({
+          ...data.getMarket(sourceParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    expect(
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }).reallocations,
+    ).toEqual([]);
+  });
+
   test("error: UnsupportedMarketIrmError when source projection is required", () => {
     const { data } = makeFixture({ sourceBorrow: 1n });
     const snapshot = new VaultV2BlueReallocationData({
