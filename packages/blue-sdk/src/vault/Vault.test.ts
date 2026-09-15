@@ -267,6 +267,88 @@ describe("AccrualVault", () => {
     expect(accrued.lastTotalAssets).toBe(accrued.totalAssets);
   });
 
+  test("accrueInterest does not count fetched lost assets twice", () => {
+    const position = accrualPosition({ supplyShares: 100n });
+    const allocatedAssets = position.supplyAssets;
+    const vault = new AccrualVault(
+      vaultInput({
+        fee: 0n,
+        lastTotalAssets: allocatedAssets + 10n,
+        lostAssets: 10n,
+      }),
+      [
+        {
+          config: vaultMarketConfig(position.marketId),
+          position,
+        },
+      ],
+    );
+
+    const accrued = vault.accrueInterest(position.market.lastUpdate);
+
+    expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
+    expect(accrued.lostAssets).toBe(10n);
+    const proportion = accrued.collateralAllocations.get(
+      position.market.params.collateralToken,
+    )?.proportion;
+    expect(proportion).toBe(accrued.getAllocationProportion(position.marketId));
+    expect(proportion).toBe(
+      MathLib.wDivDown(allocatedAssets, allocatedAssets + 10n),
+    );
+  });
+
+  test("accrueInterest preserves virtual losses not yet stored on-chain", () => {
+    const position = accrualPosition({ supplyShares: 100n });
+    const allocatedAssets = position.supplyAssets;
+    const vault = new AccrualVault(
+      vaultInput({
+        fee: 0n,
+        lastTotalAssets: allocatedAssets + 10n,
+        lostAssets: 0n,
+      }),
+      [
+        {
+          config: vaultMarketConfig(position.marketId),
+          position,
+        },
+      ],
+    );
+
+    const accrued = vault.accrueInterest(position.market.lastUpdate);
+
+    expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
+    expect(accrued.lostAssets).toBe(10n);
+  });
+
+  test("accrueInterest lets unstored virtual losses recover before charging fees", () => {
+    const position = accrualPosition({ supplyShares: 1_000_000n });
+    const allocatedBefore = position.supplyAssets;
+    const allocatedAfter = position.accrueInterest(200n).supplyAssets;
+    const growth = allocatedAfter - allocatedBefore;
+    expect(growth).toBeGreaterThan(0n);
+    const lastTotalAssets = allocatedBefore + growth + 10n;
+    const vault = new AccrualVault(
+      vaultInput({
+        fee: MathLib.WAD / 2n,
+        totalSupply: 1_000_000n,
+        lastTotalAssets,
+        lostAssets: 0n,
+      }),
+      [
+        {
+          config: vaultMarketConfig(position.marketId),
+          position,
+        },
+      ],
+    );
+
+    const accrued = vault.accrueInterest(200n);
+
+    expect(accrued.lostAssets).toBe(10n);
+    expect(accrued.totalAssets).toBe(lastTotalAssets);
+    expect(accrued.totalSupply).toBe(vault.totalSupply);
+  });
+
   test("accrueInterest accounts for configured lost assets", () => {
     const accrued = accrualVault({ lostAssets: 1n }).accrueInterest(200n);
 

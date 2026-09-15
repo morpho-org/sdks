@@ -6,6 +6,22 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
 
+## 5.6.0
+
+### Minor Changes
+
+- [#1027](https://github.com/morpho-org/sdks/pull/1027) [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Preserve immutable Blue collateral projections and direct onchain Vault V1 fetch results, project Vault V1 market, loss, and fee accounting when computing migration bounds, deprecate cached collateral-allocation proportions and the positional nested-vault parent-allocation constructor argument, and ignore residual nested-vault shares when their parent allocation is zero.
+
+### Patch Changes
+
+- [#1042](https://github.com/morpho-org/sdks/pull/1042) [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compare token addresses case-insensitively: `getUnwrappedToken` resolves lowercased wrapped-token addresses against the checksummed registry (and re-registering the same mapping under a different casing no longer creates a duplicate key), while `fetchHolding`/`fetchToken` now detect permissioned Backed/wrapper tokens, wstETH, and the native token regardless of the caller's address casing.
+
+- [#1041](https://github.com/morpho-org/sdks/pull/1041) [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1)]:
+  - @morpho-org/morpho-ts@2.11.2
+  - @morpho-org/blue-sdk@6.8.0
+
 ## 5.5.0
 
 ### Minor Changes

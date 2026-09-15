@@ -41,6 +41,7 @@ const expectedDataVaultV1Adapter = new VaultV2MorphoVaultV1Adapter({
   address: vaultV2AdapterVaultV1Address,
   parentVault: vaultV2Address,
   skimRecipient: zeroAddress,
+  parentAllocation: 16_624_313n,
 });
 
 const marketParams = new MarketParams({

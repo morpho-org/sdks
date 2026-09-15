@@ -6,7 +6,7 @@ import {
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
-import { deepFreeze, entries } from "./utils.js";
+import { deepFreeze, entries, fromEntries, isHexEqual, keys } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *
@@ -841,6 +841,7 @@ const _addressesRegistry = {
   [ChainId.MonadMainnet]: {
     blue: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
     morpho: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
       generalAdapter1: "0x725AB8CAd931BCb80Fdbf10955a806765cCe00e5",
@@ -869,6 +870,7 @@ const _addressesRegistry = {
   [ChainId.StableMainnet]: {
     blue: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
     morpho: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0xA0bb114F927dF03d9a1a639b9c71F71B0FaFDf1B",
       generalAdapter1: "0x59b1F4376a81e39c466A0A218447E4D36f39A96b",
@@ -1748,6 +1750,7 @@ const _deployments = {
   [ChainId.MonadMainnet]: {
     blue: 31907457n,
     morpho: 31907457n,
+    permit2: 0n,
     bundler3: {
       bundler3: 32321504n,
       generalAdapter1: 32321504n,
@@ -1770,6 +1773,7 @@ const _deployments = {
   [ChainId.StableMainnet]: {
     blue: 1504506n,
     morpho: 1504506n,
+    permit2: 0n,
     bundler3: {
       bundler3: 1741861n,
       generalAdapter1: 1741861n,
@@ -2339,6 +2343,8 @@ const _unwrappedTokensMapping: Record<
 /**
  * Returns the unwrapped token mapped to a wrapped token on a chain.
  *
+ * Lookup is case-insensitive: the registry keys are checksummed, but callers may pass a lowercased address.
+ *
  * @param wrappedToken - The wrapped token address to resolve.
  * @param chainId - The EIP-155 chain id.
  * @returns The unwrapped token address, or `undefined` when no mapping is registered.
@@ -2354,7 +2360,13 @@ export function getUnwrappedToken(
   wrappedToken: `0x${string}`,
   chainId: number,
 ) {
-  return unwrappedTokensMapping[chainId]?.[wrappedToken];
+  const mapping = unwrappedTokensMapping[chainId];
+  if (mapping == null || wrappedToken == null) return undefined;
+
+  return (
+    mapping[wrappedToken] ??
+    entries(mapping).find(([key]) => isHexEqual(key, wrappedToken))?.[1]
+  );
 }
 
 /**
@@ -2811,10 +2823,42 @@ export function registerCustomAddresses<
   }
 
   if (unwrappedTokens) {
+    // Patch keys that differ only by case from a registered key (or from an earlier key of the same
+    // patch) are rewritten onto that key, and values that differ only by case from the registered
+    // value are rewritten onto that value, so `mergeRegistry` compares the same token instead of
+    // adding a duplicate entry. Casing variants within one patch must agree on the unwrapped token.
+    const alignedUnwrappedTokens = fromEntries(
+      entries(unwrappedTokens).map(([chainIdString, tokens]) => {
+        const registered = unwrappedTokensMapping[Number(chainIdString)] ?? {};
+        const registeredKeys = keys(registered);
+        const aligned: Record<`0x${string}`, `0x${string}`> = {};
+
+        for (const [wrapped, unwrapped] of entries(tokens)) {
+          const key =
+            [...registeredKeys, ...keys(aligned)].find((candidate) =>
+              isHexEqual(candidate, wrapped),
+            ) ?? wrapped;
+          const previous = aligned[key] ?? registered[key];
+
+          if (previous !== undefined && !isHexEqual(previous, unwrapped))
+            throw new RegistryValueAlreadyRegisteredError({
+              label: `unwrappedTokens.${chainIdString}.${key}`,
+              registeredValue: previous,
+              requestedValue: unwrapped,
+              type: "unwrapped token",
+            });
+
+          aligned[key] = previous ?? unwrapped;
+        }
+
+        return [chainIdString, aligned] as const;
+      }),
+    );
+
     unwrappedTokensMapping = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
-        patch: unwrappedTokens,
+        patch: alignedUnwrappedTokens,
         label: "unwrappedTokens",
         type: "unwrapped token",
       }),

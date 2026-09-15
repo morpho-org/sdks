@@ -28,11 +28,9 @@ import type { Metadata } from "../types/index.js";
  * @param {Metadata} metadata - An object containing optional metadata fields
  * such as `timestamp` and `origin`.
  *
- * @returns {Object} - A new transaction object with the modified `data` field
- * including the concatenated metadata.
- *
- * If no `data` is present in the original transaction, the function returns
- * the transaction unmodified.
+ * @returns The same `tx` object when `data` is missing, an empty string, or
+ * canonical empty calldata (`"0x"`); otherwise, a new transaction object
+ * with `data` containing any appended metadata. The input is never mutated.
  */
 export function addTransactionMetadata(
   tx: { data: Hex; value: bigint; to: Address },
@@ -40,7 +38,7 @@ export function addTransactionMetadata(
 ) {
   const { data, ..._tx } = tx;
 
-  if (!data) return tx;
+  if (!data || data === "0x") return tx;
 
   const concatItems = [data];
 

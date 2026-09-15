@@ -1,0 +1,49 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "url": "https://context7.com/morpho-org/sdks",
+  "public_key": "pk_56N2F7HNcFqpwQN2WCHY0",
+  "projectTitle": "Morpho SDKs",
+  "description": "TypeScript SDKs for Morpho Blue, Vault V1, Vault V2, and Midnight. Use @morpho-org/morpho-sdk with viem for reads and transaction building.",
+  "folders": ["packages", "docs"],
+  "excludeFolders": [
+    "docs/tibs",
+    "packages/morpho-test",
+    "test",
+    "tests",
+    "__tests__",
+    "__fixtures__",
+    "__mocks__",
+    "node_modules",
+    "lib",
+    "dist",
+    "coverage",
+    "artifacts",
+    "*archive*",
+    "old",
+    "*deprecated*",
+    "*legacy*",
+    "*previous*",
+    "*outdated*",
+    "*superseded*"
+  ],
+  "excludeFiles": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "ARCHITECTURE.md",
+    "CONTRIBUTING.md",
+    "MISSION.md",
+    "SECURITY.md",
+    "jsdoc-style.md",
+    "CHANGELOG.md",
+    "changelog.md",
+    "CHANGELOG.mdx",
+    "changelog.mdx",
+    "LICENSE.md",
+    "license.md",
+    "CODE_OF_CONDUCT.md",
+    "code_of_conduct.md"
+  ],
+  "rules": [
+    "Prefer @morpho-org/morpho-sdk with viem for Morpho reads and transaction building. Use lower-level packages only when the consumer SDK does not cover the use case."
+  ]
+}
