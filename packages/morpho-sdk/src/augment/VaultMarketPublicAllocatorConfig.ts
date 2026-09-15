@@ -15,5 +15,6 @@ BlueVaultMarketPublicAllocatorConfig.fetch =
   fetchVaultMarketPublicAllocatorConfig;
 
 export {
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `VaultV2BlueMarketPublicAllocatorConfig` from `@morpho-org/morpho-sdk/entities`. */
   BlueVaultMarketPublicAllocatorConfig as VaultMarketPublicAllocatorConfig,
 };

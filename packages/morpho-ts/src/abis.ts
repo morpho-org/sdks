@@ -4044,9 +4044,7 @@ export const metaMorphoAbi = [
 
 /**
  * Vault V1 PublicAllocator ABI used to read vault allocator configuration and flow caps.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
- * Vault V2 and use `vaultV2BluePublicAllocatorAbi`.
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi` for Vault V2.
  */
 export const vaultV1PublicAllocatorAbi = [
   {
@@ -4579,8 +4577,7 @@ export const vaultV1PublicAllocatorAbi = [
 /**
  * Deprecated alias for the Vault V1 PublicAllocator ABI.
  *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
- * Vault V2 and use `vaultV2BluePublicAllocatorAbi`.
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi` for Vault V2.
  */
 export const publicAllocatorAbi = vaultV1PublicAllocatorAbi;
 

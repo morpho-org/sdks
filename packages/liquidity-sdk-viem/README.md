@@ -39,46 +39,17 @@ npm install @morpho-org/liquidity-sdk-viem
 yarn add @morpho-org/liquidity-sdk-viem
 ```
 
-## Usage
+## Migration to Vault V2
 
-### Fetch from API or RPC
+`LiquidityLoader`, `LiquidityLoader.fetch`, and `LiquidityParameters` are deprecated because they only plan Vault V1 PublicAllocator reallocations.
 
-```typescript
-import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
+Use a Morpho Blue entity from `client.morpho.blue(marketParams, chainId)`:
 
-const loader = new LiquidityLoader(
-  client // viem client.
-);
+1. Fetch a block with `client.getBlock()`.
+2. Call `market.getVaultV2BlueReallocationData({ vaultAddresses, block })` with the Vault V2 addresses to inspect.
+3. Call `market.getVaultV2BlueReallocations({ reallocationData, options })` to compute action-ready `reallocations` and the resulting `data` snapshot.
 
-const [withdrawals1, withdrawals2] = await Promise.all([
-  loader.fetch(
-    "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
-    "api"
-  ),
-  loader.fetch(
-    "0xe475337d11be1db07f7c5a156e511f05d1844308e66e17d2ba5da0839d3b34d9" as MarketId,
-    "rpc"
-  ),
-]);
-```
-
-### Fetch only from API
-
-```typescript
-import { ChainId } from "@morpho-org/blue-sdk";
-import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
-
-const loader = new LiquidityLoader({ chainId: ChainId.EthMainnet });
-
-const [withdrawals1, withdrawals2] = await Promise.all([
-  loader.fetch(
-    "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId
-  ),
-  loader.fetch(
-    "0xe475337d11be1db07f7c5a156e511f05d1844308e66e17d2ba5da0839d3b34d9" as MarketId
-  ),
-]);
-```
+Configure the source-market withdrawal ceiling with `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization`, a single WAD-scaled `bigint` for all source markets. The V2 API accepts an explicit vault allowlist and returns V2 reallocation descriptors; it is not a drop-in replacement for the API-backed V1 loader.
 
 ## Development
 

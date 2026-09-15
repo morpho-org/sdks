@@ -9,6 +9,12 @@
 
 Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
+## Deprecated flows
+
+All Vault V1 PublicAllocator surfaces are deprecated, including raw ABIs, addresses, configs, fetchers, planning APIs, and Bundler3 composition. Use Vault V2 BluePublicAllocator APIs: `getVaultV2BlueReallocationData()` fetches the state and `getVaultV2BlueReallocations()` prepares a plan for a Blue action.
+
+The legacy `morphoToken` address and MORPHO wrapping entries in `ethereumGeneralAdapter1Abi` are also deprecated. Use the current MORPHO token directly. Deprecated APIs remain available until the next major release; general Vault V1 operations and other token wrapping flows remain supported.
+
 ## Installation
 
 ```bash

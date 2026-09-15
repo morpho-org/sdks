@@ -17,27 +17,6 @@ export interface Pending<T> {
   validAt: bigint;
 }
 
-/**
- * PublicAllocator configuration attached to a MetaMorpho vault.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
- * `IVaultV2BluePublicAllocatorConfig`.
- */
-export interface VaultPublicAllocatorConfig {
-  /**
-   * The PublicAllocator's admin address.
-   */
-  admin: Address;
-  /**
-   * The PublicAllocator's reallocation fee (in native token).
-   */
-  fee: bigint;
-  /**
-   * The PublicAllocator's reallocation fee accrued so far (in native token).
-   */
-  accruedFee: bigint;
-}
-
 /** Plain input shape for a MetaMorpho vault. */
 export interface IVault extends IVaultConfig {
   curator: Address;
@@ -56,11 +35,6 @@ export interface IVault extends IVaultConfig {
   totalAssets: bigint;
   lastTotalAssets: bigint;
   lostAssets?: bigint;
-  /**
-   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
-   * `IVaultV2BluePublicAllocatorConfig`.
-   */
-  publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
 /** Represents a MetaMorpho vault and its governance, queue, and accounting state. */
@@ -138,19 +112,10 @@ export class Vault extends VaultToken implements IVault {
    */
   public lostAssets?: bigint;
 
-  /**
-   * The MetaMorpho vault's public allocator configuration.
-   *
-   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
-   * `VaultV2BluePublicAllocatorConfig`.
-   */
-  public publicAllocatorConfig?: VaultPublicAllocatorConfig;
-
   constructor({
     curator,
     owner,
     guardian,
-    publicAllocatorConfig,
     fee,
     feeRecipient,
     skimRecipient,
@@ -185,7 +150,6 @@ export class Vault extends VaultToken implements IVault {
     this.withdrawQueue = withdrawQueue;
     this.lastTotalAssets = lastTotalAssets;
     this.lostAssets = lostAssets;
-    this.publicAllocatorConfig = publicAllocatorConfig;
   }
 
   /**

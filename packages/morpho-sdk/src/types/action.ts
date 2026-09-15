@@ -619,7 +619,6 @@ export interface PermitArgs {
   readonly amount: bigint;
   readonly deadline: bigint;
 }
-
 /**
  * Holds the pre-resolved arguments for a Permit2 `permit` bundler call. It
  * mirrors {@link PermitArgs} but adds the Permit2 allowance `expiration` (when
