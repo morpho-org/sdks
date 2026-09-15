@@ -117,7 +117,7 @@
     "dotenv": "^17.4.2",
     "fast-check": "^4.9.0",
     "typescript": "catalog:",
-    "viem": "^2.55.10",
+    "viem": "^2.56.3",
     "vitest": "catalog:"
   },
   "publishConfig": {
