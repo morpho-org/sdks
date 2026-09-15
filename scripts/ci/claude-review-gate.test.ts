@@ -37,7 +37,7 @@ const claudeReview = (
     commitId = HEAD,
     runId = RUN_ID,
     state = "COMMENTED",
-  }: { commitId?: string; runId?: string; state?: string } = {},
+  }: { commitId?: string | null; runId?: string; state?: string } = {},
 ): Review => ({
   body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n${runMarker(runId)}\n<!-- CLAUDE_VERDICT:APPROVE -->`,
   commit_id: commitId,
@@ -172,6 +172,12 @@ describe("countNewReviews", () => {
   test("behavior: a review on a different head does not count", () => {
     expect(
       countNewReviews([claudeReview(11, { commitId: OLD_HEAD })], countOptions),
+    ).toBe(0);
+  });
+
+  test("behavior: a review whose commit was garbage-collected does not count", () => {
+    expect(
+      countNewReviews([claudeReview(11, { commitId: null })], countOptions),
     ).toBe(0);
   });
 
