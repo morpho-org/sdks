@@ -110,12 +110,16 @@ export class LiquidityLoader<chain extends Chain = Chain> {
         const [markets, vaults, vaultsMarkets] = await Promise.all([
           Promise.all(
             [...allMarketIds].map((marketId) =>
-              fetchMarket(marketId, client, { blockNumber: block.number }),
+              fetchMarket(marketId, client, {
+                block: { type: "number", value: block.number },
+              }),
             ),
           ),
           Promise.all(
             [...allVaults].map((vault) =>
-              fetchVault(vault, client, { blockNumber: block.number }),
+              fetchVault(vault, client, {
+                block: { type: "number", value: block.number },
+              }),
             ),
           ),
           Promise.all(
@@ -134,13 +138,17 @@ export class LiquidityLoader<chain extends Chain = Chain> {
                               vault,
                               market.uniqueKey,
                               client,
-                              { blockNumber: block.number },
+                              {
+                                block: { type: "number", value: block.number },
+                              },
                             ),
                             vaultMarketConfig: await fetchVaultMarketConfig(
                               vault,
                               market.uniqueKey,
                               client,
-                              { blockNumber: block.number },
+                              {
+                                block: { type: "number", value: block.number },
+                              },
                             ),
                           },
                         ] as const,

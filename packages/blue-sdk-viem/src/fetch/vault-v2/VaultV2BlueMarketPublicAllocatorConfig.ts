@@ -6,6 +6,7 @@ import type { Address, Client, Hash } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import type { FetchParameters } from "../../types.js";
+import { callParameters } from "../utils.js";
 
 /**
  * Fetches BluePublicAllocator permission and cap state for one Vault V2 adapter-market pair.
@@ -15,8 +16,7 @@ import type { FetchParameters } from "../../types.js";
  * @param adapterMarketCapId - Adapter-scoped market cap id.
  * @param client - Viem client used for contract reads.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns Hydrated adapter-market config with max-in calculation.
@@ -57,14 +57,14 @@ export async function fetchVaultV2BlueMarketPublicAllocatorConfig(
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: allocator,
       abi: vaultV2BluePublicAllocatorAbi,
       functionName: "absoluteCap",
       args: [vault, adapterMarketCapId],
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: allocator,
       abi: vaultV2BluePublicAllocatorAbi,
       functionName: "canPullFromMarket",

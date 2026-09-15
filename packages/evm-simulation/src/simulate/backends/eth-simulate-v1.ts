@@ -1,6 +1,9 @@
 import {
+  type BlockNumberOrTag,
+  toBlockParameters,
+} from "@morpho-org/morpho-ts";
+import {
   type Address,
-  type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
   getAddress,
@@ -40,11 +43,11 @@ export async function simulateV1(params: {
   rpcUrl: string;
   chainId: number;
   transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
+  readonly block?: BlockNumberOrTag;
   wNative?: Address | null;
   signal?: AbortSignal;
 }): Promise<RawSimulationResult> {
-  const { rpcUrl, transactions, blockNumber, wNative, signal } = params;
+  const { rpcUrl, transactions, block, wNative, signal } = params;
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
@@ -78,12 +81,7 @@ export async function simulateV1(params: {
     value: tx.value,
   }));
 
-  const blockParam =
-    typeof blockNumber === "bigint"
-      ? { blockNumber }
-      : blockNumber !== undefined
-        ? { blockTag: blockNumber }
-        : {};
+  const blockParam = toBlockParameters(block);
 
   try {
     const simulationResult = await client.simulateCalls({

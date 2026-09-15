@@ -20,6 +20,7 @@ import { getChainId, readContract } from "viem/actions";
 import { erc5267Abi, wstEthAbi } from "../abis.js";
 import { abi, code } from "../queries/GetToken.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Decodes ERC20 `bytes32` metadata results while leaving string metadata unchanged.
@@ -49,8 +50,7 @@ export const decodeBytes32String = (hexOrStr: string) => {
  * @param address - Token address, or `NATIVE_ADDRESS` for the native asset.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -88,7 +88,7 @@ export async function fetchToken(
   if (deployless) {
     try {
       const token = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -126,19 +126,19 @@ export async function fetchToken(
 
   const [decimals, symbol, name, eip5267Domain] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: erc20Abi,
       functionName: "decimals",
     }).catch(() => undefined),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: erc20Abi,
       functionName: "symbol",
     }).catch(() =>
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address,
         abi: erc20Abi_bytes32,
         functionName: "symbol",
@@ -147,13 +147,13 @@ export async function fetchToken(
         .catch(() => undefined),
     ),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: erc20Abi,
       functionName: "name",
     }).catch(() =>
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address,
         abi: erc20Abi_bytes32,
         functionName: "name",
@@ -162,7 +162,7 @@ export async function fetchToken(
         .catch(() => undefined),
     ),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: erc5267Abi,
       functionName: "eip712Domain",
@@ -201,7 +201,7 @@ export async function fetchToken(
 
   if (isWstEth && wstEth != null && stEth != null) {
     const stEthPerWstEth = await readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: wstEth,
       abi: wstEthAbi,
       functionName: "stEthPerToken",

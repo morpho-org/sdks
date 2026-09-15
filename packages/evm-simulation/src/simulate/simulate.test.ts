@@ -78,7 +78,7 @@ function makeParams(overrides: Partial<SimulateParams> = {}): SimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
-    blockNumber: 20000000n,
+    block: { type: "number", value: 20000000n },
     ...overrides,
   };
 }

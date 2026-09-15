@@ -1,6 +1,6 @@
+import type { BlockNumberOrTag } from "@morpho-org/morpho-ts";
 import {
   type Address,
-  type BlockTag,
   ethAddress,
   type Hex,
   isAddress,
@@ -116,7 +116,7 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
  *
  * @param params.config - Tenderly RPC config (URL with access key embedded).
  * @param params.transactions - Bundle to simulate, in execution order.
- * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
+ * @param params.block - Optional `BlockNumberOrTag` selector. Defaults to `latest`.
  * @param params.signal - Optional `AbortSignal` for cancellation / timeout.
  * @returns A {@link RawSimulationResult} with one `RawCall` per input transaction.
  * @throws {SimulationValidationError} when `transactions` is empty.
@@ -127,10 +127,10 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
 export async function simulateTenderlyRpc(params: {
   config: TenderlyRpcConfig;
   transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
+  readonly block?: BlockNumberOrTag;
   signal?: AbortSignal;
 }): Promise<RawSimulationResult> {
-  const { config, transactions, blockNumber, signal } = params;
+  const { config, transactions, block, signal } = params;
 
   const firstTx = transactions[0];
   if (!firstTx) {
@@ -140,7 +140,12 @@ export async function simulateTenderlyRpc(params: {
     );
   }
 
-  const block = encodeBlock(blockNumber);
+  const rpcBlock =
+    block === undefined
+      ? "latest"
+      : block.type === "number"
+        ? numberToHex(block.value)
+        : block.value;
   // Inflate sender ETH balance to avoid false "insufficient funds for gas"
   // reverts on wallets low on native gas token — mirrors simulateV1.
   const stateOverrides = buildStateOverrides(firstTx.from);
@@ -150,7 +155,7 @@ export async function simulateTenderlyRpc(params: {
       const json = await rpcRequest({
         rpcUrl: config.rpcUrl,
         method: "tenderly_simulateTransaction",
-        params: [buildCall(firstTx), block, stateOverrides],
+        params: [buildCall(firstTx), rpcBlock, stateOverrides],
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
@@ -163,7 +168,7 @@ export async function simulateTenderlyRpc(params: {
     const json = await rpcRequest({
       rpcUrl: config.rpcUrl,
       method: "tenderly_simulateBundle",
-      params: [transactions.map(buildCall), block, stateOverrides],
+      params: [transactions.map(buildCall), rpcBlock, stateOverrides],
       signal,
     });
     const results = unwrapResult(bundleEnvelope.parse(json));
@@ -235,13 +240,6 @@ function buildStateOverrides(
   // the recipient balance and revert the value transfer if the sender were
   // pinned at maxUint256.
   return { [sender]: { balance: numberToHex(maxUint256 / 2n) } };
-}
-
-function encodeBlock(blockNumber?: bigint | BlockTag): string {
-  if (blockNumber === undefined) return "latest";
-  return typeof blockNumber === "bigint"
-    ? numberToHex(blockNumber)
-    : blockNumber;
 }
 
 function toRawCall(data: SimResult): RawCall {

@@ -7,6 +7,7 @@ import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV1PublicAllocatorAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Fetches PublicAllocator flow caps for a vault market.
@@ -18,8 +19,7 @@ import type { FetchParameters } from "../types.js";
  * @param marketId - Market id whose flow caps are fetched.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `VaultMarketPublicAllocatorConfig`, or `undefined` when the chain has no
@@ -54,7 +54,7 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   if (vaultV1PublicAllocator == null) return;
 
   const [maxIn, maxOut] = await readContract(client, {
-    ...parameters,
+    ...callParameters(parameters),
     address: vaultV1PublicAllocator,
     abi: vaultV1PublicAllocatorAbi,
     functionName: "flowCaps",

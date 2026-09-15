@@ -625,6 +625,13 @@ describe.sequential("LiquidityLoader.fetch", () => {
     expect(second.withdrawals).toStrictEqual([
       { id: sourceMarketId, vault, assets: 1000n },
     ]);
+    for (const handle of [firstHandle, secondHandle]) {
+      const reads = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(reads.length).toBeGreaterThan(0);
+      for (const read of reads) expect(read.params?.[1]).toBe("0xa");
+    }
     expect(getBlockCalls(firstHandle)).toStrictEqual([
       { method: "eth_getBlockByNumber", params: ["latest", false] },
     ]);

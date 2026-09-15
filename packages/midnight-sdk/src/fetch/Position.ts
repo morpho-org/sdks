@@ -36,8 +36,7 @@ import {
  * @param params.user - Position owner address.
  * @param params.deployless - Optional deployless mode; defaults to `true` with fallback, or `"force"` without fallback.
  * @param params.account - Optional account used as the `from` field for the reads.
- * @param params.blockNumber - Optional block number used for the reads.
- * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.block - Optional numbered block or named tag; omission preserves the client default.
  * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Normalized position object.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
@@ -140,8 +139,7 @@ export async function fetchPosition(
  * @param params.user - Position owner address.
  * @param params.deployless - Optional deployless mode for the position read; defaults to `true` with fallback, or `"force"` without fallback.
  * @param params.account - Optional account used as the `from` field for the reads.
- * @param params.blockNumber - Optional block number used for the reads.
- * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.block - Optional numbered block or named tag; omission preserves the client default.
  * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Accrual position instance.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.

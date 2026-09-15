@@ -26,6 +26,7 @@ import {
 } from "../abis.js";
 import { abi, code } from "../queries/GetHolding.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 
 /** Lookup table used to decode optional deployless boolean results. */
 export const optionalBoolean = [undefined, false, true] as const;
@@ -41,8 +42,7 @@ export const optionalBoolean = [undefined, false, true] as const;
  * @param token - Token address, or `NATIVE_ADDRESS` for the native asset.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -83,8 +83,7 @@ export async function fetchHolding(
       },
       balance: ChainUtils.hasReliableNativeBalance(parameters.chainId!)
         ? await getBalance(client, {
-            // biome-ignore lint/suspicious/noExplicitAny: flattened union type
-            ...(parameters as any),
+            ...callParameters(parameters),
             address: user,
           })
         : 0n,
@@ -116,7 +115,7 @@ export async function fetchHolding(
         erc2612Nonce,
         canTransfer,
       } = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -160,7 +159,7 @@ export async function fetchHolding(
     hasErc20WrapperPermission,
   ] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       abi: erc20Abi,
       address: token,
       functionName: "balanceOf",
@@ -174,7 +173,7 @@ export async function fetchHolding(
         return [
           label,
           await readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             abi: erc20Abi,
             address: token,
             functionName: "allowance",
@@ -185,7 +184,7 @@ export async function fetchHolding(
     ),
     chainAddresses.permit2 != null
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           abi: permit2Abi,
           address: chainAddresses.permit2,
           functionName: "allowance",
@@ -197,7 +196,7 @@ export async function fetchHolding(
         }))
       : { amount: 0n, expiration: 0n, nonce: 0n },
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       abi: erc2612Abi,
       address: token,
       functionName: "nonces",
@@ -205,14 +204,14 @@ export async function fetchHolding(
     }).catch(() => undefined),
     isPermissionedBackedToken
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           abi: wrappedBackedTokenAbi,
           address: token,
           functionName: "whitelistControllerAggregator",
         })
       : undefined,
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       abi: permissionedErc20WrapperAbi,
       address: token,
       functionName: "hasPermission",
@@ -232,7 +231,7 @@ export async function fetchHolding(
 
   if (whitelistControllerAggregator)
     holding.canTransfer = await readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       abi: whitelistControllerAggregatorV2Abi,
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",

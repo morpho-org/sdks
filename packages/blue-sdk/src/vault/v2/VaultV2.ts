@@ -329,7 +329,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
    * const block = await client.getBlock();
    * const vault = await fetchAccrualVaultV2(vaultV2Address, client, {
-   *   blockNumber: block.number,
+   *   block: { type: "number", value: block.number },
    * });
    * const result = vault.accrueInterest(block.timestamp);
    * // result satisfies {

@@ -1,3 +1,4 @@
+export type { BlockNumberOrTag, BlockTag } from "@morpho-org/morpho-ts";
 export * from "./action.js";
 export * from "./client.js";
 export * from "./deallocation.js";

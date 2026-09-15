@@ -1,10 +1,10 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
-
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import { abi, code } from "../queries/GetVaultUser.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 
 /**
@@ -17,8 +17,7 @@ import { fetchVaultConfig } from "./VaultConfig.js";
  * @param user - User address whose vault state is fetched.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -50,7 +49,7 @@ export async function fetchVaultUser(
   if (deployless) {
     try {
       const { isAllocator, allowance } = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -76,14 +75,14 @@ export async function fetchVaultUser(
 
   const [allowance, isAllocator] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: config.asset,
       abi: erc20Abi,
       functionName: "allowance",
       args: [user, vault],
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: vault,
       abi: metaMorphoAbi,
       functionName: "isAllocator",

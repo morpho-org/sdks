@@ -5,12 +5,12 @@ import {
   MarketParams,
 } from "@morpho-org/blue-sdk";
 import { type Client, zeroAddress } from "viem";
-
 import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
 import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Fetches Morpho Blue market state, params, oracle price, and adaptive IRM rate.
@@ -22,8 +22,7 @@ import { readContractRestructured } from "../utils.js";
  * @param id - Market id to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -69,7 +68,7 @@ export async function fetchMarket(
         price,
         rateAtTarget,
       } = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -96,14 +95,14 @@ export async function fetchMarket(
 
   const [params, market] = await Promise.all([
     readContractRestructured(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
     }),
     readContractRestructured(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morpho,
       abi: blueAbi,
       functionName: "market",
@@ -114,7 +113,7 @@ export async function fetchMarket(
   const [price, rateAtTarget] = await Promise.all([
     params.oracle !== zeroAddress
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
@@ -122,7 +121,7 @@ export async function fetchMarket(
       : undefined,
     params.irm === adaptiveCurveIrm
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",

@@ -19,6 +19,7 @@ import {
 import type { DeploylessFetchParameters } from "../../types.js";
 import { readContractRestructured } from "../../utils.js";
 import { fetchAccrualPosition } from "../Position.js";
+import { callParameters } from "../utils.js";
 
 /**
  * Fetches a MorphoMarketV1Adapter used by VaultV2.
@@ -29,8 +30,7 @@ import { fetchAccrualPosition } from "../Position.js";
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -71,7 +71,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
   if (deployless) {
     try {
       const adapter = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -97,7 +97,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     marketParamsListLength,
   ] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morphoMarketV1AdapterFactory,
       abi: morphoMarketV1AdapterFactoryAbi,
       functionName: "isMorphoMarketV1Adapter",
@@ -105,19 +105,19 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     }) // Factory may not have been deployed at requested block tag.
       .catch(() => false),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterAbi,
       functionName: "parentVault",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterAbi,
       functionName: "skimRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterAbi,
       functionName: "marketParamsListLength",
@@ -131,7 +131,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
   const marketParamsList = await Promise.all(
     Array.from({ length: Number(marketParamsListLength) }, (_, i) =>
       readContractRestructured(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address,
         abi: morphoMarketV1AdapterAbi,
         functionName: "marketParamsList",
@@ -156,8 +156,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.

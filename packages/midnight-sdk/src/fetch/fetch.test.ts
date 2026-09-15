@@ -208,7 +208,7 @@ describe("fetchPosition", () => {
     const position = await fetchPosition(handle.client, {
       marketId,
       user: addresses.taker,
-      blockNumber: 123n,
+      block: { type: "number", value: 123n },
       deployless: false,
     });
 
@@ -328,5 +328,95 @@ describe("fetchRatifierInfo", () => {
 
     expect(info.type).toBe("ecrecover");
     expect(info.ratifier).toBe(ecrecoverRatifier);
+  });
+});
+
+describe.each([
+  { block: undefined, selector: "latest" },
+  { block: { type: "number", value: 0n }, selector: "0x0" },
+  { block: { type: "number", value: 123n }, selector: "0x7b" },
+  ...(["latest", "earliest", "pending", "safe", "finalized"] as const).map(
+    (value) => ({ block: { type: "tag", value } as const, selector: value }),
+  ),
+] as const)("block selector $selector", ({ block, selector }) => {
+  test.each([false, true, "force"] as const)(
+    "behavior: forwards block through position, collateral, and market reads (deployless=%s)",
+    async (deployless) => {
+      const handle = createMockClient(base);
+      mockRead(handle, {
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "position",
+        args: [marketId, addresses.taker],
+        result: [1n, 2n, 3n, 4n, 5n, 6n],
+      });
+      mockRead(handle, {
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        args: [marketId, addresses.taker, 0n],
+        result: 7n,
+      });
+      mockRead(handle, {
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        args: [marketId],
+        result: MarketUtils.toStruct(baseMarketParams()),
+      });
+      mockRead(handle, {
+        address: midnight,
+        abi: midnightAbi,
+        functionName: "marketState",
+        args: [marketId],
+        result: [1_000n, 0n, 0n, 0n, 1, 2, 3, 4, 5, 6, 7, 10, 4],
+      });
+      if (deployless === "force") {
+        mockDeploylessRead(handle, {
+          abi: getPositionAbi,
+          functionName: "query",
+          result: {
+            credit: 1n,
+            pendingFee: 2n,
+            lastLossFactor: 3n,
+            lastAccrual: 4n,
+            debt: 5n,
+            collateralBitmap: 6n,
+            collateral: Array.from({ length: 128 }, () => 7n),
+          },
+        });
+      } else if (deployless) {
+        mockDeploylessFailure(handle);
+      }
+      await fetchAccrualPosition(
+        handle.client,
+        Object.freeze({
+          block,
+          deployless,
+          marketId,
+          user: addresses.taker,
+        }),
+      );
+      const calls = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(calls.length).toBeGreaterThan(2);
+      for (const call of calls) expect(call.params?.[1]).toBe(selector);
+    },
+  );
+
+  test("behavior: forwards block to ratifier bytecode read", async () => {
+    const handle = createMockClient(base);
+    const defaultRequest = handle.request.getMockImplementation();
+    handle.request.mockImplementation(async (call) => {
+      if (call.method === "eth_getCode") return "0x";
+      return defaultRequest?.(call);
+    });
+    await fetchRatifierInfo(handle.client, { maker: addresses.maker, block });
+    const calls = handle.request.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.method === "eth_getCode");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.params?.[1]).toBe(selector);
   });
 });

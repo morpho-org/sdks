@@ -3,6 +3,7 @@ import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Fetches Morpho Blue user authorization and nonce state.
@@ -12,8 +13,7 @@ import type { FetchParameters } from "../types.js";
  * @param address - User address to fetch.
  * @param client - Viem client used for the contract reads.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `User` entity.
@@ -45,14 +45,14 @@ export async function fetchUser(
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
       args: [address, generalAdapter1],
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morpho,
       abi: blueAbi,
       functionName: "nonce",

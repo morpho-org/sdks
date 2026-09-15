@@ -67,7 +67,7 @@ export interface VaultV1Actions {
   /**
    * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
-   * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
+   * @param {FetchParameters} [parameters] - Optional account, `block: BlockNumberOrTag` selector, and state overrides.
    * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
    */
   getData: (

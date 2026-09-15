@@ -1,4 +1,9 @@
 export * from "./addresses.js";
+export {
+  type BlockNumberOrTag,
+  type BlockTag,
+  toBlockParameters,
+} from "./block.js";
 export * from "./chain.js";
 export * from "./constants.js";
 export * from "./errors.js";

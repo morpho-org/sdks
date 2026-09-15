@@ -10,7 +10,6 @@ import {
   type VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, zeroAddress } from "viem";
-
 import { getChainId, readContract } from "viem/actions";
 import {
   metaMorphoAbi,
@@ -19,6 +18,7 @@ import {
 } from "../abis.js";
 import { abi, code } from "../queries/GetVault.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { callParameters } from "./utils.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
@@ -31,8 +31,7 @@ import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -92,7 +91,7 @@ export async function fetchVault(
         hasPublicAllocator,
         publicAllocatorConfig,
       } = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -158,111 +157,111 @@ export async function fetchVault(
   ] = await Promise.all([
     fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "curator",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "owner",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "guardian",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "timelock",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "pendingTimelock",
     }).then(([value, validAt]) => ({ value, validAt })),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "pendingGuardian",
     }).then(([value, validAt]) => ({ value, validAt })),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "pendingOwner",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "fee",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "feeRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "skimRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "totalSupply",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "totalAssets",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "lastTotalAssets",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "lostAssets",
     }).catch(() => undefined),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "supplyQueueLength",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
     vaultV1PublicAllocator != null &&
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address,
         abi: metaMorphoAbi,
         functionName: "isAllocator",
         args: [vaultV1PublicAllocator],
       }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: metaMorphoFactory,
       abi: metaMorphoFactoryAbi,
       functionName: "isMetaMorpho",
@@ -275,7 +274,7 @@ export async function fetchVault(
     !isMetaMorphoV1_1 &&
     (parameters.chainId === 1 || parameters.chainId === 8453)
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
           abi: metaMorphoFactoryAbi,
           functionName: "isMetaMorpho",
@@ -289,21 +288,21 @@ export async function fetchVault(
   if (hasPublicAllocator)
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address: vaultV1PublicAllocator!,
         abi: vaultV1PublicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address: vaultV1PublicAllocator!,
         abi: vaultV1PublicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address: vaultV1PublicAllocator!,
         abi: vaultV1PublicAllocatorAbi,
         functionName: "accruedFee",
@@ -319,7 +318,7 @@ export async function fetchVault(
           { length: Number(supplyQueueSize) },
           (_, i) =>
             readContract(client, {
-              ...parameters,
+              ...callParameters(parameters),
               address,
               abi: metaMorphoAbi,
               functionName: "supplyQueue",
@@ -332,7 +331,7 @@ export async function fetchVault(
           { length: Number(withdrawQueueSize) },
           (_, i) =>
             readContract(client, {
-              ...parameters,
+              ...callParameters(parameters),
               address,
               abi: metaMorphoAbi,
               functionName: "withdrawQueue",
@@ -377,15 +376,14 @@ export async function fetchVault(
  * Reads the vault state with `fetchVault`, fetches a `VaultMarketAllocation` for every market in the
  * withdraw queue, and returns their direct onchain state. Consumers can call
  * `AccrualVault.accrueInterest(timestamp)` when they need a virtual projection. When no
- * `blockNumber` is supplied and `blockTag` is `"latest"` (the default), separate reads may resolve
+ * numbered `block` is supplied and a moving tag such as `"latest"` is used, separate reads may resolve
  * at different blocks, so nested entities are not guaranteed synchronized. Pass an explicit
- * `blockNumber` for a block-consistent snapshot.
+ * numbered `block` for a block-consistent snapshot.
  *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.

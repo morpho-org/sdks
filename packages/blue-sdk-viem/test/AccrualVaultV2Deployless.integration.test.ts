@@ -404,10 +404,10 @@ describe("fetchAccrualVaultV2Deployless", () => {
       const block = await client.getBlock();
       const [deploylessVault, sequentialVault] = await Promise.all([
         fetchAccrualVaultV2Deployless(parentVault, client, {
-          blockNumber: block.number,
+          block: { type: "number", value: block.number },
         }),
         fetchAccrualVaultV2(parentVault, client, {
-          blockNumber: block.number,
+          block: { type: "number", value: block.number },
           deployless: false,
         }),
       ]);

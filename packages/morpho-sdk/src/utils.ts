@@ -98,6 +98,7 @@ export {
   mergeEntries,
   retryPromiseLinearBackoff,
   Time,
+  toBlockParameters,
   transformValue,
   values,
 } from "@morpho-org/morpho-ts";

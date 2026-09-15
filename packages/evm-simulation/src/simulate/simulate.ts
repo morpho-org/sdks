@@ -47,7 +47,7 @@ import {
  *   same `from`.
  * @param params.authorizations - Optional token authorizations resolved into prepended approve
  *   transactions before the main bundle runs.
- * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
+ * @param params.block - Optional `BlockNumberOrTag` selector. Defaults to `latest`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
@@ -99,7 +99,7 @@ export async function simulate(
     config,
     chainId: params.chainId,
     transactions: simulationTxs,
-    blockNumber: params.blockNumber,
+    block: params.block,
     wNative,
   });
   if (result.calls.length !== simulationTxs.length) {

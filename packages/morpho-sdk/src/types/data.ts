@@ -1,6 +1,4 @@
-import type { CallParameters, UnionPick } from "viem";
+import type { FetchParameters as BlueFetchParameters } from "@morpho-org/blue-sdk-viem";
 
-export type FetchParameters = UnionPick<
-  CallParameters,
-  "account" | "blockNumber" | "blockTag" | "stateOverride"
->;
+/** Account, block selector, and state overrides accepted by entity reads. */
+export type FetchParameters = Omit<BlueFetchParameters, "chainId">;

@@ -1910,7 +1910,7 @@ describe("vault fetchers", () => {
     mockVaultMarketConfigReads(handle);
     mockPositionReads(handle);
 
-    const parameters = { blockTag: "latest" } as const;
+    const parameters = { block: { type: "tag", value: "latest" } } as const;
     const vault = await fetchAccrualVault(VAULT, handle.client, parameters);
 
     expect(vault).toBeInstanceOf(AccrualVault);
@@ -1929,6 +1929,82 @@ describe("vault fetchers", () => {
         ([call]) => call.method === "eth_getBlockByNumber",
       ),
     ).toBe(false);
-    expect(parameters).toStrictEqual({ blockTag: "latest" });
+    expect(parameters).toStrictEqual({
+      block: { type: "tag", value: "latest" },
+    });
+  });
+});
+
+describe.each([
+  { block: undefined, selector: "latest" },
+  { block: { type: "number", value: 0n }, selector: "0x0" },
+  { block: { type: "number", value: 123n }, selector: "0x7b" },
+  ...(["latest", "earliest", "pending", "safe", "finalized"] as const).map(
+    (value) => ({ block: { type: "tag", value } as const, selector: value }),
+  ),
+] as const)("block selector $selector", ({ block, selector }) => {
+  test.each([false, true, "force"] as const)(
+    "behavior: forwards block through nested position/market reads (deployless=%s)",
+    async (deployless) => {
+      const handle = createMockClient(mainnet);
+      mockPositionReads(handle);
+      mockMarketReads(handle);
+      if (deployless === "force") {
+        mockDeploylessRead(handle, marketQueryAbi, "query", {
+          marketParams: marketParamsTuple(),
+          market: marketTuple,
+          hasPrice: true,
+          price: 123n,
+          rateAtTarget: 456n,
+        });
+      } else if (deployless) {
+        mockDeploylessReads(handle, ["0x"]);
+      }
+      const parameters = Object.freeze({ block, deployless });
+      await fetchAccrualPosition(USER, ID, handle.client, parameters);
+      const calls = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(calls.length).toBeGreaterThan(1);
+      for (const call of calls) expect(call.params?.[1]).toBe(selector);
+    },
+  );
+
+  test("behavior: forwards block to native balance reads", async () => {
+    const handle = createMockClient(mainnet);
+    mockNativeBalance(handle, 123n);
+    await fetchHolding(USER, NATIVE_ADDRESS, handle.client, { block });
+    const calls = handle.request.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.method === "eth_getBalance");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.params?.[1]).toBe(selector);
+  });
+});
+
+describe("block omission", () => {
+  test("behavior: preserves a client's configured pending default", async () => {
+    const handle = createMockClient(mainnet);
+    mockMarketReads(handle);
+    const client = {
+      ...handle.client,
+      experimental_blockTag: "pending" as const,
+    };
+    await fetchMarket(ID, client, { deployless: false });
+    const calls = handle.request.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.method === "eth_call");
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.params?.[1]).toBe("pending");
+    handle.request.mockClear();
+    await fetchMarket(ID, client, {
+      deployless: false,
+      block: { type: "tag", value: "latest" },
+    });
+    const explicitCalls = handle.request.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.method === "eth_call");
+    expect(explicitCalls.length).toBeGreaterThan(0);
+    for (const call of explicitCalls) expect(call.params?.[1]).toBe("latest");
   });
 });

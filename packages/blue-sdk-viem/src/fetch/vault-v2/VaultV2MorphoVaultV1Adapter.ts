@@ -17,6 +17,7 @@ import {
   code,
 } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
 import type { DeploylessFetchParameters } from "../../types.js";
+import { callParameters } from "../utils.js";
 import { fetchAccrualVault } from "../Vault.js";
 
 /**
@@ -28,8 +29,7 @@ import { fetchAccrualVault } from "../Vault.js";
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -68,7 +68,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
   if (deployless) {
     try {
       const adapter = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -91,7 +91,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     parentAllocation,
   ] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morphoVaultV1AdapterFactory,
       abi: morphoVaultV1AdapterFactoryAbi,
       functionName: "isMorphoVaultV1Adapter",
@@ -99,25 +99,25 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     }) // Factory may not have been deployed at requested block tag.
       .catch(() => false),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "parentVault",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "skimRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "morphoVaultV1",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoVaultV1AdapterAbi,
       functionName: "allocation",
@@ -142,16 +142,15 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
  *
  * Reads the adapter state and parent Vault V2 allocation, the MetaMorpho vault it wraps, and the
  * adapter's vault share balance. The nested `accrualVaultV1` retains unprojected market, loss, and
- * fee accounting so `realAssets(timestamp)` can project it. When no `blockNumber` is supplied and
- * `blockTag` is `"latest"` (the default), separate reads may resolve at different blocks, so nested
- * entities are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent
+ * fee accounting so `realAssets(timestamp)` can project it. When no numbered `block` is supplied and
+ * a moving tag such as `"latest"` is used, separate reads may resolve at different blocks, so nested
+ * entities are not guaranteed synchronized. Pass an explicit numbered `block` for a block-consistent
  * snapshot.
  *
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
@@ -189,7 +188,7 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   const [vaultV1, shares] = await Promise.all([
     fetchAccrualVault(adapter.morphoVaultV1, client, parameters),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: adapter.morphoVaultV1,
       abi: erc20Abi,
       functionName: "balanceOf",

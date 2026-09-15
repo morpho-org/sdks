@@ -342,7 +342,7 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     await simulateTenderlyRpc({
       config: CONFIG,
       transactions: [TX1],
-      blockNumber: 20_000_000n,
+      block: { type: "number", value: 20_000_000n },
     });
 
     const body = requestBody(fetchMock.mock.calls[0]!);
@@ -360,7 +360,7 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     await simulateTenderlyRpc({
       config: CONFIG,
       transactions: [TX1],
-      blockNumber: "pending",
+      block: { type: "tag", value: "pending" },
     });
 
     const body = requestBody(fetchMock.mock.calls[0]!);

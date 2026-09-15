@@ -1,10 +1,13 @@
+import type { BlockNumberOrTag } from "@morpho-org/morpho-ts";
 import type { CallParameters, UnionPick } from "viem";
 
 /** Common viem call parameters accepted by blue-sdk-viem fetchers. */
 export type FetchParameters = UnionPick<
   CallParameters,
-  "account" | "blockNumber" | "blockTag" | "stateOverride"
+  "account" | "stateOverride"
 > & {
+  /** Optional numbered block or named tag; omission preserves the client default. */
+  readonly block?: BlockNumberOrTag;
   /**
    * Chain id used to resolve protocol addresses.
    *

@@ -54,6 +54,7 @@ import type {
   FetchParameters,
 } from "../../types.js";
 import { fetchToken } from "../Token.js";
+import { callParameters } from "../utils.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
 /**
@@ -73,8 +74,7 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -119,7 +119,7 @@ export async function fetchVaultV2(
     try {
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           abi,
           code,
           functionName: "query",
@@ -171,86 +171,86 @@ export async function fetchVaultV2(
     fetchToken(address, client, { ...parameters, deployless }),
 
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: vaultV2Factory,
       abi: vaultV2FactoryAbi,
       functionName: "isVaultV2",
       args: [address],
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "asset",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "totalSupply",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "_totalAssets",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "performanceFee",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "managementFee",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "virtualShares",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "lastUpdate",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "maxRate",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "liquidityAdapter",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "liquidityData",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "adaptersLength",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "performanceFeeRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: vaultV2Abi,
       functionName: "managementFeeRecipient",
@@ -267,7 +267,7 @@ export async function fetchVaultV2(
   ] = await Promise.all([
     performanceFee > 0n
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address,
           abi: vaultV2Abi,
           functionName: "canReceiveShares",
@@ -276,7 +276,7 @@ export async function fetchVaultV2(
       : true,
     managementFee > 0n
       ? readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address,
           abi: vaultV2Abi,
           functionName: "canReceiveShares",
@@ -296,7 +296,7 @@ export async function fetchVaultV2(
           abi: morphoVaultV1AdapterFactoryAbi,
           functionName: "isMorphoVaultV1Adapter",
           args: [liquidityAdapter],
-          ...parameters,
+          ...callParameters(parameters),
         })
       : undefined,
     morphoMarketV1AdapterV2Factory != null && liquidityAdapter !== zeroAddress
@@ -305,12 +305,12 @@ export async function fetchVaultV2(
           abi: morphoMarketV1AdapterV2FactoryAbi,
           functionName: "isMorphoMarketV1AdapterV2",
           args: [liquidityAdapter],
-          ...parameters,
+          ...callParameters(parameters),
         })
       : undefined,
     ...Array.from({ length: Number(adaptersLength) }, (_, i) =>
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address,
         abi: vaultV2Abi,
         functionName: "adapters",
@@ -347,21 +347,21 @@ export async function fetchVaultV2(
       liquidityAdapterIds.map(async (id) => {
         const [absoluteCap, relativeCap, allocation] = await Promise.all([
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address,
             abi: vaultV2Abi,
             functionName: "absoluteCap",
             args: [id],
           }),
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address,
             abi: vaultV2Abi,
             functionName: "relativeCap",
             args: [id],
           }),
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address,
             abi: vaultV2Abi,
             functionName: "allocation",
@@ -413,15 +413,14 @@ export async function fetchVaultV2(
  * `fetchVaultV2` only loads allocations for `MorphoVaultV1Adapter` and
  * `MorphoMarketV1AdapterV2`. Calling `maxDeposit` on the returned `AccrualVaultV2` therefore throws
  * `VaultV2Errors.UnsupportedLiquidityAdapter` for a non-V2 market adapter liquidity adapter.
- * When no `blockNumber` is supplied and `blockTag` is `"latest"` (the default), a sequential
+ * When no numbered `block` is supplied and a moving tag such as `"latest"` is used, a sequential
  * fallback or `deployless: false` may resolve separate reads at different blocks, so nested entities
- * are not guaranteed synchronized. Pass an explicit `blockNumber` for a block-consistent snapshot.
+ * are not guaranteed synchronized. Pass an explicit numbered `block` for a block-consistent snapshot.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -482,7 +481,7 @@ export async function fetchAccrualVaultV2(
   const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
     [
       readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         address: vaultV2.asset,
         abi: erc20Abi,
         functionName: "balanceOf",
@@ -501,7 +500,7 @@ export async function fetchAccrualVaultV2(
             deployless,
           }),
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address,
             abi: vaultV2Abi,
             functionName: "forceDeallocatePenalty",
@@ -743,7 +742,7 @@ function toAccrualAdapter(
  * (equivalent to `deployless: "force"`). It requires every configured adapter factory to be deployed
  * at the queried block.
  *
- * At the same explicit `blockNumber`, the returned `AccrualVaultV2` is byte-for-byte identical to
+ * At the same explicit numbered `block`, the returned `AccrualVaultV2` is byte-for-byte identical to
  * `fetchAccrualVaultV2`'s output, including the nested MetaMorpho V1 vault of a
  * `MorphoVaultV1Adapter`: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config (both
  * vault-level and per-market `publicAllocatorConfig`) are read in the same single call, so no field
@@ -752,8 +751,7 @@ function toAccrualAdapter(
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for the deployless read.
  * @param parameters.account - Optional account passed to the viem call.
- * @param parameters.blockNumber - Optional block number for a historical read.
- * @param parameters.blockTag - Optional block tag for a historical read.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrued liquidity and regular
@@ -810,7 +808,7 @@ export async function fetchAccrualVaultV2Deployless(
   let response: AccrualVaultV2QueryResponse;
   try {
     response = await readContract(client, {
-      ...readParameters,
+      ...callParameters(readParameters),
       abi: getAccrualVaultV2Abi,
       code: getAccrualVaultV2Code,
       functionName: "query",

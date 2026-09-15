@@ -20,6 +20,7 @@ import {
 } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchMarket } from "../Market.js";
+import { callParameters } from "../utils.js";
 
 /**
  * Fetches a MorphoMarketV1AdapterV2 used by VaultV2.
@@ -30,8 +31,7 @@ import { fetchMarket } from "../Market.js";
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
@@ -72,7 +72,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
   if (deployless) {
     try {
       const adapter = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -110,7 +110,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
     adaptiveCurveIrm,
   ] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: morphoMarketV1AdapterV2Factory,
       abi: morphoMarketV1AdapterV2FactoryAbi,
       functionName: "isMorphoMarketV1AdapterV2",
@@ -118,25 +118,25 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
     }) // Factory may not have been deployed at requested block tag.
       .catch(() => false),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterV2Abi,
       functionName: "parentVault",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterV2Abi,
       functionName: "skimRecipient",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterV2Abi,
       functionName: "marketIdsLength",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: morphoMarketV1AdapterV2Abi,
       functionName: "adaptiveCurveIrm",
@@ -152,7 +152,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
       { length: Number(marketIdsLength) },
       (_, i) =>
         readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address,
           abi: morphoMarketV1AdapterV2Abi,
           functionName: "marketIds",
@@ -167,7 +167,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
         [
           marketId,
           await readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address,
             abi: morphoMarketV1AdapterV2Abi,
             functionName: "supplyShares",
@@ -195,8 +195,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
  * @param address - Adapter address to fetch.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.

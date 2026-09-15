@@ -1068,7 +1068,7 @@ describe("MorphoMidnight", () => {
       }).getPositionData({
         marketId: midnightMarketId,
         accountAddress: midnightAddresses.taker,
-        parameters: { blockNumber: requestedBlockNumber },
+        parameters: { block: { type: "number", value: requestedBlockNumber } },
       });
 
       const calls = handle.request.mock.calls
@@ -1082,25 +1082,28 @@ describe("MorphoMidnight", () => {
       ).toBe(true);
     });
 
-    test("behavior: forwards an explicit blockTag to every read", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockPositionReads(handle);
+    test.each(["latest", "earliest", "pending", "safe", "finalized"] as const)(
+      "behavior: forwards block tag %s to every read",
+      async (value) => {
+        const handle = createMockClient(midnightTestChain);
+        mockPositionReads(handle);
 
-      await midnightWithHandle(handle, {
-        supportSignature: false,
-        supportDeployless: false,
-      }).getPositionData({
-        marketId: midnightMarketId,
-        accountAddress: midnightAddresses.taker,
-        parameters: { blockTag: "pending" },
-      });
+        await midnightWithHandle(handle, {
+          supportSignature: false,
+          supportDeployless: false,
+        }).getPositionData({
+          marketId: midnightMarketId,
+          accountAddress: midnightAddresses.taker,
+          parameters: { block: { type: "tag", value } },
+        });
 
-      const calls = handle.request.mock.calls
-        .map(([call]) => call)
-        .filter((call) => call.method === "eth_call");
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls.every((call) => call.params?.[1] === "pending")).toBe(true);
-    });
+        const calls = handle.request.mock.calls
+          .map(([call]) => call)
+          .filter((call) => call.method === "eth_call");
+        expect(calls.length).toBeGreaterThan(0);
+        expect(calls.every((call) => call.params?.[1] === value)).toBe(true);
+      },
+    );
   });
 
   describe("getOffersData", () => {

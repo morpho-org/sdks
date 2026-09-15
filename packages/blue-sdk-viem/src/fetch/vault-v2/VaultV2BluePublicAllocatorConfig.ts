@@ -18,6 +18,7 @@ import type {
   DeploylessFetchParameters,
   FetchParameters,
 } from "../../types.js";
+import { callParameters } from "../utils.js";
 import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarketPublicAllocatorConfig.js";
 
 /**
@@ -26,8 +27,7 @@ import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarket
  * @param vault - Vault V2 address.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns Hydrated vault allocator configuration with penalty calculations.
@@ -58,7 +58,7 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
   const chainId = parameters.chainId ?? (await getChainId(client));
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [canPullFromIdle, penalty] = await readContract(client, {
-    ...parameters,
+    ...callParameters(parameters),
     address: allocator,
     abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
@@ -84,8 +84,7 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * @param vault - Hydrated Vault V2 whose accrued adapters provide the candidate markets.
  * @param client - Viem client used for deployless or direct reads.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
@@ -162,7 +161,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
   if (deployless) {
     try {
       const result = await readContract(client, {
-        ...parameters,
+        ...callParameters(parameters),
         abi,
         code,
         functionName: "query",
@@ -220,7 +219,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
     allocationValues,
   ] = await Promise.all([
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: vault.address,
       abi: vaultV2Abi,
       functionName: "isAllocator",
@@ -233,7 +232,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
     Promise.all(
       adapterList.map((adapter) =>
         readContract(client, {
-          ...parameters,
+          ...callParameters(parameters),
           address: allocator,
           abi: vaultV2BluePublicAllocatorAbi,
           functionName: "isActiveAdapter",
@@ -256,21 +255,21 @@ export async function fetchVaultV2BluePublicAllocatorData(
       allocationIdList.map(async (id) => {
         const [absoluteCap, relativeCap, allocation] = await Promise.all([
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address: vault.address,
             abi: vaultV2Abi,
             functionName: "absoluteCap",
             args: [id],
           }),
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address: vault.address,
             abi: vaultV2Abi,
             functionName: "relativeCap",
             args: [id],
           }),
           readContract(client, {
-            ...parameters,
+            ...callParameters(parameters),
             address: vault.address,
             abi: vaultV2Abi,
             functionName: "allocation",

@@ -2034,7 +2034,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       sequentialHandle.client,
-      { blockNumber: 1n, chainId: CHAIN_ID },
+      { block: { type: "number", value: 1n }, chainId: CHAIN_ID },
     );
 
     const deploylessHandle = createMockClient(mainnet);
@@ -2076,8 +2076,15 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const deployless = await fetchAccrualVaultV2Deployless(
       VAULT,
       deploylessHandle.client,
-      { blockNumber: 1n, chainId: CHAIN_ID },
+      { block: { type: "number", value: 1n }, chainId: CHAIN_ID },
     );
+    for (const handle of [sequentialHandle, deploylessHandle]) {
+      const reads = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(reads.length).toBeGreaterThan(0);
+      for (const read of reads) expect(read.params?.[1]).toBe("0x1");
+    }
     const deploylessAdapter = deployless.accrualAdapters[0] as
       | AccrualVaultV2MorphoVaultV1Adapter
       | undefined;

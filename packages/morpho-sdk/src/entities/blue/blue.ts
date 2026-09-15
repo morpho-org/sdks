@@ -127,7 +127,7 @@ export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
    *
-   * @param parameters - Optional fetch parameters (block number, state overrides).
+   * @param parameters - Optional account, `block: BlockNumberOrTag` selector, and state overrides.
    * @returns Market state including total supply/borrow assets and shares.
    */
   getMarketData: (parameters?: FetchParameters) => Promise<Market>;
@@ -136,7 +136,7 @@ export interface BlueActions {
    * Fetches the user's position in this market with accrued interest.
    *
    * @param userAddress - The user whose position to fetch.
-   * @param parameters - Optional fetch parameters (block number, state overrides).
+   * @param parameters - Optional account, `block: BlockNumberOrTag` selector, and state overrides.
    * @returns Accrual position with health metrics (maxBorrowAssets, ltv, isHealthy).
    */
   getPositionData: (
@@ -1975,7 +1975,7 @@ export class MorphoBlue implements BlueActions {
 
     const client = this.client.viemClient;
     const fetchParams = {
-      blockNumber: block.number,
+      block: { type: "number", value: block.number } as const,
       chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     };
@@ -2149,7 +2149,7 @@ export class MorphoBlue implements BlueActions {
 
     const client = this.client.viemClient;
     const fetchParams = {
-      blockNumber: block.number,
+      block: { type: "number", value: block.number } as const,
       chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     };

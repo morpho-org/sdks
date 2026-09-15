@@ -632,3 +632,50 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
     expect(onchainSharePrice).toBeGreaterThan(stale);
   });
 });
+
+describe("Blue entity block forwarding", () => {
+  test.each(["latest", "earliest", "pending", "safe", "finalized"] as const)(
+    "behavior: forwards %s through market and position data",
+    async (value) => {
+      const handle = createMockClient(mainnet);
+      const params = MarketParams.idle(MARKET_PARAMS.loanToken);
+      const { morpho } = getChainAddresses(mainnet.id);
+      mockRead(handle, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "idToMarketParams",
+        result: [
+          params.loanToken,
+          params.collateralToken,
+          params.oracle,
+          params.irm,
+          params.lltv,
+        ],
+      });
+      mockRead(handle, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "market",
+        result: [100n, 100n, 0n, 0n, 1n, 0n],
+      });
+      mockRead(handle, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "position",
+        result: [1n, 0n, 0n],
+      });
+      const client = handle.client.extend(
+        morphoViemExtension({ supportDeployless: false }),
+      );
+      const entity = client.morpho.blue(params, mainnet.id);
+      const block = { type: "tag", value } as const;
+      await entity.getMarketData({ block });
+      await entity.getPositionData(USER, { block });
+      const reads = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(reads).toHaveLength(5);
+      for (const read of reads) expect(read.params?.[1]).toBe(value);
+    },
+  );
+});

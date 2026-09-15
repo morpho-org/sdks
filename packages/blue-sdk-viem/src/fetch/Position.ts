@@ -6,13 +6,13 @@ import {
   PreLiquidationParams,
   PreLiquidationPosition,
 } from "@morpho-org/blue-sdk";
-
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis.js";
 import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
 import { fetchMarket } from "./Market.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Fetches a user's raw Morpho Blue position for a market.
@@ -23,8 +23,7 @@ import { fetchMarket } from "./Market.js";
  * @param marketId - Market id of the position.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `Position` entity.
@@ -54,7 +53,7 @@ export async function fetchPosition(
 
   const { morpho } = getChainAddresses(parameters.chainId);
   const position = await readContractRestructured(client, {
-    ...parameters,
+    ...callParameters(parameters),
     address: morpho,
     abi: blueAbi,
     functionName: "position",
@@ -76,8 +75,7 @@ export async function fetchPosition(
  * @param preLiquidation - Address of the pre-liquidation contract.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded by callers.
@@ -107,7 +105,7 @@ export async function fetchPreLiquidationParams(
   parameters.chainId ??= await getChainId(client);
   const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
     await readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address: preLiquidation,
       abi: preLiquidationAbi,
       functionName: "preLiquidationParams",
@@ -133,8 +131,7 @@ export async function fetchPreLiquidationParams(
  * @param marketId - Market id of the position.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
@@ -182,8 +179,7 @@ export async function fetchAccrualPosition(
  * @param preLiquidation - Address of the pre-liquidation contract.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
@@ -226,7 +222,7 @@ export async function fetchPreLiquidationPosition(
   ]);
 
   const preLiquidationOraclePrice = await readContract(client, {
-    ...parameters,
+    ...callParameters(parameters),
     address: preLiquidationParams.preLiquidationOracle,
     abi: blueOracleAbi,
     functionName: "price",

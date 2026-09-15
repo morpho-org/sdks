@@ -1,4 +1,5 @@
-import type { Address, BlockTag } from "viem";
+import type { BlockNumberOrTag } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
 import type {
   RawSimulationResult,
@@ -42,10 +43,10 @@ export async function executeSimulation(params: {
   config: SimulationConfig;
   chainId: number;
   transactions: SimulationTransaction[];
-  blockNumber?: bigint | BlockTag;
+  readonly block?: BlockNumberOrTag;
   wNative?: Address | null;
 }): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber, wNative } = params;
+  const { config, chainId, transactions, block, wNative } = params;
   const chain = resolveChain(config, chainId);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
@@ -57,7 +58,7 @@ export async function executeSimulation(params: {
       return await simulateTenderlyRpc({
         config: chain.tenderlyRpc,
         transactions,
-        blockNumber,
+        block,
         signal: AbortSignal.timeout(tenderlyTimeout),
       });
     } catch (error) {
@@ -80,7 +81,7 @@ export async function executeSimulation(params: {
         rpcUrl: chain.simulateV1Url,
         chainId,
         transactions,
-        blockNumber,
+        block,
         wNative,
         signal: AbortSignal.timeout(fallbackBudget),
       });
@@ -96,7 +97,7 @@ export async function executeSimulation(params: {
     rpcUrl: chain.simulateV1Url,
     chainId,
     transactions,
-    blockNumber,
+    block,
     wNative,
     signal: AbortSignal.timeout(timeoutMs),
   });

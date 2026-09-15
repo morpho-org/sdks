@@ -1,4 +1,4 @@
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddress, toBlockParameters } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import { getBytecode } from "viem/actions";
 import {
@@ -24,8 +24,7 @@ import { resolveChainId } from "./utils.js";
  *
  * @param client - Viem client used for the bytecode read.
  * @param params.maker - Maker address whose bytecode determines the ratifier route.
- * @param params.blockNumber - Optional block number used for the bytecode read.
- * @param params.blockTag - Optional block tag used for the bytecode read.
+ * @param params.block - Optional numbered block or named tag; omission preserves the client default.
  * @returns Ratifier information.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no configured ratifier address for the client chain id.
@@ -50,11 +49,7 @@ export async function fetchRatifierInfo(
   const ecrecoverRatifier = getChainAddress(chainId, "ecrecoverRatifier");
   const setterRatifier = getChainAddress(chainId, "setterRatifier");
   const bytecode = await getBytecode(client, {
-    ...(params.blockNumber != null
-      ? { blockNumber: params.blockNumber }
-      : params.blockTag != null
-        ? { blockTag: params.blockTag }
-        : {}),
+    ...toBlockParameters(params.block),
     address: params.maker,
   });
 

@@ -96,3 +96,9 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 MIT — see [LICENSE](/LICENSE).
 
 Exception: `packages/wdk-protocol-lending-morpho-evm` ships under Apache-2.0 (see its [LICENSE](./packages/wdk-protocol-lending-morpho-evm/LICENSE)).
+
+## Block selector migration
+
+SDK reads accept one optional `block: BlockNumberOrTag` selector. See the
+[migration guide](docs/migrations/block-number-or-tag.md) for the new API, examples,
+and affected package majors.

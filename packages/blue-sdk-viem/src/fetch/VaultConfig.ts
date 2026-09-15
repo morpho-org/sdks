@@ -4,6 +4,7 @@ import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { fetchToken } from "./Token.js";
+import { callParameters } from "./utils.js";
 
 /**
  * Fetches immutable and token-derived MetaMorpho vault configuration.
@@ -13,8 +14,7 @@ import { fetchToken } from "./Token.js";
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
  * @param parameters.account - Optional account passed to viem calls.
- * @param parameters.blockNumber - Optional block number for historical reads.
- * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.block - Optional numbered block or named tag; omission preserves the client default.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded to token metadata reads.
@@ -43,13 +43,13 @@ export async function fetchVaultConfig(
   const [token, asset, decimalsOffset] = await Promise.all([
     fetchToken(address, client, parameters), // TODO: avoid fetching decimals
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "asset",
     }),
     readContract(client, {
-      ...parameters,
+      ...callParameters(parameters),
       address,
       abi: metaMorphoAbi,
       functionName: "DECIMALS_OFFSET",

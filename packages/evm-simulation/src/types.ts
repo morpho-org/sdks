@@ -1,4 +1,5 @@
-import type { Address, BlockTag, Hex } from "viem";
+import type { BlockNumberOrTag } from "@morpho-org/morpho-ts";
+import type { Address, Hex } from "viem";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 // Shapes the caller constructs once and passes into `simulate()`.
@@ -159,14 +160,14 @@ export interface SimulationLogger {
 }
 
 /**
- * Input to `simulate`. Pin a `blockNumber` for deterministic / historical
+ * Input to `simulate`. Pin a `block` for deterministic / historical
  * simulation; omit to simulate against `latest`.
  */
 export interface SimulateParams {
   chainId: number;
   transactions: SimulationTransaction[];
   authorizations?: SimulationAuthorization[];
-  blockNumber?: bigint | BlockTag;
+  readonly block?: BlockNumberOrTag;
 }
 
 // ─── Internal (consumed by backends / pipeline) ───────────────────────────────

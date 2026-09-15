@@ -161,7 +161,7 @@ const validateMarketData = (market: Market, chainId: number) => {
  *   await midnight.getPositionData({
  *     marketId,
  *     accountAddress: user,
- *     parameters: { blockNumber: block.number },
+ *     parameters: { block: { type: "number", value: block.number } },
  *   })
  * ).accrueInterest(block.timestamp);
  * const { buildTx } = midnight.redeem({
@@ -188,7 +188,7 @@ export class MorphoMidnight {
    * ```ts
    * const midnight = client.morpho.midnight(8453);
    * const marketData = await midnight.getMarketData(marketId, {
-   *   blockNumber: 48_287_000n,
+   *   block: { type: "number", value: 48_287_000n },
    * });
    * ```
    */
@@ -221,7 +221,7 @@ export class MorphoMidnight {
    * const positionData = await midnight.getPositionData({
    *   marketId,
    *   accountAddress: user,
-   *   parameters: { blockNumber: 48_287_000n },
+   *   parameters: { block: { type: "number", value: 48_287_000n } },
    * });
    * ```
    */

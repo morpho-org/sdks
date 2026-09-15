@@ -1,4 +1,5 @@
-import type { Account, Address, BlockTag, StateOverride } from "viem";
+import type { BlockNumberOrTag } from "@morpho-org/morpho-ts";
+import type { Account, Address, StateOverride } from "viem";
 
 /**
  * Shared viem call parameters accepted by Midnight fetch helpers.
@@ -7,17 +8,15 @@ import type { Account, Address, BlockTag, StateOverride } from "viem";
  * ```ts
  * import type { MidnightCallParameters } from "@morpho-org/midnight-sdk";
  *
- * const params: MidnightCallParameters = { blockTag: "latest" };
- * console.log(params.blockTag);
+ * const params: MidnightCallParameters = { block: { type: "tag", value: "latest" } };
+ * console.log(params.block);
  * ```
  */
 export interface MidnightCallParameters {
   /** Account used as the `from` field for the read. */
   readonly account?: Account | Address;
-  /** Block number used for the read. */
-  readonly blockNumber?: bigint;
-  /** Block tag used for the read. */
-  readonly blockTag?: BlockTag;
+  /** Optional numbered block or named tag; omission preserves the client default. */
+  readonly block?: BlockNumberOrTag;
   /** State override set used for the read. */
   readonly stateOverride?: StateOverride;
 }
@@ -53,8 +52,8 @@ export interface DeploylessFetchParameters extends MidnightCallParameters {
  * ```ts
  * import type { MidnightFetchParams } from "@morpho-org/midnight-sdk";
  *
- * const params: MidnightFetchParams = { blockTag: "latest" };
- * console.log(params.blockTag);
+ * const params: MidnightFetchParams = { block: { type: "tag", value: "latest" } };
+ * console.log(params.block);
  * ```
  */
 export type MidnightFetchParams = DeploylessFetchParameters;

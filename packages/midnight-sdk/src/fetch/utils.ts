@@ -1,3 +1,4 @@
+import { toBlockParameters } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { ChainIdMismatchError } from "../errors.js";
@@ -7,12 +8,9 @@ import type {
 } from "./types.js";
 
 /** @internal Extracts viem call parameters from Midnight fetch inputs. */
-export const callParameters = (
-  params: MidnightCallParameters,
-): MidnightCallParameters => ({
+export const callParameters = (params: MidnightCallParameters) => ({
   account: params.account,
-  blockNumber: params.blockNumber,
-  blockTag: params.blockTag,
+  ...toBlockParameters(params.block),
   stateOverride: params.stateOverride,
 });
 

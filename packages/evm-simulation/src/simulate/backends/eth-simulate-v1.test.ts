@@ -194,7 +194,7 @@ describe.sequential("simulateV1", () => {
       rpcUrl: "http://rpc.local",
       chainId: 1,
       transactions: [BASIC_TX],
-      blockNumber: 20_000_000n,
+      block: { type: "number", value: 20_000_000n },
     });
 
     const callArgs = mockSimulateCalls.mock.calls[0]![0];
@@ -213,7 +213,7 @@ describe.sequential("simulateV1", () => {
       rpcUrl: "http://rpc.local",
       chainId: 1,
       transactions: [BASIC_TX],
-      blockNumber: "latest",
+      block: { type: "tag", value: "latest" },
     });
 
     const callArgs = mockSimulateCalls.mock.calls[0]![0];

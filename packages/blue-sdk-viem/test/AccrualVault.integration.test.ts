@@ -10,9 +10,11 @@ describe("AccrualVault", () => {
   test("should accrue same totalAssets", async ({ client }) => {
     const block = await client.getBlock();
     const [vault, accrualVault] = await Promise.all([
-      fetchVault(steakUsdc.address, client, { blockNumber: block.number }),
+      fetchVault(steakUsdc.address, client, {
+        block: { type: "number", value: block.number },
+      }),
       fetchAccrualVault(steakUsdc.address, client, {
-        blockNumber: block.number,
+        block: { type: "number", value: block.number },
       }),
     ]);
     const accruedVault = accrualVault.accrueInterest(block.timestamp);
@@ -27,8 +29,12 @@ describe("AccrualVault", () => {
       const block = await client.getBlock();
       const address = "0x51056b3F809f4cFE17E1A8715B82f5dbbCA5a5A1";
       const [vault, accrualVault] = await Promise.all([
-        fetchVault(address, client, { blockNumber: block.number }),
-        fetchAccrualVault(address, client, { blockNumber: block.number }),
+        fetchVault(address, client, {
+          block: { type: "number", value: block.number },
+        }),
+        fetchAccrualVault(address, client, {
+          block: { type: "number", value: block.number },
+        }),
       ]);
       const allocatedAssets = [...accrualVault.allocations.values()].reduce(
         (total, { position }) => total + position.supplyAssets,

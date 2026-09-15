@@ -8,7 +8,7 @@
 - Augment classes only in `src/augment`, e.g. `Market.fetch = fetchMarket`.
 - Keep `fetch/`, `queries/`, and `augment/` names aligned with the matching `blue-sdk` entity names.
 - Use `readContractRestructured` when tuple fields should map to named object properties.
-- Fetch params pass through viem call fields: `account`, `blockNumber`, `blockTag`, `stateOverride`.
+- Fetch params accept `account`, `block`, and `stateOverride`. The shared `BlockNumberOrTag` discriminated union is converted to viem `blockNumber`/`blockTag` only at RPC boundaries; nested SDK fetchers receive `block` unchanged.
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.
 - Typed-data helpers return `TypedDataDefinition`, e.g. `getPermitTypedData(...)`.
 - Re-export ABI literals from `@morpho-org/morpho-ts` when they exist there; keep local ABI declarations only for Blue-specific viem surfaces absent from `morpho-ts`.

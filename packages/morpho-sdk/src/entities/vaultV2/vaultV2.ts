@@ -66,7 +66,7 @@ export interface VaultV2Actions {
    * Fetches the latest vault data.
    *
    * This function fetches the latest vault data from the blockchain.
-   * @param {FetchParameters} [parameters] - The parameters for the fetch operation.
+   * @param {FetchParameters} [parameters] - Optional account, `block: BlockNumberOrTag` selector, and state overrides.
    *
    * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>} The latest vault data.
    */
