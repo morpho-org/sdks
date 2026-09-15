@@ -1684,13 +1684,11 @@ export class RepayExceedsDebtError extends Error {
   }
 }
 
-/** Thrown when EIP-712 signature verification fails (malformed signature, or the signed data does not match the expected signer). */
+/** Thrown when EIP-712 signature verification fails (the signed data does not match the expected signer). */
 export class InvalidSignatureError extends Error {
-  /** @param cause - Underlying recovery failure, when the signature could not be parsed. */
-  constructor(cause?: unknown) {
+  constructor() {
     super(
       "Signature verification failed: the signed data does not match the expected signer address",
-      { cause },
     );
   }
 }

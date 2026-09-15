@@ -8,10 +8,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { ChainIdMismatchError, InvalidSignatureError } from "../types/index.js";
-import {
-  signAndVerifyTypedData,
-  verifyTypedDataSignature,
-} from "./signAndVerifyTypedData.js";
+import { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 
 const account = privateKeyToAccount(
   "0x0000000000000000000000000000000000000000000000000000000000000001",
@@ -92,42 +89,5 @@ describe("signAndVerifyTypedData", () => {
         typedData,
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
-  });
-});
-
-describe("verifyTypedDataSignature", () => {
-  test("default", async () => {
-    const signature = await account.signTypedData(typedData);
-
-    await expect(
-      verifyTypedDataSignature({
-        userAddress: account.address,
-        typedData,
-        signature,
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  test("error: InvalidSignatureError on signer mismatch", async () => {
-    const signature = await otherAccount.signTypedData(typedData);
-
-    await expect(
-      verifyTypedDataSignature({
-        userAddress: account.address,
-        typedData,
-        signature,
-      }),
-    ).rejects.toBeInstanceOf(InvalidSignatureError);
-  });
-
-  test("error: InvalidSignatureError wraps a malformed signature", async () => {
-    const error = await verifyTypedDataSignature({
-      userAddress: account.address,
-      typedData,
-      signature: "0x1234",
-    }).catch((thrown: unknown) => thrown);
-
-    expect(error).toBeInstanceOf(InvalidSignatureError);
-    expect((error as InvalidSignatureError).cause).toBeDefined();
   });
 });

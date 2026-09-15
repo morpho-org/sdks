@@ -51,7 +51,6 @@ import {
   ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
-  InvalidSignatureError,
   MarketIdMismatchError,
   MidnightMarketAddressMismatchError,
   MidnightOfferMakerMismatchError,
@@ -1505,61 +1504,6 @@ describe("MorphoMidnight", () => {
           signature: externalSignature,
         }),
       ).toBe(true);
-    });
-
-    test("behavior: withSignature derives the ratification payload buildTx consumes", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.loanToken,
-        result: maxUint256,
-      });
-      mockMidnightAuthorization(handle, true);
-      const data = offersData(true, offerSignerAccount.address);
-      const output = await midnightWithHandle(handle).makeLend({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-      });
-      const requirements = await output.getRequirements();
-      const requirement = requirements.find(
-        ({ action }) => action.type === "midnightOfferRootSignature",
-      );
-      if (requirement == null || !("sign" in requirement)) {
-        throw new Error("Expected midnightOfferRootSignature requirement");
-      }
-
-      const externalSignature = await offerSignerAccount.signTypedData(
-        requirement.action.typedData,
-      );
-      const external = await requirement.withSignature(
-        externalSignature,
-        offerSignerAccount.address,
-      );
-      const signed = await requirement.sign(
-        offerSignerWallet,
-        offerSignerAccount.address,
-      );
-
-      expect(external).toEqual(signed);
-      expect(external.action).toBe(requirement.action);
-      expect(Object.isFrozen(external)).toBe(true);
-      if (
-        !isMidnightOfferRootSignature(external) ||
-        !isMidnightOfferRootSignature(signed)
-      ) {
-        throw new Error("Expected midnightOfferRootSignature result");
-      }
-      expect(external.args.payload).toBe(signed.args.payload);
-
-      const tx = output.buildTx(external);
-      expect(tx.data).toBe(external.args.payload);
-
-      await expect(
-        requirement.withSignature(externalSignature, midnightAddresses.taker),
-      ).rejects.toBeInstanceOf(InvalidSignatureError);
     });
 
     test("behavior: approval covers new group and existing loan reserves", async () => {

@@ -11,7 +11,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   AddressMismatchError,
-  InvalidSignatureError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { selectBundlesSharesRequirementSignature } from "../../bundles/common.js";
@@ -169,83 +168,6 @@ describe("encodeVaultSharesPermit", () => {
         signature: externalSignature,
       }),
     ).resolves.toBe(true);
-  });
-
-  test("behavior: withSignature matches sign() and feeds bundles selection", async () => {
-    const requirement = encodeVaultSharesPermit({
-      vault: new Token({ address: vault, name: "Vault V2" }),
-      version: "vaultV2",
-      spender,
-      owner: account.address,
-      chainId: mainnet.id,
-      nonce: 9n,
-      amount,
-      deadline: 1_900_000_000n,
-    });
-    const signature = await account.signTypedData(requirement.action.typedData);
-
-    const external = await requirement.withSignature(
-      signature,
-      account.address,
-    );
-    const signed = await requirement.sign(walletClient, account.address);
-
-    expect(external).toEqual(signed);
-    expect(Object.isFrozen(external)).toBe(true);
-    const { action } = external;
-    if (action.type !== "permit") {
-      throw new Error(`expected an ERC-2612 permit action, got ${action.type}`);
-    }
-    expect(
-      selectBundlesSharesRequirementSignature([external], {
-        requiredShareAllowance: amount,
-        expectedRequirement: action,
-      }),
-    ).toEqual(external);
-  });
-
-  test("error: withSignature throws AddressMismatchError when signer differs from owner", async () => {
-    const requirement = encodeVaultSharesPermit({
-      vault: new Token({ address: vault, name: "Vault V2" }),
-      version: "vaultV2",
-      spender,
-      owner: account.address,
-      chainId: mainnet.id,
-      nonce: 9n,
-      amount,
-      deadline: 1_900_000_000n,
-    });
-    const signature = await account.signTypedData(requirement.action.typedData);
-
-    await expect(
-      requirement.withSignature(
-        signature,
-        "0x1111111111111111111111111111111111111111",
-      ),
-    ).rejects.toBeInstanceOf(AddressMismatchError);
-  });
-
-  test("error: withSignature throws InvalidSignatureError for a foreign signature", async () => {
-    const requirement = encodeVaultSharesPermit({
-      vault: new Token({ address: vault, name: "Vault V2" }),
-      version: "vaultV2",
-      spender,
-      owner: account.address,
-      chainId: mainnet.id,
-      nonce: 9n,
-      amount,
-      deadline: 1_900_000_000n,
-    });
-    const wrongSigner = privateKeyToAccount(
-      "0x0000000000000000000000000000000000000000000000000000000000000002",
-    );
-    const signature = await wrongSigner.signTypedData(
-      requirement.action.typedData,
-    );
-
-    await expect(
-      requirement.withSignature(signature, account.address),
-    ).rejects.toBeInstanceOf(InvalidSignatureError);
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {

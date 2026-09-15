@@ -50,56 +50,15 @@ export const signAndVerifyTypedData = async (params: {
     account,
   });
 
-  await verifyTypedDataSignature({ userAddress, typedData, signature });
-
-  return signature;
-};
-
-/**
- * Verifies that an EIP-712 signature produced elsewhere (remote signer, hardware wallet) recovers
- * `userAddress` for `typedData`.
- *
- * Use inside requirement `withSignature(...)` callbacks so an externally produced signature goes
- * through the same recover-and-verify step as `sign()` before it reaches transaction builders.
- * Verification is offline ECDSA recovery: `userAddress` must be an EOA. ERC-1271 contract-wallet
- * signatures cannot be checked without an RPC client and are rejected.
- *
- * @param params - Verification parameters.
- * @param params.userAddress - EOA expected to own the signature.
- * @param params.typedData - EIP-712 typed data that was signed.
- * @param params.signature - Signature to verify.
- * @returns Resolves without a value once the signature is verified.
- * @throws {InvalidSignatureError} when the signature is malformed or does not recover to `userAddress`.
- * @example
- * ```ts
- * import { verifyTypedDataSignature } from "@morpho-org/morpho-sdk";
- *
- * await verifyTypedDataSignature({
- *   userAddress: owner,
- *   typedData: requirement.action.typedData,
- *   signature,
- * });
- * ```
- */
-export const verifyTypedDataSignature = async (params: {
-  readonly userAddress: Address;
-  readonly typedData: TypedDataDefinition<Record<string, unknown>, string>;
-  readonly signature: Hex;
-}): Promise<void> => {
-  const { userAddress, typedData, signature } = params;
-
-  let isValid: boolean;
-  try {
-    isValid = await verifyTypedData({
-      ...typedData,
-      address: userAddress,
-      signature,
-    });
-  } catch (cause) {
-    throw new InvalidSignatureError(cause);
-  }
+  const isValid = await verifyTypedData({
+    ...typedData,
+    address: userAddress,
+    signature,
+  });
 
   if (!isValid) {
     throw new InvalidSignatureError();
   }
+
+  return signature;
 };

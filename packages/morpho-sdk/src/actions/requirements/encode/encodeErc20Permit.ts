@@ -1,11 +1,8 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import type { Client, Hex, WalletClient } from "viem";
-import {
-  signAndVerifyTypedData,
-  verifyTypedDataSignature,
-} from "../../../helpers/signAndVerifyTypedData.js";
+import type { Client, WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import {
   validateDeadline,
   validateUserAddress,
@@ -38,9 +35,8 @@ interface EncodeErc20PermitParams {
  * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
  * the selected transaction route can consume. The requirement's `action.typedData` holds that
- * EIP-712 payload so it can be signed with any signer; `withSignature()` verifies such a signature
- * and returns the same `RequirementSignature`. Deadline defaults to two hours from
- * `Time.timestamp()`.
+ * EIP-712 payload so it can be inspected or displayed before signing. Deadline defaults to two
+ * hours from `Time.timestamp()`.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
@@ -54,8 +50,7 @@ interface EncodeErc20PermitParams {
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @param params.deadline - Signature expiration timestamp. Defaults to two hours from now.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
- *   `sign(client, userAddress)` or `withSignature(signature, userAddress)` produces the
- *   deep-frozen signature.
+ *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1,
@@ -65,9 +60,9 @@ interface EncodeErc20PermitParams {
  * @throws {ExpiredDeadlineError} when an explicit `deadline` is positive but not in the future.
  * @throws {viem.BaseError} when the token metadata read fails with no fallback left.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
- * @throws {AddressMismatchError} from `sign()` / `withSignature()` when the signer differs from
- *   `owner`, or from `sign()` when the client account differs from the signer.
- * @throws {InvalidSignatureError} from `sign()` / `withSignature()` when EIP-712 verification fails.
+ * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
+ *   client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
  * import { createWalletClient, http } from "viem";
@@ -83,9 +78,9 @@ interface EncodeErc20PermitParams {
  *   chainId: 1,
  *   nonce: 0n,
  * });
- * // Sign it yourself, then hand the signature back:
- * const signature = await walletClient.signTypedData(requirement.action.typedData);
- * const signed = await requirement.withSignature(signature, owner);
+ * // Inspect the EIP-712 payload, then sign via the requirement:
+ * const typedData = requirement.action.typedData;
+ * const signed = await requirement.sign(client, owner);
  * ```
  */
 export const encodeErc20Permit = async (
@@ -152,19 +147,6 @@ export const encodeErc20Permit = async (
     typedData,
   };
 
-  const toSignature = (signature: Hex) =>
-    deepFreeze({
-      args: {
-        owner,
-        signature,
-        deadline,
-        amount,
-        asset: token,
-        nonce,
-      },
-      action,
-    });
-
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
@@ -177,13 +159,17 @@ export const encodeErc20Permit = async (
         typedData,
       });
 
-      return toSignature(signature);
-    },
-    async withSignature(signature: Hex, userAddress: Address) {
-      validateUserAddress(userAddress, owner);
-      await verifyTypedDataSignature({ userAddress, typedData, signature });
-
-      return toSignature(signature);
+      return deepFreeze({
+        args: {
+          owner,
+          signature,
+          deadline,
+          amount,
+          asset: token,
+          nonce,
+        },
+        action,
+      });
     },
   };
 };

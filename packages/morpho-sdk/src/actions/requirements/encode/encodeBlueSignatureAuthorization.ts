@@ -1,11 +1,8 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import type { Client, Hex, WalletClient } from "viem";
-import {
-  signAndVerifyTypedData,
-  verifyTypedDataSignature,
-} from "../../../helpers/signAndVerifyTypedData.js";
+import type { Client, WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import {
   validateDeadline,
   validateUserAddress,
@@ -41,8 +38,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * The returned `Requirement.sign()` produces the EIP-712 signature over Morpho's `Authorization`
  * typed data, verifies it against the connected account, and returns a deep-frozen
  * `RequirementSignature` the selected transaction route consumes. The requirement's
- * `action.typedData` holds that EIP-712 payload so it can be signed with any signer;
- * `withSignature()` verifies such a signature and returns the same `RequirementSignature`.
+ * `action.typedData` holds that EIP-712 payload so it can be inspected or displayed before signing.
  * Deadline defaults to two hours from `Time.timestamp()`.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
@@ -54,16 +50,15 @@ interface EncodeBlueSignatureAuthorizationParams {
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
  * @param params.deadline - Optional signature deadline in seconds.
  * @returns A `Requirement` whose `action.typedData` is the EIP-712 payload and whose
- *   `sign(client, userAddress)` or `withSignature(signature, userAddress)` produces the
- *   deep-frozen signature.
+ *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
  * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
  * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
- * @throws {AddressMismatchError} from `sign()` / `withSignature()` when the signer differs from
- *   `owner`, or from `sign()` when the client account differs from the signer.
- * @throws {InvalidSignatureError} from `sign()` / `withSignature()` when EIP-712 verification fails.
+ * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
+ *   client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
  * import { createWalletClient, http } from "viem";
@@ -77,7 +72,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  *   chainId: 1,
  *   nonce: 0n,
  * });
- * // Sign it yourself: await walletClient.signTypedData(requirement.action.typedData);
+ * // Inspect the EIP-712 payload (requirement.action.typedData) or sign via requirement.sign(...).
  * ```
  */
 export const encodeBlueSignatureAuthorization = async (
@@ -118,19 +113,6 @@ export const encodeBlueSignatureAuthorization = async (
     typedData,
   };
 
-  const toSignature = (signature: Hex) =>
-    deepFreeze({
-      args: {
-        owner,
-        authorized,
-        isAuthorized,
-        nonce,
-        deadline,
-        signature,
-      },
-      action,
-    });
-
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
@@ -143,13 +125,17 @@ export const encodeBlueSignatureAuthorization = async (
         typedData,
       });
 
-      return toSignature(signature);
-    },
-    async withSignature(signature: Hex, userAddress: Address) {
-      validateUserAddress(userAddress, owner);
-      await verifyTypedDataSignature({ userAddress, typedData, signature });
-
-      return toSignature(signature);
+      return deepFreeze({
+        args: {
+          owner,
+          authorized,
+          isAuthorized,
+          nonce,
+          deadline,
+          signature,
+        },
+        action,
+      });
     },
   };
 };

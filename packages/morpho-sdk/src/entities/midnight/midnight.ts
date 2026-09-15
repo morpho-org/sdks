@@ -36,10 +36,7 @@ import {
   getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
-import {
-  signAndVerifyTypedData,
-  verifyTypedDataSignature,
-} from "../../helpers/signAndVerifyTypedData.js";
+import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
@@ -1166,26 +1163,6 @@ export class MorphoMidnight {
         typedData,
       };
 
-      // Both signing paths derive the ratification payload `buildTx()` submits.
-      const toSignature = async (signature: Hex, owner: Address) => {
-        const items = await EcrecoverRatifierUtils.ratify({
-          tree: data.tree,
-          account: owner,
-          signature,
-        });
-        const payload = await Payload.encode(items);
-
-        return deepFreeze({
-          args: {
-            owner,
-            root: data.tree.root,
-            signature,
-            payload,
-          },
-          action,
-        });
-      };
-
       requirements.push({
         action,
         async sign(client: WalletClient, userAddress: Address) {
@@ -1195,12 +1172,23 @@ export class MorphoMidnight {
             typedData,
           });
 
-          return toSignature(signature, userAddress);
-        },
-        async withSignature(signature: Hex, userAddress: Address) {
-          await verifyTypedDataSignature({ userAddress, typedData, signature });
+          // Derive the ratification payload `buildTx()` submits.
+          const items = await EcrecoverRatifierUtils.ratify({
+            tree: data.tree,
+            account: userAddress,
+            signature,
+          });
+          const payload = await Payload.encode(items);
 
-          return toSignature(signature, userAddress);
+          return deepFreeze({
+            args: {
+              owner: userAddress,
+              root: data.tree.root,
+              signature,
+              payload,
+            },
+            action,
+          });
         },
       });
       return requirements;

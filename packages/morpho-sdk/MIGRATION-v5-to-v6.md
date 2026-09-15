@@ -274,27 +274,21 @@ no nonce.
 
 Every signable requirement action (`PermitAction`, `Permit2Action`,
 `Permit2SignatureTransferAction`, `AuthorizationAction`, `MidnightOfferRootSignatureAction`) now
-carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be signed with any signer:
+carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be inspected or displayed
+before signing:
 
 ```ts
 const requirement = (await output.getRequirements()).find(isRequirementSignature);
 if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
 
-const signature = await remoteSigner.signTypedData(requirement.action.typedData);
-const signed = await requirement.withSignature(signature, owner);
+const typedData = requirement.action.typedData; // exact EIP-712 payload `sign()` will sign
+const signed = await requirement.sign(walletClient, owner);
 const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
 ```
 
-`requirement.action.typedData` is typed as required on a `Requirement`, so no null check is
-needed. `withSignature(signature, userAddress)` is the external-signer counterpart of `sign()`:
-it verifies that `signature` recovers to `userAddress` (`InvalidSignatureError` otherwise),
-rejects a `userAddress` that differs from the owner embedded in ERC-2612 / authorization payloads
-(`AddressMismatchError`), and returns the same deep-frozen `RequirementSignature` that `sign()`
-does, so `buildTx()` accepts it unchanged. For the Midnight offer-root requirement it also derives
-the ratification payload that `buildTx()` submits, so raw `typedData` signatures must go through
-`withSignature()` (or `sign()`) before being passed to `buildTx()`. Verification is offline ECDSA
-recovery (as in `sign()`), so `userAddress` must be an EOA: ERC-1271 smart-contract-wallet
-signatures are not verified and are rejected with `InvalidSignatureError`.
+`requirement.action.typedData` is typed as required on a `Requirement`, so no null check is needed.
+It is the exact `TypedDataDefinition` that `sign()` signs; signing itself still goes through
+`Requirement.sign(client, userAddress)`.
 
 Because the permit and authorization payloads embed the owner and are built eagerly, two exported
 low-level encoders take a new required `owner` parameter, and `getGeneralAdapterRequirementsPermit`

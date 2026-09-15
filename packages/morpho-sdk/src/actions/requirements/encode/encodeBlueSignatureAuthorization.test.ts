@@ -16,7 +16,6 @@ import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
-  InvalidSignatureError,
   NonPositiveInputError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
@@ -192,62 +191,5 @@ describe("encodeBlueSignatureAuthorization", () => {
         signature: externalSignature,
       }),
     ).resolves.toBe(true);
-  });
-
-  test("behavior: withSignature matches sign()", async () => {
-    const client = walletClient();
-    const requirement = await encodeBlueSignatureAuthorization(client, {
-      owner: account.address,
-      authorized: generalAdapter1,
-      chainId: mainnet.id,
-      nonce: 0n,
-    });
-    const signature = await account.signTypedData(requirement.action.typedData);
-
-    const external = await requirement.withSignature(
-      signature,
-      account.address,
-    );
-    const signed = await requirement.sign(client, account.address);
-
-    expect(external).toEqual(signed);
-    expect(external.action).toBe(requirement.action);
-    expect(Object.isFrozen(external)).toBe(true);
-  });
-
-  test("error: withSignature throws AddressMismatchError when signer is not the owner", async () => {
-    const requirement = await encodeBlueSignatureAuthorization(walletClient(), {
-      owner: account.address,
-      authorized: generalAdapter1,
-      chainId: mainnet.id,
-      nonce: 0n,
-    });
-    const signature = await account.signTypedData(requirement.action.typedData);
-
-    await expect(
-      requirement.withSignature(
-        signature,
-        "0x0000000000000000000000000000000000000001",
-      ),
-    ).rejects.toBeInstanceOf(AddressMismatchError);
-  });
-
-  test("error: withSignature throws InvalidSignatureError when signature does not recover owner", async () => {
-    const requirement = await encodeBlueSignatureAuthorization(walletClient(), {
-      owner: account.address,
-      authorized: generalAdapter1,
-      chainId: mainnet.id,
-      nonce: 0n,
-    });
-    const wrongSigner = privateKeyToAccount(
-      "0x0000000000000000000000000000000000000000000000000000000000000002",
-    );
-    const signature = await wrongSigner.signTypedData(
-      requirement.action.typedData,
-    );
-
-    await expect(
-      requirement.withSignature(signature, account.address),
-    ).rejects.toBeInstanceOf(InvalidSignatureError);
   });
 });

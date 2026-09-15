@@ -165,23 +165,13 @@ describe("isMidnightOfferRootSignature", () => {
 });
 
 describe("isRequirementSignature", () => {
-  test("default: true when sign and withSignature are callable", () => {
+  test("default: true when sign is callable", () => {
     expect(
       isRequirementSignature({
         sign: async () => permitSignature,
-        withSignature: async () => permitSignature,
         action: permitSignature.action,
       } as unknown as ActionRequirement),
     ).toBe(true);
-  });
-
-  test("behavior: false without withSignature", () => {
-    expect(
-      isRequirementSignature({
-        sign: async () => permitSignature,
-        action: permitSignature.action,
-      } as unknown as ActionRequirement),
-    ).toBe(false);
   });
 
   test("behavior: false for a call requirement or undefined", () => {

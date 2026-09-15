@@ -682,12 +682,10 @@ export interface PermitAction
     }
   > {
   /**
-   * EIP-712 payload to sign for this permit, ready to pass to any signer
-   * (`walletClient.signTypedData(...)`, `account.signTypedData(...)`, or a remote/EIP-712 signer).
-   * Required on {@link Requirement.action}; optional here only so hand-built action metadata
-   * (e.g. test fixtures) need not supply it. The payload is deep-frozen and `sign()` signs this
-   * exact payload. Feed an externally produced signature back through
-   * {@link Requirement.withSignature} to obtain the {@link RequirementSignature} `buildTx()` consumes.
+   * EIP-712 payload `sign()` signs for this permit, exposed so it can be inspected or displayed
+   * before signing. Required on {@link Requirement.action}; optional here only so hand-built action
+   * metadata (e.g. test fixtures) need not supply it. The payload is deep-frozen and `sign()` signs
+   * this exact payload.
    */
   readonly typedData?: RequirementTypedData;
 }
@@ -740,12 +738,12 @@ export interface MidnightOfferRootSignatureAction
     }
   > {
   /**
-   * EIP-712 offer-tree payload to sign for this Midnight ratification. See {@link PermitAction.typedData}.
+   * EIP-712 offer-tree payload `sign()` signs for this Midnight ratification, exposed so it can be
+   * inspected or displayed before signing. See {@link PermitAction.typedData}.
    *
    * A bare signature over this payload is not enough to build the submit-offers transaction:
-   * `sign()` and `withSignature()` also derive the ratification payload
-   * (`MidnightOfferRootSignature.args.payload`) that `buildTx()` submits to the mempool, so an
-   * external signature must be passed through {@link Requirement.withSignature}.
+   * `sign()` also derives the ratification payload (`MidnightOfferRootSignature.args.payload`) that
+   * `buildTx()` submits to the mempool.
    */
   readonly typedData?: RequirementTypedData;
 }
@@ -835,8 +833,7 @@ type RequirementResult<
 /**
  * A signable approval / authorization requirement. `sign()` returns the matching
  * {@link RequirementSignature}; `action` describes the requirement without signing and carries the
- * EIP-712 `typedData` payload so an integrator can produce the signature with any signer, then
- * exchange it for the same {@link RequirementSignature} through `withSignature()`.
+ * EIP-712 `typedData` payload so an integrator can inspect or display it before signing.
  *
  * Generic over the signature it produces so permit encoders narrow to
  * {@link PermitRequirementSignature} and the authorization encoder to
@@ -848,8 +845,8 @@ type RequirementResult<
  * const requirement = (await output.getRequirements()).find(isRequirementSignature);
  * if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
  *
- * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
- * const signed = await requirement.withSignature(signature, owner);
+ * const typedData = requirement.action.typedData; // exact EIP-712 payload `sign()` will sign
+ * const signed = await requirement.sign(walletClient, owner);
  * const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
  * ```
  */
@@ -862,29 +859,6 @@ export interface Requirement<
   /** Signs `action.typedData` with `client`, verifies the signature recovers `userAddress`, and returns the signed requirement. */
   readonly sign: (
     client: WalletClient,
-    userAddress: Address,
-  ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
-  /**
-   * Wraps a signature over `action.typedData` produced by any signer into the same signed
-   * requirement `sign()` returns, after verifying it recovers `userAddress` (and, for owner-bound
-   * requirements, that `userAddress` is the owner). Midnight also derives the ratification payload.
-   * Verification is offline ECDSA recovery, so `userAddress` must be an EOA; ERC-1271 contract-wallet
-   * signatures are not verified and are rejected.
-   *
-   * @param signature - EIP-712 signature over `action.typedData`.
-   * @param userAddress - EOA expected to have produced `signature` (the owner, for owner-bound requirements).
-   * @returns The deep-frozen {@link RequirementSignature} (`{ args, action }`) that `sign()` would return; pass it to `buildTx()`.
-   * @throws {InvalidSignatureError} when `signature` is malformed or does not recover to `userAddress`.
-   * @throws {AddressMismatchError} when `userAddress` differs from the owner embedded in ERC-2612 / authorization typed data.
-   * @example
-   * ```ts
-   * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
-   * const signed = await requirement.withSignature(signature, owner);
-   * // signed.args.signature === signature; signed.action === requirement.action
-   * ```
-   */
-  readonly withSignature: (
-    signature: Hex,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
   /** Requirement metadata; `typedData` is always populated on SDK-built requirements. */
@@ -1027,9 +1001,7 @@ export function isRequirementSignature(requirement: unknown): boolean {
     typeof requirement === "object" &&
     requirement !== null &&
     "sign" in requirement &&
-    typeof requirement.sign === "function" &&
-    "withSignature" in requirement &&
-    typeof requirement.withSignature === "function"
+    typeof requirement.sign === "function"
   );
 }
 
