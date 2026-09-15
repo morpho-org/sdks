@@ -147,6 +147,7 @@ jobs:
           LD_AUDIT: ''
           LD_LIBRARY_PATH: ''
           NODE_OPTIONS: ''
+          TRUSTED_TEMP: ${{ runner.temp }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
@@ -156,8 +157,8 @@ jobs:
         run: >-
           /usr/bin/env -i
           HOME="$HOME"
-          RUNNER_TEMP="$RUNNER_TEMP"
-          TRUSTED_SCRIPTS_DIR="$RUNNER_TEMP/trusted-scripts"
+          RUNNER_TEMP="$TRUSTED_TEMP"
+          TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
           SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
           GH_TOKEN="$GH_TOKEN"
           GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
@@ -165,7 +166,7 @@ jobs:
           PR_NUMBER="$PR_NUMBER"
           HEAD_SHA="$HEAD_SHA"
           MAX_ID_BEFORE="$MAX_ID_BEFORE"
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
+          "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
@@ -178,6 +179,7 @@ jobs:
           SECRET_VALUES: |
             ${{ github.token }}
             ${{ secrets.ANTHROPIC_SDK_API_KEY }}
+          TRUSTED_TEMP: ${{ runner.temp }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           BASH_ENV: ''
@@ -192,13 +194,13 @@ jobs:
         run: >-
           /usr/bin/env -i
           HOME="$HOME"
-          RUNNER_TEMP="$RUNNER_TEMP"
+          RUNNER_TEMP="$TRUSTED_TEMP"
           GITHUB_OUTPUT="$GITHUB_OUTPUT"
-          TRUSTED_SCRIPTS_DIR="$RUNNER_TEMP/trusted-scripts"
+          TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
           SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
           SECRET_VALUES="$SECRET_VALUES"
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/post-claude.ts" scrub
-          "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
+          "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" scrub
+          "$EXECUTION_FILE" "$TRUSTED_TEMP/claude-execution-output.scrubbed.json"
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
