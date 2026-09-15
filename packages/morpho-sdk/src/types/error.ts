@@ -2077,11 +2077,11 @@ export class MidnightOfferRootOfferCountMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight offer-root signature was not prepared by this maker flow. */
+/** Thrown when a Midnight offer-root signature carries no encoded payload. */
 export class UnpreparedMidnightOfferRootSignatureError extends Error {
   constructor() {
     super(
-      "Midnight offer root signature was not prepared for this offer tree. Sign this flow's offer-root requirement before building the submit transaction.",
+      "Midnight offer root signature carries no encoded payload. Sign the offer-root requirement (its signature already includes the payload) before building the submit transaction.",
     );
   }
 }
