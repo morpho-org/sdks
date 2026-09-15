@@ -598,8 +598,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
-   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
+   * @throws {NegativeInputError} when reallocation is needed and a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when reallocation is needed and a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getAvailableLiquidityToUtilization`.
@@ -638,20 +638,6 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
   ): bigint {
-    if (options?.enabled !== false) {
-      // Reject invalid defaults even when only the market's own liquidity is returned.
-      resolveMaxWithdrawalUtilization(
-        options?.defaultMaxWithdrawalUtilization,
-        "defaultMaxWithdrawalUtilization",
-      );
-      for (const ceiling of Object.values(
-        options?.maxWithdrawalUtilization ?? {},
-      )) {
-        // Validate unused per-market overrides before the supply-target early return.
-        resolveMaxWithdrawalUtilization(ceiling);
-      }
-    }
-
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
     // Below the allocator's trigger, no reallocation happens: own headroom only.
