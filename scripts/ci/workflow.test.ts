@@ -61,6 +61,21 @@ describe("describeError", () => {
     expect(describeError(loop)).toBe("loop");
     expect(describeError(undefined)).toBe("");
   });
+
+  test("behavior: AggregateError with an empty message surfaces its errors", () => {
+    const aggregate = new AggregateError(
+      [
+        new Error("connect ECONNREFUSED ::1:443"),
+        new Error("connect ECONNREFUSED 127.0.0.1:443"),
+      ],
+      "",
+    );
+    expect(
+      describeError(new TypeError("fetch failed", { cause: aggregate })),
+    ).toBe(
+      "fetch failed: connect ECONNREFUSED ::1:443; connect ECONNREFUSED 127.0.0.1:443",
+    );
+  });
 });
 
 describe("writeStdout", () => {

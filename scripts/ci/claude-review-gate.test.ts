@@ -87,6 +87,16 @@ describe("parseNextLink", () => {
     );
   });
 
+  test('behavior: middle page lists rel="prev" before rel="next"', () => {
+    expect(
+      parseNextLink(
+        '<https://api.github.com/repositories/1/pulls/1076/reviews?per_page=100&page=1>; rel="prev", <https://api.github.com/repositories/1/pulls/1076/reviews?per_page=100&page=3>; rel="next", <https://api.github.com/repositories/1/pulls/1076/reviews?per_page=100&page=4>; rel="last", <https://api.github.com/repositories/1/pulls/1076/reviews?per_page=100&page=1>; rel="first"',
+      )?.href,
+    ).toBe(
+      "https://api.github.com/repositories/1/pulls/1076/reviews?per_page=100&page=3",
+    );
+  });
+
   test("behavior: last page", () => {
     expect(parseNextLink(null)).toBeNull();
     expect(

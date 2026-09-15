@@ -25,18 +25,33 @@ export function reportCliError(error: unknown): void {
   process.exitCode = 1;
 }
 
-/** Formats an error as its message followed by every `cause` message, separated by `: `. */
+/**
+ * Formats an error as its message followed by every `cause` message, separated by `: `. An
+ * `AggregateError` (undici's shape for connection failures, whose own message is often empty)
+ * contributes its `errors` joined by `; `. Empty messages are dropped.
+ */
 export function describeError(error: unknown): string {
+  return describeChain(error, new Set()).join(": ");
+}
+
+function describeChain(error: unknown, seen: Set<unknown>): string[] {
   const messages: string[] = [];
-  const seen = new Set<unknown>();
   let current: unknown = error;
   while (current != null && !seen.has(current)) {
     seen.add(current);
-    messages.push(current instanceof Error ? current.message : String(current));
+    const message =
+      current instanceof Error ? current.message : String(current);
+    if (message !== "") messages.push(message);
+    if (current instanceof AggregateError) {
+      const inner = current.errors
+        .map((e: unknown) => describeChain(e, seen).join(": "))
+        .filter((m) => m !== "");
+      if (inner.length > 0) messages.push(inner.join("; "));
+    }
     current = current instanceof Error ? current.cause : undefined;
   }
 
-  return messages.join(": ");
+  return messages;
 }
 
 /**
