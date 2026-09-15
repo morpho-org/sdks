@@ -125,19 +125,21 @@ export const encodeErc20Permit = async (
     deployless: supportDeployless,
   });
 
-  const typedData = deepFreeze(
-    getPermitTypedData(
-      {
-        erc20: tokenData,
-        owner,
-        spender,
-        allowance: amount,
-        nonce,
-        deadline,
-      },
-      chainId,
-    ),
+  const permitTypedData = getPermitTypedData(
+    {
+      erc20: tokenData,
+      owner,
+      spender,
+      allowance: amount,
+      nonce,
+      deadline,
+    },
+    chainId,
   );
+  const typedData = deepFreeze({
+    ...permitTypedData,
+    domain: { ...permitTypedData.domain },
+  });
 
   const action: Requirement<Erc2612RequirementSignature>["action"] = {
     type: "permit",

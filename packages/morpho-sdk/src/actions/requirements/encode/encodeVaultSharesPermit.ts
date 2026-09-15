@@ -129,19 +129,21 @@ export const encodeVaultSharesPermit = (
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
-  const typedData = deepFreeze(
-    getPermitTypedData(
-      {
-        owner,
-        spender,
-        allowance: amount,
-        nonce,
-        deadline,
-        erc20: vault,
-      },
-      chainId,
-    ),
+  const permitTypedData = getPermitTypedData(
+    {
+      owner,
+      spender,
+      allowance: amount,
+      nonce,
+      deadline,
+      erc20: vault,
+    },
+    chainId,
   );
+  const typedData = deepFreeze({
+    ...permitTypedData,
+    domain: { ...permitTypedData.domain },
+  });
 
   const action: Requirement<Erc2612RequirementSignature>["action"] = {
     type: "permit",

@@ -319,6 +319,37 @@ describe("encodeVaultSharesPermit", () => {
     expect(signed.action.args.spender).toBe(spender);
   });
 
+  test("behavior: does not freeze the caller's Vault V1 EIP-5267 domain", () => {
+    const token = new Token({
+      address: vault,
+      name: "Vault V1",
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "Frozen Vault V1",
+        version: "1",
+        chainId: BigInt(mainnet.id),
+        verifyingContract: vault,
+        salt: zeroHash,
+        extensions: [],
+      }),
+    });
+
+    const requirement = encodeVaultSharesPermit({
+      vault: token,
+      version: "vaultV1",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 3n,
+      amount,
+      deadline: 1_900_000_000n,
+    });
+
+    expect(Object.isFrozen(requirement.action.typedData.domain)).toBe(true);
+    expect(Object.isFrozen(token.eip5267Domain?.eip712Domain)).toBe(false);
+    expect(Object.isFrozen(token.eip5267Domain)).toBe(false);
+  });
+
   test("behavior: snapshots the Vault V1 permit domain before signing", async () => {
     const extensions: bigint[] = [];
     const requirement = encodeVaultSharesPermit({
