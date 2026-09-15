@@ -59,6 +59,7 @@ describe("scrubTranscript", () => {
       '"{\\"Authorization\\":\\"token eyJhbGciOiJIUzI1NiJ9.escaped\\"}"',
       "basic Authorization: Basic dXNlcjpwYXNz",
       "lower authorization: bearer eyJhbGciOiJIUzI1NiJ9.lower",
+      "runtime ACTIONS_RUNTIME_TOKEN=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY3AiOiJBY3Rpb25zIn0.sig-Nature_1",
     ].join("\n");
 
     const scrubbed = scrubTranscript(transcript, []);
@@ -70,6 +71,8 @@ describe("scrubTranscript", () => {
     expect(scrubbed).toContain(`Authorization: Bearer ${MASK}"`);
     expect(scrubbed).toContain("https://x-access-token:***@github.com/o/r");
     expect(scrubbed).toContain(`installation ${MASK}`);
+    expect(scrubbed).toContain(`runtime ACTIONS_RUNTIME_TOKEN=${MASK}`);
+    expect(scrubbed).not.toMatch(/eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9/);
     expect(scrubbed).not.toContain("eyJ");
     expect(scrubbed).toContain(`"Authorization":"Bearer ${MASK}"`);
     expect(scrubbed).toContain(`\\"Authorization\\":\\"token ${MASK}\\"`);

@@ -49,10 +49,13 @@ interface RunOptions {
   readonly writeOutput?: (message: string) => void;
 }
 
-/** Lists every regular file under `dir`, as `/`-separated paths relative to `dir`, sorted. */
+/**
+ * Lists every non-directory entry under `dir` (regular files and symlinks, so a planted link changes
+ * the digest too), as `/`-separated paths relative to `dir`, sorted.
+ */
 export function listFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
+    .filter((entry) => !entry.isDirectory())
     .map((entry) =>
       relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"),
     )

@@ -24,8 +24,8 @@ export function isMain(
   if (entry == null || entry === "") return false;
   try {
     return moduleUrl === pathToFileURL(realpathSync(entry)).href;
-  } catch {
-    return false;
+  } catch (cause: unknown) {
+    throw new Error(`Cannot resolve CLI entry "${entry}".`, { cause });
   }
 }
 

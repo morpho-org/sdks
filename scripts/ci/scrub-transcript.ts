@@ -37,7 +37,8 @@ export const MASK = "***";
 /**
  * Token shapes that may appear in tool output regardless of which secret was configured:
  * GitHub tokens (classic `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`, the newer `ghs_<digits>_<payload>`
- * installation format, fine-grained `github_pat_`), Anthropic API keys, and `Authorization`
+ * installation format, fine-grained `github_pat_`), Anthropic API keys, bare JWTs (e.g. the runner's
+ * `ACTIONS_RUNTIME_TOKEN`, which is not a workflow secret), and `Authorization`
  * header values in both text (`Authorization: Bearer x`) and JSON (`"Authorization":"Bearer x"`,
  * escaped or not) form.
  */
@@ -46,6 +47,7 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
   /((?:\\?")?Authorization(?:\\?")?\s*:\s*(?:\\?")?(?:Bearer|token|Basic)\s+)[^\s"'\\]+/gi,
 ];
 

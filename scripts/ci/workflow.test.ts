@@ -41,6 +41,9 @@ describe("isMain", () => {
       expect(isMain(url, ["node", join(dir, "other.ts")])).toBe(false);
       expect(isMain(url, ["node"])).toBe(false);
       expect(isMain(url, ["node", ""])).toBe(false);
+      expect(() => isMain(url, ["node", join(dir, "missing.ts")])).toThrow(
+        /Cannot resolve CLI entry/,
+      );
     } finally {
       rmSync(dir, { force: true, recursive: true });
     }

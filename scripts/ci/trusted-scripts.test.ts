@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -72,6 +73,15 @@ describe("digestDirectory", () => {
       base,
     );
     expect(digestDirectory(makeTree({ "a.ts": "a" }))).not.toBe(base);
+  });
+
+  test("behavior: a symlink planted after the snapshot changes the digest", () => {
+    const dir = makeTree({ "a.ts": "a" });
+    const base = digestDirectory(dir);
+    symlinkSync(join(dir, "a.ts"), join(dir, "planted.ts"));
+
+    expect(digestDirectory(dir)).not.toBe(base);
+    expect(listFiles(dir)).toEqual(["a.ts", "planted.ts"]);
   });
 
   test("behavior: moving content between files is detected", () => {
