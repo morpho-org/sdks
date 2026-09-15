@@ -104,11 +104,40 @@ export async function listReviews(
       );
     }
 
-    reviews.push(...(page as Review[]));
+    for (const item of page) {
+      if (!isReview(item)) {
+        throw new Error(
+          `GitHub API GET ${url.pathname} returned a malformed review entry.`,
+        );
+      }
+      reviews.push(item);
+    }
     url = parseNextLink(response.headers.get("link"));
   }
 
   return reviews;
+}
+
+function isReview(value: unknown): value is Review {
+  if (typeof value !== "object" || value == null) return false;
+  const { body, commit_id, id, state, user } = value as Record<
+    keyof Review,
+    unknown
+  >;
+  const userOk =
+    user === null ||
+    (typeof user === "object" &&
+      user != null &&
+      typeof (user as { login?: unknown }).login === "string");
+
+  return (
+    (body === null || typeof body === "string") &&
+    typeof commit_id === "string" &&
+    typeof id === "number" &&
+    Number.isInteger(id) &&
+    typeof state === "string" &&
+    userOk
+  );
 }
 
 /** Parses the `rel="next"` target of a GitHub `Link` response header. */

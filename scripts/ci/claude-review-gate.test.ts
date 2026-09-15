@@ -253,6 +253,21 @@ describe("listReviews", () => {
       }),
     ).rejects.toThrow(/non-array/);
   });
+
+  test("error: rejects a review entry with a malformed shape", async () => {
+    const { fetchImpl } = createFetch([
+      { body: [{ ...claudeReview(1), id: "1" }] },
+    ]);
+
+    await expect(
+      listReviews({
+        fetchImpl,
+        prNumber: "1076",
+        repository: "morpho-org/sdks",
+        token: "ghs_test",
+      }),
+    ).rejects.toThrow(/malformed review entry/);
+  });
 });
 
 describe("snapshot", () => {
