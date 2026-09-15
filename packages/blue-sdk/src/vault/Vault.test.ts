@@ -8,7 +8,7 @@ import {
   vaultInput,
   vaultMarketConfig,
 } from "../__test__/fixtures.js";
-import { UnknownMarketAllocationError } from "../errors.js";
+import { BlueErrors, UnknownMarketAllocationError } from "../errors.js";
 import { Market } from "../market/Market.js";
 import { MathLib } from "../math/MathLib.js";
 import { AccrualPosition } from "../position/Position.js";
@@ -295,6 +295,23 @@ describe("AccrualVault", () => {
     expect(preserved).not.toBe(position);
     expect(preserved).toStrictEqual(position);
   });
+
+  test.each([0n, 100n])(
+    "error: BlueErrors.InvalidInterestAccrual with %s supply shares",
+    (supplyShares) => {
+      const position = accrualPosition(
+        { supplyShares },
+        { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+      );
+      const vault = new AccrualVault(vaultInput(), [
+        { config: vaultMarketConfig(position.marketId), position },
+      ]);
+
+      expect(() =>
+        vault.accrueInterest(position.market.lastUpdate - 1n),
+      ).toThrow(BlueErrors.InvalidInterestAccrual);
+    },
+  );
 
   test("accrueInterest does not count fetched lost assets twice", () => {
     const position = accrualPosition({ supplyShares: 100n });

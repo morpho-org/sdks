@@ -364,7 +364,27 @@ export class Market implements IMarket {
    * @param timestamp The timestamp at which to accrue interest.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `lastUpdate` (returns a copy of the market).
+   * @returns A new `Market` with accrued asset totals and fee shares, updated `lastUpdate`, and projected `rateAtTarget`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
+   * @example
+   * ```ts
+   * import { ChainId, getChainAddress, Market, MarketParams } from "@morpho-org/blue-sdk";
+   *
+   * const market = new Market({
+   *   params: MarketParams.idle(getChainAddress(ChainId.EthMainnet, "usdc")),
+   *   totalSupplyAssets: 1_000_000n,
+   *   totalBorrowAssets: 0n,
+   *   totalSupplyShares: 1_000_000_000_000n,
+   *   totalBorrowShares: 0n,
+   *   lastUpdate: 1_700_000_000n,
+   *   fee: 0n,
+   * });
+   * const accrued = market.accrueInterest(1_700_003_600n);
+   * // accrued satisfies Market
+   * // accrued.lastUpdate === 1_700_003_600n; accrued.totalSupplyAssets === 1_000_000n
+   * // market.lastUpdate === 1_700_000_000n
+   * ```
    */
   public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter

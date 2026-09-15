@@ -651,6 +651,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * Projects the vault's market interest, loss accounting, and performance fees to a timestamp.
    *
    * Returns a new `AccrualVault` and leaves this instance unchanged.
+   * Zero-share allocations keep their market snapshots while still validating the timestamp.
    *
    * @param timestamp - Optional accrual timestamp in seconds. Must not precede any allocation
    *   market's `lastUpdate`; defaults each allocation to its own `lastUpdate`.
@@ -696,7 +697,13 @@ export class AccrualVault extends Vault implements IAccrualVault {
           config,
           position:
             position.supplyShares === 0n
-              ? position.accrueInterest(position.market.lastUpdate)
+              ? position.accrueInterest(
+                  // Preserve backward timestamps for validation; skip only forward projection.
+                  MathLib.min(
+                    timestamp ?? position.market.lastUpdate,
+                    position.market.lastUpdate,
+                  ),
+                )
               : position.accrueInterest(timestamp),
         };
       }),
