@@ -52,7 +52,8 @@ export interface VaultV2InKindRedeemParams {
  * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind,
+ *   asset, owner, spender, or signature encoding, or when its signed and action deadlines disagree.
  * @example
  * ```ts
  * import { vaultV2InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -84,6 +85,8 @@ export const vaultV2InKindRedeem = ({
   const sharesPermit = getVaultExitBundlesV1PermitStruct({
     vault: vault.address,
     deadline: args.deadline,
+    owner: args.userAddress,
+    spender: to,
     requirementSignature: args.requirementSignature,
   });
   let tx = {

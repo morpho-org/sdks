@@ -13,6 +13,7 @@ import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
   NonPositiveInputError,
   type PermitRequirementSignature,
+  VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 import { vaultV2InKindRedeem } from "./inKindRedeem.js";
 
@@ -149,6 +150,53 @@ describe("vaultV2InKindRedeem", () => {
         "functionName": "vaultExitBundlesV1InKindRedemptionVaultV2",
       }
     `);
+  });
+
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            args: {
+              ...permit.args,
+              owner: blue,
+            },
+          },
+        },
+      }),
+    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+  });
+
+  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another spender", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                spender: blue,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(VaultExitBundlesV1PermitMismatchError);
   });
 
   test("behavior: calldata round-trips across valid primitive inputs", () => {
