@@ -279,7 +279,7 @@ if (requirement == null) return; // nothing to sign (only on-chain approvals, or
 
 const signature = await remoteSigner.signTypedData(requirement.action.typedData);
 const signed = await requirement.withSignature(signature, owner);
-const tx = output.buildTx(signed);
+const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
 ```
 
 `requirement.action.typedData` is typed as required on a `Requirement`, so no null check is

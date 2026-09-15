@@ -815,7 +815,7 @@ type RequirementResult<
  *
  * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
  * const signed = await requirement.withSignature(signature, owner);
- * const tx = output.buildTx(signed);
+ * const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
  * ```
  */
 export interface Requirement<
