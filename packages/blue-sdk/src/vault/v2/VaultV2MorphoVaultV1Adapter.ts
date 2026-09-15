@@ -148,14 +148,14 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * share-based accounting.
    *
    * @param timestamp - Optional accrual timestamp. Defaults each nested market to its own
-   *   `lastUpdate`.
+   *   `lastUpdate`; markets at or beyond the requested timestamp keep their snapshots without
+   *   backward accrual or a timestamp error.
    * @returns The projected underlying assets represented by `shares`, or `0n` when
    *   `parentAllocation` or `shares` is `0n`.
    * @throws {UnknownMarketAllocationError} when the nested Vault V1 withdraw queue references a
    *   market without an allocation.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a nested market's
-   *   `lastUpdate`.
-   * @throws {UnsupportedMarketIrmError} when an allocated nested market with positive debt uses an unsupported IRM.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an allocated nested market with
+   *   positive debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { AccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";

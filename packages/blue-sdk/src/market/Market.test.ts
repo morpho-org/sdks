@@ -61,20 +61,23 @@ describe("Market constructor and getters", () => {
     expect(accrued.totalSupplyAssets).toBe(unsupported.totalSupplyAssets);
     expect(unsupported.getSupplyApy(101n)).toBe(0);
     expect(unsupported.getAvgSupplyRate(101n)).toBe(0n);
-    expect(() => unsupported.getSupplyApy(99n)).toThrow(
-      BlueErrors.InvalidInterestAccrual,
-    );
-    expect(() => unsupported.accrueInterest(99n)).toThrow(
-      BlueErrors.InvalidInterestAccrual,
-    );
+    expect(unsupported.getSupplyApy(99n)).toBe(0);
+    expect(unsupported.getAvgSupplyRate(99n)).toBe(0n);
+    expect(unsupported.accrueInterest(99n)).toStrictEqual(unsupported);
   });
 
-  test("rate helpers reject timestamps before lastUpdate", () => {
+  test.each([
+    "getEndBorrowRate",
+    "getAvgBorrowRate",
+    "getBorrowApy",
+    "getSupplyApy",
+    "getAvgBorrowApy",
+    "getAvgSupplyRate",
+    "getAvgSupplyApy",
+  ] as const)("behavior: %s uses lastUpdate for past timestamps", (method) => {
     const m = market();
 
-    expect(() => m.getEndBorrowRate(99n)).toThrow(
-      BlueErrors.InvalidInterestAccrual,
-    );
+    expect(m[method](99n)).toBe(m[method](m.lastUpdate));
   });
 
   test("average APY helpers use average borrow and supply rates", () => {
@@ -124,6 +127,29 @@ describe("Market constructor and getters", () => {
 });
 
 describe("Market accrueInterest and accounting actions", () => {
+  test.each([undefined, 0n, MathLib.WAD / 100_000n])(
+    "behavior: past and equal accrual preserves snapshots with rateAtTarget %s",
+    (rateAtTarget) => {
+      const m = market({ rateAtTarget });
+
+      for (const timestamp of [-1n, 99n, 99, "99", m.lastUpdate]) {
+        const accrued = m.accrueInterest(timestamp);
+
+        expect(accrued).not.toBe(m);
+        expect(accrued).toStrictEqual(m);
+      }
+    },
+  );
+
+  test.each(["supply", "withdraw", "borrow", "repay"] as const)(
+    "behavior: %s applies the operation without past accrual",
+    (method) => {
+      const m = market({ rateAtTarget: undefined });
+
+      expect(m[method](1n, 0n, 99n)).toStrictEqual(m[method](1n, 0n));
+    },
+  );
+
   test("accrueInterest returns an updated market and keeps the source unchanged", () => {
     const m = market({ fee: 0n });
     const accrued = m.accrueInterest(200n);

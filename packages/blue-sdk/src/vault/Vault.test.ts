@@ -8,7 +8,7 @@ import {
   vaultInput,
   vaultMarketConfig,
 } from "../__test__/fixtures.js";
-import { BlueErrors, UnknownMarketAllocationError } from "../errors.js";
+import { UnknownMarketAllocationError } from "../errors.js";
 import { Market } from "../market/Market.js";
 import { MathLib } from "../math/MathLib.js";
 import { AccrualPosition } from "../position/Position.js";
@@ -212,6 +212,8 @@ describe("AccrualVault", () => {
 
     expect(vault.getApy(timestamp)).toBe(0.44954541440127593);
     expect(vault.getNetApy(timestamp)).toBe(0.34581529939809785);
+    expect(vault.getApy(timestamp - 1n)).toBe(vault.getApy(timestamp));
+    expect(vault.getNetApy(timestamp - 1n)).toBe(vault.getNetApy(timestamp));
   });
 
   test("getAllocationProportion handles empty and missing allocations", () => {
@@ -297,7 +299,7 @@ describe("AccrualVault", () => {
   });
 
   test.each([0n, 100n])(
-    "error: BlueErrors.InvalidInterestAccrual with %s supply shares",
+    "behavior: past accrual preserves market snapshots with %s supply shares",
     (supplyShares) => {
       const position = accrualPosition(
         { supplyShares },
@@ -307,11 +309,46 @@ describe("AccrualVault", () => {
         { config: vaultMarketConfig(position.marketId), position },
       ]);
 
-      expect(() =>
-        vault.accrueInterest(position.market.lastUpdate - 1n),
-      ).toThrow(BlueErrors.InvalidInterestAccrual);
+      const snapshot = new AccrualVault(vault, [...vault.allocations.values()]);
+      const accrued = vault.accrueInterest(position.market.lastUpdate - 1n);
+      const preserved = accrued.allocations.get(position.marketId)?.position;
+
+      expect(preserved).not.toBe(position);
+      expect(preserved).toStrictEqual(position);
+      expect(accrued).toStrictEqual(
+        vault.accrueInterest(position.market.lastUpdate),
+      );
+      expect(vault).toStrictEqual(snapshot);
     },
   );
+
+  test("behavior: accrual preserves newer markets while advancing older ones", () => {
+    const older = accrualPosition({ supplyShares: 100n });
+    const newer = accrualPosition(
+      { supplyShares: 100n },
+      {
+        params: marketParams({ irm: RECIPIENT }),
+        rateAtTarget: undefined,
+        lastUpdate: 102n,
+      },
+    );
+    const vault = new AccrualVault(vaultInput(), [
+      { config: vaultMarketConfig(older.marketId), position: older },
+      { config: vaultMarketConfig(newer.marketId), position: newer },
+    ]);
+    const accrued = vault.accrueInterest(101n);
+    const accruedOlder = accrued.allocations.get(older.marketId)?.position;
+
+    expect(accruedOlder?.market.lastUpdate).toBe(101n);
+    expect(accruedOlder?.market.totalSupplyAssets).toBeGreaterThan(
+      older.market.totalSupplyAssets,
+    );
+    expect(accrued.allocations.get(newer.marketId)?.position).toStrictEqual(
+      newer,
+    );
+    expect(older.market.lastUpdate).toBe(100n);
+    expect(newer.market.lastUpdate).toBe(102n);
+  });
 
   test("accrueInterest does not count fetched lost assets twice", () => {
     const position = accrualPosition({ supplyShares: 100n });

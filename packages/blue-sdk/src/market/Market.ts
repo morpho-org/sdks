@@ -208,7 +208,7 @@ export class Market implements IMarket {
    * It is fundamentally different from the rate at which interest is paid by borrowers to lenders in the case of an interest accrual,
    * as in the case of the AdaptiveCurveIRM, the (approximated) average rate since the last update is used instead.
    * @param timestamp The timestamp at which to calculate the borrow rate.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow rate).
    * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
@@ -220,7 +220,7 @@ export class Market implements IMarket {
    * Returns the average rate at which interest _would_ accrue for borrowers of this market,
    * if `accrueInterest` was called at the given timestamp (scaled by WAD).
    * @param timestamp The timestamp at which to calculate the average borrow rate.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current average borrow rate).
    * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
@@ -232,7 +232,7 @@ export class Market implements IMarket {
    * Returns the rates that _would_ apply to interest accrual for borrowers of this market,
    * if `accrueInterest` was called at the given timestamp (scaled by WAD).
    * @param timestamp The timestamp at which to calculate the accrual borrow rate.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current accrual borrow rate).
    */
   protected getAccrualBorrowRates(timestamp: BigIntish = Time.timestamp()): {
@@ -241,16 +241,7 @@ export class Market implements IMarket {
     endBorrowRate: bigint;
     endRateAtTarget?: bigint;
   } {
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    timestamp = BigInt(timestamp);
-
-    const elapsed = timestamp - this.lastUpdate;
-    if (elapsed < 0n)
-      throw new BlueErrors.InvalidInterestAccrual(
-        this.id,
-        timestamp,
-        this.lastUpdate,
-      );
+    const elapsed = MathLib.zeroFloorSub(timestamp, this.lastUpdate);
 
     if (this.rateAtTarget == null) {
       if (this.params.irm !== ZERO_ADDRESS) {
@@ -277,7 +268,7 @@ export class Market implements IMarket {
    * The market's instantaneous borrow-side Annual Percentage Yield (APY) at the given timestamp,
    * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the borrow APY.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
    * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
@@ -291,16 +282,12 @@ export class Market implements IMarket {
    * The market's instantaneous supply-side Annual Percentage Yield (APY) at the given timestamp,
    * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the supply APY.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalBorrowAssets === 0n) {
-      // Validate the timestamp even though supply interest is exactly zero.
-      this.accrueInterest(timestamp);
-      return 0;
-    }
+    if (this.totalBorrowAssets === 0n) return 0;
     const borrowRate = this.getEndBorrowRate(timestamp);
 
     return MarketUtils.rateToApy(
@@ -315,7 +302,7 @@ export class Market implements IMarket {
    * The market's experienced borrow-side Annual Percentage Yield (APY),
    * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the borrow APY.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
    * @throws {UnsupportedMarketIrmError} when the market uses a nonzero unsupported IRM.
    */
@@ -329,16 +316,12 @@ export class Market implements IMarket {
    * Returns the average rate at which interest _would_ accrue for suppliers of this market,
    * if `accrueInterest` was called at the given timestamp (scaled by WAD).
    * @param timestamp The timestamp at which to calculate the average supply rate.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current average supply rate).
    * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
   public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalBorrowAssets === 0n) {
-      // Validate the timestamp even though supply interest is exactly zero.
-      this.accrueInterest(timestamp);
-      return 0n;
-    }
+    if (this.totalBorrowAssets === 0n) return 0n;
     const borrowRate = this.getAvgBorrowRate(timestamp);
 
     return MathLib.wMulUp(
@@ -351,7 +334,7 @@ export class Market implements IMarket {
    * The market's experienced supply-side Annual Percentage Yield (APY),
    * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the supply APY.
-   * Must be greater than or equal to `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    * @throws {UnsupportedMarketIrmError} when positive debt uses a nonzero unsupported IRM.
    */
@@ -362,10 +345,9 @@ export class Market implements IMarket {
   /**
    * Returns a new market derived from this market, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest.
-   * Must be greater than or equal to `lastUpdate`.
-   * Defaults to `lastUpdate` (returns a copy of the market).
-   * @returns A new `Market` with accrued asset totals and fee shares, updated `lastUpdate`, and projected `rateAtTarget`.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
+   * Earlier timestamps are treated as `lastUpdate`.
+   * Defaults to `lastUpdate`. At or before `lastUpdate`, returns an unchanged copy without projecting interest or rewinding the timestamp.
+   * @returns A new `Market`, unchanged for past or equal timestamps; otherwise with accrued asset totals and fee shares, updated `lastUpdate`, and projected `rateAtTarget`.
    * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
    * @example
    * ```ts
@@ -380,9 +362,9 @@ export class Market implements IMarket {
    *   lastUpdate: 1_700_000_000n,
    *   fee: 0n,
    * });
-   * const accrued = market.accrueInterest(1_700_003_600n);
+   * const accrued = market.accrueInterest(1_699_999_999n);
    * // accrued satisfies Market
-   * // accrued.lastUpdate === 1_700_003_600n; accrued.totalSupplyAssets === 1_000_000n
+   * // accrued.lastUpdate === 1_700_000_000n; accrued.totalSupplyAssets === 1_000_000n
    * // market.lastUpdate === 1_700_000_000n
    * ```
    */
@@ -390,9 +372,8 @@ export class Market implements IMarket {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
-    if (timestamp === this.lastUpdate) return new Market(this);
+    if (timestamp <= this.lastUpdate) return new Market(this);
     if (
-      timestamp > this.lastUpdate &&
       this.rateAtTarget == null &&
       this.params.irm !== ZERO_ADDRESS &&
       this.totalBorrowAssets === 0n
@@ -422,10 +403,9 @@ export class Market implements IMarket {
    * Applies a supply to an interest-accrued copy of this market.
    * @param assets Loan assets to supply, or zero when `shares` is provided.
    * @param shares Supply shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The updated market and normalized asset and share amounts.
    * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
@@ -467,10 +447,9 @@ export class Market implements IMarket {
    * Applies a withdrawal to an interest-accrued copy of this market.
    * @param assets Loan assets to withdraw, or zero when `shares` is provided.
    * @param shares Supply shares to burn, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The updated market and normalized asset and share amounts.
    * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {BlueErrors.InsufficientLiquidity} when the withdrawal exceeds the accrued market's liquidity.
    * @example
@@ -516,10 +495,9 @@ export class Market implements IMarket {
    * Applies a borrow to an interest-accrued copy of this market.
    * @param assets Loan assets to borrow, or zero when `shares` is provided.
    * @param shares Borrow shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The updated market and normalized asset and share amounts.
    * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {BlueErrors.InsufficientLiquidity} when the borrow exceeds the accrued market's liquidity.
    * @example
@@ -569,7 +547,7 @@ export class Market implements IMarket {
    * `totalBorrowAssets`; the market total is then floored at zero, mirroring `Morpho.repay`.
    * @param assets The amount of loan assets to repay (`0n` when repaying by shares).
    * @param shares The amount of borrow shares to repay (`0n` when repaying by assets).
-   * @param timestamp The timestamp at which to accrue interest before repaying. Defaults to `lastUpdate`.
+   * @param timestamp The timestamp at which to accrue interest before repaying. Defaults to `lastUpdate`; earlier timestamps skip interest accrual while still repaying.
    * @returns The accrued market after repayment, along with the resolved `assets` and `shares` repaid.
    * @throws {BlueErrors.InconsistentInput} If both or neither of `assets` and `shares` are non-zero.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.

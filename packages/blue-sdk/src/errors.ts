@@ -102,7 +102,10 @@ export namespace BlueErrors {
     }
   }
 
-  /** Error thrown when market interest accrual is requested before `lastUpdate`. */
+  /**
+   * Legacy market accrual error retained for compatibility.
+   * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
@@ -170,7 +173,10 @@ export namespace BlueErrors {
 
 /** Morpho Vault V2 simulation errors. */
 export namespace VaultV2Errors {
-  /** Error thrown when vault interest accrual is requested before `lastUpdate`. */
+  /**
+   * Legacy Vault V2 accrual error retained for compatibility.
+   * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
