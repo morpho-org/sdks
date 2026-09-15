@@ -10,6 +10,17 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
 
+## 4.1.7
+
+### Patch Changes
+
+- [#1063](https://github.com/morpho-org/sdks/pull/1063) [`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add the canonical Permit2 contract address (`0x000000000022D473030F116dDEE9F6B43aC78BA3`) to the Monad (chain id 143) and Stable (chain id 988) entries in the shared address registry, enabling Permit2 approval flows (Bundler3 and Midnight periphery) on both chains.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entries.
+
+- Updated dependencies [[`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd)]:
+  - @morpho-org/morpho-ts@2.12.0
+
 ## 4.1.6
 
 ### Patch Changes
