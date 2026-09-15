@@ -171,11 +171,15 @@ export function countNewReviews(
 }
 
 /**
- * Parses the `MAX_ID_BEFORE` step output: empty means "no snapshot" (0); anything else must be a
- * non-negative integer so a corrupted output cannot silently disable the gate.
+ * Parses the `MAX_ID_BEFORE` step output. The snapshot step always writes at least `max_id=0`, so an
+ * empty value can only come from broken step-output wiring and is rejected like a corrupted one.
  */
 export function parseMaxIdBefore(value: string | undefined): number {
-  if (value == null || value === "") return 0;
+  if (value == null || value === "") {
+    throw new Error(
+      "Missing MAX_ID_BEFORE: the snapshot step output is not wired to this step.",
+    );
+  }
   if (!/^\d+$/.test(value)) {
     throw new Error(
       `Invalid MAX_ID_BEFORE "${value}". Expected a non-negative integer.`,

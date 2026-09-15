@@ -168,9 +168,9 @@ describe("parseMaxIdBefore", () => {
     expect(parseMaxIdBefore("42")).toBe(42);
   });
 
-  test("behavior: missing snapshot means 0", () => {
-    expect(parseMaxIdBefore(undefined)).toBe(0);
-    expect(parseMaxIdBefore("")).toBe(0);
+  test("error: rejects an unwired snapshot output", () => {
+    expect(() => parseMaxIdBefore(undefined)).toThrow(/Missing MAX_ID_BEFORE/);
+    expect(() => parseMaxIdBefore("")).toThrow(/Missing MAX_ID_BEFORE/);
   });
 
   test("error: rejects non-integer values", () => {
