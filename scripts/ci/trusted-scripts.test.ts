@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -79,7 +80,7 @@ describe("digestDirectory", () => {
 });
 
 describe("snapshot", () => {
-  test("default: copies the tree and writes node_bin= and digest= to the output file", () => {
+  test("default: copies the tree and node, writes node_bin= and digest= to the output file", () => {
     const src = makeTree({ "a.ts": "a", "ci/b.ts": "b" });
     const dest = join(src, "..", `trusted-scripts-dest-${process.pid}`);
     const outputFile = join(src, "..", `trusted-scripts-output-${process.pid}`);
@@ -87,27 +88,36 @@ describe("snapshot", () => {
 
     const digest = snapshot({ dest, src }, { outputFile });
 
+    const nodeBin = join(dest, "bin", "node");
     expect(readFileSync(join(dest, "ci", "b.ts"), "utf8")).toBe("b");
     expect(readFileSync(outputFile, "utf8")).toBe(
-      `node_bin=${process.execPath}\ndigest=${digest}\n`,
+      `node_bin=${nodeBin}\ndigest=${digest}\n`,
     );
-    expect(digest).toBe(digestDirectory(src));
     expect(digest).toBe(digestDirectory(dest));
+    expect(digest).not.toBe(digestDirectory(src));
+    expect(
+      spawnSync(nodeBin, ["-p", "1+1"], { encoding: "utf8" }).stdout.trim(),
+    ).toBe("2");
   });
 
-  test("behavior: records an injected node binary path", () => {
+  test("behavior: the digest covers the copied node binary", () => {
     const src = makeTree({ "a.ts": "a" });
     const dest = join(src, "..", `trusted-scripts-dest-bin-${process.pid}`);
-    const outputFile = join(
+    const fakeNode = join(
       src,
       "..",
-      `trusted-scripts-output-bin-${process.pid}`,
+      `trusted-scripts-fake-node-${process.pid}`,
     );
-    tempDirs.push(dest, outputFile);
+    tempDirs.push(dest, fakeNode);
+    writeFileSync(fakeNode, "#!/bin/sh\nexit 0\n");
 
-    snapshot({ dest, src }, { nodeBin: "/opt/node", outputFile });
+    const digest = snapshot(
+      { dest, src },
+      { nodeBin: fakeNode, outputFile: "/dev/null" },
+    );
+    writeFileSync(join(dest, "bin", "node"), "#!/bin/sh\nexit 1\n");
 
-    expect(readFileSync(outputFile, "utf8")).toMatch(/^node_bin=\/opt\/node\n/);
+    expect(() => verify(dest, digest)).toThrow(/modified after the snapshot/);
   });
 
   test("error: refuses an existing destination", () => {

@@ -3,23 +3,26 @@
  *
  * The workflow snapshots `scripts/` from the default-branch checkout into `$RUNNER_TEMP` before
  * Claude runs, then executes the post-Claude gate and scrubber from that copy. `snapshot` makes the
- * copy and records a digest of it plus the absolute path of the node binary running it as step
- * outputs (runner-held state Claude's subprocesses cannot rewrite); `verify` recomputes the digest
- * and fails if any file was added, removed, or changed since. `verify` itself
+ * copy, adds the node binary running it as `<dest>/bin/node` (so the interpreter is covered by the
+ * same digest as the scripts it runs), and records the digest plus that node path as step outputs
+ * (runner-held state Claude's subprocesses cannot rewrite); `verify` recomputes the digest and
+ * fails if any file was added, removed, or changed since. `verify` itself
  * runs from the trusted copy, so this is defense in depth against accidental or careless edits by
  * Claude's session, not a boundary against a process that already controls the runner user.
  *
  * The digest is a SHA-256 over `"<relative path>\0<sha256(content)>\n"` entries sorted by path, so
  * it is independent of directory-walk order and of the shell tools available on the runner.
  *
- *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest>     # copies, appends node_bin= and digest= to GITHUB_OUTPUT
+ *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest>     # copies scripts + node, appends node_bin= and digest= to GITHUB_OUTPUT
  *   node scripts/ci/trusted-scripts.ts verify <dir> <expected>   # exits 1 when the digest differs
  */
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
+  copyFileSync,
   cpSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
 } from "node:fs";
@@ -31,7 +34,7 @@ import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
 interface RunOptions {
   readonly argv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
-  /** Overrides the recorded node binary path (defaults to `process.execPath`). */
+  /** Overrides the node binary copied into the snapshot (defaults to `process.execPath`). */
   readonly nodeBin?: string;
   /** Overrides `GITHUB_OUTPUT` for tests. */
   readonly outputFile?: string;
@@ -62,8 +65,8 @@ export function digestDirectory(dir: string): string {
 }
 
 /**
- * Copies `src` to a fresh `dest`, then records `node_bin` (the interpreter running this script) and
- * the `digest` of the copy as step outputs.
+ * Copies `src` to a fresh `dest`, copies the interpreter running this script to `<dest>/bin/node`,
+ * then records that path as `node_bin` and the `digest` of the whole copy as step outputs.
  */
 export function snapshot(
   { dest, src }: { readonly dest: string; readonly src: string },
@@ -74,10 +77,13 @@ export function snapshot(
     throw new Error(`Refusing to snapshot into existing path ${dest}.`);
   }
   cpSync(src, dest, { recursive: true });
+  const nodeBin = join(dest, "bin", "node");
+  mkdirSync(join(dest, "bin"));
+  copyFileSync(options.nodeBin ?? process.execPath, nodeBin);
   const digest = digestDirectory(dest);
   appendFileSync(
     options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
-    `node_bin=${options.nodeBin ?? process.execPath}\ndigest=${digest}\n`,
+    `node_bin=${nodeBin}\ndigest=${digest}\n`,
   );
 
   return digest;

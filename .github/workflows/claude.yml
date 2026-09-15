@@ -58,9 +58,9 @@ jobs:
 
       # The action checks out the PR head into the workspace before Claude runs, so anything under
       # .agents/ there is PR-controlled. Snapshot the trusted copy from the checked-out default branch.
-      # scripts/ci/trusted-scripts.ts copies scripts/ and records its digest plus the absolute node path
-      # as step outputs (runner-held state Claude's subprocesses cannot rewrite); the post-Claude steps
-      # re-verify them before executing the trusted copy.
+      # scripts/ci/trusted-scripts.ts copies scripts/ plus the node binary itself into the snapshot and
+      # records one digest over both, and the copied node path, as step outputs (runner-held state Claude's
+      # subprocesses cannot rewrite); the post-Claude steps re-verify the digest before executing the copy.
       - name: Snapshot trusted review instructions
         id: trusted
         run: |
