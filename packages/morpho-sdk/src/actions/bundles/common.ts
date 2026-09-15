@@ -398,10 +398,10 @@ export const getBundlesSharesPermit = (params: {
   readonly requirementSignature?: PermitRequirementSignature;
 }): BundleSharesPermit => {
   const { requirementSignature } = params;
-  // Reject unencodable bundle and signed permit deadlines before reshaping.
+  // Require a positive uint256 for the fallback permit deadline.
   validateDeadline(params.deadline);
   if (requirementSignature != null) {
-    // Signed permits retain their own deadline, which must also fit the ABI.
+    // Require a positive uint256 for the signed permit deadline too.
     validateDeadline(requirementSignature.args.deadline);
   }
   if (requirementSignature == null) {
