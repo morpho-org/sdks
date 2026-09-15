@@ -23,9 +23,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
+import {
+  isMain,
+  readRequiredEnv,
+  reportCliError,
+  writeStdout,
+} from "./workflow.ts";
 
 /** Replacement written over every masked secret. */
 export const MASK = "***";
@@ -95,14 +99,14 @@ export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
 }
 
 /**
- * Returns the canonical path of `inputPath`, throwing unless it resolves (symlinks included) to a
+ * Returns the canonical path and inode of `inputPath`, throwing unless it resolves (symlinks included) to a
  * regular file strictly inside `allowedDir` (a FIFO would block the read forever). Callers must
- * read the returned path, not `inputPath`.
+ * read through {@link readRegularFile}, not `inputPath`.
  */
 export function assertInputUnder(
   inputPath: string,
   allowedDir: string,
-): string {
+): CheckedFile {
   const error = new Error(
     `Refusing to read "${inputPath}": the transcript must live under ${allowedDir}.`,
   );
@@ -114,28 +118,43 @@ export function assertInputUnder(
   }
   const rel = relative(realpathSync(resolve(allowedDir)), canonical);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw error;
-  if (!statSync(canonical).isFile()) {
+  const stat = statSync(canonical);
+  if (!stat.isFile()) {
     throw new Error(
       `Refusing to read "${inputPath}": the transcript must be a regular file.`,
     );
   }
 
-  return canonical;
+  return { dev: stat.dev, ino: stat.ino, path: canonical };
+}
+
+/** Identity of a checked file: its canonical path plus the inode it had when checked. */
+export interface CheckedFile {
+  readonly dev: number;
+  readonly ino: number;
+  readonly path: string;
 }
 
 /**
- * Reads `path` without following a final symlink and only if the opened descriptor is a regular
- * file, so the file checked by {@link assertInputUnder} cannot be swapped between check and read.
+ * Reads a file checked by {@link assertInputUnder}: opens its path without following a final
+ * symlink, then requires the opened descriptor to be a regular file with the same `dev`/`ino` as
+ * the checked one, so a path component or file swapped in after the check is refused.
  */
-export function readRegularFile(path: string): string {
+export function readRegularFile(file: CheckedFile): string {
   const fd = openSync(
-    path,
+    file.path,
     constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
   );
   try {
-    if (!fstatSync(fd).isFile()) {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) {
       throw new Error(
-        `Refusing to read "${path}": the transcript must be a regular file.`,
+        `Refusing to read "${file.path}": the transcript must be a regular file.`,
+      );
+    }
+    if (stat.dev !== file.dev || stat.ino !== file.ino) {
+      throw new Error(
+        `Refusing to read "${file.path}": the file changed after it was checked.`,
       );
     }
 
@@ -161,15 +180,16 @@ export function main(options: ScrubOptions = {}): string {
     throw new Error("Usage: scrub-transcript.ts <input> <output>");
   }
 
-  const canonicalInput = assertInputUnder(
+  const input = assertInputUnder(
     inputPath,
     readRequiredEnv(env, "RUNNER_TEMP"),
   );
   const scrubbed = scrubTranscript(
-    readRegularFile(canonicalInput),
+    readRegularFile(input),
     readSecretValues(env),
   );
-  writeFileSync(outputPath, scrubbed);
+  // `wx` creates the output fail-closed: a pre-planted file or symlink at the path is refused.
+  writeFileSync(outputPath, scrubbed, { flag: "wx" });
   appendFileSync(
     options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
     `path=${outputPath}\n`,
@@ -179,10 +199,7 @@ export function main(options: ScrubOptions = {}): string {
   return outputPath;
 }
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isMain(import.meta.url)) {
   try {
     main();
   } catch (error: unknown) {

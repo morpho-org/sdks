@@ -1,7 +1,12 @@
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 
 import {
   describeError,
+  isMain,
   readRequiredEnv,
   reportCliError,
   sanitizeAnnotation,
@@ -18,6 +23,27 @@ describe("readRequiredEnv", () => {
     expect(() => readRequiredEnv({ GH_TOKEN: "" }, "GH_TOKEN")).toThrow(
       /GH_TOKEN/,
     );
+  });
+});
+
+describe("isMain", () => {
+  test("default: matches the launched script, also through a symlinked path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ci-ismain-"));
+    try {
+      const script = join(dir, "entry.ts");
+      writeFileSync(script, "");
+      const link = join(dir, "link");
+      symlinkSync(dir, link);
+      const url = pathToFileURL(script).href;
+
+      expect(isMain(url, ["node", script])).toBe(true);
+      expect(isMain(url, ["node", join(link, "entry.ts")])).toBe(true);
+      expect(isMain(url, ["node", join(dir, "other.ts")])).toBe(false);
+      expect(isMain(url, ["node"])).toBe(false);
+      expect(isMain(url, ["node", ""])).toBe(false);
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 });
 

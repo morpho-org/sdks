@@ -9,12 +9,16 @@
  * Reads `TRUSTED_SCRIPTS_DIR` and `SCRIPTS_DIGEST` from the environment for the integrity check; the
  * remaining variables are those of the delegated command.
  */
-import { pathToFileURL } from "node:url";
 
 import { type FetchLike, main as gateMain } from "./claude-review-gate.ts";
 import { main as scrubMain } from "./scrub-transcript.ts";
 import { verify as verifyTrusted } from "./trusted-scripts.ts";
-import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
+import {
+  isMain,
+  readRequiredEnv,
+  reportCliError,
+  writeStdout,
+} from "./workflow.ts";
 
 /** Injectable argv/env/output boundaries of the CLI. */
 export interface PostClaudeOptions {
@@ -50,9 +54,6 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
   scrubMain({ ...options, argv: rest, env, writeOutput });
 }
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isMain(import.meta.url)) {
   main().catch(reportCliError);
 }

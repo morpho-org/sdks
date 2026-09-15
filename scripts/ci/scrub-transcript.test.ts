@@ -4,7 +4,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -107,15 +109,20 @@ describe("assertInputUnder", () => {
     writeFileSync(join(dir, "x.json"), "");
     writeFileSync(join(dir, "a", "b.json"), "");
 
-    expect(assertInputUnder(join(dir, "x.json"), dir)).toBe(
+    expect(assertInputUnder(join(dir, "x.json"), dir).path).toBe(
       join(dir, "x.json"),
     );
-    expect(assertInputUnder(join(dir, "a", "b.json"), `${dir}/`)).toBe(
+    expect(assertInputUnder(join(dir, "a", "b.json"), `${dir}/`).path).toBe(
       join(dir, "a", "b.json"),
     );
-    expect(assertInputUnder(join(dir, "a", "..", "x.json"), dir)).toBe(
+    expect(assertInputUnder(join(dir, "a", "..", "x.json"), dir).path).toBe(
       join(dir, "x.json"),
     );
+    expect(assertInputUnder(join(dir, "x.json"), dir)).toEqual({
+      dev: statSync(join(dir, "x.json")).dev,
+      ino: statSync(join(dir, "x.json")).ino,
+      path: join(dir, "x.json"),
+    });
   });
 
   test("error: outside, equal, traversal, or missing paths", () => {
@@ -168,30 +175,53 @@ describe("assertInputUnder", () => {
 });
 
 describe("readRegularFile", () => {
-  test("default: returns the content of a regular file", () => {
+  test("default: returns the content of the checked file", () => {
     const dir = createTempDir();
     writeFileSync(join(dir, "x.json"), "{}");
 
-    expect(readRegularFile(join(dir, "x.json"))).toBe("{}");
+    expect(readRegularFile(assertInputUnder(join(dir, "x.json"), dir))).toBe(
+      "{}",
+    );
   });
 
-  test("error: a symlink swapped in at the validated path is not followed", () => {
+  test("error: a symlink swapped in at the checked path is not followed", () => {
     const dir = createTempDir();
+    writeFileSync(join(dir, "x.json"), "{}");
+    const checked = assertInputUnder(join(dir, "x.json"), dir);
+    rmSync(join(dir, "x.json"));
     writeFileSync(join(dir, "target"), "secret");
     symlinkSync(join(dir, "target"), join(dir, "x.json"));
 
-    expect(() => readRegularFile(join(dir, "x.json"))).toThrow(/ELOOP/);
+    expect(() => readRegularFile(checked)).toThrow(/ELOOP/);
+  });
+
+  test("error: a different file renamed onto the checked path is refused", () => {
+    const dir = createTempDir();
+    writeFileSync(join(dir, "x.json"), "{}");
+    const checked = assertInputUnder(join(dir, "x.json"), dir);
+    writeFileSync(join(dir, "other"), "secret");
+    renameSync(join(dir, "other"), join(dir, "x.json"));
+
+    expect(() => readRegularFile(checked)).toThrow(
+      /changed after it was checked/,
+    );
   });
 
   test("error: non-regular files are refused without blocking", () => {
     const dir = createTempDir();
+    writeFileSync(join(dir, "x.json"), "{}");
+    const checked = assertInputUnder(join(dir, "x.json"), dir);
     mkdirSync(join(dir, "sub"));
-    expect(() => readRegularFile(join(dir, "sub"))).toThrow();
+    expect(() =>
+      readRegularFile({ ...checked, path: join(dir, "sub") }),
+    ).toThrow();
 
     const fifo = join(dir, "pipe");
     const mkfifo = spawnSync("mkfifo", [fifo]);
     if (mkfifo.status === 0) {
-      expect(() => readRegularFile(fifo)).toThrow(/regular file/);
+      expect(() => readRegularFile({ ...checked, path: fifo })).toThrow(
+        /regular file/,
+      );
     }
   });
 });
@@ -233,6 +263,28 @@ describe("main", () => {
     });
 
     expect(readFileSync(outputFile, "utf8")).toBe(`path=${output}\n`);
+  });
+
+  test("error: a pre-planted symlink at the output path is refused", () => {
+    const dir = createTempDir();
+    const input = join(dir, "in.json");
+    writeFileSync(input, "plain");
+    const victim = join(dir, "victim");
+    writeFileSync(victim, "keep");
+    const output = join(dir, "out.json");
+    symlinkSync(victim, output);
+    const outputFile = join(dir, "github-output");
+
+    expect(() =>
+      main({
+        argv: [input, output],
+        env: { RUNNER_TEMP: dir, SECRET_VALUES: "" },
+        outputFile,
+        writeOutput: () => {},
+      }),
+    ).toThrow(/EEXIST/);
+    expect(readFileSync(victim, "utf8")).toBe("keep");
+    expect(existsSync(outputFile)).toBe(false);
   });
 
   test("error: no output sink", () => {

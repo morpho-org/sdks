@@ -31,9 +31,13 @@ import {
   readFileSync,
 } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
+import {
+  isMain,
+  readRequiredEnv,
+  reportCliError,
+  writeStdout,
+} from "./workflow.ts";
 
 interface RunOptions {
   readonly argv?: readonly string[];
@@ -176,10 +180,7 @@ export function main(options: RunOptions = {}): void {
   }
 }
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isMain(import.meta.url)) {
   try {
     main();
   } catch (error: unknown) {

@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -32,6 +33,19 @@ function withTempDir<T>(fn: (dir: string) => T): T {
     rmSync(dir, { force: true, recursive: true });
   }
 }
+
+describe("entry guard", () => {
+  test("behavior: a symlinked invocation path still runs main (exits 1 on unknown mode)", () => {
+    withTempDir((dir) => {
+      const link = join(dir, "scripts-link");
+      symlinkSync(SCRIPTS_DIR, link);
+      const result = run([join(link, "post-claude.ts"), "nope"], {});
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/^::error::Unknown mode "nope"/);
+    });
+  });
+});
 
 describe("claude-review-gate CLI", () => {
   test("error: verify with unwired MAX_ID_BEFORE exits 1 with a sanitized annotation", () => {

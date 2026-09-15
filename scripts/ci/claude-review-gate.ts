@@ -12,9 +12,13 @@
  */
 
 import { appendFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
+import {
+  isMain,
+  readRequiredEnv,
+  reportCliError,
+  writeStdout,
+} from "./workflow.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";
@@ -285,9 +289,6 @@ export async function main(options: RunOptions = {}): Promise<number> {
   }
 }
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isMain(import.meta.url)) {
   main().catch(reportCliError);
 }

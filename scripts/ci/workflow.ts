@@ -1,3 +1,6 @@
+import { realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
 /** Reads an environment variable that the workflow must bind; unset or blank is a wiring error. */
 export function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
@@ -6,6 +9,24 @@ export function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   }
 
   return value;
+}
+
+/**
+ * Whether `moduleUrl` (a script's `import.meta.url`) is the module Node was launched with. Node
+ * realpaths the main module, so `process.argv[1]` is realpathed too before comparing; a symlinked
+ * invocation path must not silently skip `main()` and exit 0.
+ */
+export function isMain(
+  moduleUrl: string,
+  argv: readonly string[] = process.argv,
+): boolean {
+  const entry = argv[1];
+  if (entry == null || entry === "") return false;
+  try {
+    return moduleUrl === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
 }
 
 /** Default `writeOutput` sink for the CLI dispatchers. */
