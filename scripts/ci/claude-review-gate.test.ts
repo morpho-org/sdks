@@ -254,6 +254,21 @@ describe("listReviews", () => {
     ).rejects.toThrow(/non-array/);
   });
 
+  test("behavior: accepts a garbage-collected review whose commit_id is null", async () => {
+    const { fetchImpl } = createFetch([
+      { body: [{ ...claudeReview(1), commit_id: null }, claudeReview(2)] },
+    ]);
+
+    const reviews = await listReviews({
+      fetchImpl,
+      prNumber: "1076",
+      repository: "morpho-org/sdks",
+      token: "ghs_test",
+    });
+
+    expect(reviews.map((r) => r.commit_id)).toEqual([null, HEAD]);
+  });
+
   test("error: rejects a review entry with a malformed shape", async () => {
     const { fetchImpl } = createFetch([
       { body: [{ ...claudeReview(1), id: "1" }] },

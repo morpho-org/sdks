@@ -33,7 +33,7 @@ export function runMarker(runId: string): string {
 /** Subset of a GitHub pull-request review the gate inspects. */
 export interface Review {
   readonly body: string | null;
-  readonly commit_id: string;
+  readonly commit_id: string | null;
   readonly id: number;
   readonly state: string;
   readonly user: { readonly login: string } | null;
@@ -132,7 +132,7 @@ function isReview(value: unknown): value is Review {
 
   return (
     (body === null || typeof body === "string") &&
-    typeof commit_id === "string" &&
+    (commit_id === null || typeof commit_id === "string") &&
     typeof id === "number" &&
     Number.isInteger(id) &&
     typeof state === "string" &&

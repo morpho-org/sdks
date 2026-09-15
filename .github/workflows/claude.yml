@@ -148,6 +148,8 @@ jobs:
           LD_LIBRARY_PATH: ''
           NODE_OPTIONS: ''
           TRUSTED_TEMP: ${{ runner.temp }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
@@ -161,8 +163,8 @@ jobs:
           TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
           SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
           GH_TOKEN="$GH_TOKEN"
-          GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
-          GITHUB_RUN_ID="$GITHUB_RUN_ID"
+          GITHUB_REPOSITORY="$REPOSITORY"
+          GITHUB_RUN_ID="$RUN_ID"
           PR_NUMBER="$PR_NUMBER"
           HEAD_SHA="$HEAD_SHA"
           MAX_ID_BEFORE="$MAX_ID_BEFORE"
