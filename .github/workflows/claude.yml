@@ -81,6 +81,19 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@codex review' || echo "::warning::Failed to request Codex re-review for PR #$PR_NUMBER"
 
+      # Reruns on an unchanged head must not be satisfied by a review left behind by an earlier run.
+      - name: Snapshot existing Claude reviews
+        id: reviews_before
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          max_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
+            --jq '[.[] | select(.body | contains("CLAUDE_REVIEW_COMPLETE")) | .id] | max // 0' \
+            | sort -n | tail -n 1)
+          echo "max_id=${max_id:-0}" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1
@@ -115,15 +128,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
         run: |
           count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq "[.[] | select(.commit_id == \"$HEAD_SHA\" and (.body | contains(\"CLAUDE_REVIEW_COMPLETE\")))] | length" \
+            --jq "[.[] | select(.id > $MAX_ID_BEFORE and .commit_id == \"$HEAD_SHA\" and (.body | contains(\"CLAUDE_REVIEW_COMPLETE\")))] | length" \
             | awk '{ s += $1 } END { print s + 0 }')
           if [ "$count" -eq 0 ]; then
-            echo "::error::Claude finished without posting a formal review on $HEAD_SHA (PR #$PR_NUMBER). See the claude-execution-output artifact."
+            echo "::error::Claude finished without posting a formal review on $HEAD_SHA (PR #$PR_NUMBER) in this run. See the claude-execution-output artifact."
             exit 1
           fi
-          echo "Found $count Claude review(s) on $HEAD_SHA."
+          echo "Found $count new Claude review(s) on $HEAD_SHA."
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       - name: Upload Claude execution log
