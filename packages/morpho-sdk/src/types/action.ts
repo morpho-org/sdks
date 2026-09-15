@@ -835,6 +835,18 @@ export interface Requirement<
    * requirements, that `userAddress` is the owner). Midnight also derives the ratification payload.
    * Verification is offline ECDSA recovery, so `userAddress` must be an EOA; ERC-1271 contract-wallet
    * signatures are not verified and are rejected.
+   *
+   * @param signature - EIP-712 signature over `action.typedData`.
+   * @param userAddress - EOA expected to have produced `signature` (the owner, for owner-bound requirements).
+   * @returns The deep-frozen {@link RequirementSignature} (`{ args, action }`) that `sign()` would return; pass it to `buildTx()`.
+   * @throws {InvalidSignatureError} when `signature` is malformed or does not recover to `userAddress`.
+   * @throws {AddressMismatchError} when `userAddress` differs from the owner embedded in ERC-2612 / authorization typed data.
+   * @example
+   * ```ts
+   * const signature = await remoteSigner.signTypedData(requirement.action.typedData);
+   * const signed = await requirement.withSignature(signature, owner);
+   * // signed.args.signature === signature; signed.action === requirement.action
+   * ```
    */
   readonly withSignature: (
     signature: Hex,
