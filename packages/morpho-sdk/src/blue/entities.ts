@@ -19,6 +19,7 @@ export type {
   IVaultConfig,
   IVaultMarketAllocation,
   IVaultMarketConfig,
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `IVaultV2BlueMarketPublicAllocatorConfig`. */
   IVaultMarketPublicAllocatorConfig,
   IVaultToken,
   IVaultUser,
@@ -32,6 +33,7 @@ export type {
   IVaultV2MorphoVaultV1Adapter,
   PeripheralBalance,
   PeripheralBalanceType,
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `IVaultV2BluePublicAllocatorConfig`. */
   VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 export {
@@ -57,6 +59,7 @@ export {
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `VaultV2BlueMarketPublicAllocatorConfig`. */
   VaultMarketPublicAllocatorConfig,
   VaultToken,
   VaultUser,
