@@ -27,6 +27,7 @@ import {
   groupAssetChanges,
   normalizeAssetToken,
 } from "../asset-changes.js";
+import { resolveFeeContext } from "../fee-context.js";
 
 interface TenderlyRpcCall {
   from: Address;
@@ -35,6 +36,11 @@ interface TenderlyRpcCall {
   input: Hex;
   data: Hex;
   value: Hex;
+  // Fee context, so the `GASPRICE` opcode is realistic instead of a
+  // never-on-chain zero that would hide a fee-sensitive revert (Cantina 1631).
+  gasPrice?: Hex;
+  maxFeePerGas?: Hex;
+  maxPriorityFeePerGas?: Hex;
 }
 
 const addressSchema = z.custom<Address>(
@@ -218,12 +224,22 @@ function unwrapResult<T>(envelope: {
 }
 
 function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
+  const fee = resolveFeeContext(tx);
   return {
     from: tx.from,
     to: tx.to,
     input: tx.data,
     data: tx.data,
     value: numberToHex(tx.value ?? 0n),
+    ...(fee.gasPrice !== undefined
+      ? { gasPrice: numberToHex(fee.gasPrice) }
+      : {}),
+    ...(fee.maxFeePerGas !== undefined
+      ? { maxFeePerGas: numberToHex(fee.maxFeePerGas) }
+      : {}),
+    ...(fee.maxPriorityFeePerGas !== undefined
+      ? { maxPriorityFeePerGas: numberToHex(fee.maxPriorityFeePerGas) }
+      : {}),
   };
 }
 

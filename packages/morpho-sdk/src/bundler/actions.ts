@@ -45,7 +45,20 @@ export interface BundlerCall {
   /** Native-token value sent with the call. */
   readonly value: bigint;
 
-  /** Whether Bundler3 should continue when the call reverts. */
+  /**
+   * Whether Bundler3 continues past this call when it reverts (`true`) or
+   * reverts the whole bundle (`false`).
+   *
+   * Prefer `false`. `skipRevert: true` is only safe for a call that moves no
+   * funds and whose failure strands nothing — e.g. an idempotent approval or
+   * permit that may already be set. On any call that is meant to consume funds
+   * already routed into Bundler3, `true` is dangerous: if the call reverts
+   * on-chain for a reason a simulation did not reproduce (for example a
+   * fee-sensitive external route — see Cantina finding 1631), Bundler3 skips it
+   * and leaves those funds in the permissionless bundler, where anyone can take
+   * them. Keep every value- or balance-carrying step `skipRevert: false` so the
+   * bundle reverts atomically instead.
+   */
   readonly skipRevert: boolean;
 
   /** Expected callback hash for calls that reenter Bundler3, or zero hash. */
