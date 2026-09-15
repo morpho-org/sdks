@@ -81,7 +81,7 @@ export interface BlueRefinanceParams {
  * @throws {NegativeInputError} when `maxLtv`, a referral fee, or a reallocation penalty is negative.
  * @throws {NonPositiveInputError} when the deadline or a reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.

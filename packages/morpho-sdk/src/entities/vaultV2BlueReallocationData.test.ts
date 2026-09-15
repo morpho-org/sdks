@@ -13,6 +13,7 @@ import {
   MarketParams,
   MathLib,
   SharesMath,
+  UnsupportedMarketIrmError,
   UnsupportedVaultV2AdapterError,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
@@ -105,6 +106,7 @@ const makeMarket = ({
     totalBorrowShares: borrow * 1_000_000n,
     lastUpdate,
     fee: 0n,
+    rateAtTarget: 0n,
   });
 
 interface FixtureOptions {
@@ -965,6 +967,270 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     }
   });
 
+  test("behavior: ignores unsupported markets outside the reallocation plan", () => {
+    const { data, sourceExpectedAssets } = makeFixture();
+    const unsupportedMarket = new Market({
+      ...data.getMarket(sourceParams.id),
+      params: new MarketParams({ ...sourceParams, irm: OTHER_IRM }),
+      totalBorrowAssets: 1n,
+      totalBorrowShares: 1n,
+      rateAtTarget: undefined,
+    });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: { ...data.markets, [unsupportedMarket.id]: unsupportedMarket },
+    });
+
+    expect(
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }).reallocations[0]?.assets,
+    ).toBe(sourceExpectedAssets);
+  });
+
+  test.each([
+    ["allocator capacity", { allocatorTargetCap: 0n }],
+    [
+      "adapter absolute capacity",
+      {
+        idle: 1n,
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral absolute capacity",
+      {
+        idle: 1n,
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "adapter relative capacity",
+      {
+        idle: 1n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral relative capacity",
+      {
+        idle: 1n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "market absolute capacity",
+      {
+        targetPositionAssets: 100n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 100n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "market relative capacity",
+      {
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+        ],
+      },
+    ],
+    [
+      "uint128 supply share capacity",
+      { targetTotalSupplyShares: MathLib.MAX_UINT_128 },
+    ],
+    [
+      "supply share minting",
+      { targetSupply: 2_000_000n, targetTotalSupplyShares: 0n, idle: 300n },
+    ],
+    [
+      "uint128 supply capacity",
+      {
+        targetSupply: MathLib.MAX_UINT_128,
+        targetTotalSupplyShares: MathLib.MAX_UINT_128,
+      },
+    ],
+  ] satisfies readonly (readonly [string, FixtureOptions])[])(
+    "behavior: skips unsupported source IRM with zero target %s",
+    (_, options) => {
+      const { data } = makeFixture({ ...options, sourceBorrow: 1n });
+      const snapshot = new VaultV2BlueReallocationData({
+        ...data,
+        markets: {
+          ...data.markets,
+          [sourceParams.id]: new Market({
+            ...data.getMarket(sourceParams.id),
+            rateAtTarget: undefined,
+          }),
+        },
+      });
+
+      expect(
+        snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+          timestamp: TIMESTAMP + 1n,
+        }).reallocations,
+      ).toEqual([]);
+    },
+  );
+
+  test.each([0n, -2n])(
+    "behavior: full target absolute caps preserve rounding and signed allocation changes with %s untracked assets",
+    (targetUntracked) => {
+      const { data, targetAdapterMarketCapId } = makeFixture({
+        targetSupply: 5n,
+        targetTotalSupplyShares: 1_000_000n,
+        targetPositionAssets: 3n,
+        targetUntracked,
+        sourceSupply: 1n,
+        targetCaps: [
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+          { absoluteCap: 3n, relativeCap: MathLib.WAD },
+        ],
+      });
+
+      const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+      expect(result.reallocations).toHaveLength(1);
+      expect(result.reallocations[0]?.assets).toBe(1n);
+      expect(
+        result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+      ).toBe(3n);
+    },
+  );
+
+  test("behavior: zero target relative caps permit a deposit that rounds to zero allocation", () => {
+    const { data } = makeFixture({
+      targetSupply: 2n,
+      targetTotalSupplyShares: 1_000_000n,
+      sourceSupply: 1n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: 0n },
+        { absoluteCap: 10_000n, relativeCap: 0n },
+        { absoluteCap: 10_000n, relativeCap: 0n },
+      ],
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(reallocations).toHaveLength(1);
+    expect(reallocations[0]?.assets).toBe(1n);
+  });
+
+  test.each([
+    [
+      "adapter",
+      {
+        sourceAdapter: TARGET_ADAPTER,
+        targetCaps: [
+          { absoluteCap: 1_100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+    [
+      "collateral",
+      {
+        sourceMarketParams: new MarketParams({
+          ...sourceParams,
+          collateralToken: targetParams.collateralToken,
+        }),
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 1_100n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+  ] satisfies readonly (readonly [string, FixtureOptions])[])(
+    "behavior: source withdrawal frees a full shared %s cap",
+    (_, options) => {
+      const { data, sourceExpectedAssets } = makeFixture({
+        ...options,
+        targetPositionAssets: 100n,
+      });
+
+      const { reallocations } = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        { timestamp: TIMESTAMP + 1n },
+      );
+
+      expect(reallocations).toHaveLength(1);
+      expect(reallocations[0]?.assets).toBe(sourceExpectedAssets);
+      expect(reallocations[0]?.from.type).toBe("market");
+    },
+  );
+
+  test("behavior: skips unsupported zero-share sources", () => {
+    const { data } = makeFixture({
+      sourceBorrow: 1n,
+      sourcePositionShares: 0n,
+      // Keep tracked allocations positive to reach the zero-share guard.
+      sourceUntracked: -1n,
+    });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [sourceParams.id]: new Market({
+          ...data.getMarket(sourceParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    expect(
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }).reallocations,
+    ).toEqual([]);
+  });
+
+  test("error: UnsupportedMarketIrmError when source projection is required", () => {
+    const { data } = makeFixture({ sourceBorrow: 1n });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [sourceParams.id]: new Market({
+          ...data.getMarket(sourceParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    expect(() =>
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP + 1n,
+      }),
+    ).toThrow(UnsupportedMarketIrmError);
+  });
+
   test.each([
     [
       "a target adapter belonging to another vault",
@@ -1252,6 +1518,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         parentVault: VAULT,
         skimRecipient: zeroAddress,
         morphoVaultV1: NESTED_VAULT,
+        parentAllocation: 25n,
       },
       nestedVault,
       30n,
@@ -1338,6 +1605,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(clonedNested?.accrualVaultV1.allocations).not.toBe(
       inputNested?.accrualVaultV1.allocations,
     );
+    expect(clonedNested?.parentAllocation).toBe(25n);
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise probe isolation directly.
     const probe = input["applyPublicReallocation"]({

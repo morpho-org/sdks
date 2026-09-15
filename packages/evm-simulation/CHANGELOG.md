@@ -10,6 +10,33 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
 
+## 4.1.7
+
+### Patch Changes
+
+- [#1063](https://github.com/morpho-org/sdks/pull/1063) [`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add the canonical Permit2 contract address (`0x000000000022D473030F116dDEE9F6B43aC78BA3`) to the Monad (chain id 143) and Stable (chain id 988) entries in the shared address registry, enabling Permit2 approval flows (Bundler3 and Midnight periphery) on both chains.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entries.
+
+- Updated dependencies [[`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd)]:
+  - @morpho-org/morpho-ts@2.12.0
+
+## 4.1.6
+
+### Patch Changes
+
+- [#1010](https://github.com/morpho-org/sdks/pull/1010) [`000d92b`](https://github.com/morpho-org/sdks/commit/000d92bc88f6b9370d16dcc3069ffd81fbd85fe8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Extend the simulation retention check to also guard the standalone `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) from the blue-sdk address registry, alongside the existing `bundler3` executor and adapters. Net `(address, token)` retention above `DUST_THRESHOLD` in any of these restricted contracts now raises `BlacklistViolationError`. Chains are skipped only when blue-sdk catalogs neither a `bundler3` nor a `bundles` config.
+
+- [#1005](https://github.com/morpho-org/sdks/pull/1005) [`890d2e3`](https://github.com/morpho-org/sdks/commit/890d2e33855e04d51e93b2133455d68dfc78455f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
+
+- [#1029](https://github.com/morpho-org/sdks/pull/1029) [`9decd4b`](https://github.com/morpho-org/sdks/commit/9decd4b7da0867c01a9240fd0c7658739490b6f2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
+
+- [#1050](https://github.com/morpho-org/sdks/pull/1050) [`28f49d7`](https://github.com/morpho-org/sdks/commit/28f49d7da6ebd9c86669d06b03a43044fdffaade) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Map a node-level viem `ExecutionRevertedError` thrown by `eth_simulateV1` to `SimulationRevertedError` instead of `ExternalServiceError`, so a reverting bundle is never classified as a fallback-eligible service failure.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1)]:
+  - @morpho-org/morpho-ts@2.11.2
+  - @morpho-org/blue-sdk@6.8.0
+
 ## 4.1.5
 
 ### Patch Changes

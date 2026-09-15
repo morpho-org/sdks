@@ -1,5 +1,6 @@
 ---
 "@morpho-org/morpho-sdk": major
+"@morpho-org/wdk-protocol-lending-morpho-evm": major
 ---
 
 Complete the morpho-sdk v6 surface cleanup that landed after `6.0.0-next.0`. Remove the deprecated
@@ -19,6 +20,12 @@ must remove those branches or stay on v5.
 Also remove deprecated ambiguous unprefixed Blue and Midnight facade aliases and deprecated ABI,
 constant, entity, fetcher, typed-data, utility-type, and operation-specific scalar and native-error
 aliases. Use the `Blue*`/`Midnight*`-qualified facade names, canonical replacements, or canonical raw
-`/blue/*` and `/midnight/*` subpaths. The canonical raw `getDaiPermitTypedData` and `DaiPermitArgs`
-exports remain available under `/blue/utils` and `/blue/types`; only their unprefixed root aliases
-are removed.
+`/blue/*` and `/midnight/*` subpaths. The deprecated raw `getDaiPermitTypedData` and `DaiPermitArgs`
+facade exports are removed too; maintained DAI flows use Permit2 or classic approval.
+
+Remove the remaining in-kind exit and fixed-bundles compatibility exports. Use
+`VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
+`BundlesPermitMismatchError`, `BundlesRequirementSignatureMismatchError`,
+`Permit2SignatureTransferNonceAlreadyUsedError`, `ReferralFeeRecipientMissingError`,
+`getBundlesSharesPermit`, and `BundleSharesPermit`. WDK consumers must replace
+`BlueApprovalOrSignatureRequirement` with `BundlesApprovalOrSignatureRequirement`.

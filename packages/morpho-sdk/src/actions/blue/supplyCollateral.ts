@@ -68,7 +68,7 @@ export interface BlueSupplyCollateralParams {
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
  * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be encoded safely.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example

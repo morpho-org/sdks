@@ -24,9 +24,9 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   InputExceedsMaxError,
-  MissingReferralFeeRecipientError,
   NativeFundingAmountMismatchError,
   NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
   UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import { blueSupply } from "./supply.js";
@@ -161,7 +161,7 @@ describe("blueSupply", () => {
     expect(decoded.args?.[4]).toBe(zeroAddress);
   });
 
-  test("error: MissingReferralFeeRecipientError for the zero address", () => {
+  test("error: ReferralFeeRecipientMissingError for the zero address", () => {
     expect(() =>
       blueSupply({
         market,
@@ -173,7 +173,7 @@ describe("blueSupply", () => {
           referralFeeRecipient: zeroAddress,
         },
       }),
-    ).toThrow(MissingReferralFeeRecipientError);
+    ).toThrow(ReferralFeeRecipientMissingError);
   });
 
   test("behavior: accepts an ERC-2098 compact (64-byte) ERC-2612 signature", () => {

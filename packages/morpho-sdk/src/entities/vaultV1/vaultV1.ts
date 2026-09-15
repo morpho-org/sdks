@@ -80,10 +80,10 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 export interface VaultV1Actions {
   /**
-   * Fetches the latest vault data with accrued interest.
+   * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest vault data.
+   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
    */
   getData: (
     parameters?: FetchParameters,
@@ -113,6 +113,7 @@ export interface VaultV1Actions {
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
@@ -340,6 +341,7 @@ export interface VaultV1Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
@@ -356,7 +358,7 @@ export interface VaultV1Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -423,6 +425,7 @@ export interface VaultV1Actions {
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and destination vault assets differ.
    * @throws {SameVaultMigrationError} when the source and destination vault addresses are equal.
@@ -854,6 +857,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       const marketId = MarketUtils.getMarketId(marketParams);
       const allocation = vaultData.allocations.get(marketId);
       if (allocation?.config.enabled !== true) continue;
+      if (allocation.position.supplyShares === 0n) continue;
 
       const market = allocation.position.market.accrueInterest(now);
       const available = market.toSupplyAssets(allocation.position.supplyShares);
@@ -1040,7 +1044,18 @@ export class MorphoVaultV1 implements VaultV1Actions {
       referralFeeRecipient: params.referralFeeRecipient,
     });
     const grossAssets =
-      assets ?? params.sourceVault.toAssets(shares ?? 0n, "Down");
+      assets ??
+      params.sourceVault
+        .accrueInterest(
+          params.sourceVault.allocations
+            .values()
+            .reduce(
+              (timestamp, { position }) =>
+                MathLib.max(timestamp, position.market.lastUpdate),
+              createdAt,
+            ),
+        )
+        .toAssets(shares ?? 0n, "Down");
     const referralFeeAssets = getBundlesReferralFeeAssets(
       grossAssets,
       common.referralFeePct,

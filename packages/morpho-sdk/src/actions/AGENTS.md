@@ -16,7 +16,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `signatures/` — pure helpers that reshape signed requirements for their destination.
   `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
   composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
-  authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
+  authorization structs, while `getBundlesSharesPermit` reshapes a vault-share permit
   for VaultExitBundlesV1.
 
 ## Common builder pattern

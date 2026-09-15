@@ -28,9 +28,9 @@ import {
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
-  MissingReferralFeeRecipientError,
   NegativeInputError,
   ReferralFeePctExceededError,
+  ReferralFeeRecipientMissingError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   type VaultV2BlueReallocation,
@@ -87,7 +87,7 @@ const makePosition = (
       lastUpdate: overrides.lastUpdate ?? 1_700_000_000n,
       fee: 0n,
       price: ORACLE_PRICE_SCALE,
-      rateAtTarget: overrides.rateAtTarget,
+      rateAtTarget: overrides.rateAtTarget ?? 0n,
     }),
   );
 
@@ -539,7 +539,7 @@ describe("MorphoBlue common write validation", () => {
       deadline: maxUint256,
       referralFeePct: 1n,
     })) {
-      expect(call, method).toThrow(MissingReferralFeeRecipientError);
+      expect(call, method).toThrow(ReferralFeeRecipientMissingError);
     }
     for (const [method, call] of getCommonWriteCalls(entity, {
       deadline: maxUint256,

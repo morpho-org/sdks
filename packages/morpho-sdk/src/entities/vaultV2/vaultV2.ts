@@ -128,6 +128,7 @@ export interface VaultV2Actions {
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an underlying market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
@@ -346,6 +347,7 @@ export interface VaultV2Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an adapter-listed market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
@@ -364,7 +366,7 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -490,7 +492,7 @@ export interface VaultV2Actions {
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
    *   deadline differs from this operation. Any handle built from the same inputs accepts the
    *   permit; the nonce is verified onchain by the vault's `permit`.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -947,12 +949,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     const assetsByMarket = new Map(
-      soleAdapter.markets.map((market) => [
-        market.id,
-        market
-          .accrueInterest(now)
-          .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
-      ]),
+      soleAdapter.markets
+        .filter((market) => (soleAdapter.supplyShares[market.id] ?? 0n) !== 0n)
+        .map((market) => [
+          market.id,
+          market
+            .accrueInterest(now)
+            .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
+        ]),
     );
     const uniqueMarketIds = new Set(marketIdListSnapshot);
     let covered = 0n;

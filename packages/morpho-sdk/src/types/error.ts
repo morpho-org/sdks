@@ -144,13 +144,6 @@ export class VaultV2SingleAdapterRequiredError extends Error {
   }
 }
 
-/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
-export const InKindRedeemRequiresSingleAdapterError =
-  VaultV2SingleAdapterRequiredError;
-/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
-export type InKindRedeemRequiresSingleAdapterError =
-  VaultV2SingleAdapterRequiredError;
-
 /** Thrown when a requested in-kind redemption adapter is not part of the Vault V2 snapshot. */
 export class AdapterNotPartOfVaultError extends Error {
   /**
@@ -195,11 +188,6 @@ export class VaultV2UnsupportedExitAdapterError extends Error {
     this.name = "VaultV2UnsupportedExitAdapterError";
   }
 }
-
-/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
-export const UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
-/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
-export type UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
 
 /**
  * Thrown when a Vault V2 exit cannot resolve the vault's configured liquidity adapter.
@@ -680,32 +668,6 @@ export class BundlesPermitMismatchError extends Error {
   }
 }
 
-/**
- * Thrown by the deprecated VaultExitBundlesV1 permit compatibility helper.
- *
- * @deprecated Use {@link BundlesPermitMismatchError} with `getBundlesSharesPermit`.
- */
-export class VaultExitBundlesV1PermitMismatchError extends BundlesPermitMismatchError {
-  public constructor(params: {
-    readonly field:
-      | "type"
-      | "asset"
-      | "owner"
-      | "spender"
-      | "amount"
-      | "nonce"
-      | "deadline"
-      | "signature";
-    readonly expected: string;
-    readonly actual: string;
-    readonly cause?: unknown;
-  }) {
-    super(params);
-    this.message = `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`;
-    this.name = "VaultExitBundlesV1PermitMismatchError";
-  }
-}
-
 /** Thrown when a signed requirement cannot be safely encoded for a fixed bundles call. */
 export class BundlesRequirementSignatureMismatchError extends Error {
   /** Field whose signed value or encoding is invalid for the fixed bundles call. */
@@ -751,11 +713,6 @@ export class BundlesRequirementSignatureMismatchError extends Error {
   }
 }
 
-/** @deprecated Use {@link BundlesRequirementSignatureMismatchError}. */
-export {
-  BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
-};
-
 /** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
@@ -790,11 +747,6 @@ export class NoUnusedPermit2NonceError extends Error {
   }
 }
 
-/** @deprecated Use {@link Permit2SignatureTransferNonceAlreadyUsedError}. */
-export {
-  Permit2SignatureTransferNonceAlreadyUsedError as Permit2TransferFromNonceAlreadyUsedError,
-};
-
 /** Thrown when native funding does not exactly match the contract's gross token pull. */
 export class NativeFundingAmountMismatchError extends Error {
   /**
@@ -821,12 +773,6 @@ export class ReferralFeeRecipientMissingError extends Error {
     this.name = "ReferralFeeRecipientMissingError";
   }
 }
-
-/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
-export const MissingReferralFeeRecipientError =
-  ReferralFeeRecipientMissingError;
-/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
-export type MissingReferralFeeRecipientError = ReferralFeeRecipientMissingError;
 
 /**
  * Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range.

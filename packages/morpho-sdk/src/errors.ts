@@ -12,6 +12,7 @@ export {
   UnknownTokenPriceError as UnknownBlueTokenPriceError,
   UnknownVaultConfigError as UnknownBlueVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError as UnsupportedBlueMarketIrmError,
   UnsupportedPreLiquidationParamsError as UnsupportedBluePreLiquidationParamsError,
   UnsupportedVaultV2AdapterError as UnsupportedBlueVaultV2AdapterError,
   VaultV2Errors,

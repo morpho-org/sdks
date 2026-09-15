@@ -344,9 +344,16 @@ major:
 - `InvalidReallocationShapeError` remains the error thrown for malformed Vault V2 entries.
 - Deprecated ABI, constant, typed-data helper, and utility-type aliases inherited from upstream
   packages are removed. Import their canonical replacements from the same facade category.
-- The unprefixed `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed. Their canonical
-  exports remain available from `/blue/utils` and `/blue/types`; maintained action flows route DAI
-  approvals through Permit2 or a classic approval.
+- The deprecated `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed from both the root
+  and raw `/blue` facades. Maintained action flows route DAI approvals through Permit2 or a classic
+  approval.
+- Deprecated in-kind and bundles aliases are removed. Replace
+  `InKindRedeemRequiresSingleAdapterError`, `UnsupportedInKindAdapterError`,
+  `VaultExitBundlesV1PermitMismatchError`, `BlueBundlesV1RequirementSignatureMismatchError`,
+  `Permit2TransferFromNonceAlreadyUsedError`, and `MissingReferralFeeRecipientError` with their
+  canonical error classes.
+- Replace `getVaultExitBundlesV1PermitStruct`, `GetVaultExitBundlesV1PermitStructParams`, and
+  `VaultExitBundlesV1PermitStruct` with `getBundlesSharesPermit` and `BundleSharesPermit`.
 - PublicAllocator V1 planner, data, input, validation, and Bundler3-composition symbols are removed.
   Use `getVaultV2BlueReallocationData` and
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
@@ -413,9 +420,8 @@ Migration steps:
   `exitAssets`, `minSharePriceE27`, `referralFeePct`, `referralFeeRecipient`, and `deadline` are new.
 - Stop batching exits: only one VaultExitBundlesV1 call can execute per transaction, because its
   `initiator` guard is transient and never cleared.
-- `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are deprecated aliases
-  of `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`; `instanceof` keeps
-  working for both names.
+- `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are removed. Use
+  `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`.
 
 See the [`TIB-2026-08-28-vault-exit-force-withdraw`](https://github.com/morpho-org/sdks/blob/main/docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md)
 decision record for the full rationale.
@@ -494,7 +500,7 @@ BlueBundlesV1 and VaultBundlesV1.
 | `isPermit2TransferFromSignature` | `isPermit2SignatureTransferSignature` |
 | `selectRequirementSignatures` option and result field `permit2TransferFrom` | `permit2SignatureTransfer` |
 | `MissingPermit2TransferFromNonceError` | Removed — the nonce is resolved automatically; catch `NoUnusedPermit2NonceError` only if every nonce is consumed |
-| `Permit2TransferFromNonceAlreadyUsedError` | `Permit2SignatureTransferNonceAlreadyUsedError` (old name kept as a `@deprecated` alias) |
+| `Permit2TransferFromNonceAlreadyUsedError` | `Permit2SignatureTransferNonceAlreadyUsedError` |
 
 Update call sites and `switch`/discriminated-union checks on `action.type` to the new
 `"permit2SignatureTransfer"` tag; the signed payload shape (`nonce`, `deadline`, `signature`) is

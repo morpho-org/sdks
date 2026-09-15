@@ -74,6 +74,16 @@ describe("AccrualPosition getters", () => {
 });
 
 describe("AccrualPosition state transitions", () => {
+  test("behavior: past accrual preserves an unsupported market snapshot", () => {
+    const position = accrualPosition({}, { rateAtTarget: undefined });
+
+    const accrued = position.accrueInterest(position.market.lastUpdate - 1n);
+
+    expect(accrued).not.toBe(position);
+    expect(accrued.market).not.toBe(position.market);
+    expect(accrued).toStrictEqual(position);
+  });
+
   test("accrueInterest returns a new AccrualPosition", () => {
     const position = accrualPosition();
     const accrued = position.accrueInterest(200n);
@@ -105,7 +115,7 @@ describe("AccrualPosition state transitions", () => {
     const position = accrualPosition();
     const result = position.supplyCollateral(10n);
 
-    expect(position.collateral).toBe(210n);
+    expect(position.collateral).toBe(200n);
     expect(result).not.toBe(position);
     expect(result.collateral).toBe(210n);
   });

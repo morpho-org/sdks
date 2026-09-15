@@ -23,14 +23,14 @@
     "lib"
   ],
   "scripts": {
-    "prepublish": "$npm_execpath build",
+    "prepublish": "pnpm build",
     "compile": "node ../../scripts/compile-solidity.js blue-sdk-viem",
-    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.6.0",
+    "@morpho-org/blue-sdk": "^6.8.0",
     "@morpho-org/morpho-ts": "^2.10.0",
     "viem": "^2.0.0"
   },

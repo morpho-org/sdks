@@ -126,9 +126,6 @@ export type BundlesApprovalOrSignatureRequirement =
 export type VaultSharesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<Erc2612RequirementSignature>;
-/** @deprecated Use {@link BundlesApprovalOrSignatureRequirement}. */
-export type BlueApprovalOrSignatureRequirement =
-  BundlesApprovalOrSignatureRequirement;
 /** A Blue authorization transaction or authorization-signature request. */
 export type AuthorizationOrSignatureRequirement =
   | RequirementAuthorization
@@ -987,6 +984,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
    * @throws {InputExceedsMaxError} when funding exceeds uint256.
    * @throws {VaultAssetMismatchError} when the token differs from the configured vault asset.
+   * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
@@ -1024,6 +1022,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
    * @throws {InputExceedsMaxError} when funding exceeds uint256.
    * @throws {VaultAssetMismatchError} when the token differs from the configured vault asset.
+   * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
@@ -1644,6 +1643,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The WDK repay result, including the submitted transaction hash and fee data.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1707,6 +1708,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
@@ -1726,7 +1729,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     token: market.loanToken,
    *     amount: 1_000_000n,
    *   });
-   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   // requirements satisfies readonly BundlesApprovalOrSignatureRequirement[]
    *   return requirements;
    * }
    * ```
@@ -1734,7 +1737,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
+  ): Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
   async getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
@@ -1763,6 +1766,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The WDK repay fee quote without a transaction hash.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts
@@ -1953,7 +1958,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     token: market.collateralToken,
    *     amount: 10n ** 18n,
    *   });
-   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   // requirements satisfies readonly BundlesApprovalOrSignatureRequirement[]
    *   return requirements;
    * }
    * ```
@@ -1961,7 +1966,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   getSupplyCollateralRequirements(
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
+  ): Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
   async getSupplyCollateralRequirements(
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,

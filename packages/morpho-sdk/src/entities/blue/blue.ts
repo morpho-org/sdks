@@ -143,7 +143,7 @@ export interface BlueActions {
    * @throws {ChainWNativeMissingError} when native funding is requested without registered wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
@@ -212,7 +212,7 @@ export interface BlueActions {
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic `approvalAmount` is below the funded `assets`.
@@ -288,7 +288,7 @@ export interface BlueActions {
    * @throws {WithdrawExceedsSupplyError} when assets exceed the supplied balance.
    * @throws {WithdrawSharesExceedSupplyError} when shares exceed the owned balance.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -360,6 +360,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -369,7 +370,7 @@ export interface BlueActions {
    * @throws {NonPositiveInputError} when `borrowAssets` is not positive.
    * @throws {NegativeInputError} when the borrow, fee, or a reallocation value is negative.
    * @throws {InputExceedsMaxError} when a fee, penalty, or reallocation exceeds its bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -440,6 +441,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -451,7 +453,7 @@ export interface BlueActions {
    * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
    * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
@@ -526,6 +528,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -536,7 +539,7 @@ export interface BlueActions {
    * @throws {NonPositiveInputError} when `collateralAssets` is not positive.
    * @throws {NegativeInputError} when collateral or the referral fee is negative.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
@@ -607,6 +610,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
@@ -621,7 +625,7 @@ export interface BlueActions {
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
@@ -705,6 +709,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when a borrow has no position snapshot.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
    * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
@@ -718,7 +723,7 @@ export interface BlueActions {
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -798,6 +803,7 @@ export interface BlueActions {
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when positive source or destination debt requires an unsupported IRM projection.
    * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
    * @throws {MarketIdMismatchError} when a position snapshot belongs to another market.
    * @throws {AccrualPositionUserMismatchError} when a position snapshot belongs to another user.
@@ -809,7 +815,7 @@ export interface BlueActions {
    * @throws {BorrowExceedsSafeLtvError} when the complete destination exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -907,6 +913,7 @@ export interface BlueActions {
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when a utilization or penalty limit is negative.
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
@@ -1983,6 +1990,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when a utilization or penalty limit is negative.
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.

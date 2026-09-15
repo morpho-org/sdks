@@ -71,16 +71,22 @@ const mockV1Requirements = (
 
 describe("MorphoVaultV1.inKindRedeem", () => {
   test("default: builds the V1 action from distinct market coverage", () => {
+    const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const exit = vault.inKindRedeem({
-      amount: 1_500n,
-      marketParamsList: [inKindMarketParams, secondInKindMarketParams],
-      vaultData: inKindVaultV1Data({ additionalMarket: true }),
-      userAddress: IN_KIND_USER,
-    });
+    const vaultData = withChainTimestamp(now, () =>
+      inKindVaultV1Data({ additionalMarket: true }),
+    );
+    const exit = withChainTimestamp(now + 1n, () =>
+      vault.inKindRedeem({
+        amount: 1_500n,
+        marketParamsList: [inKindMarketParams, secondInKindMarketParams],
+        vaultData,
+        userAddress: IN_KIND_USER,
+      }),
+    );
 
     expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
   });
@@ -178,6 +184,31 @@ describe("MorphoVaultV1.inKindRedeem", () => {
         vaultData: inKindVaultV1Data({ enabled: false }),
         userAddress: IN_KIND_USER,
       }),
+    ).toThrow(InKindRedeemCoverageError);
+  });
+
+  test("behavior: skips zero-share markets before accruing interest", () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const vaultData = withChainTimestamp(now, () =>
+      inKindVaultV1Data({ supplyShares: 0n }),
+    );
+    vaultData.allocations.get(
+      inKindMarketParams.id,
+    )!.position.market.rateAtTarget = undefined;
+
+    expect(() =>
+      withChainTimestamp(now + 1n, () =>
+        vault.inKindRedeem({
+          amount: 1n,
+          marketParamsList: [inKindMarketParams],
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ),
     ).toThrow(InKindRedeemCoverageError);
   });
 

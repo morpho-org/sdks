@@ -14,7 +14,7 @@ import {
   type Transaction,
   type VaultV2ForceWithdrawAction,
 } from "../../types/index.js";
-import { getVaultExitBundlesV1PermitStruct } from "../signatures/getVaultExitBundlesV1PermitStruct.js";
+import { getBundlesSharesPermit } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2ForceWithdraw}. */
 export interface VaultV2ForceWithdrawParams {
@@ -75,7 +75,7 @@ export interface VaultV2ForceWithdrawParams {
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind,
+ * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind,
  *   asset, owner, spender, or signature encoding.
  * @example
  * ```ts
@@ -107,7 +107,7 @@ export const vaultV2ForceWithdraw = ({
   const { referralFeePct, referralFeeRecipient } = validateReferralFee(args);
 
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
-  const sharesPermit = getVaultExitBundlesV1PermitStruct({
+  const sharesPermit = getBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
     owner: args.userAddress,

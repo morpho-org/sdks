@@ -63,7 +63,7 @@ export interface BlueBorrowParams {
  * @throws {NegativeInputError} when an amount, LTV, fee, or reallocation penalty is negative.
  * @throws {NonPositiveInputError} when the borrow, deadline, or reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.

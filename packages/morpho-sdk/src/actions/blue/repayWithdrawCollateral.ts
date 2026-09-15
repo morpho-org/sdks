@@ -92,7 +92,7 @@ export interface BlueRepayWithdrawCollateralParams {
  * @throws {NonPositiveInputError} when both operation legs are zero, repay funding is absent, or the deadline is invalid.
  * @throws {MaxRepayAssetsBelowRepayAssetsError} when exact-asset funding cannot cover the repayment and referral fee.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
  * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.

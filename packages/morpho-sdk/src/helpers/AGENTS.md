@@ -1,6 +1,6 @@
 # `helpers/`
 
-Pure protocol-specific utilities shared across layers. They return new objects and never mutate inputs. Inherits [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
+Pure protocol-specific utilities shared across layers. They never mutate inputs; fresh return objects are required only when explicitly promised by the function's JSDoc. Returning an input unchanged is otherwise valid. Inherits [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
 Per-function contracts (arguments, return shapes, behavior) live as JSDoc on each function — that's the canonical source. This file documents only the layer-level invariants and the shape of the helper categories.
 

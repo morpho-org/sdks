@@ -67,7 +67,7 @@ export interface BlueSupplyParams {
  * @throws {NonPositiveInputError} when `assets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `nativeAmount` or `referralFeePct` is negative.
  * @throws {InputExceedsMaxError} when `assets` exceeds `uint256` or `referralFeePct` is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {NativeFundingAmountMismatchError} when native funding does not equal `assets`.
  * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
