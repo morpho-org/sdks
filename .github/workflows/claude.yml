@@ -135,7 +135,8 @@ jobs:
         run: |
           set -o pipefail
           count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq "[.[] | select(.id > $MAX_ID_BEFORE and .commit_id == \"$HEAD_SHA\" and .user.login == \"github-actions[bot]\" and (.body | contains(\"CLAUDE_REVIEW_COMPLETE\")))] | length" \
+            --arg head "$HEAD_SHA" --argjson before "${MAX_ID_BEFORE:-0}" \
+            --jq '[.[] | select(.id > $before and .commit_id == $head and .user.login == "github-actions[bot]" and (.body | contains("CLAUDE_REVIEW_COMPLETE")))] | length' \
             | awk '{ s += $1 } END { print s + 0 }') || { echo "::error::Could not verify the review on PR #$PR_NUMBER (gh api failed)."; exit 1; }
           if [ "$count" -eq 0 ]; then
             echo "::error::Claude finished without posting a formal review on $HEAD_SHA (PR #$PR_NUMBER) in this run. See the claude-execution-output artifact."
