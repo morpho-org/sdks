@@ -1,9 +1,14 @@
 #!/usr/bin/env node
+/**
+ * scrub-transcript.ts — masks secrets in the Claude execution transcript before
+ * `.github/workflows/claude.yml` uploads it as a failure artifact (artifacts on
+ * a public repo bypass job-log redaction). Run with Node's native TypeScript support:
+ *
+ *   SECRET_VALUES=$'<token>\n<key>' node scripts/ci/scrub-transcript.ts <input> <output>
+ */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-
-import { getErrorMessage } from "../release/helpers.mjs";
 
 export const MASK = "***";
 
@@ -12,21 +17,24 @@ export const MASK = "***";
  * GitHub tokens (`ghs_` job tokens, `ghp_`/`gho_`/`ghu_`/`ghr_` user tokens, fine-grained
  * `github_pat_`), Anthropic API keys, and `Authorization` header values.
  */
-export const SECRET_PATTERNS = [
+export const SECRET_PATTERNS: readonly RegExp[] = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
   /(Authorization:\s*(?:Bearer|token|Basic)\s+)[^\s"'\\]+/gi,
 ];
 
-/**
- * Masks every known secret value and every token-shaped string in a transcript.
- *
- * @param {string} content The raw transcript.
- * @param {readonly string[]} secretValues Exact secret values to mask (empty strings are ignored).
- * @returns {string} The scrubbed transcript.
- */
-export function scrubTranscript(content, secretValues) {
+export interface ScrubOptions {
+  readonly argv?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly writeOutput?: (message: string) => void;
+}
+
+/** Masks every known secret value and every token-shaped string in a transcript. */
+export function scrubTranscript(
+  content: string,
+  secretValues: readonly string[],
+): string {
   let scrubbed = content;
 
   for (const value of secretValues) {
@@ -38,7 +46,7 @@ export function scrubTranscript(content, secretValues) {
   }
 
   for (const pattern of SECRET_PATTERNS) {
-    scrubbed = scrubbed.replace(pattern, (_match, prefix) =>
+    scrubbed = scrubbed.replace(pattern, (_match: string, prefix?: string) =>
       typeof prefix === "string" ? `${prefix}${MASK}` : MASK,
     );
   }
@@ -49,29 +57,23 @@ export function scrubTranscript(content, secretValues) {
 /**
  * Reads newline-separated secret values from `SECRET_VALUES` (each may itself be empty when the
  * corresponding secret is not configured).
- *
- * @param {NodeJS.ProcessEnv} env The environment.
- * @returns {string[]} The non-empty secret values.
  */
-export function readSecretValues(env) {
+export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
   return (env.SECRET_VALUES ?? "")
     .split("\n")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 }
 
-/**
- * CLI entrypoint: `node scripts/ci/scrub-transcript.mjs <input> <output>` with `SECRET_VALUES`
- * in the environment.
- *
- * @param {{ argv?: string[], env?: NodeJS.ProcessEnv, writeOutput?: (message: string) => void }} options Runtime options.
- * @returns {string} The output path.
- */
-export function main(options = {}) {
+/** CLI entrypoint: `node scripts/ci/scrub-transcript.ts <input> <output>`. */
+export function main(options: ScrubOptions = {}): string {
   const argv = options.argv ?? process.argv.slice(2);
   const env = options.env ?? process.env;
   const writeOutput =
-    options.writeOutput ?? ((message) => process.stdout.write(message));
+    options.writeOutput ??
+    ((message: string) => {
+      process.stdout.write(message);
+    });
   const [inputPath, outputPath] = argv;
 
   if (
@@ -80,7 +82,7 @@ export function main(options = {}) {
     outputPath == null ||
     outputPath === ""
   ) {
-    throw new Error("Usage: scrub-transcript.mjs <input> <output>");
+    throw new Error("Usage: scrub-transcript.ts <input> <output>");
   }
 
   const scrubbed = scrubTranscript(
@@ -99,8 +101,9 @@ if (
 ) {
   try {
     main();
-  } catch (error) {
-    process.stderr.write(`::error::${getErrorMessage(error)}\n`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`::error::${message}\n`);
     process.exitCode = 1;
   }
 }

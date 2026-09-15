@@ -1,25 +1,65 @@
 #!/usr/bin/env node
+/**
+ * claude-review-gate.ts — the "did Claude actually post its review?" gate of
+ * `.github/workflows/claude.yml`. Run with Node's native TypeScript support:
+ *
+ *   node scripts/ci/claude-review-gate.ts snapshot   # before Claude runs
+ *   node scripts/ci/claude-review-gate.ts verify     # after Claude runs
+ *
+ * Reads `GH_TOKEN`, `GITHUB_REPOSITORY`, `PR_NUMBER`, plus `HEAD_SHA` and
+ * `MAX_ID_BEFORE` for `verify`. Every GitHub API failure is an error, never a
+ * silent 0, so the gate can only pass on a real review.
+ */
 
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-
-import { getErrorMessage } from "../release/helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";
 export const REVIEW_AUTHOR = "github-actions[bot]";
 export const REVIEW_MARKER = "CLAUDE_REVIEW_COMPLETE";
 
-/**
- * Lists every formal review on a pull request, following GitHub's `Link` pagination.
- *
- * @param {{ apiBaseUrl?: string, fetchImpl?: typeof fetch, prNumber: string, repository: string, token: string }} options Request options.
- * @returns {Promise<Array<{ body: string | null, commit_id: string, id: number, user: { login: string } | null }>>} The reviews, oldest first.
- */
-export async function listReviews(options) {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const reviews = [];
-  let url = new URL(
+export interface Review {
+  readonly body: string | null;
+  readonly commit_id: string;
+  readonly id: number;
+  readonly user: { readonly login: string } | null;
+}
+
+export type FetchLike = (
+  url: URL,
+  init: { headers: Record<string, string>; method: string },
+) => Promise<{
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+  ok: boolean;
+  status: number;
+}>;
+
+export interface ListReviewsOptions {
+  readonly apiBaseUrl?: string;
+  readonly fetchImpl?: FetchLike;
+  readonly prNumber: string;
+  readonly repository: string;
+  readonly token: string;
+}
+
+export interface RunOptions {
+  readonly apiBaseUrl?: string;
+  readonly argv?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly fetchImpl?: FetchLike;
+  readonly outputFile?: string;
+  readonly writeOutput?: (message: string) => void;
+}
+
+/** Lists every formal review on a pull request, following GitHub's `Link` pagination. */
+export async function listReviews(
+  options: ListReviewsOptions,
+): Promise<Review[]> {
+  const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
+  const reviews: Review[] = [];
+  let url: URL | null = new URL(
     `repos/${options.repository}/pulls/${options.prNumber}/reviews?per_page=100`,
     options.apiBaseUrl ?? DEFAULT_API_BASE_URL,
   );
@@ -48,25 +88,20 @@ export async function listReviews(options) {
       );
     }
 
-    reviews.push(...page);
+    reviews.push(...(page as Review[]));
     url = parseNextLink(response.headers.get("link"));
   }
 
   return reviews;
 }
 
-/**
- * Parses the `rel="next"` target of a GitHub `Link` response header.
- *
- * @param {string | null} linkHeader The raw `Link` header.
- * @returns {URL | null} The next page URL, or null on the last page.
- */
-export function parseNextLink(linkHeader) {
+/** Parses the `rel="next"` target of a GitHub `Link` response header. */
+export function parseNextLink(linkHeader: string | null): URL | null {
   if (linkHeader == null) return null;
 
   for (const part of linkHeader.split(",")) {
     const match = /<([^>]+)>\s*;\s*rel="next"/.exec(part.trim());
-    if (match != null) return new URL(match[1]);
+    if (match?.[1] != null) return new URL(match[1]);
   }
 
   return null;
@@ -76,11 +111,8 @@ export function parseNextLink(linkHeader) {
  * Keeps only the reviews posted by the review workflow itself: authored by the job token and
  * carrying the completion marker. Reviews by other users, or bot reviews without the marker
  * (e.g. the "Claude Code is working…" placeholders), never count.
- *
- * @param {Array<{ body: string | null, commit_id: string, id: number, user: { login: string } | null }>} reviews The reviews to filter.
- * @returns {Array<{ body: string | null, commit_id: string, id: number, user: { login: string } | null }>} The matching reviews.
  */
-export function selectClaudeReviews(reviews) {
+export function selectClaudeReviews(reviews: readonly Review[]): Review[] {
   return reviews.filter(
     (review) =>
       review.user?.login === REVIEW_AUTHOR &&
@@ -89,27 +121,19 @@ export function selectClaudeReviews(reviews) {
   );
 }
 
-/**
- * Returns the highest id among the workflow's reviews, or 0 when there is none.
- *
- * @param {Array<{ body: string | null, commit_id: string, id: number, user: { login: string } | null }>} reviews The reviews to scan.
- * @returns {number} The max review id.
- */
-export function getMaxReviewId(reviews) {
+/** Returns the highest id among the workflow's reviews, or 0 when there is none. */
+export function getMaxReviewId(reviews: readonly Review[]): number {
   return selectClaudeReviews(reviews).reduce(
     (max, review) => Math.max(max, review.id),
     0,
   );
 }
 
-/**
- * Counts the workflow's reviews created after the snapshot and attached to the expected head.
- *
- * @param {Array<{ body: string | null, commit_id: string, id: number, user: { login: string } | null }>} reviews The reviews to scan.
- * @param {{ headSha: string, maxIdBefore: number }} options The gate inputs.
- * @returns {number} The number of qualifying reviews.
- */
-export function countNewReviews(reviews, options) {
+/** Counts the workflow's reviews created after the snapshot and attached to the expected head. */
+export function countNewReviews(
+  reviews: readonly Review[],
+  options: { readonly headSha: string; readonly maxIdBefore: number },
+): number {
   return selectClaudeReviews(reviews).filter(
     (review) =>
       review.id > options.maxIdBefore && review.commit_id === options.headSha,
@@ -119,11 +143,8 @@ export function countNewReviews(reviews, options) {
 /**
  * Parses the `MAX_ID_BEFORE` step output: empty means "no snapshot" (0); anything else must be a
  * non-negative integer so a corrupted output cannot silently disable the gate.
- *
- * @param {string | undefined} value The raw environment value.
- * @returns {number} The parsed id.
  */
-export function parseMaxIdBefore(value) {
+export function parseMaxIdBefore(value: string | undefined): number {
   if (value == null || value === "") return 0;
   if (!/^\d+$/.test(value)) {
     throw new Error(
@@ -134,16 +155,10 @@ export function parseMaxIdBefore(value) {
   return Number(value);
 }
 
-/**
- * `snapshot` mode: records the highest pre-existing workflow review id as the `max_id` step output.
- *
- * @param {{ apiBaseUrl?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, writeOutput?: (message: string) => void }} options Runtime options.
- * @returns {Promise<number>} The recorded max id.
- */
-export async function snapshot(options = {}) {
+/** `snapshot` mode: records the highest pre-existing workflow review id as the `max_id` step output. */
+export async function snapshot(options: RunOptions = {}): Promise<number> {
   const env = options.env ?? process.env;
-  const writeOutput =
-    options.writeOutput ?? ((message) => process.stdout.write(message));
+  const writeOutput = options.writeOutput ?? defaultWriteOutput;
   const reviews = await listReviews({
     apiBaseUrl: options.apiBaseUrl,
     fetchImpl: options.fetchImpl,
@@ -159,16 +174,10 @@ export async function snapshot(options = {}) {
   return maxId;
 }
 
-/**
- * `verify` mode: fails unless a workflow review newer than the snapshot exists on the current head.
- *
- * @param {{ apiBaseUrl?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, writeOutput?: (message: string) => void }} options Runtime options.
- * @returns {Promise<number>} The number of qualifying reviews (always > 0).
- */
-export async function verify(options = {}) {
+/** `verify` mode: fails unless a workflow review newer than the snapshot exists on the current head. */
+export async function verify(options: RunOptions = {}): Promise<number> {
   const env = options.env ?? process.env;
-  const writeOutput =
-    options.writeOutput ?? ((message) => process.stdout.write(message));
+  const writeOutput = options.writeOutput ?? defaultWriteOutput;
   const prNumber = readRequiredEnv(env, "PR_NUMBER");
   const headSha = readRequiredEnv(env, "HEAD_SHA");
   const maxIdBefore = parseMaxIdBefore(env.MAX_ID_BEFORE);
@@ -192,13 +201,8 @@ export async function verify(options = {}) {
   return count;
 }
 
-/**
- * CLI entrypoint: `node scripts/ci/claude-review-gate.mjs <snapshot|verify>`.
- *
- * @param {{ argv?: string[], env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, writeError?: (message: string) => void, writeOutput?: (message: string) => void }} options Runtime options.
- * @returns {Promise<number>} The mode's result.
- */
-export async function main(options = {}) {
+/** CLI entrypoint: `node scripts/ci/claude-review-gate.ts <snapshot|verify>`. */
+export async function main(options: RunOptions = {}): Promise<number> {
   const argv = options.argv ?? process.argv.slice(2);
   const mode = argv[0];
 
@@ -209,18 +213,22 @@ export async function main(options = {}) {
       return verify(options);
     default:
       throw new Error(
-        `Unknown mode "${mode ?? ""}". Usage: claude-review-gate.mjs <snapshot|verify>`,
+        `Unknown mode "${mode ?? ""}". Usage: claude-review-gate.ts <snapshot|verify>`,
       );
   }
 }
 
-function appendOutput(outputFile, output) {
+function defaultWriteOutput(message: string): void {
+  process.stdout.write(message);
+}
+
+function appendOutput(outputFile: string | undefined, output: string): void {
   if (outputFile != null && outputFile !== "") {
     appendFileSync(outputFile, output);
   }
 }
 
-function readRequiredEnv(env, name) {
+function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
   if (value == null || value === "") {
     throw new Error(`Missing required environment variable ${name}.`);
@@ -233,8 +241,9 @@ if (
   process.argv[1] != null &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  main().catch((error) => {
-    process.stderr.write(`::error::${getErrorMessage(error)}\n`);
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`::error::${message}\n`);
     process.exitCode = 1;
   });
 }

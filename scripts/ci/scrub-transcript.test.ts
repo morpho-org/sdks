@@ -8,9 +8,9 @@ import {
   main,
   readSecretValues,
   scrubTranscript,
-} from "./scrub-transcript.mjs";
+} from "./scrub-transcript.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -97,7 +97,7 @@ describe("main", () => {
   });
 });
 
-function createTempDir() {
+function createTempDir(): string {
   const tempDir = mkdtempSync(join(tmpdir(), "scrub-transcript-"));
   tempDirs.push(tempDir);
   return tempDir;

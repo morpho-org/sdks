@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import {
   countNewReviews,
+  type FetchLike,
   getMaxReviewId,
   listReviews,
   main,
@@ -12,14 +13,15 @@ import {
   parseNextLink,
   REVIEW_AUTHOR,
   REVIEW_MARKER,
+  type Review,
   selectClaudeReviews,
   snapshot,
   verify,
-} from "./claude-review-gate.mjs";
+} from "./claude-review-gate.ts";
 
 const HEAD = "c462f0c49c0f35e3cb065cf2247312502d1f8062";
 const OLD_HEAD = "da7cc34a1111111111111111111111111111111111";
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -27,21 +29,21 @@ afterEach(() => {
   }
 });
 
-const claudeReview = (id, commitId = HEAD) => ({
+const claudeReview = (id: number, commitId = HEAD): Review => ({
   body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n<!-- CLAUDE_VERDICT:APPROVE -->`,
   commit_id: commitId,
   id,
   user: { login: REVIEW_AUTHOR },
 });
 
-const humanReview = (id, commitId = HEAD) => ({
+const humanReview = (id: number, commitId = HEAD): Review => ({
   body: `LGTM <!-- ${REVIEW_MARKER} -->`,
   commit_id: commitId,
   id,
   user: { login: "0xbulma" },
 });
 
-const botPlaceholder = (id, commitId = HEAD) => ({
+const botPlaceholder = (id: number, commitId = HEAD): Review => ({
   body: "Claude Code is working…",
   commit_id: commitId,
   id,
@@ -168,11 +170,11 @@ describe("listReviews", () => {
 
     expect(reviews.map((review) => review.id)).toEqual([1, 2]);
     expect(requests).toHaveLength(2);
-    expect(requests[0].url.pathname).toBe(
+    expect(requests[0]?.url.pathname).toBe(
       "/repos/morpho-org/sdks/pulls/1076/reviews",
     );
-    expect(requests[0].init.headers.Authorization).toBe("Bearer ghs_test");
-    expect(requests[1].url.searchParams.get("page")).toBe("2");
+    expect(requests[0]?.init.headers.Authorization).toBe("Bearer ghs_test");
+    expect(requests[1]?.url.searchParams.get("page")).toBe("2");
   });
 
   test("error: surfaces API failures instead of an empty list", async () => {
@@ -208,14 +210,16 @@ describe("snapshot", () => {
     const { fetchImpl } = createFetch([
       { body: [claudeReview(5), humanReview(50), claudeReview(7)] },
     ]);
-    const output = [];
+    const output: string[] = [];
 
     await expect(
       snapshot({
         env,
         fetchImpl,
         outputFile,
-        writeOutput: (message) => output.push(message),
+        writeOutput: (message) => {
+          output.push(message);
+        },
       }),
     ).resolves.toBe(7);
     expect(readFileSync(outputFile, "utf8")).toBe("max_id=7\n");
@@ -245,13 +249,15 @@ describe("verify", () => {
     const { fetchImpl } = createFetch([
       { body: [claudeReview(5), claudeReview(9)] },
     ]);
-    const output = [];
+    const output: string[] = [];
 
     await expect(
       verify({
         env: { ...env, MAX_ID_BEFORE: "5" },
         fetchImpl,
-        writeOutput: (message) => output.push(message),
+        writeOutput: (message) => {
+          output.push(message);
+        },
       }),
     ).resolves.toBe(1);
     expect(output.join("")).toContain(
@@ -313,9 +319,18 @@ describe("main", () => {
   });
 });
 
-function createFetch(pages) {
-  const requests = [];
-  const fetchImpl = async (url, init) => {
+interface FakePage {
+  readonly body: unknown;
+  readonly next?: boolean;
+  readonly status?: number;
+}
+
+function createFetch(pages: readonly FakePage[]) {
+  const requests: {
+    init: { headers: Record<string, string>; method: string };
+    url: URL;
+  }[] = [];
+  const fetchImpl: FetchLike = async (url, init) => {
     const page = pages[requests.length];
     requests.push({ init, url: new URL(url) });
     if (page == null) throw new Error("Unexpected extra request");
@@ -339,7 +354,7 @@ function createFetch(pages) {
   return { fetchImpl, requests };
 }
 
-function createTempDir() {
+function createTempDir(): string {
   const tempDir = mkdtempSync(join(tmpdir(), "claude-review-gate-"));
   tempDirs.push(tempDir);
   return tempDir;

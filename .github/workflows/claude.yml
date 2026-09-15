@@ -91,7 +91,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         # Run from the trusted default-branch checkout: the action swaps the workspace to the PR head later.
-        run: node scripts/ci/claude-review-gate.mjs snapshot
+        run: node scripts/ci/claude-review-gate.ts snapshot
 
       - name: Run Claude Code
         id: claude
@@ -122,7 +122,7 @@ jobs:
       # The action reports success even when Claude ended its turn without posting the review
       # (frozen todo list, `No buffered inline comments`). Turn that silent failure into a red job.
       # Only a formal review counts: the issue-comment fallback in pr-review-ci.md loses the inline
-      # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/claude-review-gate.mjs.
+      # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/claude-review-gate.ts.
       - name: Verify the review was posted
         if: github.event_name == 'pull_request'
         env:
@@ -131,11 +131,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
         # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran.
-        run: node "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.mjs" verify
+        run: node "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.ts" verify
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
-      # and mask the job's secrets plus token-shaped strings first (scripts/ci/scrub-transcript.mjs).
+      # and mask the job's secrets plus token-shaped strings first (scripts/ci/scrub-transcript.ts).
       - name: Scrub Claude execution log
         id: scrub
         if: failure() && steps.claude.outputs.execution_file != ''
@@ -145,7 +145,7 @@ jobs:
             ${{ github.token }}
             ${{ secrets.ANTHROPIC_SDK_API_KEY }}
         run: |
-          node "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.mjs" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
+          node "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
           echo "path=$RUNNER_TEMP/claude-execution-output.scrubbed.json" >> "$GITHUB_OUTPUT"
 
       - name: Upload Claude execution log

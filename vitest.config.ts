@@ -18,7 +18,8 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       include: [
         "packages/**/src/**/*.{ts,tsx}",
-        "scripts/{ci,release}/**/*.{js,mjs}",
+        "scripts/ci/**/*.ts",
+        "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
         "packages/test/**",
@@ -34,7 +35,7 @@ export default defineConfig({
         "packages/**/src/**/abis.ts",
         "packages/**/src/api/sdk.ts",
         "packages/**/src/api/types.ts",
-        "scripts/**/*.test.{js,mjs}",
+        "scripts/**/*.test.{js,mjs,ts}",
       ],
     },
     sequence: {
@@ -54,7 +55,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "scripts",
-          include: ["scripts/**/*.test.{js,mjs}"],
+          include: ["scripts/**/*.test.{js,mjs,ts}"],
           environment: "node",
         },
       },
