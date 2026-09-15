@@ -1,5 +1,25 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0-next.2
+
+### Patch Changes
+
+- [#1064](https://github.com/morpho-org/sdks/pull/1064) [`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Resolve the Permit2 SignatureTransfer nonce automatically in `getBundlesTokenRequirements` (and every entity `getRequirements()`) when no `permit2Nonce` is passed, using the lowest unused nonce from `getUnusedPermit2Nonce`. `getRequirements()` now throws `NoUnusedPermit2NonceError` (when every nonce is consumed) instead of the removed `MissingPermit2SignatureTransferNonceError` / `MissingPermit2TransferFromNonceError`.
+
+  The WDK adapter's `get*Requirements` and `prepareSupply(...).getRequirements` inherit the default nonce resolution; `permit2Nonce` in `RequirementOptions` is now optional and its docs are updated accordingly.
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+- Updated dependencies [[`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb), [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1), [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1), [`8bfc8b3`](https://github.com/morpho-org/sdks/commit/8bfc8b38b641ec2b21ceb2e6f3533ffbc8166bc7)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.2
+  - @morpho-org/blue-sdk@6.10.0-next.0
+
 ## 2.0.0-next.1
 
 ### Major Changes
