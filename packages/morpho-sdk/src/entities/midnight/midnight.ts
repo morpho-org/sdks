@@ -723,7 +723,6 @@ export class MorphoMidnight {
       }
     });
     const midnight = getChainAddress(this.chainId, "midnight");
-    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -744,7 +743,6 @@ export class MorphoMidnight {
         requirements.push(
           ...(await this.getRatifierRequirements({
             offersData: data,
-            signedPayloads,
           })),
         );
 
@@ -754,7 +752,6 @@ export class MorphoMidnight {
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
-          signedPayloads,
         }),
     };
   }
@@ -787,7 +784,6 @@ export class MorphoMidnight {
       validation: params.validation,
     });
     validateOfferSides(data.tree.offers, false);
-    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -796,14 +792,12 @@ export class MorphoMidnight {
       getRequirements: async () => {
         return await this.getRatifierRequirements({
           offersData: data,
-          signedPayloads,
         });
       },
       buildTx: (signatures?: MidnightActionSignatures) =>
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
-          signedPayloads,
         }),
     };
   }
@@ -873,7 +867,6 @@ export class MorphoMidnight {
       }
     }
     const midnight = getChainAddress(this.chainId, "midnight");
-    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -900,7 +893,6 @@ export class MorphoMidnight {
           }),
           ...(await this.getRatifierRequirements({
             offersData: data,
-            signedPayloads,
           })),
         ];
 
@@ -910,7 +902,6 @@ export class MorphoMidnight {
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
-          signedPayloads,
         }),
     };
   }
@@ -1131,7 +1122,6 @@ export class MorphoMidnight {
 
   private async getRatifierRequirements(params: {
     readonly offersData: OffersData;
-    readonly signedPayloads: Map<string, Hex>;
   }): Promise<readonly ActionRequirement[]> {
     const data = params.offersData;
     const requirements: ActionRequirement[] = [];
@@ -1182,7 +1172,6 @@ export class MorphoMidnight {
             signature,
           });
           const payload = await Payload.encode(items);
-          params.signedPayloads.set(signature.toLowerCase(), payload);
 
           return deepFreeze({
             args: {
@@ -1212,7 +1201,6 @@ export class MorphoMidnight {
   private buildSubmitOffersTx(params: {
     readonly offersData: OffersData;
     readonly signatures?: MidnightActionSignatures;
-    readonly signedPayloads: ReadonlyMap<string, Hex>;
   }) {
     const data = params.offersData;
     const collectedSignatures =
@@ -1264,13 +1252,13 @@ export class MorphoMidnight {
           actualOffers: signature.action.args.offers,
         });
       }
-      const signedPayload = params.signedPayloads.get(
-        signature.args.signature.toLowerCase(),
-      );
-      if (signedPayload == null) {
+      // The payload is carried on the signature the caller hands to buildTx, so
+      // a prepared offer-root requirement can be signed on one instance and
+      // submitted from another without sharing in-memory state.
+      if (signature.args.payload == null) {
         throw new UnpreparedMidnightOfferRootSignatureError();
       }
-      payload = signedPayload;
+      payload = signature.args.payload;
     } else {
       selectRequirementSignatures(collectedSignatures, {});
       payload = data.setterPayload;
