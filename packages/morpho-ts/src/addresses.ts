@@ -841,6 +841,7 @@ const _addressesRegistry = {
   [ChainId.MonadMainnet]: {
     blue: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
     morpho: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
       generalAdapter1: "0x725AB8CAd931BCb80Fdbf10955a806765cCe00e5",
@@ -869,6 +870,7 @@ const _addressesRegistry = {
   [ChainId.StableMainnet]: {
     blue: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
     morpho: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0xA0bb114F927dF03d9a1a639b9c71F71B0FaFDf1B",
       generalAdapter1: "0x59b1F4376a81e39c466A0A218447E4D36f39A96b",
@@ -1748,6 +1750,7 @@ const _deployments = {
   [ChainId.MonadMainnet]: {
     blue: 31907457n,
     morpho: 31907457n,
+    permit2: 0n,
     bundler3: {
       bundler3: 32321504n,
       generalAdapter1: 32321504n,
@@ -1770,6 +1773,7 @@ const _deployments = {
   [ChainId.StableMainnet]: {
     blue: 1504506n,
     morpho: 1504506n,
+    permit2: 0n,
     bundler3: {
       bundler3: 1741861n,
       generalAdapter1: 1741861n,
