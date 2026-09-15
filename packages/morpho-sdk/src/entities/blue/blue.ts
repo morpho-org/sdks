@@ -467,6 +467,7 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided.
@@ -634,6 +635,7 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
    * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
@@ -825,6 +827,7 @@ export interface BlueActions {
    * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
    * @param params.referralFeeRecipient - Recipient required for a positive fee.
    * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction builder.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
    * @throws {MarketIdMismatchError} when a position snapshot belongs to another market.
@@ -998,6 +1001,7 @@ export interface BlueActions {
    *        Pass the fetched block timestamp to compute reallocations at the same block.
    * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
@@ -1027,6 +1031,7 @@ export interface BlueActions {
    * @param params.options - Optional allocator and utilization options.
    * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
@@ -1053,6 +1058,7 @@ export interface BlueActions {
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when a utilization or penalty limit is negative.
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
@@ -2301,6 +2307,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.options - Optional allocator and utilization options.
    * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
@@ -2353,6 +2360,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.options - Optional allocator and utilization options.
    * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
@@ -2381,6 +2389,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.options - Optional allocator discovery controls and operation to support.
    * @returns Action-ready reallocations and their post-simulation state.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when a utilization or penalty limit is negative.
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.

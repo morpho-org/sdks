@@ -982,6 +982,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The submitted deposit hash and fee.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
@@ -1019,6 +1020,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The deposit fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
@@ -1059,6 +1061,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NonPositiveInputError} when neither funding amount is supplied or the selected amount is zero.
    * @throws {NegativeInputError} when the selected funding amount is negative.
@@ -1642,6 +1645,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getRepayRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay result, including the submitted transaction hash and fee data.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
@@ -1704,6 +1709,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
    *   defaults to the lowest unused nonce when omitted.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
@@ -1761,6 +1768,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay fee quote without a transaction hash.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {Error} when an address, target token, account, or quote request is invalid.

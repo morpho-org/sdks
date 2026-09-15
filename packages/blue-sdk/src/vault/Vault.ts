@@ -357,12 +357,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * Returns the vault's current allocation-weighted experienced APY before its performance fee.
    *
-   * Use `getApy(timestamp)` to project the APY at a specific timestamp.
+   * Use `getApy(timestamp)` to project the APY at a specific timestamp. Markets newer than that
+   * timestamp use their snapshot rates without backward projection.
    *
    * @returns The current gross annual yield as a decimal JavaScript number, or `0` for an empty
    *   vault.
-   * @throws {BlueErrors.InvalidInterestAccrual} when the current timestamp precedes an allocation
-   *   market's `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
@@ -383,12 +383,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * Returns the vault's current allocation-weighted experienced APY after its performance fee.
    *
-   * Use `getNetApy(timestamp)` to project the net APY at a specific timestamp.
+   * Use `getNetApy(timestamp)` to project the net APY at a specific timestamp. Markets newer than
+   * that timestamp use their snapshot rates without backward projection.
    *
    * @returns The current net annual yield as a decimal JavaScript number, or `0` for an empty
    *   vault.
-   * @throws {BlueErrors.InvalidInterestAccrual} when the current timestamp precedes an allocation
-   *   market's `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
@@ -415,14 +415,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
     if (this.totalAssets === 0n) return 0n;
 
     return (
-      this.allocations
-        .values()
-        .reduce(
-          (total, { position }) =>
-            total +
-            position.market.getAvgSupplyRate(timestamp) * position.supplyAssets,
-          0n,
-        ) / this.totalAssets
+      this.allocations.values().reduce((total, { position }) => {
+        const assets = position.supplyAssets;
+        return assets === 0n
+          ? total
+          : total + position.market.getAvgSupplyRate(timestamp) * assets;
+      }, 0n) / this.totalAssets
     );
   }
 
@@ -430,11 +428,11 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * Calculates the allocation-weighted experienced APY before fees if each market accrued at a
    * timestamp.
    *
-   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp.
+   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
+   *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
    * @returns The projected gross annual yield as a decimal JavaScript number, or `0` for an empty
    *   vault.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an allocation market's
-   *   `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
@@ -458,11 +456,11 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * Calculates the allocation-weighted experienced APY after fees if each market accrued at a
    * timestamp.
    *
-   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp.
+   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
+   *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
    * @returns The projected net annual yield as a decimal JavaScript number, or `0` for an empty
    *   vault.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an allocation market's
-   *   `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
@@ -649,15 +647,18 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * Projects the vault's market interest, loss accounting, and performance fees to a timestamp.
    *
    * Returns a new `AccrualVault` and leaves this instance unchanged.
+   * Markets at or beyond the requested timestamp keep their snapshots without backward accrual
+   * or a timestamp error. Zero-share allocations always keep their market snapshots.
+   * Vault loss and fee accounting still reconciles against the resulting allocation balances.
    *
-   * @param timestamp - Optional accrual timestamp in seconds. Must not precede any allocation
-   *   market's `lastUpdate`; defaults each allocation to its own `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp in seconds. Defaults each allocation to its
+   *   own `lastUpdate`; earlier timestamps leave that market unchanged.
    * @returns A new vault whose market positions, realized losses, and fee shares reflect the
    *   projected accounting.
    * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an
    *   allocation.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an allocation market's
-   *   `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an allocated market with positive
+   *   debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
@@ -691,7 +692,10 @@ export class AccrualVault extends Vault implements IAccrualVault {
         const { config, position } = allocation;
         return {
           config,
-          position: position.accrueInterest(timestamp),
+          position:
+            position.supplyShares === 0n
+              ? position.accrueInterest()
+              : position.accrueInterest(timestamp),
         };
       }),
     );

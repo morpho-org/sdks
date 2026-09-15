@@ -10,6 +10,7 @@ import {
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("MigrateToV2 VaultV1", () => {
@@ -43,14 +44,19 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        });
+        const migrate = withChainTimestamp(await client.timestamp(), () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          }),
+        );
 
-        const requirements = await migrate.getRequirements();
+        const requirements = await withChainTimestamp(
+          await client.timestamp(),
+          () => migrate.getRequirements(),
+        );
 
         expect(requirements.length).toBe(1);
 
@@ -114,14 +120,19 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        });
+        const migrate = withChainTimestamp(await client.timestamp(), () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          }),
+        );
 
-        const requirements = await migrate.getRequirements();
+        const requirements = await withChainTimestamp(
+          await client.timestamp(),
+          () => migrate.getRequirements(),
+        );
 
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -147,7 +158,7 @@ describe("MigrateToV2 VaultV1", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
         expect(requirementSignature.args.deadline).toBeGreaterThan(
-          BigInt(Math.floor(Date.now() / 1000)),
+          await client.timestamp(),
         );
 
         const tx = migrate.buildTx([requirementSignature]);
@@ -205,7 +216,10 @@ describe("MigrateToV2 VaultV1", () => {
           assets,
         });
 
-        const requirements = await migrate.getRequirements();
+        const requirements = await withChainTimestamp(
+          await client.timestamp(),
+          () => migrate.getRequirements(),
+        );
 
         expect(requirements.length).toBe(1);
 
