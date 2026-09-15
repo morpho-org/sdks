@@ -28,7 +28,7 @@ describe("fetchMarketParams", () => {
       "0xdead000000000000000000000000000000000000000000000000000000000001" as typeof params.id;
 
     const handle = createMockClient(mainnet);
-    const morpho = addressesRegistry[ChainId.EthMainnet].morpho;
+    const morpho = addressesRegistry[ChainId.EthMainnet].blue;
     mockRead(handle, {
       address: morpho,
       abi: blueAbi,
@@ -42,9 +42,7 @@ describe("fetchMarketParams", () => {
       ],
     });
 
-    const result = await fetchMarketParams(freshId, handle.client, {
-      chainId: ChainId.EthMainnet,
-    });
+    const result = await fetchMarketParams(freshId, handle.client);
     expect(result).toBeInstanceOf(MarketParams);
     expect(result.loanToken).toBe(params.loanToken);
     expect(result.collateralToken).toBe(params.collateralToken);

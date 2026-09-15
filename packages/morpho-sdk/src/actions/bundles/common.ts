@@ -184,7 +184,6 @@ export const resolveBundlesFunding = (
  * @param params.amount - Exact pull amount in the token's smallest unit; must match both signed amount fields.
  * @param params.requirementSignature - Optional signed ERC-2612 or Permit2 SignatureTransfer requirement; omit for allowance funding.
  * @returns An empty, ERC-2612, or Permit2 SignatureTransfer token permit.
- * @throws {UnexpectedRequirementSignatureError} when Permit2 AllowanceTransfer is supplied.
  * @throws {DepositOwnerMismatchError} when the signature owner differs from `userAddress`.
  * @throws {DepositAssetMismatchError} when the signed token differs from `token`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
@@ -213,9 +212,6 @@ export const getBundlesTokenPermit = (params: {
 }): BundlesTokenPermit => {
   const { requirementSignature } = params;
   if (requirementSignature == null) return { ...EMPTY_TOKEN_PERMIT };
-  if (requirementSignature.action.type === "permit2") {
-    throw new UnexpectedRequirementSignatureError("permit");
-  }
   if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
     throw new DepositOwnerMismatchError(
       params.userAddress,

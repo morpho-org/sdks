@@ -33,7 +33,7 @@ interface RetainedAsset {
   netRetained: string;
 }
 
-/** Funds would flow to restricted bundler3 or bundles contract addresses. Never bypassable. */
+/** Funds would flow to restricted standalone bundles contract addresses. Never bypassable. */
 export class BlacklistViolationError extends SimulationPackageError {
   readonly code = "BLACKLIST_ERROR";
 

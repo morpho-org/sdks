@@ -16,11 +16,9 @@ import { UnsupportedErc20ApprovalSpenderError } from "../../../types/index.js";
 import { encodeErc20Approval } from "./encodeErc20Approval.js";
 
 describe("encodeErc20Approval", () => {
-  const {
-    permit2,
-    usdc,
-    bundler3: { generalAdapter1 },
-  } = addressesRegistry[mainnet.id];
+  const { permit2, usdc } = addressesRegistry[mainnet.id];
+  const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
+  if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");
 
   const mockAmount = 1000000n;
   const customSpender = "0x0000000000000000000000000000000000000001" as const;
@@ -28,7 +26,7 @@ describe("encodeErc20Approval", () => {
   test("should set correct transaction properties", () => {
     const transaction = encodeErc20Approval({
       token: usdc,
-      spender: generalAdapter1,
+      spender: blueBundlesV1,
       amount: mockAmount,
       chainId: mainnet.id,
     });
@@ -41,7 +39,7 @@ describe("encodeErc20Approval", () => {
   test("should encode approve function call correctly", () => {
     const transaction = encodeErc20Approval({
       token: usdc,
-      spender: generalAdapter1,
+      spender: blueBundlesV1,
       amount: mockAmount,
       chainId: mainnet.id,
     });
@@ -53,7 +51,7 @@ describe("encodeErc20Approval", () => {
 
     expect(decoded.functionName).toBe("approve");
     expect(decoded.args).toHaveLength(2);
-    expect(decoded.args[0]).toEqual(generalAdapter1);
+    expect(decoded.args[0]).toEqual(blueBundlesV1);
     expect(decoded.args[1]).toEqual(mockAmount);
   });
 
@@ -100,7 +98,7 @@ describe("encodeErc20Approval", () => {
   test("should work with zero amount", () => {
     const transaction = encodeErc20Approval({
       token: usdc,
-      spender: generalAdapter1,
+      spender: blueBundlesV1,
       amount: 0n,
       chainId: mainnet.id,
     });
@@ -132,7 +130,7 @@ describe("encodeErc20Approval", () => {
     test("default: caps a checksummed capped token at its registered maximum", () => {
       const { action } = encodeErc20Approval({
         token: uni,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: maxUint256,
         chainId: mainnet.id,
       });
@@ -143,7 +141,7 @@ describe("encodeErc20Approval", () => {
     test("behavior: resolves the cap for a differently-cased token address", () => {
       const { action } = encodeErc20Approval({
         token: uni.toLowerCase() as `0x${string}`,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: maxUint256,
         chainId: mainnet.id,
       });

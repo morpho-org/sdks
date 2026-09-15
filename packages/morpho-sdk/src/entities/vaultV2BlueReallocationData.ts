@@ -229,19 +229,11 @@ const cloneAccrualVault = (
       pendingTimelock: { ...vault.pendingTimelock },
       pendingGuardian: { ...vault.pendingGuardian },
       supplyQueue: [...vault.supplyQueue],
-      publicAllocatorConfig:
-        vault.publicAllocatorConfig == null
-          ? undefined
-          : { ...vault.publicAllocatorConfig },
     },
     [...vault.allocations.values()].map(({ config, position }) => ({
       config: {
         ...config,
         pendingCap: { ...config.pendingCap },
-        publicAllocatorConfig:
-          config.publicAllocatorConfig == null
-            ? undefined
-            : { ...config.publicAllocatorConfig },
       },
       position: clonePosition(position, markets),
     })),

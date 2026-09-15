@@ -18,12 +18,12 @@ import {
 import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
+  BundlesPermitMismatchError,
   InputExceedsMaxError,
-  MissingReferralFeeRecipientError,
   NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
-  VaultExitBundlesV1PermitMismatchError,
+  ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { vaultV2ForceWithdraw } from "./forceWithdraw.js";
 
@@ -68,21 +68,11 @@ registerCustomAddresses({
   addresses: {
     [chainId]: {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000010",
-        generalAdapter1: "0x0000000000000000000000000000000000000011",
-      },
       bundles: { vaultExitBundlesV1 },
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000012",
     },
     [unregisteredBundlesChainId]: {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000010",
-        generalAdapter1: "0x0000000000000000000000000000000000000011",
-      },
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000012",
     },
   },
@@ -460,7 +450,7 @@ describe("vaultV2ForceWithdraw", () => {
     ).toThrow(InputExceedsMaxError);
   });
 
-  test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
+  test("error: ReferralFeeRecipientMissingError for a fee without a recipient", () => {
     expect(() =>
       vaultV2ForceWithdraw({
         vault: { chainId, address: vault },
@@ -473,10 +463,10 @@ describe("vaultV2ForceWithdraw", () => {
           referralFeePct: 1n,
         },
       }),
-    ).toThrow(MissingReferralFeeRecipientError);
+    ).toThrow(ReferralFeeRecipientMissingError);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError for a permit on another asset", () => {
+  test("error: BundlesPermitMismatchError for a permit on another asset", () => {
     expect(() =>
       vaultV2ForceWithdraw({
         vault: { chainId, address: vault },
@@ -489,10 +479,10 @@ describe("vaultV2ForceWithdraw", () => {
           requirementSignature: permitWith({ asset: adapter }),
         },
       }),
-    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+    ).toThrow(BundlesPermitMismatchError);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another spender", () => {
+  test("error: BundlesPermitMismatchError for a permit with another spender", () => {
     const permit = permitWith();
     expect(() =>
       vaultV2ForceWithdraw({
@@ -514,13 +504,13 @@ describe("vaultV2ForceWithdraw", () => {
       }),
     ).toThrowError(
       expect.objectContaining({
-        name: "VaultExitBundlesV1PermitMismatchError",
+        name: "BundlesPermitMismatchError",
         field: "spender",
       }),
     );
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
+  test("error: BundlesPermitMismatchError for a permit with another owner", () => {
     expect(() =>
       vaultV2ForceWithdraw({
         vault: { chainId, address: vault },
@@ -537,7 +527,7 @@ describe("vaultV2ForceWithdraw", () => {
       }),
     ).toThrowError(
       expect.objectContaining({
-        name: "VaultExitBundlesV1PermitMismatchError",
+        name: "BundlesPermitMismatchError",
         field: "owner",
       }),
     );

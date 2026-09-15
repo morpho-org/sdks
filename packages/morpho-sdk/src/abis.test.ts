@@ -3,9 +3,7 @@ import { toFunctionSelector, toFunctionSignature } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   blueBundlesV1Abi,
-  publicAllocatorAbi,
   vaultBundlesV1Abi,
-  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "./abis.js";
 
@@ -55,9 +53,5 @@ describe("Public allocator ABI exports", () => {
     expect(vaultV2BluePublicAllocatorAbi).toBe(
       canonicalVaultV2BluePublicAllocatorAbi,
     );
-  });
-
-  test("keeps the deprecated Vault V1 ABI alias", () => {
-    expect(publicAllocatorAbi).toBe(vaultV1PublicAllocatorAbi);
   });
 });

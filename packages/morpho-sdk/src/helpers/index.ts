@@ -1,8 +1,4 @@
 export {
-  computeReallocations,
-  computeVaultV1Reallocations,
-} from "./computeVaultV1Reallocations.js";
-export {
   APPROVE_ONLY_ONCE_TOKENS,
   DEFAULT_LLTV_BUFFER,
   DEFAULT_MAX_REALLOCATION_PENALTY,
@@ -27,11 +23,7 @@ export {
 export { grossFromNetAssets } from "./referralFee.js";
 export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {
-  computeMaxRepaySharePrice,
-  computeMaxSupplySharePrice,
-  computeMinBorrowSharePrice,
   computeMinForceWithdrawSharePrice,
-  computeMinWithdrawSharePrice,
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
 } from "./slippage.js";
@@ -42,7 +34,6 @@ export {
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
-  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,

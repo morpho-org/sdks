@@ -50,7 +50,7 @@ export const getAuthorizationTypedData = (
   return {
     domain: {
       chainId: chainId,
-      verifyingContract: getChainAddresses(chainId).morpho,
+      verifyingContract: getChainAddresses(chainId).blue,
     },
     types: authorizationTypes,
     message: {

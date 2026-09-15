@@ -165,23 +165,6 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "liquidity-sdk-viem",
-          include: ["packages/liquidity-sdk-viem/src/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidity-sdk-viem-fork",
-          include: [
-            "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
-          ],
-          ...forkTestConfig,
-        },
-      },
-      {
-        extends: true,
-        test: {
           name: "test",
           include: ["packages/test/src/**/*.test.ts"],
         },

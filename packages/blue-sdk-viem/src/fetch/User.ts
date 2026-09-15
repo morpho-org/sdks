@@ -5,9 +5,9 @@ import { blueAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 
 /**
- * Fetches Morpho Blue user authorization and nonce state.
+ * Fetches Morpho Blue user nonce state.
  *
- * Reads `Morpho.isAuthorized(address, bundler3.generalAdapter1)` and `Morpho.nonce(address)`.
+ * Reads `Morpho.nonce(address)`.
  *
  * @param address - User address to fetch.
  * @param client - Viem client used for the contract reads.
@@ -15,7 +15,6 @@ import type { FetchParameters } from "../types.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `User` entity.
  * @example
  * ```ts
@@ -36,33 +35,17 @@ export async function fetchUser(
   client: Client,
   { ...parameters }: FetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const {
-    morpho,
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(parameters.chainId);
-
-  const [isBundlerAuthorized, morphoNonce] = await Promise.all([
-    readContract(client, {
-      ...parameters,
-      address: morpho,
-      abi: blueAbi,
-      functionName: "isAuthorized",
-      args: [address, generalAdapter1],
-    }),
-    readContract(client, {
-      ...parameters,
-      address: morpho,
-      abi: blueAbi,
-      functionName: "nonce",
-      args: [address],
-    }),
-  ]);
+  const { blue } = getChainAddresses(await getChainId(client));
+  const morphoNonce = await readContract(client, {
+    ...parameters,
+    address: blue,
+    abi: blueAbi,
+    functionName: "nonce",
+    args: [address],
+  });
 
   return new User({
     address,
-    isBundlerAuthorized,
     morphoNonce,
   });
 }

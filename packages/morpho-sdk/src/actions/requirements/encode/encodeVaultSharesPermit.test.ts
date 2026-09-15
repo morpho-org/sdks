@@ -234,16 +234,11 @@ describe("encodeVaultSharesPermit", () => {
   });
 
   test("error: UnsupportedErc20ApprovalSpenderError", () => {
-    const generalAdapter1 = getChainAddress(
-      mainnet.id,
-      "bundler3.generalAdapter1",
-    );
-
     expect(() =>
       encodeVaultSharesPermit({
         vault: new Token({ address: vault, name: "Vault V2" }),
         version: "vaultV2",
-        spender: generalAdapter1,
+        spender: "0x1111111111111111111111111111111111111111",
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,

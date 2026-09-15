@@ -54,7 +54,6 @@ import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultUser";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketAllocation";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketConfig";
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketPublicAllocatorConfig";
 
 // Or full, opt-in class augmentation:
 import "@morpho-org/blue-sdk-viem/lib/augment";

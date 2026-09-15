@@ -9,11 +9,7 @@ import {
   zeroHash,
 } from "viem";
 import { describe, expect, expectTypeOf, test } from "vitest";
-import type {
-  BundleSharesPermit,
-  BundlesSharesPermit,
-  VaultExitBundlesV1PermitStruct,
-} from "../../index.js";
+import type { BundleSharesPermit, BundlesSharesPermit } from "../../index.js";
 import {
   type BundlesFundingArgs,
   BundlesPermitMismatchError,
@@ -26,10 +22,8 @@ import {
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
-  type Permit2AllowanceRequirementSignature,
   type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
-  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import {
   getBundlesSharesPermit,
@@ -105,7 +99,6 @@ describe("getBundlesSharesPermit", () => {
     expectTypeOf<
       ReturnType<typeof getBundlesSharesPermit>
     >().toEqualTypeOf<BundleSharesPermit>();
-    expectTypeOf<VaultExitBundlesV1PermitStruct>().toEqualTypeOf<BundleSharesPermit>();
     expectTypeOf<BundlesSharesPermit>().toEqualTypeOf<BundleSharesPermit>();
     expect(getBundlesSharesPermit({ vault, deadline: 13n })).toEqual({
       value: 0n,
@@ -299,19 +292,6 @@ describe("getBundlesTokenPermit", () => {
       expect.any(BundlesPermitMismatchError),
     );
   });
-
-  test("error: UnexpectedRequirementSignatureError for Permit2 AllowanceTransfer", () => {
-    const requirementSignature = {
-      args: { ...permit.args, expiration: 11n },
-      action: {
-        type: "permit2",
-        args: { ...permit.action.args, expiration: 11n },
-      },
-    } satisfies Permit2AllowanceRequirementSignature;
-    expect(() =>
-      getBundlesTokenPermit({ ...params, requirementSignature }),
-    ).toThrow(UnexpectedRequirementSignatureError);
-  });
 });
 
 describe("selectBundlesSharesRequirementSignature", () => {
@@ -386,32 +366,6 @@ describe("selectBundlesSharesPermitSignature", () => {
     );
     expect(selectBundlesSharesPermitSignature(undefined, expected)).toBe(
       undefined,
-    );
-  });
-
-  test("error: BundlesPermitMismatchError for a non-ERC-2612 permit", () => {
-    const permit2 = {
-      args: {
-        ...permit.args,
-        expiration: 12n,
-      },
-      action: {
-        type: "permit2",
-        args: {
-          spender,
-          amount: 7n,
-          deadline: 11n,
-          expiration: 12n,
-        },
-      },
-    } satisfies Permit2AllowanceRequirementSignature;
-    expect(() =>
-      selectBundlesSharesPermitSignature([permit2], expected),
-    ).toThrowError(
-      expect.objectContaining({
-        name: "BundlesPermitMismatchError",
-        field: "type",
-      }),
     );
   });
 

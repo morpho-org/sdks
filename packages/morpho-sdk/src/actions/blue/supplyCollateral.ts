@@ -41,7 +41,7 @@ export interface BlueSupplyCollateralParams {
  * Encodes a pure collateral supply through BlueBundlesV1.
  *
  * Delegates to {@link blueSupplyCollateralBorrow} with a zero borrow leg and an unrestricted LTV
- * cap. Native funding is exclusive with ERC-20 funding and no Bundler3 action is encoded.
+ * cap. Native funding is exclusive with ERC-20 funding.
  *
  * @param params - Collateral-supply encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.
@@ -68,7 +68,7 @@ export interface BlueSupplyCollateralParams {
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
  * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be encoded safely.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example

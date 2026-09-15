@@ -44,7 +44,7 @@ export interface BlueBorrowParams {
  * Encodes a pure borrow through BlueBundlesV1.
  *
  * Delegates to {@link blueSupplyCollateralBorrow} with a zero collateral leg. Vault V2 allocator
- * penalties and referral fees reduce the assets received, and no Bundler3 action is encoded.
+ * penalties and referral fees reduce the assets received.
  *
  * @param params - Borrow encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.
@@ -63,8 +63,9 @@ export interface BlueBorrowParams {
  * @throws {NegativeInputError} when an amount, LTV, fee, or reallocation penalty is negative.
  * @throws {NonPositiveInputError} when the borrow, deadline, or reallocation amount is not positive.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
+ * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
  * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.

@@ -18,7 +18,6 @@ export {
   fetchVaultConfig,
   fetchVaultMarketAllocation,
   fetchVaultMarketConfig,
-  fetchVaultMarketPublicAllocatorConfig,
   fetchVaultUser,
   fetchVaultV2,
   fetchVaultV2Adapter,

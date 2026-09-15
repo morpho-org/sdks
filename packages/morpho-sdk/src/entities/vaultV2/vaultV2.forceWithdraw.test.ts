@@ -40,9 +40,9 @@ import {
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
-  MissingReferralFeeRecipientError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
   VaultAddressMismatchError,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
@@ -675,7 +675,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(NegativeInputError);
     });
 
-    test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
+    test("error: ReferralFeeRecipientMissingError for a fee without a recipient", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
@@ -685,10 +685,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           userAddress: IN_KIND_USER,
           referralFeePct: 1n,
         }),
-      ).toThrow(MissingReferralFeeRecipientError);
+      ).toThrow(ReferralFeeRecipientMissingError);
     });
 
-    test("error: MissingReferralFeeRecipientError for a zero-address recipient", () => {
+    test("error: ReferralFeeRecipientMissingError for a zero-address recipient", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
@@ -699,7 +699,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           referralFeePct: 1n,
           referralFeeRecipient: zeroAddress,
         }),
-      ).toThrow(MissingReferralFeeRecipientError);
+      ).toThrow(ReferralFeeRecipientMissingError);
     });
   });
 

@@ -1,45 +1,14 @@
-import {
-  addressesRegistry,
-  ChainId,
-  Eip5267Domain,
-  type MarketId,
-} from "@morpho-org/blue-sdk";
+import { ChainId, Eip5267Domain, type MarketId } from "@morpho-org/blue-sdk";
 import { vaults } from "@morpho-org/morpho-test";
 import { zeroAddress, zeroHash } from "viem";
 import { describe, expect } from "vitest";
 import { Vault } from "../src/augment/Vault.js";
-import { metaMorphoAbi, vaultV1PublicAllocatorAbi } from "../src/index.js";
 import { test, test2 } from "./setup.js";
 
 const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
 
 describe("augment/Vault", () => {
   test("should fetch vault data", async ({ client }) => {
-    const owner = await client.readContract({
-      address: steakUsdc.address,
-      abi: metaMorphoAbi,
-      functionName: "owner",
-    });
-
-    await client.setBalance({ address: owner, value: BigInt(1e18) });
-    await client.writeContract({
-      account: owner,
-      address: steakUsdc.address,
-      abi: metaMorphoAbi,
-      functionName: "setIsAllocator",
-      args: [
-        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
-        true,
-      ],
-    });
-    await client.writeContract({
-      account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "setFee",
-      args: [steakUsdc.address, 1n],
-    });
-
     const expectedData = new Vault({
       ...steakUsdc,
       curator: zeroAddress,
@@ -57,11 +26,6 @@ describe("augment/Vault", () => {
         value: 0n,
       },
       skimRecipient: zeroAddress,
-      publicAllocatorConfig: {
-        admin: zeroAddress,
-        fee: 1n,
-        accruedFee: 0n,
-      },
       supplyQueue: [
         "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
         "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8" as MarketId,
@@ -111,11 +75,6 @@ describe("augment/Vault", () => {
         value: 0n,
       },
       skimRecipient: zeroAddress,
-      publicAllocatorConfig: {
-        admin: "0xfeed46c11F57B7126a773EeC6ae9cA7aE1C03C9a",
-        fee: 0n,
-        accruedFee: 0n,
-      },
       supplyQueue: [
         "0xb1963517b52c4315a4ed5f6811aee279ab7adc90d9dfbd8f187e05f2758f4d1a" as MarketId,
       ],
@@ -169,36 +128,6 @@ describe("augment/Vault", () => {
         Vault.fetch(steakPaxg.address, client, { deployless: false }),
       ]);
 
-      expect(forced).toStrictEqual(multicall);
-    },
-  );
-
-  test2(
-    "behavior: forced deployless omits publicAllocatorConfig when the vault has not enabled the allocator",
-    async ({ client }) => {
-      const publicAllocator =
-        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator;
-      const owner = await client.readContract({
-        address: steakPaxg.address,
-        abi: metaMorphoAbi,
-        functionName: "owner",
-      });
-
-      await client.setBalance({ address: owner, value: BigInt(1e18) });
-      await client.writeContract({
-        account: owner,
-        address: steakPaxg.address,
-        abi: metaMorphoAbi,
-        functionName: "setIsAllocator",
-        args: [publicAllocator, false],
-      });
-
-      const [forced, multicall] = await Promise.all([
-        Vault.fetch(steakPaxg.address, client, { deployless: "force" }),
-        Vault.fetch(steakPaxg.address, client, { deployless: false }),
-      ]);
-
-      expect(forced.publicAllocatorConfig).toBeUndefined();
       expect(forced).toStrictEqual(multicall);
     },
   );

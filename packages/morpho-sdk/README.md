@@ -9,6 +9,15 @@
 
 Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
+## Removed in v6
+
+Vault V1 PublicAllocator APIs, low-level Bundler3 composition, migration adapters, and legacy
+MORPHO wrapping were removed. Use Vault V2 BluePublicAllocator APIs:
+`getVaultV2BlueReallocationData()` fetches the state and `getVaultV2BlueReallocations()` prepares a
+plan for a Blue action.
+
+General Vault V1 operations remain supported.
+
 ## Installation
 
 ```bash
@@ -212,13 +221,12 @@ borrowing. That path may also require Morpho authorization for BlueBundlesV1. Op
 instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePrice`, or
 `maxSharePrice` because BlueBundlesV1 has no share-price-bound inputs.
 
-> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
-> low-level Bundler3 composition remain available only as deprecated compatibility surfaces and
-> will be removed in the next major.
+> High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 allocator and
+> low-level composition surfaces were removed in v6; direct Vault V1 flows remain.
 
 ### Midnight: take a fixed-rate offer
 
-Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
+Protocol-specific names are qualified in shared facades, for example `fetchBluePosition` and `fetchMidnightPosition` from `@morpho-org/morpho-sdk/fetch`. Canonical raw upstream names remain available under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`.
 
 ```typescript
 const midnight = client.morpho.midnight(8453);

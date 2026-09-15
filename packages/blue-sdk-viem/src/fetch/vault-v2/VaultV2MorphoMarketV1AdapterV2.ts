@@ -33,7 +33,6 @@ import { fetchMarket } from "../Market.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2MorphoMarketV1AdapterV2` entity.
  * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1AdapterV2 factory.
@@ -58,10 +57,8 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const { morphoMarketV1AdapterV2Factory } = getChainAddresses(
-    parameters.chainId,
+    await getChainId(client),
   );
 
   /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
@@ -198,7 +195,6 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVaultV2MorphoMarketV1AdapterV2` entity.
  * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1AdapterV2 factory.

@@ -19,7 +19,6 @@ export type {
   IVaultConfig,
   IVaultMarketAllocation,
   IVaultMarketConfig,
-  IVaultMarketPublicAllocatorConfig,
   IVaultToken,
   IVaultUser,
   IVaultV2,
@@ -32,7 +31,6 @@ export type {
   IVaultV2MorphoVaultV1Adapter,
   PeripheralBalance,
   PeripheralBalanceType,
-  VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 export {
   AccrualPosition,
@@ -57,7 +55,6 @@ export {
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
   VaultToken,
   VaultUser,
   VaultV2,

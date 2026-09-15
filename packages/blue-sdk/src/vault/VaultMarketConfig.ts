@@ -1,7 +1,6 @@
 import type { Address, MarketId } from "../types.js";
 
 import type { Pending } from "./Vault.js";
-import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
 /** Plain input shape for a vault's configuration on one Morpho Blue market. */
 export interface IVaultMarketConfig {
@@ -11,7 +10,6 @@ export interface IVaultMarketConfig {
   pendingCap: Pending<bigint>;
   removableAt: bigint;
   enabled: boolean;
-  publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 }
 
 /** Represents a vault's configuration on one Morpho Blue market. */
@@ -46,11 +44,6 @@ export class VaultMarketConfig implements IVaultMarketConfig {
    */
   public enabled: boolean;
 
-  /**
-   * The vault's PublicAllocator configuration on the corresponding market.
-   */
-  public readonly publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
-
   constructor({
     vault,
     marketId,
@@ -58,7 +51,6 @@ export class VaultMarketConfig implements IVaultMarketConfig {
     pendingCap,
     removableAt,
     enabled,
-    publicAllocatorConfig,
   }: IVaultMarketConfig) {
     this.vault = vault;
     this.marketId = marketId;
@@ -66,6 +58,5 @@ export class VaultMarketConfig implements IVaultMarketConfig {
     this.pendingCap = pendingCap;
     this.removableAt = removableAt;
     this.enabled = enabled;
-    this.publicAllocatorConfig = publicAllocatorConfig;
   }
 }

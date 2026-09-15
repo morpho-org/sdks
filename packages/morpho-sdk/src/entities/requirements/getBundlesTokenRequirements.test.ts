@@ -49,11 +49,7 @@ describe("getBundlesTokenRequirements", () => {
   ])(
     "error: UnsupportedErc20ApprovalSpenderError before RPC reads (case %#)",
     async (options) => {
-      for (const spender of [
-        addressesRegistry[mainnet.id].bundler3.generalAdapter1,
-        permit2,
-        zeroAddress,
-      ]) {
+      for (const spender of [permit2, zeroAddress]) {
         const handle = createMockClient(mainnet);
         mockRead(handle, {
           address: usdc,

@@ -1,7 +1,6 @@
 import { type MarketId, VaultMarketAllocation } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 
-import { getChainId } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types.js";
 import { fetchAccrualPosition } from "./Position.js";
 import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
@@ -18,7 +17,6 @@ import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded to downstream fetchers.
  * @returns The hydrated `VaultMarketAllocation` entity.
  * @example
@@ -47,8 +45,6 @@ export async function fetchVaultMarketAllocation(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [config, position] = await Promise.all([
     fetchVaultMarketConfig(vault, marketId, client, parameters),
     fetchAccrualPosition(vault, marketId, client, parameters),
