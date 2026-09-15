@@ -1,6 +1,6 @@
 # pr-review-ci
 
-CI-mode pull request review. Posts an inline GitHub review with a formal `APPROVE` / `REQUEST_CHANGES` verdict. Runs in GitHub Actions on a PR.
+CI-mode pull request review. Posts an inline GitHub review with a formal verdict (`REQUEST_CHANGES`, or `COMMENT` carrying the approve marker). Runs in GitHub Actions on a PR.
 
 ## Usage
 
@@ -73,7 +73,7 @@ Structure:
 ```json
 {
   "commit_id": "<HEAD_SHA>",
-  "event": "<APPROVE|REQUEST_CHANGES>",
+  "event": "<COMMENT|REQUEST_CHANGES>",
   "body": "<REVIEW_BODY>",
   "comments": [
     {
@@ -92,10 +92,12 @@ Anchor each inline comment's `line` on the finding's `snapped_line` (the nearest
 
 | Verdict | When | Event |
 |---|---|---|
-| **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `APPROVE` |
+| **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `COMMENT` (body carries `<!-- CLAUDE_VERDICT:APPROVE -->`) |
 | **Request Changes** | Any critical, OR any high, OR `<FAILED_AGENTS>` is non-zero | `REQUEST_CHANGES` |
 
-When agents have failed, never `APPROVE` — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
+Never send `"event": "APPROVE"`: the job token (`github-actions[bot]`) is not allowed to approve pull requests and the reviews API rejects it with HTTP 422, which loses the inline comments. The `CLAUDE_VERDICT:APPROVE` marker in the body is the verdict; a human clicks Approve.
+
+When agents have failed, never approve — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
 
 ### Body format
 
@@ -148,7 +150,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
 
 This creates the review and all inline comments atomically — no partial reviews if something fails midway. Clean up: `rm -f "$REVIEW_FILE"`.
 
-If the review creation fails (permissions, line numbers out of range), fall back to a single PR-level comment:
+If the review creation fails with HTTP 422 because an inline comment's `line` is not a diff line, drop the offending comment(s) into the body and retry the reviews API once. Only if the reviews API still fails, fall back to a single PR-level comment (this loses inline anchoring, so it is a last resort):
 
 ```bash
 gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments \
