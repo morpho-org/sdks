@@ -11,11 +11,16 @@
  * resolve under `RUNNER_TEMP` (where the action writes the transcript) before it is read.
  */
 
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, reportCliError } from "./workflow.ts";
+import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
 
 /** Replacement written over every masked secret. */
 export const MASK = "***";
@@ -84,25 +89,34 @@ export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
     .filter((value) => value.length > 0);
 }
 
-/** Throws unless `inputPath` resolves to a file strictly inside `allowedDir`. */
-export function assertInputUnder(inputPath: string, allowedDir: string): void {
-  const rel = relative(resolve(allowedDir), resolve(inputPath));
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-    throw new Error(
-      `Refusing to read "${inputPath}": the transcript must live under ${allowedDir}.`,
-    );
+/**
+ * Returns the canonical path of `inputPath`, throwing unless it resolves (symlinks included) to a
+ * file strictly inside `allowedDir`. Callers must read the returned path, not `inputPath`.
+ */
+export function assertInputUnder(
+  inputPath: string,
+  allowedDir: string,
+): string {
+  const error = new Error(
+    `Refusing to read "${inputPath}": the transcript must live under ${allowedDir}.`,
+  );
+  let canonical: string;
+  try {
+    canonical = realpathSync(resolve(inputPath));
+  } catch (cause: unknown) {
+    throw new Error(error.message, { cause });
   }
+  const rel = relative(realpathSync(resolve(allowedDir)), canonical);
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw error;
+
+  return canonical;
 }
 
 /** CLI entrypoint: `node scripts/ci/scrub-transcript.ts <input> <output>`. */
 export function main(options: ScrubOptions = {}): string {
   const argv = options.argv ?? process.argv.slice(2);
   const env = options.env ?? process.env;
-  const writeOutput =
-    options.writeOutput ??
-    ((message: string) => {
-      process.stdout.write(message);
-    });
+  const writeOutput = options.writeOutput ?? writeStdout;
   const [inputPath, outputPath] = argv;
 
   if (
@@ -114,9 +128,12 @@ export function main(options: ScrubOptions = {}): string {
     throw new Error("Usage: scrub-transcript.ts <input> <output>");
   }
 
-  assertInputUnder(inputPath, readRequiredEnv(env, "RUNNER_TEMP"));
+  const canonicalInput = assertInputUnder(
+    inputPath,
+    readRequiredEnv(env, "RUNNER_TEMP"),
+  );
   const scrubbed = scrubTranscript(
-    readFileSync(inputPath, "utf8"),
+    readFileSync(canonicalInput, "utf8"),
     readSecretValues(env),
   );
   writeFileSync(outputPath, scrubbed);

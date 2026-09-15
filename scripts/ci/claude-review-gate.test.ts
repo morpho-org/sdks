@@ -36,12 +36,13 @@ const claudeReview = (
   {
     commitId = HEAD,
     runId = RUN_ID,
-  }: { commitId?: string; runId?: string } = {},
+    state = "COMMENTED",
+  }: { commitId?: string; runId?: string; state?: string } = {},
 ): Review => ({
   body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n${runMarker(runId)}\n<!-- CLAUDE_VERDICT:APPROVE -->`,
   commit_id: commitId,
   id,
-  state: "COMMENTED",
+  state,
   user: { login: REVIEW_AUTHOR },
 });
 
@@ -108,6 +109,21 @@ describe("selectClaudeReviews", () => {
     expect(selectClaudeReviews(reviews).map((review) => review.id)).toEqual([
       1,
     ]);
+  });
+
+  test("behavior: REQUEST_CHANGES verdicts count like COMMENT ones", () => {
+    expect(
+      selectClaudeReviews([
+        claudeReview(1, { state: "CHANGES_REQUESTED" }),
+        claudeReview(2, { state: "APPROVED" }),
+      ]).map((review) => review.id),
+    ).toEqual([1, 2]);
+    expect(
+      countNewReviews(
+        [claudeReview(11, { state: "CHANGES_REQUESTED" })],
+        countOptions,
+      ),
+    ).toBe(1);
   });
 
   test("behavior: unsubmitted PENDING drafts never count", () => {

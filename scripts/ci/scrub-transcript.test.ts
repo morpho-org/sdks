@@ -1,8 +1,10 @@
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -97,26 +99,55 @@ describe("readSecretValues", () => {
 });
 
 describe("assertInputUnder", () => {
-  test("default", () => {
-    expect(() => assertInputUnder("/tmp/rt/x.json", "/tmp/rt")).not.toThrow();
-    expect(() =>
-      assertInputUnder("/tmp/rt/a/b.json", "/tmp/rt/"),
-    ).not.toThrow();
+  test("default: returns the canonical path of a file inside the directory", () => {
+    const dir = createTempDir();
+    mkdirSync(join(dir, "a"));
+    writeFileSync(join(dir, "x.json"), "");
+    writeFileSync(join(dir, "a", "b.json"), "");
+
+    expect(assertInputUnder(join(dir, "x.json"), dir)).toBe(
+      join(dir, "x.json"),
+    );
+    expect(assertInputUnder(join(dir, "a", "b.json"), `${dir}/`)).toBe(
+      join(dir, "a", "b.json"),
+    );
+    expect(assertInputUnder(join(dir, "a", "..", "x.json"), dir)).toBe(
+      join(dir, "x.json"),
+    );
   });
 
-  test("error: outside, equal, or traversal paths", () => {
-    expect(() => assertInputUnder("/etc/passwd", "/tmp/rt")).toThrow(
+  test("error: outside, equal, traversal, or missing paths", () => {
+    const dir = createTempDir();
+    const outside = createTempDir();
+    writeFileSync(join(outside, "x"), "");
+
+    expect(() => assertInputUnder(join(outside, "x"), dir)).toThrow(
       /must live under/,
     );
-    expect(() => assertInputUnder("/tmp/rt", "/tmp/rt")).toThrow(
+    expect(() => assertInputUnder(dir, dir)).toThrow(/must live under/);
+    expect(() => assertInputUnder(join(dir, "..", "x"), dir)).toThrow(
       /must live under/,
     );
-    expect(() => assertInputUnder("/tmp/rt/../x", "/tmp/rt")).toThrow(
+    expect(() => assertInputUnder(`${dir}2/x`, dir)).toThrow(/must live under/);
+    expect(() => assertInputUnder(join(dir, "missing"), dir)).toThrow(
       /must live under/,
     );
-    expect(() => assertInputUnder("/tmp/rt2/x", "/tmp/rt")).toThrow(
+  });
+
+  test("error: a symlink inside the directory pointing outside is refused", () => {
+    const dir = createTempDir();
+    const outside = createTempDir();
+    const target = join(outside, "etc-passwd");
+    writeFileSync(target, "root:x:0:0");
+    symlinkSync(target, join(dir, "link.json"));
+    symlinkSync(outside, join(dir, "dir-link"));
+
+    expect(() => assertInputUnder(join(dir, "link.json"), dir)).toThrow(
       /must live under/,
     );
+    expect(() =>
+      assertInputUnder(join(dir, "dir-link", "etc-passwd"), dir),
+    ).toThrow(/must live under/);
   });
 });
 
