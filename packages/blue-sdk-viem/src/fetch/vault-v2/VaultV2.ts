@@ -800,7 +800,7 @@ export async function fetchAccrualVaultV2Deployless(
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
-    publicAllocator,
+    vaultV1PublicAllocator: publicAllocator,
   } = getChainAddresses(chainId);
 
   if (!vaultV2Factory) {

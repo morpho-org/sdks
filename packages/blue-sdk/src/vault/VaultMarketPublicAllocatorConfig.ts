@@ -2,6 +2,9 @@ import type { Address, MarketId } from "../types.js";
 
 /**
  * The vault's configuration of a market on the PublicAllocator.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+ * `IVaultV2BlueMarketPublicAllocatorConfig`.
  */
 export interface IVaultMarketPublicAllocatorConfig {
   vault: Address;
@@ -10,7 +13,12 @@ export interface IVaultMarketPublicAllocatorConfig {
   maxOut: bigint;
 }
 
-/** Represents a vault market's PublicAllocator limits. */
+/**
+ * Represents a vault market's PublicAllocator limits.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+ * `VaultV2BlueMarketPublicAllocatorConfig`.
+ */
 export class VaultMarketPublicAllocatorConfig
   implements IVaultMarketPublicAllocatorConfig
 {

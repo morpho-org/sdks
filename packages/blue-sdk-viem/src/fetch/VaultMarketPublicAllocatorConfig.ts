@@ -39,6 +39,8 @@ import type { FetchParameters } from "../types.js";
  * const config: VaultMarketPublicAllocatorConfig | undefined =
  *   await fetchVaultMarketPublicAllocatorConfig(vault, marketId, client);
  * ```
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+ * `fetchVaultV2BlueMarketPublicAllocatorConfig`.
  */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultMarketPublicAllocatorConfig(

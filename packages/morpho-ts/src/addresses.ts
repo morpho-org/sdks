@@ -66,12 +66,18 @@ export interface ChainAddresses {
   };
   /** AdaptiveCurveIrm contract that lets Morpho update utilization-responsive borrow rates per market. */
   adaptiveCurveIrm: `0x${string}`;
-  /** Vault V1 PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees. */
+  /**
+   * Vault V1 PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees.
+   *
+   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+   * Vault V2 and use `vaultV2BluePublicAllocator`.
+   */
   vaultV1PublicAllocator?: `0x${string}`;
   /**
    * Deprecated alias for the Vault V1 PublicAllocator contract.
    *
-   * @deprecated Use `vaultV1PublicAllocator` instead.
+   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+   * Vault V2 and use `vaultV2BluePublicAllocator`.
    */
   publicAllocator?: `0x${string}`;
   /** Vault V2 BluePublicAllocator contract for permissionless reallocations subject to allocation caps and penalties. */

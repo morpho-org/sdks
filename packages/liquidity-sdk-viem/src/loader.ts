@@ -16,25 +16,34 @@ import { apiSdk } from "./api/index.js";
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
 /**
  * Optional tuning for the shared-liquidity source-market withdrawal ceiling.
+ *
+ * @deprecated This package's Vault V1 PublicAllocator planning will be removed in the next major.
+ * Migrate to the Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk`.
  */
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
    *
    * @default 90% (900000000000000000n)
+   * @deprecated Vault V1 PublicAllocator planning will be removed in the next major.
    */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
    * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
    *
-   * @deprecated Per-market source ceilings will be removed in the next major.
-   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every
-   * source. The Morpho API's `targetWithdrawUtilization` is no longer consulted.
+   * @deprecated Vault V1 PublicAllocator planning will be removed in the next major.
    */
   maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
 
+/**
+ * Loads Vault V1 PublicAllocator shared-liquidity plans.
+ *
+ * @deprecated Vault V1 PublicAllocator planning will be removed in the next major. Migrate to
+ * `MorphoBlue.getVaultV2BlueReallocationData` and `MorphoBlue.getVaultV2BlueReallocations` in
+ * `@morpho-org/morpho-sdk`.
+ */
 export class LiquidityLoader<chain extends Chain = Chain> {
   protected readonly dataLoader: DataLoader<
     MarketId,
@@ -48,7 +57,11 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
   constructor(
     public client: Client<Transport, chain>,
-    /** Shared-liquidity source-market withdrawal tuning. */
+    /**
+     * Shared-liquidity source-market withdrawal tuning.
+     *
+     * @deprecated Vault V1 PublicAllocator planning will be removed in the next major.
+     */
     public readonly parameters: LiquidityParameters = {},
   ) {
     this.dataLoader = new DataLoader(
@@ -240,6 +253,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
    * // withdrawals: readonly PublicReallocation[]
    * // endState: ReallocationData
    * ```
+   * @deprecated Vault V1 PublicAllocator planning will be removed in the next major. Migrate to
+   * `MorphoBlue.getVaultV2BlueReallocationData` and `MorphoBlue.getVaultV2BlueReallocations`.
    */
   public fetch(marketId: MarketId) {
     return this.dataLoader.load(marketId);

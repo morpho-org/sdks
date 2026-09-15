@@ -17,7 +17,12 @@ export interface Pending<T> {
   validAt: bigint;
 }
 
-/** PublicAllocator configuration attached to a MetaMorpho vault. */
+/**
+ * PublicAllocator configuration attached to a MetaMorpho vault.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+ * `IVaultV2BluePublicAllocatorConfig`.
+ */
 export interface VaultPublicAllocatorConfig {
   /**
    * The PublicAllocator's admin address.
@@ -51,6 +56,10 @@ export interface IVault extends IVaultConfig {
   totalAssets: bigint;
   lastTotalAssets: bigint;
   lostAssets?: bigint;
+  /**
+   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+   * `IVaultV2BluePublicAllocatorConfig`.
+   */
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
@@ -131,6 +140,9 @@ export class Vault extends VaultToken implements IVault {
 
   /**
    * The MetaMorpho vault's public allocator configuration.
+   *
+   * @deprecated Vault V1 PublicAllocator support will be removed in the next major. Migrate to
+   * `VaultV2BluePublicAllocatorConfig`.
    */
   public publicAllocatorConfig?: VaultPublicAllocatorConfig;
 
