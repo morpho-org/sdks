@@ -9,6 +9,8 @@
       "!**/cache",
       "!**/coverage",
       "!**/artifacts",
+      "!docs/api",
+      "!.api-docs",
       "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   },

@@ -4,6 +4,12 @@ This guide is the canonical shape for JSDoc on every exported symbol in this mon
 
 The guide is repo-wide. Every package follows it. Per-package `AGENTS.md` files link here rather than restating the rules.
 
+API Extractor parses TSDoc, which differs from this guide's nested `@param`
+and braced `@throws` conventions. The [documentation build](./api-generation.md)
+adapts comments in temporary declaration files: nested parameters become
+parameter-detail remarks, and braced error names become inline code. Keep
+following this source style; do not edit emitted declarations or generated Markdown.
+
 ## What needs JSDoc
 
 Every symbol re-exported from a package's `src/index.ts`:

@@ -61,6 +61,14 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, contribution workflow, and t
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported security scope.
 
+### API documentation
+
+The [Markdown API reference](./docs/api/README.md) is committed for Context7.
+Run `pnpm docs:build` or `pnpm docs:build:markdown` to regenerate it with
+API Extractor and API Documenter using declarations emitted by TypeScript 7.
+See [Generating API documentation](./docs/api-generation.md) for output locations,
+the docs toolchain, and publishing the reference for Context7.
+
 ## Debugging
 
 Here's a tutorial on how to link a specific package to debug at runtime:

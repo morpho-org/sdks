@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/api-extractor/v7/api-extractor.schema.json",
+  "projectFolder": "<lookup>",
+  "mainEntryPointFilePath": "<projectFolder>/src/index.d.ts",
+  "apiReport": { "enabled": false },
+  "docModel": {
+    "enabled": true,
+    "releaseTagsToTrim": ["@internal"]
+  },
+  "dtsRollup": { "enabled": false },
+  "tsdocMetadata": { "enabled": false },
+  "newlineKind": "lf",
+  "messages": {
+    "extractorMessageReporting": {
+      "ae-missing-release-tag": { "logLevel": "none" }
+    }
+  }
+}
