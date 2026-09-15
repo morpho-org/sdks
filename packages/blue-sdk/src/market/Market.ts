@@ -447,9 +447,29 @@ export class Market implements IMarket {
    * Applies a withdrawal to an interest-accrued copy of this market.
    * @param assets Loan assets to withdraw, or zero when `shares` is provided.
    * @param shares Supply shares to burn, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
    * @returns The updated market and normalized asset and share amounts.
+   * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {BlueErrors.InsufficientLiquidity} when the withdrawal exceeds the accrued market's liquidity.
+   * @example
+   * ```ts
+   * import { ChainId, getChainAddress, Market, MarketParams } from "@morpho-org/blue-sdk";
+   *
+   * const market = new Market({
+   *   params: MarketParams.idle(getChainAddress(ChainId.EthMainnet, "usdc")),
+   *   totalSupplyAssets: 1_000_000n,
+   *   totalBorrowAssets: 0n,
+   *   totalSupplyShares: 1_000_000_000_000n,
+   *   totalBorrowShares: 0n,
+   *   lastUpdate: 1_700_000_000n,
+   *   fee: 0n,
+   * });
+   * const result = market.withdraw(500_000n, 0n);
+   * // result satisfies { market: Market; assets: bigint; shares: bigint }
+   * // result.assets === 500_000n; result.shares === 500_000_000_000n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
@@ -476,9 +496,30 @@ export class Market implements IMarket {
    * Applies a borrow to an interest-accrued copy of this market.
    * @param assets Loan assets to borrow, or zero when `shares` is provided.
    * @param shares Borrow shares to mint, or zero when `assets` is provided.
-   * @param timestamp Optional accrual timestamp.
+   * @param timestamp Optional accrual timestamp. Defaults to `lastUpdate`.
    * @returns The updated market and normalized asset and share amounts.
+   * @throws {BlueErrors.InconsistentInput} when both or neither of `assets` and `shares` are nonzero.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes `lastUpdate`.
    * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {BlueErrors.InsufficientLiquidity} when the borrow exceeds the accrued market's liquidity.
+   * @example
+   * ```ts
+   * import { ChainId, Market } from "@morpho-org/blue-sdk";
+   * import { markets } from "@morpho-org/morpho-test";
+   *
+   * const market = new Market({
+   *   params: markets[ChainId.EthMainnet].eth_wstEth,
+   *   totalSupplyAssets: 10n ** 18n,
+   *   totalBorrowAssets: 0n,
+   *   totalSupplyShares: 10n ** 24n,
+   *   totalBorrowShares: 0n,
+   *   lastUpdate: 1_700_000_000n,
+   *   fee: 0n,
+   * });
+   * const result = market.borrow(10n ** 17n, 0n);
+   * // result satisfies { market: Market; assets: bigint; shares: bigint }
+   * // result.assets === 10n ** 17n; result.shares === 10n ** 23n
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {

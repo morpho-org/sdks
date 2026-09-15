@@ -1060,6 +1060,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       { targetTotalSupplyShares: MathLib.MAX_UINT_128 },
     ],
     [
+      "supply share minting",
+      { targetSupply: 2_000_000n, targetTotalSupplyShares: 0n, idle: 300n },
+    ],
+    [
       "uint128 supply capacity",
       {
         targetSupply: MathLib.MAX_UINT_128,

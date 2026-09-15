@@ -874,9 +874,10 @@ export class VaultV2BlueReallocationData
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
    * considered. Targets with no remaining supply or allocator capacity are skipped before
-   * projecting source interest. Supply-share limits and target absolute or zero relative caps
-   * are checked against a one-asset deposit. Shared cap IDs that a source withdrawal can reduce
-   * remain eligible, as do deposits whose allocation does not increase after rounding.
+   * projecting source interest. The adapter's minimum share minting requirement, supply-share
+   * limits, and target absolute or zero relative caps are checked against a one-asset deposit.
+   * Shared cap IDs that a source withdrawal can reduce remain eligible, as do deposits whose
+   * allocation does not increase after rounding.
    *
    * Shared-cap discovery is conservative. Operation planning searches at most
    * 1,024 base units above its targeted amount for the nearest executable fit.
@@ -1225,9 +1226,11 @@ export class VaultV2BlueReallocationData
                 );
               })
               .map(({ id }) => id);
+            // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
             if (
               targetSupplyHeadroom === 0n ||
               allocatorHeadroom === 0n ||
+              minimumSupply.shares < minimumSupply.assets ||
               minimumSupply.market.totalSupplyShares > MathLib.MAX_UINT_128 ||
               blockedTargetIds.includes(adapterMarketCapId)
             )
@@ -1351,8 +1354,6 @@ export class VaultV2BlueReallocationData
           for (const reallocation of rawCandidates) {
             let lower = 0n;
             let upper = reallocation.assets;
-            // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
-            if (targetMarket.toSupplyShares(upper, "Down") < upper) continue;
 
             const reallocationAdapter = data.getAdapter(
               reallocation.vault,
