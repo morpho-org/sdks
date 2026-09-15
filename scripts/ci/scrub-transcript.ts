@@ -13,6 +13,10 @@
 
 import {
   appendFileSync,
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
   readFileSync,
   realpathSync,
   statSync,
@@ -119,6 +123,28 @@ export function assertInputUnder(
   return canonical;
 }
 
+/**
+ * Reads `path` without following a final symlink and only if the opened descriptor is a regular
+ * file, so the file checked by {@link assertInputUnder} cannot be swapped between check and read.
+ */
+export function readRegularFile(path: string): string {
+  const fd = openSync(
+    path,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw new Error(
+        `Refusing to read "${path}": the transcript must be a regular file.`,
+      );
+    }
+
+    return readFileSync(fd, "utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** CLI entrypoint: `node scripts/ci/scrub-transcript.ts <input> <output>`. */
 export function main(options: ScrubOptions = {}): string {
   const argv = options.argv ?? process.argv.slice(2);
@@ -140,7 +166,7 @@ export function main(options: ScrubOptions = {}): string {
     readRequiredEnv(env, "RUNNER_TEMP"),
   );
   const scrubbed = scrubTranscript(
-    readFileSync(canonicalInput, "utf8"),
+    readRegularFile(canonicalInput),
     readSecretValues(env),
   );
   writeFileSync(outputPath, scrubbed);

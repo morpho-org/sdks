@@ -16,6 +16,7 @@ import {
   assertInputUnder,
   MASK,
   main,
+  readRegularFile,
   readSecretValues,
   scrubTranscript,
 } from "./scrub-transcript.ts";
@@ -163,6 +164,35 @@ describe("assertInputUnder", () => {
     expect(() =>
       assertInputUnder(join(dir, "dir-link", "etc-passwd"), dir),
     ).toThrow(/must live under/);
+  });
+});
+
+describe("readRegularFile", () => {
+  test("default: returns the content of a regular file", () => {
+    const dir = createTempDir();
+    writeFileSync(join(dir, "x.json"), "{}");
+
+    expect(readRegularFile(join(dir, "x.json"))).toBe("{}");
+  });
+
+  test("error: a symlink swapped in at the validated path is not followed", () => {
+    const dir = createTempDir();
+    writeFileSync(join(dir, "target"), "secret");
+    symlinkSync(join(dir, "target"), join(dir, "x.json"));
+
+    expect(() => readRegularFile(join(dir, "x.json"))).toThrow(/ELOOP/);
+  });
+
+  test("error: non-regular files are refused without blocking", () => {
+    const dir = createTempDir();
+    mkdirSync(join(dir, "sub"));
+    expect(() => readRegularFile(join(dir, "sub"))).toThrow();
+
+    const fifo = join(dir, "pipe");
+    const mkfifo = spawnSync("mkfifo", [fifo]);
+    if (mkfifo.status === 0) {
+      expect(() => readRegularFile(fifo)).toThrow(/regular file/);
+    }
   });
 });
 

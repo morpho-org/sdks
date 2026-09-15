@@ -206,12 +206,14 @@ jobs:
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
-        # JavaScript action: keep $GITHUB_ENV-injected loader, node, proxy and CA overrides out of its node process.
+        # JavaScript action: keep $GITHUB_ENV-injected loader, node, OpenSSL, proxy and CA overrides out of its node process.
         env:
           LD_PRELOAD: ''
           LD_AUDIT: ''
           LD_LIBRARY_PATH: ''
           NODE_OPTIONS: ''
+          OPENSSL_CONF: ''
+          OPENSSL_MODULES: ''
           NODE_EXTRA_CA_CERTS: ''
           NODE_TLS_REJECT_UNAUTHORIZED: ''
           NODE_USE_ENV_PROXY: ''
