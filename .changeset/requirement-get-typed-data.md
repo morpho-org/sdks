@@ -22,7 +22,7 @@ of `sign()` for externally produced signatures. It recovers the signer from `typ
 `InvalidSignatureError` on mismatch, rejects a `userAddress` that differs from the owner embedded
 in ERC-2612 / Morpho-authorization payloads (`AddressMismatchError`), and returns the same
 deep-frozen `RequirementSignature` shape as `sign()` so the result feeds straight into `buildTx()`.
-For the Midnight offer-root requirement it additionally derives and registers the ratification
+For the Midnight offer-root requirement it additionally derives the ratification
 payload that `buildTx()` consumes, so external signers no longer need to go through `sign()`.
 Verification is offline ECDSA recovery, so the signer must be an EOA (ERC-1271 contract-wallet
 signatures are rejected); malformed signatures surface as `InvalidSignatureError` with the parsing

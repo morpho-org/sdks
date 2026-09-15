@@ -233,23 +233,52 @@ describe("AccrualVaultV2.maxWithdraw", () => {
 });
 
 describe("AccrualVaultV2.accrueInterest", () => {
-  test("throws when accruing before lastUpdate", () => {
-    const vault = accrualVaultV2();
+  test.each([99n, 100n])(
+    "behavior: returns an unchanged copy at timestamp %s",
+    (timestamp) => {
+      const vault = accrualVaultV2();
+      const result = vault.accrueInterest(timestamp);
 
-    expect(() => vault.accrueInterest(99n)).toThrow(
-      VaultV2Errors.InvalidInterestAccrual,
-    );
-  });
+      expect(result.vault).not.toBe(vault);
+      expect(result.vault).toStrictEqual(vault);
+      expect(vault.lastUpdate).toBe(100n);
+      expect(result.performanceFeeShares).toBe(0n);
+      expect(result.managementFeeShares).toBe(0n);
+    },
+  );
 
-  test("returns a copy without fees when elapsed is zero", () => {
-    const vault = accrualVaultV2();
-    const result = vault.accrueInterest(100n);
+  test.each([0n, 100n])(
+    "behavior: preserves a newer nested market with %s supply shares",
+    (supplyShares) => {
+      const m = market({
+        params: marketParams({ irm: RECIPIENT }),
+        rateAtTarget: undefined,
+        lastUpdate: 102n,
+      });
+      const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+        {
+          ...adapterBaseInput(),
+          marketIds: [m.id],
+          adaptiveCurveIrm: ADAPTER,
+          supplyShares: { [m.id]: supplyShares },
+        },
+        [m],
+      );
+      const vault = accrualVaultV2(adapter, {
+        performanceFee: 0n,
+        managementFee: 0n,
+      });
+      const result = vault.accrueInterest(101n);
 
-    expect(result.vault).not.toBe(vault);
-    expect(result.vault._totalAssets).toBe(vault._totalAssets);
-    expect(result.performanceFeeShares).toBe(0n);
-    expect(result.managementFeeShares).toBe(0n);
-  });
+      expect(result.vault._totalAssets).toBe(
+        vault.assetBalance + m.toSupplyAssets(supplyShares),
+      );
+      expect(result.vault.lastUpdate).toBe(101n);
+      expect(adapter.markets[0]).toBe(m);
+      expect(m.lastUpdate).toBe(102n);
+      expect(vault.lastUpdate).toBe(100n);
+    },
+  );
 
   test("accrues real assets and mints performance and management fee shares", () => {
     const vault = accrualVaultV2(accrualAdapter({ realAssets: () => 1_100n }), {
@@ -374,12 +403,19 @@ describe("VaultV2MorphoMarketV1Adapter", () => {
 describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
   test("realAssets sums accrued position supply assets", () => {
     const position = accrualPosition({ supplyShares: 100n });
+    const zeroUnsupported = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
     const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
       { ...adapterBaseInput(), marketParamsList: [position.market.params] },
-      [position],
+      [position, zeroUnsupported],
     );
 
-    expect(adapter.realAssets()).toBe(position.supplyAssets);
+    const timestamp = position.market.lastUpdate + 1n;
+    expect(adapter.realAssets(timestamp)).toBe(
+      position.accrueInterest(timestamp).supplyAssets,
+    );
   });
 
   test("maxDeposit is limited by balance", () => {
@@ -480,7 +516,10 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
   });
 
   test("realAssets treats missing supply shares as zero", () => {
-    const m = market();
+    const m = market({
+      params: marketParams({ irm: RECIPIENT }),
+      rateAtTarget: undefined,
+    });
     const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
       {
         ...adapterBaseInput(),
@@ -491,7 +530,7 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
       [m],
     );
 
-    expect(adapter.realAssets()).toBe(0n);
+    expect(adapter.realAssets(m.lastUpdate + 1n)).toBe(0n);
   });
 
   test("maxDeposit is limited by balance", () => {
@@ -598,6 +637,13 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
     );
 
     expect(adapter.realAssets(5n)).toBe(15n);
+    expect(
+      new AccrualVaultV2MorphoVaultV1Adapter(
+        { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+        accrualVaultV1,
+        0n,
+      ).realAssets(5n),
+    ).toBe(0n);
     expect(adapter.maxDeposit(EMPTY_HEX, 10n)).toStrictEqual({
       value: 9n,
       limiter: CapacityLimitReason.balance,
@@ -606,5 +652,35 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
       value: 8n,
       limiter: CapacityLimitReason.liquidity,
     });
+  });
+
+  test("ignores residual shares when the parent allocation is zero", () => {
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      {
+        ...adapterBaseInput(),
+        morphoVaultV1: RECIPIENT,
+        parentAllocation: 0n,
+      },
+      {} as AccrualVault,
+      10n,
+    );
+
+    expect(adapter.realAssets()).toBe(0n);
+    expect(adapter.maxWithdraw(EMPTY_HEX)).toStrictEqual({
+      value: 0n,
+      limiter: CapacityLimitReason.position,
+    });
+  });
+
+  test("supports the deprecated parent allocation constructor argument", () => {
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      {} as AccrualVault,
+      10n,
+      0n,
+    );
+
+    expect(adapter.parentAllocation).toBe(0n);
+    expect(adapter.realAssets()).toBe(0n);
   });
 });
