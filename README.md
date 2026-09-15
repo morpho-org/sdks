@@ -15,6 +15,10 @@
 
 **Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on any EVM-compatible chain.
 
+### Deprecated flows
+
+Vault V1 PublicAllocator shared-liquidity APIs and legacy MORPHO token wrapping APIs are deprecated. Use Vault V2 BluePublicAllocator APIs for shared liquidity and the current MORPHO token directly. Deprecated entry points remain available for compatibility; removal follows the published deprecation lifecycle.
+
 ---
 
 ### Secondary packages
@@ -24,7 +28,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 #### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
-- [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
+- [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Deprecated Vault V1 PublicAllocator liquidity planner; use the Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk`
 - [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)

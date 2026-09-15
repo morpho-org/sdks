@@ -309,17 +309,16 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * Sums the vault's asset balance and every adapter's projected real assets, caps asset growth by
    * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
    * zero when its recipient cannot receive vault shares.
+   * Timestamps at or before this vault's `lastUpdate` return an unchanged copy and zero fee
+   * shares. Newer nested markets keep their snapshots; no timestamp is rewound.
    *
-   * @param timestamp - Accrual timestamp in seconds. Must not precede the vault or any nested
-   *   market's `lastUpdate`.
+   * @param timestamp - Accrual timestamp in seconds. Past timestamps skip backward accrual.
    * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,
    *   and projected management fee shares.
-   * @throws {VaultV2Errors.InvalidInterestAccrual} when `timestamp` precedes this vault's
-   *   `lastUpdate`.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a nested Morpho Blue
-   *   market's `lastUpdate`.
    * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue references a
    *   market without matching allocation state.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an underlying market with positive
+   *   debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
@@ -353,15 +352,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
-    if (elapsed < 0n)
-      throw new VaultV2Errors.InvalidInterestAccrual(
-        this.address,
-        timestamp,
-        this.lastUpdate,
-      );
-
-    // Corresponds to the `firstTotalAssets == 0` onchain check.
-    if (elapsed === 0n)
+    // Preserve the same-timestamp onchain no-op and never project backwards.
+    if (elapsed <= 0n)
       return { vault, performanceFeeShares: 0n, managementFeeShares: 0n };
 
     const realAssets = vault.accrualAdapters.reduce(
