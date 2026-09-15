@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -132,6 +133,20 @@ describe("assertInputUnder", () => {
     expect(() => assertInputUnder(join(dir, "missing"), dir)).toThrow(
       /must live under/,
     );
+  });
+
+  test("error: non-regular files inside the directory are refused", () => {
+    const dir = createTempDir();
+    mkdirSync(join(dir, "sub"));
+    expect(() => assertInputUnder(join(dir, "sub"), dir)).toThrow(
+      /regular file/,
+    );
+
+    const fifo = join(dir, "pipe");
+    const mkfifo = spawnSync("mkfifo", [fifo]);
+    if (mkfifo.status === 0) {
+      expect(() => assertInputUnder(fifo, dir)).toThrow(/regular file/);
+    }
   });
 
   test("error: a symlink inside the directory pointing outside is refused", () => {

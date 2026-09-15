@@ -15,6 +15,7 @@ const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const GATE = join(SCRIPTS_DIR, "claude-review-gate.ts");
 const SCRUB = join(SCRIPTS_DIR, "scrub-transcript.ts");
 const TRUSTED = join(SCRIPTS_DIR, "trusted-scripts.ts");
+const POST_CLAUDE = join(SCRIPTS_DIR, "post-claude.ts");
 
 function run(argv: readonly string[], env: NodeJS.ProcessEnv) {
   return spawnSync(process.execPath, [...argv], {
@@ -131,6 +132,49 @@ describe("trusted-scripts CLI", () => {
 
       const result = run([TRUSTED, "verify", dest, digest], {});
       expect(result.status, result.stderr).toBe(0);
+    });
+  });
+});
+
+describe("post-claude CLI", () => {
+  test("error: unknown mode exits 1 without touching the environment", () => {
+    const result = run([POST_CLAUDE, "nope"], {});
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/^::error::Unknown mode "nope"/);
+  });
+
+  test("default: scrub runs the trusted check then the scrubber, exits 0", () => {
+    withTempDir((dir) => {
+      const trusted = join(dir, "trusted");
+      mkdirSync(trusted);
+      writeFileSync(join(trusted, "a.ts"), "a");
+      const snapOutput = join(dir, "snap-output");
+      const dest = join(dir, "dest");
+      const snap = run([TRUSTED, "snapshot", trusted, dest], {
+        GITHUB_OUTPUT: snapOutput,
+      });
+      expect(snap.status, snap.stderr).toBe(0);
+      const digest = readFileSync(snapOutput, "utf8").match(
+        /^digest=(.*)$/m,
+      )?.[1];
+      if (digest == null) throw new Error("digest output missing");
+
+      const input = join(dir, "execution.json");
+      writeFileSync(input, "Authorization: Bearer abc");
+      const output = join(dir, "scrubbed.json");
+      const githubOutput = join(dir, "github-output");
+      const result = run([POST_CLAUDE, "scrub", input, output], {
+        GITHUB_OUTPUT: githubOutput,
+        RUNNER_TEMP: dir,
+        SCRIPTS_DIGEST: digest,
+        SECRET_VALUES: "",
+        TRUSTED_SCRIPTS_DIR: dest,
+      });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(readFileSync(output, "utf8")).toBe("Authorization: Bearer ***");
+      expect(readFileSync(githubOutput, "utf8")).toBe(`path=${output}\n`);
     });
   });
 });

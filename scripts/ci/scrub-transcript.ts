@@ -15,6 +15,7 @@ import {
   appendFileSync,
   readFileSync,
   realpathSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -91,7 +92,8 @@ export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
 
 /**
  * Returns the canonical path of `inputPath`, throwing unless it resolves (symlinks included) to a
- * file strictly inside `allowedDir`. Callers must read the returned path, not `inputPath`.
+ * regular file strictly inside `allowedDir` (a FIFO would block the read forever). Callers must
+ * read the returned path, not `inputPath`.
  */
 export function assertInputUnder(
   inputPath: string,
@@ -108,6 +110,11 @@ export function assertInputUnder(
   }
   const rel = relative(realpathSync(resolve(allowedDir)), canonical);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) throw error;
+  if (!statSync(canonical).isFile()) {
+    throw new Error(
+      `Refusing to read "${inputPath}": the transcript must be a regular file.`,
+    );
+  }
 
   return canonical;
 }

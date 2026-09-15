@@ -128,30 +128,39 @@ jobs:
       # The action reports success even when Claude ended its turn without posting the review
       # (frozen todo list, `No buffered inline comments`). Turn that silent failure into a red job.
       # Only a formal review counts: the issue-comment fallback in pr-review-ci.md loses the inline
-      # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/claude-review-gate.ts.
+      # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/post-claude.ts
+      # (trusted-copy integrity check, then claude-review-gate.ts).
+      #
+      # Claude's subprocesses can append to $GITHUB_ENV, so both post-Claude steps start from an empty
+      # environment (`env -i`) and pass only the variables listed: nothing injected (BASH_ENV, NODE_OPTIONS,
+      # LD_*, HTTPS_PROXY/NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS, ...) reaches the shell or the node
+      # process that holds the token. The workspace now holds the PR head, so the trusted copy snapshotted
+      # before Claude ran is executed with the node binary recorded then, after its digest is re-checked.
       - name: Verify the review was posted
         if: github.event_name == 'pull_request'
         env:
+          BASH_ENV: ''
+          SHELLOPTS: ''
+          PS4: ''
+          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
-          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
-          # Claude's subprocesses can append to $GITHUB_ENV; pin every variable that would let an injected
-          # value run code inside this step's shell or node process (NODE_BIN is an absolute path, so PATH is moot).
-          BASH_ENV: ''
-          NODE_OPTIONS: ''
-          LD_PRELOAD: ''
-          LD_LIBRARY_PATH: ''
-          SHELLOPTS: ''
-          PS4: ''
-        # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
-        # after checking it is byte-identical to the snapshot and with the node binary recorded then.
-        run: |
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" verify "$RUNNER_TEMP/trusted-scripts" "$SCRIPTS_DIGEST"
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.ts" verify
+        run: >-
+          /usr/bin/env -i
+          HOME="$HOME"
+          RUNNER_TEMP="$RUNNER_TEMP"
+          TRUSTED_SCRIPTS_DIR="$RUNNER_TEMP/trusted-scripts"
+          SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
+          GH_TOKEN="$GH_TOKEN"
+          GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+          GITHUB_RUN_ID="$GITHUB_RUN_ID"
+          PR_NUMBER="$PR_NUMBER"
+          HEAD_SHA="$HEAD_SHA"
+          MAX_ID_BEFORE="$MAX_ID_BEFORE"
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
@@ -167,16 +176,20 @@ jobs:
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           BASH_ENV: ''
-          NODE_OPTIONS: ''
-          LD_PRELOAD: ''
-          LD_LIBRARY_PATH: ''
           SHELLOPTS: ''
           PS4: ''
-        # Same integrity check as above; the script refuses inputs outside RUNNER_TEMP and writes
-        # `path=<scrubbed file>` to GITHUB_OUTPUT.
-        run: |
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" verify "$RUNNER_TEMP/trusted-scripts" "$SCRIPTS_DIGEST"
-          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
+        # Same empty-environment invocation and integrity check as above; the script refuses inputs
+        # outside RUNNER_TEMP (or non-regular files) and writes `path=<scrubbed file>` to GITHUB_OUTPUT.
+        run: >-
+          /usr/bin/env -i
+          HOME="$HOME"
+          RUNNER_TEMP="$RUNNER_TEMP"
+          GITHUB_OUTPUT="$GITHUB_OUTPUT"
+          TRUSTED_SCRIPTS_DIR="$RUNNER_TEMP/trusted-scripts"
+          SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
+          SECRET_VALUES="$SECRET_VALUES"
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/post-claude.ts" scrub
+          "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
