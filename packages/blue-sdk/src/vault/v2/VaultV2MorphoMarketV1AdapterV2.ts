@@ -204,15 +204,14 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     super(adapter);
   }
 
+  /** {@inheritDoc IAccrualVaultV2Adapter.realAssets} */
   realAssets(timestamp?: BigIntish) {
-    return this.markets.reduce(
-      (total, market) =>
-        total +
-        market
-          .accrueInterest(timestamp)
-          .toSupplyAssets(this.supplyShares[market.id] ?? 0n),
-      0n,
-    );
+    return this.markets.reduce((total, market) => {
+      const shares = this.supplyShares[market.id] ?? 0n;
+      return shares === 0n
+        ? total
+        : total + market.accrueInterest(timestamp).toSupplyAssets(shares);
+    }, 0n);
   }
 
   maxDeposit(_data: Hex, assets: BigIntish) {

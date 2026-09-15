@@ -10,6 +10,7 @@ import {
   MarketParams,
   MathLib,
   Position,
+  UnsupportedMarketIrmError,
   Vault,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
@@ -730,6 +731,115 @@ describe("VaultV1ReallocationData unit coverage", () => {
       },
     ]);
   });
+
+  test.each([
+    { reason: "disabled market", enabled: false },
+    { reason: "zero supply shares", supplyShares: 0n },
+    { reason: "zero withdrawal cap", maxOut: 0n },
+    {
+      reason: "missing allocator configuration",
+      withPublicAllocatorConfig: false,
+    },
+  ])(
+    "behavior: skips unsupported source IRM with $reason",
+    ({
+      enabled = true,
+      supplyShares = 1_000n * MathLib.WAD,
+      maxOut = 10_000n * MathLib.WAD,
+      withPublicAllocatorConfig = true,
+    }) => {
+      const input = makeInput({
+        targetSupply: 1_000n * MathLib.WAD,
+        targetBorrow: 500n * MathLib.WAD,
+        sourceSupply: 1_000n * MathLib.WAD,
+        sourceBorrow: 500n * MathLib.WAD,
+      });
+      input.markets![targetParams.id] = new Market({
+        ...input.markets![targetParams.id]!,
+        rateAtTarget: 0n,
+      });
+      input.positions![VAULT]![sourceParams.id] = makePosition(
+        sourceParams.id,
+        supplyShares,
+      );
+      input.vaultMarketConfigs![VAULT]![sourceParams.id] =
+        makeVaultMarketConfig({
+          marketId: sourceParams.id,
+          cap: 10_000n * MathLib.WAD,
+          enabled,
+          maxIn: 0n,
+          maxOut,
+          withPublicAllocatorConfig,
+        });
+
+      expect(
+        new VaultV1ReallocationData(input).getMarketPublicReallocations(
+          targetParams.id,
+          {
+            timestamp: TIMESTAMP + 1n,
+            defaultMaxWithdrawalUtilization: MathLib.WAD,
+          },
+        ).withdrawals,
+      ).toEqual([]);
+    },
+  );
+
+  test.each([
+    { reason: "zero allocator inflow cap", maxIn: 0n },
+    { reason: "zero vault cap", cap: 0n },
+    {
+      reason: "exhausted vault cap",
+      cap: 500n * MathLib.WAD,
+      supplyShares: 1_000n * MathLib.WAD,
+    },
+  ])(
+    "behavior: skips unsupported source IRM with target $reason",
+    ({
+      maxIn = 10_000n * MathLib.WAD,
+      cap = 10_000n * MathLib.WAD,
+      supplyShares = 0n,
+    }) => {
+      const input = makeInput({
+        targetSupply: 1_000n * MathLib.WAD,
+        targetBorrow: 500n * MathLib.WAD,
+        sourceSupply: 1_000n * MathLib.WAD,
+        sourceBorrow: 500n * MathLib.WAD,
+      });
+      input.markets![targetParams.id] = new Market({
+        ...input.markets![targetParams.id]!,
+        rateAtTarget: 0n,
+      });
+      const options = {
+        timestamp: TIMESTAMP + 1n,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      };
+      expect(() =>
+        new VaultV1ReallocationData(input).computeVaultV1Reallocations(
+          targetParams.id,
+          options,
+        ),
+      ).toThrow(UnsupportedMarketIrmError);
+
+      input.positions![VAULT]![targetParams.id] = makePosition(
+        targetParams.id,
+        supplyShares,
+      );
+      input.vaultMarketConfigs![VAULT]![targetParams.id] =
+        makeVaultMarketConfig({
+          marketId: targetParams.id,
+          cap,
+          maxIn,
+          maxOut: 0n,
+        });
+
+      expect(
+        new VaultV1ReallocationData(input).computeVaultV1Reallocations(
+          targetParams.id,
+          options,
+        ).withdrawals,
+      ).toEqual([]);
+    },
+  );
 
   test("throws typed errors for impossible direct apply states", () => {
     const baseInput = makeInput({
