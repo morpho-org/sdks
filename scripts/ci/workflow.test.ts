@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import {
+  describeError,
   readRequiredEnv,
   reportCliError,
   sanitizeAnnotation,
@@ -33,10 +34,32 @@ describe("reportCliError", () => {
 
       reportCliError("plain string");
       expect(stderr).toHaveBeenLastCalledWith("::error::plain string\n");
+
+      reportCliError(
+        new TypeError("fetch failed", {
+          cause: new Error("getaddrinfo ENOTFOUND api.github.com"),
+        }),
+      );
+      expect(stderr).toHaveBeenLastCalledWith(
+        "::error::fetch failed: getaddrinfo ENOTFOUND api.github.com\n",
+      );
     } finally {
       stderr.mockRestore();
       process.exitCode = previous;
     }
+  });
+});
+
+describe("describeError", () => {
+  test("default: joins the cause chain and tolerates cycles and non-Error causes", () => {
+    const inner = new Error("inner", { cause: "raw cause" });
+    const outer = new Error("outer", { cause: inner });
+    expect(describeError(outer)).toBe("outer: inner: raw cause");
+
+    const loop = new Error("loop");
+    loop.cause = loop;
+    expect(describeError(loop)).toBe("loop");
+    expect(describeError(undefined)).toBe("");
   });
 });
 

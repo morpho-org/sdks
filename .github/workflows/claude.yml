@@ -145,6 +145,8 @@ jobs:
           NODE_OPTIONS: ''
           LD_PRELOAD: ''
           LD_LIBRARY_PATH: ''
+          SHELLOPTS: ''
+          PS4: ''
         # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
         # after checking it is byte-identical to the snapshot and with the node binary recorded then.
         run: |
@@ -168,6 +170,8 @@ jobs:
           NODE_OPTIONS: ''
           LD_PRELOAD: ''
           LD_LIBRARY_PATH: ''
+          SHELLOPTS: ''
+          PS4: ''
         # Same integrity check as above; the script refuses inputs outside RUNNER_TEMP and writes
         # `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: |

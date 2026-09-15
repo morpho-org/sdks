@@ -15,12 +15,28 @@ export function writeStdout(message: string): void {
 
 /**
  * Terminal error handler for the CLI entry shims: reports the failure as a workflow `::error::`
- * annotation and marks the process as failed without cutting off pending stdio flushes.
+ * annotation (including the `cause` chain, e.g. the DNS/socket error behind undici's `fetch failed`)
+ * and marks the process as failed without cutting off pending stdio flushes.
  */
 export function reportCliError(error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
+  process.stderr.write(
+    `::error::${sanitizeAnnotation(describeError(error))}\n`,
+  );
   process.exitCode = 1;
+}
+
+/** Formats an error as its message followed by every `cause` message, separated by `: `. */
+export function describeError(error: unknown): string {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current != null && !seen.has(current)) {
+    seen.add(current);
+    messages.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+  }
+
+  return messages.join(": ");
 }
 
 /**

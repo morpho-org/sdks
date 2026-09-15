@@ -312,7 +312,7 @@ The repo has no `format`/`typecheck` npm scripts, its `test` script runs Vitest 
 
 - `<FORMAT_CMD>` = `pnpm exec biome check --write <changed files>` (or the resolved binary `node_modules/@biomejs/biome/bin/biome`). Format may mutate files freely.
 - `<LINT_CMD>` = `pnpm exec biome check <changed files>` — scoped to the diff's files. NOT the full `pnpm lint` (it bundles `jsdoc:coverage:check` + `lint:address` + `lint:ci-scripts` (the `tsc` type-check of `scripts/ci/`) + a whole-repo `biome check` that is pre-existing-red on frozen deprecated packages).
-- `<TYPECHECK_CMD>` = `tsc --noEmit` scoped to the touched surface: `.agents/pr-review-engine/scripts/tsconfig.json` for engine-script changes, or the touched package's `tsconfig.json` (`pnpm --filter <pkg> exec tsc --noEmit`). Skip with a one-line warning if no tsconfig covers the change.
+- `<TYPECHECK_CMD>` = `tsc --noEmit` scoped to the touched surface: `.agents/pr-review-engine/scripts/tsconfig.json` for engine-script changes, `scripts/ci/tsconfig.json` (`pnpm lint:ci-scripts`) for `scripts/ci/` changes, or the touched package's `tsconfig.json` (`pnpm --filter <pkg> exec tsc --noEmit`). Skip with a one-line warning if no tsconfig covers the change.
 - `<TEST_CMD>` = the affected **non-watch** Vitest project only: `dotenv -- node node_modules/vitest/vitest.mjs run --project <name>` (e.g. `agents-engine` for engine-script changes; the touched package's project otherwise). **Never** bare `pnpm test` (watch mode) and **never** the full fork suite (needs `MAINNET_RPC_URL` + live RPC).
 
 If a gate command is unresolvable for the change, skip that step with a one-line warning; never invent a command.
