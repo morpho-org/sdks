@@ -61,11 +61,10 @@ jobs:
       # scripts/ci/trusted-scripts.ts copies scripts/ plus the node binary itself into the snapshot and
       # records one digest over both, and the copied node path, as step outputs (runner-held state Claude's
       # subprocesses cannot rewrite); the post-Claude steps re-verify the digest before executing the copy.
+      # The second pair is the plain copy of .agents/ Claude is pointed at.
       - name: Snapshot trusted review instructions
         id: trusted
-        run: |
-          cp -R .agents "$RUNNER_TEMP/trusted-agents"
-          node scripts/ci/trusted-scripts.ts snapshot scripts "$RUNNER_TEMP/trusted-scripts"
+        run: node scripts/ci/trusted-scripts.ts snapshot scripts "$RUNNER_TEMP/trusted-scripts" .agents "$RUNNER_TEMP/trusted-agents"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
       # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
@@ -133,8 +132,10 @@ jobs:
       #
       # Claude's subprocesses can append to $GITHUB_ENV, so both post-Claude steps start from an empty
       # environment (`env -i`) and pass only the variables listed: nothing injected (BASH_ENV, NODE_OPTIONS,
-      # LD_*, HTTPS_PROXY/NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS, ...) reaches the shell or the node
-      # process that holds the token. The workspace now holds the PR head, so the trusted copy snapshotted
+      # LD_*, HTTPS_PROXY/NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS, ...) reaches the node process that
+      # holds the token. The step's own bash starts before `env -i` runs, so the variables that would
+      # inject code into that shell (dynamic loader, bash startup) are pinned empty at the step level,
+      # where `env:` takes precedence over anything appended to $GITHUB_ENV. The workspace now holds the PR head, so the trusted copy snapshotted
       # before Claude ran is executed with the node binary recorded then, after its digest is re-checked.
       - name: Verify the review was posted
         if: github.event_name == 'pull_request'
@@ -142,6 +143,9 @@ jobs:
           BASH_ENV: ''
           SHELLOPTS: ''
           PS4: ''
+          LD_PRELOAD: ''
+          LD_AUDIT: ''
+          LD_LIBRARY_PATH: ''
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
@@ -178,6 +182,9 @@ jobs:
           BASH_ENV: ''
           SHELLOPTS: ''
           PS4: ''
+          LD_PRELOAD: ''
+          LD_AUDIT: ''
+          LD_LIBRARY_PATH: ''
         # Same empty-environment invocation and integrity check as above; the script refuses inputs
         # outside RUNNER_TEMP (or non-regular files) and writes `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: >-

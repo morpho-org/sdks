@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -14,6 +15,7 @@ import {
   digestDirectory,
   listFiles,
   main,
+  parseCopyPairs,
   snapshot,
   verify,
 } from "./trusted-scripts.ts";
@@ -191,8 +193,60 @@ describe("main", () => {
     ]);
   });
 
+  test("behavior: extra <src> <dest> pairs are copied but not digested", () => {
+    const scripts = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "commands/review.md": "review" });
+    const outputFile = join(scripts, "..", `trusted-extra-out-${process.pid}`);
+    const dest = join(scripts, "..", `trusted-extra-dest-${process.pid}`);
+    const agentsDest = join(
+      scripts,
+      "..",
+      `trusted-extra-agents-${process.pid}`,
+    );
+    tempDirs.push(outputFile, dest, agentsDest);
+    const output: string[] = [];
+
+    main({
+      argv: ["snapshot", scripts, dest, agents, agentsDest],
+      outputFile,
+      writeOutput: (m) => output.push(m),
+    });
+
+    expect(
+      readFileSync(join(agentsDest, "commands", "review.md"), "utf8"),
+    ).toBe("review");
+    expect(output[0]).toBe(
+      `Trusted copy of ${agents} made at ${agentsDest}.\n`,
+    );
+    const digest = readFileSync(outputFile, "utf8").match(
+      /^digest=(.*)$/m,
+    )?.[1];
+    if (digest == null) throw new Error("digest output missing");
+    // Editing the instructions copy does not invalidate the executable-scripts digest.
+    writeFileSync(join(agentsDest, "commands", "review.md"), "changed");
+    expect(() => verify(dest, digest)).not.toThrow();
+  });
+
+  test("error: an existing extra destination aborts before any copy", () => {
+    const scripts = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "x.md": "x" });
+    const dest = join(scripts, "..", `trusted-extra-abort-${process.pid}`);
+    tempDirs.push(dest);
+
+    expect(() =>
+      snapshot(
+        { dest, extraCopies: [{ dest: agents, src: agents }], src: scripts },
+        { outputFile: "/dev/null" },
+      ),
+    ).toThrow(/existing path/);
+    expect(existsSync(dest)).toBe(false);
+  });
+
   test("error: unknown mode / missing arguments", () => {
     const dir = makeTree({ "a.ts": "a" });
+
+    expect(() => main({ argv: ["snapshot", dir, dir, dir] })).toThrow(/Usage/);
+    expect(() => parseCopyPairs([])).toThrow(/Usage/);
 
     expect(() => main({ argv: ["nope", dir, dir] })).toThrow(
       /Unknown mode "nope"/,

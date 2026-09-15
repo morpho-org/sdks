@@ -13,8 +13,12 @@
  * The digest is a SHA-256 over `"<relative path>\0<sha256(content)>\n"` entries sorted by path, so
  * it is independent of directory-walk order and of the shell tools available on the runner.
  *
- *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest>     # copies scripts + node, appends node_bin= and digest= to GITHUB_OUTPUT
- *   node scripts/ci/trusted-scripts.ts verify <dir> <expected>   # exits 1 when the digest differs
+ *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...]   # copies scripts + node, appends node_bin= and digest= to GITHUB_OUTPUT
+ *   node scripts/ci/trusted-scripts.ts verify <dir> <expected>                    # exits 1 when the digest differs
+ *
+ * Extra `<src> <dest>` pairs are plain trusted copies made in the same step (the `.agents/` review
+ * instructions Claude is pointed at); they are not part of the digest, which only guards code the
+ * post-Claude steps execute.
  */
 import { createHash } from "node:crypto";
 import {
@@ -64,17 +68,36 @@ export function digestDirectory(dir: string): string {
   return hash.digest("hex");
 }
 
+/** A directory copy made alongside the digested snapshot. */
+export interface CopySpec {
+  readonly dest: string;
+  readonly src: string;
+}
+
 /**
  * Copies `src` to a fresh `dest`, copies the interpreter running this script to `<dest>/bin/node`,
  * then records that path as `node_bin` and the `digest` of the whole copy as step outputs.
  */
 export function snapshot(
-  { dest, src }: { readonly dest: string; readonly src: string },
+  {
+    dest,
+    extraCopies = [],
+    src,
+  }: {
+    readonly dest: string;
+    readonly extraCopies?: readonly CopySpec[];
+    readonly src: string;
+  },
   options: RunOptions = {},
 ): string {
   const env = options.env ?? process.env;
-  if (existsSync(dest)) {
-    throw new Error(`Refusing to snapshot into existing path ${dest}.`);
+  for (const copy of [{ dest, src }, ...extraCopies]) {
+    if (existsSync(copy.dest)) {
+      throw new Error(`Refusing to snapshot into existing path ${copy.dest}.`);
+    }
+  }
+  for (const copy of extraCopies) {
+    cpSync(copy.src, copy.dest, { recursive: true });
   }
   cpSync(src, dest, { recursive: true });
   const nodeBin = join(dest, "bin", "node");
@@ -104,24 +127,44 @@ export function verify(dir: string, expected: string): void {
   }
 }
 
-/** CLI dispatcher: `snapshot <src> <dest>` or `verify <dir> <expected>`. */
+const USAGE =
+  "Usage: trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...] | verify <dir> <expected>";
+
+/** Parses `<src> <dest>` pairs; an odd or empty argument list is a usage error. */
+export function parseCopyPairs(args: readonly string[]): CopySpec[] {
+  if (args.length === 0 || args.length % 2 !== 0 || args.some((a) => !a)) {
+    throw new Error(USAGE);
+  }
+  const pairs: CopySpec[] = [];
+  for (let i = 0; i < args.length; i += 2) {
+    pairs.push({ dest: args[i + 1] as string, src: args[i] as string });
+  }
+
+  return pairs;
+}
+
+/** CLI dispatcher: `snapshot <src> <dest> [<src> <dest> ...]` or `verify <dir> <expected>`. */
 export function main(options: RunOptions = {}): void {
   const argv = options.argv ?? process.argv.slice(2);
   const writeOutput = options.writeOutput ?? writeStdout;
-  const [mode, first, second] = argv;
-  if (!first || !second) {
-    throw new Error(
-      "Usage: trusted-scripts.ts snapshot <src> <dest> | verify <dir> <expected>",
-    );
-  }
+  const [mode, ...rest] = argv;
 
   switch (mode) {
     case "snapshot": {
-      const digest = snapshot({ dest: second, src: first }, options);
-      writeOutput(`Trusted scripts copied to ${second} (digest ${digest}).\n`);
+      const [primary, ...extraCopies] = parseCopyPairs(rest);
+      if (primary == null) throw new Error(USAGE);
+      const digest = snapshot({ ...primary, extraCopies }, options);
+      for (const copy of extraCopies) {
+        writeOutput(`Trusted copy of ${copy.src} made at ${copy.dest}.\n`);
+      }
+      writeOutput(
+        `Trusted scripts copied to ${primary.dest} (digest ${digest}).\n`,
+      );
       return;
     }
     case "verify": {
+      const [first, second] = rest;
+      if (!first || !second) throw new Error(USAGE);
       verify(first, second);
       writeOutput(`Trusted scripts in ${first} match the snapshot.\n`);
       return;
