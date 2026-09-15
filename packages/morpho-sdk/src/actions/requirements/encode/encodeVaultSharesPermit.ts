@@ -17,7 +17,7 @@ export interface EncodeVaultSharesPermitParams {
   readonly vault: Token;
   /** Vault generation, which selects the standard V1 or two-field V2 domain. */
   readonly version: "vaultV1" | "vaultV2";
-  /** VaultExitBundlesV1 spender. */
+  /** Registered fixed vault bundles spender. */
   readonly spender: Address;
   /** Account that owns the vault shares. */
   readonly owner: Address;
@@ -39,15 +39,15 @@ export interface EncodeVaultSharesPermitParams {
  *
  * @param params.vault - Vault share token, including V1 permit-domain metadata when available.
  * @param params.version - Vault generation selecting the standard V1 or two-field V2 domain.
- * @param params.spender - Registered VaultExitBundlesV1 spender.
+ * @param params.spender - Registered VaultBundlesV1 or VaultExitBundlesV1 spender.
  * @param params.owner - Account that owns and authorizes spending of the vault shares.
  * @param params.chainId - Chain on which the vault and spender are deployed.
  * @param params.nonce - Current vault permit nonce for the owner.
  * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
- * @returns A requirement whose `sign()` result can be embedded in VaultExitBundlesV1 calldata.
+ * @returns A requirement whose `sign()` result can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the registered VaultExitBundlesV1.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a registered fixed vault-bundles contract.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet has no account.
  * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `owner`.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet targets another chain.
@@ -115,11 +115,11 @@ export const encodeVaultSharesPermit = (
             }),
   });
 
-  // Bind the permit to the standalone vault-exit deployment for this chain.
+  // Bind the permit to one of the registered fixed vault bundles deployments.
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: ["vaultExitBundlesV1"],
+    allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
   const action: PermitAction = {
@@ -128,6 +128,7 @@ export const encodeVaultSharesPermit = (
       spender,
       amount,
       deadline,
+      nonce,
     },
   };
 

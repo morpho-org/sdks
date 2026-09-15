@@ -28,6 +28,7 @@ import {
 } from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { GroupUtils } from "./GroupUtils.js";
+import { RatifierUtils } from "./RatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -137,6 +138,24 @@ describe("EcrecoverRatifierUtils.ratify", () => {
         proof: decoded.proof,
       }),
     ).toBe(true);
+  });
+
+  test("behavior: does not revalidate per offer", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = ecrecoverTree(3);
+    const signature = await signTree(tree, account);
+    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+
+    try {
+      await EcrecoverRatifierUtils.ratify({ tree, account, signature });
+
+      const calls = normalize.mock.calls.filter(
+        ([params]) => params.tree === tree,
+      );
+      expect(calls.length).toBeLessThan(tree.offers.length);
+    } finally {
+      normalize.mockRestore();
+    }
   });
 
   test("behavior: signs with client and account", async () => {

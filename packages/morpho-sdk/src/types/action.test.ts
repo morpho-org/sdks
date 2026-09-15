@@ -5,10 +5,10 @@ import {
   type AuthorizationRequirementSignature,
   isAuthorizationSignature,
   isMidnightOfferRootSignature,
-  isPermit2TransferFromSignature,
+  isPermit2SignatureTransferSignature,
   isPermitSignature,
   type MidnightOfferRootSignature,
-  type Permit2TransferFromRequirementSignature,
+  type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
   selectRequirementSignatures,
 } from "./action.js";
@@ -59,20 +59,26 @@ const permit2Signature: PermitRequirementSignature = {
   },
 };
 
-const permit2TransferFromSignature: Permit2TransferFromRequirementSignature = {
-  action: {
-    type: "permit2TransferFrom",
-    args: { spender: SPENDER, amount: 1n, deadline: 1_900_000_000n },
-  },
-  args: {
-    owner: OWNER,
-    asset: TOKEN,
-    amount: 1n,
-    nonce: 0n,
-    deadline: 1_900_000_000n,
-    signature: SIGNATURE,
-  },
-};
+const permit2SignatureTransferSignature: Permit2SignatureTransferRequirementSignature =
+  {
+    action: {
+      type: "permit2SignatureTransfer",
+      args: {
+        spender: SPENDER,
+        amount: 1n,
+        nonce: 0n,
+        deadline: 1_900_000_000n,
+      },
+    },
+    args: {
+      owner: OWNER,
+      asset: TOKEN,
+      amount: 1n,
+      nonce: 0n,
+      deadline: 1_900_000_000n,
+      signature: SIGNATURE,
+    },
+  };
 
 const authorizationSignature: AuthorizationRequirementSignature = {
   action: {
@@ -130,15 +136,15 @@ describe("isAuthorizationSignature", () => {
   });
 });
 
-describe("isPermit2TransferFromSignature", () => {
+describe("isPermit2SignatureTransferSignature", () => {
   test("default: true for Permit2 SignatureTransfer", () => {
-    expect(isPermit2TransferFromSignature(permit2TransferFromSignature)).toBe(
-      true,
-    );
+    expect(
+      isPermit2SignatureTransferSignature(permit2SignatureTransferSignature),
+    ).toBe(true);
   });
 
   test("behavior: false for Permit2 AllowanceTransfer", () => {
-    expect(isPermit2TransferFromSignature(permit2Signature)).toBe(false);
+    expect(isPermit2SignatureTransferSignature(permit2Signature)).toBe(false);
   });
 });
 
@@ -179,7 +185,7 @@ describe("selectRequirementSignatures", () => {
       }),
     ).toEqual({
       permit: permitSignature,
-      permit2TransferFrom: undefined,
+      permit2SignatureTransfer: undefined,
       authorization: authorizationSignature,
       midnightOfferRoot: undefined,
     });
@@ -196,7 +202,7 @@ describe("selectRequirementSignatures", () => {
       selectRequirementSignatures([], { permit: true, authorization: true }),
     ).toEqual({
       permit: undefined,
-      permit2TransferFrom: undefined,
+      permit2SignatureTransfer: undefined,
       authorization: undefined,
       midnightOfferRoot: undefined,
     });
@@ -209,7 +215,7 @@ describe("selectRequirementSignatures", () => {
       }),
     ).toEqual({
       permit: undefined,
-      permit2TransferFrom: undefined,
+      permit2SignatureTransfer: undefined,
       authorization: undefined,
       midnightOfferRoot: midnightOfferRootSignature,
     });
@@ -217,12 +223,12 @@ describe("selectRequirementSignatures", () => {
 
   test("behavior: extracts a Permit2 SignatureTransfer", () => {
     expect(
-      selectRequirementSignatures([permit2TransferFromSignature], {
-        permit2TransferFrom: true,
+      selectRequirementSignatures([permit2SignatureTransferSignature], {
+        permit2SignatureTransfer: true,
       }),
     ).toEqual({
       permit: undefined,
-      permit2TransferFrom: permit2TransferFromSignature,
+      permit2SignatureTransfer: permit2SignatureTransferSignature,
       authorization: undefined,
       midnightOfferRoot: undefined,
     });
@@ -230,7 +236,7 @@ describe("selectRequirementSignatures", () => {
 
   test("error: UnexpectedRequirementSignatureError on an unconsumed Permit2 SignatureTransfer", () => {
     expect(() =>
-      selectRequirementSignatures([permit2TransferFromSignature], {
+      selectRequirementSignatures([permit2SignatureTransferSignature], {
         authorization: true,
       }),
     ).toThrow(UnexpectedRequirementSignatureError);

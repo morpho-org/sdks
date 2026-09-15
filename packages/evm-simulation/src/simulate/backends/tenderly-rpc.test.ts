@@ -1,4 +1,10 @@
-import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
+import {
+  type Address,
+  ethAddress,
+  getAddress,
+  type Hex,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -252,6 +258,50 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
             assetChanges: [
               assetChange({
                 from: USER,
+                rawAmount: "0xde0b6b3a7640000",
+                symbol: "ETH",
+                decimals: 18,
+              }),
+            ],
+          }),
+        ),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+    });
+
+    expect(result.assetChanges).toEqual([
+      {
+        account: USER,
+        changes: [
+          {
+            token: ethAddress,
+            symbol: "ETH",
+            decimals: 18,
+            diff: -1_000_000_000_000_000_000n,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("maps a checksummed native sentinel in contractAddress to the eth sentinel", async () => {
+    // SDKS-102/46: Tenderly may echo the native sentinel (checksummed) as an
+    // asset change's contractAddress. It must still key native ETH by the exact
+    // `ethAddress` constant so a Bundler3 native residual is not silently dropped
+    // by `assertNoBundlerRetention`.
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope(
+          successResult({
+            assetChanges: [
+              assetChange({
+                from: USER,
+                token: getAddress(ethAddress),
                 rawAmount: "0xde0b6b3a7640000",
                 symbol: "ETH",
                 decimals: 18,

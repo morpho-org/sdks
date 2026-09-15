@@ -9,6 +9,7 @@ export type RequirementSpenderKey =
   | "midnight"
   | "midnightBundles"
   | "vaultExitBundlesV1"
+  | "vaultBundlesV1"
   | "blueBundlesV1";
 
 /**
@@ -51,6 +52,7 @@ export const validateRequirementSpender = (params: {
     midnight,
     midnightBundles,
     vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
+    vaultBundlesV1: bundles?.vaultBundlesV1,
     blueBundlesV1: bundles?.blueBundlesV1,
   } satisfies Record<RequirementSpenderKey, Address | undefined>;
   const supportedSpenders = params.allowed.map((key) => addresses[key]);

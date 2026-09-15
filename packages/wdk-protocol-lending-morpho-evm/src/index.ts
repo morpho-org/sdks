@@ -3,6 +3,11 @@ export type {
   RequirementSignature,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
+export {
+  AddressMismatchError,
+  ChainIdMismatchError,
+  VaultAssetMismatchError,
+} from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {
   BorrowOptions,
@@ -14,6 +19,7 @@ export type {
   WithdrawOptions,
   WithdrawResult,
 } from "@tetherto/wdk-wallet/protocols";
+export { MissingWalletProviderError } from "./errors.js";
 export {
   type Market,
   type MarketPresetKey,
@@ -24,30 +30,33 @@ export {
 } from "./morpho-presets.js";
 export type {
   AccountData,
-  ApprovalOrSignatureRequirement,
   AuthorizationOrSignatureRequirement,
   BlueApprovalOrSignatureRequirement,
+  BundlesApprovalOrSignatureRequirement,
   Eip1193Provider,
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
-  MorphoErc20SupplyOptions,
   MorphoEvmAccount,
-  MorphoNativeSupplyOptions,
+  MorphoExclusiveSupplyOptions,
   MorphoProtocolOptions,
   MorphoRepayOptions,
-  MorphoSupplyOptions,
   MorphoWithdrawCollateralOptions,
+  MorphoWithdrawOptions,
+  PreparedMorphoSupply,
+  PreparedMorphoWithdraw,
   Presets,
   RequirementApproval,
   RequirementAuthorization,
   RequirementOptions,
   RequirementSignatureRequest,
   VaultPosition,
+  VaultSharesApprovalOrSignatureRequirement,
 } from "./morpho-protocol-evm.js";
 export {
   default,
   default as MorphoProtocolEvm,
   MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
 } from "./morpho-protocol-evm.js";

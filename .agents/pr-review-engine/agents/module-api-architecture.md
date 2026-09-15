@@ -30,7 +30,7 @@ Per AGENTS.md §1, §2 (rule 5), and §4 — package boundaries, forbidden deep 
 
 Per AGENTS.md §7 — public deprecation lifecycle:
 
-- A removed, renamed, or retyped public symbol that skips the default deprecation flow without an explicitly codified exception. The `BlueBundlesV1` exception applies only to the route-specific input and output changes listed in its linked TIB, preserves the established method and action names, and does not waive that exception's release duties. It does not cover Vault V1 reallocation inputs: those high-level Blue and WDK flows require a published deprecation minor before becoming Vault V2-only in the next majors.
+- A removed, renamed, or retyped public symbol that skips the default deprecation flow without an explicitly codified exception. The `BlueBundlesV1` exception applies only to the route-specific input and output changes listed in its linked TIB, preserves the established method and action names, and does not waive that exception's release duties. It does not cover Vault V1 reallocation inputs: those high-level Blue and WDK flows require a published deprecation minor before becoming Vault V2-only in the next majors. A parallel `Vault V2 forceWithdraw` route exception (its linked TIB's rejected Alternative 2 documents the fund-safety reason a coexistence minor is unsafe) covers the `forceWithdraw` method/action retype to `VaultExitBundlesV1` while preserving the names; like the `BlueBundlesV1` one it is route-scoped and does not waive the major changeset, migration guide, or maintained-dependent duties.
 
 Per AGENTS.md §3 — type discipline at the boundary:
 

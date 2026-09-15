@@ -1,4 +1,4 @@
-import { type Address, getAddress } from "viem";
+import { type Address, ethAddress, getAddress, type Hex } from "viem";
 import type { AccountAssetChanges, AssetChange } from "../types.js";
 
 /** A single signed contribution to one account's balance for one token. */
@@ -8,6 +8,26 @@ export interface AssetChangeEntry {
   diff: bigint;
   symbol?: string;
   decimals?: number;
+}
+
+/**
+ * Collapse the native-ETH sentinel to viem's lowercase `ethAddress`, checksumming
+ * any real token address. `eth_simulateV1` synthesizes native moves from the
+ * sentinel `0xeee…eee`, and Tenderly may echo it — in checksummed or any other
+ * case — as an asset change's `contractAddress`. Native ETH is keyed by the exact
+ * `ethAddress` constant here and in the bundler-retention guard, so a checksummed
+ * sentinel would land on a separate map key and silently escape retention checks.
+ * This is the single source of truth for token normalization shared by the
+ * transfer-log parser and the Tenderly asset-change mapper.
+ *
+ * @param address - Token address emitting a transfer or carried by an asset change.
+ * @returns `ethAddress` for the native sentinel, else the checksummed address.
+ * @internal
+ */
+export function normalizeAssetToken(address: Hex): Address {
+  return address.toLowerCase() === ethAddress
+    ? ethAddress
+    : getAddress(address);
 }
 
 // Locale-independent byte-order compare on lowercased hex, matching `sortTransfers`.

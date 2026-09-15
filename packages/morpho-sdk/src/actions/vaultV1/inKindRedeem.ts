@@ -3,6 +3,7 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   EmptyMarketParamsListError,
   type Metadata,
@@ -46,6 +47,7 @@ export interface VaultV1InKindRedeemParams {
  * @returns A deep-frozen `Readonly<Transaction<VaultV1InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -69,8 +71,7 @@ export const vaultV1InKindRedeem = ({
   Transaction<VaultV1InKindRedeemAction>
 > => {
   if (args.amount <= 0n) throw new NonPositiveInputError("amount", args.amount);
-  if (args.deadline <= 0n)
-    throw new NonPositiveInputError("deadline", args.deadline);
+  validateDeadline(args.deadline);
   if (args.marketParamsList.length === 0)
     throw new EmptyMarketParamsListError();
 

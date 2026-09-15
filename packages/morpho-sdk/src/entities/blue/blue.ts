@@ -31,7 +31,6 @@ import {
   blueWithdraw,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
-  getBlueBundlesV1TokenRequirements,
 } from "../../actions/index.js";
 import {
   DEFAULT_LLTV_BUFFER,
@@ -75,6 +74,7 @@ import {
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { getBundlesTokenRequirements } from "../requirements/index.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
 type VaultV2BlueReallocationsParams = {
@@ -91,7 +91,7 @@ type VaultV2BlueReallocationsParams = {
 export interface BlueTokenRequirementsParams {
   /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
   readonly permit2Nonce?: bigint;
   /**
    * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
@@ -144,15 +144,15 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the collateral token.
    * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `collateralAssets`.
    * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
@@ -213,8 +213,8 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic `approvalAmount` is below the funded `assets`.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
@@ -222,7 +222,7 @@ export interface BlueActions {
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
    * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `assets`.
    * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, or token metadata read fails.
@@ -298,7 +298,7 @@ export interface BlueActions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-authorization signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
@@ -379,7 +379,7 @@ export interface BlueActions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
@@ -455,15 +455,15 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an authorization signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
    * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from the derived funding cap.
    * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
@@ -540,7 +540,7 @@ export interface BlueActions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
@@ -625,15 +625,15 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
    * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from the derived funding cap.
    * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
@@ -725,15 +725,15 @@ export interface BlueActions {
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
    * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the collateral token.
    * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `collateralAssets`.
    * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
@@ -819,7 +819,7 @@ export interface BlueActions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-authorization signature is supplied.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
    * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
@@ -988,8 +988,9 @@ export class MorphoBlue implements BlueActions {
     approvalAmount?: bigint;
   }): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline);
-    return getBlueBundlesV1TokenRequirements(this.client.viemClient, {
+    return getBundlesTokenRequirements(this.client.viemClient, {
       token: params.token,
+      spender: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
       amount: params.amount,
       owner: params.userAddress,
       chainId: this.chainId,

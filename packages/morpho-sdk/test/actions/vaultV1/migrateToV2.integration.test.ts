@@ -2,6 +2,7 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -9,7 +10,7 @@ import {
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should migrate full USDC position from V1 to V2", async ({
@@ -125,11 +126,18 @@ describe("MigrateToV2 VaultV1", () => {
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
         }
+        if (requirements[0].action.type !== "permit") {
+          throw new Error("Requirement is not a vault-share permit");
+        }
 
         const requirementSignature = await requirements[0].sign(
           client,
           client.account.address,
         );
+
+        if (!isPermitSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(requirementSignature.args.asset).toEqual(
@@ -156,6 +164,86 @@ describe("MigrateToV2 VaultV1", () => {
     );
 
     // User's underlying asset balance should be unchanged
+    expect(v1Final.userAssetBalance).toEqual(v1Initial.userAssetBalance);
+  });
+
+  test("should migrate an exact USDC amount from V1 to V2", async ({
+    client,
+  }) => {
+    const shares = parseUnits("2000", 18);
+    const assets = parseUnits("1000", 6);
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: shares,
+    });
+
+    const {
+      vaults: {
+        SteakhouseUsdcVaultV1: { initialState: v1Initial, finalState: v1Final },
+        KeyrockUsdcVaultV2: { initialState: v2Initial, finalState: v2Final },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
+      },
+      actionFn: async () => {
+        const morpho = client.extend(morphoViemExtension()).morpho;
+        const vaultV1 = morpho.vaultV1(
+          SteakhouseUsdcVaultV1.address,
+          mainnet.id,
+        );
+        const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+        const sourceVault = await vaultV1.getData();
+        const targetVault = await vaultV2.getData();
+
+        const migrate = vaultV1.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          assets,
+        });
+
+        const requirements = await migrate.getRequirements();
+
+        expect(requirements.length).toBe(1);
+
+        const approveTx = requirements[0];
+        if (!approveTx) {
+          throw new Error("Approve transaction not found");
+        }
+        if (!isRequirementApproval(approveTx)) {
+          throw new Error("Approve transaction is not an approval transaction");
+        }
+
+        // The deadline-adjusted share allowance must cover the on-chain burn,
+        // otherwise `vaultBundlesV1Migrate` reverts on the source withdrawal.
+        await client.sendTransaction(approveTx);
+
+        const tx = migrate.buildTx();
+        await client.sendTransaction(tx);
+      },
+    });
+
+    // Assets-mode migration moves exactly the requested assets, so the source
+    // position shrinks without being drained.
+    const minimumMoved = (assets * 9_999n) / 10_000n;
+    expect(v1Final.userSharesBalance).toBeLessThan(v1Initial.userSharesBalance);
+    expect(v1Final.userSharesBalance).toBeGreaterThan(0n);
+    expect(
+      v1Initial.userSharesBalanceInAssets - v1Final.userSharesBalanceInAssets,
+    ).toBeGreaterThan(minimumMoved);
+
+    // V2: the migrated assets landed as destination shares.
+    expect(v2Final.userSharesBalance).toBeGreaterThan(
+      v2Initial.userSharesBalance,
+    );
+    expect(
+      v2Final.userSharesBalanceInAssets - v2Initial.userSharesBalanceInAssets,
+    ).toBeGreaterThan(minimumMoved);
+
+    // Assets moved vault-to-vault, never through the user's wallet.
     expect(v1Final.userAssetBalance).toEqual(v1Initial.userAssetBalance);
   });
 });

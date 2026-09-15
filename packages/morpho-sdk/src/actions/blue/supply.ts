@@ -1,16 +1,14 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueSupplyAction,
+  BundlesTokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import {
-  InputExceedsMaxError,
-  NonPositiveInputError,
-} from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -41,7 +39,7 @@ export interface BlueSupplyParams {
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
     /** Optional ERC-2612 or Permit2 SignatureTransfer requirement result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BundlesTokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
   readonly metadata?: Metadata;
@@ -78,7 +76,7 @@ export interface BlueSupplyParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `assets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when the signature kind or encoding is invalid.
+ * @throws {BundlesRequirementSignatureMismatchError} when the signature kind or encoding is invalid.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
@@ -108,13 +106,7 @@ export const blueSupply = (
   if (assets <= 0n) {
     throw new NonPositiveInputError("assets", assets);
   }
-  if (assets > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "assets",
-      value: assets,
-      max: maxUint256,
-    });
-  }
+  validateUint256Field("assets", assets);
 
   const common: BlueBundlesV1CommonParams = {
     chainId,
