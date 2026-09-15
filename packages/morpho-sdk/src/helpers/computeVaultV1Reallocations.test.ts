@@ -14,8 +14,10 @@ import {
 } from "../../test/fixtures/blue.js";
 import type { VaultV1ReallocationData } from "../entities/vaultV1ReallocationData.js";
 import {
+  InputExceedsMaxError,
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
+  NegativeInputError,
   ReallocationWithdrawExceedsMarketSupplyError,
 } from "../types/index.js";
 import {
@@ -141,18 +143,78 @@ function makeMockState({
 // ---------------------------------------------------------------------------
 
 describe("computeVaultV1Reallocations", () => {
+  test("error: identifies an invalid default withdrawal ceiling", () => {
+    try {
+      computeVaultV1Reallocations({
+        reallocationData: makeMockState(),
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: MathLib.WAD,
+        options: { defaultMaxWithdrawalUtilization: MathLib.WAD + 1n },
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InputExceedsMaxError);
+      expect(error).toMatchObject({ field: "defaultMaxWithdrawalUtilization" });
+      return;
+    }
+    expect.fail("Expected an invalid default ceiling to throw");
+  });
+
   test("behavior: preserves the deprecated planner alias", () => {
     expect(computeReallocations).toBe(computeVaultV1Reallocations);
   });
 
   describe("early returns", () => {
+    test.each(["borrow", "withdraw"] as const)(
+      "error: validates unused ceilings before the %s utilization early return",
+      (operation) => {
+        for (const [value, error] of [
+          [-1n, NegativeInputError],
+          [MathLib.WAD + 1n, InputExceedsMaxError],
+        ] as const) {
+          for (const options of [
+            { defaultMaxWithdrawalUtilization: value },
+            { maxWithdrawalUtilization: { [sourceParamsA.id]: value } },
+          ]) {
+            expect(() =>
+              computeVaultV1Reallocations({
+                reallocationData: makeMockState(),
+                marketId: targetParams.id,
+                operation,
+                amount: MathLib.WAD,
+                options: { enabled: true, ...options },
+              }),
+            ).toThrow(error);
+          }
+        }
+      },
+    );
+
+    test.each([0n, MathLib.WAD])(
+      "behavior: accepts unused boundary ceiling %s",
+      (value) => {
+        expect(
+          computeVaultV1Reallocations({
+            reallocationData: makeMockState(),
+            marketId: targetParams.id,
+            operation: "borrow",
+            amount: MathLib.WAD,
+            options: {
+              defaultMaxWithdrawalUtilization: value,
+              maxWithdrawalUtilization: { [sourceParamsA.id]: value },
+            },
+          }),
+        ).toEqual([]);
+      },
+    );
+
     test("should return empty when enabled is false", () => {
       const result = computeVaultV1Reallocations({
         reallocationData: {} as VaultV1ReallocationData,
         marketId: targetParams.id,
         operation: "borrow",
         amount: MathLib.WAD,
-        options: { enabled: false },
+        options: { enabled: false, defaultMaxWithdrawalUtilization: -1n },
       });
       expect(result).toEqual([]);
     });

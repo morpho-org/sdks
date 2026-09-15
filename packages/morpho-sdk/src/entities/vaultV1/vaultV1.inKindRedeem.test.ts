@@ -70,6 +70,22 @@ const mockV1Requirements = (
 };
 
 describe("MorphoVaultV1.inKindRedeem", () => {
+  test("error: InputExceedsMaxError before exposing requirements", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("default: builds the V1 action from distinct market coverage", () => {
     const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
