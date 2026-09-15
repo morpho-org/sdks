@@ -51,6 +51,9 @@ describe("scrubTranscript", () => {
     const transcript = [
       "url https://x-access-token:ghs_abcdefghijklmnopqrstuvwxyz0123@github.com/o/r",
       "pat ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+      "oauth gho_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+      "user ghu_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+      "refresh ghr_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
       "fine github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz",
       "anthropic sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789",
       'header "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload"',
@@ -65,7 +68,7 @@ describe("scrubTranscript", () => {
     const scrubbed = scrubTranscript(transcript, []);
 
     expect(scrubbed).not.toMatch(/ghs_[A-Za-z0-9]/);
-    expect(scrubbed).not.toMatch(/ghp_[A-Za-z0-9]/);
+    expect(scrubbed).not.toMatch(/gh[pour]_[A-Za-z0-9]/);
     expect(scrubbed).not.toMatch(/github_pat_/);
     expect(scrubbed).not.toMatch(/sk-ant-/);
     expect(scrubbed).toContain(`Authorization: Bearer ${MASK}"`);
