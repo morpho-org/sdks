@@ -89,9 +89,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          set -o pipefail
           max_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(.body | contains("CLAUDE_REVIEW_COMPLETE")) | .id] | max // 0' \
-            | sort -n | tail -n 1)
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("CLAUDE_REVIEW_COMPLETE"))) | .id] | max // 0' \
+            | sort -n | tail -n 1) || { echo "::error::Could not list existing reviews on PR #$PR_NUMBER (gh api failed)."; exit 1; }
           echo "max_id=${max_id:-0}" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
@@ -122,6 +123,8 @@ jobs:
 
       # The action reports success even when Claude ended its turn without posting the review
       # (frozen todo list, `No buffered inline comments`). Turn that silent failure into a red job.
+      # Only a formal review counts: the issue-comment fallback in pr-review-ci.md loses the inline
+      # comments, so it is deliberately treated as a failure here.
       - name: Verify the review was posted
         if: github.event_name == 'pull_request'
         env:
@@ -130,9 +133,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
         run: |
+          set -o pipefail
           count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq "[.[] | select(.id > $MAX_ID_BEFORE and .commit_id == \"$HEAD_SHA\" and (.body | contains(\"CLAUDE_REVIEW_COMPLETE\")))] | length" \
-            | awk '{ s += $1 } END { print s + 0 }')
+            --jq "[.[] | select(.id > $MAX_ID_BEFORE and .commit_id == \"$HEAD_SHA\" and .user.login == \"github-actions[bot]\" and (.body | contains(\"CLAUDE_REVIEW_COMPLETE\")))] | length" \
+            | awk '{ s += $1 } END { print s + 0 }') || { echo "::error::Could not verify the review on PR #$PR_NUMBER (gh api failed)."; exit 1; }
           if [ "$count" -eq 0 ]; then
             echo "::error::Claude finished without posting a formal review on $HEAD_SHA (PR #$PR_NUMBER) in this run. See the claude-execution-output artifact."
             exit 1
@@ -140,8 +144,9 @@ jobs:
           echo "Found $count new Claude review(s) on $HEAD_SHA."
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
+      # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed.
       - name: Upload Claude execution log
-        if: always() && steps.claude.outputs.execution_file != ''
+        if: failure() && steps.claude.outputs.execution_file != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
