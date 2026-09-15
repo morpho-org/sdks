@@ -139,8 +139,8 @@ export interface VaultV2Actions {
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is
-   *   selected without an explicit nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the
+   *   owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
    *   explicit Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from

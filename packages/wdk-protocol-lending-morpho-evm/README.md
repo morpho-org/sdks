@@ -165,7 +165,7 @@ See [MIGRATION.md](./MIGRATION.md) for migration from the removed Bundler3 suppl
 
 Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods — and, for vault deposits, through the `prepareSupply` handle's own `getRequirements` — rather than reimplementing allowance or authorization logic.
 
-When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupplyCollateralRequirements` selects Permit2 SignatureTransfer, pass an unused explicit `permit2Nonce` in the optional `RequirementOptions` argument. The adapter forwards that nonce to the Morpho SDK; it does not choose one implicitly.
+When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupplyCollateralRequirements` selects Permit2 SignatureTransfer, the Morpho SDK resolves the lowest unused `permit2Nonce` for the account by default. Pass an explicit unused `permit2Nonce` in the optional `RequirementOptions` argument only when concurrent flows for the same owner need to partition nonces themselves; the adapter forwards it unchanged.
 
 For ERC-4337 accounts you can choose to batch the returned requirement transactions with the final transaction using your account-level flow. For EOA accounts, send requirements before the final operation.
 

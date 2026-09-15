@@ -756,21 +756,6 @@ export {
   BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
 };
 
-/** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
-export class MissingPermit2SignatureTransferNonceError extends Error {
-  public constructor() {
-    super(
-      "Permit2 SignatureTransfer requires an explicit unused permit2Nonce. Generate a unique uint256 nonce, pass it to getRequirements(), and resolve the requirements again.",
-    );
-    this.name = "MissingPermit2SignatureTransferNonceError";
-  }
-}
-
-/** @deprecated Use {@link MissingPermit2SignatureTransferNonceError}. */
-export {
-  MissingPermit2SignatureTransferNonceError as MissingPermit2TransferFromNonceError,
-};
-
 /** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
