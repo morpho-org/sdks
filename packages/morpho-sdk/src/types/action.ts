@@ -179,7 +179,11 @@ export interface BlueWithdrawAction
       shares: bigint;
       receiver: Address;
       minSharePrice: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
+      /**
+       * Native-token fees paid to PublicAllocator V1.
+       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
+       */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
@@ -205,7 +209,11 @@ export interface BlueBorrowAction
       amount: bigint;
       receiver: Address;
       minSharePrice: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
+      /**
+       * Native-token fees paid to PublicAllocator V1.
+       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
+       */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
@@ -223,7 +231,11 @@ export interface BlueSupplyCollateralBorrowAction
       onBehalf: Address;
       receiver: Address;
       nativeAmount?: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
+      /**
+       * Native-token fees paid to PublicAllocator V1.
+       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
+       */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
@@ -286,7 +298,11 @@ export interface BlueRefinanceAction
       readonly minBorrowSharePrice: bigint;
       readonly maxRepaySharePrice: bigint;
       readonly user: Address;
-      /** Native-token fees paid to PublicAllocator V1. */
+      /**
+       * Native-token fees paid to PublicAllocator V1.
+       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
+       */
       readonly reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
