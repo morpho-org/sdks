@@ -172,7 +172,7 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 
 ## Notes
 
-- **CI mode posts a formal verdict** with the `<!-- CLAUDE_REVIEW_COMPLETE -->` and `<!-- CLAUDE_VERDICT:APPROVE -->` markers consumed by the project's CI gates.
+- **CI mode posts a formal verdict** carrying two markers: `<!-- CLAUDE_REVIEW_COMPLETE -->` is consumed by `claude.yml`'s "Verify the review was posted" gate (`scripts/ci/claude-review-gate.mjs`), and `<!-- CLAUDE_VERDICT:APPROVE -->` signals the verdict to the human who clicks Approve — no CI gate reads it.
 - **Local-first reads**: never use the GitHub API to read diffs or file contents — the local repo has everything.
 - **Agent failures downgrade verdict**: any `<FAILED_AGENTS> > 0` forces `REQUEST_CHANGES` so a human handles it.
 - **No `--watch`** in CI — the run is one-shot per PR push.

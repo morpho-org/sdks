@@ -18,7 +18,7 @@ export default defineConfig({
       reporter: ["text-summary", "lcov"],
       include: [
         "packages/**/src/**/*.{ts,tsx}",
-        "scripts/release/**/*.{js,mjs}",
+        "scripts/{ci,release}/**/*.{js,mjs}",
       ],
       exclude: [
         "packages/test/**",

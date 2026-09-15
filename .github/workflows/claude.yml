@@ -59,7 +59,9 @@ jobs:
       # The action checks out the PR head into the workspace before Claude runs, so anything under
       # .agents/ there is PR-controlled. Snapshot the trusted copy from the checked-out default branch.
       - name: Snapshot trusted review instructions
-        run: cp -R .agents "$RUNNER_TEMP/trusted-agents"
+        run: |
+          cp -R .agents "$RUNNER_TEMP/trusted-agents"
+          cp -R scripts "$RUNNER_TEMP/trusted-scripts"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
       # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
@@ -88,12 +90,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -o pipefail
-          max_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("CLAUDE_REVIEW_COMPLETE"))) | .id] | max // 0' \
-            | sort -n | tail -n 1) || { echo "::error::Could not list existing reviews on PR #$PR_NUMBER (gh api failed)."; exit 1; }
-          echo "max_id=${max_id:-0}" >> "$GITHUB_OUTPUT"
+        # Run from the trusted default-branch checkout: the action swaps the workspace to the PR head later.
+        run: node scripts/ci/claude-review-gate.mjs snapshot
 
       - name: Run Claude Code
         id: claude
@@ -124,7 +122,7 @@ jobs:
       # The action reports success even when Claude ended its turn without posting the review
       # (frozen todo list, `No buffered inline comments`). Turn that silent failure into a red job.
       # Only a formal review counts: the issue-comment fallback in pr-review-ci.md loses the inline
-      # comments, so it is deliberately treated as a failure here.
+      # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/claude-review-gate.mjs.
       - name: Verify the review was posted
         if: github.event_name == 'pull_request'
         env:
@@ -132,24 +130,28 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
-        run: |
-          set -o pipefail
-          count=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
-            --arg head "$HEAD_SHA" --argjson before "${MAX_ID_BEFORE:-0}" \
-            --jq '[.[] | select(.id > $before and .commit_id == $head and .user.login == "github-actions[bot]" and (.body | contains("CLAUDE_REVIEW_COMPLETE")))] | length' \
-            | awk '{ s += $1 } END { print s + 0 }') || { echo "::error::Could not verify the review on PR #$PR_NUMBER (gh api failed)."; exit 1; }
-          if [ "$count" -eq 0 ]; then
-            echo "::error::Claude finished without posting a formal review on $HEAD_SHA (PR #$PR_NUMBER) in this run. See the claude-execution-output artifact."
-            exit 1
-          fi
-          echo "Found $count new Claude review(s) on $HEAD_SHA."
+        # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran.
+        run: node "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.mjs" verify
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
-      # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed.
-      - name: Upload Claude execution log
+      # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
+      # and mask the job's secrets plus token-shaped strings first (scripts/ci/scrub-transcript.mjs).
+      - name: Scrub Claude execution log
+        id: scrub
         if: failure() && steps.claude.outputs.execution_file != ''
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          SECRET_VALUES: |
+            ${{ github.token }}
+            ${{ secrets.ANTHROPIC_SDK_API_KEY }}
+        run: |
+          node "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.mjs" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
+          echo "path=$RUNNER_TEMP/claude-execution-output.scrubbed.json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Claude execution log
+        if: failure() && steps.scrub.outputs.path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.claude.outputs.execution_file }}
+          path: ${{ steps.scrub.outputs.path }}
           retention-days: 7
