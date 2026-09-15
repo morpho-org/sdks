@@ -119,7 +119,7 @@ type VaultV2BlueReallocationsParams = {
 export interface BlueTokenRequirementsParams {
   /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
   readonly permit2Nonce?: bigint;
   /**
    * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
@@ -172,7 +172,7 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
@@ -241,7 +241,7 @@ export interface BlueActions {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
    * @throws {InputExceedsMaxError} when `assets` or `deadline` exceeds `uint256`, when the referral fee is at least WAD, or from `getRequirements()` when an explicit `permit2Nonce` exceeds `uint256`.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic `approvalAmount` is below the funded `assets`.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
@@ -483,7 +483,7 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an authorization signature is supplied.
@@ -653,7 +653,7 @@ export interface BlueActions {
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
@@ -753,7 +753,7 @@ export interface BlueActions {
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
    * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
