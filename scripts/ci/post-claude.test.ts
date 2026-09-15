@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -118,6 +119,31 @@ describe("post-claude main", () => {
 
     expect(readFileSync(output, "utf8")).toBe('{"token":"***"}');
     expect(readFileSync(githubOutput, "utf8")).toBe(`path=${output}\n`);
+  });
+
+  test("error: a tampered trusted copy stops before scrubbing", async () => {
+    const { digest, dir, trusted } = trustedFixture();
+    writeFileSync(join(trusted, "a.ts"), "tampered");
+    const input = join(dir, "execution.json");
+    writeFileSync(input, '{"token":"ghp_abcdefghijklmnopqrstuvwxyz0123"}');
+    const output = join(dir, "scrubbed.json");
+    const githubOutput = join(dir, "github-output");
+
+    await expect(
+      main({
+        argv: ["scrub", input, output],
+        env: {
+          GITHUB_OUTPUT: githubOutput,
+          RUNNER_TEMP: dir,
+          SCRIPTS_DIGEST: digest,
+          SECRET_VALUES: "",
+          TRUSTED_SCRIPTS_DIR: trusted,
+        },
+        writeOutput: () => {},
+      }),
+    ).rejects.toThrow(/modified after the snapshot/);
+    expect(existsSync(output)).toBe(false);
+    expect(existsSync(githubOutput)).toBe(false);
   });
 
   test("error: missing TRUSTED_SCRIPTS_DIR / unknown mode", async () => {
