@@ -94,13 +94,47 @@ describe("main", () => {
       "token=super-secret and ghs_abcdefghijklmnopqrstuvwxyz0123",
     );
 
+    const outputFile = join(dir, "github-output");
+
     main({
       argv: [input, output],
       env: { SECRET_VALUES: "super-secret" },
+      outputFile,
       writeOutput: () => {},
     });
 
     expect(readFileSync(output, "utf8")).toBe(`token=${MASK} and ${MASK}`);
+    expect(readFileSync(outputFile, "utf8")).toBe(`path=${output}\n`);
+  });
+
+  test("behavior: falls back to GITHUB_OUTPUT when no outputFile is injected", () => {
+    const dir = createTempDir();
+    const input = join(dir, "in.json");
+    const output = join(dir, "out.json");
+    const outputFile = join(dir, "github-output");
+    writeFileSync(input, "plain");
+
+    main({
+      argv: [input, output],
+      env: { GITHUB_OUTPUT: outputFile, SECRET_VALUES: "" },
+      writeOutput: () => {},
+    });
+
+    expect(readFileSync(outputFile, "utf8")).toBe(`path=${output}\n`);
+  });
+
+  test("error: no output sink", () => {
+    const dir = createTempDir();
+    const input = join(dir, "in.json");
+    writeFileSync(input, "plain");
+
+    expect(() =>
+      main({
+        argv: [input, join(dir, "out.json")],
+        env: { SECRET_VALUES: "" },
+        writeOutput: () => {},
+      }),
+    ).toThrow(/GITHUB_OUTPUT/);
   });
 
   test("error: missing arguments", () => {

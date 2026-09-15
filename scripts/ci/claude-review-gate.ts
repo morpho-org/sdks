@@ -6,15 +6,15 @@
  *   node scripts/ci/claude-review-gate.ts snapshot   # before Claude runs
  *   node scripts/ci/claude-review-gate.ts verify     # after Claude runs
  *
- * Reads `GH_TOKEN`, `GITHUB_REPOSITORY`, `PR_NUMBER`, plus `HEAD_SHA` and
- * `MAX_ID_BEFORE` for `verify`. Every GitHub API failure is an error, never a
+ * Reads `GH_TOKEN`, `GITHUB_REPOSITORY`, `PR_NUMBER`, plus `HEAD_SHA`,
+ * `MAX_ID_BEFORE` and `GITHUB_RUN_ID` for `verify`. Every GitHub API failure is an error, never a
  * silent 0, so the gate can only pass on a real review.
  */
 
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-import { sanitizeAnnotation } from "./annotations.ts";
+import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";
@@ -22,6 +22,13 @@ const USER_AGENT = "morpho-sdks-claude-review-gate";
 export const REVIEW_AUTHOR = "github-actions[bot]";
 /** Marker the review engine embeds in the body of every completed review. */
 export const REVIEW_MARKER = "CLAUDE_REVIEW_COMPLETE";
+/** Prefix of the per-run marker (`<!-- CLAUDE_REVIEW_RUN:<GITHUB_RUN_ID> -->`) that binds a review to the job that posted it. */
+export const RUN_MARKER_PREFIX = "CLAUDE_REVIEW_RUN:";
+
+/** Builds the body marker the workflow prompt asks Claude to include for a given run. */
+export function runMarker(runId: string): string {
+  return `<!-- ${RUN_MARKER_PREFIX}${runId} -->`;
+}
 
 /** Subset of a GitHub pull-request review the gate inspects. */
 export interface Review {
@@ -140,14 +147,26 @@ export function getMaxReviewId(reviews: readonly Review[]): number {
   );
 }
 
-/** Counts the workflow's reviews created after the snapshot and attached to the expected head. */
+/**
+ * Counts the workflow's reviews created after the snapshot, attached to the expected head and
+ * carrying this run's marker. The run marker is what distinguishes this job's review from one an
+ * overlapping `@claude` run (separate concurrency group, same bot identity, same head) posted.
+ */
 export function countNewReviews(
   reviews: readonly Review[],
-  options: { readonly headSha: string; readonly maxIdBefore: number },
+  options: {
+    readonly headSha: string;
+    readonly maxIdBefore: number;
+    readonly runId: string;
+  },
 ): number {
+  const marker = runMarker(options.runId);
+
   return selectClaudeReviews(reviews).filter(
     (review) =>
-      review.id > options.maxIdBefore && review.commit_id === options.headSha,
+      review.id > options.maxIdBefore &&
+      review.commit_id === options.headSha &&
+      review.body?.includes(marker) === true,
   ).length;
 }
 
@@ -194,6 +213,7 @@ export async function verify(options: RunOptions = {}): Promise<number> {
   const writeOutput = options.writeOutput ?? defaultWriteOutput;
   const prNumber = readRequiredEnv(env, "PR_NUMBER");
   const headSha = readRequiredEnv(env, "HEAD_SHA");
+  const runId = readRequiredEnv(env, "GITHUB_RUN_ID");
   const maxIdBefore = parseMaxIdBefore(env.MAX_ID_BEFORE);
   const reviews = await listReviews({
     apiBaseUrl: options.apiBaseUrl,
@@ -202,11 +222,11 @@ export async function verify(options: RunOptions = {}): Promise<number> {
     repository: readRequiredEnv(env, "GITHUB_REPOSITORY"),
     token: readRequiredEnv(env, "GH_TOKEN"),
   });
-  const count = countNewReviews(reviews, { headSha, maxIdBefore });
+  const count = countNewReviews(reviews, { headSha, maxIdBefore, runId });
 
   if (count === 0) {
     throw new Error(
-      `Claude finished without posting a formal review on ${headSha} (PR #${prNumber}) in this run. See the claude-execution-output artifact.`,
+      `Claude finished without posting a formal review on ${headSha} (PR #${prNumber}) carrying ${runMarker(runId)} in this run. See the claude-execution-output artifact.`,
     );
   }
 
@@ -234,15 +254,6 @@ export async function main(options: RunOptions = {}): Promise<number> {
 
 function defaultWriteOutput(message: string): void {
   process.stdout.write(message);
-}
-
-function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
-  const value = env[name];
-  if (value == null || value === "") {
-    throw new Error(`Missing required environment variable ${name}.`);
-  }
-
-  return value;
 }
 
 if (

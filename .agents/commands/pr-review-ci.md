@@ -103,6 +103,7 @@ When agents have failed, never approve — `REQUEST_CHANGES` with the WARNING li
 
 ```
 <!-- CLAUDE_REVIEW_COMPLETE -->
+<!-- CLAUDE_REVIEW_RUN:<run id> -->  <!-- Copy verbatim from the prompt when it provides one -->
 <!-- CLAUDE_VERDICT:APPROVE -->  <!-- Only include for approvals -->
 ## Code Review Summary
 
@@ -172,7 +173,7 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 
 ## Notes
 
-- **CI mode posts a formal verdict** carrying two markers: `<!-- CLAUDE_REVIEW_COMPLETE -->` is consumed by `claude.yml`'s "Verify the review was posted" gate (`scripts/ci/claude-review-gate.ts`), and `<!-- CLAUDE_VERDICT:APPROVE -->` signals the verdict to the human who clicks Approve — no CI gate reads it.
+- **CI mode posts a formal verdict** carrying three markers: `<!-- CLAUDE_REVIEW_COMPLETE -->` and the per-run `<!-- CLAUDE_REVIEW_RUN:<GITHUB_RUN_ID> -->` line given in the prompt are consumed by `claude.yml`'s "Verify the review was posted" gate (`scripts/ci/claude-review-gate.ts` — the run marker is what proves *this* job posted the review, not a concurrent `@claude` run), and `<!-- CLAUDE_VERDICT:APPROVE -->` signals the verdict to the human who clicks Approve — no CI gate reads it.
 - **Local-first reads**: never use the GitHub API to read diffs or file contents — the local repo has everything.
 - **Agent failures downgrade verdict**: any `<FAILED_AGENTS> > 0` forces `REQUEST_CHANGES` so a human handles it.
 - **No `--watch`** in CI — the run is one-shot per PR push.

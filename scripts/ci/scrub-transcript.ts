@@ -5,12 +5,14 @@
  * a public repo bypass job-log redaction). Run with Node's native TypeScript support:
  *
  *   SECRET_VALUES=$'<token>\n<key>' node scripts/ci/scrub-transcript.ts <input> <output>
+ *
+ * Writes `path=<output>` to `GITHUB_OUTPUT` so the upload step can be gated on it.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-import { sanitizeAnnotation } from "./annotations.ts";
+import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
 
 /** Replacement written over every masked secret. */
 export const MASK = "***";
@@ -34,6 +36,7 @@ export const SECRET_PATTERNS: readonly RegExp[] = [
 export interface ScrubOptions {
   readonly argv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
+  readonly outputFile?: string;
   readonly writeOutput?: (message: string) => void;
 }
 
@@ -103,6 +106,10 @@ export function main(options: ScrubOptions = {}): string {
     readSecretValues(env),
   );
   writeFileSync(outputPath, scrubbed);
+  appendFileSync(
+    options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
+    `path=${outputPath}\n`,
+  );
   writeOutput(`Scrubbed transcript written to ${outputPath}.\n`);
 
   return outputPath;

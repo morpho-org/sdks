@@ -58,10 +58,15 @@ jobs:
 
       # The action checks out the PR head into the workspace before Claude runs, so anything under
       # .agents/ there is PR-controlled. Snapshot the trusted copy from the checked-out default branch.
+      # The digest and the absolute node path are step outputs (runner-held state Claude's subprocesses
+      # cannot rewrite); the post-Claude steps re-verify them before executing the trusted copy.
       - name: Snapshot trusted review instructions
+        id: trusted
         run: |
           cp -R .agents "$RUNNER_TEMP/trusted-agents"
           cp -R scripts "$RUNNER_TEMP/trusted-scripts"
+          echo "node_bin=$(command -v node)" >> "$GITHUB_OUTPUT"
+          echo "scripts_digest=$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
       # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
@@ -109,7 +114,9 @@ jobs:
           # block above, expires with the job, and needs no `id-token: write`.
           github_token: ${{ github.token }}
           # pull_request events run in agent mode with a fixed prompt; other events stay in @claude tag mode.
-          prompt: ${{ github.event_name == 'pull_request' && format('Review pull request number {0} in {1} by following the trusted pr-review-ci instructions.', github.event.pull_request.number, github.repository) || '' }}
+          # The run marker binds the posted review to this job: the verify step below only accepts a review
+          # carrying it, so a review posted by an overlapping @claude run cannot satisfy this run's gate.
+          prompt: ${{ github.event_name == 'pull_request' && format('Review pull request number {0} in {1} by following the trusted pr-review-ci instructions. Include the line `<!-- CLAUDE_REVIEW_RUN:{2} -->` in the body of the formal review, next to the CLAUDE_REVIEW_COMPLETE marker.', github.event.pull_request.number, github.repository, github.run_id) || '' }}
           track_progress: ${{ github.event_name == 'pull_request' }}
           # The release bot only needs the automatic pull_request review; keep it out of @claude comment triggers.
           allowed_bots: ${{ github.event_name == 'pull_request' && 'morpho-apps-git-bot,prime-monorepo-git-bot,devin-ai-integration,prd-carapulse,cursor,morpho-sdks-release-bot' || 'morpho-apps-git-bot,prime-monorepo-git-bot,devin-ai-integration,prd-carapulse,cursor' }}
@@ -130,8 +137,14 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
-        # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran.
-        run: node "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.ts" verify
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.scripts_digest }}
+        # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
+        # after checking it is byte-identical to the snapshot and with the node binary recorded then.
+        run: |
+          test "$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" = "$SCRIPTS_DIGEST" || { echo "::error::Trusted scripts were modified after the snapshot."; exit 1; }
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.ts" verify
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
@@ -144,9 +157,12 @@ jobs:
           SECRET_VALUES: |
             ${{ github.token }}
             ${{ secrets.ANTHROPIC_SDK_API_KEY }}
+          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.scripts_digest }}
+        # Same integrity check as above; the script writes `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: |
-          node "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
-          echo "path=$RUNNER_TEMP/claude-execution-output.scrubbed.json" >> "$GITHUB_OUTPUT"
+          test "$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" = "$SCRIPTS_DIGEST" || { echo "::error::Trusted scripts were modified after the snapshot."; exit 1; }
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
 
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''

@@ -14,6 +14,7 @@ import {
   REVIEW_AUTHOR,
   REVIEW_MARKER,
   type Review,
+  runMarker,
   selectClaudeReviews,
   snapshot,
   verify,
@@ -21,6 +22,7 @@ import {
 
 const HEAD = "c462f0c49c0f35e3cb065cf2247312502d1f8062";
 const OLD_HEAD = "da7cc34a1111111111111111111111111111111111";
+const RUN_ID = "34956932196";
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -29,8 +31,14 @@ afterEach(() => {
   }
 });
 
-const claudeReview = (id: number, commitId = HEAD): Review => ({
-  body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n<!-- CLAUDE_VERDICT:APPROVE -->`,
+const claudeReview = (
+  id: number,
+  {
+    commitId = HEAD,
+    runId = RUN_ID,
+  }: { commitId?: string; runId?: string } = {},
+): Review => ({
+  body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n${runMarker(runId)}\n<!-- CLAUDE_VERDICT:APPROVE -->`,
   commit_id: commitId,
   id,
   state: "COMMENTED",
@@ -38,7 +46,7 @@ const claudeReview = (id: number, commitId = HEAD): Review => ({
 });
 
 const pendingClaudeReview = (id: number, commitId = HEAD): Review => ({
-  ...claudeReview(id, commitId),
+  ...claudeReview(id, { commitId }),
   state: "PENDING",
 });
 
@@ -61,9 +69,11 @@ const botPlaceholder = (id: number, commitId = HEAD): Review => ({
 const env = {
   GH_TOKEN: "ghs_test",
   GITHUB_REPOSITORY: "morpho-org/sdks",
+  GITHUB_RUN_ID: RUN_ID,
   HEAD_SHA: HEAD,
   PR_NUMBER: "1076",
 };
+const countOptions = { headSha: HEAD, maxIdBefore: 10, runId: RUN_ID };
 
 describe("parseNextLink", () => {
   test("default", () => {
@@ -125,31 +135,30 @@ describe("getMaxReviewId", () => {
 describe("countNewReviews", () => {
   test("default", () => {
     expect(
-      countNewReviews([claudeReview(10), claudeReview(11)], {
-        headSha: HEAD,
-        maxIdBefore: 10,
-      }),
+      countNewReviews([claudeReview(10), claudeReview(11)], countOptions),
     ).toBe(1);
   });
 
   test("behavior: a stale review from an earlier run does not count", () => {
-    expect(
-      countNewReviews([claudeReview(10)], { headSha: HEAD, maxIdBefore: 10 }),
-    ).toBe(0);
+    expect(countNewReviews([claudeReview(10)], countOptions)).toBe(0);
   });
 
   test("behavior: a review on a different head does not count", () => {
     expect(
-      countNewReviews([claudeReview(11, OLD_HEAD)], {
-        headSha: HEAD,
-        maxIdBefore: 10,
-      }),
+      countNewReviews([claudeReview(11, { commitId: OLD_HEAD })], countOptions),
     ).toBe(0);
   });
 
   test("behavior: a marked review by another user does not count", () => {
+    expect(countNewReviews([humanReview(11)], countOptions)).toBe(0);
+  });
+
+  test("behavior: a review posted by a concurrent run on the same head does not count", () => {
     expect(
-      countNewReviews([humanReview(11)], { headSha: HEAD, maxIdBefore: 10 }),
+      countNewReviews(
+        [claudeReview(11, { runId: "999" }), claudeReview(12, { runId: "" })],
+        countOptions,
+      ),
     ).toBe(0);
   });
 });
@@ -319,11 +328,32 @@ describe("verify", () => {
   });
 
   test("error: fails when the review targets another head", async () => {
-    const { fetchImpl } = createFetch([{ body: [claudeReview(9, OLD_HEAD)] }]);
+    const { fetchImpl } = createFetch([
+      { body: [claudeReview(9, { commitId: OLD_HEAD })] },
+    ]);
 
     await expect(
       verify({ env: { ...env, MAX_ID_BEFORE: "5" }, fetchImpl }),
     ).rejects.toThrow(/without posting a formal review/);
+  });
+
+  test("error: fails when the review was posted by another run", async () => {
+    const { fetchImpl } = createFetch([
+      { body: [claudeReview(9, { runId: "1" })] },
+    ]);
+
+    await expect(
+      verify({ env: { ...env, MAX_ID_BEFORE: "5" }, fetchImpl }),
+    ).rejects.toThrow(new RegExp(`carrying ${runMarker(RUN_ID)}`));
+  });
+
+  test("error: GITHUB_RUN_ID must be bound", async () => {
+    const { fetchImpl } = createFetch([{ body: [claudeReview(9)] }]);
+    const { GITHUB_RUN_ID: _unused, ...envWithoutRunId } = env;
+
+    await expect(
+      verify({ env: { ...envWithoutRunId, MAX_ID_BEFORE: "5" }, fetchImpl }),
+    ).rejects.toThrow(/GITHUB_RUN_ID/);
   });
 
   test("error: an API failure is reported as such, not as a missing review", async () => {
@@ -347,6 +377,27 @@ describe("main", () => {
         writeOutput: () => {},
       }),
     ).resolves.toBe(1);
+  });
+
+  test("behavior: snapshot mode", async () => {
+    const { fetchImpl } = createFetch([{ body: [claudeReview(7)] }]);
+    const dir = mkdtempSync(join(tmpdir(), "claude-review-gate-main-"));
+    const outputFile = join(dir, "output");
+
+    try {
+      await expect(
+        main({
+          argv: ["snapshot"],
+          env,
+          fetchImpl,
+          outputFile,
+          writeOutput: () => {},
+        }),
+      ).resolves.toBe(7);
+      expect(readFileSync(outputFile, "utf8")).toBe("max_id=7\n");
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 
   test("error: unknown mode", async () => {
