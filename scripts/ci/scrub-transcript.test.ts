@@ -41,6 +41,9 @@ describe("scrubTranscript", () => {
       "fine github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz",
       "anthropic sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789",
       'header "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload"',
+      "installation ghs_12345_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc_DEF-ghi",
+      '{"headers":{"Authorization":"Bearer eyJhbGciOiJIUzI1NiJ9.json"}}',
+      '"{\\"Authorization\\":\\"token eyJhbGciOiJIUzI1NiJ9.escaped\\"}"',
     ].join("\n");
 
     const scrubbed = scrubTranscript(transcript, []);
@@ -51,6 +54,10 @@ describe("scrubTranscript", () => {
     expect(scrubbed).not.toMatch(/sk-ant-/);
     expect(scrubbed).toContain(`Authorization: Bearer ${MASK}"`);
     expect(scrubbed).toContain("https://x-access-token:***@github.com/o/r");
+    expect(scrubbed).toContain(`installation ${MASK}`);
+    expect(scrubbed).not.toContain("eyJ");
+    expect(scrubbed).toContain(`"Authorization":"Bearer ${MASK}"`);
+    expect(scrubbed).toContain(`\\"Authorization\\":\\"token ${MASK}\\"`);
   });
 
   test("behavior: ignores empty secret values and leaves clean text untouched", () => {
@@ -68,8 +75,12 @@ describe("readSecretValues", () => {
     ]);
   });
 
-  test("behavior: missing variable", () => {
-    expect(readSecretValues({})).toEqual([]);
+  test("behavior: present but blank variable yields no secrets", () => {
+    expect(readSecretValues({ SECRET_VALUES: "\n\n" })).toEqual([]);
+  });
+
+  test("error: unset variable is a wiring failure", () => {
+    expect(() => readSecretValues({})).toThrow(/SECRET_VALUES/);
   });
 });
 

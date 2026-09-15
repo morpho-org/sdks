@@ -10,20 +10,27 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+import { sanitizeAnnotation } from "./annotations.ts";
+
+/** Replacement written over every masked secret. */
 export const MASK = "***";
 
 /**
  * Token shapes that may appear in tool output regardless of which secret was configured:
- * GitHub tokens (`ghs_` job tokens, `ghp_`/`gho_`/`ghu_`/`ghr_` user tokens, fine-grained
- * `github_pat_`), Anthropic API keys, and `Authorization` header values.
+ * GitHub tokens (classic `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`, the newer `ghs_<digits>_<payload>`
+ * installation format, fine-grained `github_pat_`), Anthropic API keys, and `Authorization`
+ * header values in both text (`Authorization: Bearer x`) and JSON (`"Authorization":"Bearer x"`,
+ * escaped or not) form.
  */
 export const SECRET_PATTERNS: readonly RegExp[] = [
+  /\bgh[pousr]_[0-9]+_[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
-  /(Authorization:\s*(?:Bearer|token|Basic)\s+)[^\s"'\\]+/gi,
+  /((?:\\?")?Authorization(?:\\?")?\s*:\s*(?:\\?")?(?:Bearer|token|Basic)\s+)[^\s"'\\]+/gi,
 ];
 
+/** Injectable argv/env/output boundaries of the CLI. */
 export interface ScrubOptions {
   readonly argv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
@@ -55,12 +62,18 @@ export function scrubTranscript(
 }
 
 /**
- * Reads newline-separated secret values from `SECRET_VALUES` (each may itself be empty when the
- * corresponding secret is not configured).
+ * Reads newline-separated secret values from `SECRET_VALUES` (each line may itself be empty when
+ * the corresponding secret is not configured). The variable itself must be bound: an unset
+ * `SECRET_VALUES` means the workflow wiring is broken, not that there are no secrets.
  */
 export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
-  return (env.SECRET_VALUES ?? "")
-    .split("\n")
+  if (env.SECRET_VALUES == null) {
+    throw new Error(
+      "Missing required environment variable SECRET_VALUES (exact-value masking would be skipped).",
+    );
+  }
+
+  return env.SECRET_VALUES.split("\n")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 }
@@ -103,7 +116,7 @@ if (
     main();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`::error::${message}\n`);
+    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
     process.exitCode = 1;
   }
 }

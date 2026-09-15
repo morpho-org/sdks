@@ -33,13 +33,20 @@ const claudeReview = (id: number, commitId = HEAD): Review => ({
   body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n<!-- CLAUDE_VERDICT:APPROVE -->`,
   commit_id: commitId,
   id,
+  state: "COMMENTED",
   user: { login: REVIEW_AUTHOR },
+});
+
+const pendingClaudeReview = (id: number, commitId = HEAD): Review => ({
+  ...claudeReview(id, commitId),
+  state: "PENDING",
 });
 
 const humanReview = (id: number, commitId = HEAD): Review => ({
   body: `LGTM <!-- ${REVIEW_MARKER} -->`,
   commit_id: commitId,
   id,
+  state: "APPROVED",
   user: { login: "0xbulma" },
 });
 
@@ -47,6 +54,7 @@ const botPlaceholder = (id: number, commitId = HEAD): Review => ({
   body: "Claude Code is working…",
   commit_id: commitId,
   id,
+  state: "COMMENTED",
   user: { login: REVIEW_AUTHOR },
 });
 
@@ -84,12 +92,20 @@ describe("selectClaudeReviews", () => {
       claudeReview(1),
       humanReview(2),
       botPlaceholder(3),
-      { body: null, commit_id: HEAD, id: 4, user: null },
+      { body: null, commit_id: HEAD, id: 4, state: "COMMENTED", user: null },
     ];
 
     expect(selectClaudeReviews(reviews).map((review) => review.id)).toEqual([
       1,
     ]);
+  });
+
+  test("behavior: unsubmitted PENDING drafts never count", () => {
+    expect(
+      selectClaudeReviews([pendingClaudeReview(1), claudeReview(2)]).map(
+        (review) => review.id,
+      ),
+    ).toEqual([2]);
   });
 });
 
@@ -233,6 +249,27 @@ describe("snapshot", () => {
     await snapshot({ env, fetchImpl, outputFile, writeOutput: () => {} });
 
     expect(readFileSync(outputFile, "utf8")).toBe("max_id=0\n");
+  });
+
+  test("behavior: falls back to GITHUB_OUTPUT when no outputFile is injected", async () => {
+    const outputFile = join(createTempDir(), "output");
+    const { fetchImpl } = createFetch([{ body: [claudeReview(5)] }]);
+
+    await snapshot({
+      env: { ...env, GITHUB_OUTPUT: outputFile },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(readFileSync(outputFile, "utf8")).toBe("max_id=5\n");
+  });
+
+  test("error: no output sink", async () => {
+    const { fetchImpl } = createFetch([{ body: [] }]);
+
+    await expect(
+      snapshot({ env, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(/GITHUB_OUTPUT/);
   });
 
   test("error: missing environment", async () => {

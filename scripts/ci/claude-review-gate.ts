@@ -14,18 +14,25 @@
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+import { sanitizeAnnotation } from "./annotations.ts";
+
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";
+/** Login of the identity the workflow's job token posts reviews as. */
 export const REVIEW_AUTHOR = "github-actions[bot]";
+/** Marker the review engine embeds in the body of every completed review. */
 export const REVIEW_MARKER = "CLAUDE_REVIEW_COMPLETE";
 
+/** Subset of a GitHub pull-request review the gate inspects. */
 export interface Review {
   readonly body: string | null;
   readonly commit_id: string;
   readonly id: number;
+  readonly state: string;
   readonly user: { readonly login: string } | null;
 }
 
+/** Injectable `fetch` boundary so the GitHub API can be stubbed in tests. */
 export type FetchLike = (
   url: URL,
   init: { headers: Record<string, string>; method: string },
@@ -36,6 +43,7 @@ export type FetchLike = (
   status: number;
 }>;
 
+/** Inputs of {@link listReviews}. */
 export interface ListReviewsOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: FetchLike;
@@ -44,6 +52,7 @@ export interface ListReviewsOptions {
   readonly token: string;
 }
 
+/** Injectable argv/env/fetch/output boundaries of the CLI modes. */
 export interface RunOptions {
   readonly apiBaseUrl?: string;
   readonly argv?: readonly string[];
@@ -108,14 +117,16 @@ export function parseNextLink(linkHeader: string | null): URL | null {
 }
 
 /**
- * Keeps only the reviews posted by the review workflow itself: authored by the job token and
- * carrying the completion marker. Reviews by other users, or bot reviews without the marker
- * (e.g. the "Claude Code is working…" placeholders), never count.
+ * Keeps only the reviews posted by the review workflow itself: authored by the job token,
+ * submitted (a `PENDING` draft is invisible to humans, and the API returns the caller's own
+ * drafts), and carrying the completion marker. Reviews by other users, or bot reviews without
+ * the marker (e.g. the "Claude Code is working…" placeholders), never count.
  */
 export function selectClaudeReviews(reviews: readonly Review[]): Review[] {
   return reviews.filter(
     (review) =>
       review.user?.login === REVIEW_AUTHOR &&
+      review.state !== "PENDING" &&
       typeof review.body === "string" &&
       review.body.includes(REVIEW_MARKER),
   );
@@ -168,7 +179,10 @@ export async function snapshot(options: RunOptions = {}): Promise<number> {
   });
   const maxId = getMaxReviewId(reviews);
 
-  appendOutput(options.outputFile ?? env.GITHUB_OUTPUT, `max_id=${maxId}\n`);
+  appendFileSync(
+    options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
+    `max_id=${maxId}\n`,
+  );
   writeOutput(`Highest pre-existing Claude review id: ${maxId}.\n`);
 
   return maxId;
@@ -222,12 +236,6 @@ function defaultWriteOutput(message: string): void {
   process.stdout.write(message);
 }
 
-function appendOutput(outputFile: string | undefined, output: string): void {
-  if (outputFile != null && outputFile !== "") {
-    appendFileSync(outputFile, output);
-  }
-}
-
 function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
   if (value == null || value === "") {
@@ -243,7 +251,7 @@ if (
 ) {
   main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`::error::${message}\n`);
+    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
     process.exitCode = 1;
   });
 }
