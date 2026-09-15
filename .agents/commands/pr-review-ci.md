@@ -150,7 +150,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
 
 This creates the review and all inline comments atomically — no partial reviews if something fails midway. Clean up: `rm -f "$REVIEW_FILE"`.
 
-If the review creation fails with HTTP 422 because an inline comment's `line` is not a diff line, drop the offending comment(s) into the body and retry the reviews API once. Only if the reviews API still fails, fall back to a single PR-level comment (this loses inline anchoring, so it is a last resort):
+If the review creation fails with HTTP 422 because an inline comment's `line` is not a diff line, drop the offending comment(s) into the body and retry the reviews API once. Only if the reviews API still fails, fall back to a single PR-level comment (this loses inline anchoring, so it is a last resort). In CI an issue comment does **not** satisfy `claude.yml`'s "Verify the review was posted" gate — only a formal review counts — so the job still fails red and a human investigates; that is intended:
 
 ```bash
 gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments \
