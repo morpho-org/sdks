@@ -66,7 +66,7 @@ jobs:
           cp -R .agents "$RUNNER_TEMP/trusted-agents"
           cp -R scripts "$RUNNER_TEMP/trusted-scripts"
           echo "node_bin=$(command -v node)" >> "$GITHUB_OUTPUT"
-          echo "scripts_digest=$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          node "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" snapshot "$RUNNER_TEMP/trusted-scripts"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
       # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
@@ -139,11 +139,11 @@ jobs:
           MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
-          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.scripts_digest }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
         # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
         # after checking it is byte-identical to the snapshot and with the node binary recorded then.
         run: |
-          test "$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" = "$SCRIPTS_DIGEST" || { echo "::error::Trusted scripts were modified after the snapshot."; exit 1; }
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" verify "$RUNNER_TEMP/trusted-scripts" "$SCRIPTS_DIGEST"
           "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/claude-review-gate.ts" verify
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
@@ -158,10 +158,10 @@ jobs:
             ${{ github.token }}
             ${{ secrets.ANTHROPIC_SDK_API_KEY }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
-          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.scripts_digest }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
         # Same integrity check as above; the script writes `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: |
-          test "$(cd "$RUNNER_TEMP/trusted-scripts" && find . -type f -exec sha256sum {} + | sort -k 2 | sha256sum | cut -d ' ' -f 1)" = "$SCRIPTS_DIGEST" || { echo "::error::Trusted scripts were modified after the snapshot."; exit 1; }
+          "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" verify "$RUNNER_TEMP/trusted-scripts" "$SCRIPTS_DIGEST"
           "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"
 
       - name: Upload Claude execution log
