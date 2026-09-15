@@ -14,7 +14,7 @@
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
+import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const USER_AGENT = "morpho-sdks-claude-review-gate";
@@ -192,7 +192,7 @@ export function parseMaxIdBefore(value: string | undefined): number {
 /** `snapshot` mode: records the highest pre-existing workflow review id as the `max_id` step output. */
 export async function snapshot(options: RunOptions = {}): Promise<number> {
   const env = options.env ?? process.env;
-  const writeOutput = options.writeOutput ?? defaultWriteOutput;
+  const writeOutput = options.writeOutput ?? writeStdout;
   const reviews = await listReviews({
     apiBaseUrl: options.apiBaseUrl,
     fetchImpl: options.fetchImpl,
@@ -214,7 +214,7 @@ export async function snapshot(options: RunOptions = {}): Promise<number> {
 /** `verify` mode: fails unless a workflow review newer than the snapshot exists on the current head. */
 export async function verify(options: RunOptions = {}): Promise<number> {
   const env = options.env ?? process.env;
-  const writeOutput = options.writeOutput ?? defaultWriteOutput;
+  const writeOutput = options.writeOutput ?? writeStdout;
   const prNumber = readRequiredEnv(env, "PR_NUMBER");
   const headSha = readRequiredEnv(env, "HEAD_SHA");
   const runId = readRequiredEnv(env, "GITHUB_RUN_ID");
@@ -256,17 +256,9 @@ export async function main(options: RunOptions = {}): Promise<number> {
   }
 }
 
-function defaultWriteOutput(message: string): void {
-  process.stdout.write(message);
-}
-
 if (
   process.argv[1] != null &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  main().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
-    process.exitCode = 1;
-  });
+  main().catch(reportCliError);
 }

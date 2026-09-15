@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +14,7 @@ import { describe, expect, test } from "vitest";
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 const GATE = join(SCRIPTS_DIR, "claude-review-gate.ts");
 const SCRUB = join(SCRIPTS_DIR, "scrub-transcript.ts");
+const TRUSTED = join(SCRIPTS_DIR, "trusted-scripts.ts");
 
 function run(argv: readonly string[], env: NodeJS.ProcessEnv) {
   return spawnSync(process.execPath, [...argv], {
@@ -87,6 +94,43 @@ describe("scrub-transcript CLI", () => {
 
       expect(result.status).toBe(1);
       expect(result.stderr).toMatch(/^::error::.*SECRET_VALUES/);
+    });
+  });
+});
+
+describe("trusted-scripts CLI", () => {
+  test("error: verify against a mismatched digest exits 1 with a sanitized annotation", () => {
+    withTempDir((dir) => {
+      writeFileSync(join(dir, "a.ts"), "a");
+
+      const result = run([TRUSTED, "verify", dir, "0".repeat(64)], {});
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(
+        /^::error::Trusted scripts in .* were modified after the snapshot/,
+      );
+    });
+  });
+
+  test("default: snapshot then verify exits 0", () => {
+    withTempDir((dir) => {
+      const src = join(dir, "src");
+      mkdirSync(src);
+      writeFileSync(join(src, "a.ts"), "a");
+      const githubOutput = join(dir, "github-output");
+      const dest = join(dir, "dest");
+
+      const snap = run([TRUSTED, "snapshot", src, dest], {
+        GITHUB_OUTPUT: githubOutput,
+      });
+      expect(snap.status, snap.stderr).toBe(0);
+      const digest = readFileSync(githubOutput, "utf8").match(
+        /^digest=(.*)$/m,
+      )?.[1];
+      if (digest == null) throw new Error("digest output missing");
+
+      const result = run([TRUSTED, "verify", dest, digest], {});
+      expect(result.status, result.stderr).toBe(0);
     });
   });
 });

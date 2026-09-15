@@ -15,7 +15,7 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
+import { readRequiredEnv, reportCliError } from "./workflow.ts";
 
 /** Replacement written over every masked secret. */
 export const MASK = "***";
@@ -136,8 +136,6 @@ if (
   try {
     main();
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
-    process.exitCode = 1;
+    reportCliError(error);
   }
 }

@@ -29,7 +29,7 @@ import {
 import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
+import { readRequiredEnv, reportCliError, writeStdout } from "./workflow.ts";
 
 interface RunOptions {
   readonly argv?: readonly string[];
@@ -107,7 +107,7 @@ export function verify(dir: string, expected: string): void {
 /** CLI dispatcher: `snapshot <src> <dest>` or `verify <dir> <expected>`. */
 export function main(options: RunOptions = {}): void {
   const argv = options.argv ?? process.argv.slice(2);
-  const writeOutput = options.writeOutput ?? defaultWriteOutput;
+  const writeOutput = options.writeOutput ?? writeStdout;
   const [mode, first, second] = argv;
   if (!first || !second) {
     throw new Error(
@@ -133,10 +133,6 @@ export function main(options: RunOptions = {}): void {
   }
 }
 
-function defaultWriteOutput(message: string): void {
-  process.stdout.write(message);
-}
-
 if (
   process.argv[1] != null &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -144,8 +140,6 @@ if (
   try {
     main();
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
-    process.exitCode = 1;
+    reportCliError(error);
   }
 }

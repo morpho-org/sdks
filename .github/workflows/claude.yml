@@ -139,8 +139,11 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
-          # Claude's subprocesses can append to $GITHUB_ENV; never let an injected BASH_ENV run before this step.
+          # Claude's subprocesses can append to $GITHUB_ENV; pin every variable that would let an injected
+          # value run code inside this step's shell or node process (NODE_BIN is an absolute path, so PATH is moot).
           BASH_ENV: ''
+          NODE_OPTIONS: ''
+          LD_PRELOAD: ''
         # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
         # after checking it is byte-identical to the snapshot and with the node binary recorded then.
         run: |
@@ -161,6 +164,8 @@ jobs:
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
           BASH_ENV: ''
+          NODE_OPTIONS: ''
+          LD_PRELOAD: ''
         # Same integrity check as above; the script refuses inputs outside RUNNER_TEMP and writes
         # `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: |
