@@ -113,6 +113,19 @@
 - Updated dependencies [[`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`b8c944c`](https://github.com/morpho-org/sdks/commit/b8c944c44251c48985cb7411310884eb2548208c), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab)]:
   - @morpho-org/morpho-sdk@6.0.0-next.0
 
+## 1.3.0
+
+### Minor Changes
+
+- [#1024](https://github.com/morpho-org/sdks/pull/1024) [`8f5000f`](https://github.com/morpho-org/sdks/commit/8f5000f829d86de5b59a42917d0e17321741abe8) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Validate reads, requirements, quotes, and sends against the provider chain at operation boundaries, bind ERC-4337 signing to that validated context, and preserve configured provider failover. Export `ChainIdMismatchError` and `MissingWalletProviderError` for callers handling validation failures.
+
+### Patch Changes
+
+- Updated dependencies [[`f4a0ee8`](https://github.com/morpho-org/sdks/commit/f4a0ee8a0b7be960574246b35c8fb7ec2d2858b3), [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`2c973f5`](https://github.com/morpho-org/sdks/commit/2c973f522e394722d056e808524dabe731ea0c6d), [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6), [`b293635`](https://github.com/morpho-org/sdks/commit/b293635fca0ff8fcc9c3817db4e231b2e07a3142), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1), [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01)]:
+  - @morpho-org/morpho-sdk@5.10.0
+  - @morpho-org/blue-sdk-viem@5.6.0
+  - @morpho-org/blue-sdk@6.8.0
+
 ## 1.2.0
 
 ### Minor Changes
