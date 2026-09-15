@@ -162,6 +162,37 @@
 
 - [#972](https://github.com/morpho-org/sdks/pull/972) [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route the `MorphoVaultV1` and `MorphoVaultV2` action-method chain checks through the shared `validateChainId` helper instead of inlining the `ChainIdMismatchError` guard at each call site. Pure internal maintenance: the thrown error class and arguments are unchanged, and the `getData` guards keep their intentional chainless-client tolerance.
 
+## 5.11.0
+
+### Minor Changes
+
+- [#1080](https://github.com/morpho-org/sdks/pull/1080) [`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate all Vault V1 PublicAllocator surfaces, including raw ABIs, address and deployment registry fields, configuration models, fetchers, augmentation methods, and the liquidity loader. The existing V1 planning and transaction-composition deprecations continue to apply. Use Vault V2 BluePublicAllocator configurations and fetchers, `MorphoBlue.getVaultV2BlueReallocationData`, and `MorphoBlue.getVaultV2BlueReallocations` for new integrations.
+
+  Deprecate the legacy `morphoToken` address and the MORPHO legacy wrapping entries in `ethereumGeneralAdapter1Abi`. Use the current MORPHO token directly.
+
+  All deprecated exports, signatures, addresses, and transaction behavior remain available for compatibility until the next major release. General Vault V1 operations, Vault V2 allocator APIs, and other token wrapping flows remain supported.
+
+  Patch maintained runtime dependents so their next releases resolve the updated packages. Existing internal peer ranges accept these backward-compatible minor releases and require no changes.
+
+- [#1025](https://github.com/morpho-org/sdks/pull/1025) [`297e948`](https://github.com/morpho-org/sdks/commit/297e94823b86359d4bbeda2d70dd79abac0c1a8a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+### Patch Changes
+
+- [#960](https://github.com/morpho-org/sdks/pull/960) [`a7ac734`](https://github.com/morpho-org/sdks/commit/a7ac734e11bc1a20ef78cac1cfceb61422eaaea0) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add JSDoc to the core public transaction primitives `BaseAction`, `TransactionAction`, `Transaction`, `PermitArgs`, and `Permit2Args`, and correct the `validateUserAddress` helper's JSDoc to name its actual callers (`signAndVerifyTypedData` and `encodeVaultSharesPermit`). Documentation-only; no runtime or type changes.
+
+- [#1077](https://github.com/morpho-org/sdks/pull/1077) [`a43aa31`](https://github.com/morpho-org/sdks/commit/a43aa318e08897dfdad7eb79c21f185c429195ba) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Make Midnight maker offer submission stateless: `buildSubmitOffersTx` now reads the encoded offer-root payload from the `RequirementSignature` it is handed (`signature.args.payload`) instead of an in-memory `Map` that `sign()` had to populate on the same entity instance. This lets a maker offer-root requirement be signed on one `MorphoMidnight` instance and submitted from another (prepare-on-A → finalize-on-B), which previously threw `UnpreparedMidnightOfferRootSignatureError`. That error is now thrown only when the supplied signature carries no payload.
+
+- Updated dependencies [[`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab), [`297e948`](https://github.com/morpho-org/sdks/commit/297e94823b86359d4bbeda2d70dd79abac0c1a8a)]:
+  - @morpho-org/blue-sdk@6.9.0
+  - @morpho-org/blue-sdk-viem@5.7.0
+  - @morpho-org/morpho-ts@2.13.0
+
 ## 5.10.1
 
 ### Patch Changes
