@@ -49,7 +49,7 @@ export interface BlueSupplyParams {
  * Encodes a direct BlueBundlesV1 loan-asset supply transaction.
  *
  * `assets` is the gross funded amount; BlueBundlesV1 deducts the referral fee before supplying.
- * This route has no Bundler3 share-price bound or `slippageTolerance` input.
+ * This route has no share-price bound or `slippageTolerance` input.
  *
  * @param params - Supply encoding parameters.
  * @param params.market.chainId - Chain containing the BlueBundlesV1 deployment.

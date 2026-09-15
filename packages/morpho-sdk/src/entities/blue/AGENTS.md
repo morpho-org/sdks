@@ -27,7 +27,7 @@
 - `refinance`
 
 Each lazy action delegates to a pure encoder for one direct BlueBundlesV1 call. The entity does not
-offer Bundler3 fallback, a route flag, or a parallel BlueBundlesV1 factory. Blue write inputs do not
+offer a route flag or parallel BlueBundlesV1 factory. Blue write inputs do not
 include `slippageTolerance`, `minSharePrice`, or `maxSharePrice`.
 
 ## LLTV buffer (safety guard, asserted in tests)
@@ -68,7 +68,7 @@ two parts: the ERC-20 prerequisite names canonical Permit2, while the signed tra
 BlueBundlesV1. Native-only funding emits no token requirement and requires the funded token to be
 the chain's wNative.
 
-Morpho authorization also names BlueBundlesV1, not GeneralAdapter1. When `supportSignature` is
+Morpho authorization also names BlueBundlesV1. When `supportSignature` is
 enabled, the entity returns a signable authorization `Requirement`; otherwise it returns the
 standalone `morpho.setAuthorization(blueBundlesV1, true)` transaction. No requirement is returned
 when the corresponding allowance or authorization is already sufficient.
@@ -82,5 +82,5 @@ signed-authorization structs. It stays synchronous and performs no reads.
 `borrow`, `supplyCollateralBorrow`, `withdraw`, and `refinance` accept only
 `VaultV2BlueReallocation` inputs. The entity validates and normalizes them before the lazy output is
 returned. BlueBundlesV1 executes their `PublicAllocations` unconditionally; allocator penalties are
-accounted for in contract proceeds or destination debt, so they do not create a separate
-GeneralAdapter1 approval requirement.
+accounted for in contract proceeds or destination debt, so they do not create a separate funding
+requirement.

@@ -575,17 +575,6 @@ export interface Transaction<TAction extends BaseAction = TransactionAction> {
   readonly action: TAction;
 }
 
-/**
- * Enforces that at least one deposit amount source is provided.
- *
- * - `amount` alone: standard ERC20 deposit.
- * - `nativeAmount` alone: pure native-wrap deposit (vault asset must be wNative).
- * - Both: mixed deposit (ERC20 transfer + native wrap).
- */
-export type DepositAmountArgs =
-  | { amount: bigint; nativeAmount?: bigint }
-  | { nativeAmount: bigint; amount?: bigint };
-
 /** Mutually exclusive ERC-20 or native funding accepted by fixed bundles entrypoints. */
 export type BundlesFundingArgs =
   | { readonly amount: bigint; readonly nativeAmount?: never }
@@ -608,8 +597,7 @@ export type VaultV1MigrateToV2AmountArgs =
  * Holds the pre-resolved arguments for an ERC-2612 `permit`: the signed approval
  * of `amount` of `asset` from `owner` to the permitted spender, bounded by the
  * `deadline` timestamp and consuming the given `nonce`. The associated
- * {@link PermitAction} identifies the permitted spender, including fixed-bundle
- * contracts and the GeneralAdapter1 periphery.
+ * {@link PermitAction} identifies the permitted fixed-bundle contract.
  */
 export interface PermitArgs {
   readonly owner: Address;
@@ -619,26 +607,11 @@ export interface PermitArgs {
   readonly amount: bigint;
   readonly deadline: bigint;
 }
-/**
- * Holds the pre-resolved arguments for a Permit2 `permit` bundler call. It
- * mirrors {@link PermitArgs} but adds the Permit2 allowance `expiration` (when
- * the on-chain allowance lapses) alongside the signature `deadline` (by when the
- * signature must be submitted).
- */
-export interface Permit2Args {
-  readonly owner: Address;
-  readonly nonce: bigint;
-  readonly asset: Address;
-  readonly signature: Hex;
-  readonly amount: bigint;
-  readonly deadline: bigint;
-  readonly expiration: bigint;
-}
 
 /**
  * Signed Morpho Blue authorization payload produced when an integrator opts into offchain
- * signatures (`supportSignature: true`). Bundler3 consumes it through `setAuthorizationWithSig`;
- * direct BlueBundlesV1 writes encode it into their signed-authorization struct.
+ * signatures (`supportSignature: true`). BlueBundlesV1 encodes it into its
+ * signed-authorization struct.
  */
 export interface AuthorizationSignatureArgs {
   /** Account granting the authorization (the position owner). */
@@ -675,12 +648,6 @@ export interface PermitAction
     }
   > {}
 
-export interface Permit2Action
-  extends BaseAction<
-    "permit2",
-    { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
-  > {}
-
 /** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
 export interface Permit2SignatureTransferAction
   extends BaseAction<
@@ -694,8 +661,7 @@ export interface Permit2SignatureTransferAction
   > {}
 
 /**
- * Signable Morpho authorization requirement. Its `authorized` operator is route-specific:
- * GeneralAdapter1 for Bundler3 flows or BlueBundlesV1 for direct Blue writes.
+ * Signable Morpho authorization requirement for direct BlueBundlesV1 writes.
  */
 export interface AuthorizationAction
   extends BaseAction<
@@ -717,7 +683,6 @@ export interface MidnightOfferRootSignatureAction
 /** Action metadata supported by signature requirements. */
 export type SignatureRequirementAction =
   | PermitAction
-  | Permit2Action
   | Permit2SignatureTransferAction
   | AuthorizationAction
   | MidnightOfferRootSignatureAction;
@@ -725,7 +690,6 @@ export type SignatureRequirementAction =
 /** Argument payloads returned by signature requirements. */
 export type RequirementSignatureArgs =
   | PermitArgs
-  | Permit2Args
   | AuthorizationSignatureArgs
   | MidnightOfferRootSignatureArgs;
 
@@ -735,16 +699,8 @@ export interface Erc2612RequirementSignature {
   readonly action: PermitAction;
 }
 
-/** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
-export interface Permit2AllowanceRequirementSignature {
-  readonly args: Readonly<Permit2Args>;
-  readonly action: Permit2Action;
-}
-
-/** A signed ERC-2612 permit or Permit2 AllowanceTransfer requirement. */
-export type PermitRequirementSignature =
-  | Erc2612RequirementSignature
-  | Permit2AllowanceRequirementSignature;
+/** A signed ERC-2612 permit requirement accepted by vault-share bundle calls. */
+export type PermitRequirementSignature = Erc2612RequirementSignature;
 
 /** A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts. */
 export interface Permit2SignatureTransferRequirementSignature {
@@ -752,7 +708,7 @@ export interface Permit2SignatureTransferRequirementSignature {
   readonly action: Permit2SignatureTransferAction;
 }
 
-/** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */
+/** A signed Morpho authorization consumed by a direct BlueBundlesV1 call. */
 export interface AuthorizationRequirementSignature {
   readonly args: AuthorizationSignatureArgs;
   readonly action: AuthorizationAction;
@@ -766,7 +722,7 @@ export interface MidnightOfferRootSignature {
 
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
- * `"permit"` / `"permit2"` carry token-approval args, `"permit2SignatureTransfer"` carries a
+ * `"permit"` carries token-approval args, `"permit2SignatureTransfer"` carries a
  * bundles SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
  * and Midnight adds `"midnightOfferRootSignature"`.
  */
@@ -818,10 +774,6 @@ export interface Requirement<
   action: RequirementResult<TSignatureOrAction, TArgs>["action"];
 }
 
-/** Bundler3 token signature requirement. */
-export type Bundler3TokenSignatureRequirement =
-  Requirement<PermitRequirementSignature>;
-
 /** ERC-2612 or Permit2 SignatureTransfer requirement consumed by a fixed bundles contract. */
 export type BundlesTokenSignatureRequirement =
   Requirement<BundlesTokenRequirementSignature>;
@@ -833,12 +785,7 @@ export type MidnightOfferRootRequirement = Requirement<
 >;
 
 /** Any token signature requirement supported by an SDK transaction route. */
-export type TokenSignatureRequirement =
-  | Bundler3TokenSignatureRequirement
-  | BundlesTokenSignatureRequirement;
-
-/** Bundler3 token signature result. */
-export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
+export type TokenSignatureRequirement = BundlesTokenSignatureRequirement;
 
 /** Token signature result consumed by a fixed bundles contract. */
 export type BundlesTokenRequirementSignature =
@@ -846,9 +793,7 @@ export type BundlesTokenRequirementSignature =
   | Permit2SignatureTransferRequirementSignature;
 
 /** Any token signature result supported by an SDK transaction route. */
-export type TokenRequirementSignature =
-  | Bundler3TokenRequirementSignature
-  | BundlesTokenRequirementSignature;
+export type TokenRequirementSignature = BundlesTokenRequirementSignature;
 
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
@@ -957,17 +902,15 @@ export function isRequirementSignature(requirement: unknown): boolean {
 }
 
 /**
- * Narrows a {@link RequirementSignature} to a permit / Permit2 token-approval signature.
+ * Narrows a {@link RequirementSignature} to an ERC-2612 permit signature.
  *
  * @param signature - The signed requirement to test.
- * @returns `true` when `signature.action.type` is `"permit"` or `"permit2"`.
+ * @returns `true` when `signature.action.type` is `"permit"`.
  */
 export function isPermitSignature(
   signature: RequirementSignature,
 ): signature is PermitRequirementSignature {
-  return (
-    signature.action.type === "permit" || signature.action.type === "permit2"
-  );
+  return signature.action.type === "permit";
 }
 
 /**
@@ -1018,7 +961,7 @@ export function isMidnightOfferRootSignature(
 
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
-  /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
+  /** The single ERC-2612 signature, when present. */
   readonly permit?: PermitRequirementSignature;
   /** The single Permit2 SignatureTransfer signature, when present. */
   readonly permit2SignatureTransfer?: Permit2SignatureTransferRequirementSignature;
@@ -1039,7 +982,7 @@ export interface SelectedRequirementSignatures {
  *
  * @param signatures - The signatures passed to `buildTx`.
  * @param accepts - Which signature kinds this operation consumes.
- * @param accepts.permit - Whether an ERC-2612 or Permit2 AllowanceTransfer signature is consumed.
+ * @param accepts.permit - Whether an ERC-2612 signature is consumed.
  * @param accepts.permit2SignatureTransfer - Whether a Permit2 SignatureTransfer is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.

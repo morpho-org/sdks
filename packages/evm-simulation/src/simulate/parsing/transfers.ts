@@ -61,7 +61,7 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * atomically inside a single call frame. A **non-canonical wrapped-native**
  * that splits these emissions across two txs in the same bundle would leave
  * a phantom zero-address `Transfer` in the parsed output, which can be summed
- * by `assertNoBundlerRetention` and produce a false `BlacklistViolationError`.
+ * by `assertNoBundlesRetention` and produce a false `BlacklistViolationError`.
  * When its zero-address `Transfer` misses same-tx dedup, the parser emits a
  * `warn` so the assumption break is observable before it reaches retention.
  * None of `morpho-sdk`'s currently supported chains require cross-tx dedup;

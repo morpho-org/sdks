@@ -7,26 +7,21 @@ import {
   UnknownOfFactory,
   Vault,
   VaultConfig,
-  type VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, zeroAddress } from "viem";
+import type { Address, Client } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
-import {
-  metaMorphoAbi,
-  metaMorphoFactoryAbi,
-  vaultV1PublicAllocatorAbi,
-} from "../abis.js";
+import { metaMorphoAbi, metaMorphoFactoryAbi } from "../abis.js";
 import { abi, code } from "../queries/GetVault.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
 /**
- * Fetches MetaMorpho vault state, accounting, queues, and public allocator config.
+ * Fetches MetaMorpho vault state, accounting, and queues.
  *
- * Uses the deployless `GetVault` query by default and falls back to MetaMorpho, factory, and
- * PublicAllocator contract reads when allowed.
+ * Uses the deployless `GetVault` query by default and falls back to MetaMorpho and factory
+ * contract reads when allowed.
  *
  * @param address - MetaMorpho vault address.
  * @param client - Viem client used for deployless reads or multicalls.
@@ -34,7 +29,6 @@ import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Vault` entity.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
@@ -58,11 +52,8 @@ export async function fetchVault(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { vaultV1PublicAllocator, metaMorphoFactory } = getChainAddresses(
-    parameters.chainId,
-  );
+  const chainId = await getChainId(client);
+  const { metaMorphoFactory } = getChainAddresses(chainId);
 
   if (!metaMorphoFactory) {
     throw new UnknownFactory();
@@ -89,18 +80,12 @@ export async function fetchVault(
         lostAssets,
         supplyQueue,
         withdrawQueue,
-        hasPublicAllocator,
-        publicAllocatorConfig,
       } = await readContract(client, {
         ...parameters,
         abi,
         code,
         functionName: "query",
-        args: [
-          address,
-          vaultV1PublicAllocator ?? zeroAddress,
-          metaMorphoFactory,
-        ],
+        args: [address, metaMorphoFactory],
       });
 
       return new Vault({
@@ -119,9 +104,6 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
-        publicAllocatorConfig: hasPublicAllocator
-          ? publicAllocatorConfig
-          : undefined,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,
@@ -153,7 +135,6 @@ export async function fetchVault(
     lostAssets,
     supplyQueueSize,
     withdrawQueueSize,
-    hasPublicAllocator,
     isMetaMorphoV1_1,
   ] = await Promise.all([
     fetchVaultConfig(address, client, { ...parameters, deployless }),
@@ -253,14 +234,6 @@ export async function fetchVault(
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
-    vaultV1PublicAllocator != null &&
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: metaMorphoAbi,
-        functionName: "isAllocator",
-        args: [vaultV1PublicAllocator],
-      }),
     readContract(client, {
       ...parameters,
       address: metaMorphoFactory,
@@ -272,8 +245,7 @@ export async function fetchVault(
 
   // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
   const isMetaMorphoV1_0Promise =
-    !isMetaMorphoV1_1 &&
-    (parameters.chainId === 1 || parameters.chainId === 8453)
+    !isMetaMorphoV1_1 && (chainId === 1 || chainId === 8453)
       ? readContract(client, {
           ...parameters,
           address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
@@ -283,66 +255,35 @@ export async function fetchVault(
         })
       : Promise.resolve(false);
 
-  let publicAllocatorConfigPromise:
-    | Promise<VaultPublicAllocatorConfig>
-    | undefined;
-  if (hasPublicAllocator)
-    publicAllocatorConfigPromise = Promise.all([
-      readContract(client, {
-        ...parameters,
-        address: vaultV1PublicAllocator!,
-        abi: vaultV1PublicAllocatorAbi,
-        functionName: "admin",
-        args: [address],
-      }),
-      readContract(client, {
-        ...parameters,
-        address: vaultV1PublicAllocator!,
-        abi: vaultV1PublicAllocatorAbi,
-        functionName: "fee",
-        args: [address],
-      }),
-      readContract(client, {
-        ...parameters,
-        address: vaultV1PublicAllocator!,
-        abi: vaultV1PublicAllocatorAbi,
-        functionName: "accruedFee",
-        args: [address],
-      }),
-      // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
-    ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
-
-  const [supplyQueue, withdrawQueue, publicAllocatorConfig, isMetaMorphoV1_0] =
-    await Promise.all([
-      Promise.all(
-        Array.from(
-          { length: Number(supplyQueueSize) },
-          (_, i) =>
-            readContract(client, {
-              ...parameters,
-              address,
-              abi: metaMorphoAbi,
-              functionName: "supplyQueue",
-              args: [BigInt(i)],
-            }) as Promise<MarketId>,
-        ),
+  const [supplyQueue, withdrawQueue, isMetaMorphoV1_0] = await Promise.all([
+    Promise.all(
+      Array.from(
+        { length: Number(supplyQueueSize) },
+        (_, i) =>
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: metaMorphoAbi,
+            functionName: "supplyQueue",
+            args: [BigInt(i)],
+          }) as Promise<MarketId>,
       ),
-      Promise.all(
-        Array.from(
-          { length: Number(withdrawQueueSize) },
-          (_, i) =>
-            readContract(client, {
-              ...parameters,
-              address,
-              abi: metaMorphoAbi,
-              functionName: "withdrawQueue",
-              args: [BigInt(i)],
-            }) as Promise<MarketId>,
-        ),
+    ),
+    Promise.all(
+      Array.from(
+        { length: Number(withdrawQueueSize) },
+        (_, i) =>
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: metaMorphoAbi,
+            functionName: "withdrawQueue",
+            args: [BigInt(i)],
+          }) as Promise<MarketId>,
       ),
-      publicAllocatorConfigPromise,
-      isMetaMorphoV1_0Promise,
-    ]);
+    ),
+    isMetaMorphoV1_0Promise,
+  ]);
 
   const isMetaMorpho = isMetaMorphoV1_1 || isMetaMorphoV1_0;
   if (!isMetaMorpho) {
@@ -361,7 +302,6 @@ export async function fetchVault(
     pendingOwner,
     pendingGuardian,
     pendingTimelock,
-    publicAllocatorConfig,
     supplyQueue,
     withdrawQueue,
     totalSupply,
@@ -387,7 +327,6 @@ export async function fetchVault(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVault` containing direct onchain allocation state.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
@@ -411,8 +350,6 @@ export async function fetchAccrualVault(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
     vault.withdrawQueue.map((marketId) =>

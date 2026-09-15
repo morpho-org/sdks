@@ -48,8 +48,9 @@ these deposits. There is no Bundler3 fallback.
   and Blue authorization requirements use
   `AuthorizationRequirementSignature`.
 - Use `BundlesApprovalOrSignatureRequirement` for prepared vault deposits and Blue token-funded writes, and
-  `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization. The deprecated
-  `BlueApprovalOrSignatureRequirement` alias is removed.
+  `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization.
+- Remove imports of `BlueApprovalOrSignatureRequirement`; use
+  `BundlesApprovalOrSignatureRequirement` instead.
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
   Vault token and share signatures are passed to `PreparedMorphoSupply.submit` / `.quote`

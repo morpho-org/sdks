@@ -2516,7 +2516,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const client = await this._getViemClient(context);
     const market = await fetchMarket(target.marketId as MarketId, client, {
-      chainId: context.chainId,
       deployless: this._options.supportDeployless,
     });
     await this._revalidate(context);

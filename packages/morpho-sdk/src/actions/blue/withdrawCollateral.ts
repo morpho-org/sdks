@@ -41,7 +41,7 @@ export interface BlueWithdrawCollateralParams {
  * Encodes a pure collateral withdrawal through BlueBundlesV1.
  *
  * Delegates to {@link blueRepayWithdrawCollateral} with a zero repay leg. BlueBundlesV1 enforces
- * the supplied post-operation LTV, and no standalone Morpho or Bundler3 call is encoded.
+ * the supplied post-operation LTV, and no standalone Morpho call is encoded.
  *
  * @param params - Collateral-withdrawal encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.

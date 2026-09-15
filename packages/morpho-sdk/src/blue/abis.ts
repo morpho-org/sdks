@@ -17,7 +17,6 @@ export {
   permit2Abi,
   preLiquidationAbi,
   preLiquidationFactoryAbi,
-  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,

@@ -41,7 +41,7 @@ export interface BlueSupplyCollateralParams {
  * Encodes a pure collateral supply through BlueBundlesV1.
  *
  * Delegates to {@link blueSupplyCollateralBorrow} with a zero borrow leg and an unrestricted LTV
- * cap. Native funding is exclusive with ERC-20 funding and no Bundler3 action is encoded.
+ * cap. Native funding is exclusive with ERC-20 funding.
  *
  * @param params - Collateral-supply encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.

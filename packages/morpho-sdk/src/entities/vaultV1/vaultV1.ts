@@ -522,7 +522,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
-      chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     });
   }

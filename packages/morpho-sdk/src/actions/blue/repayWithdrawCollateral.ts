@@ -67,7 +67,7 @@ export interface BlueRepayWithdrawCollateralParams {
  *
  * `maxRepayAssets` funds the live repayment plus fee and BlueBundlesV1 refunds the unused amount.
  * A saturated `repayShares = maxUint256` closes the live remaining debt. This route has no
- * Bundler3 share-price bound or `slippageTolerance` input.
+ * share-price bound or `slippageTolerance` input.
  *
  * @param params - Combined-operation encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.

@@ -23,11 +23,7 @@ export {
 export { grossFromNetAssets } from "./referralFee.js";
 export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {
-  computeMaxRepaySharePrice,
-  computeMaxSupplySharePrice,
-  computeMinBorrowSharePrice,
   computeMinForceWithdrawSharePrice,
-  computeMinWithdrawSharePrice,
   computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
 } from "./slippage.js";

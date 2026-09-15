@@ -842,9 +842,7 @@ export class ReallocationLoanTokenMismatchError extends Error {
 }
 
 /**
- * Thrown when a Blue authorization operator is not one of the chain's registered Morpho operators
- * (GeneralAdapter1 or BlueBundlesV1). Guards the exported authorization builder so a misconfigured
- * `authorized` cannot grant an arbitrary address control over the user's Morpho positions.
+ * Thrown when a Blue authorization operator is not the chain's registered BlueBundlesV1 contract.
  */
 export class UnsupportedAuthorizationOperatorError extends Error {
   /**
@@ -856,7 +854,7 @@ export class UnsupportedAuthorizationOperatorError extends Error {
     public readonly chainId: number,
   ) {
     super(
-      `Authorization operator "${authorized}" is not a supported Morpho operator on chain ${chainId}. Pass the chain's registered GeneralAdapter1 or BlueBundlesV1 address, or omit \`authorized\` to default to GeneralAdapter1.`,
+      `Authorization operator "${authorized}" is not supported on chain ${chainId}. Pass the chain's registered BlueBundlesV1 address.`,
     );
     this.name = "UnsupportedAuthorizationOperatorError";
   }
@@ -886,103 +884,6 @@ export class MaxRepayAssetsBelowRepayAssetsError extends Error {
       `maxRepayAssets "${maxRepayAssets}" cannot cover required repay funding "${repayAssets}". Increase maxRepayAssets to include the repayment and referral fee.`,
     );
     this.name = "MaxRepayAssetsBelowRepayAssetsError";
-  }
-}
-
-/**
- * Typed errors thrown while encoding supported Bundler3 actions.
- *
- * @remarks
- * Import these classes through `@morpho-org/morpho-sdk` when handling
- * failures from `BundlerAction`.
- */
-export namespace BundlerErrors {
-  /**
-   * Thrown when an action that requires an offchain signature is encoded before
-   * the signature has been attached.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.MissingSignature) {
-   *   // Attach the missing permit or Permit2 signature, then encode again.
-   * }
-   * ```
-   */
-  export class MissingSignature extends Error {
-    constructor() {
-      super("missing signature");
-    }
-  }
-
-  /**
-   * Thrown when an action is unsupported on the requested chain.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedAction) {
-   *   // Remove or replace the action for the selected chain.
-   * }
-   * ```
-   */
-  export class UnexpectedAction extends Error {
-    /**
-     * @param type - Unsupported Bundler3 action discriminator or name.
-     * @param chainId - Chain where the action was requested.
-     */
-    constructor(type: string, chainId: number) {
-      super(`unexpected action "${type}" on chain "${chainId}"`);
-    }
-  }
-
-  /**
-   * Thrown when a Morpho authorization signature names a forbidden `authorized` account
-   * (for example Bundler3 itself), which would grant operator rights to an unintended address.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedSignature) {
-   *   // Re-sign the authorization targeting GeneralAdapter1.
-   * }
-   * ```
-   */
-  export class UnexpectedSignature extends Error {
-    /**
-     * @param authorized - The forbidden `authorized` address carried by the signature.
-     */
-    constructor(authorized: Address) {
-      super(`unexpected signature authorizing "${authorized}"`);
-    }
-  }
-
-  /**
-   * Thrown when a skippable Blue Public Allocator call would leave a usable
-   * token allowance behind after the allocator call reverts.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.SkippableAllocatorPenalty) {
-   *   // Rebuild the allocator call with skipRevert set to false.
-   * }
-   * ```
-   */
-  export class SkippableAllocatorPenalty extends Error {
-    /**
-     * @param penaltyAssets - Exact token amount approved to the allocator.
-     */
-    public constructor(public readonly penaltyAssets: bigint) {
-      super(
-        `Blue Public Allocator calls with penalty assets cannot skip reverts. Rebuild with skipRevert false for penalty amount "${penaltyAssets}".`,
-      );
-      this.name = "SkippableAllocatorPenalty";
-    }
   }
 }
 
@@ -1088,7 +989,6 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   constructor(params: {
     readonly spender: Address;
     readonly chainId: number;
-    readonly generalAdapter1: Address;
     readonly permit2?: Address;
     readonly midnight?: Address;
     readonly midnightBundles?: Address;
@@ -1096,7 +996,6 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   }) {
     const supported = (
       params.supportedSpenders ?? [
-        params.generalAdapter1,
         params.permit2,
         params.midnight,
         params.midnightBundles,
@@ -1182,15 +1081,6 @@ export class DepositSpenderMismatchError extends Error {
   constructor(depositSpender: Address, signatureSpender: Address) {
     super(
       `Deposit spender "${depositSpender}" does not match requirement signature spender "${signatureSpender}"`,
-    );
-  }
-}
-
-/** Thrown when a `permit2` requirement signature is missing the `expiration` field. */
-export class Permit2ExpirationMissingError extends Error {
-  constructor() {
-    super(
-      'Requirement signature with action.type === "permit2" must include args.expiration. Re-sign using the permit2 flow.',
     );
   }
 }
@@ -1283,17 +1173,17 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
  *
  * @example
  * ```ts
- * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
+ * import { InvalidVaultV2BlueReallocationShapeError } from "@morpho-org/morpho-sdk";
  *
- * const error = new InvalidReallocationShapeError();
+ * const error = new InvalidVaultV2BlueReallocationShapeError();
  * ```
  */
-export class InvalidReallocationShapeError extends Error {
+export class InvalidVaultV2BlueReallocationShapeError extends Error {
   public constructor() {
     super(
       "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()). Use morpho-sdk v5 if Vault V1 reallocations are required.",
     );
-    this.name = "InvalidReallocationShapeError";
+    this.name = "InvalidVaultV2BlueReallocationShapeError";
   }
 }
 
@@ -1401,23 +1291,6 @@ export class InconsistentReallocationPenaltyError extends Error {
   }
 }
 
-/**
- * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
- * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
- * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
- */
-export class TransferAmountNotEqualToAssetsError extends Error {
-  constructor(params: {
-    transferAmount: bigint;
-    assets: bigint;
-    market: string;
-  }) {
-    super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
-    );
-  }
-}
-
 /** Thrown when a market repay specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveRepayAmountsError extends Error {
   constructor(market: string) {
@@ -1450,13 +1323,6 @@ export class WithdrawMakesPositionUnhealthyError extends Error {
     super(
       `Withdrawing ${params.withdrawAmount} collateral would make position unhealthy. Max safe borrow after withdrawal: ${params.maxSafeBorrow}. Actual Borrow assets: ${params.borrowAssets}.`,
     );
-  }
-}
-
-/** Thrown when a share-amount conversion would divide by zero (the market has no shares of the relevant kind). */
-export class ShareDivideByZeroError extends Error {
-  constructor(market: string) {
-    super(`Share divide by zero error for market: ${market}`);
   }
 }
 

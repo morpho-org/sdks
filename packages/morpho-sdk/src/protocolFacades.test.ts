@@ -38,7 +38,6 @@ import type {
   InputAllocation as RawBlueInputAllocation,
   MarketId as RawBlueMarketId,
   MetaMorphoCall as RawBlueMetaMorphoCall,
-  Permit2PermitArgs as RawBluePermit2PermitArgs,
   Permit2TransferFromArgs as RawBluePermit2TransferFromArgs,
   PermitArgs as RawBluePermitArgs,
 } from "@morpho-org/morpho-sdk/blue/types";
@@ -99,7 +98,6 @@ import type {
   BlueMetaMorphoCall,
   MidnightDeploylessFetchParameters,
   MidnightRatifierInfo,
-  Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitTypedDataArgs,
 } from "@morpho-org/morpho-sdk/types";
@@ -196,7 +194,6 @@ describe("protocol facades", () => {
     const blueMetaMorphoCall: Equal<BlueMetaMorphoCall, RawBlueMetaMorphoCall> =
       true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
-    const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
     const permit2Transfer: Equal<
       Permit2TransferFromArgs,
       RawBluePermit2TransferFromArgs
@@ -212,7 +209,6 @@ describe("protocol facades", () => {
       blueInputAllocation,
       blueMetaMorphoCall,
       permit,
-      permit2,
       permit2Transfer,
     }).toEqual({
       blue: true,
@@ -224,7 +220,6 @@ describe("protocol facades", () => {
       blueInputAllocation: true,
       blueMetaMorphoCall: true,
       permit: true,
-      permit2: true,
       permit2Transfer: true,
     });
   });

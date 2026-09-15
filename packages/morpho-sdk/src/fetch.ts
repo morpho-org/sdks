@@ -18,8 +18,6 @@ export {
   fetchVaultConfig,
   fetchVaultMarketAllocation,
   fetchVaultMarketConfig,
-  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `fetchVaultV2BlueMarketPublicAllocatorConfig`. */
-  fetchVaultMarketPublicAllocatorConfig,
   fetchVaultUser,
   fetchVaultV2,
   fetchVaultV2Adapter,

@@ -20,12 +20,11 @@ direct calls on the chain's registered BlueBundlesV1 deployment:
 | `withdraw` | Withdraw supplied loan assets by assets or shares. |
 | `refinance` | Move the caller's full debt and collateral to a compatible destination market. |
 
-There is no high-level Bundler3 or GeneralAdapter1 fallback and no second
-`client.morpho.blueBundlesV1(...)` extension.
+There is no second `client.morpho.blueBundlesV1(...)` extension.
 
 ## Contract-owned composition
 
-BlueBundlesV1, rather than an SDK-built `BundlerAction[]`, owns each operation's sequencing:
+BlueBundlesV1 owns each operation's sequencing:
 
 - `supply` pulls or wraps the loan token, deducts the referral fee, and supplies the remainder.
 - `supplyCollateralBorrow` consumes optional Morpho authorization, pulls or wraps collateral,
@@ -46,11 +45,10 @@ builders stay synchronous and encode-only.
 
 - Classic ERC-20 approvals and ERC-2612 permits name BlueBundlesV1 as spender.
 - Permit2 SignatureTransfer keeps the ERC-20 approval on canonical Permit2, while the signed
-  transfer names BlueBundlesV1 as spender. It is distinct from the Permit2 AllowanceTransfer flow
-  used by GeneralAdapter1.
+  transfer names BlueBundlesV1 as spender.
 - Native funding is available only when the funded token is the chain's wNative. It is exclusive
   with an ERC-20 token permit, and `tx.value` must equal the funded amount.
-- Morpho authorization names BlueBundlesV1, not GeneralAdapter1. A signed authorization is encoded
+- Morpho authorization names BlueBundlesV1. A signed authorization is encoded
   in the direct entrypoint; otherwise the user submits the standalone requirement first.
 
 ## Mode, safety, and reallocation rules
@@ -64,7 +62,6 @@ builders stay synchronous and encode-only.
   collateral supply and pure repay pass `maxUint256`, allowing an unhealthy position to improve
   without an oracle-dependent LTV rejection.
 - High-level Blue writes expose no `slippageTolerance`, `minSharePrice`, or `maxSharePrice` input.
-  BlueBundlesV1 cannot enforce Bundler3 share-price bounds.
 - Write reallocations are Vault V2 `VaultV2BlueReallocation` calls only. They map to the contract's
   `PublicAllocations` and execute unconditionally.
 

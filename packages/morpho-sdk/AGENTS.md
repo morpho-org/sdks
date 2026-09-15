@@ -23,7 +23,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   high-level methods: `supply`, `withdraw`, `supplyCollateral`, `borrow`,
   `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, and
   `refinance`. They map to the five registered `BlueBundlesV1` entrypoints directly; there is no
-  `client.morpho.blueBundlesV1(...)`, route flag, Bundler3 fallback, or GeneralAdapter1 hop. Token
+  `client.morpho.blueBundlesV1(...)` or route flag. Token
   approvals, ERC-2612 permits, Permit2 signature transfers, and Morpho authorization therefore
   target BlueBundlesV1 (the ERC-20 prerequisite for Permit2 still targets canonical Permit2). Blue
   write calls accept no share-price bounds or `slippageTolerance` input. Optional write
@@ -44,9 +44,6 @@ Protocol terms used across this package's docs and JSDoc:
 - **Blue / Morpho Blue** — Morpho's immutable, **variable-rate** lending primitive (formerly called "MarketV1" in this SDK). Each market is an isolated pair whose borrow rate floats with utilization, driven by the market's IRM. A market is identified by `MarketParams { loanToken, collateralToken, oracle, irm, lltv }`. Exposed via `client.morpho.blue(marketParams, chainId) → MorphoBlue`. This is the canonical definition of "Blue" for the whole package; other docs link here rather than redefine it.
 - **VaultV1 / MetaMorpho** — ERC-4626 vault layered on top of Blue.
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
-- **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
-- **GeneralAdapter1** — the bundler-side adapter that holds approvals and executes composed calls.
-  Public low-level Bundler3 primitives use it; the high-level vault and Blue write methods do not.
 - **BlueBundlesV1** — the protocol-owned periphery called directly by the high-level Blue
   write methods. It owns operation ordering, token pulls, optional native wrapping, Morpho
   authorization consumption, referral fees, refunds, and BluePublicAllocator execution.
@@ -59,26 +56,8 @@ Protocol terms used across this package's docs and JSDoc:
   deadline- and slippage-derived cap, replacing any different allowance, including an oversized
   one. That allowance is the only onchain share-burn cap in asset mode. Registered per chain as
   `bundles.vaultBundlesV1`; its canonical ABI export is `vaultBundlesV1Abi`.
-- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. The SDK exposes its canonical raw ABI, address, fetch, and config APIs, but not planner or composition helpers.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions. Its `vaultExitBundlesV1ForceWithdrawVaultV2` entry point additionally force-withdraws into the underlying asset, computing its own deallocations, bounding the realized exit share price with `minSharePriceE27`, and optionally routing a referral fee.
-
-### Bundler actions
-
-The action verbs available to vault flows and advanced low-level Bundler3 composition
-(`BundlerAction.encode...`). They are not the route used by the high-level Blue writes:
-
-- **`morphoBorrow` / `morphoSupply` / `morphoSupplyCollateral` / `morphoRepay` / `morphoWithdraw`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
-- **`setAuthorization`** — Morpho call that grants an operator the right to call market functions
-  on behalf of the user. High-level Blue requirements authorize BlueBundlesV1; advanced Bundler3
-  compositions may authorize GeneralAdapter1.
-- **`setAuthorizationWithSig`** — the offchain-signature equivalent of `setAuthorization`. When
-  the client opts into signatures (`supportSignature: true`), the authorization requirement
-  becomes a signable `Requirement`; the destination action consumes the signed authorization.
-- **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
-- **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
-- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before a redeem. Only `forceRedeem` composes these; `forceWithdraw` moved to VaultExitBundlesV1, which derives its own deallocations on-chain.
-- **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — low-level Bundler3 actions that move one market source or vault idle liquidity into a target market. Both target the chain's registered allocator, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata. The direct BlueBundlesV1 route instead carries equivalent allocator inputs in its fixed call.
 
 ### Constants and conventions
 
@@ -86,8 +65,8 @@ The action verbs available to vault flows and advanced low-level Bundler3 compos
 - **WAD** — fixed-point scale `1e18`. Used for rates, slippage tolerances, LTVs.
 - **`ORACLE_PRICE_SCALE`** — `1e36`, the scale Morpho uses for `price * collateral / WAD = collateralValueInLoanToken`.
 - **LLTV / LLTV buffer** — Liquidation-LTV. The `DEFAULT_LLTV_BUFFER` (0.5%, hardcoded) is subtracted from the market LLTV before validating a borrow, collateral withdrawal, or migration leg on the combined BlueBundlesV1 methods. Pure collateral supply and pure repay disable the onchain LTV cap so they can improve an unhealthy position.
-- **`minSharePrice` / `maxSharePrice`** — slippage bounds used by vault deposits, the destination
-  leg of Vault V1-to-V2 migration, and low-level Bundler3 primitives. VaultBundlesV1 enforces the
+- **`minSharePrice` / `maxSharePrice`** — slippage bounds used by vault deposits and the destination
+  leg of Vault V1-to-V2 migration. VaultBundlesV1 enforces the
   deposit-side maximum directly. The high-level Blue write methods do not accept share-price bounds
   or `slippageTolerance` because BlueBundlesV1 cannot enforce them.
 - **Permit / Permit2** — signature-based token-pull flows. ERC-2612 permits name the contract that

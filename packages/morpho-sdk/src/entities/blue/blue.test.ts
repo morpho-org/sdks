@@ -329,7 +329,7 @@ describe("MorphoBlue write surface", () => {
       result: 0n,
     });
     mockRead(handle, {
-      address: getChainAddress(mainnet.id, "morpho"),
+      address: getChainAddress(mainnet.id, "blue"),
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,

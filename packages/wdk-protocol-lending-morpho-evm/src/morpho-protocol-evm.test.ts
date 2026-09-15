@@ -1193,7 +1193,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         MARKET_ID,
         expect.any(Object),
         {
-          chainId: 1,
           deployless: undefined,
         },
       );

@@ -15,7 +15,6 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData as getBlueAuthorizationTypedData,
-  getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
   MetaMorphoAction as BlueMetaMorphoAction,
@@ -82,11 +81,7 @@ export {
   previewVaultV2InKindRedeem,
   type VaultV2InKindRedeemMarketPreview,
 } from "./helpers/previewVaultV2InKindRedeem.js";
-export {
-  computeMaxRepaySharePrice,
-  computeMinBorrowSharePrice,
-  computeMinForceWithdrawSharePrice,
-} from "./helpers/slippage.js";
+export { computeMinForceWithdrawSharePrice } from "./helpers/slippage.js";
 export {
   validateAccrualPosition,
   validateChainId,

@@ -194,7 +194,7 @@ export interface BlueActions {
    * `getRequirements()` reads only the loan-token allowance and selected ERC-2612 or Permit2
    * nonce state. Direct approvals and ERC-2612 name BlueBundlesV1 as spender; Permit2 keeps its
    * ERC-20 approval on canonical Permit2. Native funding is exclusive and skips token requirements.
-   * The referral fee is deducted from the gross `assets` supplied. This route exposes no Bundler3
+   * The referral fee is deducted from the gross `assets` supplied. This route exposes no
    * share-price bound or `slippageTolerance`.
    *
    * @param params.userAddress - User funding and receiving the supply position.
@@ -266,7 +266,7 @@ export interface BlueActions {
    * `getRequirements()` reads Morpho authorization state for BlueBundlesV1. Optional reallocations
    * are Vault V2-only; their penalties and the referral fee reduce withdrawal proceeds. Shares
    * mode has neither a saturated full-close sentinel nor an onchain minimum-assets guarantee.
-   * This route exposes no Bundler3 share-price bound or `slippageTolerance`.
+   * This route exposes no share-price bound or `slippageTolerance`.
    *
    * @param params.userAddress - User whose supply position is withdrawn.
    * @param params.positionData - Pre-fetched position used for ownership and balance validation.
@@ -290,7 +290,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
+   * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
@@ -372,7 +372,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee, penalty, or reallocation exceeds its bound.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
+   * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
@@ -597,7 +597,7 @@ export interface BlueActions {
    * are disabled, while the transaction itself remains bounded by the derived cap.
    * Share-mode deadlines cannot exceed the two-hour quote horizon. Blue authorization is required
    * only for collateral withdrawal. Pure repay uses `maxLtv = maxUint256`; withdrawals use buffered
-   * LLTV. No Bundler3 share-price or `slippageTolerance` input exists.
+   * LLTV. No share-price or `slippageTolerance` input exists.
    *
    * @param params.userAddress - User whose debt and collateral position changes.
    * @param params.positionData - Pre-fetched position used for repayment and health validation.
@@ -696,7 +696,7 @@ export interface BlueActions {
    * collateral funding requires token approval/signature unless it is exclusively native. Vault V2
    * reallocations are accepted only with a borrow. Penalties and referral fees reduce borrow
    * proceeds. The entity uses `maxUint256` for a pure collateral supply and buffered LLTV otherwise.
-   * No Bundler3 share-price or `slippageTolerance` input exists.
+   * No share-price or `slippageTolerance` input exists.
    *
    * @param params.userAddress - User whose collateral and debt position changes.
    * @param params.collateralAssets - Gross collateral supplied, or zero for pure borrow.
@@ -725,7 +725,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
+   * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
@@ -817,7 +817,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
+   * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the destination market.
@@ -1031,7 +1031,6 @@ export class MorphoBlue implements BlueActions {
 
     return fetchMarket(this.marketParams.id, this.client.viemClient, {
       ...parameters,
-      chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     });
   }
@@ -1049,7 +1048,6 @@ export class MorphoBlue implements BlueActions {
       {
         ...parameters,
         deployless: this.client.options.supportDeployless,
-        chainId: this.chainId,
       },
     );
   }

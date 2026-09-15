@@ -6,14 +6,12 @@ export type {
   Failable,
   Fetchable,
   InputMarketParams as BlueInputMarketParams,
-  IPermit2Allowance,
   Loadable,
   MarketId as BlueMarketId,
   MaxBorrowOptions as BlueMaxBorrowOptions,
   MaxPositionCapacities as BlueMaxPositionCapacities,
   MaxWithdrawCollateralOptions as BlueMaxWithdrawCollateralOptions,
   Pending,
-  Permit2Allowance,
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs as BlueAuthorizationTypedDataArgs,
@@ -21,7 +19,6 @@ export type {
   FetchParameters as BlueFetchParameters,
   InputAllocation as BlueInputAllocation,
   MetaMorphoCall as BlueMetaMorphoCall,
-  Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs as PermitTypedDataArgs,
 } from "@morpho-org/blue-sdk-viem";

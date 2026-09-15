@@ -9,11 +9,14 @@
 
 Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on chains with the required protocol and periphery deployments. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/morpho-sdk/addresses`.
 
-## Deprecated flows
+## Removed in v6
 
-All Vault V1 PublicAllocator surfaces are deprecated, including raw ABIs, addresses, configs, fetchers, planning APIs, and Bundler3 composition. Use Vault V2 BluePublicAllocator APIs: `getVaultV2BlueReallocationData()` fetches the state and `getVaultV2BlueReallocations()` prepares a plan for a Blue action.
+Vault V1 PublicAllocator APIs, low-level Bundler3 composition, migration adapters, and legacy
+MORPHO wrapping were removed. Use Vault V2 BluePublicAllocator APIs:
+`getVaultV2BlueReallocationData()` fetches the state and `getVaultV2BlueReallocations()` prepares a
+plan for a Blue action.
 
-The legacy `morphoToken` address and MORPHO wrapping entries in `ethereumGeneralAdapter1Abi` are also deprecated. Use the current MORPHO token directly. Deprecated APIs remain available until the next major release; general Vault V1 operations and other token wrapping flows remain supported.
+General Vault V1 operations remain supported.
 
 ## Installation
 
@@ -218,9 +221,8 @@ borrowing. That path may also require Morpho authorization for BlueBundlesV1. Op
 instant liquidation. Blue writes do not accept `slippageTolerance`, `minSharePrice`, or
 `maxSharePrice` because BlueBundlesV1 has no share-price-bound inputs.
 
-> High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 planner and
-> explicit low-level Bundler3-composition surfaces were removed in v6; direct Vault V1 flows and
-> canonical raw ABI, address, fetch, and config exports remain.
+> High-level Blue writes and shared-liquidity planning use Vault V2 only. Vault V1 allocator and
+> low-level composition surfaces were removed in v6; direct Vault V1 flows remain.
 
 ### Midnight: take a fixed-rate offer
 

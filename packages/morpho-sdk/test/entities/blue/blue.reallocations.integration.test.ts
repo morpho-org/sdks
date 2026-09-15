@@ -48,7 +48,7 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
     "executes the simulated zero-elapsed relative-cap maximum",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
-      const { morpho, vaultV2BluePublicAllocator: allocator } =
+      const { blue: morpho, vaultV2BluePublicAllocator: allocator } =
         getChainAddresses(base.id);
       assert(allocator != null);
       const depositAssets = parseUnits("100", 6);

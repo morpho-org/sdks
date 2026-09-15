@@ -7,19 +7,15 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `BaseAction<TType, TArgs>` — discriminated union base, keyed on `type`.
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
 - `Requirement` / `RequirementSignature` — prerequisite signing flow for ERC-2612, Permit2
-  AllowanceTransfer, Permit2 SignatureTransfer, Morpho authorization, and Midnight offer roots.
+  SignatureTransfer, Morpho authorization, and Midnight offer roots.
 - `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
-- `DepositAmountArgs` — additive funding union enforcing at least one of `amount` / `nativeAmount`.
-  Retained for low-level composition; high-level vault deposits and Blue writes use exclusive
-  `BundlesFundingArgs`.
 - `BundlesFundingArgs` — exclusive `{ amount } | { nativeAmount }` funding used by fixed BlueBundlesV1 and VaultBundlesV1 calls.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
 - Repay funding is expressed with the operation-specific `repayAssets` / `repayShares` inputs, mutually exclusive (`repayShares = maxUint256` requests a saturated full repay); the entity surface pairs them with a `maxRepayAssets` funding cap and optional `nativeAmount`, deriving every amount from live market state, and the flat action arg shapes (`BlueRepayWithdrawCollateralActionArgs`) carry the pre-resolved `{ repayAssets, repayShares, maxRepayAssets, collateralAssets, maxLtv }` so the action does no arithmetic. The former `RepayAmountArgs` / `RepayActionAmountArgs` shapes were removed with the BlueBundlesV1 migration.
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
 - `BlueAuthorizationAction` — used for `morpho.setAuthorization()` prerequisite transactions.
-  High-level Blue writes authorize BlueBundlesV1; low-level Bundler3 composition may authorize
-  GeneralAdapter1.
+  Blue writes authorize BlueBundlesV1.
 - `Midnight*Action` — Midnight fixed-rate action metadata for bundled taker flows, direct collateral/credit flows, maker-offer submission, and maker prerequisite transactions.
 
 ## Shared liquidity (`sharedLiquidity.ts`)
@@ -33,7 +29,7 @@ One class per error case. Never throw a generic `Error` from SDK source.
 
 - **Generic input bounds:** `NegativeInputError` for values that must be non-negative, `NonPositiveInputError` for values that must be positive, and `InputExceedsMaxError` for protocol upper bounds such as BluePublicAllocator's `uint128` assets and WAD-scaled `uint64` penalty. All expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
 - **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
-- **Reallocation-specific:** `InvalidReallocationShapeError` when a reallocation entry passed to a high-level Blue write is not a valid Vault V2 reallocation, `InvalidReallocationAddressError` for malformed BluePublicAllocator vault or adapter addresses, `InvalidReallocationSourceTypeError` for an absent, incomplete, or unknown BluePublicAllocator source, `InconsistentReallocationPenaltyError` for conflicting penalties on one vault, `ReallocationWithdrawalOnTargetMarketError`, and `ReallocationWithdrawExceedsMarketSupplyError`.
+- **Reallocation-specific:** `InvalidVaultV2BlueReallocationShapeError` when a reallocation entry passed to a high-level Blue write is not a valid Vault V2 reallocation, `InvalidReallocationAddressError` for malformed BluePublicAllocator vault or adapter addresses, `InvalidReallocationSourceTypeError` for an absent, incomplete, or unknown BluePublicAllocator source, `InconsistentReallocationPenaltyError` for conflicting penalties on one vault, `ReallocationWithdrawalOnTargetMarketError`, and `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation
 

@@ -26,7 +26,6 @@ import { fetchMarket } from "./Market.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `Position` entity.
  * @example
  * ```ts
@@ -50,12 +49,10 @@ export async function fetchPosition(
   client: Client,
   { ...parameters }: FetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { morpho } = getChainAddresses(parameters.chainId);
+  const { blue } = getChainAddresses(await getChainId(client));
   const position = await readContractRestructured(client, {
     ...parameters,
-    address: morpho,
+    address: blue,
     abi: blueAbi,
     functionName: "position",
     args: [marketId, user],
@@ -79,7 +76,6 @@ export async function fetchPosition(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded by callers.
  * @returns The hydrated `PreLiquidationParams` entity.
  * @example
@@ -104,7 +100,6 @@ export async function fetchPreLiquidationParams(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
-  parameters.chainId ??= await getChainId(client);
   const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
     await readContract(client, {
       ...parameters,
@@ -136,7 +131,6 @@ export async function fetchPreLiquidationParams(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualPosition` entity.
  * @example
@@ -161,8 +155,6 @@ export async function fetchAccrualPosition(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [position, market] = await Promise.all([
     fetchPosition(user, marketId, client, parameters),
     fetchMarket(marketId, client, parameters),
@@ -185,7 +177,6 @@ export async function fetchAccrualPosition(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `PreLiquidationPosition` entity.
  * @example
@@ -217,8 +208,6 @@ export async function fetchPreLiquidationPosition(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [position, market, preLiquidationParams] = await Promise.all([
     fetchPosition(user, marketId, client, parameters),
     fetchMarket(marketId, client, parameters),

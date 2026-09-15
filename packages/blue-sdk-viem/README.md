@@ -54,8 +54,6 @@ import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultUser";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketAllocation";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketConfig";
-// Deprecated Vault V1 PublicAllocator fetcher; use fetchVaultV2BlueMarketPublicAllocatorConfig for Vault V2.
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketPublicAllocatorConfig";
 
 // Or full, opt-in class augmentation:
 import "@morpho-org/blue-sdk-viem/lib/augment";

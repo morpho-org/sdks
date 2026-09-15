@@ -25,7 +25,6 @@ const TIER = {
   "evm-simulation": 1,
   "blue-sdk": 2,
   "blue-sdk-viem": 2,
-  "liquidity-sdk-viem": 3,
   "morpho-ts": 4,
 };
 

@@ -53,7 +53,7 @@ const reallocations = [
 
 const mockUnauthorized = (handle: ReturnType<typeof createMockClient>) => {
   mockRead(handle, {
-    address: getChainAddress(mainnet.id, "morpho"),
+    address: getChainAddress(mainnet.id, "blue"),
     abi: blueAbi,
     functionName: "isAuthorized",
     result: false,

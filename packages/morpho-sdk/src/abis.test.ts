@@ -1,13 +1,9 @@
-import {
-  vaultV1PublicAllocatorAbi as canonicalVaultV1PublicAllocatorAbi,
-  vaultV2BluePublicAllocatorAbi as canonicalVaultV2BluePublicAllocatorAbi,
-} from "@morpho-org/blue-sdk-viem";
+import { vaultV2BluePublicAllocatorAbi as canonicalVaultV2BluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { toFunctionSelector, toFunctionSignature } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   blueBundlesV1Abi,
   vaultBundlesV1Abi,
-  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "./abis.js";
 
@@ -57,9 +53,5 @@ describe("Public allocator ABI exports", () => {
     expect(vaultV2BluePublicAllocatorAbi).toBe(
       canonicalVaultV2BluePublicAllocatorAbi,
     );
-  });
-
-  test("re-exports the canonical Vault V1 ABI", () => {
-    expect(vaultV1PublicAllocatorAbi).toBe(canonicalVaultV1PublicAllocatorAbi);
   });
 });

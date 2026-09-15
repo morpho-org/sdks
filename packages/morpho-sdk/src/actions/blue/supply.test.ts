@@ -333,29 +333,6 @@ describe("blueSupply", () => {
         },
       }),
     ).toThrow(BundlesRequirementSignatureMismatchError);
-    expect(() =>
-      blueSupply({
-        market,
-        args: {
-          userAddress,
-          assets: 5n,
-          deadline,
-          requirementSignature: {
-            ...permit2,
-            args: { ...permit2.args, expiration: 999n },
-            action: {
-              type: "permit2",
-              args: {
-                spender: blueBundlesV1,
-                amount: 5n,
-                deadline: 789n,
-                expiration: 999n,
-              },
-            },
-          } as unknown as BundlesTokenRequirementSignature,
-        },
-      }),
-    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("error: binds every token signature field", () => {

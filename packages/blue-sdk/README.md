@@ -197,11 +197,7 @@ registerCustomAddresses({
   addresses: {
     8453: { stEth: "0xabc..." }, // provide stEth address on base
     31337: {
-      morpho: "0x123...",
-      bundler3: {
-        bundler3: "0x456...",
-        ...
-      },
+      blue: "0x123...",
       ...
     }, // registers a new local test chain
   },

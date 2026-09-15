@@ -68,21 +68,11 @@ registerCustomAddresses({
   addresses: {
     [chainId]: {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000010",
-        generalAdapter1: "0x0000000000000000000000000000000000000011",
-      },
       bundles: { vaultExitBundlesV1 },
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000012",
     },
     [unregisteredBundlesChainId]: {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000010",
-        generalAdapter1: "0x0000000000000000000000000000000000000011",
-      },
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000012",
     },
   },

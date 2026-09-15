@@ -20,7 +20,6 @@ describe("NegativeInputError", () => {
     );
   });
 });
-
 describe("NonPositiveInputError", () => {
   test("default", () => {
     const error = new NonPositiveInputError("assets", 0n);

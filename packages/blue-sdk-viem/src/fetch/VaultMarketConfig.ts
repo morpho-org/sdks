@@ -1,16 +1,14 @@
 import { type MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 
-import { getChainId, readContract } from "viem/actions";
+import { readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
-import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
 /**
  * Fetches a MetaMorpho vault market configuration.
  *
- * Reads `config(marketId)`, `pendingCap(marketId)`, and public allocator flow caps when the chain
- * has a PublicAllocator deployment.
+ * Reads `config(marketId)` and `pendingCap(marketId)`.
  *
  * @param vault - MetaMorpho vault address.
  * @param marketId - Market id whose vault config is fetched.
@@ -19,7 +17,6 @@ import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAlloca
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `VaultMarketConfig` entity.
  * @example
  * ```ts
@@ -47,31 +44,22 @@ export async function fetchVaultMarketConfig(
   client: Client,
   { ...parameters }: FetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const [[cap, enabled, removableAt], pendingCap, publicAllocatorConfig] =
-    await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address: vault,
-        abi: metaMorphoAbi,
-        functionName: "config",
-        args: [marketId],
-      }),
-      readContract(client, {
-        ...parameters,
-        address: vault,
-        abi: metaMorphoAbi,
-        functionName: "pendingCap",
-        args: [marketId],
-      }).then(([value, validAt]) => ({ value, validAt })),
-      fetchVaultMarketPublicAllocatorConfig(
-        vault,
-        marketId,
-        client,
-        parameters,
-      ),
-    ]);
+  const [[cap, enabled, removableAt], pendingCap] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address: vault,
+      abi: metaMorphoAbi,
+      functionName: "config",
+      args: [marketId],
+    }),
+    readContract(client, {
+      ...parameters,
+      address: vault,
+      abi: metaMorphoAbi,
+      functionName: "pendingCap",
+      args: [marketId],
+    }).then(([value, validAt]) => ({ value, validAt })),
+  ]);
 
   return new VaultMarketConfig({
     vault,
@@ -80,6 +68,5 @@ export async function fetchVaultMarketConfig(
     pendingCap,
     enabled,
     removableAt,
-    publicAllocatorConfig,
   });
 }

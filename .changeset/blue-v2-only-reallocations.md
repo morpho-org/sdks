@@ -6,7 +6,7 @@
 Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
 Remove Vault V1 shared-liquidity planners, data, inputs, validation, and explicit low-level Bundler3
 composition from morpho-sdk v6. Update the WDK borrow input for the next major. Direct Vault V1
-flows and canonical raw ABI, address, fetch, and config exports remain.
+flows remain; Vault V1 PublicAllocator ABI, address, fetch, and config exports are removed.
 
 Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
 `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
@@ -17,3 +17,6 @@ Remove morpho-sdk's previously deprecated compatibility exports, including ambig
 Blue and Midnight facade aliases, operation-specific scalar/native/refinance error aliases, and
 deprecated upstream ABI, constant, typed-data helper, and utility-type aliases. Canonical qualified
 facade names, generic errors, and canonical raw protocol exports remain.
+
+Remove `InvalidReallocationShapeError`; malformed Vault V2 entries now throw
+`InvalidVaultV2BlueReallocationShapeError`.

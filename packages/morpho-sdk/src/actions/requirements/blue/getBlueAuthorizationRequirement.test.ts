@@ -30,7 +30,7 @@ describe("getBlueAuthorizationRequirement", () => {
     ).rejects.toThrow(ChainIdMismatchError);
   });
 
-  test("returns null when GeneralAdapter1 is already authorized", async () => {
+  test("returns null when BlueBundlesV1 is already authorized", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: blue,
@@ -67,7 +67,7 @@ describe("getBlueAuthorizationRequirement", () => {
     expect(tx.to).toBe(blue);
     expect(tx.action.type).toBe("blueAuthorization");
     expect(tx.action.args.authorized).toBe(
-      addressesRegistry[mainnet.id].bundler3.generalAdapter1,
+      addressesRegistry[mainnet.id].bundles?.blueBundlesV1,
     );
   });
 
@@ -123,7 +123,7 @@ describe("getBlueAuthorizationRequirement", () => {
       throw new Error("expected an authorization action");
     }
     expect(requirement.action.args.authorized).toBe(
-      addressesRegistry[mainnet.id].bundler3.generalAdapter1,
+      addressesRegistry[mainnet.id].bundles?.blueBundlesV1,
     );
   });
 

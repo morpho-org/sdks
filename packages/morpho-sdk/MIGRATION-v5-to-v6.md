@@ -310,13 +310,14 @@ referral-fee fields, and `deadline`.
 
 Stay on v5 if the product requires partial or collateral-only refinance behavior.
 
-The v5-only partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
+The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
-`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are removed in
-v6. The full-position route validates snapshot ownership and token/market compatibility, accounts
-for reallocation penalties in destination debt, then checks the combined destination position
-against the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError` and
-`RefinanceTokenMismatchError` stay.
+`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are removed. They
+were never thrown by the full-position route. This removal did not receive a published deprecation
+window; remove pattern-matching branches for these errors or stay on v5. The full-position route
+validates snapshot ownership and token/market compatibility, accounts for reallocation penalties in
+destination debt, then checks the combined destination position against the buffered LLTV
+(`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError` and `RefinanceTokenMismatchError` stay.
 
 ## Removed action-output field: `reallocationFee`
 
@@ -334,32 +335,48 @@ Bundler3 composition is required.
 
 ## Removed deprecated compatibility exports
 
-Version 6 removes the deprecated compatibility surface rather than carrying it through another
-major:
+Version 6 removes all deprecated compatibility exports, including names first deprecated only in a
+v6 prerelease:
 
 - Ambiguous unprefixed Blue and Midnight facade aliases are removed. Use the `Blue*` / `Midnight*`
   names from shared facade subpaths or canonical names from `/blue/*` and `/midnight/*`.
 - Operation-specific scalar and native-asset error aliases are removed. Pattern-match on the
   current generic input errors and canonical native-asset error classes.
-- `InvalidReallocationShapeError` remains the error thrown for malformed Vault V2 entries.
+- `InvalidReallocationShapeError` is removed. Use `InvalidVaultV2BlueReallocationShapeError` for
+  malformed Vault V2 entries.
 - Deprecated ABI, constant, typed-data helper, and utility-type aliases inherited from upstream
   packages are removed. Import their canonical replacements from the same facade category.
 - The deprecated `getDaiPermitTypedData` and `DaiPermitArgs` exports are removed from both the root
   and raw `/blue` facades. Maintained action flows route DAI approvals through Permit2 or a classic
   approval.
-- Deprecated in-kind and bundles aliases are removed. Replace
-  `InKindRedeemRequiresSingleAdapterError`, `UnsupportedInKindAdapterError`,
-  `VaultExitBundlesV1PermitMismatchError`, `BlueBundlesV1RequirementSignatureMismatchError`,
-  `Permit2TransferFromNonceAlreadyUsedError`, and `MissingReferralFeeRecipientError` with their
-  canonical error classes.
-- Replace `getVaultExitBundlesV1PermitStruct`, `GetVaultExitBundlesV1PermitStructParams`, and
-  `VaultExitBundlesV1PermitStruct` with `getBundlesSharesPermit` and `BundleSharesPermit`.
-- PublicAllocator V1 planner, data, input, validation, and Bundler3-composition symbols are removed.
+- PublicAllocator V1 addresses, ABIs, configs, fetchers, augmentation, planner, data, input,
+  validation, and Bundler3-composition symbols are removed.
   Use `getVaultV2BlueReallocationData` and
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
+- In-kind, fixed-bundles, referral-fee, and Permit2 compatibility errors are removed. Use
+  `VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
+  `BundlesPermitMismatchError`, `BundlesRequirementSignatureMismatchError`,
+  `Permit2SignatureTransferNonceAlreadyUsedError`, and `ReferralFeeRecipientMissingError`.
+- `getVaultExitBundlesV1PermitStruct` and its parameter/result types are removed. Use
+  `getBundlesSharesPermit` and `BundleSharesPermit`.
 
-This does not remove direct Vault V1 actions or canonical raw Vault V1 ABI, address, fetch, and
-config exports.
+Direct Vault V1 actions remain. Vault V1 PublicAllocator compatibility does not.
+
+Several compatibility names above, including the partial-refinance errors, did not complete a
+published deprecation window. Their v6 removal is intentional; stay on v5 if migration cannot be
+completed atomically.
+
+## Removed low-level Bundler3 and migration surfaces
+
+Version 6 removes the low-level Bundler3 action composer, executor and adapter ABIs, Bundler3-only
+requirements and signature helpers, and related action, signature, and error types. It also removes
+the residual Aave and Compound migration-adapter ABIs left after `migration-sdk-viem` was retired,
+plus the legacy MORPHO token-wrapper ABI entries. Use the fixed standalone BlueBundlesV1,
+VaultBundlesV1, and VaultExitBundlesV1 actions for supported SDK workflows.
+
+These low-level surfaces were not deprecated in a published v5 minor. Their removal is an
+intentional one-time lifecycle deviation; integrations that still compose arbitrary Bundler3 calls
+must stay on v5 or encode against the contracts independently.
 
 ## Vault V2 `forceWithdraw`
 
@@ -420,7 +437,7 @@ Migration steps:
   `exitAssets`, `minSharePriceE27`, `referralFeePct`, `referralFeeRecipient`, and `deadline` are new.
 - Stop batching exits: only one VaultExitBundlesV1 call can execute per transaction, because its
   `initiator` guard is transient and never cleared.
-- `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are removed. Use
+- Replace `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` with
   `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`.
 
 See the [`TIB-2026-08-28-vault-exit-force-withdraw`](https://github.com/morpho-org/sdks/blob/main/docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md)
@@ -476,6 +493,7 @@ const transaction = withdrawal.buildTx(signatures);
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Replace deprecated facade, error, and upstream aliases with their canonical exports.
+- Remove low-level Bundler3 composers, migration-adapter ABIs, and legacy MORPHO wrapping imports.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.
 - Update transaction decoding, simulation fixtures, and action metadata fields; the `type`
   discriminators remain stable, including `"vaultV2ForceWithdraw"`.
