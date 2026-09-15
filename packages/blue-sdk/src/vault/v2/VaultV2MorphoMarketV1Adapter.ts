@@ -197,10 +197,13 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     super(adapter);
   }
 
+  /** {@inheritDoc IAccrualVaultV2Adapter.realAssets} */
   realAssets(timestamp?: BigIntish) {
     return this.positions.reduce(
       (total, position) =>
-        total + position.accrueInterest(timestamp).supplyAssets,
+        position.supplyShares === 0n
+          ? total
+          : total + position.accrueInterest(timestamp).supplyAssets,
       0n,
     );
   }
