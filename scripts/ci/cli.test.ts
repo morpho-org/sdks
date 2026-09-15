@@ -58,6 +58,7 @@ describe("scrub-transcript CLI", () => {
 
       const result = run([SCRUB, input, output], {
         GITHUB_OUTPUT: githubOutput,
+        RUNNER_TEMP: dir,
         SECRET_VALUES: "super-secret\n",
       });
 
@@ -74,6 +75,7 @@ describe("scrub-transcript CLI", () => {
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         GITHUB_OUTPUT: join(dir, "github-output"),
+        RUNNER_TEMP: dir,
       };
       delete env.SECRET_VALUES;
 

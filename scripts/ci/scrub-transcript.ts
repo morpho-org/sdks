@@ -6,10 +6,13 @@
  *
  *   SECRET_VALUES=$'<token>\n<key>' node scripts/ci/scrub-transcript.ts <input> <output>
  *
- * Writes `path=<output>` to `GITHUB_OUTPUT` so the upload step can be gated on it.
+ * Writes `path=<output>` to `GITHUB_OUTPUT` so the upload step can be gated on it. The input path
+ * comes from an output of the Claude step, which Claude's subprocesses can overwrite, so it must
+ * resolve under `RUNNER_TEMP` (where the action writes the transcript) before it is read.
  */
 
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
@@ -81,6 +84,16 @@ export function readSecretValues(env: NodeJS.ProcessEnv): string[] {
     .filter((value) => value.length > 0);
 }
 
+/** Throws unless `inputPath` resolves to a file strictly inside `allowedDir`. */
+export function assertInputUnder(inputPath: string, allowedDir: string): void {
+  const rel = relative(resolve(allowedDir), resolve(inputPath));
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error(
+      `Refusing to read "${inputPath}": the transcript must live under ${allowedDir}.`,
+    );
+  }
+}
+
 /** CLI entrypoint: `node scripts/ci/scrub-transcript.ts <input> <output>`. */
 export function main(options: ScrubOptions = {}): string {
   const argv = options.argv ?? process.argv.slice(2);
@@ -101,6 +114,7 @@ export function main(options: ScrubOptions = {}): string {
     throw new Error("Usage: scrub-transcript.ts <input> <output>");
   }
 
+  assertInputUnder(inputPath, readRequiredEnv(env, "RUNNER_TEMP"));
   const scrubbed = scrubTranscript(
     readFileSync(inputPath, "utf8"),
     readSecretValues(env),

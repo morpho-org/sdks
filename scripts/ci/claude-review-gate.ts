@@ -6,9 +6,9 @@
  *   node scripts/ci/claude-review-gate.ts snapshot   # before Claude runs
  *   node scripts/ci/claude-review-gate.ts verify     # after Claude runs
  *
- * Reads `GH_TOKEN`, `GITHUB_REPOSITORY`, `PR_NUMBER`, plus `HEAD_SHA`,
- * `MAX_ID_BEFORE` and `GITHUB_RUN_ID` for `verify`. Every GitHub API failure is an error, never a
- * silent 0, so the gate can only pass on a real review.
+ * Reads `GH_TOKEN`, `GITHUB_REPOSITORY` and `PR_NUMBER`, plus `GITHUB_OUTPUT` for `snapshot` and
+ * `HEAD_SHA`, `MAX_ID_BEFORE` and `GITHUB_RUN_ID` for `verify`. Every missing variable and every
+ * GitHub API failure is an error, never a silent 0, so the gate can only pass on a real review.
  */
 
 import { appendFileSync } from "node:fs";

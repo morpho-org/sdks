@@ -58,15 +58,14 @@ jobs:
 
       # The action checks out the PR head into the workspace before Claude runs, so anything under
       # .agents/ there is PR-controlled. Snapshot the trusted copy from the checked-out default branch.
-      # The digest and the absolute node path are step outputs (runner-held state Claude's subprocesses
-      # cannot rewrite); the post-Claude steps re-verify them before executing the trusted copy.
+      # scripts/ci/trusted-scripts.ts copies scripts/ and records its digest plus the absolute node path
+      # as step outputs (runner-held state Claude's subprocesses cannot rewrite); the post-Claude steps
+      # re-verify them before executing the trusted copy.
       - name: Snapshot trusted review instructions
         id: trusted
         run: |
           cp -R .agents "$RUNNER_TEMP/trusted-agents"
-          cp -R scripts "$RUNNER_TEMP/trusted-scripts"
-          echo "node_bin=$(command -v node)" >> "$GITHUB_OUTPUT"
-          node "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" snapshot "$RUNNER_TEMP/trusted-scripts"
+          node scripts/ci/trusted-scripts.ts snapshot scripts "$RUNNER_TEMP/trusted-scripts"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
       # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
@@ -140,6 +139,8 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
+          # Claude's subprocesses can append to $GITHUB_ENV; never let an injected BASH_ENV run before this step.
+          BASH_ENV: ''
         # The workspace now holds the PR head, so execute the trusted copy snapshotted before Claude ran,
         # after checking it is byte-identical to the snapshot and with the node binary recorded then.
         run: |
@@ -159,7 +160,9 @@ jobs:
             ${{ secrets.ANTHROPIC_SDK_API_KEY }}
           NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
           SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
-        # Same integrity check as above; the script writes `path=<scrubbed file>` to GITHUB_OUTPUT.
+          BASH_ENV: ''
+        # Same integrity check as above; the script refuses inputs outside RUNNER_TEMP and writes
+        # `path=<scrubbed file>` to GITHUB_OUTPUT.
         run: |
           "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/trusted-scripts.ts" verify "$RUNNER_TEMP/trusted-scripts" "$SCRIPTS_DIGEST"
           "$NODE_BIN" "$RUNNER_TEMP/trusted-scripts/ci/scrub-transcript.ts" "$EXECUTION_FILE" "$RUNNER_TEMP/claude-execution-output.scrubbed.json"

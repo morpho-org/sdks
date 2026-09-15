@@ -2,20 +2,27 @@
  * Trusted-copy integrity for the Claude review workflow.
  *
  * The workflow snapshots `scripts/` from the default-branch checkout into `$RUNNER_TEMP` before
- * Claude runs, then executes the post-Claude gate and scrubber from that copy. `snapshot` records
- * a digest of the copy as a step output (runner-held state Claude's subprocesses cannot rewrite);
- * `verify` recomputes it and fails if any file was added, removed, or changed since. `verify` itself
+ * Claude runs, then executes the post-Claude gate and scrubber from that copy. `snapshot` makes the
+ * copy and records a digest of it plus the absolute path of the node binary running it as step
+ * outputs (runner-held state Claude's subprocesses cannot rewrite); `verify` recomputes the digest
+ * and fails if any file was added, removed, or changed since. `verify` itself
  * runs from the trusted copy, so this is defense in depth against accidental or careless edits by
  * Claude's session, not a boundary against a process that already controls the runner user.
  *
  * The digest is a SHA-256 over `"<relative path>\0<sha256(content)>\n"` entries sorted by path, so
  * it is independent of directory-walk order and of the shell tools available on the runner.
  *
- *   node scripts/ci/trusted-scripts.ts snapshot <dir>            # appends digest=<hex> to GITHUB_OUTPUT
+ *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest>     # copies, appends node_bin= and digest= to GITHUB_OUTPUT
  *   node scripts/ci/trusted-scripts.ts verify <dir> <expected>   # exits 1 when the digest differs
  */
 import { createHash } from "node:crypto";
-import { appendFileSync, readdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -24,6 +31,8 @@ import { readRequiredEnv, sanitizeAnnotation } from "./workflow.ts";
 interface RunOptions {
   readonly argv?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
+  /** Overrides the recorded node binary path (defaults to `process.execPath`). */
+  readonly nodeBin?: string;
   /** Overrides `GITHUB_OUTPUT` for tests. */
   readonly outputFile?: string;
   readonly writeOutput?: (message: string) => void;
@@ -52,13 +61,23 @@ export function digestDirectory(dir: string): string {
   return hash.digest("hex");
 }
 
-/** Digests `dir` and records it as the `digest` step output. */
-export function snapshot(dir: string, options: RunOptions = {}): string {
+/**
+ * Copies `src` to a fresh `dest`, then records `node_bin` (the interpreter running this script) and
+ * the `digest` of the copy as step outputs.
+ */
+export function snapshot(
+  { dest, src }: { readonly dest: string; readonly src: string },
+  options: RunOptions = {},
+): string {
   const env = options.env ?? process.env;
-  const digest = digestDirectory(dir);
+  if (existsSync(dest)) {
+    throw new Error(`Refusing to snapshot into existing path ${dest}.`);
+  }
+  cpSync(src, dest, { recursive: true });
+  const digest = digestDirectory(dest);
   appendFileSync(
     options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
-    `digest=${digest}\n`,
+    `node_bin=${options.nodeBin ?? process.execPath}\ndigest=${digest}\n`,
   );
 
   return digest;
@@ -79,27 +98,26 @@ export function verify(dir: string, expected: string): void {
   }
 }
 
-/** CLI dispatcher: `snapshot <dir>` or `verify <dir> <expected>`. */
+/** CLI dispatcher: `snapshot <src> <dest>` or `verify <dir> <expected>`. */
 export function main(options: RunOptions = {}): void {
   const argv = options.argv ?? process.argv.slice(2);
   const writeOutput = options.writeOutput ?? defaultWriteOutput;
-  const [mode, dir, expected] = argv;
-  if (dir == null || dir === "") {
-    throw new Error(`Usage: trusted-scripts.ts ${mode ?? "<mode>"} <dir> ...`);
+  const [mode, first, second] = argv;
+  if (!first || !second) {
+    throw new Error(
+      "Usage: trusted-scripts.ts snapshot <src> <dest> | verify <dir> <expected>",
+    );
   }
 
   switch (mode) {
     case "snapshot": {
-      const digest = snapshot(dir, options);
-      writeOutput(`Trusted scripts digest: ${digest}\n`);
+      const digest = snapshot({ dest: second, src: first }, options);
+      writeOutput(`Trusted scripts copied to ${second} (digest ${digest}).\n`);
       return;
     }
     case "verify": {
-      if (expected == null || expected === "") {
-        throw new Error("Usage: trusted-scripts.ts verify <dir> <expected>");
-      }
-      verify(dir, expected);
-      writeOutput(`Trusted scripts in ${dir} match the snapshot.\n`);
+      verify(first, second);
+      writeOutput(`Trusted scripts in ${first} match the snapshot.\n`);
       return;
     }
     default:

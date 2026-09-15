@@ -79,21 +79,52 @@ describe("digestDirectory", () => {
 });
 
 describe("snapshot", () => {
-  test("default: writes digest=<hex> to the output file", () => {
-    const dir = makeTree({ "a.ts": "a" });
-    const outputFile = join(dir, "..", `trusted-scripts-output-${process.pid}`);
-    tempDirs.push(outputFile);
+  test("default: copies the tree and writes node_bin= and digest= to the output file", () => {
+    const src = makeTree({ "a.ts": "a", "ci/b.ts": "b" });
+    const dest = join(src, "..", `trusted-scripts-dest-${process.pid}`);
+    const outputFile = join(src, "..", `trusted-scripts-output-${process.pid}`);
+    tempDirs.push(dest, outputFile);
 
-    const digest = snapshot(dir, { outputFile });
+    const digest = snapshot({ dest, src }, { outputFile });
 
-    expect(readFileSync(outputFile, "utf8")).toBe(`digest=${digest}\n`);
-    expect(digest).toBe(digestDirectory(dir));
+    expect(readFileSync(join(dest, "ci", "b.ts"), "utf8")).toBe("b");
+    expect(readFileSync(outputFile, "utf8")).toBe(
+      `node_bin=${process.execPath}\ndigest=${digest}\n`,
+    );
+    expect(digest).toBe(digestDirectory(src));
+    expect(digest).toBe(digestDirectory(dest));
+  });
+
+  test("behavior: records an injected node binary path", () => {
+    const src = makeTree({ "a.ts": "a" });
+    const dest = join(src, "..", `trusted-scripts-dest-bin-${process.pid}`);
+    const outputFile = join(
+      src,
+      "..",
+      `trusted-scripts-output-bin-${process.pid}`,
+    );
+    tempDirs.push(dest, outputFile);
+
+    snapshot({ dest, src }, { nodeBin: "/opt/node", outputFile });
+
+    expect(readFileSync(outputFile, "utf8")).toMatch(/^node_bin=\/opt\/node\n/);
+  });
+
+  test("error: refuses an existing destination", () => {
+    const src = makeTree({ "a.ts": "a" });
+    const dest = makeTree({ "stale.ts": "x" });
+
+    expect(() => snapshot({ dest, src }, { outputFile: "/dev/null" })).toThrow(
+      /existing path/,
+    );
   });
 
   test("error: missing GITHUB_OUTPUT", () => {
-    const dir = makeTree({ "a.ts": "a" });
+    const src = makeTree({ "a.ts": "a" });
+    const dest = join(src, "..", `trusted-scripts-dest-noout-${process.pid}`);
+    tempDirs.push(dest);
 
-    expect(() => snapshot(dir, { env: {} })).toThrow(/GITHUB_OUTPUT/);
+    expect(() => snapshot({ dest, src }, { env: {} })).toThrow(/GITHUB_OUTPUT/);
   });
 });
 
@@ -127,28 +158,37 @@ describe("main", () => {
     tempDirs.push(outputFile);
     const output: string[] = [];
 
+    const dest = join(dir, "..", `trusted-scripts-main-dest-${process.pid}`);
+    tempDirs.push(dest);
+
     main({
-      argv: ["snapshot", dir],
+      argv: ["snapshot", dir, dest],
       outputFile,
       writeOutput: (m) => output.push(m),
     });
-    const digest = readFileSync(outputFile, "utf8").replace(
-      /^digest=|\n$/g,
-      "",
-    );
-    main({ argv: ["verify", dir, digest], writeOutput: (m) => output.push(m) });
+    const digest = readFileSync(outputFile, "utf8").match(
+      /^digest=(.*)$/m,
+    )?.[1];
+    if (digest == null) throw new Error("digest output missing");
+    main({
+      argv: ["verify", dest, digest],
+      writeOutput: (m) => output.push(m),
+    });
 
     expect(output).toEqual([
-      `Trusted scripts digest: ${digest}\n`,
-      `Trusted scripts in ${dir} match the snapshot.\n`,
+      `Trusted scripts copied to ${dest} (digest ${digest}).\n`,
+      `Trusted scripts in ${dest} match the snapshot.\n`,
     ]);
   });
 
   test("error: unknown mode / missing arguments", () => {
     const dir = makeTree({ "a.ts": "a" });
 
-    expect(() => main({ argv: ["nope", dir] })).toThrow(/Unknown mode "nope"/);
+    expect(() => main({ argv: ["nope", dir, dir] })).toThrow(
+      /Unknown mode "nope"/,
+    );
     expect(() => main({ argv: ["verify"] })).toThrow(/Usage/);
     expect(() => main({ argv: ["verify", dir] })).toThrow(/Usage/);
+    expect(() => main({ argv: ["snapshot", dir] })).toThrow(/Usage/);
   });
 });
