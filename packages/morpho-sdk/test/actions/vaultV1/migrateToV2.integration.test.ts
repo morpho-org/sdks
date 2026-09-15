@@ -207,14 +207,19 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          assets,
-        });
+        const timestamp = await client.timestamp();
+        const migrate = withChainTimestamp(timestamp, () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            assets,
+          }),
+        );
 
-        const requirements = await migrate.getRequirements();
+        const requirements = await withChainTimestamp(timestamp, () =>
+          migrate.getRequirements(),
+        );
 
         expect(requirements.length).toBe(1);
 

@@ -424,6 +424,7 @@ export interface VaultV1Actions {
    *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
+   * @throws {UnknownBlueMarketAllocationError} when a source withdraw-queue market has no allocation snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
@@ -992,6 +993,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
+  /** {@inheritDoc VaultV1Actions.migrateToV2} */
   migrateToV2(
     params: {
       readonly userAddress: Address;
@@ -1043,6 +1045,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       referralFeePct: params.referralFeePct,
       referralFeeRecipient: params.referralFeeRecipient,
     });
+    // V1 redeem accrues market interest and performance fees before converting shares.
     const grossAssets =
       assets ??
       params.sourceVault

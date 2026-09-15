@@ -110,7 +110,7 @@ describe("MorphoBlue validation", () => {
 
     const requirements = await market
       .repayWithdrawCollateral({
-        repayAssets: 1n,
+        repayAssets: parseUnits("1", 6),
         collateralAssets: 1n,
         userAddress: USER,
         positionData: makePosition(),
