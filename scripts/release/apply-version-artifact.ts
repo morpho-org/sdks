@@ -160,7 +160,8 @@ function readArtifactEntries(
     }
 
     return {
-      contents: record.contents as string | undefined,
+      contents:
+        typeof record.contents === "string" ? record.contents : undefined,
       path: record.path,
     };
   });
