@@ -112,13 +112,30 @@ jobs:
             --reporter=default --reporter=github-actions --reporter=blob \
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
-      - name: Upload failed report
+      # Artifacts on a public repo bypass job-log secret redaction, and a fork shard's blob report
+      # can embed the RPC URL/API key (e.g. a viem transport error relaying an upstream backend
+      # failure). Scrub the report here — independent of @morpho-org/test's Anvil-diagnostic
+      # redaction — and gate the upload on this step (scripts/ci/redact-vitest-reports.ts).
+      - name: Redact failed report
+        id: redact
         if: failure() && steps.test.outcome == 'failure'
+        env:
+          SECRET_VALUES: |
+            ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
+            ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
+            ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
+          EXPECT_RPC_SECRETS: ${{ matrix.uses_foundry }}
+        run: node scripts/ci/redact-vitest-reports.ts vitest-reports vitest-reports-sanitized
+
+      - name: Upload failed report
+        # `steps.redact.outputs.path` is set only once a sanitized report exists, so a hard crash
+        # that never wrote a report skips the upload instead of failing on a missing file.
+        if: failure() && steps.test.outcome == 'failure' && steps.redact.outputs.path != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vitest-failure-${{ matrix.name }}
-          path: vitest-reports/${{ matrix.name }}.json
-          if-no-files-found: error
+          name: vitest-failure-${{ matrix.name }}-${{ github.run_attempt }}
+          path: ${{ steps.redact.outputs.path }}
+          if-no-files-found: warn
           retention-days: 1
 
       - name: Save Foundry cache
