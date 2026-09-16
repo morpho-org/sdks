@@ -364,7 +364,7 @@ export interface VaultV1Actions {
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612
    *   or names another spender, amount, or deadline than the prepared cap.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, owner, spender, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit asset, owner, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
