@@ -31,6 +31,7 @@ Prompt must include:
 - Doc comments accurate vs. the implementation (no stale references to renamed args, removed return values, changed throw behavior).
 - Public types use semantic names — flag generic `T`, `U`, `Foo` where domain names exist.
 - `@example` blocks compile and follow the runnable-recipe shape from the style guide.
+- API references use API Extractor and API Documenter on emitted declarations. Check `pnpm docs:build:markdown` output and the JSDoc compatibility behavior documented in `docs/api-generation.md`; generated files must be regenerated rather than hand-edited.
 
 ## 2. Markdown documentation accuracy
 
