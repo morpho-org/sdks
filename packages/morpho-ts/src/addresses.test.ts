@@ -113,14 +113,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.ArcMainnet, "midnight");
+      getChainAddress(ChainId.ArbitrumMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.ArcMainnet,
+      chainId: ChainId.ArbitrumMainnet,
       label: "midnight",
     });
   });
@@ -205,6 +205,10 @@ describe("addressesRegistry", () => {
     [
       ChainId.RobinhoodMainnet,
       ["0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857", 38318973n],
+    ],
+    [
+      ChainId.ArcMainnet,
+      ["0x4c2ff4D792d0a03A0e461e4B9B00Bc812A0147C2", 20_322_353n],
     ],
   ] as const)(
     "behavior: exposes BluePublicAllocator on chain %i",
@@ -424,6 +428,48 @@ describe("addressesRegistry", () => {
       "setterRatifier",
       "0xb72c416382c8A6399D0765CebfB032F040B00B3c",
       25_798_183n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnight",
+      "0x208786922BE56fDE2D1Fa60e6b9eC5D723e8d7b0",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightBundles",
+      "0x3609525024c88f794CBE09e4832810E2bd737beC",
+      20_321_988n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x9bD11e1EC7bf3520896F8e3e63d4B70f8d6d177E",
+      20_322_111n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightMempool",
+      "0x26bded5Fb01373CE875dEa14E52799D04C839C1A",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "ecrecoverRatifier",
+      "0xA3B53aDe6668b6ceC03a9E56a993B47034F43715",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "ecrecoverAuthorizer",
+      "0xe1dccAdc10c35AE9e2207059B233fE5c634CF20f",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "setterRatifier",
+      "0x3915156EBFC246Ee9aC3236af561546B7D9D924c",
+      20_320_779n,
     ],
     [
       ChainId.ScrollMainnet,
@@ -862,7 +908,7 @@ describe("addressesRegistry", () => {
 
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
-    const blueAddresses = addressesRegistry[ChainId.ArcMainnet];
+    const blueAddresses = addressesRegistry[ChainId.PolygonMainnet];
     const chainAddresses = {
       ...createMidnightAddresses(),
       permit2: blueAddresses.permit2,
@@ -931,7 +977,7 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = deployments[ChainId.ArcMainnet];
+    const blueDeployments = deployments[ChainId.PolygonMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
       permit2: blueDeployments.permit2,
