@@ -647,6 +647,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The supply result.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
    *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
    *   EOA signer returns a transaction for another chain.
@@ -697,6 +698,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
    * @example
@@ -740,6 +742,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The supply options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
    * @example
@@ -1178,6 +1181,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The repay result.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider chain context changes while preparing the
    *   operation, conflicts with the configured target or cached ERC-4337 account context, or the
    *   EOA signer returns a transaction for another chain.
@@ -1227,6 +1231,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param requirementOptions - Optional Morpho SDK requirement options.
    * @returns Approval/signature requirements.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
    * @example
@@ -1270,6 +1275,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - The repay options.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
    *   with configured target or cached ERC-4337 account context.
    * @example

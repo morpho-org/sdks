@@ -15,6 +15,7 @@ export {
   UnknownTokenPriceError,
   UnknownVaultConfigError,
   UnsupportedChainIdError,
+  UnsupportedMarketIrmError,
   UnsupportedPreLiquidationParamsError,
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,

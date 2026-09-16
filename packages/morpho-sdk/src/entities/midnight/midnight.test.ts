@@ -82,7 +82,6 @@ import type {
 type BuildSubmitOffersTx = (params: {
   readonly offersData: OffersData;
   readonly signatures?: MidnightActionSignatures;
-  readonly signedPayloads?: ReadonlyMap<string, Hex>;
   readonly metadata?: { readonly origin: string };
 }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
 
@@ -99,14 +98,9 @@ const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
       buildSubmitOffersTx: (params: {
         readonly offersData: OffersData;
         readonly signatures?: MidnightActionSignatures;
-        readonly signedPayloads: ReadonlyMap<string, Hex>;
       }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
     }
-  ).buildSubmitOffersTx({
-    ...params,
-    signedPayloads:
-      params.signedPayloads ?? new Map([["0x1234", "0x1234" as Hex]]),
-  });
+  ).buildSubmitOffersTx(params);
 
 const offersData = (
   buy = true,
@@ -198,6 +192,7 @@ const offerRootSignature = (
     readonly owner?: Address;
     readonly ratifier?: Address;
     readonly offers?: number;
+    readonly payload?: Hex | undefined;
   } = {},
 ): MidnightOfferRootSignature => ({
   action: {
@@ -212,7 +207,7 @@ const offerRootSignature = (
     owner: overrides.owner ?? data.accountAddress,
     root: data.tree.root,
     signature: "0x1234",
-    payload: "0x1234",
+    payload: "payload" in overrides ? (overrides.payload as Hex) : "0x1234",
   },
 });
 
@@ -1981,9 +1976,12 @@ describe("MorphoMidnight", () => {
       expect(tx.data.includes("a1b2c3d4")).toBe(true);
     });
 
-    test("behavior: ignores untrusted payload bytes in the signature wrapper", () => {
+    test("behavior: submits the payload carried on the offer-root signature", () => {
       const data = offersData();
       const signature = offerRootSignature(data);
+      // buildTx is stateless: it reads the encoded payload straight off the
+      // signature it is handed, so a prepared requirement can be signed on one
+      // instance and submitted from another.
       const tx = buildSubmitOffersTx({
         offersData: data,
         signatures: {
@@ -1992,7 +1990,7 @@ describe("MorphoMidnight", () => {
         },
       });
 
-      expect(tx.data).toBe("0x1234");
+      expect(tx.data).toBe("0xdeadbeef");
     });
 
     test("behavior: setter ratifier uses prepared payload without signatures", () => {
@@ -2095,8 +2093,7 @@ describe("MorphoMidnight", () => {
       expect(() =>
         buildSubmitOffersTx({
           offersData: data,
-          signatures: offerRootSignature(data),
-          signedPayloads: new Map(),
+          signatures: offerRootSignature(data, { payload: undefined }),
         }),
       ).toThrow(UnpreparedMidnightOfferRootSignatureError);
     });

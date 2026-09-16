@@ -632,6 +632,7 @@ describe("RepayBlue", () => {
         totalBorrowShares,
         lastUpdate: 0n,
         fee: 0n,
+        rateAtTarget: 0n,
       },
     );
 

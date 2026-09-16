@@ -7,6 +7,8 @@
 - Keep all protocol amounts as `bigint`; accept `BigIntish` only at API edges.
 - Address registries are immutable and additive; custom addresses must not override existing values.
 - Use `MathLib` rounding helpers; spell rounding as `"Up"` or `"Down"`.
+- Accrual must never throw solely because a timestamp precedes a snapshot. Market and position accrual at or before the market's `lastUpdate` returns an unchanged copy without IRM projection or timestamp rewind. Rate helpers evaluate earlier timestamps at `lastUpdate`; unsupported IRM rate queries still throw rather than invent a rate.
+- Vault V2 accrual at or before its own `lastUpdate` returns an unchanged copy and zero fee shares. Forward vault accrual leaves newer nested markets unchanged. Vault V1 has no vault-wide timestamp and must retain normal loss and fee reconciliation against unchanged nested snapshots.
 - Use `_try(accessor, UnknownError)` for optional domain lookups, not broad `catch`.
 - Protocol entity folders (`market/`, `vault/`, `token/`, `position/`, `holding/`, `user/`) own their classes and folder barrels.
 - Getters may throw typed `Unknown*Error`; nullable lookup paths should use `_try` or `tryGet*`-style helpers deliberately.
