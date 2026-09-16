@@ -138,9 +138,16 @@ const repayAction = {
   buildTx: vi.fn().mockReturnValue(REPAY_TX),
 };
 const supplyCollateralAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
+  getRequirements: vi.fn((options?: RequirementOptions) =>
+    Promise.resolve([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { amount: options?.approvalAmount ?? 100_000n },
+        },
+      },
+    ]),
+  ),
   buildTx: vi.fn().mockReturnValue(SUPPLY_COLLATERAL_TX),
 };
 const withdrawCollateralAction = {
@@ -1584,6 +1591,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       const requirementOptions = {
         useSimplePermit: true,
         permit2Nonce: 11n,
+        approvalAmount: 1_000_000n,
       } satisfies RequirementOptions;
       const promise = protocol.getSupplyCollateralRequirements(
         { token: COLLATERAL, amount: 100_000n },
@@ -1594,7 +1602,9 @@ describe.sequential("MorphoProtocolEvm", () => {
       >();
       const requirements = await promise;
 
-      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(requirements).toEqual([
+        { action: { type: "erc20Approval", args: { amount: 1_000_000n } } },
+      ]);
       expect(supplyCollateralAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );
