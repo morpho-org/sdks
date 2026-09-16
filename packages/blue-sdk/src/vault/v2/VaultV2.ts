@@ -313,8 +313,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * shares without accruing nested adapters. Forward accrual also accrues every built-in adapter
    * (and the liquidity adapter) implementing `accrueInterest` to `timestamp`, so contributing
    * nested markets and positions share the vault's `lastUpdate`; adapters without `accrueInterest`,
-   * zero-allocation Vault V1 adapters, and nested markets already ahead of `timestamp` keep their
-   * snapshots.
+   * zero-allocation or zero-share Vault V1 adapters, and nested markets already ahead of `timestamp`
+   * keep their snapshots.
    *
    * @param timestamp - Accrual timestamp in seconds.
    * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,

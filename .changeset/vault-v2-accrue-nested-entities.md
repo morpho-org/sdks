@@ -1,7 +1,7 @@
 ---
 "@morpho-org/blue-sdk": minor
 "@morpho-org/blue-sdk-viem": patch
-"@morpho-org/morpho-sdk": patch
+"@morpho-org/morpho-sdk": minor
 "@morpho-org/wdk-protocol-lending-morpho-evm": patch
 ---
 

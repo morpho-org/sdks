@@ -58,7 +58,7 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    * @returns A new adapter of the same concrete type, with every contributing
    * underlying market accrued to `timestamp`. Built-in implementations may
    * return the adapter unchanged when it contributes no assets, such as when
-   * its parent allocation is zero, leaving nested markets at their snapshots.
+   * its parent allocation or shares are zero, leaving nested markets at their snapshots.
    * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue
    * references a market without an allocation.
    * @throws {UnsupportedMarketIrmError} when forward projection of an underlying
