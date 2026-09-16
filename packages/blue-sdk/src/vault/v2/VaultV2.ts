@@ -311,10 +311,11 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * zero when its recipient cannot receive vault shares.
    * Timestamps at or before this vault's `lastUpdate` return an unchanged copy and zero fee
    * shares without accruing nested adapters. Forward accrual also accrues every built-in adapter
-   * (and the liquidity adapter) implementing `accrueInterest` to `timestamp`, so contributing
-   * nested markets and positions share the vault's `lastUpdate`; adapters without `accrueInterest`,
-   * zero-allocation or zero-share Vault V1 adapters, and nested markets already ahead of `timestamp`
-   * keep their snapshots.
+   * implementing `accrueInterest` to `timestamp`, so contributing nested markets and positions
+   * share the vault's `lastUpdate`; when registered among `accrualAdapters`, the liquidity adapter
+   * reuses that accrued instance, while an unregistered liquidity adapter remains unchanged.
+   * Adapters without `accrueInterest`, zero-allocation or zero-share Vault V1 adapters, and nested
+   * markets already ahead of `timestamp` keep their snapshots.
    *
    * @param timestamp - Accrual timestamp in seconds.
    * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,
@@ -363,8 +364,11 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       (adapter) => adapter.accrueInterest?.(timestamp) ?? adapter,
     );
     const accrualLiquidityAdapter =
-      this.accrualLiquidityAdapter?.accrueInterest?.(timestamp) ??
-      this.accrualLiquidityAdapter;
+      this.accrualLiquidityAdapter &&
+      (accrualAdapters.find(
+        (adapter) => adapter.address === this.accrualLiquidityAdapter!.address,
+      ) ??
+        this.accrualLiquidityAdapter);
 
     const vault = new AccrualVaultV2(
       this,

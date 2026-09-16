@@ -418,6 +418,11 @@ describe("AccrualVaultV2.accrueInterest", () => {
     const accruedLiquidity =
       accrued.accrualLiquidityAdapter as AccrualVaultV2MorphoMarketV1Adapter;
     expect(accruedAdapter).not.toBe(adapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(
+      accrued.accrualAdapters.find(
+        (candidate) => candidate.address === accruedAdapter.address,
+      ),
+    );
     expect(accruedAdapter.positions[0]?.market.lastUpdate).toBe(101n);
     expect(accruedLiquidity.positions[0]?.market.lastUpdate).toBe(101n);
     const baseline = accrualVaultV2(
@@ -493,6 +498,24 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(() => vault.accrueInterest(101n)).toThrow(
       UnknownMarketAllocationError,
     );
+  });
+
+  test("behavior: leaves an unregistered liquidity adapter unchanged", () => {
+    const registeredAdapter = accrualAdapter();
+    const staleLiquidityAdapter = accrualAdapter({
+      address: LIQUIDITY_ADAPTER,
+      accrueInterest: () => {
+        throw new UnknownMarketAllocationError(
+          new MarketParams(marketParams()).id,
+        );
+      },
+    });
+    const vault = accrualVaultV2(registeredAdapter);
+    vault.accrualLiquidityAdapter = staleLiquidityAdapter;
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBe(staleLiquidityAdapter);
   });
 });
 
