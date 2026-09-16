@@ -11,8 +11,8 @@
 
 ## Context
 
-Transaction creation is moving from `morpho-apps` to an independent write API. Both consumers need
-common effect/position checks; the frontend must confirm the API's output against user choices.
+Transaction creation is moving from `morpho-apps` to an independent write API. Both need shared
+effect/position checks; the frontend must match API output to user choices.
 
 Today, `evm-simulation` runs ordered transactions and reports calls, transfers and asset changes.
 Configured Tenderly runs first; `eth_simulateV1` handles service failures, not reverts. Tenderly
@@ -33,12 +33,11 @@ market safety. Preserve the API; add optional mode and limits.
 ## Proposed Solution
 
 Use `eth_simulateV1` only; remove Tenderly and fallback. Both consumers call the SDK directly;
-it owns decoding, reads and checks. The write API runs only `preview`. The frontend independently
-previews, checks signing requests, then runs `final` before submission.
+it owns decoding, reads and checks, reusing existing SDK math. The write API runs only `preview`.
+The frontend independently previews, checks signing requests, then runs `final` before submission.
 
-This removes dependence on Tenderly's effect summaries while retaining RPC trust. Independent frontend
-verification prevents a faulty transaction builder from also supplying the only trusted assessment.
-The rationales below describe intended protection, including exceptions that keep valid recovery actions usable.
+This removes Tenderly's effect-summary dependency, retaining RPC trust. Independent frontend verification
+prevents a faulty builder from supplying the only trusted assessment.
 
 ### Decode supported operations
 
@@ -66,31 +65,24 @@ Keep `simulate(config, params)`, `config.chains`, `simulateV1Url`, `logger`, `ti
 | `mode?` (new) | Default `final`; explicit `preview` enables signature overrides | Omitted options must not silently bypass signature verification |
 | `limits?` (new) | Thresholds/ranges below; omitted values use SDK defaults | Missing consumer settings must not remove baseline protections |
 
-`preview` uses an [`ecrecover` override](https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set)
-scoped to decoded digests/signers, with valid-format placeholders. Permit/authorization paths execute
-before signing. `final` starts from chain state with actual signatures and no signature/permission
-overrides. Both apply the same checks; unsupported overrides/signature schemes fail.
+`preview` scopes an [`ecrecover` override](https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set)
+to decoded digests/signers to preserve unrelated signature checks. Valid-format placeholders execute real
+permit/authorization logic, including nonce/deadline/allowance checks; no synthetic approvals.
+`final` uses fresh chain state and actual signatures without signature/permission overrides, exposing
+failures preview grants/nonces could mask. Both apply identical checks; unsupported mechanisms fail.
 
-Scoped recovery prevents bypassing unrelated signature checks. Valid-format placeholders reach permit logic
-without failing earlier format checks; executing that logic preserves its nonce, deadline and allowance
-rules, which synthetic approvals skip. Fresh final state prevents preview grants/nonces from masking real
-failures. Matching checks keep preview meaningful; unsupported mechanisms cannot count as verified coverage.
+Match signing requests to decoded operations. Legacy signature hints require preview plus a matching
+complete permit; token/spender/amount alone could conceal excessive authority.
 
-Check actual authorization requests against decoded operations before signing. Legacy signature hints
-are accepted only in preview when matching a complete permit; otherwise fail. No synthetic approvals.
-Token/spender/amount hints alone do not identify the signed authority; accepting them could conceal an
-excessive grant. A final failure cannot revoke a signature already obtained.
-
-Preserve `SimulationResult` fields/shapes (`simulationTxs`, `calls`, `transfers`, `assetChanges`),
-call/transfer indices and existing errors. Keep internal probes separate.
+Preserve `SimulationResult` fields/shapes (`simulationTxs`, `calls`, `transfers`, `assetChanges`), errors and
+call/transfer indices; separate probes to avoid misidentifying calls.
 `VerifiedSimulationResult extends SimulationResult` adds `verification`: operations, block/time, mode, limits, checks,
-balance/permission/position/market records, conversions and fees. Include **before/after, diff and
-actionDiff** (excluding accrual), including unchanged values; numeric deltas only. Failures throw typed errors.
+balance/permission/position/market records, conversions and fees.
 
-Stable indices prevent consumers inspecting the wrong call after probes are added. Endpoints expose
-remaining exposure; deltas expose unintended changes; explicit unchanged values prevent omissions being
-read as proof. Separate fees/conversions explain losses; numeric-only deltas avoid meaningless status
-arithmetic. Mode/block/limits identify the conditions checked; typed failures preserve reliable blocking.
+Report **before/after** and numeric **diff/actionDiff**; only `actionDiff` excludes modeled accrual.
+Endpoints reveal exposure; deltas reveal changes. Include unchanged values so omissions cannot imply proof;
+numeric-only deltas avoid status arithmetic.
+Separate fees/conversions explain losses; mode/block/limits identify verification conditions. Typed errors block failures.
 
 ### Consumer limits
 
@@ -100,25 +92,67 @@ arithmetic. Mode/block/limits identify the conditions checked; typed failures pr
 | `minLltvBufferBps` | Distance below liquidation threshold; default 50 bps | Avoid ending immediately at a liquidation/protection boundary; the policy buffer cannot guarantee future health |
 | `ranges` | Inclusive `{ subject?, metric, at?, min?, max? }`; `at` = `after` (default), `diff` or `actionDiff`. Subject = account + token/market/vault; omit when unambiguous | Enforce consumer-specific outcomes; binding subject/metric/time basis avoids checking the wrong position, amount or remaining exposure |
 
-Examples: final LTV ≤75%, debt increase 990–1,000 USDC, shares received ≥990, utilization ≤90%,
-per-asset fee cap. Use `bigint`: raw amounts/shares, WAD ratios, WAD/second rates, `1e36` Blue prices,
-integer bps. Require an endpoint; equal endpoints mean exact.
+Examples: LTV ≤75%, debt increase 990–1,000 USDC, shares received ≥990, utilization ≤90%, per-asset fee cap.
+Use `bigint`: raw amounts/shares, WAD ratios, WAD/second rates, `1e36` Blue prices, integer bps.
+Require an endpoint; equal endpoints mean exact. Fixed units/endpoints prevent scaling mistakes and empty checks.
 
-Intersect SDK defaults, calldata and caller bounds; callers only tighten checks. Reject malformed,
-unknown, ambiguous, inapplicable or contradictory bounds. Deterministic checks need no caller limits.
-Intersection prevents permissive calldata/settings weakening another bound. Fixed units and explicit
-endpoints avoid decimal-scale mistakes, empty checks and boundary ambiguity. Rejecting invalid constraints
-prevents consumers believing an ignored restriction was enforced. SDK-derived accounting needs no duplicated inputs.
+Intersect SDK, calldata and caller bounds so none weakens another; callers only tighten checks.
+Reject malformed, unknown, ambiguous, inapplicable or contradictory bounds to avoid silently ignored
+restrictions. SDK-derived accounting needs no caller limits.
+
+### Error taxonomy
+
+Preserve `SimulationPackageError`, names/codes, constructors, fields and `instanceof`. First five classes
+already exist; additions extend the base directly. Use rule/subject details, not per-flow subclasses.
+
+| Class / code | Failure |
+| --- | --- |
+| `SimulationValidationError` / `VALIDATION_ERROR` | Invalid config/input/calldata, mixed senders, incomplete signature hints or invalid ranges |
+| `UnsupportedChainError` / `UNSUPPORTED_CHAIN` | Missing chain configuration or `simulateV1Url` |
+| `ExternalServiceError` / `EXTERNAL_SERVICE_ERROR` | RPC transport, timeout, authentication, rate-limit, availability or unclassified rejection |
+| `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user execution, including panic, gas, signature, nonce or deadline rejection |
+| `BlacklistViolationError` / `BLACKLIST_ERROR` | Bundle/adapter retention exceeds dust |
+| `UnsupportedOperationError` / `UNSUPPORTED_OPERATION` | Unrecognized target/selector or unsupported call recipe/top-level callback |
+| `ProtocolBindingMismatchError` / `PROTOCOL_BINDING_MISMATCH` | Known route has wrong owner/recipient, underlying, market, adapter or deployment binding |
+| `UnsupportedVerificationFeatureError` / `UNSUPPORTED_VERIFICATION_FEATURE` | Recognized route lacks registry/model coverage (token/vault/oracle/IRM/signature) or required RPC capability |
+| `InvalidSimulationResponseError` / `INVALID_SIMULATION_RESPONSE` | Malformed response, call status/count/index or required logs |
+| `MissingVerificationEvidenceError` / `MISSING_VERIFICATION_EVIDENCE` | Missing state/events/prices/rates, failed probe execution or inconsistent snapshot reference |
+| `AuthorizationRequestMismatchError` / `AUTHORIZATION_REQUEST_MISMATCH` | Signing request disagrees with decoded owner/domain/token/spender/amount/nonce/deadline |
+| `AssetChangeMismatchError` / `ASSET_CHANGE_MISMATCH` | Wrong debit/receipt/refund, double funding, consumed gas reserve or unexplained balance change |
+| `PermissionChangeMismatchError` / `PERMISSION_CHANGE_MISMATCH` | Any ERC-20, Permit2, IKR, lasting/temporary approval or Morpho operator invariant fails |
+| `StateChangeMismatchError` / `STATE_CHANGE_MISMATCH` | Position/market/vault/Aave accounting, accrual, full-close or configuration mismatch |
+| `MarketConstraintViolationError` / `MARKET_CONSTRAINT_VIOLATION` | Verified state violates health/buffer, rescue, AutoDeleverage, no-Aave-debt or liquidity/capacity policy |
+| `SlippageLimitExceededError` / `SLIPPAGE_LIMIT_EXCEEDED` | Conversion violates quote/calldata/SDK slippage bound |
+| `FeeMismatchError` / `FEE_MISMATCH` | Wrong fee/penalty amount, recipient or schedule; forbidden discretionary fee |
+| `ConsumerRangeViolationError` / `CONSUMER_RANGE_VIOLATION` | Verified value outside a valid caller range |
+| `UnexpectedSimulationError` / `UNEXPECTED_SIMULATION_ERROR` | Unclassified local SDK/dependency failure |
+
+**Classification:** Validate → bind → execute → establish evidence → check effects/limits. Throw once in
+stable transaction/rule order; preserve known errors and classify structured data, never message text.
+Missing/malformed evidence is never zero or an effect mismatch. Probe execution failure means missing evidence; probe transport/response
+failures retain those classes. Unsupported RPC capability requires proof. Invalid RPC parameters mean
+validation for bad caller input, unexpected failure for SDK-built requests. Wrong fee → fee error;
+valid fee above caller cap → range error; retention → existing blacklist error.
+
+**Diagnostics:** Add optional trailing context/cause options: stage/mode, chain/block/time, transaction/call
+path or probe ID, rule/subject, expected/observed values/units and RPC code. Keep `txIdx` indexing
+`simulationTxs`, `fieldErrors`, `reason`, `details` and retention's `{ address, token, netRetained }` shape
+(string amounts); omit unavailable context. Context is readonly; messages give remedies. Consumers branch
+on class/code. Adapters own HTTP mapping; serialize safe fields and decimal bigints, not signatures,
+credentials or raw causes.
+
+**Enforcement:** All errors block API output/submission; never bypass/fallback. Retry transient RPC failures;
+inspect persistent RPC errors, correct input/configuration/route faults and report/fix SDK defects.
+Rerun verification without silently widening limits.
+Replace today's broad service-error wrapping, skipped required logs/registries and frontend bypass of
+every code except `BLACKLIST_ERROR`. Only irrelevant logs/optional metadata may warn; unknown errors block.
 
 ### Position and market checks
 
-Cover affected positions, backing allocations, fee recipients and markets. Compare against a no-action
-baseline accrued to simulation time. Reconcile calls in order with protocol rounding/clamps and
-entrypoint-specific accrual/fee mints. Raw shares are exact; claim diffs need not equal cash flows.
-
-The baseline prevents interest counting as proceeds or hiding a wrong debit. Ordered, entrypoint-specific
-math avoids false failures from legitimate fee mints/clamps; exact shares stop rounding tolerance hiding
-accounting errors. Repricing claims avoids demanding unchanged value from unchanged shares.
+Cover affected positions, backing allocations, fee recipients and markets. Accrue a no-action baseline
+to simulation time so interest cannot masquerade as proceeds or hide debits. Reconcile ordered calls with
+protocol rounding/clamps and entrypoint-specific accrual/fee mints to avoid false failures.
+Require exact raw shares to expose accounting errors; reprice claims, whose diffs need not equal cash flows.
 
 | State / metric | Required checks | Threat / why it matters |
 | --- | --- | --- |
@@ -127,51 +161,43 @@ accounting errors. Repricing claims avoids demanding unchanged value from unchan
 | Aave migration source | Reconcile nominal/scaled aToken balances, income index, withdrawal and destination credit; require no existing Aave debt | Index accrual can disguise overspending or overstate migrated value. The no-debt policy avoids removing collateral supporting an existing loan |
 | Market accounting | Reconcile supply/borrow asset/share totals, fee shares and accrual time. Check liquidity, utilization, rates/APYs and borrow/withdraw/flash-loan/reallocation capacity | Inconsistent totals distort claims/debt; insufficient capacity makes the route impossible. Utilization/rates expose liquidity pressure and borrowing/yield costs for confirmation or ranges |
 | LTV and health | Compute collateral value, debt, LTV, health/liquidatability, health factor, liquidation price and borrow/withdraw headroom. Separate protocol LLTV and active `preLLTV` metrics; supply rounds down, debt up | Valuation/rounding errors can understate liquidation exposure. Health/LTV describe current risk; price/headroom show distance to thresholds. Separate protection metrics avoid confusing early deleveraging with protocol liquidation |
-| Risk limits | Borrow/collateral removal ends ≤applicable LLTV/active `preLLTV` minus buffer (floor zero). Improving repayments/top-ups may remain unhealthy. Check markets/refinance legs separately; AutoDeleverage enable requires LTV <canonical `preLLTV` | Limit new risk near thresholds; improvement elsewhere cannot excuse an unsafe market. Allow rescue actions that cannot fully restore health; avoid enabling protection already eligible to trigger |
+| Risk limits | Borrow/collateral removal ends ≤applicable LLTV/active `preLLTV` minus buffer (floor zero). Pure repayments/top-ups may remain unhealthy if risk does not worsen. Check markets/refinance legs separately; AutoDeleverage enable requires LTV <canonical `preLLTV` | Limit new risk near thresholds; improvement elsewhere cannot excuse an unsafe market. Allow rescue actions that cannot fully restore health; avoid enabling protection already eligible to trigger |
 | Slippage/share price | Check assets/shares/debt conversions against independent quotes, calldata limits and SDK tolerance; retain two-hour accrual allowance and onchain inflation guards | Permissive calldata can overcharge or under-credit; inflation/share-price manipulation can destroy deposit value. Interest headroom avoids false slippage failures or underfunded share repayments, without allowing unlimited spend |
 | Fees/reallocations | Match charges/recipients to route/pinned schedule. Separate V1 native fees, V2 loan-token penalties and refunds; reject discretionary/referral fees unless SDK policy permits | Hidden/double charges or redirected fees take value despite correct main legs. Separating assets/refunds prevents netting away costs; calldata alone does not establish fee consent |
 | Configuration/completeness | Verify protocol identities, oracle/IRM availability and operation-specific vault/adapter caps; reject missing reads, unsupported accounting or unexplained configuration changes | Wrong identities/models or missing prices/rates can fabricate healthy positions and claims. Unexpected configuration can change later rights/risk despite correct balances |
 
-Apply ranges to selected end/delta metrics. Debt-free means no liquidation risk; debt with zero
-collateral value means infinite LTV/zero health. Missing evidence is never zero. V2 assets may be
-rate-capped; lowered caps may sit below existing allocations. Enforce operation-specific capacity.
-These distinctions prevent marking unknown/unhealthy debt safe, overstating V2 claims, or blocking valid
-exits after a cap reduction. Metrics are reported calculations; only SDK rules/caller ranges impose limits.
-APY, utilization or liquidation-price reporting alone is not a safety guarantee.
+Debt-free means no liquidation risk; debt with zero collateral value means infinite LTV/zero health.
+Respect V2 rate-capped assets to avoid overstating claims. Existing allocations may exceed lowered caps;
+enforce operation-specific capacity so valid exits remain possible. Reported metrics alone provide no
+guarantee; only SDK rules/caller ranges impose limits.
 
 ### Shared invariants
 
-Spend only decoded inputs; receive required outputs. Unrelated raw balances/shares/permissions stay
-unchanged except modeled accrual/fees; recompute derived claims/metrics. Funding always allows ERC-20
-first, then native, preserving gas reserves; lasting approvals remain allowed within these caps.
-
-Input/output matching catches excess debits, lost receipts and redirects. Unrelated-state checks catch
-hidden side effects; accrual/fee exceptions avoid false failures. Funding rules prevent double spending
-across native/wrapped forms; gas reserves avoid consuming native balance set aside for transaction fees.
+Match decoded inputs/outputs to catch excess debits, lost receipts and redirects. Keep unrelated raw
+balances/shares/permissions unchanged to catch hidden effects, except modeled accrual/fees; recompute
+derived claims/metrics to avoid false failures. Fund ERC-20 first, then native, preventing double funding
+while reserving native balance for gas.
 
 | Invariant | SDK rule | Threat / why it matters |
 | --- | --- | --- |
 | Bundle retention dust limit | Per bundle/adapter and asset, net retention ≤SDK dust threshold | Successful execution can strand funds in temporary contracts. Per-asset bounds prevent offsetting losses; dust permits harmless rounding residues |
 | IKR headroom below residual cap | Derive grant/residual caps from rounded burn/deadline; final VaultExitBundlesV1 allowance ≤cap. Reset existing excess | Rounded burns need headroom; excess surviving share allowance enables later withdrawals. Resetting existing excess makes the final cap effective |
-| Lasting approval below accepted cap | Fresh funding ends zero; reused allowance ≤start. Persistent token→Permit2 ≤`MAX_UINT160`; balance-MAX Aave aToken→GA1 ≤`MAX_UINT256` | Avoid adding unintended authority while retaining supported persistent routes. These large accepted caps still permit future spending and do not protect against spender compromise |
+| Lasting approval below accepted cap | Fresh exact funding ends zero; reused allowance ≤start. Persistent token→Permit2 ≤`MAX_UINT160`; balance-MAX Aave aToken→GA1 ≤`MAX_UINT256` | Avoid adding unintended authority while retaining supported persistent routes. These large accepted caps still permit future spending and do not protect against spender compromise |
 | Unchanged unrelated permission | Reject unexpected grants, including temporary ones; unrelated permissions unchanged | A balance-neutral transaction can grant a future drain, exercise temporary authority, or revoke permissions needed by another workflow |
 | Expected Morpho operator authorization or unchanged | Required route operator authorized; canonical AutoDeleverage operator gets decoded boolean; otherwise unchanged | A wrong operator gains position control; missing/revoked intended authority breaks the route or disables selected protection. Lasting operator trust remains |
 | Permit2 invariants | Correct owner/token/spender; exact gross grant; managed amount ends zero; nonce advances once; expiry `MAX_UINT48`; bounded signing deadline | Identity/gross amount prevent redirected or oversized grants; zero remainder prevents continued managed spending; nonce consumption prevents grant replay; signing deadline bounds submission time. Long expiry is accepted policy, not short-lived protection |
 
 Examples: fresh 100-USDC funding leaves zero allowance; a 101-share IKR grant permits a 100-share burn
 with one-share residual. Check events **and** endpoints: approve 100/spend 40 can leave 60 without
-another event; approve/revoke hides a temporary grant in equal endpoints. Approval events may represent spending.
-Events expose intermediate authority; endpoint reads prove what remains. Neither covers both threats;
-classifying every Approval event as a new grant would reject valid allowance consumption.
+another event; approve/revoke hides temporary authority in equal endpoints. Approval events may also
+represent spending; treating every event as a grant rejects valid consumption.
 
 ### Action coverage
 
-**All rows require asset, permission, position and market checks above.** Move today's post-confirmation
-IKR checks into simulation. `A` = assets, `S` = shares, `D/N` = ERC-20/native funding; exclude gas.
-Apply rounding/fee adjustments throughout. **Funding** uses shared invariants; **operator** means the
-registered operator (legacy GA1). Unmentioned fields follow shared invariants.
-Each row inherits the shared rationales; the final column explains its specific failure mode.
-Moving IKR checks before submission catches lost replacement claims while the transaction can still be stopped.
+**All rows require the asset, permission, position and market checks above.** Move post-confirmation IKR
+checks before submission to catch missing replacement claims. `A` = assets, `S` = shares, `D/N` = ERC-20/native
+funding; exclude gas, apply rounding/fees. **Funding** and unmentioned fields follow shared invariants;
+**operator** = registered operator (legacy GA1).
 
 | Decoded flow / amount mode | Wallet and position checks | Permission rule | Threat / why it matters |
 | --- | --- | --- | --- |
@@ -200,12 +226,10 @@ Moving IKR checks before submission catches lost replacement claims while the tr
 | AutoDeleverage: enable / disable | Wallet/raw positions unchanged; verify resulting risk/protection | Canonical authorization true / false | Ensure the selected protection changes, without asset movement or authority to another operator |
 | V1 in-kind redemption: SDK-supported, app unwired | Source vault burn → actual supply credits in each market | IKR cap; frontend missing | Checking only one destination can hide missing or redirected credits in other markets |
 
-Validate exit method/deallocation order. Retain two-hour repayment funding. Apply route fees/penalties
-to all affected entries; V2 penalties can require funding for loan withdrawals, borrowing, refinancing
-and combinations. Require zero residual positions only for decoded full closes.
-Wrong exit ordering can cause avoidable penalties or reverts. Repayment headroom covers supported accrual;
-gross-pull/refund checks stop that buffer becoming excess spend. Fee overlays expose costs in otherwise
-wallet-neutral flows; distinguishing full/partial closes catches leftover debt without rejecting partial actions.
+Validate exit method/deallocation order to avoid penalties/reverts. Two-hour repayment funding covers
+accrual; reconcile gross pulls/refunds to prevent excess spend. Apply route fees/penalties throughout,
+including wallet-neutral flows: V2 penalties may require funding for loan withdrawals, borrowing,
+refinancing and combinations. Require zero residual positions only for decoded full closes.
 
 No standalone mint/revoke/native unwrap/swap/multiply/repay-with-collateral journey found; reward
 claims use external apps. Approval prerequisites are covered above.
@@ -218,14 +242,15 @@ claims use external apps. Approval prerequisites are covered above.
 | Decoder/backend | Register supported calls; implement signature override; remove Tenderly execution |
 | State/permissions | Move reads/calculations into SDK; add probes, comparisons, accrual baseline and all rules above; normalize IKR allowances |
 | Compatibility | Preserve existing config/params/result/errors; add mode, limits and verification subtype |
+| Errors | Implement the taxonomy, preserve legacy fields/codes, classify boundary failures and update bypass-related docs/consumer handling |
 | Retention | Release/consume main's `bundles` guard; published 4.1.3/4.1.5 only scan `bundler3`. Retain legacy guards; internal native transfers already work |
-| Tests | Cover every flow/invariant, both modes, input/index compatibility, bounds, missing/extra evidence, rounding/accrual, full/partial closes, improving unhealthy actions and deterministic replay. Pin state-dependent tests |
+| Tests | Cover every flow/invariant, both modes, input/index compatibility, bounds, missing/extra evidence, rounding/accrual, full/partial closes, non-worsening unhealthy repayments/top-ups and deterministic replay. Pin state-dependent tests |
 
-Keep deprecated Tenderly fields/types inert; require `simulateV1Url`. Backend removal, incomplete
-signature-hint rejection and stricter checks require a major/migration guide; avoid unrelated API changes.
-Compatibility avoids unrelated integration failures; inert fields must not restore provider fallback.
-Keep legacy guards until route migration so older transactions never lose retention coverage. Tests should
-reproduce each listed threat and valid exception; pinned state separates regressions from chain changes.
+Keep deprecated Tenderly fields/types inert, require `simulateV1Url` and retain legacy guards until route
+migration to preserve retention coverage. Backend removal, incomplete signature-hint rejection and stricter checks
+require a major/migration guide; preserve other APIs to avoid unrelated integration failures.
+Test every threat/valid exception; pin state-dependent tests to isolate regressions. Include error class/code/data
+compatibility, precedence, causes, malformed/missing evidence and blocking of every code, including unknown ones.
 
 ## Considered Alternatives
 
@@ -249,10 +274,9 @@ now need the same checks.
 
 ## Acceptance Criteria
 
-Every supported affected position has verified end state/diff and market metrics. Mismatches/missing
-evidence block API output or frontend submission. No bypass. V1 IKR remains app-unwired.
-Missing evidence proves nothing; allowing submission after verification fails defeats every guard above.
-When changing a check, preserve its stated protection or explicitly record the changed assumption/rationale.
+Verify every supported affected position's end state/diff and market metrics. Errors/missing evidence
+block API output/submission; bypass defeats these protections. V1 IKR remains app-unwired.
+Changes to checks must preserve their protection or document the changed assumption/rationale.
 
 ## Assumptions & Constraints
 
@@ -262,18 +286,17 @@ within supported routes, not hidden allowances, global solvency, future executio
 
 ## Security
 
-Bind `from` to the connected user/request account. Ranges prove only supplied expectations; still
-compare/display decoded operations against the form. Preview permissions/nonces remain provisional
-until final verification. Check requests before signing; final simulation cannot undo granted authority.
-An internally consistent transaction can still select the wrong amount, market or beneficiary. Preview
-success assumes signatures; presenting it as final verification would hide invalid or unavailable authority.
+Bind `from` to the connected user/request account; compare/display decoded operations against the form.
+Internal consistency and supplied ranges can miss a wrong amount, market or beneficiary. Check requests
+before signing: final simulation cannot undo granted authority. Present preview permissions/nonces as
+provisional; assumed signatures cannot prove valid authority until final verification.
 
 ## References
 
 - [EVM simulation safety priorities](https://app.notion.com/p/morpho-labs/EVM-simulation-safety-priorities-3d6d69939e6d8145bc9deb1b0be31ae8)
 - [Audited Vaults app](https://github.com/morpho-org/morpho-apps/tree/8a0afba42cb24a2eb472e9368809ac880db90a91/apps/vvrm-app): `src/services/simulate`, `src/hooks/operation/market/v2`, vault review dialogs and withdrawal hooks
 - [Pinned funding rules](https://unpkg.com/@morpho-org/morpho-sdk@5.5.0/lib/esm/actions/requirements/generalAdapter/getGeneralAdapterRequirements.js)
-- [Existing public simulation types](https://unpkg.com/@morpho-org/evm-simulation@4.1.3/lib/esm/types.d.ts)
+- [Existing public simulation types](https://unpkg.com/@morpho-org/evm-simulation@4.1.3/lib/esm/types.d.ts) · [existing error API](https://unpkg.com/@morpho-org/evm-simulation@4.1.3/lib/esm/errors.d.ts)
 - [Published retention guard](https://unpkg.com/@morpho-org/evm-simulation@4.1.5/lib/esm/simulate/pipeline/bundler-retention.js) · [expanded guard on main](https://github.com/morpho-org/sdks/blob/6ad775fc794b1b164fef5defaf10f2d32a889fd1/packages/evm-simulation/src/simulate/pipeline/bundler-retention.ts#L107)
 - [`eth_simulateV1`](https://ethereum.github.io/execution-apis/api/methods/eth_simulateV1/) · [ERC-20 allowance/event behavior](https://docs.openzeppelin.com/contracts/5.x/api/token/erc20#ERC20-transferFrom-address-address-uint256-)
 - [Permit2 allowance, nonce and deadline enforcement](https://github.com/Uniswap/permit2/blob/main/src/AllowanceTransfer.sol)
