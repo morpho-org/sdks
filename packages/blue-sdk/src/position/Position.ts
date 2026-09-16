@@ -204,7 +204,24 @@ export class AccrualPosition extends Position implements IAccrualPosition {
 
   /**
    * Returns a new position derived from this position, whose interest has been accrued up to the given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the market's `lastUpdate`.
+   * @param timestamp Optional accrual timestamp. Defaults to the market's `lastUpdate`; past or equal timestamps return an unchanged copy without projecting interest or rewinding the market.
+   * @returns A new position with its accrued market, unchanged for past or equal timestamps.
+   * @throws {UnsupportedMarketIrmError} when projection requires a nonzero unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const position = await fetchAccrualPosition(
+   *   zeroAddress, markets[mainnet.id].eth_wstEth.id, client,
+   * );
+   * const accrued = position.accrueInterest(position.market.lastUpdate - 1n);
+   * // accrued satisfies AccrualPosition; its values equal the original snapshot.
+   * // accrued !== position; accrued.market.lastUpdate === position.market.lastUpdate
+   * ```
    */
   public accrueInterest(timestamp?: BigIntish) {
     return new AccrualPosition(this, this._market.accrueInterest(timestamp));
@@ -215,10 +232,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    *
    * @param assets - Supplied loan assets, or `0n` when `shares` specifies the amount.
    * @param shares - Minted supply shares, or `0n` when `assets` specifies the amount.
-   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, supplied assets, and minted supply shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
    * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
@@ -260,12 +277,12 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    *
    * @param assets - Withdrawn loan assets, or `0n` when `shares` specifies the amount.
    * @param shares - Burned supply shares, or `0n` when `assets` specifies the amount.
-   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, withdrawn assets, and burned supply shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
    * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
    * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's supply shares.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
    * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
@@ -339,12 +356,12 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * Projects a collateral withdrawal into a new accrued position without changing this position.
    *
    * @param assets - Collateral assets to withdraw.
-   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns A new accrued position with the reduced collateral balance.
    * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
    * @throws {BlueErrors.InsufficientPosition} when the withdrawal exceeds the position's collateral.
    * @throws {BlueErrors.InsufficientCollateral} when the projected position would be unhealthy.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
    * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
@@ -396,13 +413,13 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    *
    * @param assets - Borrowed loan assets, or `0n` when `shares` specifies the amount.
    * @param shares - Minted borrow shares, or `0n` when `assets` specifies the amount.
-   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, borrowed assets, and minted borrow shares after rounding.
    * @throws {BlueErrors.UnknownOraclePrice} when the market's oracle price is unavailable.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
    * @throws {BlueErrors.InsufficientLiquidity} when the market lacks enough loan assets.
    * @throws {BlueErrors.InsufficientCollateral} when the projected position would be unhealthy.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
    * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";
@@ -450,11 +467,11 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    *
    * @param assets - Repaid loan assets, or `0n` when `shares` specifies the amount.
    * @param shares - Burned borrow shares, or `0n` when `assets` specifies the amount.
-   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`.
+   * @param timestamp - Optional accrual timestamp. Defaults to the market's `lastUpdate`; earlier timestamps skip interest accrual while still applying the operation.
    * @returns The new accrued position, repaid assets, and burned borrow shares after rounding.
    * @throws {BlueErrors.InconsistentInput} when both `assets` and `shares` are zero or both are nonzero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes the market's `lastUpdate`.
    * @throws {BlueErrors.InsufficientPosition} when the repayment exceeds the position's borrow shares.
+   * @throws {UnsupportedMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @example
    * ```ts
    * import { AccrualPosition, ChainId, ORACLE_PRICE_SCALE } from "@morpho-org/blue-sdk";

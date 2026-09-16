@@ -1,5 +1,60 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 1.3.2
+
+### Patch Changes
+
+- [#995](https://github.com/morpho-org/sdks/pull/995) [`4eb0da6`](https://github.com/morpho-org/sdks/commit/4eb0da65dbf8684ebefbb8ebeed506086a792b73) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Bump the pinned Tether WDK ERC-4337 stack to the release that validates the token-paymaster
+  address (`@tetherto/wdk-wallet-evm-erc-4337` `1.0.0-beta.14` → `1.0.0-beta.17`, and its siblings
+  `@tetherto/wdk-wallet` `1.0.0-beta.15` → `1.0.0-beta.17` and `@tetherto/wdk-wallet-evm`
+  `1.0.0-beta.16` → `1.0.0-beta.18` to keep the tree on a single WDK version). beta.17 rejects any
+  token-mode paymaster whose on-chain address returned by the paymaster RPC does not match the
+  configured `paymasterAddress`, so the auto-generated ERC-20 approval can no longer target an
+  unexpected spender when the paymaster endpoint is misrouted or compromised. This package is a
+  pass-through and carries none of that logic itself; the fix lives entirely in the pinned
+  dependency.
+- Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
+  - @morpho-org/blue-sdk@6.10.0
+  - @morpho-org/morpho-sdk@5.12.0
+
+## 1.3.1
+
+### Patch Changes
+
+- [#1080](https://github.com/morpho-org/sdks/pull/1080) [`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate all Vault V1 PublicAllocator surfaces, including raw ABIs, address and deployment registry fields, configuration models, fetchers, augmentation methods, and the liquidity loader. The existing V1 planning and transaction-composition deprecations continue to apply. Use Vault V2 BluePublicAllocator configurations and fetchers, `MorphoBlue.getVaultV2BlueReallocationData`, and `MorphoBlue.getVaultV2BlueReallocations` for new integrations.
+
+  Deprecate the legacy `morphoToken` address and the MORPHO legacy wrapping entries in `ethereumGeneralAdapter1Abi`. Use the current MORPHO token directly.
+
+  All deprecated exports, signatures, addresses, and transaction behavior remain available for compatibility until the next major release. General Vault V1 operations, Vault V2 allocator APIs, and other token wrapping flows remain supported.
+
+  Patch maintained runtime dependents so their next releases resolve the updated packages. Existing internal peer ranges accept these backward-compatible minor releases and require no changes.
+
+- [#1025](https://github.com/morpho-org/sdks/pull/1025) [`297e948`](https://github.com/morpho-org/sdks/commit/297e94823b86359d4bbeda2d70dd79abac0c1a8a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+- Updated dependencies [[`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab), [`a7ac734`](https://github.com/morpho-org/sdks/commit/a7ac734e11bc1a20ef78cac1cfceb61422eaaea0), [`297e948`](https://github.com/morpho-org/sdks/commit/297e94823b86359d4bbeda2d70dd79abac0c1a8a), [`a43aa31`](https://github.com/morpho-org/sdks/commit/a43aa318e08897dfdad7eb79c21f185c429195ba)]:
+  - @morpho-org/blue-sdk@6.9.0
+  - @morpho-org/blue-sdk-viem@5.7.0
+  - @morpho-org/morpho-sdk@5.11.0
+
+## 1.3.0
+
+### Minor Changes
+
+- [#1024](https://github.com/morpho-org/sdks/pull/1024) [`8f5000f`](https://github.com/morpho-org/sdks/commit/8f5000f829d86de5b59a42917d0e17321741abe8) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Validate reads, requirements, quotes, and sends against the provider chain at operation boundaries, bind ERC-4337 signing to that validated context, and preserve configured provider failover. Export `ChainIdMismatchError` and `MissingWalletProviderError` for callers handling validation failures.
+
+### Patch Changes
+
+- Updated dependencies [[`f4a0ee8`](https://github.com/morpho-org/sdks/commit/f4a0ee8a0b7be960574246b35c8fb7ec2d2858b3), [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`2c973f5`](https://github.com/morpho-org/sdks/commit/2c973f522e394722d056e808524dabe731ea0c6d), [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6), [`b293635`](https://github.com/morpho-org/sdks/commit/b293635fca0ff8fcc9c3817db4e231b2e07a3142), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1), [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01)]:
+  - @morpho-org/morpho-sdk@5.10.0
+  - @morpho-org/blue-sdk-viem@5.6.0
+  - @morpho-org/blue-sdk@6.8.0
+
 ## 1.2.0
 
 ### Minor Changes

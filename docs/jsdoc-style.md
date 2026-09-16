@@ -194,9 +194,9 @@ What's wrong:
  * `onBehalf`. Uses `minSharePrice` to protect against share price manipulation between
  * transaction construction and execution.
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets via the PublicAllocator before borrowing. Reallocation fees
- * accumulate in `tx.value`.
+ * When `reallocations` are provided, allocator actions are prepended to the bundle. Use Vault V2
+ * BluePublicAllocator reallocations for new integrations; their penalties are paid in loan tokens.
+ * Deprecated Vault V1 PublicAllocator reallocations remain supported and add native fees to `tx.value`.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).

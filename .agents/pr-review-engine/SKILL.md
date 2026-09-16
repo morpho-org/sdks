@@ -1,12 +1,12 @@
 ---
 name: pr-review-engine
 internal: true
-description: Shared multi-lens review dispatcher. Invoked indirectly by the /pr-review-* commands and /pr-fix, never directly. Walks agents/, decides which apply via flags, fans out one sub-agent per match, aggregates findings. Supersedes the previous lib/pr-review-base.md dispatcher.
+description: Shared multi-lens review dispatcher. Invoked indirectly by the /review-pr-* commands and /fix-pr, never directly. Walks agents/, decides which apply via flags, fans out one sub-agent per match, aggregates findings. Supersedes the previous lib/pr-review-base.md dispatcher.
 ---
 
 # pr-review-engine — shared multi-lens review dispatcher
 
-This file is the shared review engine for the `/pr-review-ci`, `/pr-review-gh`, `/pr-review-local`, and `/pr-fix` slash commands. It supersedes the previous shared dispatcher at `.agents/lib/pr-review-base.md`.
+This file is the shared review engine for the `/review-pr-ci`, `/review-pr-gh`, `/review-pr-local`, and `/fix-pr` slash commands. It supersedes the previous shared dispatcher at `.agents/lib/pr-review-base.md`.
 
 **Do NOT invoke this file directly.** It is consumed by other commands — it is not symlinked into `.claude/commands/` and assumes the caller has resolved branches and head SHA in its own Steps 1–2. Callers hand control to this file's Steps 3–6.
 
@@ -20,7 +20,7 @@ How a caller knows the engine is working (rough targets, not hard thresholds):
 
 - **Triggering precision** — CI/release-only diffs fire `ci-release-security`; protocol-surface diffs collect ABI/address context for `morpho-protocol` and `web3-security`; agentic-system diffs fire `skill-authoring`.
 - **False-positive ceiling** — ≤ 10% of agent findings dropped by the scope filter on a healthy diff. If consistently higher, the diff path normalization or `<CHANGED_LINES>` build is wrong.
-- **0 failed agents on a clean diff** — `<FAILED_AGENTS>` is empty when every agent's JSON parses and matches the WHAT/FIX schema. If non-zero, check schema injection in Step 5.
+- **0 failed agents on a clean diff** — `<FAILED_AGENTS>` is empty when every agent was dispatched and its JSON parses and matches the WHAT/FIX schema. If non-zero, check schema injection in Step 5.
 - **Bounded cost** — a typical review fans out 8 baseline + 0–2 conditional agents.
 
 ## Inputs (from caller's Steps 1–2)
@@ -33,7 +33,7 @@ How a caller knows the engine is working (rough targets, not hard thresholds):
 | `<HEAD_SHA>` | `gh pr view` → `headRefOid` (PR modes) OR `git rev-parse HEAD` (Local-only) |
 | `<DIFF_SOURCE>` | `pr` (use `origin/<BASE_BRANCH>...<HEAD_REF>`) OR `local` (use `origin/<BASE_BRANCH>...HEAD` and overlay uncommitted) |
 | `<HEAD_REF>` | Caller-supplied for `<DIFF_SOURCE>=pr` (`origin/<HEAD_BRANCH>`, or `origin/pr/<PR_NUMBER>` when fetched via `refs/pull/<PR_NUMBER>/head` — required for fork PRs); `HEAD` for `<DIFF_SOURCE>=local` |
-| `<EXCLUDE_AGENTS>` | Optional list of agent names to skip in Step 5 (e.g. `["documentation"]` from `/pr-review-local --fast`). Defaults to empty. |
+| `<EXCLUDE_AGENTS>` | Optional list of agent names to skip in Step 5 (e.g. `["documentation"]` from `/review-pr-local --fast`). Defaults to empty. |
 | `<INTENT_CONTEXT>` | Optional caller-supplied intent/history block — changed-commit messages, and (when the caller talks to GitHub) the PR title+body. Injected into the Step 5 envelope between items 6 and 7. Empty by default; callers that can't reach the data omit it. |
 
 ## Step 3: Get the diff locally
@@ -141,7 +141,7 @@ Compute flags from the changed-files list and content. These flags are passed to
 
 **Doc files are prose, not surfaces:** content-based detector legs (import / string / pattern matches) never count matches found inside `*.md` / `*.mdx` / `*.txt` files — a documented example command must not launch an agent whose own scope rules will predictably return `[]`. Path-based legs (file-path patterns) are unaffected.
 
-- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. **Fires `ci-release-security`.**
+- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `scripts/ci/**`, `scripts/release/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. **Fires `ci-release-security`.**
 - `<HAS_PLUGIN_SKILLS>` — true if any changed file is part of the repo's agentic-system / skill-authoring surface: matches `.agents/**/*.md`, `.agents/pr-review-engine/scripts/**`, `.claude/**`, any `**/SKILL.md`, or a `.claude-plugin/*.json` manifest. Path-based (these are prose/JSON), so it fires even on a docs-only change to the agentic system — exactly when authoring conformance matters. **Fires `skill-authoring`.**
 - `<HAS_PROTOCOL_SURFACE>` — true if any changed file or changed hunk touches protocol-facing SDK code or terms listed in the protocol source-of-truth section above. This flag does not gate `morpho-protocol` (baseline); it tells all agents whether protocol context should have been collected.
 
@@ -175,10 +175,10 @@ Agent specs live in `.agents/pr-review-engine/agents/*.md`. Each file has frontm
 2. For each agent, decide whether to launch:
    - `kind: baseline` → always launch.
    - `kind: conditional` → parse the `trigger:` value, look up the named flag from Step 4, evaluate it. Compound triggers like `HAS_A OR HAS_B` are evaluated as written (split on whitespace, look up each flag, apply `OR` / `AND`).
-3. **Apply the caller's exclusion list.** If the caller provided `<EXCLUDE_AGENTS>`, drop those from the launch set (e.g. `/pr-review-local --fast` excludes `documentation`).
+3. **Apply the caller's exclusion list.** If the caller provided `<EXCLUDE_AGENTS>`, drop those from the launch set (e.g. `/review-pr-local --fast` excludes `documentation`).
 3b. **Doc-only fast path.** If every changed file is `*.md` / `*.mdx` / `*.txt`, drop `silent-failure-hunter`, `test-coverage`, and `web3-security` from the launch set — they have no surface on a docs-only diff and only add cost and noise. `documentation`, `code-quality`, `morpho-protocol`, `module-api-architecture`, and `style-conventions` still launch (prose accuracy, protocol-doc claims, secrets-in-docs, pointer integrity, changeset relevance). Conditionals need no special handling — Step 4's content-based detectors already ignore matches inside doc files, so on a doc-only diff only path-based triggers (`HAS_CI_RELEASE`, `HAS_PLUGIN_SKILLS`) can fire. Print one line: `Doc-only diff: skipping silent-failure-hunter, test-coverage, web3-security.`
-4. Launch ALL selected agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
-5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of agents actually launched (baseline + fired conditionals − excluded).
+4. Launch ALL selected agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`): emit every Agent call in a single message. **Foreground only — set `run_in_background: false` explicitly on every Agent call** (the harness backgrounds subagents by default, so leaving it unset is not enough outside CI). The dispatcher must block on the agents' results before moving to Step 6; in headless runs (CI) the process exits as soon as the main turn ends, so a turn that ends with agents still running orphans them and the review is silently never posted. If an Agent call is rejected, review inline with the same rubric rather than stopping, and still count that agent in `<FAILED_AGENTS>` (name + reason `dispatch rejected, reviewed inline`) so callers surface the degraded panel in their WARNING line and verdict logic.
+5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of agents selected for launch (baseline + fired conditionals − excluded), including any whose dispatch was rejected and reviewed inline — so `<FAILED_AGENTS>` is always a subset of it.
 
 ### Sub-agent prompt envelope (what the dispatcher must inject)
 
@@ -296,6 +296,7 @@ Merge all agent results into a single list:
 
 2. **Count agent failures.** An agent counts as failed if any of these hold:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5). A sentinel payload is never mined for embedded findings.
+   - Was never launched because the Agent call was rejected (Step 5.4 inline fallback) — reason `dispatch rejected, reviewed inline`; the inline findings are kept.
    - Returned text from which no findings array can be **safely** recovered. The validator parses tolerantly (a prose-wrapped array is recovered by slicing from the first `[` to the last `]`; an object whose sole value is a list is unwrapped) but rejects ambiguous payloads (incidental brackets, trailing failure objects). The bias is deliberate: a false failure is recoverable, a false clean is not.
    - Returned a JSON value that is not an array and could not be unwrapped.
    - Returned an array containing one or more objects missing required fields:
@@ -324,14 +325,14 @@ Severity labels:
 
 ## Output contract (returned to caller)
 
-The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local` / `/pr-fix`) consumes:
+The caller (Step 7 of `/review-pr-ci` / `/review-pr-gh` / `/review-pr-local` / `/fix-pr`) consumes:
 
 - `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description, snapped_line?}`. `snapped_line` is the nearest actual diff line (the anchor for a GitHub inline comment; equals `line` when the cited line is itself changed); absent on pure-rename keeps.
 - `<DROPPED_FINDINGS>` — findings the scope filter dropped, each tagged with `drop_reason` (`file-out-of-scope` / `line-pre-existing` / `doc-example-fp`). Consumer commands render this as a collapsible audit section after the main findings list — never a silent nuke.
-- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
+- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output, or whose dispatch was rejected (reviewed inline).
 - `<COUNTS>` — `{critical, high, medium, low}` totals on the kept findings.
 - `<DROPPED_COUNTS>` — `{out_of_scope, pre_existing, doc_example}` totals on the dropped findings.
-- `<TOTAL_AGENTS_LAUNCHED>` — count of baseline + fired conditional agents, minus `<EXCLUDE_AGENTS>`.
+- `<TOTAL_AGENTS_LAUNCHED>` — count of baseline + fired conditional agents, minus `<EXCLUDE_AGENTS>`, including rejected dispatches.
 
 The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / terminal output / fix application).
 
@@ -341,7 +342,7 @@ The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / 
 
 ### Example 1: PR-mode review of a CI-workflow-only change
 
-Caller (`/pr-review-gh`) hands in `<DIFF_SOURCE>=pr`, a single changed file `.github/workflows/release.yml`.
+Caller (`/review-pr-gh`) hands in `<DIFF_SOURCE>=pr`, a single changed file `.github/workflows/release.yml`.
 
 - Step 4 sets `<HAS_CI_RELEASE>=true`; other flags false.
 - Step 5 launches: 8 baseline + `ci-release-security` = 9 agents in parallel. `skill-authoring` is skipped.
@@ -349,7 +350,7 @@ Caller (`/pr-review-gh`) hands in `<DIFF_SOURCE>=pr`, a single changed file `.gi
 
 ### Example 2: Local-mode review of a protocol action with uncommitted changes
 
-Caller (`/pr-review-local`) hands in `<DIFF_SOURCE>=local`, 2 committed + 1 uncommitted file under `packages/morpho-sdk/src/actions/`.
+Caller (`/review-pr-local`) hands in `<DIFF_SOURCE>=local`, 2 committed + 1 uncommitted file under `packages/morpho-sdk/src/actions/`.
 
 - Step 3 unions committed + uncommitted diffs, announces "Including 1 uncommitted file(s) in the review."
 - Step 4 sets `<HAS_PROTOCOL_SURFACE>=true` and collects ABI/constant excerpts for `morpho-protocol` + `web3-security`.
@@ -357,7 +358,7 @@ Caller (`/pr-review-local`) hands in `<DIFF_SOURCE>=local`, 2 committed + 1 unco
 
 ### Example 3: Excluding an agent (`--fast`)
 
-Caller (`/pr-review-local --fast`) hands in `<EXCLUDE_AGENTS>=["documentation"]`.
+Caller (`/review-pr-local --fast`) hands in `<EXCLUDE_AGENTS>=["documentation"]`.
 
 - Step 5.3 drops `documentation` from the launch set (the most expensive lens, most likely clean on code-only diffs).
 
@@ -385,7 +386,7 @@ The window is a fixed engine constant. See `references/calibration.md` for the r
 - `scripts/validate-findings.ts` — applies the WHAT/FIX schema check + ±15 line-window filter + Markdown fenced-block detection. Emits dropped-findings with `drop_reason` + `distance_to_nearest_changed_line`, and tags each kept finding with `snapped_line`. Run via `node`.
 - `scripts/findings-ledger.ts` — merges a review's findings into a persisted per-PR/branch ledger and classifies each as net-new / recurring / resolved / suppressed (wontfix). Also serves the **idempotency cache** (`--check-cache --run-hash`). Pure core + injected IO; run by the **caller**, not the engine. Run via `node`.
 - `scripts/review-scope.ts` — testable git-scope helpers: `toHttpsUrl` (SSH→HTTPS rewrite for the fetch fallback) and `runHash` (content-based idempotency-cache identity). Run via `node`.
-- `scripts/list-fix-rubric-agents.sh` — discovers which agents carry a `## Fix rubric` section. Used by `/pr-fix`'s rubric-loading loop.
+- `scripts/list-fix-rubric-agents.sh` — discovers which agents carry a `## Fix rubric` section. Used by `/fix-pr`'s rubric-loading loop.
 
 These exist so the deterministic logic isn't re-derived from English by every caller, and so a regression fails a `pnpm test` gate instead of riding to production. Their unit tests live alongside them (`*.test.ts`) and run under the `agents-engine` Vitest project.
 

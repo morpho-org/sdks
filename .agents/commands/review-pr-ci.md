@@ -1,0 +1,187 @@
+# review-pr-ci
+
+CI-mode pull request review. Posts an inline GitHub review with a formal verdict (`REQUEST_CHANGES`, or `COMMENT` carrying the approve marker). Runs in GitHub Actions on a PR.
+
+## Usage
+
+```
+/review-pr-ci <PR_NUMBER>
+```
+
+Pre-conditions:
+
+- `CI=true` OR `GITHUB_ACTIONS=true` MUST be set in the environment.
+- A `<PR_NUMBER>` argument is required.
+- `--watch` is not supported (no cron in CI).
+- `--local` is not supported (use `/review-pr-local` for that).
+
+If any pre-condition fails, abort with a clear error and exit 1.
+
+## Step 1: Validate environment + arguments
+
+```bash
+if [ "$CI" != "true" ] && [ "$GITHUB_ACTIONS" != "true" ]; then
+  echo "review-pr-ci must run in CI (CI=true or GITHUB_ACTIONS=true). Use /review-pr-gh for local-PR review." >&2
+  exit 1
+fi
+if [ -z "${1:-}" ]; then
+  echo "review-pr-ci requires a PR number." >&2
+  exit 1
+fi
+```
+
+Parse `<OWNER>` and `<REPO>` from `git remote get-url origin` (handles both `git@github.com:owner/repo.git` and `https://github.com/owner/repo.git`).
+
+## Step 2: Fetch PR details
+
+```bash
+PR_JSON=$(gh pr view <PR_NUMBER> --json title,body,baseRefName,headRefName,headRefOid,state 2>&1)
+if [ $? -ne 0 ]; then
+  echo "gh pr view <PR_NUMBER> failed: $PR_JSON" >&2
+  exit 1
+fi
+```
+
+Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that all three branch/SHA fields are non-empty AND not whitespace-only (use `[ -z "${X//[[:space:]]/}" ]` — bare `[ -z "$X" ]` lets whitespace pass). If `state` is not `OPEN`, inform the user and stop. Then fetch the base branch and the PR head by pull ref (works for fork PRs, where `<HEAD_BRANCH>` does not exist under `origin`):
+
+```bash
+git fetch origin <BASE_BRANCH> "+refs/pull/<PR_NUMBER>/head:refs/remotes/origin/pr/<PR_NUMBER>"
+```
+
+Verify `git rev-parse origin/pr/<PR_NUMBER>` equals `<HEAD_SHA>`; if not, the PR moved mid-run — stop and report. Also verify `git rev-parse HEAD` equals `<HEAD_SHA>` (the engine reads full file contents from the worktree, so it must be at the reviewed revision); if not, run `git checkout --detach <HEAD_SHA>` before continuing.
+
+## Steps 3–6: Shared review base
+
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
+
+- `<DIFF_SOURCE>` = `pr` (use `origin/<BASE_BRANCH>...origin/pr/<PR_NUMBER>`)
+- `<HEAD_REF>` = `origin/pr/<PR_NUMBER>`
+- `<INTENT_CONTEXT>` = the PR title + body (from `PR_JSON` in Step 2) followed by the changed-commit messages (`git log --format='%h %s%n%b' $(git merge-base origin/<BASE_BRANCH> origin/pr/<PR_NUMBER>)..origin/pr/<PR_NUMBER>`), so agents can tell a deliberate, documented change from a regression.
+
+Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated, each carrying `snapped_line`), `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>` (count + names), `<COUNTS>` (severity totals), `<DROPPED_COUNTS>`, `<TOTAL_AGENTS_LAUNCHED>`. These flow into Step 7. CI mode is stateless — it does **not** read or write the findings ledger (a fresh verdict every run).
+
+## Step 7: Post the formal review (atomic)
+
+Build a JSON object with all findings. Write to a PR-specific temp file:
+
+```bash
+REVIEW_FILE="/tmp/review-pr-ci-<PR_NUMBER>-comments.json"
+```
+
+Structure:
+
+```json
+{
+  "commit_id": "<HEAD_SHA>",
+  "event": "<COMMENT|REQUEST_CHANGES>",
+  "body": "<REVIEW_BODY>",
+  "comments": [
+    {
+      "path": "<file>",
+      "line": <snapped_line>,
+      "side": "RIGHT",
+      "body": "**[SEVERITY]** <description>\n\nSuggestion: <how to fix>"
+    }
+  ]
+}
+```
+
+Anchor each inline comment's `line` on the finding's `snapped_line` (the nearest actual diff line) — the reviews API rejects any comment whose line is not an exact diff line. Skip an inline comment for any finding that carries no `snapped_line` (none of CI's agents emit the `runtime` sentinel) and fold it into the body instead.
+
+### Verdict
+
+| Verdict | When | Event |
+|---|---|---|
+| **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `COMMENT` (body carries `<!-- CLAUDE_VERDICT:APPROVE -->`) |
+| **Request Changes** | Any critical, OR any high, OR `<FAILED_AGENTS>` is non-zero | `REQUEST_CHANGES` |
+
+Never send `"event": "APPROVE"`: the job token (`github-actions[bot]`) is not allowed to approve pull requests and the reviews API rejects it with HTTP 422, which loses the inline comments. The `CLAUDE_VERDICT:APPROVE` marker in the body is the verdict; a human clicks Approve.
+
+When agents have failed, never approve — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
+
+### Body format
+
+```
+<!-- CLAUDE_REVIEW_COMPLETE -->
+<!-- CLAUDE_REVIEW_RUN:<run id> -->  <!-- Copy verbatim from the prompt when it provides one -->
+<!-- CLAUDE_VERDICT:APPROVE -->  <!-- Only include for approvals -->
+## Code Review Summary
+
+### Overview
+<Brief summary of the PR and overall assessment>
+
+### Findings
+- Critical: X issues
+- High: X issues
+- Medium: X issues
+- Low: X issues
+
+See inline comments for details.
+
+### Guidelines Compliance
+- [ ] Follows TypeScript strict mode
+- [ ] Uses early returns over nested conditionals
+- [ ] `bigint` for onchain quantities; WAD-scaled where appropriate
+- [ ] Reuses SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`)
+- [ ] Type-only imports where possible
+- [ ] Relative imports use `.js` suffix (NodeNext)
+- [ ] Public APIs explicitly re-exported from `src/index.ts`
+- [ ] Domain failures are typed `Error` subclasses
+- [ ] Biome clean (`pnpm lint`)
+
+### Verdict
+**Approved** - Code looks good!
+<!-- OR -->
+**Changes Requested** - Please address the issues above.
+```
+
+If `<FAILED_AGENTS>` is non-zero, prepend to the body BEFORE the verdict:
+
+```
+> WARNING: <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete.
+```
+
+### Submit
+
+```bash
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
+  --method POST \
+  --input "$REVIEW_FILE"
+```
+
+This creates the review and all inline comments atomically — no partial reviews if something fails midway. Clean up: `rm -f "$REVIEW_FILE"`.
+
+If the review creation fails with HTTP 422 because an inline comment's `line` is not a diff line, drop the offending comment(s) into the body and retry the reviews API once. Only if the reviews API still fails, fall back to a single PR-level comment (this loses inline anchoring, so it is a last resort). In CI an issue comment does **not** satisfy `claude.yml`'s "Verify the review was posted" gate — only a formal review counts — so the job still fails red and a human investigates; that is intended:
+
+```bash
+gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments \
+  --method POST \
+  -f body="<REVIEW_BODY>"
+```
+
+If there are zero findings AND zero failures, submit with empty `comments[]` and a body saying "No issues found in this review."
+
+## Step 8: Report
+
+Print a single grep-able sentinel:
+
+```
+Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEAD_SHA_SHORT>
+```
+
+(Drop the agent-failure prefix when `<FAILED_AGENTS>` is zero.)
+
+## Notes
+
+- **CI mode posts a formal verdict** carrying three markers: `<!-- CLAUDE_REVIEW_COMPLETE -->` and the per-run `<!-- CLAUDE_REVIEW_RUN:<GITHUB_RUN_ID> -->` line given in the prompt are consumed by `claude.yml`'s "Verify the review was posted" gate (`scripts/ci/claude-review-gate.ts` — the run marker is what proves *this* job posted the review, not a concurrent `@claude` run), and `<!-- CLAUDE_VERDICT:APPROVE -->` signals the verdict to the human who clicks Approve — no CI gate reads it.
+- **Local-first reads**: never use the GitHub API to read diffs or file contents — the local repo has everything.
+- **Agent failures downgrade verdict**: any `<FAILED_AGENTS> > 0` forces `REQUEST_CHANGES` so a human handles it.
+- **No `--watch`** in CI — the run is one-shot per PR push.
+- **For pre-PR review**: use `/review-pr-local` (terminal-only, no GitHub interaction).
+- **For local PR review with optional watcher**: use `/review-pr-gh`.
+
+## Sentinel grammar
+
+| Sentinel | Owning step | Trailer grammar |
+|---|---|---|
+| `REVIEW_DONE_PR` | Step 8 | `— PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEAD_SHA_SHORT>` |

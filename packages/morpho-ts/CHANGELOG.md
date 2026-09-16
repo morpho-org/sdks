@@ -1,5 +1,51 @@
 # @morpho-org/morpho-ts
 
+## 2.14.0
+
+### Minor Changes
+
+- [#1088](https://github.com/morpho-org/sdks/pull/1088) [`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the canonical `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` deployments in the
+  `bundles` group of `ChainAddresses` for Arc (chain 5042), matching the layout already exposed on the
+  other supported chains. `getChainAddress(ChainId.ArcMainnet, "bundles.vaultExitBundlesV1")`,
+  `getChainAddress(ChainId.ArcMainnet, "bundles.vaultBundlesV1")`, and
+  `getChainAddress(ChainId.ArcMainnet, "bundles.blueBundlesV1")` now resolve the new entries, and the
+  deployment-block registry records the `VaultExitBundlesV1` creation block. Addresses are sourced
+  byte-for-byte from the canonical deployment registry (morpho-org/deployments address-book.json).
+
+- [#1092](https://github.com/morpho-org/sdks/pull/1092) [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the remaining Arc (chain 5042) deployments from morpho-org/deployments address-book.json:
+  the Vault V2 `BluePublicAllocator` (`vaultV2BluePublicAllocator`) and the full Midnight stack
+  (`midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`), each with its deployment block in the
+  registry. `getChainAddress(ChainId.ArcMainnet, ...)` now resolves these labels, so Blue public
+  allocations and the Midnight SDK work on Arc. Addresses are sourced byte-for-byte from the canonical
+  deployment registry; deployment blocks were derived from the Arc archive node.
+
+## 2.13.0
+
+### Minor Changes
+
+- [#1080](https://github.com/morpho-org/sdks/pull/1080) [`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate all Vault V1 PublicAllocator surfaces, including raw ABIs, address and deployment registry fields, configuration models, fetchers, augmentation methods, and the liquidity loader. The existing V1 planning and transaction-composition deprecations continue to apply. Use Vault V2 BluePublicAllocator configurations and fetchers, `MorphoBlue.getVaultV2BlueReallocationData`, and `MorphoBlue.getVaultV2BlueReallocations` for new integrations.
+
+  Deprecate the legacy `morphoToken` address and the MORPHO legacy wrapping entries in `ethereumGeneralAdapter1Abi`. Use the current MORPHO token directly.
+
+  All deprecated exports, signatures, addresses, and transaction behavior remain available for compatibility until the next major release. General Vault V1 operations, Vault V2 allocator APIs, and other token wrapping flows remain supported.
+
+  Patch maintained runtime dependents so their next releases resolve the updated packages. Existing internal peer ranges accept these backward-compatible minor releases and require no changes.
+
+## 2.12.0
+
+### Minor Changes
+
+- [#1063](https://github.com/morpho-org/sdks/pull/1063) [`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add the canonical Permit2 contract address (`0x000000000022D473030F116dDEE9F6B43aC78BA3`) to the Monad (chain id 143) and Stable (chain id 988) entries in the shared address registry, enabling Permit2 approval flows (Bundler3 and Midnight periphery) on both chains.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entries.
+
+## 2.11.2
+
+### Patch Changes
+
+- [#1042](https://github.com/morpho-org/sdks/pull/1042) [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compare token addresses case-insensitively: `getUnwrappedToken` resolves lowercased wrapped-token addresses against the checksummed registry (and re-registering the same mapping under a different casing no longer creates a duplicate key), while `fetchHolding`/`fetchToken` now detect permissioned Backed/wrapper tokens, wstETH, and the native token regardless of the caller's address casing.
+
 ## 2.11.1
 
 ### Patch Changes

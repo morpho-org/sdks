@@ -75,6 +75,7 @@ function makePosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: 0n,
   });
 
   return new AccrualPosition(
@@ -99,6 +100,7 @@ function makeWethPosition(
     totalBorrowShares: 10n ** 24n / 2n,
     lastUpdate: 1_700_000_000n,
     fee: 0n,
+    rateAtTarget: 0n,
     price: ORACLE_PRICE_SCALE,
   });
 
