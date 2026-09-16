@@ -158,7 +158,7 @@ happens inside VaultBundlesV1.
 Classic approvals and ERC-2612 permits name VaultBundlesV1 as spender. Permit2 SignatureTransfer
 keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the signed transfer.
 Each chain must have a registered VaultBundlesV1 deployment; missing deployments throw
-`UnknownAddressError`. Check the [migration guide](./MIGRATION-v5-to-v6.md) for chain availability.
+`UnknownAddressError`.
 
 Vault V1 `migrateToV2` uses the same fixed contract: it exits the source by exact assets or shares,
 then deposits net assets into Vault V2 with a destination maximum-share-price bound.

@@ -6,6 +6,7 @@
     "packages/evm-simulation/src/index.ts",
     "packages/blue-sdk/src/index.ts",
     "packages/blue-sdk-viem/src/index.ts",
+    "packages/liquidity-sdk-viem/src/index.ts",
     "packages/morpho-ts/src/index.ts"
   ],
   "out": "docs/api",

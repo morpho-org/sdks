@@ -1,0 +1,267 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
+import {
+  fetchMarket,
+  fetchPosition,
+  fetchVault,
+  fetchVaultMarketConfig,
+} from "@morpho-org/blue-sdk-viem";
+import type { PublicReallocation } from "@morpho-org/morpho-sdk";
+import { ReallocationData } from "@morpho-org/morpho-sdk/entities";
+import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
+import DataLoader from "dataloader";
+import type { Chain, Client, Transport } from "viem";
+import { getBlock } from "viem/actions";
+import { apiSdk } from "./api/index.js";
+
+const REALLOCATION_SIMULATION_DELAY = 3_600n;
+/**
+ * Optional tuning for the shared-liquidity source-market withdrawal ceiling.
+ *
+ * @deprecated Vault V1 PublicAllocator liquidity planning is deprecated. Use
+ * `VaultV2BluePublicAllocatorOptions` from `@morpho-org/morpho-sdk` instead.
+ */
+export interface LiquidityParameters {
+  /**
+   * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   *
+   * @default 90% (900000000000000000n)
+   * @deprecated Use `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization`
+   * with the Vault V2 BluePublicAllocator planner in `@morpho-org/morpho-sdk`.
+   */
+  defaultMaxWithdrawalUtilization?: bigint;
+
+  /**
+   * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
+   *
+   * @deprecated Vault V1 PublicAllocator liquidity planning and per-market source
+   * ceilings are deprecated. Use `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization`
+   * with the Vault V2 BluePublicAllocator planner in `@morpho-org/morpho-sdk`.
+   */
+  maxWithdrawalUtilization?: Record<MarketId, bigint>;
+}
+
+/**
+ * Batches Vault V1 PublicAllocator liquidity planning from API and onchain state.
+ *
+ * @deprecated Use `MorphoBlue.getVaultV2BlueReallocationData` and
+ * `MorphoBlue.getVaultV2BlueReallocations` from `@morpho-org/morpho-sdk` instead.
+ */
+export class LiquidityLoader<chain extends Chain = Chain> {
+  protected readonly dataLoader: DataLoader<
+    MarketId,
+    {
+      startState: ReallocationData;
+      endState: ReallocationData;
+      withdrawals: readonly PublicReallocation[];
+      targetBorrowUtilization: bigint;
+    }
+  >;
+
+  constructor(
+    public client: Client<Transport, chain>,
+    /**
+     * Shared-liquidity source-market withdrawal tuning.
+     *
+     * @deprecated Vault V1 PublicAllocator planning will be removed in the next major.
+     */
+    public readonly parameters: LiquidityParameters = {},
+  ) {
+    this.dataLoader = new DataLoader(
+      async (marketIds) => {
+        // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
+        const { client, parameters } = this;
+        const chainId = client.chain.id;
+
+        const [block, data] = await Promise.all([
+          getBlock(client),
+          apiSdk.getMarkets({
+            chainId,
+            marketIds: [...marketIds],
+          }),
+        ]);
+
+        const marketsById = fromEntries(
+          data.markets.items?.map((market) => [
+            market.uniqueKey as string,
+            market,
+          ]) ?? [],
+        );
+
+        const apiMarkets = marketIds
+          .map((marketId) => marketsById[marketId.toLowerCase()])
+          .filter(isDefined);
+
+        const allMarketIds = new Set(
+          apiMarkets.flatMap(
+            ({ supplyingVaults }) =>
+              supplyingVaults?.flatMap(
+                (vault) =>
+                  vault.state?.allocation?.map(
+                    (allocation) => allocation.market.uniqueKey,
+                  ) ?? [],
+              ) ?? [],
+          ),
+        );
+        const allVaults = new Set(
+          apiMarkets.flatMap(
+            ({ supplyingVaults }) =>
+              supplyingVaults?.map(({ address }) => address) ?? [],
+          ),
+        );
+
+        const allVaultsMarkets = entries(
+          fromEntries(
+            apiMarkets.flatMap(
+              (market) =>
+                market.supplyingVaults?.map((vault) => [
+                  vault.address,
+                  // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
+                  vault.state?.allocation?.map(({ market }) => market) ?? [],
+                ]) ?? [],
+            ),
+          ),
+        );
+
+        const [markets, vaults, vaultsMarkets] = await Promise.all([
+          Promise.all(
+            [...allMarketIds].map((marketId) =>
+              fetchMarket(marketId, client, { blockNumber: block.number }),
+            ),
+          ),
+          Promise.all(
+            [...allVaults].map((vault) =>
+              fetchVault(vault, client, { blockNumber: block.number }),
+            ),
+          ),
+          Promise.all(
+            allVaultsMarkets.map(
+              // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
+              async ([vault, markets]) =>
+                [
+                  vault,
+                  await Promise.all(
+                    markets.map(
+                      async (market) =>
+                        [
+                          market.uniqueKey,
+                          {
+                            position: await fetchPosition(
+                              vault,
+                              market.uniqueKey,
+                              client,
+                              { blockNumber: block.number },
+                            ),
+                            vaultMarketConfig: await fetchVaultMarketConfig(
+                              vault,
+                              market.uniqueKey,
+                              client,
+                              { blockNumber: block.number },
+                            ),
+                          },
+                        ] as const,
+                    ),
+                  ),
+                ] as const,
+            ),
+          ),
+        ]);
+
+        const startState = new ReallocationData({
+          chainId,
+          markets: fromEntries(markets.map((market) => [market.id, market])),
+          vaults: fromEntries(vaults.map((vault) => [vault.address, vault])),
+          positions: fromEntries(
+            vaultsMarkets.map(([vault, vaultMarkets]) => [
+              vault,
+              fromEntries(
+                vaultMarkets.map(([marketId, { position }]) => [
+                  marketId,
+                  position,
+                ]),
+              ),
+            ]),
+          ),
+          vaultMarketConfigs: fromEntries(
+            vaultsMarkets.map(([vault, vaultMarkets]) => [
+              vault,
+              fromEntries(
+                vaultMarkets.map(([marketId, { vaultMarketConfig }]) => [
+                  marketId,
+                  vaultMarketConfig,
+                ]),
+              ),
+            ]),
+          ),
+        });
+
+        return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
+          try {
+            // The source-market withdrawal ceiling defaults to 90%
+            // (DEFAULT_WITHDRAWAL_TARGET_UTILIZATION) inside
+            // `getMarketPublicReallocations`; the API's per-market
+            // `targetWithdrawUtilization` is no longer consulted.
+            // Caller `parameters` overrides are forwarded to the planner.
+            const { data: endState, withdrawals } =
+              startState.getMarketPublicReallocations(uniqueKey, {
+                ...parameters,
+                timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
+                enabled: true,
+              });
+
+            return {
+              startState,
+              endState,
+              withdrawals,
+              targetBorrowUtilization,
+            };
+          } catch (error) {
+            return Error(
+              `An error occurred while simulating reallocations: ${error}`,
+            );
+          }
+        });
+      },
+      { cache: false },
+    );
+  }
+
+  /**
+   * Fetches the shared-liquidity plan for a target market from the Morpho API and onchain state.
+   *
+   * @deprecated Use `MorphoBlue.getVaultV2BlueReallocationData` and
+   * `MorphoBlue.getVaultV2BlueReallocations` from `@morpho-org/morpho-sdk` instead.
+   *
+   * @param marketId - Target market id to plan withdrawals for.
+   * @returns The start state, simulated end state, computed withdrawals, and target borrow utilization.
+   *
+   * @remarks The returned `endState` is produced by `ReallocationData.getMarketPublicReallocations`
+   * from onchain inputs fetched at one block, with reallocation headroom evaluated one hour after
+   * that block timestamp.
+   *
+   * @example
+   * ```ts
+   * import type { MarketId } from "@morpho-org/blue-sdk";
+   * import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http("https://rpc.example"),
+   * });
+   * const loader = new LiquidityLoader(client);
+   *
+   * const marketId =
+   *   "0x7bbbb127f5d2886295f50f3cdf86231d9ff45f248639ee1fd3f2bd5d8b129dcf" as MarketId;
+   * const { withdrawals, endState } = await loader.fetch(marketId);
+   *
+   * // withdrawals: readonly PublicReallocation[]
+   * // endState: ReallocationData
+   * ```
+   * @deprecated Vault V1 PublicAllocator planning will be removed in the next major. Migrate to
+   * `MorphoBlue.getVaultV2BlueReallocationData` and `MorphoBlue.getVaultV2BlueReallocations`.
+   */
+  public fetch(marketId: MarketId) {
+    return this.dataLoader.load(marketId);
+  }
+}

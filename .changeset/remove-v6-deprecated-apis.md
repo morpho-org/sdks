@@ -35,6 +35,6 @@ five v5 partial-refinance error classes. This is an intentional one-time lifecyc
 consumers must migrate to the standalone bundle actions and canonical exports or stay on the
 previous major versions.
 
-Remove the deprecated liquidity-sdk-viem package from the workspace; its only public entry point was
-the Vault V1 PublicAllocator loader. Patch maintained dependents and update internal peer ranges for
-the new morpho-ts, blue-sdk, and blue-sdk-viem majors.
+Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+and blue-sdk-viem majors.

@@ -116,7 +116,7 @@ For each unique package directory among the changed files (e.g. a file at `packa
 1. `packages/<pkg>/AGENTS.md` — package-specific refinements (refines the root for this package; root wins on contradictions).
 2. `packages/<pkg>/README.md` — public-facing description.
 3. `packages/<pkg>/ARCHITECTURE.md` — if present.
-4. Any other top-level `*.md` in the package (e.g. `packages/morpho-sdk/MIGRATION-v5-to-v6.md`).
+4. Any other top-level `*.md` in the package.
 5. Nested `AGENTS.md` along the path of touched files (at any depth — e.g. `packages/morpho-sdk/src/actions/AGENTS.md`).
 
 Use the Glob tool: `**/AGENTS.md` and `packages/*/*.md`. Filter to paths that prefix at least one changed file's directory.
