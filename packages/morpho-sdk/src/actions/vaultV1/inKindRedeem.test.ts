@@ -234,6 +234,30 @@ describe("vaultV1InKindRedeem", () => {
     ).toThrow(VaultExitBundlesV1PermitMismatchError);
   });
 
+  test("error: VaultExitBundlesV1PermitMismatchError on amount disagreement", () => {
+    expect(() =>
+      vaultV1InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                amount: permit.action.args.amount + 1n,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+  });
+
   test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
     expect(() =>
       vaultV1InKindRedeem({
