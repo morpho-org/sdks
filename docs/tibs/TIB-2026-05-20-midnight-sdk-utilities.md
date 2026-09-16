@@ -289,7 +289,7 @@ directly instead of going through SDK wrapper functions.
 
 Deployless fetcher bytecode is kept as generated `abi` and `code` constants under `src/queries/`,
 matching the `blue-sdk-viem` pattern. The Solidity inputs live under `contracts/` and are compiled by
-`pnpm --filter @morpho-org/midnight-sdk compile` through the shared `scripts/compile-solidity.ts`
+`pnpm --filter @morpho-org/midnight-sdk compile` through the shared `scripts/compile-solidity.js`
 helper. The initial generated query is:
 
 - `GetPosition`, which reads `position(id, user)` and all 128 fixed `collateral(id, user, index)` slots in one deployless call.
