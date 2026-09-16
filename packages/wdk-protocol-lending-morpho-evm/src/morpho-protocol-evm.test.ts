@@ -1411,6 +1411,19 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
+    test("behavior: max repay preserves requirement options when adding the approval cap", async () => {
+      await protocol.getRepayRequirements(
+        { token: TOKEN, amount: "max" },
+        { useSimplePermit: true, permit2Nonce: 7n },
+      );
+
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        useSimplePermit: true,
+        permit2Nonce: 7n,
+        approvalAmount: viem.maxUint256,
+      });
+    });
+
     test("behavior: exact-asset repay approves the exact amount", async () => {
       const requirements = await protocol.getRepayRequirements({
         token: TOKEN,
