@@ -207,6 +207,8 @@ jobs:
       - name: Upload Claude execution log
         if: failure() && steps.scrub.outputs.path != ''
         # JavaScript action: keep $GITHUB_ENV-injected loader, node, OpenSSL, proxy and CA overrides out of its node process.
+        # GitHub treats env keys case-insensitively, so each proxy var is pinned once here (HTTP_PROXY also
+        # covers http_proxy); listing both cases is a duplicate-key error that fails the whole workflow to parse.
         env:
           LD_PRELOAD: ''
           LD_AUDIT: ''
@@ -220,9 +222,6 @@ jobs:
           HTTP_PROXY: ''
           HTTPS_PROXY: ''
           NO_PROXY: ''
-          http_proxy: ''
-          https_proxy: ''
-          no_proxy: ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
