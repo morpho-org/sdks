@@ -267,12 +267,6 @@ describe.sequential("prepared withdrawal adapter", () => {
           amount: 1_000n,
           deadline: 1_900_000_000n,
         },
-        typedData: {
-          domain: {},
-          types: {},
-          primaryType: "Permit",
-          message: {},
-        },
       },
     } as const satisfies Erc2612RequirementSignature;
     // Signing is SDK-owned; this adapter test verifies the public return type and forwarding.
