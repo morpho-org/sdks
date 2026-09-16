@@ -7,6 +7,7 @@ import {
 } from "@morpho-org/morpho-ts";
 import { createWalletClient, http, maxUint256, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { signTypedData } from "viem/actions";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -43,7 +44,7 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
     });
     const signed = await requirement.sign(walletClient, account.address);
 
-    expect(signed.action).toEqual({
+    expect(signed.action).toMatchObject({
       type: "permit2SignatureTransfer",
       args: {
         spender,
@@ -165,5 +166,43 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
         spender: "0x1111111111111111111111111111111111111111",
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);
+  });
+
+  test("action.typedData carries the SignatureTransfer payload", () => {
+    const params = base();
+    const requirement = encodeErc20Permit2SignatureTransfer(params);
+
+    expect(requirement.action.typedData).toEqual(
+      getPermit2TransferFromTypedData(
+        {
+          erc20: params.token,
+          allowance: params.amount,
+          spender: params.spender,
+          nonce: params.nonce,
+          deadline: params.deadline,
+        },
+        mainnet.id,
+      ),
+    );
+  });
+
+  test("behavior: signing action.typedData externally matches sign()", async () => {
+    const requirement = encodeErc20Permit2SignatureTransfer(base());
+
+    const typedData = requirement.action.typedData;
+    const externalSignature = await signTypedData(walletClient, {
+      ...typedData,
+      account,
+    });
+    const signed = await requirement.sign(walletClient, account.address);
+
+    expect(externalSignature).toEqual(signed.args.signature);
+    await expect(
+      verifyTypedData({
+        ...typedData,
+        address: account.address,
+        signature: externalSignature,
+      }),
+    ).resolves.toBe(true);
   });
 });

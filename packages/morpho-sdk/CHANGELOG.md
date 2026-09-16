@@ -1,5 +1,163 @@
 # @morpho-org/morpho-sdk
 
+## 6.0.0-next.2
+
+### Major Changes
+
+- [#1064](https://github.com/morpho-org/sdks/pull/1064) [`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Resolve the Permit2 SignatureTransfer nonce automatically in `getBundlesTokenRequirements` (and every entity `getRequirements()`) when no `permit2Nonce` is passed, using the lowest unused nonce from `getUnusedPermit2Nonce`. `getRequirements()` now throws `NoUnusedPermit2NonceError` (when every nonce is consumed) instead of the removed `MissingPermit2SignatureTransferNonceError` / `MissingPermit2TransferFromNonceError`.
+
+  The WDK adapter's `get*Requirements` and `prepareSupply(...).getRequirements` inherit the default nonce resolution; `permit2Nonce` in `RequirementOptions` is now optional and its docs are updated accordingly.
+
+- Route the referral-fee, deadline, and ECDSA-signature guards shared by the direct BlueBundlesV1 writes and the VaultExitBundlesV1 force withdrawal through single helpers instead of per-call-site copies.
+
+  The referral-fee failure mode is one canonical class — `ReferralFeeRecipientMissingError`, with the legacy `MissingReferralFeeRecipientError` name kept as a `@deprecated` alias — because both peripheries transfer the fee unconditionally. `validateReferralFee` owns the `[0, WAD)` bound (throwing `ReferralFeePctExceededError`) plus the recipient check, `validateDeadline` owns the positive-`uint256` deadline bound, and the shared `normalizeBundlesSignature` owns the 64-byte EIP-2098 / 65-byte parse and the `yParity` → `v` widening for every periphery permit and authorization struct. The three remaining hand-rolled `uint256` bounds (`blueSupply`'s `assets`, and the fixed-bundles token requirement resolver's `amount` and `permit2Nonce`) now call the existing `validateUint256Field` like their siblings.
+
+  Beyond the referral-fee error's canonical rename this is internal maintenance — the thrown error identities (preserved through the retained aliases), encoded calldata, and requirement shapes are unchanged — with one deliberate behavior addition: `vaultV1InKindRedeem` and `vaultV2InKindRedeem` had no upper bound on `deadline` at all, so routing them through the shared guard means an out-of-`uint256` deadline now throws `InputExceedsMaxError` instead of viem's `IntegerOutOfRangeError` at encode time, matching their `vaultV2ForceWithdraw` sibling on the same periphery.
+
+  `MorphoVaultV1.inKindRedeem`, `MorphoVaultV2.inKindRedeem`, and `MorphoVaultV2.forceWithdraw` apply the same bound at handle creation, and `MorphoVaultV2.forceWithdraw` extends it to `exitAssets` and to the effective `minSharePriceE27` (supplied or derived). Previously each entity checked only that the deadline was in the future, so an out-of-`uint256` override was accepted and could walk a caller through a vault-share approval or an EIP-712 permit before `buildTx()` finally refused to encode it.
+
+  That also reclassifies one error on those three methods: a non-positive `deadline` now throws `NonPositiveInputError` where it previously threw `ExpiredDeadlineError`. The contracts read `0` as "unset" rather than "expired", and the underlying actions already classified it this way, so the handles now agree with them. Pattern-match on `NonPositiveInputError` for a zero or negative deadline.
+
+  The derived Vault V2 force-withdraw share allowance is saturated at `maxUint256`. A very small accepted price floor scaled it past the ABI slot, and because the approval encoder clamps what it emits, the requirement sat permanently above any allowance a user could grant — so `getRequirements()` returned the same approval forever.
+
+- [#1067](https://github.com/morpho-org/sdks/pull/1067) [`f5f0acb`](https://github.com/morpho-org/sdks/commit/f5f0acbb5c9d05dd08f64e411884d1b89f5c876e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the EIP-712 payload of every signature `Requirement` as `action.typedData`, so integrators
+  can inspect or display the exact typed data before it is signed by the built-in
+  `Requirement.sign(client, userAddress)`.
+
+  Each signable requirement action — ERC-2612 permit (`PermitAction`), Permit2 AllowanceTransfer
+  (`Permit2Action`), Permit2 SignatureTransfer (`Permit2SignatureTransferAction`), Morpho
+  authorization (`AuthorizationAction`), and the Midnight offer-root
+  (`MidnightOfferRootSignatureAction`) — now carries a `typedData` field holding the exact viem
+  `TypedDataDefinition` that `sign()` signs. On the `Requirement` returned by `getRequirements()`
+  the field is typed as required (`RequirementTypedData`) so
+  `requirement.action.typedData` type-checks under strict TypeScript; it stays optional on the
+  standalone action interfaces so hand-built action metadata (e.g. test fixtures) need not supply it.
+  The payload is deep-frozen.
+
+  Because the permit/authorization payload embeds the owner, and it is now built when the requirement
+  is created, two low-level exported encoders take a new required `owner` parameter:
+  `encodeErc20Permit` and `encodeBlueSignatureAuthorization` (and `getGeneralAdapterRequirementsPermit`
+  forwards it). Their `sign()` now also rejects a signer that differs from `owner`. All in-SDK
+  requirement resolvers already supply the owner, so high-level flows are unaffected.
+
+- [#957](https://github.com/morpho-org/sdks/pull/957) [`8bfc8b3`](https://github.com/morpho-org/sdks/commit/8bfc8b38b641ec2b21ceb2e6f3533ffbc8166bc7) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Migrate Vault V2 `forceWithdraw` from `VaultV2.multicall` to `VaultExitBundlesV1`.
+
+  `vaultV2ForceWithdraw` and `MorphoVaultV2.forceWithdraw` now encode
+  `vaultExitBundlesV1ForceWithdrawVaultV2` instead of a `VaultV2.multicall` of caller-supplied
+  `forceDeallocate` calls. The contract computes its own deallocations by walking the adapter's market
+  list, withdraws the vault's idle assets and liquidity-adapter liquidity without a penalty first, and
+  bounds the realized exit share price. `forceRedeem` is unchanged and stays on the vault multicall.
+
+  **Breaking changes**
+
+  - `MorphoVaultV2.forceWithdraw` takes `{ exitAssets, vaultData, userAddress, adapter?, deadline?,
+slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }` instead of
+    `{ deallocations, withdraw: { amount }, userAddress }`. `vaultData` is now required.
+  - It returns an `ActionOutput` — `{ getRequirements(), buildTx(signatures?) }` — instead of
+    `{ buildTx() }`. `buildTx` stays synchronous.
+  - **`exitAssets` is penalty-inclusive**, where `withdraw.amount` was the net payout. The assets
+    delivered are `assetsToWithdraw + floor((exitAssets - assetsToWithdraw) * WAD / (WAD + penalty))`
+    minus the referral fee. Use the new `previewVaultV2ForceWithdraw` to quote the split.
+  - `tx.to` is now VaultExitBundlesV1 rather than the vault.
+  - **New prerequisite: a vault-share allowance or ERC-2612 permit to VaultExitBundlesV1.** The
+    multicall path needed none because the vault burned `msg.sender`'s own shares.
+  - `forceWithdraw` `buildTx` validates the permit against the operation's spender, amount, and
+    deadline only; it no longer requires `getRequirements()` on the same handle.
+  - `VaultV2ForceWithdrawAction.args` is reshaped: `deallocations` and `withdraw` are gone; `adapter`,
+    `exitAssets`, `minSharePriceE27`, `referralFeePct`, `referralFeeRecipient`, and `deadline` are new.
+  - The caller no longer chooses markets or their order.
+  - The vault must have exactly one `MorphoMarketV1AdapterV2` and route liquidity through that same
+    adapter or none at all. Multi-adapter vaults and vaults on the legacy positions-based
+    `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` must use `forceRedeem` or a plain `withdraw`.
+  - The vault's `receiveAssetsGate` must allow VaultExitBundlesV1 as an asset recipient.
+  - Only one VaultExitBundlesV1 call can execute per transaction (its `initiator` guard is transient
+    and never cleared).
+  - `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are deprecated aliases
+    of the new canonical `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`;
+    `instanceof` keeps working for both names.
+
+  **Additions**
+
+  - `minSharePriceE27` is derived from the vault snapshot and `slippageTolerance` (default
+    `DEFAULT_SLIPPAGE_TOLERANCE`, capped by `MAX_SLIPPAGE_TOLERANCE`) and overridable. The multicall
+    path had no slippage bound at all; the derived one rejects a share-price drop, a penalty increase,
+    and liquidity shifting from the penalty-free leg to the penalised leg. It does not cover the
+    referral fee, which the contract deducts after the check.
+  - The derived bound's denominator is the share burn accrued to **`now`** (execution time). The raw
+    `lastUpdate` snapshot would underestimate the burn a stale fee-bearing vault realizes on its first
+    withdrawal and lift the floor above the faithful price, tripping `SlippageExceeded`; accruing to
+    `now` — not the caller-chosen `deadline` — tracks execution without letting a long deadline weaken
+    the guard. `slippageTolerance` absorbs the residual drift.
+  - A supplied `minSharePriceE27` override must be positive: the contract reads `0` as "no bound", so
+    an override can no longer opt out of the slippage check. A non-positive override throws
+    `NonPositiveInputError`.
+  - Referral-fee inputs are validated eagerly at handle creation, before any RPC: `referralFeePct < 0`
+    throws `NegativeInputError`, `referralFeePct >= WAD` throws `ReferralFeePctExceededError` (which
+    extends `InputExceedsMaxError`), and a positive pct with a missing or zero recipient throws
+    `ReferralFeeRecipientMissingError` (aliased as the legacy `MissingReferralFeeRecipientError`).
+  - `previewVaultV2ForceWithdraw(vaultData, params)` returns the penalty-free leg, penalised leg,
+    penalty, referral fee, net payout, and `maxExitAssets`, with no RPC.
+  - `resolveVaultV2ForceWithdrawEligibility`, `computeVaultV2ForceWithdrawPlan`,
+    `computeVaultV2ForceWithdrawSharesBurnt`, and `computeMinForceWithdrawSharePrice` expose the pure
+    planning core. The share-burn bound charges one share per _additional_ withdrawal leg that moves a
+    positive amount, rather than one per call: a zero-amount leg burns `toShares(0, "Up") == 0` and
+    rounds nothing, and since this value is the slippage denominator, counting it would widen the price
+    drop the bound accepts — worst on a dust exit, where phantom shares dominate the real burn. For the
+    same reason `penaltyAssets` carries no per-leg rounding slack at a zero penalty, where every chunk
+    charges exactly nothing. `maxExitAssets` reports `0` for a snapshot with no exitable capacity
+    instead of rounding up to `1`, which is not actually exitable.
+  - `computeVaultV2ForceWithdrawFeeSharesMinted`, `computeVaultV2ForceWithdrawMinSharesBurnt`, and
+    `VaultV2ForceWithdrawFeeSharesExceedBurnError` account for fee-recipient share mints during
+    force-withdraw planning. A fee-recipient `userAddress` gets a floor from the net share burn and
+    a safety guard projected through the accepted deadline, plus an allowance including its projected
+    fee shares. The lower burn bound is independent of how the exit splits between the penalty-free
+    and penalised legs at inclusion. Deadlines beyond the one-year fee-projection horizon are rejected.
+  - `previewVaultV2ForceWithdraw` accepts optional `userAddress`, `feeProjectionTimestamp`, and
+    `referralFeeRecipient` values to mirror fee-recipient mints and referral payouts; when the
+    referral fee is paid to `userAddress` itself, `netAssets` includes that self-paid fee. It rejects
+    exits when fee shares are minted to `userAddress` and reach the lower burn bound, when a positive
+    referral fee has no non-zero recipient, or when its derived default floor does not fit `uint256`.
+    Deadlines beyond one year after handle creation are rejected so accepted execution windows remain
+    covered by the fee-share guard and allowance.
+  - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
+    adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
+    `VaultV2ForceWithdrawZeroSharePriceError`, `VaultV2UnsupportedLiquidityAdapterError`, and
+    `VaultV2UndecodableLiquidityDataError`. `VaultV2ForceWithdrawZeroSharePriceError` closes the last
+    path to an unbounded exit: positive `withdrawnAssets` and `sharesBurnt` are not sufficient, because
+    their ratio can still round down to `0` on a vault whose share price has collapsed below `1e-27`
+    assets per share — and the contract reads a zero floor as no bound at all. The
+    referral-fee guard reuses the canonical `ReferralFeeRecipientMissingError` this major also
+    introduces for the direct BlueBundlesV1 writes. `VaultV2UndecodableLiquidityDataError` reports a
+    `liquidityData` blob that does not decode as `MarketParams` — the case the contract's `abi.decode`
+    reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
+    liquidity adapter that is not the vault's sole adapter.
+  - The new share allowance is bounded to the largest burn the on-chain price check can accept —
+    `mulDivUp(exitAssets, RAY, minSharePriceE27)`, since `withdrawn <= exitAssets` and
+    `withdrawn / burnt >= minSharePriceE27`. Deriving it from the price floor (not the snapshot plan)
+    keeps a within-tolerance price drop from reverting on allowance and silently nullifying the
+    advertised `slippageTolerance`. This is a bound on a **newly required** approval, not a replacement
+    for one: the multicall path needed no approval at all, because the vault burned `msg.sender`'s own
+    shares.
+
+  See `docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full decision record.
+
+### Minor Changes
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+### Patch Changes
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Add JSDoc to the core public transaction primitives `BaseAction`, `TransactionAction`, `Transaction`, `PermitArgs`, and `Permit2Args`, and correct the `validateUserAddress` helper's JSDoc to name its actual callers (`signAndVerifyTypedData` and `encodeVaultSharesPermit`). Documentation-only; no runtime or type changes.
+
+- Updated dependencies [[`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1)]:
+  - @morpho-org/blue-sdk@6.10.0-next.0
+
 ## 6.0.0-next.1
 
 ### Major Changes

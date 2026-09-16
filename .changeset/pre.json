@@ -14,24 +14,22 @@
     "@morpho-org/wdk-protocol-lending-morpho-evm": "1.1.0"
   },
   "changesets": [
+    "auto-permit2-nonce",
     "blue-authorization-deadline-guard",
     "blue-bundles-permit2-guards",
     "blue-bundles-position-actions",
     "blue-bundles-refinance",
     "blue-bundles-supply-withdraw",
     "blue-v2-only-reallocations",
-    "bundles-retention-check",
-    "calm-midnight-targets",
-    "copy-fetch-parameters",
-    "evm-simulation-native-sentinel-normalization",
-    "filter-wrapped-native-events",
-    "quiet-books-settle",
-    "stable-wdk-chain-context",
-    "tidy-ratifier-trees",
+    "dedupe-referral-fee-and-signature-guards",
+    "document-core-transaction-types",
+    "requirement-get-typed-data",
+    "safe-blue-snapshots",
     "vault-bundles-deposit",
     "vault-bundles-prerequisites",
     "vault-bundles-redeem",
     "vault-bundles-withdraw",
-    "vault-exit-bundles-inkind-refactor"
+    "vault-exit-bundles-inkind-refactor",
+    "vault-v2-force-withdraw-via-vault-exit-bundles"
   ]
 }

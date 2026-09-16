@@ -37,6 +37,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("error: ChainIdMismatchError when client chain differs", async () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(mainnet.id), {
+        owner: account.address,
         authorized: blueBundlesV1,
         chainId: mainnet.id + 1,
         nonce: 0n,
@@ -47,6 +48,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("default: signs a verifiable Morpho authorization", async () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
+      owner: account.address,
       authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
@@ -86,6 +88,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("error: NonPositiveInputError when deadline is not positive", async () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
+        owner: account.address,
         authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
@@ -97,6 +100,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("error: InputExceedsMaxError when deadline exceeds uint256", async () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
+        owner: account.address,
         authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
@@ -108,6 +112,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("error: ExpiredDeadlineError when deadline is in the past", async () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
+        owner: account.address,
         authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
@@ -119,6 +124,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("behavior: supports revocation via isAuthorized=false", async () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
+      owner: account.address,
       authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 1n,
@@ -132,6 +138,7 @@ describe("encodeBlueSignatureAuthorization", () => {
   test("error: AddressMismatchError when signer differs from userAddress", async () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
+      owner: account.address,
       authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
@@ -140,5 +147,48 @@ describe("encodeBlueSignatureAuthorization", () => {
     await expect(
       requirement.sign(client, "0x1111111111111111111111111111111111111111"),
     ).rejects.toBeInstanceOf(AddressMismatchError);
+  });
+
+  test("action.typedData carries the Authorization payload for the owner", async () => {
+    const client = walletClient();
+    const requirement = await encodeBlueSignatureAuthorization(client, {
+      owner: account.address,
+      authorized: blueBundlesV1,
+      chainId: mainnet.id,
+      nonce: 0n,
+    });
+
+    const typedData = requirement.action.typedData;
+
+    expect(typedData.primaryType).toBe("Authorization");
+    expect(typedData.message).toMatchObject({
+      authorizer: account.address,
+      authorized: blueBundlesV1,
+      isAuthorized: true,
+      nonce: 0n,
+    });
+  });
+
+  test("behavior: signing action.typedData externally matches sign()", async () => {
+    const client = walletClient();
+    const requirement = await encodeBlueSignatureAuthorization(client, {
+      owner: account.address,
+      authorized: blueBundlesV1,
+      chainId: mainnet.id,
+      nonce: 0n,
+    });
+
+    const typedData = requirement.action.typedData;
+    const externalSignature = await account.signTypedData(typedData);
+    const signed = await requirement.sign(client, account.address);
+
+    expect(externalSignature).toEqual(signed.args.signature);
+    await expect(
+      verifyTypedData({
+        ...typedData,
+        address: account.address,
+        signature: externalSignature,
+      }),
+    ).resolves.toBe(true);
   });
 });
