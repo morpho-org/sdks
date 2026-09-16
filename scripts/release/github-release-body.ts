@@ -11,6 +11,7 @@ const PACKAGE_TAG_SEPARATORS = ["-v", "@"];
 const VERSION_HEADING_RE =
   /^##\s+\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\s|$).*/gm;
 
+/** A package being released: manifest name, published version, and changelog path. */
 export interface ReleasePackage {
   changelogPath: string;
   name: string;

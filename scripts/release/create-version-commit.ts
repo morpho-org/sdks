@@ -34,25 +34,30 @@ const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
 const TEMP_BRANCH_RE = /^changeset-release\/(?:main|next)-api-commit-[^/]+$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
 
+/** A file to create or overwrite in the version commit. */
 export interface VersionFileAddition {
   contents: string;
   path: string;
 }
 
+/** A file to delete in the version commit. */
 export interface VersionFileDeletion {
   path: string;
 }
 
+/** File additions and deletions staged for the version commit. */
 export interface VersionFileChanges {
   additions: VersionFileAddition[];
   deletions: VersionFileDeletion[];
 }
 
+/** File changes plus the validated path list and any rejected paths. */
 export interface VersionChanges extends VersionFileChanges {
   disallowedPaths: string[];
   paths: string[];
 }
 
+/** Inputs for pushing the signed version commit onto the release branch. */
 export interface PushReleaseBranchOptions {
   commitOid: string;
   cwd: string;
@@ -63,6 +68,7 @@ export interface PushReleaseBranchOptions {
   token: string;
 }
 
+/** Injectable push implementation (overridden in tests). */
 export type PushReleaseBranch = (options: PushReleaseBranchOptions) => void;
 
 interface RunGitOptions {

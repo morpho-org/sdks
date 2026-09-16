@@ -16,6 +16,7 @@ const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
 const MISSING_REVISION_OR_PATH_RE =
   /invalid object name|unknown revision|does not exist in|exists on disk, but not in/i;
 
+/** Minimal `package.json` shape consumed by the pending-tag computation. */
 export interface PackageManifest {
   name?: string;
   version?: string;

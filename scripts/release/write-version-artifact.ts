@@ -12,6 +12,7 @@ import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
 
+/** Serialized version-change artifact passed between the version PR and publish workflows. */
 export interface VersionArtifact {
   additions: VersionChanges["additions"];
   deletions: VersionChanges["deletions"];
