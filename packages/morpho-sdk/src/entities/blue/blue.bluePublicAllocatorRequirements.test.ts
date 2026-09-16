@@ -41,6 +41,7 @@ const positionData = new AccrualPosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: 0n,
   }),
 );
 const reallocations = [

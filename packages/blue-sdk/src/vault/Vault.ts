@@ -17,18 +17,24 @@ export interface Pending<T> {
   validAt: bigint;
 }
 
-/** PublicAllocator configuration attached to a MetaMorpho vault. */
+/**
+ * PublicAllocator configuration attached to a MetaMorpho vault.
+ * @deprecated Vault V1 PublicAllocator support is deprecated. Use {@link IVaultV2BluePublicAllocatorConfig} for Vault V2 integrations.
+ */
 export interface VaultPublicAllocatorConfig {
   /**
    * The PublicAllocator's admin address.
+   * @deprecated Vault V1 PublicAllocator support is deprecated.
    */
   admin: Address;
   /**
    * The PublicAllocator's reallocation fee (in native token).
+   * @deprecated Vault V1 PublicAllocator support is deprecated.
    */
   fee: bigint;
   /**
    * The PublicAllocator's reallocation fee accrued so far (in native token).
+   * @deprecated Vault V1 PublicAllocator support is deprecated.
    */
   accruedFee: bigint;
 }
@@ -51,6 +57,7 @@ export interface IVault extends IVaultConfig {
   totalAssets: bigint;
   lastTotalAssets: bigint;
   lostAssets?: bigint;
+  /** @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations. */
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
@@ -131,6 +138,7 @@ export class Vault extends VaultToken implements IVault {
 
   /**
    * The MetaMorpho vault's public allocator configuration.
+   * @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations.
    */
   public publicAllocatorConfig?: VaultPublicAllocatorConfig;
 
@@ -177,16 +185,69 @@ export class Vault extends VaultToken implements IVault {
   }
 
   /**
-   * The amount of interest in assets accrued since the last interaction with the vault.
+   * Returns interest accrued since the vault's last accounting update, floored at zero.
+   *
+   * @returns The non-negative difference between `totalAssets` and `lastTotalAssets`, in the
+   *   underlying asset's smallest unit.
+   * @example
+   * ```ts
+   * import { fetchVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchVault(vaultAddress, client);
+   * const interest = vault.totalInterest;
+   * // interest satisfies bigint
+   * ```
    */
   get totalInterest() {
     return MathLib.zeroFloorSub(this.totalAssets, this.lastTotalAssets);
   }
 
+  /**
+   * Converts Vault V1 shares to underlying assets using the current totals and virtual offsets.
+   *
+   * @param shares - Vault shares to convert, in the share token's smallest unit.
+   * @param rounding - Optional rounding direction. Defaults to `"Down"`.
+   * @returns The corresponding underlying assets, rounded in the requested direction.
+   * @example
+   * ```ts
+   * import { fetchVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchVault(vaultAddress, client);
+   * const assets = vault.toAssets(1_000_000_000_000_000_000n);
+   * // assets satisfies bigint
+   * ```
+   */
   public toAssets(shares: BigIntish, rounding: RoundingDirection = "Down") {
     return this._unwrap(shares, rounding);
   }
 
+  /**
+   * Converts underlying assets to Vault V1 shares using the current totals and virtual offsets.
+   *
+   * @param assets - Underlying assets to convert, in the asset token's smallest unit.
+   * @param rounding - Optional rounding direction. Defaults to `"Up"`.
+   * @returns The corresponding vault shares, rounded in the requested direction.
+   * @example
+   * ```ts
+   * import { fetchVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchVault(vaultAddress, client);
+   * const shares = vault.toShares(1_000_000n);
+   * // shares satisfies bigint
+   * ```
+   */
   public toShares(assets: BigIntish, rounding: RoundingDirection = "Up") {
     return this._wrap(assets, rounding);
   }
@@ -198,6 +259,7 @@ export interface CollateralAllocation {
   lltvs: Set<bigint>;
   oracles: Set<Address>;
   markets: Set<MarketId>;
+  /** @deprecated Sum `vault.getAllocationProportion(marketId)` over `markets`. */
   proportion: bigint;
 }
 
@@ -274,7 +336,22 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The vault's liquidity directly available from allocated markets.
+   * Returns the vault assets immediately withdrawable from its allocated markets.
+   *
+   * @returns The sum of each allocation's position- and market-limited withdraw capacity, in the
+   *   underlying asset's smallest unit.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const liquidity = vault.liquidity;
+   * // liquidity satisfies bigint
+   * ```
    */
   get liquidity() {
     return this.allocations
@@ -286,18 +363,52 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, before deducting the performance fee.
-   * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
+   * Returns the vault's current allocation-weighted experienced APY before its performance fee.
+   *
+   * Use `getApy(timestamp)` to project the APY at a specific timestamp. Markets newer than that
+   * timestamp use their snapshot rates without backward projection.
+   *
+   * @returns The current gross annual yield as a decimal JavaScript number, or `0` for an empty
+   *   vault.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const apy = vault.apy;
+   * // apy satisfies number
+   * ```
    */
   get apy() {
     return this.getApy();
   }
 
   /**
-   * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, after deducting the performance fee.
-   * If interested in the APY at a specific timestamp, use `getNetApy(timestamp)` instead.
+   * Returns the vault's current allocation-weighted experienced APY after its performance fee.
+   *
+   * Use `getNetApy(timestamp)` to project the net APY at a specific timestamp. Markets newer than
+   * that timestamp use their snapshot rates without backward projection.
+   *
+   * @returns The current net annual yield as a decimal JavaScript number, or `0` for an empty
+   *   vault.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const netApy = vault.netApy;
+   * // netApy satisfies number
+   * ```
    */
   get netApy() {
     return this.getNetApy();
@@ -312,21 +423,36 @@ export class AccrualVault extends Vault implements IAccrualVault {
     if (this.totalAssets === 0n) return 0n;
 
     return (
-      this.allocations
-        .values()
-        .reduce(
-          (total, { position }) =>
-            total +
-            position.market.getAvgSupplyRate(timestamp) * position.supplyAssets,
-          0n,
-        ) / this.totalAssets
+      this.allocations.values().reduce((total, { position }) => {
+        const assets = position.supplyAssets;
+        return assets === 0n
+          ? total
+          : total + position.market.getAvgSupplyRate(timestamp) * assets;
+      }, 0n) / this.totalAssets
     );
   }
 
   /**
-   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, before deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp.
+   * Calculates the allocation-weighted experienced APY before fees if each market accrued at a
+   * timestamp.
+   *
+   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
+   *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
+   * @returns The projected gross annual yield as a decimal JavaScript number, or `0` for an empty
+   *   vault.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const apy = vault.getApy();
+   * // apy satisfies number
+   * ```
    */
   public getApy(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0;
@@ -335,9 +461,26 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, after deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp.
+   * Calculates the allocation-weighted experienced APY after fees if each market accrued at a
+   * timestamp.
+   *
+   * @param timestamp - Optional Unix timestamp in seconds. Defaults to the current timestamp;
+   *   timestamps at or before each market's `lastUpdate` use its snapshot rate.
+   * @returns The projected net annual yield as a decimal JavaScript number, or `0` for an empty
+   *   vault.
+   * @throws {UnsupportedMarketIrmError} when a supplied market with positive debt uses an unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const netApy = vault.getNetApy();
+   * // netApy satisfies number
+   * ```
    */
   public getNetApy(timestamp: BigIntish = Time.timestamp()) {
     return MarketUtils.rateToApy(
@@ -345,6 +488,26 @@ export class AccrualVault extends Vault implements IAccrualVault {
     );
   }
 
+  /**
+   * Returns one market's share of the vault's allocated assets, rounded down.
+   *
+   * @param marketId - Market whose allocation proportion to read.
+   * @returns The WAD-scaled allocation proportion, or `0n` when the vault is empty or the market
+   *   is not allocated.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const marketId = vault.withdrawQueue[0]!;
+   * const proportion = vault.getAllocationProportion(marketId);
+   * // proportion satisfies bigint
+   * ```
+   */
   public getAllocationProportion(marketId: MarketId) {
     if (this.totalAssets === 0n) return 0n;
 
@@ -355,26 +518,73 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * Returns the deposit capacity limit of a given amount of assets on the vault.
-   * @param assets The maximum amount of assets to deposit.
-   * @deprecated Use `maxDeposit` instead.
+   * Returns the vault's deposit capacity for a requested asset amount.
+   *
+   * @param assets - Maximum underlying asset amount being considered.
+   * @returns A capacity limit containing the depositable asset amount and either the `cap` or
+   *   `balance` limiting reason.
+   * @deprecated Use {@link AccrualVault.maxDeposit} instead.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const limit = vault.getDepositCapacityLimit(1_000_000n);
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public getDepositCapacityLimit(assets: bigint): CapacityLimit {
     return this.maxDeposit(assets);
   }
 
   /**
-   * Returns the withdraw capacity limit corresponding to a given amount of shares of the vault.
-   * @param shares The maximum amount of shares to redeem.
-   * @deprecated Use `maxWithdraw` instead.
+   * Returns the vault's withdraw capacity for a requested share amount.
+   *
+   * @param shares - Maximum vault share amount being considered.
+   * @returns A capacity limit containing the withdrawable asset amount and either the `liquidity`
+   *   or `balance` limiting reason.
+   * @deprecated Use {@link AccrualVault.maxWithdraw} instead.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const limit = vault.getWithdrawCapacityLimit(
+   *   1_000_000_000_000_000_000n,
+   * );
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
     return this.maxWithdraw(shares);
   }
 
   /**
-   * Returns the maximum amount of assets that can be deposited to the vault.
-   * @param assets The maximum amount of assets to deposit.
+   * Returns the requested asset amount depositable through markets in the supply queue.
+   *
+   * @param assets - Maximum underlying asset amount being considered.
+   * @returns A capacity limit containing the depositable asset amount and either the `cap` or
+   *   `balance` limiting reason.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const limit = vault.maxDeposit(1_000_000n);
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
@@ -407,8 +617,23 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * Returns the maximum amount of assets that can be withdrawn from the vault.
-   * @param shares The maximum amount of shares to redeem.
+   * Returns the underlying asset amount withdrawable for a requested vault share amount.
+   *
+   * @param shares - Maximum vault share amount being considered.
+   * @returns A capacity limit containing the withdrawable asset amount and either the `liquidity`
+   *   or `balance` limiting reason.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const vault = await fetchAccrualVault(vaultAddress, client);
+   * const limit = vault.maxWithdraw(1_000_000_000_000_000_000n);
+   * // limit satisfies CapacityLimit
+   * ```
    */
   public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
@@ -427,10 +652,36 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to each of the vault's market's `lastUpdate`.
-   * @returns A new vault whose market positions and fee accounting reflect accrued interest.
-   * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an allocation.
+   * Projects the vault's market interest, loss accounting, and performance fees to a timestamp.
+   *
+   * Returns a new `AccrualVault` and leaves this instance unchanged.
+   * Markets at or beyond the requested timestamp keep their snapshots without backward accrual
+   * or a timestamp error. Zero-share allocations always keep their market snapshots.
+   * Vault loss and fee accounting still reconciles against the resulting allocation balances.
+   *
+   * @param timestamp - Optional accrual timestamp in seconds. Defaults each allocation to its
+   *   own `lastUpdate`; earlier timestamps leave that market unchanged.
+   * @returns A new vault whose market positions, realized losses, and fee shares reflect the
+   *   projected accounting.
+   * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an
+   *   allocation.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an allocated market with positive
+   *   debt requires an unsupported IRM.
+   * @example
+   * ```ts
+   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+   * const block = await client.getBlock();
+   * const vault = await fetchAccrualVault(vaultAddress, client, {
+   *   blockNumber: block.number,
+   * });
+   * const accrued = vault.accrueInterest(block.timestamp);
+   * // accrued satisfies AccrualVault
+   * ```
    */
   public accrueInterest(timestamp?: BigIntish) {
     const vault = new AccrualVault(
@@ -449,7 +700,10 @@ export class AccrualVault extends Vault implements IAccrualVault {
         const { config, position } = allocation;
         return {
           config,
-          position: position.accrueInterest(timestamp),
+          position:
+            position.supplyShares === 0n
+              ? position.accrueInterest()
+              : position.accrueInterest(timestamp),
         };
       }),
     );
@@ -461,6 +715,18 @@ export class AccrualVault extends Vault implements IAccrualVault {
       );
 
       vault.totalAssets += vault.lostAssets;
+
+      // The constructor cached proportions against allocated assets only. Adding `lostAssets`
+      // changes their denominator, so recompute them against the final `totalAssets`.
+      for (const exposure of vault.collateralAllocations.values()) {
+        exposure.proportion = exposure.markets
+          .values()
+          .reduce(
+            (total, marketId) =>
+              total + vault.getAllocationProportion(marketId),
+            0n,
+          );
+      }
     }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);

@@ -31,6 +31,12 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   data, input, validation, and explicit low-level Bundler3-composition surfaces remain available
   only as deprecated compatibility surfaces and will be removed in the next major; their outputs
   are not accepted by the high-level write methods.
+- **Blue reallocation migration** — all Vault V1 PublicAllocator SDK surfaces, including raw
+  ABIs, addresses, configs, fetchers, shared-liquidity planning, and Bundler3 composition, are
+  deprecated and will be removed in the next major. Use Vault V2 BluePublicAllocator reallocations.
+- **MORPHO legacy token wrapping** — the legacy `morphoToken` address and MORPHO wrapping entries
+  in `ethereumGeneralAdapter1Abi` are deprecated and will be removed in the next major. Use the
+  current MORPHO token directly. Native-token, stETH, and other token wrapping remain supported.
 - **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
@@ -62,15 +68,15 @@ Protocol terms used across this package's docs and JSDoc:
   deadline- and slippage-derived cap, replacing any different allowance, including an oversized
   one. That allowance is the only onchain share-burn cap in asset mode. Registered per chain as
   `bundles.vaultBundlesV1`; its canonical ABI export is `vaultBundlesV1Abi`.
-- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Its data and low-level helpers remain public, but v6 high-level Blue writes do not accept V1 reallocations.
+- **PublicAllocator V1** — deprecated MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Its data and low-level helpers remain public, but v6 high-level Blue writes do not accept V1 reallocations.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions. Its `vaultExitBundlesV1ForceWithdrawVaultV2` entry point additionally force-withdraws into the underlying asset, computing its own deallocations, bounding the realized exit share price with `minSharePriceE27`, and optionally routing a referral fee.
 - **Shared-liquidity migration** — every PublicAllocator V1 planning, data, input, validation, and
   Bundler3-composition symbol is deprecated and will be removed in the next major. The successor is
   `MorphoBlue.getVaultV2BlueReallocationData` plus
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`, which return flat, action-ready
-  `VaultV2BlueReallocation` calls and their simulated state. Raw protocol ABI, address, fetch, and
-  config exports are not part of this SDK-algorithm deprecation.
+  `VaultV2BlueReallocation` calls and their simulated state. Raw Vault V1 PublicAllocator ABI,
+  address, fetch, and config exports are also deprecated.
 
 ### Bundler actions
 

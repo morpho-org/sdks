@@ -8,6 +8,7 @@
 - Compute derived values (for example vault `maxSharePrice` bounds and Blue LLTV-buffer health).
 - Validate `chainId` matches the client before any on-chain read or transaction construction. Entities do not enforce builder = signer at build time — callers MUST keep `userAddress` aligned with the signing account. Signature requirements enforce the invariant at `sign()` time via `validateUserAddress`.
 - Return lazy `{ buildTx, getRequirements }` handles — no side effects at construction.
+- **`buildTx` is stateless — it never reads in-memory state written by `getRequirements()` or `sign()`** (see root §1 "Stateless, immutable, composable"). An `ActionOutput` must not close over a mutable cache that `sign()` populates and `buildTx` later reads; everything `buildTx` needs comes from its own arguments, including data carried on the `RequirementSignature` objects it is handed. A payload that only signing can compute (e.g. Midnight's encoded offer-root payload) travels on the signature's `args`, so a requirement signed on one entity instance can be submitted from another (`MorphoMidnight.buildSubmitOffersTx` reads `signature.args.payload`, not a side Map).
 
 ## Routing
 

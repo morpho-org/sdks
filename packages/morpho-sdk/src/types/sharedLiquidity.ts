@@ -28,8 +28,8 @@ export interface PublicAllocatorOptions {
    * The maximum utilization each source market may reach when withdrawing
    * shared liquidity, scaled by WAD.
    *
-   * @deprecated Per-market source ceilings will be removed in the next major.
-   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every source.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
+   * Use `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization` with the Vault V2 planner.
    */
   readonly maxWithdrawalUtilization?: Readonly<
     Record<MarketId, bigint | undefined>

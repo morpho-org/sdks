@@ -25,7 +25,7 @@ The three pillars: **layering, modularity, testability**. Everything else (types
 | **Client** | no | no | no | factory for entities |
 | **Entity** | yes (RPC) | no | yes | lazy `{ buildTx, getRequirements }` |
 | **Action** | no | yes | **no** | deep-frozen `Transaction` |
-| **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | new objects |
+| **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | per-function contract |
 
 Cross-layer leaks (entities encoding calldata, actions reading state, helpers depending on entities) are an API design failure, not an implementation detail. Redesign the boundary; do not add a shortcut.
 
@@ -50,7 +50,8 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 ### Stateless, immutable, composable
 
 - `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
-- Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers return new objects, never mutate inputs.
+- **Entity flows are stateless: no in-memory state may be shared between `getRequirements()`/`sign()` and `buildTx()`.** An `ActionOutput` must not close over a mutable cache (a `Map`, `Set`, array, or object mutated during signing) that `buildTx` later reads. Everything `buildTx` needs must be derivable from the arguments it is handed — including the payloads and derived data carried on the `RequirementSignature` objects passed to it. This keeps `prepare-on-instance-A → finalize-on-instance-B` (and serialize-then-resume) flows correct: the signature is the transport, not a shared closure. If a builder needs a value that only signing can compute (e.g. an encoded offer-root payload), put it on the signature's `args`, not in a side Map.
+- Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers never mutate inputs; they may return an input or reuse an existing object unless their documented contract explicitly requires a fresh object.
 - Do not use classes as value bags. If a type has no meaningful behavior beyond construction, copying, or a one-line conversion, model it as a `type`/`interface` and use local pure conversion where needed. Classes are for typed errors and domain objects with real behavior.
 - Never `deepFreeze` a class instance. Use readonly fields/types for API intent. `deepFreeze` is reserved for function outputs that are expected to be immutable descriptors submitted onchain or signed immediately after construction.
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.

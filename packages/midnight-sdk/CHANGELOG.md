@@ -10,6 +10,21 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
 
+## 1.4.0
+
+### Minor Changes
+
+- [#1053](https://github.com/morpho-org/sdks/pull/1053) [`6a2b225`](https://github.com/morpho-org/sdks/commit/6a2b2254b9e851648956812afacc371ae16236d6) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Compute Midnight quote guards from rounded per-fill settlement amounts and an optional current settlement fee so returned offers cannot imply a worse aggregate price than the requested guard.
+
+### Patch Changes
+
+- [#1049](https://github.com/morpho-org/sdks/pull/1049) [`2c973f5`](https://github.com/morpho-org/sdks/commit/2c973f522e394722d056e808524dabe731ea0c6d) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `OfferUtils.getConsumableUnits` now validates the settlement fee against the offer price before returning unit-capped capacity, so a unit-capped buy offer whose fee exceeds its price throws `SettlementFeeExceedsPriceError` instead of being reported as consumable.
+
+- [#1022](https://github.com/morpho-org/sdks/pull/1022) [`cadae0f`](https://github.com/morpho-org/sdks/commit/cadae0fb873aa9bdeb2676845bd81eda401e7d01) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Reject cached ratifier trees whose visible offers, padding, leaves, root, or height do not describe the same tree, and avoid revalidating the full tree for every ratified offer.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2)]:
+  - @morpho-org/morpho-ts@2.11.2
+
 ## 1.3.1
 
 ### Patch Changes

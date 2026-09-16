@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "6.0.0-next.1",
+  "version": "6.0.0-next.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
@@ -97,8 +97,8 @@
     "MIGRATION-v5-to-v6.md"
   ],
   "scripts": {
-    "prepublish": "$npm_execpath build",
-    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "prepublish": "pnpm build",
+    "build": "tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "test": "vitest --root ../.. --project morpho-sdk --project morpho-sdk-fork"

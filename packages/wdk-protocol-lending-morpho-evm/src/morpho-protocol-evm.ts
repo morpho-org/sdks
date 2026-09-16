@@ -166,7 +166,10 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
-  /** Explicit Permit2 SignatureTransfer nonce, required when that requirement route is selected. */
+  /**
+   * Explicit unused Permit2 SignatureTransfer nonce. Defaults to the lowest unused nonce for the
+   * owner when omitted; set it only when concurrent flows must partition nonces themselves.
+   */
   readonly permit2Nonce?: bigint;
   /**
    * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
@@ -278,13 +281,13 @@ export interface PreparedMorphoSupply {
    * @param requirementOptions - Optional token requirement preferences.
    * @param requirementOptions.useSimplePermit - Optional preference for ERC-2612; unsupported
    *   tokens fall back to Permit2 or direct approval.
-   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce; required when
-   *   Permit2 SignatureTransfer is selected. Allocate a distinct nonce per pending operation.
+   * @param requirementOptions.permit2Nonce - Optional unused uint256 nonce. Defaults to the
+   *   lowest unused nonce when omitted; allocate a distinct nonce per pending operation.
    * @returns Ordered approval transactions and/or signable token requirements; an empty array
    *   for native funding or an already sufficient direct allowance.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {ExpiredDeadlineError} when the prepared deposit's execution deadline has passed.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {NegativeInputError} when the selected Permit2 nonce is negative.
    * @throws {InputExceedsMaxError} when the selected Permit2 nonce exceeds uint256.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the nonce is already consumed.
@@ -987,6 +990,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The submitted deposit hash and fee.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
@@ -1024,6 +1028,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The deposit fee quote.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
@@ -1064,6 +1069,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NonPositiveInputError} when neither funding amount is supplied or the selected amount is zero.
    * @throws {NegativeInputError} when the selected funding amount is negative.
@@ -1097,7 +1103,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     supportSignature: true,
    *   });
    *   const prepared = await morpho.prepareSupply({ token: USDT, amount: 1_000_000n });
-   *   // Keep this explicit nonce unique and unused for the owner. USDT falls back to Permit2.
+   *   // Optional: omit permit2Nonce to use the lowest unused nonce. USDT falls back to Permit2.
    *   const requirements = await prepared.getRequirements({
    *     useSimplePermit: true,
    *     permit2Nonce: 42n,
@@ -1650,6 +1656,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getRepayRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay result, including the submitted transaction hash and fee data.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
@@ -1709,11 +1717,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
+   *   defaults to the lowest unused nonce when omitted.
    * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
    *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
@@ -1784,6 +1795,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay fee quote without a transaction hash.
+   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
@@ -1950,13 +1963,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional previously signed token requirement whose
    *   deadline is reused while resolving a fresh requirement set.
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
-   * @param requirementOptions.permit2Nonce - Explicit unused Permit2 SignatureTransfer nonce.
+   * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
+   *   defaults to the lowest unused nonce when omitted.
    * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
    *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
-   * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+   * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
    *   funded amount.

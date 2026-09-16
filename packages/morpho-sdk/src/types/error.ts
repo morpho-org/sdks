@@ -756,21 +756,6 @@ export {
   BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
 };
 
-/** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
-export class MissingPermit2SignatureTransferNonceError extends Error {
-  public constructor() {
-    super(
-      "Permit2 SignatureTransfer requires an explicit unused permit2Nonce. Generate a unique uint256 nonce, pass it to getRequirements(), and resolve the requirements again.",
-    );
-    this.name = "MissingPermit2SignatureTransferNonceError";
-  }
-}
-
-/** @deprecated Use {@link MissingPermit2SignatureTransferNonceError}. */
-export {
-  MissingPermit2SignatureTransferNonceError as MissingPermit2TransferFromNonceError,
-};
-
 /** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
@@ -2092,11 +2077,11 @@ export class MidnightOfferRootOfferCountMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight offer-root signature was not prepared by this maker flow. */
+/** Thrown when a Midnight offer-root signature carries no encoded payload. */
 export class UnpreparedMidnightOfferRootSignatureError extends Error {
   constructor() {
     super(
-      "Midnight offer root signature was not prepared for this offer tree. Sign this flow's offer-root requirement before building the submit transaction.",
+      "Midnight offer root signature carries no encoded payload. Sign the offer-root requirement (its signature already includes the payload) before building the submit transaction.",
     );
   }
 }
