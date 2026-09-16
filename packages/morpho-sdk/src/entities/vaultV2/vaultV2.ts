@@ -8,7 +8,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { _try, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
@@ -78,6 +78,7 @@ import {
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
   VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
@@ -427,10 +428,10 @@ export interface VaultV2Actions {
    * The SDK derives a conservative lower bound on the realized exit share price from the snapshot
    * and `slippageTolerance`. A supplied `minSharePriceE27` replaces the tolerance-derived bound
    * (it may be tighter or looser) but must be at least the floor derived at
-   * `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection. The bound
-   * rejects a share price drop,
-   * a penalty increase, and liquidity shifting from the penalty-free leg to the penalised leg. It
-   * does **not** cover the referral fee, which the contract deducts afterwards.
+   * `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection.
+   * The bound rejects a share price drop, a penalty increase, and liquidity shifting from the
+   * penalty-free leg to the penalised leg. It does **not** cover the referral fee, which the
+   * contract deducts afterwards.
    *
    * Vault gates are enforced by the final transaction and are not preflighted: the receive-assets
    * gate must allow VaultExitBundlesV1 and may depend on its transient initiator, while a
@@ -1280,14 +1281,16 @@ export class MorphoVaultV2 implements VaultV2Actions {
     if (minSharePriceE27Override != null) {
       // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
       // may round to zero, in which case every positive override is acceptable.
-      const minAllowedSharePriceE27 = MathLib.max(
-        1n,
-        MathLib.mulDivDown(
-          plan.withdrawnAssets,
-          MathLib.wToRay(MathLib.WAD - MAX_SLIPPAGE_TOLERANCE),
-          netSharesBurntNow,
-        ),
-      );
+      const minAllowedSharePriceE27 =
+        _try(
+          () =>
+            computeMinForceWithdrawSharePrice({
+              withdrawnAssets: plan.withdrawnAssets,
+              sharesBurnt: netSharesBurntNow,
+              slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+            }),
+          VaultV2ForceWithdrawZeroSharePriceError,
+        ) ?? 1n;
       if (minSharePriceE27Override < minAllowedSharePriceE27) {
         throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
           minSharePriceE27: minSharePriceE27Override,
@@ -1306,7 +1309,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
     // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
     // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
-    //
     validateUint256Field("minSharePriceE27", minSharePriceE27);
     // VaultExitBundlesV1's burn bound includes fee shares minted by the first withdrawal. Add the
     // projected fee shares to the price-floor ceiling so the approval covers that mint.

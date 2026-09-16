@@ -966,6 +966,56 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       expect(recipientFloor).toBeGreaterThan(nonRecipientFloor);
     });
 
+    test("error: VaultV2ForceWithdrawSharePriceBelowFloorError for a fee-recipient override between the gross-burn and net-burn floors", () => {
+      const now = 1_800_000_000n;
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const { plan, sharesBurnt } = expectedSharesBurnt({
+        vaultData: recipientVaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const netFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: sharesBurnt - feeSharesNow,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+      const grossFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(grossFloor).toBeLessThan(netFloor);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet))
+            .forceWithdraw({
+              exitAssets: 51n,
+              minSharePriceE27: netFloor - 1n,
+              vaultData: recipientVaultData,
+              userAddress: IN_KIND_USER,
+            })
+            .buildTx(),
+        ),
+      ).toThrow(
+        new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          floorE27: netFloor,
+          minSharePriceE27: netFloor - 1n,
+        }),
+      );
+    });
+
     test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {
       const vaultData = vaultV2ExitData({
         assetBalance: 1n,
