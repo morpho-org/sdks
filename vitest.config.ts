@@ -16,7 +16,11 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text-summary", "lcov"],
-      include: ["packages/**/src/**/*.{ts,tsx}", "scripts/release/**/*.ts"],
+      include: [
+        "packages/**/src/**/*.{ts,tsx}",
+        "scripts/ci/**/*.ts",
+        "scripts/release/**/*.ts",
+      ],
       exclude: [
         "packages/test/**",
         "packages/morpho-test/**",
