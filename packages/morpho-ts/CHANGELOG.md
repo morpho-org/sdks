@@ -1,5 +1,17 @@
 # @morpho-org/morpho-ts
 
+## 2.13.0
+
+### Minor Changes
+
+- [#1080](https://github.com/morpho-org/sdks/pull/1080) [`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate all Vault V1 PublicAllocator surfaces, including raw ABIs, address and deployment registry fields, configuration models, fetchers, augmentation methods, and the liquidity loader. The existing V1 planning and transaction-composition deprecations continue to apply. Use Vault V2 BluePublicAllocator configurations and fetchers, `MorphoBlue.getVaultV2BlueReallocationData`, and `MorphoBlue.getVaultV2BlueReallocations` for new integrations.
+
+  Deprecate the legacy `morphoToken` address and the MORPHO legacy wrapping entries in `ethereumGeneralAdapter1Abi`. Use the current MORPHO token directly.
+
+  All deprecated exports, signatures, addresses, and transaction behavior remain available for compatibility until the next major release. General Vault V1 operations, Vault V2 allocator APIs, and other token wrapping flows remain supported.
+
+  Patch maintained runtime dependents so their next releases resolve the updated packages. Existing internal peer ranges accept these backward-compatible minor releases and require no changes.
+
 ## 2.12.0
 
 ### Minor Changes

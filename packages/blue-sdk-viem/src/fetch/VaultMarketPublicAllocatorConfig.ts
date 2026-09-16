@@ -14,6 +14,8 @@ import type { FetchParameters } from "../types.js";
  * Reads `PublicAllocator.flowCaps(vault, marketId)` when the configured chain has a
  * PublicAllocator deployment.
  *
+ * @deprecated Vault V1 PublicAllocator support is deprecated. Use {@link fetchVaultV2BlueMarketPublicAllocatorConfig} for Vault V2 integrations.
+ *
  * @param vault - MetaMorpho vault address.
  * @param marketId - Market id whose flow caps are fetched.
  * @param client - Viem client used for the contract read.

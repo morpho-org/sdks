@@ -1,6 +1,6 @@
 # review-pr-ci
 
-CI-mode pull request review. Posts an inline GitHub review with a formal `APPROVE` / `REQUEST_CHANGES` verdict. Runs in GitHub Actions on a PR.
+CI-mode pull request review. Posts an inline GitHub review with a formal verdict (`REQUEST_CHANGES`, or `COMMENT` carrying the approve marker). Runs in GitHub Actions on a PR.
 
 ## Usage
 
@@ -73,7 +73,7 @@ Structure:
 ```json
 {
   "commit_id": "<HEAD_SHA>",
-  "event": "<APPROVE|REQUEST_CHANGES>",
+  "event": "<COMMENT|REQUEST_CHANGES>",
   "body": "<REVIEW_BODY>",
   "comments": [
     {
@@ -92,15 +92,18 @@ Anchor each inline comment's `line` on the finding's `snapped_line` (the nearest
 
 | Verdict | When | Event |
 |---|---|---|
-| **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `APPROVE` |
+| **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `COMMENT` (body carries `<!-- CLAUDE_VERDICT:APPROVE -->`) |
 | **Request Changes** | Any critical, OR any high, OR `<FAILED_AGENTS>` is non-zero | `REQUEST_CHANGES` |
 
-When agents have failed, never `APPROVE` — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
+Never send `"event": "APPROVE"`: the job token (`github-actions[bot]`) is not allowed to approve pull requests and the reviews API rejects it with HTTP 422, which loses the inline comments. The `CLAUDE_VERDICT:APPROVE` marker in the body is the verdict; a human clicks Approve.
+
+When agents have failed, never approve — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
 
 ### Body format
 
 ```
 <!-- CLAUDE_REVIEW_COMPLETE -->
+<!-- CLAUDE_REVIEW_RUN:<run id> -->  <!-- Copy verbatim from the prompt when it provides one -->
 <!-- CLAUDE_VERDICT:APPROVE -->  <!-- Only include for approvals -->
 ## Code Review Summary
 
@@ -148,7 +151,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews \
 
 This creates the review and all inline comments atomically — no partial reviews if something fails midway. Clean up: `rm -f "$REVIEW_FILE"`.
 
-If the review creation fails (permissions, line numbers out of range), fall back to a single PR-level comment:
+If the review creation fails with HTTP 422 because an inline comment's `line` is not a diff line, drop the offending comment(s) into the body and retry the reviews API once. Only if the reviews API still fails, fall back to a single PR-level comment (this loses inline anchoring, so it is a last resort). In CI an issue comment does **not** satisfy `claude.yml`'s "Verify the review was posted" gate — only a formal review counts — so the job still fails red and a human investigates; that is intended:
 
 ```bash
 gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments \
@@ -170,7 +173,7 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 
 ## Notes
 
-- **CI mode posts a formal verdict** with the `<!-- CLAUDE_REVIEW_COMPLETE -->` and `<!-- CLAUDE_VERDICT:APPROVE -->` markers consumed by the project's CI gates.
+- **CI mode posts a formal verdict** carrying three markers: `<!-- CLAUDE_REVIEW_COMPLETE -->` and the per-run `<!-- CLAUDE_REVIEW_RUN:<GITHUB_RUN_ID> -->` line given in the prompt are consumed by `claude.yml`'s "Verify the review was posted" gate (`scripts/ci/claude-review-gate.ts` — the run marker is what proves *this* job posted the review, not a concurrent `@claude` run), and `<!-- CLAUDE_VERDICT:APPROVE -->` signals the verdict to the human who clicks Approve — no CI gate reads it.
 - **Local-first reads**: never use the GitHub API to read diffs or file contents — the local repo has everything.
 - **Agent failures downgrade verdict**: any `<FAILED_AGENTS> > 0` forces `REQUEST_CHANGES` so a human handles it.
 - **No `--watch`** in CI — the run is one-shot per PR push.

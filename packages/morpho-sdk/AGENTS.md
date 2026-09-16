@@ -10,9 +10,12 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem. VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone VaultExitBundlesV1 periphery directly. Their optional RPC-backed pre-flight checks run only when the caller awaits `getRequirements()`; the pure actions and `buildTx()` remain synchronous and can encode without those reads.
 - **Blue bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply`, `repay`, and `repayWithdrawCollateral` support native wrapping when `loanToken === wNative` (repay assets mode is additive like supply; repay shares mode carves native out of the transfer); loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
-- **Blue reallocation migration** — all SDK surfaces for the Vault V1 shared-liquidity algorithm
-  and its PublicAllocator Bundler3 composition are deprecated and will be removed in the next
-  major. Use Vault V2 BluePublicAllocator reallocations.
+- **Blue reallocation migration** — all Vault V1 PublicAllocator SDK surfaces, including raw
+  ABIs, addresses, configs, fetchers, shared-liquidity planning, and Bundler3 composition, are
+  deprecated and will be removed in the next major. Use Vault V2 BluePublicAllocator reallocations.
+- **MORPHO legacy token wrapping** — the legacy `morphoToken` address and MORPHO wrapping entries
+  in `ethereumGeneralAdapter1Abi` are deprecated and will be removed in the next major. Use the
+  current MORPHO token directly. Native-token, stETH, and other token wrapping remain supported.
 - **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
@@ -31,15 +34,15 @@ Protocol terms used across this package's docs and JSDoc:
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
-- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`.
+- **PublicAllocator V1** — deprecated MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`. Use Vault V2 BluePublicAllocator for new integrations.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; the allocator pulls `ceil(assets × penalty / WAD)` of the target loan token from Bundler3 and donates it directly to the vault. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
 - **Shared-liquidity migration** — every PublicAllocator V1 planning, data, input, validation, and
   Bundler3-composition symbol is deprecated and will be removed in the next major. The successor is
   `MorphoBlue.getVaultV2BlueReallocationData` plus
   `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`, which return flat, action-ready
-  `VaultV2BlueReallocation` calls and their simulated state. Raw protocol ABI, address, fetch, and
-  config exports are not part of this SDK-algorithm deprecation.
+  `VaultV2BlueReallocation` calls and their simulated state. Raw Vault V1 PublicAllocator ABI,
+  address, fetch, and config exports are also deprecated.
 
 ### Bundler actions
 

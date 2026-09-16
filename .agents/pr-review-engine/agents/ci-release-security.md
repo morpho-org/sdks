@@ -7,8 +7,8 @@ out-of-scope:
   - Code quality of build/test scripts themselves — see code-quality, style-conventions.
   - JSDoc on any exported symbols touched by a CI script — see documentation.
   - Test coverage of the publish flow — see test-coverage.
-focus: GitHub Actions workflow injection, action pinning, workflow permissions, secret exposure, publish-flow integrity, Changesets/release-bot wiring, lockfile drift, dependency hygiene, .npmrc and pnpm-workspace settings, pnpm minimum-release-age bypasses.
-severity-guidance: Workflow injection → critical. Floating action tags or wide default permissions → high. Runtime/peer lockfile drift without manifest/versioning → high. Compatible devDependency-only resolution drift is allowed. Provenance opt-out → medium. Dependency-age bypass → high unless explicitly approved and temporary.
+focus: GitHub Actions workflow injection, untested inline CI logic, action pinning, workflow permissions, secret exposure, publish-flow integrity, Changesets/release-bot wiring, lockfile drift, dependency hygiene, .npmrc and pnpm-workspace settings, pnpm minimum-release-age bypasses.
+severity-guidance: Workflow injection → critical. Untested inline CI logic (jq/awk/shell pipelines deciding outputs or pass/fail) → high. Floating action tags or wide default permissions → high. Runtime/peer lockfile drift without manifest/versioning → high. Compatible devDependency-only resolution drift is allowed. Provenance opt-out → medium. Dependency-age bypass → high unless explicitly approved and temporary.
 ---
 
 # CI / Release Security
@@ -28,6 +28,10 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 - Any `${{ github.event.* }}`, `${{ github.head_ref }}`, or other attacker-controllable input interpolated directly into a `run:` block, `shell:` invocation, or third-party-action argument. The fix is always: assign to an env var first, then reference `$ENV_VAR` in the shell — never expand untrusted GitHub-context expressions in `run:` strings.
 - `pull_request_target` triggers that also check out the PR head (`actions/checkout` with `ref: ${{ github.event.pull_request.head.sha }}` or similar). This pattern executes attacker code with write-scoped credentials. Flag unless the workflow demonstrably never runs the checked-out code (no install, no test, no script).
 - `issue_comment` or `pull_request_review_comment` triggers that act on comment text without ACL gating (e.g. checking `github.event.comment.author_association == 'OWNER'`).
+
+### Untested inline CI logic (HIGH)
+
+- A `run:` block that derives a decision or a value from data — parses API responses, filters or counts records, computes step outputs, or decides pass/fail — via inline `jq`/`awk`/shell. Not in scope: linear setup sequences (install, `sysctl`, `cp`), a single command with a static error message on failure, or marshalling static workflow inputs into command arguments. Per AGENTS.md §10 that logic belongs in a TypeScript script under `scripts/ci/` (run as `node <script>.ts`) with colocated `*.test.ts` in the `scripts` project (pattern: `scripts/ci/claude-review-gate.ts`); the step only invokes it. Also flag a new or changed script under `scripts/ci/` or `scripts/release/` that lands without a matching `*.test.ts`/`*.test.js` change, a new CI script written as `.mjs`/`.js` instead of `.ts` (**medium**), and a step that runs the workspace copy of such a script after the workspace has been switched to the PR head instead of the trusted default-branch copy.
 
 ### Action pinning (HIGH)
 

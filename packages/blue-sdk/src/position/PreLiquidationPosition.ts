@@ -119,6 +119,7 @@ export class PreLiquidationPosition
     return this._baseMarket.params.lltv;
   }
 
+  /** {@inheritDoc AccrualPosition.accrueInterest} */
   public override accrueInterest(timestamp?: BigIntish) {
     return new PreLiquidationPosition(
       {

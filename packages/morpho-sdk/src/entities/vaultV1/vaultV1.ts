@@ -150,6 +150,7 @@ export interface VaultV1Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
@@ -221,6 +222,7 @@ export interface VaultV1Actions {
    * @returns Lazy approval or permit resolution through `getRequirements()` and a synchronous
    *   `buildTx()` returning a deep-frozen `Transaction<VaultV1MigrateToV2Action>`.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and target assets differ.
    * @throws {NonPositiveInputError} when `shares` is not positive or the target projection yields
@@ -499,6 +501,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       const marketId = MarketUtils.getMarketId(marketParams);
       const allocation = vaultData.allocations.get(marketId);
       if (allocation?.config.enabled !== true) continue;
+      if (allocation.position.supplyShares === 0n) continue;
 
       const market = allocation.position.market.accrueInterest(now);
       const available = market.toSupplyAssets(allocation.position.supplyShares);

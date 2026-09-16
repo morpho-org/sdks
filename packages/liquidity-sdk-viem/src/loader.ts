@@ -16,25 +16,36 @@ import { apiSdk } from "./api/index.js";
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
 /**
  * Optional tuning for the shared-liquidity source-market withdrawal ceiling.
+ *
+ * @deprecated Vault V1 PublicAllocator liquidity planning is deprecated. Use
+ * `VaultV2BluePublicAllocatorOptions` from `@morpho-org/morpho-sdk` instead.
  */
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
    *
    * @default 90% (900000000000000000n)
+   * @deprecated Use `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization`
+   * with the Vault V2 BluePublicAllocator planner in `@morpho-org/morpho-sdk`.
    */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
    * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
    *
-   * @deprecated Per-market source ceilings will be removed in the next major.
-   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every
-   * source. The Morpho API's `targetWithdrawUtilization` is no longer consulted.
+   * @deprecated Vault V1 PublicAllocator liquidity planning and per-market source
+   * ceilings are deprecated. Use `VaultV2BluePublicAllocatorOptions.maxWithdrawalUtilization`
+   * with the Vault V2 BluePublicAllocator planner in `@morpho-org/morpho-sdk`.
    */
   maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
 
+/**
+ * Batches Vault V1 PublicAllocator liquidity planning from API and onchain state.
+ *
+ * @deprecated Use `MorphoBlue.getVaultV2BlueReallocationData` and
+ * `MorphoBlue.getVaultV2BlueReallocations` from `@morpho-org/morpho-sdk` instead.
+ */
 export class LiquidityLoader<chain extends Chain = Chain> {
   protected readonly dataLoader: DataLoader<
     MarketId,
@@ -212,6 +223,9 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
   /**
    * Fetches the shared-liquidity plan for a target market from the Morpho API and onchain state.
+   *
+   * @deprecated Use `MorphoBlue.getVaultV2BlueReallocationData` and
+   * `MorphoBlue.getVaultV2BlueReallocations` from `@morpho-org/morpho-sdk` instead.
    *
    * @param marketId - Target market id to plan withdrawals for.
    * @returns The start state, simulated end state, computed withdrawals, and target borrow utilization.
