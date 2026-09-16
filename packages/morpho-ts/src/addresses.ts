@@ -827,7 +827,13 @@ const _addressesRegistry = {
   [ChainId.ArcMainnet]: {
     blue: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundles: {
+      vaultExitBundlesV1: "0x2095B5974101A94B726593f0E81d177B058849C7",
+      vaultBundlesV1: "0x76c1dEefAe48523E14903085081Bda2999450b68",
+      blueBundlesV1: "0x3c4BaE2a2Ef708ddaAE40A0b66623afE44eF4A7F",
+    },
     adaptiveCurveIrm: "0xF02615d094Fc02fC031C35fe705e175aA4653f20",
+    vaultV2BluePublicAllocator: "0x4c2ff4D792d0a03A0e461e4B9B00Bc812A0147C2",
     vaultV2Factory: "0x3b0eefaBfa22ec7CF2c73877ac16e78D76749f12",
     morphoMarketV1AdapterV2Factory:
       "0x6C2FF5114E45b50bc7195c2F1f87C98cbdad62Cc",
@@ -835,6 +841,14 @@ const _addressesRegistry = {
     registryList: "0xdEBC92370Cd74d55DA144116138681dbbb528765",
     chainlinkOracleFactory: "0xbFc8D6167a02889D5EB08a023d9aB712B44f7dE8",
     preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
+    midnight: "0x208786922BE56fDE2D1Fa60e6b9eC5D723e8d7b0",
+    midnightBundles: "0x3609525024c88f794CBE09e4832810E2bd737beC",
+    midnightBlueBuyCallbackFactory:
+      "0x9bD11e1EC7bf3520896F8e3e63d4B70f8d6d177E",
+    midnightMempool: "0x26bded5Fb01373CE875dEa14E52799D04C839C1A",
+    ecrecoverRatifier: "0xA3B53aDe6668b6ceC03a9E56a993B47034F43715",
+    ecrecoverAuthorizer: "0xe1dccAdc10c35AE9e2207059B233fE5c634CF20f",
+    setterRatifier: "0x3915156EBFC246Ee9aC3236af561546B7D9D924c",
   },
   [ChainId.MorphMainnet]: {
     blue: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
@@ -1388,13 +1402,22 @@ const _deployments = {
   [ChainId.ArcMainnet]: {
     blue: 1208685n,
     permit2: 0n,
+    bundles: { vaultExitBundlesV1: 20_322_300n },
     adaptiveCurveIrm: 1208685n,
+    vaultV2BluePublicAllocator: 20_322_353n,
     vaultV2Factory: 1208931n,
     morphoMarketV1AdapterV2Factory: 1208978n,
     morphoVaultV1AdapterFactory: 5_314_109n,
     registryList: 1208978n,
     chainlinkOracleFactory: 1208882n,
     preLiquidationFactory: 1208882n,
+    midnight: 20_320_779n,
+    midnightBundles: 20_321_988n,
+    midnightBlueBuyCallbackFactory: 20_322_111n,
+    midnightMempool: 20_320_779n,
+    ecrecoverRatifier: 20_320_779n,
+    ecrecoverAuthorizer: 20_320_779n,
+    setterRatifier: 20_320_779n,
   },
   [ChainId.MorphMainnet]: {
     blue: 23180020n,

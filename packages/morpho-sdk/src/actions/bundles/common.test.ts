@@ -19,6 +19,7 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
+  InputExceedsMaxError,
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
@@ -94,6 +95,43 @@ describe("getBundlesSharesPermit", () => {
       args: { spender, amount: 7n, deadline: 11n, nonce: 9n },
     },
   } satisfies PermitRequirementSignature;
+
+  test.each([
+    { deadline: -1n, error: NonPositiveInputError },
+    { deadline: 0n, error: NonPositiveInputError },
+    { deadline: maxUint256 + 1n, error: InputExceedsMaxError },
+  ])(
+    "error: rejects bundle and signed permit deadline $deadline",
+    ({ deadline, error }) => {
+      expect(() => getBundlesSharesPermit({ vault, deadline })).toThrow(error);
+      expect(() =>
+        getBundlesSharesPermit({
+          vault,
+          deadline: 13n,
+          requirementSignature: {
+            ...permit,
+            args: { ...permit.args, deadline },
+          },
+        }),
+      ).toThrow(error);
+    },
+  );
+
+  test("behavior: accepts maxUint256 for the bundle and signed permit", () => {
+    expect(
+      getBundlesSharesPermit({ vault, deadline: maxUint256 }).deadline,
+    ).toBe(maxUint256);
+    expect(
+      getBundlesSharesPermit({
+        vault,
+        deadline: 13n,
+        requirementSignature: {
+          ...permit,
+          args: { ...permit.args, deadline: maxUint256 },
+        },
+      }).deadline,
+    ).toBe(maxUint256);
+  });
 
   test("default", () => {
     expectTypeOf<

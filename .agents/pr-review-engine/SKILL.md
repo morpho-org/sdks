@@ -20,7 +20,7 @@ How a caller knows the engine is working (rough targets, not hard thresholds):
 
 - **Triggering precision** — CI/release-only diffs fire `ci-release-security`; protocol-surface diffs collect ABI/address context for `morpho-protocol` and `web3-security`; agentic-system diffs fire `skill-authoring`.
 - **False-positive ceiling** — ≤ 10% of agent findings dropped by the scope filter on a healthy diff. If consistently higher, the diff path normalization or `<CHANGED_LINES>` build is wrong.
-- **0 failed agents on a clean diff** — `<FAILED_AGENTS>` is empty when every agent's JSON parses and matches the WHAT/FIX schema. If non-zero, check schema injection in Step 5.
+- **0 failed agents on a clean diff** — `<FAILED_AGENTS>` is empty when every agent was dispatched and its JSON parses and matches the WHAT/FIX schema. If non-zero, check schema injection in Step 5.
 - **Bounded cost** — a typical review fans out 8 baseline + 0–2 conditional agents.
 
 ## Inputs (from caller's Steps 1–2)
@@ -140,7 +140,7 @@ Compute flags from the changed-files list and content. These flags are passed to
 
 **Doc files are prose, not surfaces:** content-based detector legs (import / string / pattern matches) never count matches found inside `*.md` / `*.mdx` / `*.txt` files — a documented example command must not launch an agent whose own scope rules will predictably return `[]`. Path-based legs (file-path patterns) are unaffected.
 
-- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. **Fires `ci-release-security`.**
+- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `scripts/ci/**`, `scripts/release/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. **Fires `ci-release-security`.**
 - `<HAS_PLUGIN_SKILLS>` — true if any changed file is part of the repo's agentic-system / skill-authoring surface: matches `.agents/**/*.md`, `.agents/pr-review-engine/scripts/**`, `.claude/**`, any `**/SKILL.md`, or a `.claude-plugin/*.json` manifest. Path-based (these are prose/JSON), so it fires even on a docs-only change to the agentic system — exactly when authoring conformance matters. **Fires `skill-authoring`.**
 - `<HAS_PROTOCOL_SURFACE>` — true if any changed file or changed hunk touches protocol-facing SDK code or terms listed in the protocol source-of-truth section above. This flag does not gate `morpho-protocol` (baseline); it tells all agents whether protocol context should have been collected.
 
@@ -176,8 +176,8 @@ Agent specs live in `.agents/pr-review-engine/agents/*.md`. Each file has frontm
    - `kind: conditional` → parse the `trigger:` value, look up the named flag from Step 4, evaluate it. Compound triggers like `HAS_A OR HAS_B` are evaluated as written (split on whitespace, look up each flag, apply `OR` / `AND`).
 3. **Apply the caller's exclusion list.** If the caller provided `<EXCLUDE_AGENTS>`, drop those from the launch set (e.g. `/pr-review-local --fast` excludes `documentation`).
 3b. **Doc-only fast path.** If every changed file is `*.md` / `*.mdx` / `*.txt`, drop `silent-failure-hunter`, `test-coverage`, and `web3-security` from the launch set — they have no surface on a docs-only diff and only add cost and noise. `documentation`, `code-quality`, `morpho-protocol`, `module-api-architecture`, and `style-conventions` still launch (prose accuracy, protocol-doc claims, secrets-in-docs, pointer integrity, changeset relevance). Conditionals need no special handling — Step 4's content-based detectors already ignore matches inside doc files, so on a doc-only diff only path-based triggers (`HAS_CI_RELEASE`, `HAS_PLUGIN_SKILLS`) can fire. Print one line: `Doc-only diff: skipping silent-failure-hunter, test-coverage, web3-security.`
-4. Launch ALL selected agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
-5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of agents actually launched (baseline + fired conditionals − excluded).
+4. Launch ALL selected agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`): emit every Agent call in a single message. **Foreground only — set `run_in_background: false` explicitly on every Agent call** (the harness backgrounds subagents by default, so leaving it unset is not enough outside CI). The dispatcher must block on the agents' results before moving to Step 6; in headless runs (CI) the process exits as soon as the main turn ends, so a turn that ends with agents still running orphans them and the review is silently never posted. If an Agent call is rejected, review inline with the same rubric rather than stopping, and still count that agent in `<FAILED_AGENTS>` (name + reason `dispatch rejected, reviewed inline`) so callers surface the degraded panel in their WARNING line and verdict logic.
+5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of agents selected for launch (baseline + fired conditionals − excluded), including any whose dispatch was rejected and reviewed inline — so `<FAILED_AGENTS>` is always a subset of it.
 
 ### Sub-agent prompt envelope (what the dispatcher must inject)
 
@@ -295,6 +295,7 @@ Merge all agent results into a single list:
 
 2. **Count agent failures.** An agent counts as failed if any of these hold:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5). A sentinel payload is never mined for embedded findings.
+   - Was never launched because the Agent call was rejected (Step 5.4 inline fallback) — reason `dispatch rejected, reviewed inline`; the inline findings are kept.
    - Returned text from which no findings array can be **safely** recovered. The validator parses tolerantly (a prose-wrapped array is recovered by slicing from the first `[` to the last `]`; an object whose sole value is a list is unwrapped) but rejects ambiguous payloads (incidental brackets, trailing failure objects). The bias is deliberate: a false failure is recoverable, a false clean is not.
    - Returned a JSON value that is not an array and could not be unwrapped.
    - Returned an array containing one or more objects missing required fields:
@@ -327,10 +328,10 @@ The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local` / `
 
 - `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description, snapped_line?}`. `snapped_line` is the nearest actual diff line (the anchor for a GitHub inline comment; equals `line` when the cited line is itself changed); absent on pure-rename keeps.
 - `<DROPPED_FINDINGS>` — findings the scope filter dropped, each tagged with `drop_reason` (`file-out-of-scope` / `line-pre-existing` / `doc-example-fp`). Consumer commands render this as a collapsible audit section after the main findings list — never a silent nuke.
-- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
+- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output, or whose dispatch was rejected (reviewed inline).
 - `<COUNTS>` — `{critical, high, medium, low}` totals on the kept findings.
 - `<DROPPED_COUNTS>` — `{out_of_scope, pre_existing, doc_example}` totals on the dropped findings.
-- `<TOTAL_AGENTS_LAUNCHED>` — count of baseline + fired conditional agents, minus `<EXCLUDE_AGENTS>`.
+- `<TOTAL_AGENTS_LAUNCHED>` — count of baseline + fired conditional agents, minus `<EXCLUDE_AGENTS>`, including rejected dispatches.
 
 The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / terminal output / fix application).
 

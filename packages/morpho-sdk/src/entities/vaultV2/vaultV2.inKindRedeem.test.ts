@@ -64,6 +64,22 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
+  test("error: InputExceedsMaxError before exposing requirements", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("default", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

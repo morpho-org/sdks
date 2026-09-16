@@ -105,14 +105,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.ArcMainnet, "midnight");
+      getChainAddress(ChainId.ArbitrumMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.ArcMainnet,
+      chainId: ChainId.ArbitrumMainnet,
       label: "midnight",
     });
   });
@@ -187,6 +187,10 @@ describe("addressesRegistry", () => {
     [
       ChainId.RobinhoodMainnet,
       ["0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857", 38318973n],
+    ],
+    [
+      ChainId.ArcMainnet,
+      ["0x4c2ff4D792d0a03A0e461e4B9B00Bc812A0147C2", 20_322_353n],
     ],
   ] as const)(
     "behavior: exposes BluePublicAllocator on chain %i",
@@ -297,6 +301,11 @@ describe("addressesRegistry", () => {
       "0xCE29862924756584BBD0D75CA1249d22007E2813",
       32_383_480n,
     ],
+    [
+      ChainId.ArcMainnet,
+      "0x2095B5974101A94B726593f0E81d177B058849C7",
+      20_322_300n,
+    ],
   ] as const)(
     "behavior: exposes VaultExitBundlesV1 on chain %s",
     (...[chainId, address, deploymentBlock]) => {
@@ -323,6 +332,7 @@ describe("addressesRegistry", () => {
     [ChainId.StableMainnet, "0x2b910f5368e4939A2906ADa85c21fc0e51C4A861"],
     [ChainId.TempoMainnet, "0xe8aA1d8f1Cb111B7f52957D662Ee310D6d2Ee9B9"],
     [ChainId.RobinhoodMainnet, "0xcC108538f36242D6E0d6B9255f6D9Ccd137D70Fe"],
+    [ChainId.ArcMainnet, "0x76c1dEefAe48523E14903085081Bda2999450b68"],
   ] as const)(
     "behavior: exposes VaultBundlesV1 on chain %s",
     (...[chainId, address]) => {
@@ -344,6 +354,7 @@ describe("addressesRegistry", () => {
     [ChainId.StableMainnet, "0xFB606389166c04828D6Dba36F77871489673CeA0"],
     [ChainId.TempoMainnet, "0xAE863452f44ADD237739A85eb6BB1989E2368362"],
     [ChainId.RobinhoodMainnet, "0x53A1eB6589861F686af7c531211E35Aefe30210f"],
+    [ChainId.ArcMainnet, "0x3c4BaE2a2Ef708ddaAE40A0b66623afE44eF4A7F"],
   ] as const)(
     "behavior: exposes BlueBundlesV1 on chain %s",
     (...[chainId, address]) => {
@@ -399,6 +410,48 @@ describe("addressesRegistry", () => {
       "setterRatifier",
       "0xb72c416382c8A6399D0765CebfB032F040B00B3c",
       25_798_183n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnight",
+      "0x208786922BE56fDE2D1Fa60e6b9eC5D723e8d7b0",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightBundles",
+      "0x3609525024c88f794CBE09e4832810E2bd737beC",
+      20_321_988n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x9bD11e1EC7bf3520896F8e3e63d4B70f8d6d177E",
+      20_322_111n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "midnightMempool",
+      "0x26bded5Fb01373CE875dEa14E52799D04C839C1A",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "ecrecoverRatifier",
+      "0xA3B53aDe6668b6ceC03a9E56a993B47034F43715",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "ecrecoverAuthorizer",
+      "0xe1dccAdc10c35AE9e2207059B233fE5c634CF20f",
+      20_320_779n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "setterRatifier",
+      "0x3915156EBFC246Ee9aC3236af561546B7D9D924c",
+      20_320_779n,
     ],
     [
       ChainId.ScrollMainnet,
@@ -824,7 +877,7 @@ describe("addressesRegistry", () => {
 
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
-    const blueAddresses = addressesRegistry[ChainId.ArcMainnet];
+    const blueAddresses = addressesRegistry[ChainId.PolygonMainnet];
     const chainAddresses = {
       ...createMidnightAddresses(),
       permit2: blueAddresses.permit2,
@@ -851,7 +904,7 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = deployments[ChainId.ArcMainnet];
+    const blueDeployments = deployments[ChainId.PolygonMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
       permit2: blueDeployments.permit2,

@@ -11,6 +11,7 @@ import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
   EmptyMarketParamsListError,
+  InputExceedsMaxError,
   NonPositiveInputError,
 } from "../../types/index.js";
 import { vaultV1InKindRedeem } from "./inKindRedeem.js";
@@ -61,6 +62,38 @@ registerCustomAddresses({
 });
 
 describe("vaultV1InKindRedeem", () => {
+  test("error: InputExceedsMaxError for an unencodable deadline", () => {
+    expect(() =>
+      vaultV1InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: maxUint256 + 1n,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("behavior: accepts maxUint256 for the bundle and empty permit", () => {
+    const tx = vaultV1InKindRedeem({
+      vault: { chainId, address: vault },
+      args: {
+        amount: 100n,
+        marketParamsList: [marketParams],
+        userAddress,
+        deadline: maxUint256,
+      },
+    });
+    const decoded = decodeFunctionData({
+      abi: vaultExitBundlesV1Abi,
+      data: tx.data,
+    });
+    expect(decoded.args?.[3]).toMatchObject({ deadline: maxUint256 });
+    expect(decoded.args?.[4]).toBe(maxUint256);
+  });
+
   test("default", () => {
     const tx = vaultV1InKindRedeem({
       vault: { chainId, address: vault },
