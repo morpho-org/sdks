@@ -133,6 +133,23 @@
 - Updated dependencies [[`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`b8c944c`](https://github.com/morpho-org/sdks/commit/b8c944c44251c48985cb7411310884eb2548208c), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab)]:
   - @morpho-org/morpho-sdk@6.0.0-next.0
 
+## 1.3.2
+
+### Patch Changes
+
+- [#995](https://github.com/morpho-org/sdks/pull/995) [`4eb0da6`](https://github.com/morpho-org/sdks/commit/4eb0da65dbf8684ebefbb8ebeed506086a792b73) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Bump the pinned Tether WDK ERC-4337 stack to the release that validates the token-paymaster
+  address (`@tetherto/wdk-wallet-evm-erc-4337` `1.0.0-beta.14` → `1.0.0-beta.17`, and its siblings
+  `@tetherto/wdk-wallet` `1.0.0-beta.15` → `1.0.0-beta.17` and `@tetherto/wdk-wallet-evm`
+  `1.0.0-beta.16` → `1.0.0-beta.18` to keep the tree on a single WDK version). beta.17 rejects any
+  token-mode paymaster whose on-chain address returned by the paymaster RPC does not match the
+  configured `paymasterAddress`, so the auto-generated ERC-20 approval can no longer target an
+  unexpected spender when the paymaster endpoint is misrouted or compromised. This package is a
+  pass-through and carries none of that logic itself; the fix lives entirely in the pinned
+  dependency.
+- Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
+  - @morpho-org/blue-sdk@6.10.0
+  - @morpho-org/morpho-sdk@5.12.0
+
 ## 1.3.1
 
 ### Patch Changes
