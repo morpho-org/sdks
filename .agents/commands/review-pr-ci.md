@@ -1,11 +1,11 @@
-# pr-review-ci
+# review-pr-ci
 
 CI-mode pull request review. Posts an inline GitHub review with a formal verdict (`REQUEST_CHANGES`, or `COMMENT` carrying the approve marker). Runs in GitHub Actions on a PR.
 
 ## Usage
 
 ```
-/pr-review-ci <PR_NUMBER>
+/review-pr-ci <PR_NUMBER>
 ```
 
 Pre-conditions:
@@ -13,7 +13,7 @@ Pre-conditions:
 - `CI=true` OR `GITHUB_ACTIONS=true` MUST be set in the environment.
 - A `<PR_NUMBER>` argument is required.
 - `--watch` is not supported (no cron in CI).
-- `--local` is not supported (use `/pr-review-local` for that).
+- `--local` is not supported (use `/review-pr-local` for that).
 
 If any pre-condition fails, abort with a clear error and exit 1.
 
@@ -21,11 +21,11 @@ If any pre-condition fails, abort with a clear error and exit 1.
 
 ```bash
 if [ "$CI" != "true" ] && [ "$GITHUB_ACTIONS" != "true" ]; then
-  echo "pr-review-ci must run in CI (CI=true or GITHUB_ACTIONS=true). Use /pr-review-gh for local-PR review." >&2
+  echo "review-pr-ci must run in CI (CI=true or GITHUB_ACTIONS=true). Use /review-pr-gh for local-PR review." >&2
   exit 1
 fi
 if [ -z "${1:-}" ]; then
-  echo "pr-review-ci requires a PR number." >&2
+  echo "review-pr-ci requires a PR number." >&2
   exit 1
 fi
 ```
@@ -65,7 +65,7 @@ Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated, each carrying `snapped_
 Build a JSON object with all findings. Write to a PR-specific temp file:
 
 ```bash
-REVIEW_FILE="/tmp/pr-review-ci-<PR_NUMBER>-comments.json"
+REVIEW_FILE="/tmp/review-pr-ci-<PR_NUMBER>-comments.json"
 ```
 
 Structure:
@@ -177,8 +177,8 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 - **Local-first reads**: never use the GitHub API to read diffs or file contents — the local repo has everything.
 - **Agent failures downgrade verdict**: any `<FAILED_AGENTS> > 0` forces `REQUEST_CHANGES` so a human handles it.
 - **No `--watch`** in CI — the run is one-shot per PR push.
-- **For pre-PR review**: use `/pr-review-local` (terminal-only, no GitHub interaction).
-- **For local PR review with optional watcher**: use `/pr-review-gh`.
+- **For pre-PR review**: use `/review-pr-local` (terminal-only, no GitHub interaction).
+- **For local PR review with optional watcher**: use `/review-pr-gh`.
 
 ## Sentinel grammar
 

@@ -102,7 +102,7 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 
 ## Fix rubric
 
-(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+(Consumed by `/fix-pr` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
 
 Apply only the mechanical fixes that have a single correct shape:
 
