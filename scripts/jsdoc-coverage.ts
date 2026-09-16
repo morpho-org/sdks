@@ -13,14 +13,14 @@
 //                     guard against TypeScript syntax drift breaking the regex
 //                     silently.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGES_DIR = join(REPO_ROOT, "packages");
 
-const TIER = {
+const TIER: Record<string, number> = {
   "morpho-sdk": 1,
   "evm-simulation": 1,
   "blue-sdk": 2,
@@ -44,12 +44,13 @@ const EXCLUDED_PATH_PATTERNS = [
   /\/generated\//,
 ];
 
-function* walk(dir) {
-  let entries;
+function* walk(dir: string): Generator<string> {
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch (err) {
-    process.stderr.write(`jsdoc-coverage: skipped ${dir}: ${err.message}\n`);
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`jsdoc-coverage: skipped ${dir}: ${message}\n`);
     return;
   }
   for (const entry of entries) {
@@ -87,23 +88,23 @@ const EXPORT_RE =
 // code block. Known limitation: a literal `@internal` mention in a code-fence
 // (e.g. `// @internal`) inside `@example` will still match — no occurrences in
 // the repo today; tighten if a real false positive surfaces.
-function isInternal(jsdocBlock) {
+function isInternal(jsdocBlock: string): boolean {
   return /@internal\b/.test(jsdocBlock);
 }
 
-function hasParams(signature) {
+function hasParams(signature: string): boolean {
   // Arrow function: `= (...)`, `= async (...)`, or `= <T>(...)` (generic arrow).
   // Known limitation: nested generic constraints like `<T extends Foo<Bar>>`
   // break the `[^>]+` consume — no occurrences in Tier 1 today.
   const arrow = signature.match(/=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(([^)]*)\)/);
-  if (arrow) return arrow[1].trim().length > 0;
+  if (arrow) return (arrow[1] ?? "").trim().length > 0;
   // Function declaration: `function name(...)` or `function name<T>(...)`.
   const fn = signature.match(/function\s+\w+\s*(?:<[^>]+>\s*)?\(([^)]*)\)/);
-  if (fn) return fn[1].trim().length > 0;
+  if (fn) return (fn[1] ?? "").trim().length > 0;
   return false;
 }
 
-function isFunctionLike(kind, signature) {
+function isFunctionLike(kind: string, signature: string): boolean {
   if (kind === "function") return true;
   if (kind !== "const" && kind !== "let" && kind !== "var") return false;
   // const X = (...) => ... | const X = async (...) => ...
@@ -115,42 +116,57 @@ function isFunctionLike(kind, signature) {
   );
 }
 
-function analyzeFile(filePath, { collectUndocumented }) {
+interface UndocumentedEntry {
+  kind: string;
+  name: string;
+  reason: string;
+}
+
+interface FileAnalysis {
+  documented: number;
+  total: number;
+  undocumented: UndocumentedEntry[];
+}
+
+function analyzeFile(
+  filePath: string,
+  { collectUndocumented }: { collectUndocumented: boolean },
+): FileAnalysis {
   const text = readFileSync(filePath, "utf-8");
   const lines = text.split("\n");
-  const undocumented = [];
+  const undocumented: UndocumentedEntry[] = [];
   let total = 0;
   let documented = 0;
 
-  const recordMissing = (entry) => {
+  const recordMissing = (entry: UndocumentedEntry) => {
     if (collectUndocumented) undocumented.push(entry);
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(EXPORT_RE);
+    const m = lines[i]?.match(EXPORT_RE);
     if (!m) continue;
-    const [, kind, name] = m;
+    const [, kind = "", name = ""] = m;
     total++;
 
     // Find closing `*/` immediately above (allow blank lines and single-line `//` directives
     // such as `// biome-ignore` or `// eslint-disable`).
     let j = i - 1;
     while (j >= 0) {
-      const t = lines[j].trim();
+      const t = (lines[j] ?? "").trim();
       if (t === "" || t.startsWith("//")) {
         j--;
         continue;
       }
       break;
     }
-    if (j < 0 || !lines[j].includes("*/")) {
+    if (j < 0 || !(lines[j] ?? "").includes("*/")) {
       recordMissing({ name, kind, reason: "no JSDoc" });
       continue;
     }
 
     // Walk back to opening `/**`.
     let k = j;
-    while (k >= 0 && !lines[k].trimStart().startsWith("/**")) k--;
+    while (k >= 0 && !(lines[k] ?? "").trimStart().startsWith("/**")) k--;
     if (k < 0) {
       recordMissing({ name, kind, reason: "malformed JSDoc" });
       continue;
@@ -189,7 +205,7 @@ function analyzeFile(filePath, { collectUndocumented }) {
       continue;
     }
 
-    const missing = [];
+    const missing: string[] = [];
     if (hasParams(signature) && !block.includes("@param"))
       missing.push("@param");
     if (!block.includes("@returns")) missing.push("@returns");
@@ -209,19 +225,24 @@ function analyzeFile(filePath, { collectUndocumented }) {
   return { total, documented, undocumented };
 }
 
-function pct(part, total) {
+function pct(part: number, total: number): string {
   if (total === 0) return "—";
   return `${Math.round((part / total) * 100)}%`;
 }
 
-function selfCheck() {
+function selfCheck(): never {
   let pass = 0;
   let fail = 0;
-  const fails = [];
+  const fails: string[] = [];
 
   // EXPORT_RE — match + kind + name capture for representative export forms,
   // plus negative cases that must not match.
-  const exportCases = [
+  const exportCases: {
+    expectMatch?: boolean;
+    kind?: string;
+    line: string;
+    name?: string;
+  }[] = [
     {
       line: "export const foo = (x: number) => x;",
       kind: "const",
@@ -272,18 +293,18 @@ function selfCheck() {
     const matched = !!m;
     const expectMatch = c.expectMatch ?? true;
     let ok = matched === expectMatch;
-    if (ok && expectMatch) ok = m[1] === c.kind && m[2] === c.name;
+    if (ok && expectMatch) ok = m?.[1] === c.kind && m?.[2] === c.name;
     if (ok) pass++;
     else {
       fail++;
       fails.push(
-        `EXPORT_RE FAIL: ${JSON.stringify(c.line)} → expected ${expectMatch ? `kind=${c.kind} name=${c.name}` : "no match"}, got ${matched ? `kind=${m[1]} name=${m[2]}` : "no match"}`,
+        `EXPORT_RE FAIL: ${JSON.stringify(c.line)} → expected ${expectMatch ? `kind=${c.kind} name=${c.name}` : "no match"}, got ${matched ? `kind=${m?.[1]} name=${m?.[2]}` : "no match"}`,
       );
     }
   }
 
   // hasParams — verifies @param requirement detection across signature shapes.
-  const hasParamsCases = [
+  const hasParamsCases: { expected: boolean; sig: string }[] = [
     { sig: "export const foo = (x: number) => x;", expected: true },
     { sig: "export const foo = () => x;", expected: false },
     { sig: "export const foo = async (x: number) => x;", expected: true },
@@ -307,7 +328,11 @@ function selfCheck() {
 
   // isFunctionLike — verifies function vs constant classification.
   // Generic arrows are now recognized symmetrically with hasParams.
-  const isFunctionLikeCases = [
+  const isFunctionLikeCases: {
+    expected: boolean;
+    kind: string;
+    sig: string;
+  }[] = [
     { kind: "function", sig: "export function foo() {}", expected: true },
     { kind: "const", sig: "export const foo = (x) => x;", expected: true },
     {
@@ -342,7 +367,7 @@ function selfCheck() {
 
   // @internal exemption — exercises the production isInternal() helper so any
   // future tweak to the @internal recognition rule is caught at self-check time.
-  const internalCases = [
+  const internalCases: { block: string; expected: boolean }[] = [
     { block: "/**\n * Foo.\n * @internal\n */", expected: true },
     { block: "/** @internal */", expected: true },
     { block: "/**\n * Foo.\n */", expected: false },
@@ -375,13 +400,21 @@ const json = process.argv.includes("--json");
 
 if (process.argv.includes("--self-check")) selfCheck();
 
-const rows = [];
+interface CoverageRow {
+  documented: number;
+  pkg: string;
+  tier: number;
+  total: number;
+  undocumented: (UndocumentedEntry & { file: string })[];
+}
 
-for (const pkg of Object.keys(TIER)) {
+const rows: CoverageRow[] = [];
+
+for (const [pkg, tier] of Object.entries(TIER)) {
   const srcDir = join(PACKAGES_DIR, pkg, "src");
   let total = 0;
   let documented = 0;
-  const undocumented = [];
+  const undocumented: (UndocumentedEntry & { file: string })[] = [];
   for (const file of walk(srcDir)) {
     const r = analyzeFile(file, { collectUndocumented: verbose });
     total += r.total;
@@ -393,7 +426,7 @@ for (const pkg of Object.keys(TIER)) {
       }
     }
   }
-  rows.push({ tier: TIER[pkg], pkg, total, documented, undocumented });
+  rows.push({ tier, pkg, total, documented, undocumented });
 }
 
 rows.sort((a, b) => a.tier - b.tier || a.pkg.localeCompare(b.pkg));

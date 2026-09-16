@@ -7,7 +7,7 @@ const ignored = (config.files?.includes ?? [])
   .filter((pattern) => pattern.startsWith("!"))
   .map((pattern) => pattern.replace(/^!(\*\*\/)?/, ""));
 
-const lint = (path) => {
+const lint = (path: string): void => {
   const files = readdirSync(path, { encoding: "utf-8" });
 
   for (const file of files) {

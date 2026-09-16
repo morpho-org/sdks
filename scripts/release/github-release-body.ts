@@ -4,17 +4,34 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside } from "./helpers.mjs";
+import { getErrorMessage, isPathInside } from "./helpers.ts";
 
 const DEFAULT_PACKAGES_DIR = "packages";
 const PACKAGE_TAG_SEPARATORS = ["-v", "@"];
 const VERSION_HEADING_RE =
   /^##\s+\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\s|$).*/gm;
 
-export function readReleasePackages(options = {}) {
+export interface ReleasePackage {
+  changelogPath: string;
+  name: string;
+  version: string;
+}
+
+interface ReadReleasePackagesOptions {
+  packagesDir?: string;
+}
+
+interface GitHubReleaseBodyOptions extends ReadReleasePackagesOptions {
+  packages?: ReleasePackage[];
+  tag: string;
+}
+
+export function readReleasePackages(
+  options: ReadReleasePackagesOptions = {},
+): ReleasePackage[] {
   const packagesDir = options.packagesDir ?? DEFAULT_PACKAGES_DIR;
   const packagesRoot = resolve(packagesDir);
-  const packages = [];
+  const packages: ReleasePackage[] = [];
 
   for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -23,7 +40,10 @@ export function readReleasePackages(options = {}) {
     if (!isPathInside(packagesRoot, packageJsonPath)) continue;
     if (!existsSync(packageJsonPath)) continue;
 
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      name?: unknown;
+      version?: unknown;
+    };
     if (typeof packageJson.name !== "string" || packageJson.name === "")
       continue;
     if (typeof packageJson.version !== "string" || packageJson.version === "")
@@ -42,8 +62,11 @@ export function readReleasePackages(options = {}) {
   return packages.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function matchReleaseTag(options) {
-  const matches = [];
+export function matchReleaseTag(options: {
+  packages: ReleasePackage[];
+  tag: string;
+}): ReleasePackage {
+  const matches: ReleasePackage[] = [];
 
   for (const releasePackage of options.packages) {
     for (const separator of PACKAGE_TAG_SEPARATORS) {
@@ -64,10 +87,13 @@ export function matchReleaseTag(options) {
     throw new Error(`Tag "${options.tag}" is ambiguous; matches ${names}.`);
   }
 
-  return matches[0];
+  return matches[0]!;
 }
 
-export function extractVersionSection(options) {
+export function extractVersionSection(options: {
+  changelog: string;
+  version: string;
+}): string | undefined {
   const heading = new RegExp(
     `^##\\s+${escapeRegExp(options.version)}(?:\\s|$).*`,
     "m",
@@ -86,7 +112,9 @@ export function extractVersionSection(options) {
   return `${options.changelog.slice(sectionStart, sectionEnd).trim()}\n`;
 }
 
-export function buildGitHubReleaseBody(options) {
+export function buildGitHubReleaseBody(
+  options: GitHubReleaseBodyOptions,
+): string {
   const packages = options.packages ?? readReleasePackages(options);
   const packagesRoot = resolve(options.packagesDir ?? DEFAULT_PACKAGES_DIR);
   const releasePackage = matchReleaseTag({ tag: options.tag, packages });
@@ -114,31 +142,42 @@ export function buildGitHubReleaseBody(options) {
   return section;
 }
 
-export function writeGitHubReleaseBody(options) {
+export function writeGitHubReleaseBody(
+  options: GitHubReleaseBodyOptions & { bodyFile: string },
+): void {
   writeFileSync(options.bodyFile, buildGitHubReleaseBody(options));
 }
 
-export function main(args = process.argv.slice(2), options = {}) {
+export function main(
+  args: string[] = process.argv.slice(2),
+  options: ReadReleasePackagesOptions & { packages?: ReleasePackage[] } = {},
+): void {
   const [tag, bodyFile] = args;
   if (tag == null || bodyFile == null) {
     throw new Error(
-      "Usage: node scripts/release/github-release-body.mjs <tag> <body-file>",
+      "Usage: node scripts/release/github-release-body.ts <tag> <body-file>",
     );
   }
 
   writeGitHubReleaseBody({ ...options, tag, bodyFile });
 }
 
-function getPackageTag(options) {
+function getPackageTag(options: {
+  releasePackage: ReleasePackage;
+  separator: string;
+}): string {
   return `${options.releasePackage.name}${options.separator}${options.releasePackage.version}`;
 }
 
-function findNextVersionHeading(options) {
+function findNextVersionHeading(options: {
+  changelog: string;
+  start: number;
+}): RegExpExecArray | undefined {
   VERSION_HEADING_RE.lastIndex = options.start;
   return VERSION_HEADING_RE.exec(options.changelog) ?? undefined;
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

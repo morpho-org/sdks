@@ -33,11 +33,11 @@
   ],
   "scripts": {
     "prepublish": "pnpm build",
-    "compile": "node ../../scripts/compile-solidity.js midnight-sdk",
+    "compile": "node ../../scripts/compile-solidity.ts midnight-sdk",
     "build": "pnpm generate:version && tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
-    "generate:version": "node ../../scripts/release/generate-midnight-package-version.mjs",
+    "generate:version": "node ../../scripts/release/generate-midnight-package-version.ts",
     "test": "vitest --root ../.. --project midnight-sdk --project midnight-sdk-fork"
   },
   "peerDependencies": {

@@ -615,7 +615,7 @@ existing entity makes, and it is documented on the method.
 
 ### Alternative 6: Vendor the `bundles` submodules and compile in-repo
 
-Use `scripts/compile-solidity.js` rather than committing a pre-compiled artifact.
+Use `scripts/compile-solidity.ts` rather than committing a pre-compiled artifact.
 
 **Why rejected:** already settled in PR #907 — the contract pulls in 37 Solidity files across six
 foundry submodules, which would mean checking roughly 150 KB of upstream contracts into this repo.

@@ -5,7 +5,7 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside } from "./helpers.mjs";
+import { getErrorMessage, isPathInside } from "./helpers.ts";
 
 const DEFAULT_BASE_REF = "HEAD^";
 const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
@@ -16,13 +16,36 @@ const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
 const MISSING_REVISION_OR_PATH_RE =
   /invalid object name|unknown revision|does not exist in|exists on disk, but not in/i;
 
+export interface PackageManifest {
+  name?: string;
+  version?: string;
+}
+
+interface ReadPackageManifestOptions {
+  cwd?: string;
+  manifestPath: string;
+}
+
+interface ReadPreviousPackageManifestOptions
+  extends ReadPackageManifestOptions {
+  baseRef?: string;
+}
+
+interface ResolvedManifestPath {
+  absolutePath: string;
+  basePath: string;
+  relativePath: string;
+}
+
 /**
  * Reads a package manifest from disk.
  *
- * @param {{ cwd?: string, manifestPath: string }} options Read options.
- * @returns {{ name?: string, version?: string }} The parsed package manifest.
+ * @param options Read options.
+ * @returns The parsed package manifest.
  */
-export function readPackageManifest(options) {
+export function readPackageManifest(
+  options: ReadPackageManifestOptions,
+): PackageManifest {
   const manifestPath = resolveManifestPath(options);
   const stats = lstatSync(manifestPath.absolutePath);
 
@@ -36,19 +59,23 @@ export function readPackageManifest(options) {
     manifestPath: options.manifestPath,
   });
 
-  return JSON.parse(readFileSync(manifestPath.absolutePath, "utf8"));
+  return JSON.parse(
+    readFileSync(manifestPath.absolutePath, "utf8"),
+  ) as PackageManifest;
 }
 
 /**
  * Reads a package manifest from the previous release commit, if it exists.
  *
- * @param {{ baseRef?: string, cwd?: string, manifestPath: string }} options Git read options.
- * @returns {undefined | { name?: string, version?: string }} The parsed previous package manifest.
+ * @param options Git read options.
+ * @returns The parsed previous package manifest.
  */
-export function readPreviousPackageManifest(options) {
+export function readPreviousPackageManifest(
+  options: ReadPreviousPackageManifestOptions,
+): PackageManifest | undefined {
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
   const manifestPath = resolveManifestPath(options);
-  let manifestSource;
+  let manifestSource: string;
 
   try {
     manifestSource = execFileSync(
@@ -68,16 +95,24 @@ export function readPreviousPackageManifest(options) {
     throw error;
   }
 
-  return JSON.parse(manifestSource);
+  return JSON.parse(manifestSource) as PackageManifest;
 }
 
 /**
  * Computes the package tag that still needs to be created during publish rerun recovery.
  *
- * @param {{ baseRef?: string, cwd?: string, manifest?: { name?: string, version?: string }, manifestPath: string, readPreviousManifest?: (options: { baseRef?: string, cwd?: string, manifestPath: string }) => undefined | { name?: string, version?: string } }} options Tag computation options.
- * @returns {undefined | string} The package tag to create, or undefined when the version did not change.
+ * @param options Tag computation options.
+ * @returns The package tag to create, or undefined when the version did not change.
  */
-export function computePendingTag(options) {
+export function computePendingTag(options: {
+  baseRef?: string;
+  cwd?: string;
+  manifest?: PackageManifest;
+  manifestPath: string;
+  readPreviousManifest?: (
+    options: ReadPreviousPackageManifestOptions,
+  ) => PackageManifest | undefined;
+}): string | undefined {
   const manifest =
     options.manifest ??
     readPackageManifest({
@@ -99,7 +134,9 @@ export function computePendingTag(options) {
   return `${manifest.name}-v${manifest.version}`;
 }
 
-function resolveManifestPath(options) {
+function resolveManifestPath(
+  options: ReadPackageManifestOptions,
+): ResolvedManifestPath {
   if (
     isAbsolute(options.manifestPath) ||
     options.manifestPath.split(/[\\/]/).includes("..")
@@ -124,13 +161,17 @@ function resolveManifestPath(options) {
   return { absolutePath, basePath, relativePath };
 }
 
-function assertPathInsideBase(options) {
+function assertPathInsideBase(options: {
+  absolutePath: string;
+  basePath: string;
+  manifestPath: string;
+}): void {
   if (!isPathInside(options.basePath, options.absolutePath)) {
     throw new Error(`Invalid manifest path "${options.manifestPath}".`);
   }
 }
 
-function isMissingRevisionOrPathError(error) {
+function isMissingRevisionOrPathError(error: unknown): boolean {
   if (
     typeof error !== "object" ||
     error == null ||
@@ -148,15 +189,22 @@ function isMissingRevisionOrPathError(error) {
 /**
  * Runs the pending package tag computation CLI.
  *
- * @param {string[]} args CLI arguments.
- * @param {{ baseRef?: string, cwd?: string, writeOutput?: (message: string) => void }} options Runtime options.
- * @returns {undefined | string} The computed package tag.
+ * @param args CLI arguments.
+ * @param options Runtime options.
+ * @returns The computed package tag.
  */
-export function main(args = process.argv.slice(2), options = {}) {
+export function main(
+  args: string[] = process.argv.slice(2),
+  options: {
+    baseRef?: string;
+    cwd?: string;
+    writeOutput?: (message: string) => void;
+  } = {},
+): string | undefined {
   const [manifestPath] = args;
   if (manifestPath == null) {
     throw new Error(
-      "Usage: node scripts/release/compute-pending-tag.mjs <manifest-path>",
+      "Usage: node scripts/release/compute-pending-tag.ts <manifest-path>",
     );
   }
 

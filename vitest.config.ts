@@ -16,10 +16,7 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text-summary", "lcov"],
-      include: [
-        "packages/**/src/**/*.{ts,tsx}",
-        "scripts/release/**/*.{js,mjs}",
-      ],
+      include: ["packages/**/src/**/*.{ts,tsx}", "scripts/release/**/*.ts"],
       exclude: [
         "packages/test/**",
         "packages/morpho-test/**",
@@ -34,7 +31,7 @@ export default defineConfig({
         "packages/**/src/**/abis.ts",
         "packages/**/src/api/sdk.ts",
         "packages/**/src/api/types.ts",
-        "scripts/**/*.test.{js,mjs}",
+        "scripts/**/*.test.ts",
       ],
     },
     sequence: {
@@ -54,7 +51,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "scripts",
-          include: ["scripts/**/*.test.{js,mjs}"],
+          include: ["scripts/**/*.test.ts"],
           environment: "node",
         },
       },
