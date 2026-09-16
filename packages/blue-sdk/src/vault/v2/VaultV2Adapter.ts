@@ -36,6 +36,14 @@ export abstract class VaultV2Adapter implements IVaultV2Adapter {
 
 /** Adapter interface with accrued asset and capacity methods. */
 export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
+  /**
+   * Returns the adapter's assets after accruing its underlying markets.
+   * Markets at or beyond the requested timestamp keep their snapshots without backward accrual.
+   * @param timestamp Timestamp through which interest is accrued; past timestamps do not throw.
+   * @returns Accrued adapter assets.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an underlying market with positive
+   *   debt requires an unsupported IRM.
+   */
   realAssets(timestamp: BigIntish): bigint;
 
   /**

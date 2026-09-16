@@ -2,9 +2,9 @@ import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, type Client, maxUint256 } from "viem";
 import { readContract } from "viem/actions";
-import { validateChainId } from "../../../helpers/index.js";
-import { validateUint256Field } from "../../../helpers/validate.js";
-import { NoUnusedPermit2NonceError } from "../../../types/index.js";
+import { validateChainId } from "../../helpers/index.js";
+import { validateUint256Field } from "../../helpers/validate.js";
+import { NoUnusedPermit2NonceError } from "../../types/index.js";
 
 /** Parameters for {@link getUnusedPermit2Nonce}. */
 export interface GetUnusedPermit2NonceParams {

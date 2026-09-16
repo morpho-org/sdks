@@ -93,9 +93,22 @@ describe("previewVaultV2InKindRedeem", () => {
   );
 
   test("behavior: omits empty markets", () => {
-    const preview = previewInKind(inKindVaultV2Data({ supplyShares: 0n }), 1n);
+    const vaultData = inKindVaultV2Data({ supplyShares: 0n });
+    const [adapter] = vaultData.accrualAdapters;
+    if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+      throw new Error("Expected a MorphoMarketV1AdapterV2 fixture");
+    }
+    adapter.markets[0] = new Market({
+      ...adapter.markets[0]!,
+      rateAtTarget: undefined,
+    });
 
-    expect(preview).toEqual([]);
+    expect(
+      previewVaultV2InKindRedeem(vaultData, {
+        requestedExitAssets: 1n,
+        timestamp: adapter.markets[0]!.lastUpdate + 1n,
+      }),
+    ).toEqual([]);
   });
 
   test("behavior: omits choices that round to no effective exit", () => {

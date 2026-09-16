@@ -87,7 +87,7 @@ const makePosition = (
       lastUpdate: overrides.lastUpdate ?? 1_700_000_000n,
       fee: 0n,
       price: ORACLE_PRICE_SCALE,
-      rateAtTarget: overrides.rateAtTarget,
+      rateAtTarget: overrides.rateAtTarget ?? 0n,
     }),
   );
 

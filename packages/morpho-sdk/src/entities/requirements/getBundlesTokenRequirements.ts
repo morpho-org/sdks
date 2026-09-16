@@ -21,11 +21,11 @@ import {
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InputExceedsMaxError,
-  MissingPermit2SignatureTransferNonceError,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
+import { getUnusedPermit2Nonce } from "./getUnusedPermit2Nonce.js";
 
 /** Parameters for {@link getBundlesTokenRequirements}. */
 export interface GetBundlesTokenRequirementsParams {
@@ -49,7 +49,7 @@ export interface GetBundlesTokenRequirementsParams {
   readonly supportDeployless?: boolean;
   /** Prefer ERC-2612 when the token exposes a compatible nonce. */
   readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  /** Explicit unused uint256 nonce; defaults to the lowest unused nonce found via getUnusedPermit2Nonce. */
   readonly permit2Nonce?: bigint;
 }
 
@@ -59,8 +59,8 @@ export interface GetBundlesTokenRequirementsParams {
  *
  * Reads only the allowance and nonce state required by the selected path. Permit2 keeps the
  * ERC-20 allowance on canonical Permit2 while the one-time signed transfer names the bundles contract
- * as spender. Permit2 SignatureTransfer requires an explicit unused unordered nonce so concurrent
- * requirements never silently sign the same owner-global nonce.
+ * as spender. The resolver picks the lowest unused unordered nonce by default; concurrent flows for
+ * the same owner should pass explicit nonces.
  *
  * @param viemClient - Connected viem client used for allowance and nonce reads.
  * @param params - Token requirement parameters.
@@ -74,7 +74,8 @@ export interface GetBundlesTokenRequirementsParams {
  * @param params.supportSignature - Whether ERC-2612 or Permit2 signatures may be requested.
  * @param params.supportDeployless - Whether ERC-2612 metadata reads may use deployless calls.
  * @param params.useSimplePermit - Prefer ERC-2612 when its nonce probe succeeds.
- * @param params.permit2Nonce - Explicit unused uint256 nonce required when Permit2 is selected.
+ * @param params.permit2Nonce - Explicit unused uint256 nonce; defaults to the lowest unused nonce
+ *   found via {@link getUnusedPermit2Nonce}.
  * @returns Ordered deep-frozen approval transactions and/or signable token requirements.
  * @throws {ChainIdMismatchError} when the connected client targets another chain.
  * @throws {NegativeInputError} when `amount` or `permit2Nonce` is negative.
@@ -83,7 +84,8 @@ export interface GetBundlesTokenRequirementsParams {
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
  *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
- * @throws {MissingPermit2SignatureTransferNonceError} when Permit2 is selected without a nonce.
+ * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed and none
+ *   was passed explicitly.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
  * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
@@ -107,7 +109,6 @@ export interface GetBundlesTokenRequirementsParams {
  *   chainId: mainnet.id,
  *   deadline: 1_900_000_000n,
  *   supportSignature: true,
- *   permit2Nonce: 42n,
  * });
  * // requirements contains approvals and/or signable bundles token requirements.
  * ```
@@ -174,6 +175,7 @@ export const getBundlesTokenRequirements = async (
         return [
           await encodeErc20Permit(viemClient, {
             token: params.token,
+            owner: params.owner,
             spender: params.spender,
             amount: params.amount,
             chainId: params.chainId,
@@ -186,20 +188,23 @@ export const getBundlesTokenRequirements = async (
     }
 
     if (permit2 != null) {
-      if (params.permit2Nonce == null) {
-        throw new MissingPermit2SignatureTransferNonceError();
+      const permit2Nonce =
+        params.permit2Nonce ??
+        (await getUnusedPermit2Nonce(viemClient, {
+          owner: params.owner,
+          chainId: params.chainId,
+        }));
+      if (permit2Nonce < 0n) {
+        throw new NegativeInputError("permit2Nonce", permit2Nonce);
       }
-      if (params.permit2Nonce < 0n) {
-        throw new NegativeInputError("permit2Nonce", params.permit2Nonce);
-      }
-      if (params.permit2Nonce > maxUint256) {
+      if (permit2Nonce > maxUint256) {
         throw new InputExceedsMaxError({
           field: "permit2Nonce",
-          value: params.permit2Nonce,
+          value: permit2Nonce,
           max: maxUint256,
         });
       }
-      const wordPosition = params.permit2Nonce >> 8n;
+      const wordPosition = permit2Nonce >> 8n;
       const [allowance, nonceBitmap] = await Promise.all([
         readContract(viemClient, {
           abi: erc20Abi,
@@ -225,7 +230,7 @@ export const getBundlesTokenRequirements = async (
         state: {
           type: "permit2SignatureTransfer",
           permit2Allowance: allowance,
-          permit2Nonce: params.permit2Nonce,
+          permit2Nonce,
           nonceBitmap,
         },
       });

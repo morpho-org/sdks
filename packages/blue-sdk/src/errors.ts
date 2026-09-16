@@ -12,6 +12,23 @@ export {
 import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
+/** Thrown when interest projection is requested for an unsupported nonzero IRM. */
+export class UnsupportedMarketIrmError extends Error {
+  /**
+   * @param marketId - Market whose interest cannot be projected.
+   * @param irm - Unsupported interest-rate-model address.
+   */
+  constructor(
+    public readonly marketId: MarketId,
+    public readonly irm: Address,
+  ) {
+    super(
+      `Market "${marketId}" uses unsupported IRM "${irm}". Interest cannot be projected without a supported rate model.`,
+    );
+    this.name = "UnsupportedMarketIrmError";
+  }
+}
+
 /** Error thrown when bytes cannot be decoded into valid Morpho Blue market params. */
 export class InvalidMarketParamsError extends Error {
   constructor(public readonly data: Hex) {
@@ -85,7 +102,10 @@ export namespace BlueErrors {
     }
   }
 
-  /** Error thrown when market interest accrual is requested before `lastUpdate`. */
+  /**
+   * Legacy market accrual error retained for compatibility.
+   * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
@@ -153,7 +173,10 @@ export namespace BlueErrors {
 
 /** Morpho Vault V2 simulation errors. */
 export namespace VaultV2Errors {
-  /** Error thrown when vault interest accrual is requested before `lastUpdate`. */
+  /**
+   * Legacy Vault V2 accrual error retained for compatibility.
+   * Accrual at or before `lastUpdate` now returns an unchanged snapshot instead.
+   */
   export class InvalidInterestAccrual extends Error {
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(

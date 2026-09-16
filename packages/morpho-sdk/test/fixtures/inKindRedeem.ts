@@ -72,6 +72,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    rateAtTarget: 0n,
   });
   const secondMarket = new Market({
     params: secondInKindMarketParams,
@@ -81,6 +82,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    rateAtTarget: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
   const totalAssets = params?.additionalMarket ? 1_500n : 1_000n;
@@ -202,7 +204,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 900n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
-    rateAtTarget: params?.rateAtTarget,
+    rateAtTarget: params?.rateAtTarget ?? 0n,
   });
   const secondMarket = new Market({
     params: secondInKindMarketParams,
@@ -212,6 +214,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    rateAtTarget: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
   const totalAssets =

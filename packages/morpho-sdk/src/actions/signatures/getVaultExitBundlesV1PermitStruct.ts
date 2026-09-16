@@ -43,6 +43,8 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  * @param params.spender - Optional expected spender of the signed permit.
  * @param params.requirementSignature - Optional signed ERC-2612 vault-share requirement.
  * @returns The shared bundles share-permit tuple.
+ * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
+ * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement is incompatible.
  * @deprecated Use `getBundlesSharesPermit`; this wrapper preserves the legacy error identity.
  * @example

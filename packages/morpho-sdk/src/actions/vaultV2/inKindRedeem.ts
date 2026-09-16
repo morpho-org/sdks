@@ -49,7 +49,7 @@ export interface VaultV2InKindRedeemParams {
  * @returns A deep-frozen `Readonly<Transaction<VaultV2InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
- * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
+ * @throws {InputExceedsMaxError} when the bundle or permit deadline exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
  * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind,

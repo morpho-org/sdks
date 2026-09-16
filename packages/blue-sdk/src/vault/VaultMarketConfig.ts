@@ -11,6 +11,7 @@ export interface IVaultMarketConfig {
   pendingCap: Pending<bigint>;
   removableAt: bigint;
   enabled: boolean;
+  /** @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations. */
   publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 }
 
@@ -48,6 +49,7 @@ export class VaultMarketConfig implements IVaultMarketConfig {
 
   /**
    * The vault's PublicAllocator configuration on the corresponding market.
+   * @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations.
    */
   public readonly publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 

@@ -1,7 +1,6 @@
 * @morpho-org/sdk-engineers
 /.github/ @morpho-org/security
 /.changeset/config.json @morpho-org/security
-/.changeset/pre.json @morpho-org/security
 /package.json @morpho-org/sdk-engineers
 /packages/*/package.json @morpho-org/sdk-engineers
 /packages/midnight-sdk/ @morpho-org/sdk-engineers @morpho-org/router-engineers
