@@ -460,6 +460,30 @@ describe("AccrualVaultV2.accrueInterest", () => {
     );
   });
 
+  test("behavior: accrues adapters without a liquidity adapter", () => {
+    const adapter = accrualAdapter({ realAssets: () => 1_100n });
+    const vault = new AccrualVaultV2(
+      vaultV2Input({ liquidityAdapter: zeroAddress }),
+      undefined,
+      [adapter],
+      100n,
+      {},
+    );
+
+    const {
+      vault: accrued,
+      performanceFeeShares,
+      managementFeeShares,
+    } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBeUndefined();
+    expect(accrued.accrualAdapters[0]).toBe(adapter);
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued._totalAssets).toBeGreaterThanOrEqual(vault._totalAssets);
+    expect(performanceFeeShares).toBe(0n);
+    expect(managementFeeShares).toBe(0n);
+  });
+
   test("behavior: leaves adapters without accrueInterest at their pre-accrual state", () => {
     // An adapter built before the optional `accrueInterest` method existed.
     const legacyAdapter: IAccrualVaultV2Adapter = {
