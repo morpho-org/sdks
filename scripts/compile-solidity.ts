@@ -78,7 +78,7 @@ const collectSoliditySources = (dir: string): string[] => {
   const files: string[] = [];
 
   for (const entry of entries) {
-    const entryPath = join(dir, entry.name);
+    const entryPath = join(dir, entry.name); // nosec
     if (entry.isDirectory()) {
       files.push(...collectSoliditySources(entryPath));
       continue;

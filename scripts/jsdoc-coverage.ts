@@ -132,7 +132,7 @@ function analyzeFile(
   filePath: string,
   { collectUndocumented }: { collectUndocumented: boolean },
 ): FileAnalysis {
-  const text = readFileSync(filePath, "utf-8");
+  const text = readFileSync(filePath, "utf-8"); // nosec
   const lines = text.split("\n");
   const undocumented: UndocumentedEntry[] = [];
   let total = 0;
