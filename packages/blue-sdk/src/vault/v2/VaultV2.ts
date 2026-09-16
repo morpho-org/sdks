@@ -1,4 +1,4 @@
-import { type Address, type Hex, zeroAddress } from "viem";
+import { type Address, type Hex, isAddressEqual, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
@@ -363,12 +363,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const accrualAdapters = this.accrualAdapters.map(
       (adapter) => adapter.accrueInterest?.(timestamp) ?? adapter,
     );
+    const liquidityAdapter = this.accrualLiquidityAdapter;
     const accrualLiquidityAdapter =
-      this.accrualLiquidityAdapter &&
-      (accrualAdapters.find(
-        (adapter) => adapter.address === this.accrualLiquidityAdapter!.address,
+      liquidityAdapter &&
+      (accrualAdapters.find((adapter) =>
+        isAddressEqual(adapter.address, liquidityAdapter.address),
       ) ??
-        this.accrualLiquidityAdapter);
+        liquidityAdapter);
 
     const vault = new AccrualVaultV2(
       this,

@@ -436,6 +436,30 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
   });
 
+  test("behavior: matches the liquidity adapter case-insensitively by address", () => {
+    const adapterAddress =
+      "0xAbCdEf0123456789012345678901234567890123" as typeof ADAPTER;
+    const adapter = accrualAdapter({ address: adapterAddress });
+    const liquidityAdapter = accrualAdapter({
+      address: adapterAddress.toLowerCase() as typeof ADAPTER,
+    });
+    const vault = new AccrualVaultV2(
+      vaultV2Input(),
+      liquidityAdapter,
+      [adapter],
+      100n,
+      {},
+    );
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBe(
+      accrued.accrualAdapters.find(
+        (candidate) => candidate.address === adapterAddress,
+      ),
+    );
+  });
+
   test("behavior: leaves adapters without accrueInterest at their pre-accrual state", () => {
     // An adapter built before the optional `accrueInterest` method existed.
     const legacyAdapter: IAccrualVaultV2Adapter = {
