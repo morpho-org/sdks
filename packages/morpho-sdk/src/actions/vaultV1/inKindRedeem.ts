@@ -39,7 +39,8 @@ export interface VaultV1InKindRedeemParams {
  * @param params.args.amount - Asset-denominated amount to exit.
  * @param params.args.marketParamsList - Ordered markets consumed greedily by the contract.
  * @param params.args.userAddress - Redeeming account, recorded in action metadata and validated as
- *   the expected owner of an optional `requirementSignature` permit.
+ *   the expected owner of an optional `requirementSignature` permit. VaultExitBundlesV1 burns
+ *   `msg.sender`'s vault shares, so the submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.requirementSignature - Optional bounded Vault V1 shares permit.
  * @param params.metadata - Optional analytics metadata.

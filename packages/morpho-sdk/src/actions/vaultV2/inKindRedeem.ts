@@ -41,7 +41,8 @@ export interface VaultV2InKindRedeemParams {
  * @param params.args.marketParamsList - Ordered markets consumed greedily after idle assets. May be
  *   empty when the vault's idle balance covers `amount`.
  * @param params.args.userAddress - Redeeming account, recorded in action metadata and validated as
- *   the expected owner of an optional `requirementSignature` permit.
+ *   the expected owner of an optional `requirementSignature` permit. VaultExitBundlesV1 burns
+ *   `msg.sender`'s vault shares, so the submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.requirementSignature - Optional bounded Vault V2 shares permit.
  * @param params.metadata - Optional analytics metadata.
