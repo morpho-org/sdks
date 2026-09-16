@@ -162,7 +162,7 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
   }
 }
 
-/** Controls token requirements for Blue loan and collateral writes. */
+/** Controls token requirements for prepared vault deposits and Blue loan and collateral writes; `approvalAmount` applies only to the Blue writes. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;

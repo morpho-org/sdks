@@ -478,6 +478,8 @@ export interface BlueActions {
    * @throws {RepayExceedsDebtError} when an exact asset repay exceeds current debt.
    * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
    * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
+   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
+   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
@@ -649,6 +651,8 @@ export interface BlueActions {
    * @throws {WithdrawMakesPositionUnhealthyError} when the post-repay withdrawal exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
+   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
+   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.

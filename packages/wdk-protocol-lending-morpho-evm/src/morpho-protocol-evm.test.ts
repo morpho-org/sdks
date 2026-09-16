@@ -5,6 +5,7 @@ import {
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
+  MAX_TOKEN_APPROVALS,
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
@@ -47,6 +48,9 @@ const MARKET_PARAMS = {
 const NOW_MS = 1_800_000_000_000;
 const BLUE_BUNDLES_V1_DEADLINE = 1_800_007_200n;
 const SIGNATURE_DEADLINE = 1_800_003_600n;
+const UNI =
+  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984".toLowerCase() as viem.Address;
+const UNI_MAX_APPROVAL = MAX_TOKEN_APPROVALS[1]?.[viem.getAddress(UNI)];
 
 vi.spyOn(Date, "now").mockReturnValue(NOW_MS);
 
@@ -480,6 +484,23 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
       expect(supplyAction.getRequirements).toHaveBeenCalledWith({
         useSimplePermit: true,
+      });
+    });
+
+    test("behavior: vault deposit requirements ignore approvalAmount", async () => {
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      await prepared.getRequirements({
+        useSimplePermit: true,
+        approvalAmount: viem.maxUint256,
+      });
+
+      expect(supplyAction.getRequirements).toHaveBeenCalledWith({
+        useSimplePermit: true,
+        permit2Nonce: undefined,
       });
     });
 
@@ -1407,6 +1428,25 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       expect(repayAction.getRequirements).toHaveBeenCalledWith({
         approvalAmount,
+      });
+    });
+
+    test("behavior: max repay defaults to the per-token MAX_TOKEN_APPROVALS cap", async () => {
+      expect(UNI_MAX_APPROVAL).toBeDefined();
+      // biome-ignore lint/suspicious/noShadow: test-local protocol with a MAX_TOKEN_APPROVALS token
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: {
+          ...MARKET_PARAMS,
+          loanToken: UNI,
+        },
+      });
+
+      await protocol.getRepayRequirements({ token: UNI, amount: "max" });
+
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount: UNI_MAX_APPROVAL,
       });
     });
 
