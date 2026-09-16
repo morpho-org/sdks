@@ -8,6 +8,7 @@ import {
   market,
   marketParams,
   RECIPIENT,
+  vaultInput,
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
@@ -19,7 +20,7 @@ import {
 import { MarketParams, marketParamsAbi } from "../../market/MarketParams.js";
 import { MathLib } from "../../math/MathLib.js";
 import { CapacityLimitReason } from "../../utils.js";
-import type { AccrualVault } from "../Vault.js";
+import { AccrualVault } from "../Vault.js";
 import { AccrualVaultV2, VaultV2 } from "./VaultV2.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -985,6 +986,25 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
     expect(accruedAt).toBe(5n);
     expect(accrued.accrualVaultV1).toBe(accruedVaultV1);
     expect(accrued.shares).toBe(10n);
+  });
+
+  test("error: UnknownMarketAllocationError", () => {
+    const position = accrualPosition({ supplyShares: 100n });
+    const accrualVaultV1 = new AccrualVault(vaultInput(), []);
+    accrualVaultV1.withdrawQueue = [position.marketId];
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      {
+        ...adapterBaseInput(),
+        morphoVaultV1: RECIPIENT,
+        parentAllocation: 1n,
+      },
+      accrualVaultV1,
+      100n,
+    );
+
+    expect(() =>
+      adapter.accrueInterest(position.market.lastUpdate + 1n),
+    ).toThrow(UnknownMarketAllocationError);
   });
 
   test("accrueInterest leaves a zero-allocation adapter untouched", () => {
