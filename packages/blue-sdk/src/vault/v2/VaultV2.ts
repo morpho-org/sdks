@@ -310,7 +310,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
    * zero when its recipient cannot receive vault shares.
    * Timestamps at or before this vault's `lastUpdate` return an unchanged copy and zero fee
-   * shares without accruing nested adapters. Forward accrual also accrues every built-in adapter
+   * shares without accruing nested adapters. Forward accrual also accrues every adapter
    * implementing `accrueInterest` to `timestamp`, so contributing nested markets and positions
    * share the vault's `lastUpdate`; when registered among `accrualAdapters`, the liquidity adapter
    * reuses that accrued instance, while an unregistered liquidity adapter remains unchanged.
