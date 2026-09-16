@@ -11,7 +11,11 @@ import {
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
-import { UnknownMarketAllocationError, VaultV2Errors } from "../../errors.js";
+import {
+  UnknownMarketAllocationError,
+  UnsupportedMarketIrmError,
+  VaultV2Errors,
+} from "../../errors.js";
 import { MarketParams, marketParamsAbi } from "../../market/MarketParams.js";
 import { MathLib } from "../../math/MathLib.js";
 import { CapacityLimitReason } from "../../utils.js";
@@ -679,6 +683,26 @@ describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
     expect(accrued.positions[0]?.market.lastUpdate).toBe(101n);
     expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
     expect(accrued.realAssets(101n)).toBe(adapter.realAssets(101n));
+  });
+
+  test("error: UnsupportedMarketIrmError", () => {
+    const position = accrualPosition(
+      { supplyShares: 100n },
+      {
+        params: marketParams({ irm: RECIPIENT }),
+        rateAtTarget: undefined,
+        totalBorrowAssets: 1n,
+        totalBorrowShares: 1n,
+      },
+    );
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+
+    expect(() =>
+      adapter.accrueInterest(position.market.lastUpdate + 1n),
+    ).toThrow(UnsupportedMarketIrmError);
   });
 
   test("accrueInterest keeps zero-share positions unchanged", () => {

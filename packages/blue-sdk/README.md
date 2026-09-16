@@ -109,7 +109,9 @@ requesting an unsupported IRM's rate still throws `UnsupportedMarketIrmError`.
 fee shares at or before the vault's own `lastUpdate`. Forward vault accrual also
 accrues contributing nested adapters, markets, and positions to the same
 timestamp; newer nested markets, zero-share or zero-allocation nested state, and
-adapters without `accrueInterest` keep their snapshots. Vault V1 has no
+adapters without `accrueInterest` keep their snapshots. The liquidity adapter
+reuses the accrued registered adapter instance and is never accrued
+independently; an unregistered liquidity adapter keeps its snapshot. Vault V1 has no
 vault-wide timestamp: it still reconciles losses and fees using its nested snapshots, including any
 that need no interest accrual.
 
