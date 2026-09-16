@@ -2,6 +2,7 @@ import fc from "fast-check";
 import {
   type Address,
   concatHex,
+  maxUint256,
   serializeCompactSignature,
   serializeSignature,
   signatureToCompactSignature,
@@ -10,6 +11,8 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   BundlesPermitMismatchError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
@@ -63,6 +66,35 @@ const permit = (
 });
 
 describe("getVaultExitBundlesV1PermitStruct", () => {
+  test.each([
+    { deadline: -1n, error: NonPositiveInputError },
+    { deadline: 0n, error: NonPositiveInputError },
+    { deadline: maxUint256 + 1n, error: InputExceedsMaxError },
+  ])(
+    "error: rejects unencodable bundle and permit deadline $deadline",
+    ({ deadline, error }) => {
+      expect(() =>
+        getVaultExitBundlesV1PermitStruct({ vault, deadline }),
+      ).toThrow(error);
+      expect(() =>
+        getVaultExitBundlesV1PermitStruct({
+          vault,
+          deadline: 1_900_000_000n,
+          requirementSignature: permit({ deadline }),
+        }),
+      ).toThrow(error);
+    },
+  );
+  test("behavior: preserves a signed uint256 maximum permit deadline", () => {
+    expect(
+      getVaultExitBundlesV1PermitStruct({
+        vault,
+        deadline: 1_900_000_000n,
+        requirementSignature: permit({ deadline: maxUint256 }),
+      }).deadline,
+    ).toBe(maxUint256);
+  });
+
   test("default: encodes the empty-permit sentinel", () => {
     expect(
       getVaultExitBundlesV1PermitStruct({

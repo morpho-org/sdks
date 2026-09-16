@@ -374,6 +374,8 @@ export const normalizeBundlesSignature = (
  * @param params.amount - Optional exact share allowance in the vault share token's smallest unit.
  * @param params.requirementSignature - Optional signed ERC-2612 share requirement; omit for the empty-permit sentinel.
  * @returns The signed share permit or the contract's empty-permit sentinel.
+ * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
+ * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
  * @throws {BundlesPermitMismatchError} when the requirement kind, token, or signature is invalid.
  * @example
  * ```ts
@@ -396,6 +398,12 @@ export const getBundlesSharesPermit = (params: {
   readonly requirementSignature?: PermitRequirementSignature;
 }): BundleSharesPermit => {
   const { requirementSignature } = params;
+  // Require a positive uint256 for the fallback permit deadline.
+  validateDeadline(params.deadline);
+  if (requirementSignature != null) {
+    // Require a positive uint256 for the signed permit deadline too.
+    validateDeadline(requirementSignature.args.deadline);
+  }
   if (requirementSignature == null) {
     return {
       value: 0n,

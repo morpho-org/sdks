@@ -104,6 +104,20 @@ describe("VaultV1ReallocationData.getPublicReallocationLiquidity", () => {
 });
 
 describe("VaultV1ReallocationData.getAvailableLiquidityToUtilization", () => {
+  test("behavior: ignores withdrawal ceilings when only own liquidity is needed", () => {
+    expect(
+      makeData().getAvailableLiquidityToUtilization(
+        targetParams.id,
+        EIGHTY_PERCENT,
+        {
+          defaultSupplyTargetUtilization: NINETY_PERCENT,
+          defaultMaxWithdrawalUtilization: -1n,
+          maxWithdrawalUtilization: { [sourceParamsA.id]: MathLib.WAD + 1n },
+        },
+      ),
+    ).toBe(300n * MathLib.WAD);
+  });
+
   test("default: own headroom + scaled available liquidity", () => {
     // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
     // supplyTarget set to 90% (not > target) → scaled liquidity 0.9·200 = 180 is
