@@ -16,7 +16,10 @@ import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
 } from "../helpers/constant.js";
-import { getSupplyTargetUtilization } from "../helpers/utilization.js";
+import {
+  getSupplyTargetUtilization,
+  resolveMaxWithdrawalUtilization,
+} from "../helpers/utilization.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
@@ -343,13 +346,18 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * Returned `data` normalizes `vault.publicAllocatorConfig.accruedFee` to the
    * on-chain `reallocateTo` fee semantics: one fee charge per vault with at
    * least one computed withdrawal.
+   * Sources with zero allocator withdrawal capacity and destinations with no deposit capacity
+   * are skipped before projecting source interest.
    *
    * @param marketId - Target market to supply with shared liquidity.
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
    * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
@@ -398,6 +406,16 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     } = options;
 
     if (!enabled) return { withdrawals: [], data: this };
+
+    // Validate every supplied ceiling, including overrides for unused markets.
+    resolveMaxWithdrawalUtilization(
+      defaultMaxWithdrawalUtilization,
+      "defaultMaxWithdrawalUtilization",
+    );
+    for (const utilization of Object.values(maxWithdrawalUtilization)) {
+      // Reject invalid deprecated map entries before any withdrawal planning.
+      resolveMaxWithdrawalUtilization(utilization);
+    }
 
     const accrualTimestamp = BigInt(
       timestamp ?? this.getMarket(marketId).lastUpdate,
@@ -489,6 +507,9 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param marketId - Target market to supply with shared liquidity.
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
    * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
@@ -512,6 +533,9 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param marketId - Target market that would receive the liquidity.
    * @param options - Optional allocator discovery options.
    * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getPublicReallocationLiquidity`.
@@ -573,6 +597,9 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param utilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
+   * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when reallocation is needed and a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when reallocation is needed and a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getAvailableLiquidityToUtilization`.
@@ -671,17 +698,20 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     return _try(() => {
       const { cap, pendingCap, publicAllocatorConfig } =
         this.getVaultMarketConfig(vault, marketId);
+      const maxIn = publicAllocatorConfig?.maxIn ?? 0n;
 
       const validCap =
         pendingCap.validAt >= timestamp
           ? MathLib.min(pendingCap.value, cap)
           : cap;
+      if (maxIn === 0n || validCap === 0n) return { vault };
 
       const suppliable = MathLib.zeroFloorSub(
         validCap,
         this.getAccrualPosition(vault, marketId).accrueInterest(timestamp)
           .supplyAssets,
       );
+      if (suppliable === 0n) return { vault };
 
       const marketWithdrawals = this.getVault(vault)
         .withdrawQueue.filter(
@@ -694,10 +724,16 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
         )
         .map((srcMarketId) => {
           const withdrawal = _try(() => {
-            const srcPosition = this.getAccrualPosition(
-              vault,
-              srcMarketId,
-            ).accrueInterest(timestamp);
+            const srcConfig = this.getVaultMarketConfig(vault, srcMarketId);
+            const maxOut = srcConfig.publicAllocatorConfig?.maxOut ?? 0n;
+            if (!srcConfig.enabled || maxOut === 0n)
+              return { id: srcMarketId, assets: 0n };
+
+            const rawSrcPosition = this.getAccrualPosition(vault, srcMarketId);
+            if (rawSrcPosition.supplyShares === 0n)
+              return { id: srcMarketId, assets: 0n };
+
+            const srcPosition = rawSrcPosition.accrueInterest(timestamp);
 
             const targetUtilizationLiquidity =
               srcPosition.market.getWithdrawToUtilization(
@@ -705,17 +741,14 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
                   defaultMaxWithdrawalUtilization,
               );
 
-            const srcConfig = this.getVaultMarketConfig(vault, srcMarketId);
-            if (!srcConfig.enabled) return { id: srcMarketId, assets: 0n };
-
             return {
               id: srcMarketId,
               assets: MathLib.min(
                 srcPosition.supplyAssets,
                 targetUtilizationLiquidity,
                 suppliable,
-                publicAllocatorConfig?.maxIn ?? 0n,
-                srcConfig.publicAllocatorConfig?.maxOut ?? 0n,
+                maxIn,
+                maxOut,
               ),
             };
           }, UnknownDataError);

@@ -17,7 +17,6 @@ import {
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
-  MissingPermit2SignatureTransferNonceError,
   NegativeInputError,
   NonPositiveInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
@@ -203,7 +202,50 @@ describe("getBundlesTokenRequirements", () => {
     expect(signed.args.nonce).toBe(maxUint256 - 1n);
   });
 
-  test("rejects invalid amounts and unavailable Permit2 nonces", async () => {
+  test("behavior: resolves the lowest unused Permit2 nonce when none is provided", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "nonceBitmap",
+      result: 0b111n,
+    });
+
+    const requirements = await getBundlesTokenRequirements(handle.client, {
+      token: usdc,
+      spender: blueBundlesV1,
+      amount: 1n,
+      owner: account.address,
+      chainId: mainnet.id,
+      deadline: maxUint256,
+      supportSignature: true,
+    });
+    const signatureRequirement = requirements.at(-1);
+    if (!isRequirementSignature(signatureRequirement)) {
+      throw new Error("SignatureTransfer requirement is missing");
+    }
+    const signed = await signatureRequirement.sign(
+      walletClient,
+      account.address,
+    );
+
+    expect(requirements[0]?.action).toMatchObject({
+      type: "erc20Approval",
+      args: { spender: permit2 },
+    });
+    if (signed.action.type !== "permit2SignatureTransfer") {
+      throw new Error("Unexpected signature requirement");
+    }
+    expect(signed.args.nonce).toBe(3n);
+  });
+
+  test("rejects invalid amounts and consumed Permit2 nonces", async () => {
     const handle = createMockClient(mainnet);
     await expect(
       getBundlesTokenRequirements(handle.client, {
@@ -277,18 +319,6 @@ describe("getBundlesTokenRequirements", () => {
         supportSignature: false,
       }),
     ).rejects.toBeInstanceOf(ApprovalAmountLessThanSpendAmountError);
-
-    await expect(
-      getBundlesTokenRequirements(handle.client, {
-        token: usdc,
-        spender: blueBundlesV1,
-        amount: 1n,
-        owner: account.address,
-        chainId: mainnet.id,
-        deadline: maxUint256,
-        supportSignature: true,
-      }),
-    ).rejects.toBeInstanceOf(MissingPermit2SignatureTransferNonceError);
 
     await expect(
       getBundlesTokenRequirements(handle.client, {

@@ -130,6 +130,7 @@ export interface VaultV2Actions {
    *   two hours from handle creation.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
+   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
@@ -141,8 +142,8 @@ export interface VaultV2Actions {
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
    * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
-   * @throws {MissingPermit2SignatureTransferNonceError} from `getRequirements()` when Permit2 is
-   *   selected without an explicit nonce.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the
+   *   owner is consumed and none was passed explicitly.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
    *   explicit Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
@@ -349,6 +350,7 @@ export interface VaultV2Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {UnsupportedBlueMarketIrmError} when an adapter-listed market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
@@ -956,12 +958,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     const assetsByMarket = new Map(
-      soleAdapter.markets.map((market) => [
-        market.id,
-        market
-          .accrueInterest(now)
-          .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
-      ]),
+      soleAdapter.markets
+        .filter((market) => (soleAdapter.supplyShares[market.id] ?? 0n) !== 0n)
+        .map((market) => [
+          market.id,
+          market
+            .accrueInterest(now)
+            .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
+        ]),
     );
     const uniqueMarketIds = new Set(marketIdListSnapshot);
     let covered = 0n;

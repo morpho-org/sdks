@@ -32,6 +32,7 @@ function makePosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: 0n,
   });
 
   return new AccrualPosition(
@@ -58,6 +59,7 @@ function makeWethPosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: 0n,
   });
 
   return new AccrualPosition(
@@ -108,7 +110,7 @@ describe("MorphoBlue validation", () => {
 
     const requirements = await market
       .repayWithdrawCollateral({
-        repayAssets: 1n,
+        repayAssets: parseUnits("1", 6),
         collateralAssets: 1n,
         userAddress: USER,
         positionData: makePosition(),
@@ -128,10 +130,9 @@ describe("MorphoBlue validation", () => {
     const positionData = makeWethPosition();
     const now = 1_800_000_000n;
     const deadline = now + 3_600n;
-    const borrowAssets = positionData.market.toBorrowAssets(
-      positionData.borrowShares,
-      "Up",
-    );
+    const borrowAssets = positionData.market
+      .accrueInterest(deadline)
+      .toBorrowAssets(positionData.borrowShares, "Up");
 
     const repay = withChainTimestamp(now, () =>
       market.repay({
@@ -186,10 +187,9 @@ describe("MorphoBlue validation", () => {
     const now = 1_800_000_000n;
     const deadline = now + 3_600n;
 
-    const borrowAssets = positionData.market.toBorrowAssets(
-      positionData.borrowShares,
-      "Up",
-    );
+    const borrowAssets = positionData.market
+      .accrueInterest(deadline)
+      .toBorrowAssets(positionData.borrowShares, "Up");
 
     const action = withChainTimestamp(now, () =>
       market.repayWithdrawCollateral({

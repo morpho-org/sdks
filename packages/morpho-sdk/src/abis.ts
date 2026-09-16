@@ -29,9 +29,11 @@ export {
   preLiquidationFactoryAbi as bluePreLiquidationFactoryAbi,
   /** @deprecated Use `bluePreLiquidationFactoryAbi` or the raw `/blue/abis` subpath. */
   preLiquidationFactoryAbi,
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi`. */
   publicAllocatorAbi,
   vaultV1AdapterAbi,
   vaultV1AdapterFactoryAbi,
+  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi`. */
   vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
@@ -1329,7 +1331,12 @@ export const generalAdapter1Abi = [
   },
 ] as const satisfies Abi;
 
-/** ABI for the Ethereum-specific Bundler3 GeneralAdapter1 extension. */
+/**
+ * ABI for the Ethereum-specific Bundler3 GeneralAdapter1 extension.
+ *
+ * MORPHO legacy token wrapping entries are deprecated and will be removed in the next major.
+ * Use the current MORPHO token directly. Native-token and stETH wrapping remain supported.
+ */
 export const ethereumGeneralAdapter1Abi = [
   ...generalAdapter1Abi,
   {
@@ -1356,11 +1363,13 @@ export const ethereumGeneralAdapter1Abi = [
         internalType: "address",
       },
       {
+        /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
         name: "morphoToken",
         type: "address",
         internalType: "address",
       },
       {
+        /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
         name: "morphoWrapper",
         type: "address",
         internalType: "address",
@@ -1370,6 +1379,7 @@ export const ethereumGeneralAdapter1Abi = [
   },
   {
     type: "function",
+    /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
     name: "MORPHO_TOKEN",
     inputs: [],
     outputs: [
@@ -1383,6 +1393,7 @@ export const ethereumGeneralAdapter1Abi = [
   },
   {
     type: "function",
+    /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
     name: "MORPHO_WRAPPER",
     inputs: [],
     outputs: [
@@ -1422,6 +1433,7 @@ export const ethereumGeneralAdapter1Abi = [
   },
   {
     type: "function",
+    /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
     name: "morphoWrapperDepositFor",
     inputs: [
       {
@@ -1440,6 +1452,7 @@ export const ethereumGeneralAdapter1Abi = [
   },
   {
     type: "function",
+    /** @deprecated MORPHO legacy token wrapping will be removed in the next major. Use the current MORPHO token directly. */
     name: "morphoWrapperWithdrawTo",
     inputs: [
       {

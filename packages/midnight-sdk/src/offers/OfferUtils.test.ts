@@ -563,6 +563,24 @@ describe("OfferUtils.getConsumableUnits", () => {
       }),
     ).toThrow(SettlementFeeExceedsPriceError);
   });
+
+  test("error: SettlementFeeExceedsPriceError for unit-capped buy offer", () => {
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket({
+            settlementFeeCbps: [1, 1, 1, 1, 1, 1, 1],
+          }),
+          buy: true,
+          tick: 0n,
+          maxUnits: 100n,
+          maxAssets: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(SettlementFeeExceedsPriceError);
+  });
 });
 
 describe("OfferUtils.validateOfferGroup", () => {

@@ -41,6 +41,7 @@ struct VaultResponse {
     uint256 lostAssets;
     Id[] supplyQueue;
     Id[] withdrawQueue;
+    bool hasPublicAllocator;
     PublicAllocatorConfig publicAllocatorConfig;
 }
 
@@ -107,6 +108,7 @@ contract GetVault {
         }
 
         if (address(publicAllocator) != address(0) && vault.isAllocator(address(publicAllocator))) {
+            res.hasPublicAllocator = true;
             res.publicAllocatorConfig = PublicAllocatorConfig({
                 admin: publicAllocator.admin(address(vault)),
                 fee: publicAllocator.fee(address(vault)),

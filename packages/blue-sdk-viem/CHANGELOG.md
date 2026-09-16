@@ -6,6 +6,49 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
 
+## 5.7.0
+
+### Minor Changes
+
+- [#1080](https://github.com/morpho-org/sdks/pull/1080) [`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate all Vault V1 PublicAllocator surfaces, including raw ABIs, address and deployment registry fields, configuration models, fetchers, augmentation methods, and the liquidity loader. The existing V1 planning and transaction-composition deprecations continue to apply. Use Vault V2 BluePublicAllocator configurations and fetchers, `MorphoBlue.getVaultV2BlueReallocationData`, and `MorphoBlue.getVaultV2BlueReallocations` for new integrations.
+
+  Deprecate the legacy `morphoToken` address and the MORPHO legacy wrapping entries in `ethereumGeneralAdapter1Abi`. Use the current MORPHO token directly.
+
+  All deprecated exports, signatures, addresses, and transaction behavior remain available for compatibility until the next major release. General Vault V1 operations, Vault V2 allocator APIs, and other token wrapping flows remain supported.
+
+  Patch maintained runtime dependents so their next releases resolve the updated packages. Existing internal peer ranges accept these backward-compatible minor releases and require no changes.
+
+### Patch Changes
+
+- Updated dependencies [[`616b457`](https://github.com/morpho-org/sdks/commit/616b4578edd3509ff3cf4e666f958f16e3bcdcab), [`297e948`](https://github.com/morpho-org/sdks/commit/297e94823b86359d4bbeda2d70dd79abac0c1a8a)]:
+  - @morpho-org/blue-sdk@6.9.0
+  - @morpho-org/morpho-ts@2.13.0
+
+## 5.6.1
+
+### Patch Changes
+
+- [#1045](https://github.com/morpho-org/sdks/pull/1045) [`c6756ed`](https://github.com/morpho-org/sdks/commit/c6756eddc5c4f9b60f966e5ab2eb0403000a6874) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deployless `fetchVault` now reports `publicAllocatorConfig` as `undefined` when the vault has not enabled the chain's PublicAllocator as an allocator, matching the multicall path. Previously the deployless path returned a zeroed `{ admin, fee, accruedFee }` config whenever the chain had a PublicAllocator, which made Vault V1 shared-liquidity planning treat the vault as reallocatable. The generated `GetVault` query ABI gains a `hasPublicAllocator` flag.
+
+- Updated dependencies [[`ebaba84`](https://github.com/morpho-org/sdks/commit/ebaba84e28832c2d1935c9f21ab3b37d037b18dd)]:
+  - @morpho-org/morpho-ts@2.12.0
+
+## 5.6.0
+
+### Minor Changes
+
+- [#1027](https://github.com/morpho-org/sdks/pull/1027) [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Preserve immutable Blue collateral projections and direct onchain Vault V1 fetch results, project Vault V1 market, loss, and fee accounting when computing migration bounds, deprecate cached collateral-allocation proportions and the positional nested-vault parent-allocation constructor argument, and ignore residual nested-vault shares when their parent allocation is zero.
+
+### Patch Changes
+
+- [#1042](https://github.com/morpho-org/sdks/pull/1042) [`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Compare token addresses case-insensitively: `getUnwrappedToken` resolves lowercased wrapped-token addresses against the checksummed registry (and re-registering the same mapping under a different casing no longer creates a duplicate key), while `fetchHolding`/`fetchToken` now detect permissioned Backed/wrapper tokens, wstETH, and the native token regardless of the caller's address casing.
+
+- [#1041](https://github.com/morpho-org/sdks/pull/1041) [`b26a427`](https://github.com/morpho-org/sdks/commit/b26a427ea98c314e0fec761e6ffec7f439f35891) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Stop mutating caller-owned fetch `parameters` objects: every fetcher now defaults `chainId`/`deployless` on its own copy, so a shared options object reused across clients or chains is no longer silently pinned to the first resolved chain id.
+
+- Updated dependencies [[`5e09aa2`](https://github.com/morpho-org/sdks/commit/5e09aa2c2bb091c9ace4a5bda200e2ca520227b2), [`0a3e9a3`](https://github.com/morpho-org/sdks/commit/0a3e9a32b184164ed774d6aae35868987e622597), [`6ad775f`](https://github.com/morpho-org/sdks/commit/6ad775fc794b1b164fef5defaf10f2d32a889fd1)]:
+  - @morpho-org/morpho-ts@2.11.2
+  - @morpho-org/blue-sdk@6.8.0
+
 ## 5.5.0
 
 ### Minor Changes

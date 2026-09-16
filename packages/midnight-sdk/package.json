@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/midnight-sdk",
   "description": "Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated API subpath.",
-  "version": "1.4.0-next.0",
+  "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -32,9 +32,9 @@
     "lib"
   ],
   "scripts": {
-    "prepublish": "$npm_execpath build",
+    "prepublish": "pnpm build",
     "compile": "node ../../scripts/compile-solidity.js midnight-sdk",
-    "build": "$npm_execpath generate:version && tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build": "pnpm generate:version && tsc --noEmit && pnpm build:cjs && pnpm build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "generate:version": "node ../../scripts/release/generate-midnight-package-version.mjs",

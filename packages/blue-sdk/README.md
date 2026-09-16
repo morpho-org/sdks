@@ -99,6 +99,18 @@ const accruedMarket = market.accrueInterest(Time.timestamp()); // Accrue interes
 accruedMarket.toSupplyAssets(shares); // Convert supply shares to assets.
 ```
 
+Accrual never throws solely because the requested timestamp is in the past.
+`Market.accrueInterest` and position accrual return unchanged copies when the
+timestamp is at or before the market's `lastUpdate`, without projecting the IRM
+or rewinding state. Rate helpers evaluate earlier timestamps at `lastUpdate`;
+requesting an unsupported IRM's rate still throws `UnsupportedMarketIrmError`.
+
+`AccrualVaultV2.accrueInterest` likewise returns an unchanged vault copy and zero
+fee shares at or before the vault's own `lastUpdate`. Forward vault accrual leaves
+newer nested market snapshots unchanged. Vault V1 has no vault-wide timestamp:
+it still reconciles losses and fees using its nested snapshots, including any
+that need no interest accrual.
+
 ### Instance of the position of a specific user on a specific market
 
 Leverage the [`Position`](./src/position/Position.ts) class to manipulate the position of a user on a given market:
