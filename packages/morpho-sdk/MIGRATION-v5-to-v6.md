@@ -270,6 +270,40 @@ start is consumed throws `NoUnusedPermit2NonceError`. To skip Permit2 for ERC-26
 `getRequirements({ useSimplePermit: true })`, which prefers a one-signature ERC-2612 permit and needs
 no nonce.
 
+### Signature requirements expose `action.typedData`; low-level encoders take `owner`
+
+Every signable requirement action (`PermitAction`, `Permit2Action`,
+`Permit2SignatureTransferAction`, `AuthorizationAction`, `MidnightOfferRootSignatureAction`) now
+carries the deep-frozen EIP-712 payload that `sign()` signs, so it can be inspected or displayed
+before signing:
+
+```ts
+const requirement = (await output.getRequirements()).find(isRequirementSignature);
+if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
+
+const typedData = requirement.action.typedData; // exact EIP-712 payload `sign()` will sign
+const signed = await requirement.sign(walletClient, owner);
+const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
+```
+
+`requirement.action.typedData` is typed as required on a `Requirement`, so no null check is needed.
+It is the exact `TypedDataDefinition` that `sign()` signs; signing itself still goes through
+`Requirement.sign(client, userAddress)`.
+
+Because the permit and authorization payloads embed the owner and are built eagerly, two exported
+low-level encoders take a new required `owner` parameter, and `getGeneralAdapterRequirementsPermit`
+forwards it. Their `sign(client, userAddress)` rejects a `userAddress` different from `owner` with
+`AddressMismatchError`.
+
+| v5 call | v6 call |
+| --- | --- |
+| `encodeErc20Permit(client, { token, spender, amount, chainId, nonce })` | `encodeErc20Permit(client, { token, owner, spender, amount, chainId, nonce })` |
+| `encodeBlueSignatureAuthorization(client, { authorized, isAuthorized, chainId, nonce })` | `encodeBlueSignatureAuthorization(client, { owner, authorized, isAuthorized, chainId, nonce })` |
+| `getGeneralAdapterRequirementsPermit(client, { token, chainId, args, nonce })` | `getGeneralAdapterRequirementsPermit(client, { token, owner, chainId, args, nonce })` |
+
+High-level entity flows (`client.morpho.blue(...)`, vault deposits, Midnight) already supply the
+owner and need no changes.
+
 ## Blue refinance
 
 The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call

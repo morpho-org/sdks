@@ -24,6 +24,7 @@ import {
   type Hex,
   maxUint256,
   numberToHex,
+  verifyTypedData,
   zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -1457,6 +1458,52 @@ describe("MorphoMidnight", () => {
           loanToken: midnightAddresses.loanToken,
         },
       });
+    });
+
+    test("behavior: action.typedData carries the offer-tree payload sign() consumes", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: maxUint256,
+      });
+      mockMidnightAuthorization(handle, true);
+      const data = offersData(true, offerSignerAccount.address);
+      const output = await midnightWithHandle(handle).makeLend({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+      });
+      const requirements = await output.getRequirements();
+      const requirement = requirements.find(
+        ({ action }) => action.type === "midnightOfferRootSignature",
+      );
+      if (requirement == null || !("sign" in requirement)) {
+        throw new Error("Expected midnightOfferRootSignature requirement");
+      }
+
+      const typedData = requirement.action.typedData;
+      expect(typedData.primaryType).toBe("OfferTree");
+      expect(typedData.message).toMatchObject({
+        offerTree: {
+          maker: offerSignerAccount.address,
+          ratifier: data.ratifier,
+          market: { loanToken: midnightAddresses.loanToken },
+        },
+      });
+
+      // Signing the payload externally recovers the same signer sign() verifies against.
+      const externalSignature =
+        await offerSignerAccount.signTypedData(typedData);
+      expect(
+        await verifyTypedData({
+          ...typedData,
+          address: offerSignerAccount.address,
+          signature: externalSignature,
+        }),
+      ).toBe(true);
     });
 
     test("behavior: approval covers new group and existing loan reserves", async () => {
