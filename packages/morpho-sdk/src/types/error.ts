@@ -454,7 +454,26 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
   }
 }
 
-/** Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor. */
+/**
+ * Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor.
+ *
+ * An override below the floor derived at `MAX_SLIPPAGE_TOLERANCE` would weaken the on-chain
+ * share-price protection and let the required share allowance grow without bound, so the entity
+ * rejects it instead of encoding it.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawSharePriceBelowFloorError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets, vaultData, userAddress, minSharePriceE27 });
+ * } catch (error) {
+ *   if (error instanceof VaultV2ForceWithdrawSharePriceBelowFloorError) {
+ *     console.error(error.minSharePriceE27, error.floorE27);
+ *   }
+ * }
+ * ```
+ */
 export class VaultV2ForceWithdrawSharePriceBelowFloorError extends Error {
   /** Supplied force-withdraw share-price floor. */
   public readonly minSharePriceE27: bigint;

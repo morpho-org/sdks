@@ -460,7 +460,8 @@ export interface VaultV2Actions {
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
    * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. It replaces
    *   the tolerance-derived bound and may be tighter or looser, but must be at least the floor
-   *   derived at `MAX_SLIPPAGE_TOLERANCE`.
+   *   derived at `MAX_SLIPPAGE_TOLERANCE`. When that floor rounds down to zero (dust exits) it is
+   *   clamped to `1`, so any positive override is accepted.
    * @param params.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
    *   `referralFeeRecipient`. Defaults to `0n`.
    * @param params.referralFeeRecipient - Optional referral fee recipient, required when

@@ -48,6 +48,7 @@ import {
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
   VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   VaultV2SingleAdapterRequiredError,
   VaultV2UndecodableLiquidityDataError,
@@ -300,11 +301,24 @@ describe("MorphoVaultV2.forceWithdraw", () => {
   });
 
   test("behavior: a positive floor remains valid when the max-slippage threshold rounds to zero", () => {
+    const now = 1_800_000_000n;
     const vaultData = vaultV2ExitData({
       assetBalance: 1n,
       totalAssets: 0n,
       totalSupply: 950_000_000_000_000_000_000_000_000n,
     });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 1n,
+      timestamp: now,
+    });
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      }),
+    ).toThrow(VaultV2ForceWithdrawZeroSharePriceError);
     const build = (minSharePriceE27?: bigint) =>
       vaultFor(createMockClient(mainnet))
         .forceWithdraw({
