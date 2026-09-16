@@ -185,20 +185,22 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   /**
    * Returns a new adapter whose underlying MetaMorpho V1 vault (and its market
    * positions) has been accrued up to the given timestamp.
-   * A zero-allocation adapter contributes no assets — `realAssets` short-circuits
-   * to `0n` without inspecting the nested vault — so it is returned unchanged and
-   * never accrues (nor throws for) its economically inactive markets.
+   * An adapter with zero parent allocation or zero shares contributes no assets —
+   * `realAssets` short-circuits to `0n` without inspecting the nested vault — so
+   * it is returned unchanged and never accrues (nor throws for) its economically
+   * inactive markets.
    * Past timestamps and markets already ahead of `timestamp` keep their snapshots
    * without throwing.
    * @param timestamp The timestamp at which to accrue interest.
    * @returns A new `AccrualVaultV2MorphoVaultV1Adapter` wrapping the V1 vault
    * accrued to `timestamp`, or this adapter unchanged when its parent allocation
-   * is zero.
+   * or shares are zero.
    * @throws {UnknownMarketAllocationError} when the underlying V1 vault's withdraw
-   * queue references a market without an allocation and the parent allocation is
-   * non-zero.
+   * queue references a market without an allocation and both the parent allocation
+   * and shares are non-zero.
    * @throws {UnsupportedMarketIrmError} when forward projection of an allocated
-   * nested market with positive debt requires an unsupported IRM.
+   * nested market with positive debt requires an unsupported IRM and both the
+   * parent allocation and shares are non-zero.
    * @example
    * ```ts
    * import { fetchAccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk-viem";
@@ -216,10 +218,9 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * ```
    */
   accrueInterest(timestamp: BigIntish) {
-    // Mirror `realAssets`: a zero-allocation adapter never inspects its nested
-    // vault, so leave it untouched rather than eagerly accruing (and possibly
-    // throwing for) markets that contribute no assets.
-    if (this.parentAllocation === 0n) return this;
+    // Mirror `realAssets`: an adapter with no parent allocation or shares never
+    // inspects its nested vault, so leave it untouched.
+    if (this.parentAllocation === 0n || this.shares === 0n) return this;
     return new AccrualVaultV2MorphoVaultV1Adapter(
       this,
       this.accrualVaultV1.accrueInterest(timestamp),

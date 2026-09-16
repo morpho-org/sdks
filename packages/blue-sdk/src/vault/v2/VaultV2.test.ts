@@ -910,6 +910,21 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
     expect(adapter.accrueInterest(5n)).toBe(adapter);
   });
 
+  test("accrueInterest leaves a zero-share adapter untouched", () => {
+    const accrualVaultV1 = {
+      accrueInterest: () => {
+        throw new Error("nested vault must not be accrued");
+      },
+    } as unknown as AccrualVault;
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT, parentAllocation: 1n },
+      accrualVaultV1,
+      0n,
+    );
+
+    expect(adapter.accrueInterest(5n)).toBe(adapter);
+  });
+
   test("ignores residual shares when the parent allocation is zero", () => {
     const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
       {
