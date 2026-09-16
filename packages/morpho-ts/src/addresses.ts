@@ -1238,6 +1238,11 @@ const _addressesRegistry = {
       bundler3: "0x855dbe13C409Df75CAF6a985Cf6993a4D0319Feb",
       generalAdapter1: "0x0AF5BE7BD7B615e94e1d9275414482D028952466",
     },
+    bundles: {
+      vaultExitBundlesV1: "0x2095B5974101A94B726593f0E81d177B058849C7",
+      vaultBundlesV1: "0x76c1dEefAe48523E14903085081Bda2999450b68",
+      blueBundlesV1: "0x3c4BaE2a2Ef708ddaAE40A0b66623afE44eF4A7F",
+    },
     adaptiveCurveIrm: "0xF02615d094Fc02fC031C35fe705e175aA4653f20",
     vaultV2Factory: "0x3b0eefaBfa22ec7CF2c73877ac16e78D76749f12",
     morphoMarketV1AdapterV2Factory:
@@ -2167,6 +2172,7 @@ const _deployments = {
       bundler3: 1208685n,
       generalAdapter1: 1208685n,
     },
+    bundles: { vaultExitBundlesV1: 20_322_300n },
     adaptiveCurveIrm: 1208685n,
     vaultV2Factory: 1208931n,
     morphoMarketV1AdapterV2Factory: 1208978n,

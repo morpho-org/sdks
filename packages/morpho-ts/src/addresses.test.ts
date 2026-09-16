@@ -315,6 +315,11 @@ describe("addressesRegistry", () => {
       "0xCE29862924756584BBD0D75CA1249d22007E2813",
       32_383_480n,
     ],
+    [
+      ChainId.ArcMainnet,
+      "0x2095B5974101A94B726593f0E81d177B058849C7",
+      20_322_300n,
+    ],
   ] as const)(
     "behavior: exposes VaultExitBundlesV1 on chain %s",
     (...[chainId, address, deploymentBlock]) => {
@@ -341,6 +346,7 @@ describe("addressesRegistry", () => {
     [ChainId.StableMainnet, "0x2b910f5368e4939A2906ADa85c21fc0e51C4A861"],
     [ChainId.TempoMainnet, "0xe8aA1d8f1Cb111B7f52957D662Ee310D6d2Ee9B9"],
     [ChainId.RobinhoodMainnet, "0xcC108538f36242D6E0d6B9255f6D9Ccd137D70Fe"],
+    [ChainId.ArcMainnet, "0x76c1dEefAe48523E14903085081Bda2999450b68"],
   ] as const)(
     "behavior: exposes VaultBundlesV1 on chain %s",
     (...[chainId, address]) => {
@@ -362,6 +368,7 @@ describe("addressesRegistry", () => {
     [ChainId.StableMainnet, "0xFB606389166c04828D6Dba36F77871489673CeA0"],
     [ChainId.TempoMainnet, "0xAE863452f44ADD237739A85eb6BB1989E2368362"],
     [ChainId.RobinhoodMainnet, "0x53A1eB6589861F686af7c531211E35Aefe30210f"],
+    [ChainId.ArcMainnet, "0x3c4BaE2a2Ef708ddaAE40A0b66623afE44eF4A7F"],
   ] as const)(
     "behavior: exposes BlueBundlesV1 on chain %s",
     (...[chainId, address]) => {
