@@ -30,6 +30,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 #### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
+- [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Deprecated Vault V1 PublicAllocator liquidity planner; use the Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk`
 - [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)
