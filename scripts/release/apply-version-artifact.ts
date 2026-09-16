@@ -180,7 +180,7 @@ function validateArtifactPath(path: string): void {
 
 function resolveArtifactTarget(options: { cwd: string; path: string }): string {
   const basePath = realpathSync(options.cwd);
-  const absolutePath = resolve(basePath, options.path); // nosec
+  const absolutePath = resolve(basePath, options.path);
 
   if (!isPathInside(basePath, absolutePath)) {
     throw new Error(`Invalid version artifact path "${options.path}".`);

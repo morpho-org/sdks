@@ -30,7 +30,7 @@ export function readReleasePackages(
   options: ReadReleasePackagesOptions = {},
 ): ReleasePackage[] {
   const packagesDir = options.packagesDir ?? DEFAULT_PACKAGES_DIR;
-  const packagesRoot = resolve(packagesDir); // nosec
+  const packagesRoot = resolve(packagesDir);
   const packages: ReleasePackage[] = [];
 
   for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
