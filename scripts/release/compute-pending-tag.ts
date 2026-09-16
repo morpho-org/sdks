@@ -18,8 +18,8 @@ const MISSING_REVISION_OR_PATH_RE =
 
 /** Minimal `package.json` shape consumed by the pending-tag computation. */
 export interface PackageManifest {
-  name?: string;
-  version?: string;
+  readonly name?: string;
+  readonly version?: string;
 }
 
 interface ReadPackageManifestOptions {

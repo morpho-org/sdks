@@ -36,36 +36,36 @@ const USER_AGENT = "morpho-sdks-release-version-commit";
 
 /** A file to create or overwrite in the version commit. */
 export interface VersionFileAddition {
-  contents: string;
-  path: string;
+  readonly contents: string;
+  readonly path: string;
 }
 
 /** A file to delete in the version commit. */
 export interface VersionFileDeletion {
-  path: string;
+  readonly path: string;
 }
 
 /** File additions and deletions staged for the version commit. */
 export interface VersionFileChanges {
-  additions: VersionFileAddition[];
-  deletions: VersionFileDeletion[];
+  readonly additions: readonly VersionFileAddition[];
+  readonly deletions: readonly VersionFileDeletion[];
 }
 
 /** File changes plus the validated path list and any rejected paths. */
 export interface VersionChanges extends VersionFileChanges {
-  disallowedPaths: string[];
-  paths: string[];
+  readonly disallowedPaths: readonly string[];
+  readonly paths: readonly string[];
 }
 
 /** Inputs for pushing the signed version commit onto the release branch. */
 export interface PushReleaseBranchOptions {
-  commitOid: string;
-  cwd: string;
-  releaseBranch: string;
-  remoteUrl?: string;
-  repository: string;
-  tempBranch: string;
-  token: string;
+  readonly commitOid: string;
+  readonly cwd: string;
+  readonly releaseBranch: string;
+  readonly remoteUrl?: string;
+  readonly repository: string;
+  readonly tempBranch: string;
+  readonly token: string;
 }
 
 /** Injectable push implementation (overridden in tests). */
@@ -887,7 +887,7 @@ function runGit(args: string[], options: RunGitOptions): Buffer {
   });
 }
 
-function formatIndentedList(paths: string[]): string {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 

@@ -14,9 +14,9 @@ const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
 
 /** Serialized version-change artifact passed between the version PR and publish workflows. */
 export interface VersionArtifact {
-  additions: VersionChanges["additions"];
-  deletions: VersionChanges["deletions"];
-  schemaVersion: number;
+  readonly additions: VersionChanges["additions"];
+  readonly deletions: VersionChanges["deletions"];
+  readonly schemaVersion: number;
 }
 
 export function writeVersionArtifact(
@@ -58,7 +58,7 @@ export function main(
   });
 }
 
-function formatIndentedList(paths: string[]): string {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 

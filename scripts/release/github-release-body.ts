@@ -13,9 +13,9 @@ const VERSION_HEADING_RE =
 
 /** A package being released: manifest name, published version, and changelog path. */
 export interface ReleasePackage {
-  changelogPath: string;
-  name: string;
-  version: string;
+  readonly changelogPath: string;
+  readonly name: string;
+  readonly version: string;
 }
 
 interface ReadReleasePackagesOptions {

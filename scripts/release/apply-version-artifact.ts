@@ -211,7 +211,7 @@ function hasControlCharacter(value: string): boolean {
   return false;
 }
 
-function formatIndentedList(paths: string[]): string {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 
