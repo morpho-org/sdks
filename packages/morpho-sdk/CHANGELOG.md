@@ -320,6 +320,33 @@ slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }`
 
 - [#972](https://github.com/morpho-org/sdks/pull/972) [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route the `MorphoVaultV1` and `MorphoVaultV2` action-method chain checks through the shared `validateChainId` helper instead of inlining the `ChainIdMismatchError` guard at each call site. Pure internal maintenance: the thrown error class and arguments are unchanged, and the `getData` guards keep their intentional chainless-client tolerance.
 
+## 5.12.0
+
+### Minor Changes
+
+- [#1088](https://github.com/morpho-org/sdks/pull/1088) [`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the canonical `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` deployments in the
+  `bundles` group of `ChainAddresses` for Arc (chain 5042), matching the layout already exposed on the
+  other supported chains. `getChainAddress(ChainId.ArcMainnet, "bundles.vaultExitBundlesV1")`,
+  `getChainAddress(ChainId.ArcMainnet, "bundles.vaultBundlesV1")`, and
+  `getChainAddress(ChainId.ArcMainnet, "bundles.blueBundlesV1")` now resolve the new entries, and the
+  deployment-block registry records the `VaultExitBundlesV1` creation block. Addresses are sourced
+  byte-for-byte from the canonical deployment registry (morpho-org/deployments address-book.json).
+
+- [#1092](https://github.com/morpho-org/sdks/pull/1092) [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the remaining Arc (chain 5042) deployments from morpho-org/deployments address-book.json:
+  the Vault V2 `BluePublicAllocator` (`vaultV2BluePublicAllocator`) and the full Midnight stack
+  (`midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`), each with its deployment block in the
+  registry. `getChainAddress(ChainId.ArcMainnet, ...)` now resolves these labels, so Blue public
+  allocations and the Midnight SDK work on Arc. Addresses are sourced byte-for-byte from the canonical
+  deployment registry; deployment blocks were derived from the Arc archive node.
+
+### Patch Changes
+
+- Updated dependencies [[`2e899af`](https://github.com/morpho-org/sdks/commit/2e899af4063a70d37b2b48270dba85b4231d6cca), [`ab6d1b9`](https://github.com/morpho-org/sdks/commit/ab6d1b9760debb944dcb4a24ce327e359528fee8)]:
+  - @morpho-org/morpho-ts@2.14.0
+  - @morpho-org/blue-sdk@6.10.0
+  - @morpho-org/midnight-sdk@1.5.0
+
 ## 5.11.0
 
 ### Minor Changes

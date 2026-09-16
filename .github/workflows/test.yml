@@ -99,7 +99,7 @@ jobs:
           ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
           IS_LOGGING_DISABLED: true
           VITEST_PROJECTS: ${{ matrix.projects }}
-          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/release' || format('packages/{0}/src', matrix.name) }}
+          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release}' || format('packages/{0}/src', matrix.name) }}
         run: |
           project_args=()
           for project in $VITEST_PROJECTS; do
