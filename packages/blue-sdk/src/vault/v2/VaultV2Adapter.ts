@@ -54,13 +54,15 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    *
    * Optional for backward compatibility: an adapter that does not implement it is
    * left at its pre-accrual state by the vault's `accrueInterest`.
-   * @param timestamp The timestamp at which to accrue interest. Required so every
-   * nested market accrues to the same instant. Must be greater than or equal to
-   * each underlying market's `lastUpdate`.
-   * @returns A new adapter of the same concrete type, with every underlying
-   * market accrued to `timestamp`.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an
-   * underlying market's `lastUpdate`.
+   * @param timestamp The timestamp at which to accrue interest.
+   * @returns A new adapter of the same concrete type, with every contributing
+   * underlying market accrued to `timestamp`. Built-in implementations may
+   * return the adapter unchanged when it contributes no assets, such as when
+   * its parent allocation is zero, leaving nested markets at their snapshots.
+   * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue
+   * references a market without an allocation.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an underlying
+   * market with positive debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";

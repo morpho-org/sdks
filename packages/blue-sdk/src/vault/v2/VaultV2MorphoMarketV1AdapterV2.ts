@@ -217,12 +217,13 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
   /**
    * Returns a new adapter whose underlying markets have been accrued up to the
    * given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater
-   * than or equal to each market's `lastUpdate`.
-   * @returns A new `AccrualVaultV2MorphoMarketV1AdapterV2` with every market
-   * accrued to `timestamp`.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a
-   * market's `lastUpdate`.
+   * Past timestamps and markets already ahead of `timestamp` keep their snapshots
+   * without throwing. Zero-share markets are left unchanged.
+   * @param timestamp The timestamp at which to accrue interest.
+   * @returns A new `AccrualVaultV2MorphoMarketV1AdapterV2` with contributing
+   * markets accrued to `timestamp`.
+   * @throws {UnsupportedMarketIrmError} when forward projection of a market with
+   * positive debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
@@ -246,7 +247,11 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
   accrueInterest(timestamp: BigIntish) {
     return new AccrualVaultV2MorphoMarketV1AdapterV2(
       this,
-      this.markets.map((market) => market.accrueInterest(timestamp)),
+      this.markets.map((market) =>
+        (this.supplyShares[market.id] ?? 0n) === 0n
+          ? market
+          : market.accrueInterest(timestamp),
+      ),
     );
   }
 

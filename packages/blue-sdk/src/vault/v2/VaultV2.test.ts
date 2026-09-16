@@ -11,11 +11,7 @@ import {
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
-import {
-  BlueErrors,
-  UnknownMarketAllocationError,
-  VaultV2Errors,
-} from "../../errors.js";
+import { UnknownMarketAllocationError, VaultV2Errors } from "../../errors.js";
 import { MarketParams, marketParamsAbi } from "../../market/MarketParams.js";
 import { MathLib } from "../../math/MathLib.js";
 import { CapacityLimitReason } from "../../utils.js";
@@ -253,6 +249,49 @@ describe("AccrualVaultV2.accrueInterest", () => {
     },
   );
 
+  test.each([99n, 100n])(
+    "behavior: timestamp at or before lastUpdate returns an unchanged copy without accruing nested adapters",
+    (timestamp) => {
+      const position = accrualPosition(
+        { supplyShares: 100n },
+        { lastUpdate: 105n },
+      );
+      const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+        {
+          ...adapterBaseInput(),
+          marketParamsList: [position.market.params],
+        },
+        [position],
+      );
+      const liquidityPosition = accrualPosition(
+        { supplyShares: 100n },
+        { lastUpdate: 105n },
+      );
+      const liquidityAdapter = new AccrualVaultV2MorphoMarketV1Adapter(
+        {
+          ...adapterBaseInput(),
+          marketParamsList: [liquidityPosition.market.params],
+        },
+        [liquidityPosition],
+      );
+      const vault = new AccrualVaultV2(
+        vaultV2Input(),
+        liquidityAdapter,
+        [adapter],
+        100n,
+        {},
+      );
+
+      const { vault: accrued } = vault.accrueInterest(timestamp);
+
+      expect(accrued).not.toBe(vault);
+      expect(accrued.accrualAdapters[0]).toBe(adapter);
+      expect(accrued.accrualLiquidityAdapter).toBe(liquidityAdapter);
+      expect(adapter.positions[0]?.market.lastUpdate).toBe(105n);
+      expect(liquidityAdapter.positions[0]?.market.lastUpdate).toBe(105n);
+    },
+  );
+
   test.each([0n, 100n])(
     "behavior: preserves a newer nested market with %s supply shares",
     (supplyShares) => {
@@ -381,6 +420,12 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(accruedAdapter).not.toBe(adapter);
     expect(accruedAdapter.positions[0]?.market.lastUpdate).toBe(101n);
     expect(accruedLiquidity.positions[0]?.market.lastUpdate).toBe(101n);
+    const baseline = accrualVaultV2(
+      accrualAdapter({ realAssets: () => adapter.realAssets(101n) }),
+    ).accrueInterest(101n);
+    expect(accrued._totalAssets).toBe(baseline.vault._totalAssets);
+    expect(accrued.totalSupply).toBe(baseline.vault.totalSupply);
+    expect(accrued.lastUpdate).toBe(baseline.vault.lastUpdate);
 
     // Accrual is non-mutating: the source adapter keeps its original state.
     expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
@@ -435,53 +480,7 @@ describe("AccrualVaultV2.accrueInterest", () => {
     ).toBe(105n);
   });
 
-  test("error: BlueErrors.InvalidInterestAccrual when advancing past an ahead nested market", () => {
-    // Advancing the vault to 101 (elapsed > 0) while a nested market sits ahead
-    // at 105 cannot yield a graph that shares one timestamp. The inconsistency
-    // must surface rather than silently returning a mixed-timestamp graph.
-    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
-      {
-        ...adapterBaseInput(),
-        marketParamsList: [new MarketParams(marketParams())],
-      },
-      [accrualPosition({ supplyShares: 100n }, { lastUpdate: 105n })],
-    );
-    const vault = accrualVaultV2(adapter);
-
-    expect(() => vault.accrueInterest(101n)).toThrow(
-      BlueErrors.InvalidInterestAccrual,
-    );
-  });
-
-  test("behavior: a no-op accrual keeps an adapter whose nested queue is stale", () => {
-    // At elapsed 0 (accruing to the vault's own `lastUpdate`), a nested V1
-    // adapter whose withdraw queue lacks matching allocation state throws
-    // UnknownMarketAllocationError. This no-op call stayed valid before nested
-    // accrual existed, so it must not throw and must keep the adapter untouched.
-    const staleAdapter = accrualAdapter({
-      accrueInterest: () => {
-        throw new UnknownMarketAllocationError(
-          new MarketParams(marketParams()).id,
-        );
-      },
-    });
-    const vault = accrualVaultV2(staleAdapter);
-
-    const {
-      vault: accrued,
-      performanceFeeShares,
-      managementFeeShares,
-    } = vault.accrueInterest(100n);
-
-    expect(accrued.accrualAdapters[0]).toBe(staleAdapter);
-    expect(accrued.accrualLiquidityAdapter).toBe(staleAdapter);
-    expect(performanceFeeShares).toBe(0n);
-    expect(managementFeeShares).toBe(0n);
-  });
-
   test("error: UnknownMarketAllocationError when advancing with a stale nested queue", () => {
-    // The stale-queue tolerance is limited to the elapsed-0 no-op: advancing the
-    // vault must still surface a nested adapter's UnknownMarketAllocationError.
     const staleAdapter = accrualAdapter({
       accrueInterest: () => {
         throw new UnknownMarketAllocationError(
@@ -494,33 +493,6 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(() => vault.accrueInterest(101n)).toThrow(
       UnknownMarketAllocationError,
     );
-  });
-
-  test("behavior: a liquidity-only adapter that cannot reach the timestamp is left untouched", () => {
-    // A liquidity adapter absent from `accrualAdapters` does not feed the vault's
-    // total-assets reduction, so — as before nested accrual existed — advancing
-    // the vault must leave it at its pre-accrual state rather than throwing when
-    // it cannot be accrued to the timestamp.
-    const liquidityOnly = accrualAdapter({
-      accrueInterest: () => {
-        throw new BlueErrors.InvalidInterestAccrual(
-          new MarketParams(marketParams()).id,
-          101n,
-          105n,
-        );
-      },
-    });
-    const vault = new AccrualVaultV2(
-      vaultV2Input(),
-      liquidityOnly,
-      [],
-      100n,
-      {},
-    );
-
-    const { vault: accrued } = vault.accrueInterest(101n);
-
-    expect(accrued.accrualLiquidityAdapter).toBe(liquidityOnly);
   });
 });
 
@@ -636,6 +608,22 @@ describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
     expect(accrued.positions[0]?.market.lastUpdate).toBe(101n);
     expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
     expect(accrued.realAssets(101n)).toBe(adapter.realAssets(101n));
+  });
+
+  test("accrueInterest keeps zero-share positions unchanged", () => {
+    const position = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+
+    const accrued = adapter.accrueInterest(position.market.lastUpdate + 1n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.positions[0]).toBe(position);
   });
 });
 
@@ -797,6 +785,27 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
     expect(accrued.markets[0]?.lastUpdate).toBe(101n);
     expect(adapter.markets[0]?.lastUpdate).toBe(100n);
     expect(accrued.realAssets(101n)).toBe(adapter.realAssets(101n));
+  });
+
+  test("accrueInterest keeps zero-share markets unchanged", () => {
+    const m = market({
+      params: marketParams({ irm: RECIPIENT }),
+      rateAtTarget: undefined,
+    });
+    const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        ...adapterBaseInput(),
+        marketIds: [m.id],
+        adaptiveCurveIrm: ADAPTER,
+        supplyShares: { [m.id]: 0n },
+      },
+      [m],
+    );
+
+    const accrued = adapter.accrueInterest(m.lastUpdate + 1n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.markets[0]).toBe(m);
   });
 });
 

@@ -188,16 +188,17 @@ export class AccrualVaultV2MorphoVaultV1Adapter
    * A zero-allocation adapter contributes no assets — `realAssets` short-circuits
    * to `0n` without inspecting the nested vault — so it is returned unchanged and
    * never accrues (nor throws for) its economically inactive markets.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater
-   * than or equal to each underlying market's `lastUpdate`.
+   * Past timestamps and markets already ahead of `timestamp` keep their snapshots
+   * without throwing.
+   * @param timestamp The timestamp at which to accrue interest.
    * @returns A new `AccrualVaultV2MorphoVaultV1Adapter` wrapping the V1 vault
    * accrued to `timestamp`, or this adapter unchanged when its parent allocation
    * is zero.
-   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an
-   * underlying market's `lastUpdate` and the parent allocation is non-zero.
    * @throws {UnknownMarketAllocationError} when the underlying V1 vault's withdraw
    * queue references a market without an allocation and the parent allocation is
    * non-zero.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an allocated
+   * nested market with positive debt requires an unsupported IRM.
    * @example
    * ```ts
    * import { fetchAccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk-viem";

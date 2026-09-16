@@ -348,16 +348,16 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
-    const vault = new AccrualVaultV2(
-      this,
-      this.accrualLiquidityAdapter,
-      this.accrualAdapters,
-      this.assetBalance,
-      this.forceDeallocatePenalties,
-    );
-
-    if (elapsed <= 0n)
+    if (elapsed <= 0n) {
+      const vault = new AccrualVaultV2(
+        this,
+        this.accrualLiquidityAdapter,
+        this.accrualAdapters,
+        this.assetBalance,
+        this.forceDeallocatePenalties,
+      );
       return { vault, performanceFeeShares: 0n, managementFeeShares: 0n };
+    }
 
     const accrualAdapters = this.accrualAdapters.map(
       (adapter) => adapter.accrueInterest?.(timestamp) ?? adapter,
@@ -366,7 +366,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.accrualLiquidityAdapter?.accrueInterest?.(timestamp) ??
       this.accrualLiquidityAdapter;
 
-    const accruedVault = new AccrualVaultV2(
+    const vault = new AccrualVaultV2(
       this,
       accrualLiquidityAdapter,
       accrualAdapters,
@@ -374,53 +374,47 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.forceDeallocatePenalties,
     );
 
-    const realAssets = accruedVault.accrualAdapters.reduce(
+    const realAssets = vault.accrualAdapters.reduce(
       (curr, adapter) => curr + adapter.realAssets(timestamp),
-      accruedVault.assetBalance,
+      vault.assetBalance,
     );
     const maxTotalAssets =
-      accruedVault._totalAssets +
-      MathLib.wMulDown(
-        accruedVault._totalAssets * elapsed,
-        accruedVault.maxRate,
-      );
+      vault._totalAssets +
+      MathLib.wMulDown(vault._totalAssets * elapsed, vault.maxRate);
     const newTotalAssets = MathLib.min(realAssets, maxTotalAssets);
-    const interest = MathLib.zeroFloorSub(
-      newTotalAssets,
-      accruedVault._totalAssets,
-    );
+    const interest = MathLib.zeroFloorSub(newTotalAssets, vault._totalAssets);
 
     const performanceFeeAssets =
       interest > 0n &&
-      accruedVault.performanceFee > 0n &&
-      accruedVault.performanceFeeRecipientCanReceiveShares
-        ? MathLib.wMulDown(interest, accruedVault.performanceFee)
+      vault.performanceFee > 0n &&
+      vault.performanceFeeRecipientCanReceiveShares
+        ? MathLib.wMulDown(interest, vault.performanceFee)
         : 0n;
     const managementFeeAssets =
       elapsed > 0n &&
-      accruedVault.managementFee > 0n &&
-      accruedVault.managementFeeRecipientCanReceiveShares
-        ? MathLib.wMulDown(newTotalAssets * elapsed, accruedVault.managementFee)
+      vault.managementFee > 0n &&
+      vault.managementFeeRecipientCanReceiveShares
+        ? MathLib.wMulDown(newTotalAssets * elapsed, vault.managementFee)
         : 0n;
 
     const newTotalAssetsWithoutFees =
       newTotalAssets - performanceFeeAssets - managementFeeAssets;
     const performanceFeeShares = MathLib.mulDivDown(
       performanceFeeAssets,
-      accruedVault.totalSupply + accruedVault.virtualShares,
+      vault.totalSupply + vault.virtualShares,
       newTotalAssetsWithoutFees + 1n,
     );
     const managementFeeShares = MathLib.mulDivDown(
       managementFeeAssets,
-      accruedVault.totalSupply + accruedVault.virtualShares,
+      vault.totalSupply + vault.virtualShares,
       newTotalAssetsWithoutFees + 1n,
     );
 
-    accruedVault._totalAssets = newTotalAssets;
-    if (performanceFeeShares) accruedVault.totalSupply += performanceFeeShares;
-    if (managementFeeShares) accruedVault.totalSupply += managementFeeShares;
-    accruedVault.lastUpdate = timestamp;
+    vault._totalAssets = newTotalAssets;
+    if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
+    if (managementFeeShares) vault.totalSupply += managementFeeShares;
+    vault.lastUpdate = timestamp;
 
-    return { vault: accruedVault, performanceFeeShares, managementFeeShares };
+    return { vault, performanceFeeShares, managementFeeShares };
   }
 }
