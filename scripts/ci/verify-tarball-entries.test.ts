@@ -324,8 +324,9 @@ describe("verifyTarballEntries", () => {
       ]),
     ).toThrow(/renamed to \.npmignore .* collides with/);
     // The literally spelled sibling is tolerated in both orders: pacote either
-    // skips the rename (.npmignore first) or lets the sibling overwrite the
-    // renamed file (.gitignore first); both are inert ignore files either way.
+    // drops the .gitignore entry (.npmignore first) or lets the sibling
+    // overwrite the renamed file (.gitignore first); both are inert ignore
+    // files either way.
     expect(() =>
       verifyTarballEntries([
         ...VALID,
@@ -769,6 +770,34 @@ describe("readTarballEntries", () => {
     expect(() => readTarballEntries(tgz)).toThrow(
       /past the end of the archive/,
     );
+  });
+
+  test("behavior: the prefix window follows node-tar's byte-475 rule", () => {
+    const short = "p".repeat(129);
+    const long = "q".repeat(140);
+    expect(
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "a.js", type: "0", prefix: short }),
+          rawEntry({ name: "b.js", type: "0", prefix: long }),
+        ),
+      ),
+    ).toEqual([MANIFEST_ENTRY, `${short}/a.js`, `${long}/b.js`]);
+    // A NUL before byte 475 with a non-zero byte 475 makes node-tar join an
+    // empty prefix, producing `/package/...`; GNU tar would ignore the prefix.
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({
+            name: "package/foo.js",
+            type: "0",
+            prefix: `${"\0".repeat(130)}x`,
+          }),
+        ),
+      ),
+    ).toThrow(/prefix field that node-tar joins as ""/);
   });
 
   test("error: an archive without an end-of-archive zero block is rejected", () => {

@@ -88,7 +88,9 @@ const OCTAL = /^[0-7]+$/;
  * other records, `size` included, so they are rejected wholesale), GNU
  * long-name headers (`L`/`K`),
  * links, devices, FIFOs, magic/version bytes other than `ustar\0` + `00`
- * (node-tar only applies `prefix` for that exact value), an invalid header
+ * (node-tar only applies `prefix` for that exact value), a `prefix` field with
+ * a non-zero byte 475 that nonetheless decodes to `""` (node-tar joins it
+ * anyway, yielding a leading `/`), an invalid header
  * checksum (node-tar skips such a header and re-syncs one block later), a
  * non-octal `size` field, a directory header declaring a non-zero `size`
  * (node-tar forces it to 0 and reads the next block as a header), an empty
@@ -170,7 +172,17 @@ export function readTarballEntries(tgz: Buffer): string[] {
       );
     }
     const name = decodeString(header.subarray(0, 100));
-    const prefix = decodeString(header.subarray(345, 500));
+    // node-tar reads the prefix field in two shapes: when byte 475 is non-zero
+    // it decodes all 155 bytes and joins them unconditionally (a leading `/`
+    // if a NUL comes first), otherwise it decodes 130 bytes and joins only a
+    // non-empty result. Mirror the window and fail closed on the empty join.
+    const longPrefix = header.readUInt8(475) !== 0;
+    const prefix = decodeString(header.subarray(345, longPrefix ? 500 : 475));
+    if (longPrefix && prefix === "") {
+      throw new Error(
+        `Tar header at byte ${offset} has a prefix field that node-tar joins as ""; refusing to publish.`,
+      );
+    }
     const rawPath = prefix === "" ? name : `${prefix}/${name}`;
     // node-tar skips (one block, no body) a header with an empty path, or a
     // non-empty linkname on a regular file/directory, then re-syncs on the next
@@ -405,10 +417,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
 
     const canonical = canonicalEntryPath(entry);
     if (!isDirectory) files.set(canonical, entry);
-    // pacote renames `.gitignore` to `.npmignore` on install (skipping the
-    // rename only when the literally spelled sibling `.npmignore` file came
-    // first), so the renamed path joins the collision namespace. The literal
-    // sibling is tolerated: whichever order, both are inert ignore files.
+    // pacote renames `.gitignore` to `.npmignore` on install (dropping the
+    // `.gitignore` entry entirely when the literally spelled sibling
+    // `.npmignore` file came first), so the renamed path joins the collision
+    // namespace. The literal sibling is tolerated: whichever order, both are
+    // inert ignore files.
     if (!isDirectory && segments.at(-1) === ".gitignore") {
       const sibling = `${segments.slice(0, -1).join("/")}/.npmignore`;
       const renamed = canonicalEntryPath(sibling);
