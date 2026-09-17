@@ -1064,6 +1064,84 @@ export class InvalidSignatureError extends Error {
   }
 }
 
+/**
+ * Thrown when {@link resolveRequirementSignature} receives EIP-712 typed data whose `primaryType`
+ * is not a supported signature requirement (`Permit`, `PermitSingle`, or `Authorization`).
+ * DAI-style permits are routed through Permit2 and are not directly representable as a
+ * `RequirementSignature`.
+ *
+ * @example
+ * ```ts
+ * import { UnsupportedSignatureTypedDataError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof UnsupportedSignatureTypedDataError) {
+ *   console.error(error.primaryType);
+ * }
+ * ```
+ */
+export class UnsupportedSignatureTypedDataError extends Error {
+  /**
+   * @param primaryType - The unsupported EIP-712 `primaryType`.
+   */
+  public constructor(public readonly primaryType: string) {
+    super(
+      `Unsupported EIP-712 primaryType "${primaryType}". Expected "Permit" (ERC-2612), "PermitSingle" (Permit2), or "Authorization" (Blue). DAI-style permits route through Permit2 and are not directly representable.`,
+    );
+    this.name = "UnsupportedSignatureTypedDataError";
+  }
+}
+
+/**
+ * Thrown when {@link resolveRequirementSignature} finds a required EIP-712 message field missing or
+ * of the wrong type (for example after a lossy JSON round-trip of a continuation token).
+ *
+ * @example
+ * ```ts
+ * import { MalformedSignatureTypedDataError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof MalformedSignatureTypedDataError) {
+ *   console.error(error.field, error.expected);
+ * }
+ * ```
+ */
+export class MalformedSignatureTypedDataError extends Error {
+  /**
+   * @param field - The message field that is missing or mistyped.
+   * @param expected - The expected primitive kind (`"address"`, `"bigint"`, or `"boolean"`).
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly expected: string,
+  ) {
+    super(
+      `Malformed EIP-712 message: field "${field}" is missing or is not a ${expected}.`,
+    );
+    this.name = "MalformedSignatureTypedDataError";
+  }
+}
+
+/**
+ * Thrown when {@link resolveRequirementSignature} resolves Permit2 typed data without an explicit
+ * `owner`. The Permit2 `PermitSingle` message carries no owner, so the caller must supply it.
+ *
+ * @example
+ * ```ts
+ * import { MissingSignatureOwnerError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof MissingSignatureOwnerError) {
+ *   // Pass `owner` to resolveRequirementSignature for Permit2 typed data.
+ * }
+ * ```
+ */
+export class MissingSignatureOwnerError extends Error {
+  public constructor() {
+    super(
+      "Permit2 typed data does not carry the owner. Pass `owner` to resolveRequirementSignature.",
+    );
+    this.name = "MissingSignatureOwnerError";
+  }
+}
+
 /** Thrown when a repay in shares mode supplies more shares than the borrower owes. */
 export class RepaySharesExceedDebtError extends Error {
   constructor(params: {

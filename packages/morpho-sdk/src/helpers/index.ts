@@ -19,6 +19,12 @@ export {
   previewVaultV2InKindRedeem,
   type VaultV2InKindRedeemMarketPreview,
 } from "./previewVaultV2InKindRedeem.js";
+export {
+  type ResolveRequirementSignatureOptions,
+  resolveRequirementSignature,
+  resolveRequirementSignatures,
+  type SignedTypedData,
+} from "./resolveRequirementSignature.js";
 export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {
   computeMaxRepaySharePrice,
