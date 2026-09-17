@@ -3,7 +3,12 @@
  * verify-tarball-entries.ts — the entry-path alias gate of
  * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
  *
- *   tar -tzf <tarball> | node scripts/ci/verify-tarball-entries.ts
+ *   tar -tzf <tarball> --quoting-style=escape | node scripts/ci/verify-tarball-entries.ts
+ *
+ * `--quoting-style=escape` guarantees one line per entry: GNU tar renders a
+ * stored `\`, newline, control or non-ASCII byte as a `\`-escape instead of
+ * emitting it raw, so a crafted name cannot forge an entry boundary and every
+ * such name still surfaces to the backslash check below.
  *
  * Reads the newline-separated `tar -t` listing on stdin, exits 0 silently when
  * every entry resolves to a distinct canonical path on every consumer platform,
@@ -47,7 +52,8 @@ const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
  * Rejects:
  * - any entry containing `\` (node-tar strips a leading `\` on every platform
  *   and treats `\` as a separator on Windows, so `package/\./package.json`
- *   lands on `package.json`);
+ *   lands on `package.json`; under `--quoting-style=escape` this also covers
+ *   stored newlines and other bytes tar had to escape);
  * - any entry with a `.` / `..` segment or an empty segment (`//`, trailing
  *   `/` on a file), which npm normalizes away before writing;
  * - any segment ending in `.` or a space, which the Win32 file APIs trim so
@@ -55,15 +61,23 @@ const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
  * - any entry with a character outside printable ASCII, so that case-
  *   insensitive and Unicode-normalizing consumer file systems (e.g. `ſ` → `s`
  *   under macOS caseless matching) cannot fold it onto another entry;
+ * - any segment containing `~`, the marker of a Windows 8.3 short name
+ *   (`LONGFI~1.JS`) through which a second entry can reach an already
+ *   extracted long-name file;
  * - any entry outside `package/`;
  * - any two entries whose canonical forms collide (exact duplicates, case
  *   variants, `dir` vs `dir/`);
+ * - any regular-file entry that is also an ancestor directory of another
+ *   entry in any order (`package/package.json/x` makes node-tar create a
+ *   `package.json` directory and skip the real manifest with `ENOTEMPTY`);
  * - a manifest that is not stored literally as `package/package.json`.
  *
  * @param entries - The stored entry paths, in archive order.
  */
 export function verifyTarballEntries(entries: readonly string[]): void {
   const seen = new Map<string, string>();
+  const files = new Map<string, string>();
+  const ancestors = new Map<string, string>();
   let manifestCount = 0;
 
   for (const entry of entries) {
@@ -90,11 +104,21 @@ export function verifyTarballEntries(entries: readonly string[]): void {
         `Tar entry "${entry}" contains a non-ASCII or control character; consumer file systems may fold it onto another path.`,
       );
     }
+    if (segments.some((s) => s.includes("~"))) {
+      throw new Error(
+        `Tar entry "${entry}" has a path segment containing "~", which can alias a Windows 8.3 short name.`,
+      );
+    }
     if (segments[0] !== "package") {
       throw new Error(`Tar entry "${entry}" is outside package/.`);
     }
 
     const canonical = canonicalEntryPath(entry);
+    if (!isDirectory) files.set(canonical, entry);
+    for (let depth = 1; depth < segments.length; depth++) {
+      const ancestor = canonicalEntryPath(segments.slice(0, depth).join("/"));
+      ancestors.set(ancestor, entry);
+    }
     if (canonical === MANIFEST_ENTRY && entry !== MANIFEST_ENTRY) {
       throw new Error(
         `Tar entry "${entry}" aliases ${MANIFEST_ENTRY}; the manifest must be stored literally.`,
@@ -111,6 +135,15 @@ export function verifyTarballEntries(entries: readonly string[]): void {
 
     if (entry === MANIFEST_ENTRY) {
       manifestCount += 1;
+    }
+  }
+
+  for (const [canonical, file] of files) {
+    const descendant = ancestors.get(canonical);
+    if (descendant != null) {
+      throw new Error(
+        `Tar entry "${file}" is a regular file but "${descendant}" is stored beneath it.`,
+      );
     }
   }
 

@@ -256,10 +256,11 @@ jobs:
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            # `--quoting-style=literal` so the listing carries the stored bytes
-            # (no `\\`/octal escaping) and the alias gate below sees exactly
-            # what npm's extractor will resolve.
-            entries="$(tar -tzf "$tgz" --quoting-style=literal)"
+            # `--quoting-style=escape` keeps one line per entry: a stored `\`,
+            # newline, control or non-ASCII byte is emitted as `\\`, `\n`, or an
+            # octal escape, so it cannot forge an entry boundary and the alias
+            # gate below rejects any listed `\` as fail-closed evidence of it.
+            entries="$(tar -tzf "$tgz" --quoting-style=escape)"
             # npm's extractor (node-tar) does not extract the stored names the
             # literal checks below inspect: it strips a leading `\` as a root
             # indicator on every platform and treats `\` as a separator on

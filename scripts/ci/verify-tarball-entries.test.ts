@@ -157,6 +157,24 @@ describe("verifyTarballEntries", () => {
     ).toThrow(/exactly one package\/package\.json \(found 0\)/);
   });
 
+  test("error: a regular file that is an ancestor of another entry is rejected in any order", () => {
+    expect(() =>
+      verifyTarballEntries(["package/package.json/evil", ...VALID]),
+    ).toThrow(/is a regular file but .* is stored beneath it/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/LIB/ESM/index.js/x"]),
+    ).toThrow(/is a regular file but .* is stored beneath it/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib/esm/"]),
+    ).not.toThrow();
+  });
+
+  test("error: segments containing a tilde (Windows 8.3 short names) are rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/LONGFI~1.JS"]),
+    ).toThrow(/containing "~"/);
+  });
+
   test("error: empty listing is rejected", () => {
     expect(() => verifyTarballEntries([])).toThrow(/found 0/);
   });
@@ -208,6 +226,30 @@ describe("main", () => {
       expect(caseResult.stderr).toMatch(
         /^::error::.*aliases package\/package\.json/,
       );
+    });
+  });
+
+  test("behavior: an embedded newline cannot forge an entry boundary under --quoting-style=escape", () => {
+    withTempDir((dir) => {
+      const forged = buildTarball(join(dir, "newline"), [
+        "package/package.json",
+        "package/a\npackage/b",
+      ]);
+      const listing = execFileSync(
+        "tar",
+        ["-tzf", forged, "--quoting-style=escape"],
+        { encoding: "utf8" },
+      );
+      expect(parseEntryListing(listing)).toEqual([
+        "package/package.json",
+        "package/a\\npackage/b",
+      ]);
+      const result = spawnSync(process.execPath, [SCRIPT], {
+        encoding: "utf8",
+        input: listing,
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/^::error::.*contains a backslash/);
     });
   });
 });
