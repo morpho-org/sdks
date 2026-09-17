@@ -27,7 +27,7 @@
 > This Vault V1 PublicAllocator package is deprecated and remains on `@morpho-org/morpho-sdk` v5.
 > New integrations should use the Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk`.
 
-Viem-based package that provides utilities to build viem-based liquidity bots on Morpho and examples using Flashbots and Morpho's GraphQL API.
+Viem-based package that calculates the shared liquidity available through the Vault V1 PublicAllocator using Morpho's GraphQL API and onchain reads.
 
 ## Installation
 

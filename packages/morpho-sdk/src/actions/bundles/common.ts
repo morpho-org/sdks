@@ -41,6 +41,7 @@ import {
   type TokenRequirementSignature,
   type Transaction,
   UnexpectedRequirementSignatureError,
+  UnsupportedRequirementSignatureError,
 } from "../../types/index.js";
 
 /** Numeric permit kinds consumed by `TokenLib.pullToken`. */
@@ -188,6 +189,8 @@ export const resolveBundlesFunding = (
  * @throws {DepositAssetMismatchError} when the signed token differs from `token`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
  * @throws {DepositSpenderMismatchError} when the signed spender differs from `spender`.
+ * @throws {UnsupportedRequirementSignatureError} when the signature's action type is neither
+ *   "permit" nor "permit2SignatureTransfer".
  * @throws {BundlesRequirementSignatureMismatchError} when signature metadata is malformed.
  * @example
  * ```ts
@@ -212,6 +215,9 @@ export const getBundlesTokenPermit = (params: {
 }): BundlesTokenPermit => {
   const { requirementSignature } = params;
   if (requirementSignature == null) return { ...EMPTY_TOKEN_PERMIT };
+  const { type } = requirementSignature.action;
+  if (type !== "permit" && type !== "permit2SignatureTransfer")
+    throw new UnsupportedRequirementSignatureError(type);
   if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
     throw new DepositOwnerMismatchError(
       params.userAddress,

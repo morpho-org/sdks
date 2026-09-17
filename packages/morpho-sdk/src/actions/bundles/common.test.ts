@@ -25,6 +25,8 @@ import {
   NonPositiveInputError,
   type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
+  type TokenRequirementSignature,
+  UnsupportedRequirementSignatureError,
 } from "../../types/index.js";
 import {
   getBundlesSharesPermit,
@@ -170,6 +172,45 @@ describe("getBundlesSharesPermit", () => {
       }),
     ).toThrow(BundlesPermitMismatchError);
   });
+
+  test("behavior: permit tuple round-trips across valid scalar inputs", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          deadline: fc.bigInt({ min: 1n, max: 2n ** 128n }),
+          nonce: fc.bigInt({ min: 0n, max: 2n ** 128n }),
+          permitAmount: fc.bigInt({ min: 1n, max: 2n ** 128n }),
+        }),
+        ({ deadline, nonce, permitAmount }) => {
+          const encoded = getBundlesSharesPermit({
+            vault,
+            deadline,
+            requirementSignature: {
+              ...permit,
+              args: { ...permit.args, amount: permitAmount, deadline, nonce },
+              action: {
+                ...permit.action,
+                args: {
+                  ...permit.action.args,
+                  amount: permitAmount,
+                  deadline,
+                  nonce,
+                },
+              },
+            },
+          });
+
+          expect(encoded).toMatchObject({
+            value: permitAmount,
+            nonce,
+            deadline,
+            v: 27,
+          });
+        },
+      ),
+      { numRuns: 50, seed: 20_260_727 },
+    );
+  });
 });
 
 describe("getBundlesTokenPermit", () => {
@@ -249,6 +290,17 @@ describe("getBundlesTokenPermit", () => {
         tokenPermit.data,
       ),
     ).toEqual([9n, 11n, "0x1234"]);
+  });
+
+  test("error: UnsupportedRequirementSignatureError", () => {
+    const requirementSignature = {
+      args: { ...permit.args },
+      action: { type: "permit2", args: { ...permit.action.args } },
+    } as unknown as TokenRequirementSignature;
+
+    expect(() =>
+      getBundlesTokenPermit({ ...params, requirementSignature }),
+    ).toThrow(UnsupportedRequirementSignatureError);
   });
 
   test.each([
@@ -452,6 +504,13 @@ describe("selectBundlesTokenRequirementSignature", () => {
       args: { spender, amount: 7n, deadline: 11n, nonce: 9n },
     },
   } satisfies PermitRequirementSignature;
+  const permit2 = {
+    args: { ...permit.args, signature: "0x1234" },
+    action: {
+      type: "permit2SignatureTransfer",
+      args: { ...permit.action.args },
+    },
+  } satisfies Permit2SignatureTransferRequirementSignature;
 
   test("default", () => {
     expect(
@@ -469,5 +528,16 @@ describe("selectBundlesTokenRequirementSignature", () => {
         args: { ...permit.action.args, deadline: 12n },
       }),
     ).toThrow(BundlesPermitMismatchError);
+  });
+
+  test("error: BundlesPermitMismatchError for a non-ERC-2612 permit", () => {
+    expect(() =>
+      selectBundlesTokenRequirementSignature([permit2], permit.action),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "type",
+      }),
+    );
   });
 });

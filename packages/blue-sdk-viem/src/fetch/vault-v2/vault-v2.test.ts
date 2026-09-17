@@ -1506,12 +1506,6 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
-        hasPublicAllocator: true,
-        publicAllocatorConfig: {
-          admin: zeroAddress,
-          fee: 0n,
-          accruedFee: 0n,
-        },
       }),
     ]);
     mockRead(handle, {
@@ -1568,12 +1562,6 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
-        hasPublicAllocator: true,
-        publicAllocatorConfig: {
-          admin: zeroAddress,
-          fee: 0n,
-          accruedFee: 0n,
-        },
       }),
     ]);
     mockRead(handle, {
@@ -1756,8 +1744,6 @@ const emptyVaultV1QueryResult = {
   lostAssets: 0n,
   supplyQueue: [],
   withdrawQueue: [],
-  hasPublicAllocator: false,
-  publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
 };
 
 function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
@@ -2021,8 +2007,6 @@ describe("fetchAccrualVaultV2 deployless path", () => {
               pendingCap: { value: 0n, validAt: 0n },
               position,
               market,
-              flowCapMaxIn: 0n,
-              flowCapMaxOut: 0n,
             },
           ],
           vaultV1Shares: 25n * unit,
