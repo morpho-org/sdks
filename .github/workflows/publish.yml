@@ -288,6 +288,11 @@ jobs:
 
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
+            # npm flattens every publishConfig key from the packed manifest
+            # into the publish options (including transport keys such as
+            # proxy, https-proxy, strict-ssl, and ca) before the OIDC exchange.
+            # Accept only the expected npmjs packaging fields.
+            node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json"
             name="$(node -p "require('${tmpd}/package/package.json').name")"
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
@@ -332,15 +337,18 @@ jobs:
             fi
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
-            # publishes explicit and future-proof; `--registry` overrides any
-            # `publishConfig.registry` in the packed manifest so a tampered pack
-            # job cannot redirect the OIDC audience away from npmjs.
+            # publishes explicit and future-proof. The manifest allowlist above
+            # and explicit transport flags keep both the OIDC exchange and the
+            # package PUT on npmjs without an untrusted proxy or CA policy.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
               --access public \
               --tag "$publish_tag" \
               --ignore-scripts \
+              --proxy false \
+              --https-proxy false \
+              --strict-ssl true \
               --registry https://registry.npmjs.org
             published=$((published + 1))
           done
