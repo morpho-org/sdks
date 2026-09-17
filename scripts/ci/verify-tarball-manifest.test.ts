@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -121,6 +127,28 @@ describe("main", () => {
       "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
     );
   });
+
+  test("error: rejects a directory at the manifest path", () => {
+    const tempDir = createTempDir();
+    const manifestPath = join(tempDir, "package.json");
+    mkdirSync(manifestPath);
+    writeFileSync(join(manifestPath, "index.js"), "process.exit(42)\n");
+
+    expect(() => main([manifestPath])).toThrow(
+      `Manifest path "${manifestPath}" is not a regular file.`,
+    );
+  });
+
+  test("error: rejects a symlink at the manifest path", () => {
+    const realPath = writeTempManifest({ name: "@morpho-org/alpha" });
+    const tempDir = createTempDir();
+    const manifestPath = join(tempDir, "package.json");
+    symlinkSync(realPath, manifestPath);
+
+    expect(() => main([manifestPath])).toThrow(
+      `Manifest path "${manifestPath}" is not a regular file.`,
+    );
+  });
 });
 
 describe("cli", () => {
@@ -158,11 +186,36 @@ describe("cli", () => {
     expect(execError?.status).toBe(1);
     expect(execError?.stderr).toContain('Disallowed publishConfig key "proxy"');
   });
+
+  test("error: exits 1 for a directory at the manifest path", () => {
+    const tempDir = createTempDir();
+    const manifestPath = join(tempDir, "package.json");
+    mkdirSync(manifestPath);
+    writeFileSync(join(manifestPath, "index.js"), "process.exit(42)\n");
+
+    try {
+      execFileSync("node", [scriptPath, manifestPath], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      expect.unreachable("expected the CLI to exit non-zero");
+    } catch (error) {
+      const execError = error as { status: number; stderr: string };
+      expect(execError.status).toBe(1);
+      expect(execError.stderr).toContain("::error::");
+      expect(execError.stderr).toContain("is not a regular file");
+    }
+  });
 });
 
-function writeTempManifest(manifest: Record<string, unknown>): string {
+function createTempDir(): string {
   const tempDir = mkdtempSync(join(tmpdir(), "verify-manifest-"));
   tempDirs.push(tempDir);
+  return tempDir;
+}
+
+function writeTempManifest(manifest: Record<string, unknown>): string {
+  const tempDir = createTempDir();
   const manifestPath = join(tempDir, "package.json");
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifestPath;

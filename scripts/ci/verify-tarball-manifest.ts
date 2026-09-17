@@ -6,10 +6,12 @@
  *   node scripts/ci/verify-tarball-manifest.ts <path/to/package.json>
  *
  * Exits 0 silently when the manifest's `publishConfig` is restricted to the
- * allowlist; exits 1 with an `::error::` annotation otherwise.
+ * allowlist; exits 1 with an `::error::` annotation otherwise. The manifest
+ * path must be a regular file (a symlink or directory is rejected) and its
+ * contents are parsed as JSON, never executed.
  */
 
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 
 import { isMain, reportCliError } from "./workflow.ts";
 
@@ -81,6 +83,10 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     throw new Error(
       "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
     );
+  }
+
+  if (!lstatSync(manifestPath).isFile()) {
+    throw new Error(`Manifest path "${manifestPath}" is not a regular file.`);
   }
 
   verifyPublishConfig(
