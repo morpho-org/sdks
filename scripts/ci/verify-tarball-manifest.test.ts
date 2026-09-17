@@ -2,12 +2,14 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { main, verifyPublishConfig } from "./verify-tarball-manifest.ts";
 
-const scriptPath = new URL("./verify-tarball-manifest.ts", import.meta.url)
-  .pathname;
+const scriptPath = fileURLToPath(
+  new URL("./verify-tarball-manifest.ts", import.meta.url),
+);
 const tempDirs: string[] = [];
 
 afterEach(() => {
