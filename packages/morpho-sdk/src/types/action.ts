@@ -1,5 +1,5 @@
 import type { InputMarketParams } from "@morpho-org/blue-sdk";
-import type { Address, Hex, WalletClient } from "viem";
+import type { Address, Hex, TypedDataDefinition, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
 import {
   AmbiguousRequirementSignaturesError,
@@ -32,35 +32,69 @@ export interface ERC20PermitAction {
   sign: (client: WalletClient, userAddress: Address) => Promise<Hex>;
 }
 
+/** Metadata for a direct Vault V2 deposit through VaultBundlesV1. */
 export interface VaultV2DepositAction
   extends BaseAction<
     "vaultV2Deposit",
     {
-      vault: Address;
-      amount: bigint;
-      maxSharePrice: bigint;
-      recipient: Address;
-      nativeAmount?: bigint;
+      /** Destination vault receiving net assets; shares are minted to the transaction sender. */
+      readonly vault: Address;
+      /** Gross funding in asset base units, for either ERC-20 or native funding, before fees. */
+      readonly amount: bigint;
+      /** Maximum asset/share ratio scaled by 1e27, computed from net assets through the deadline. */
+      readonly maxSharePrice: bigint;
+      /** Native funding marker: equals `amount` and transaction `value` on native deposits; otherwise undefined. */
+      readonly nativeAmount?: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets deposited into the vault: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and token-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for an exact-assets Vault V2 withdrawal through VaultBundlesV1. */
 export interface VaultV2WithdrawAction
   extends BaseAction<
     "vaultV2Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
+      readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for an exact-shares Vault V2 redemption through VaultBundlesV1. */
 export interface VaultV2RedeemAction
   extends BaseAction<
     "vaultV2Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Exact shares to burn, in vault-share base units. */
+      readonly shares: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted from redeemed assets; zero disables it. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
@@ -78,14 +112,25 @@ export interface VaultV2InKindRedeemAction
     }
   > {}
 
+/**
+ * Metadata for a Vault V2 force withdrawal through VaultExitBundlesV1.
+ *
+ * `exitAssets` is penalty-inclusive: the assets actually delivered are
+ * `assetsToWithdraw + floor((exitAssets - assetsToWithdraw) * WAD / (WAD + penalty))`, minus the
+ * referral fee.
+ */
 export interface VaultV2ForceWithdrawAction
   extends BaseAction<
     "vaultV2ForceWithdraw",
     {
-      vault: Address;
-      deallocations: readonly Deallocation[];
-      withdraw: { amount: bigint; recipient: Address };
-      onBehalf: Address;
+      readonly vault: Address;
+      readonly adapter: Address;
+      readonly exitAssets: bigint;
+      readonly minSharePriceE27: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly onBehalf: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -100,35 +145,69 @@ export interface VaultV2ForceRedeemAction
     }
   > {}
 
+/** Metadata for a direct Vault V1 deposit through VaultBundlesV1. */
 export interface VaultV1DepositAction
   extends BaseAction<
     "vaultV1Deposit",
     {
-      vault: Address;
-      amount: bigint;
-      maxSharePrice: bigint;
-      recipient: Address;
-      nativeAmount?: bigint;
+      /** Destination vault receiving net assets; shares are minted to the transaction sender. */
+      readonly vault: Address;
+      /** Gross funding in asset base units, for either ERC-20 or native funding, before fees. */
+      readonly amount: bigint;
+      /** Maximum asset/share ratio scaled by 1e27, computed from net assets through the deadline. */
+      readonly maxSharePrice: bigint;
+      /** Native funding marker: equals `amount` and transaction `value` on native deposits; otherwise undefined. */
+      readonly nativeAmount?: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets deposited into the vault: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and token-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for an exact-assets Vault V1 withdrawal through VaultBundlesV1. */
 export interface VaultV1WithdrawAction
   extends BaseAction<
     "vaultV1Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Gross withdrawal in asset base units, before the referral fee is deducted. */
+      readonly amount: bigint;
+      /** Referral fee fraction scaled by WAD (1e18); zero disables the fee. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(amount * referralFeePct / WAD). */
+      readonly referralFeeAssets: bigint;
+      /** Assets received by the transaction sender: amount minus referralFeeAssets. */
+      readonly netAssets: bigint;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for an exact-shares Vault V1 redemption through VaultBundlesV1. */
 export interface VaultV1RedeemAction
   extends BaseAction<
     "vaultV1Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      /** Source vault whose shares are burned from the transaction sender. */
+      readonly vault: Address;
+      /** Exact shares to burn, in vault-share base units. */
+      readonly shares: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted from redeemed assets; zero disables it. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Execution and share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
@@ -145,167 +224,145 @@ export interface VaultV1InKindRedeemAction
     }
   > {}
 
+/** Metadata for an assets-or-shares Vault V1 to Vault V2 migration through VaultBundlesV1. */
 export interface VaultV1MigrateToV2Action
   extends BaseAction<
     "vaultV1MigrateToV2",
     {
-      sourceVault: Address;
-      targetVault: Address;
-      shares: bigint;
-      minSharePriceVaultV1: bigint;
-      maxSharePriceVaultV2: bigint;
-      recipient: Address;
+      /** Source Vault V1 whose shares are burned from the transaction sender. */
+      readonly sourceVault: Address;
+      /** Destination Vault V2 receiving net assets; shares are minted to the transaction sender. */
+      readonly targetVault: Address;
+      /** Gross assets to withdraw in asset base units; zero in exact-shares mode. */
+      readonly assets: bigint;
+      /** Source shares to burn in vault-share base units; zero in exact-assets mode. */
+      readonly shares: bigint;
+      /** Maximum destination asset base units per share base unit, scaled by RAY (1e27). */
+      readonly maxSharePriceVaultV2: bigint;
+      /** Referral fee fraction scaled by WAD (1e18), deducted before depositing; zero disables it. */
+      readonly referralFeePct: bigint;
+      /** Recipient of the referral fee; zero address when the fee is disabled by default. */
+      readonly referralFeeRecipient: Address;
+      /** Fee in asset base units: floor(assets * referralFeePct / WAD); omitted in exact-shares mode. */
+      readonly referralFeeAssets?: bigint;
+      /** Assets deposited: assets minus referralFeeAssets; omitted in exact-shares mode. */
+      readonly netAssets?: bigint;
+      /** Execution and source share-permit expiration as a Unix timestamp in seconds. */
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset supply. */
 export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      maxSharePrice: bigint;
-      nativeAmount?: bigint;
+      readonly market: Hex;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
 export interface BlueWithdrawAction
   extends BaseAction<
     "blueWithdraw",
     {
-      market: Hex;
-      assets: bigint;
-      shares: bigint;
-      receiver: Address;
-      minSharePrice: bigint;
-      /**
-       * Native-token fees paid to PublicAllocator V1.
-       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
-       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
-       */
-      reallocationFee: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
+      readonly market: Hex;
+      readonly withdrawAssets: bigint;
+      readonly withdrawShares: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
       readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
+type BlueSupplyCollateralBorrowActionArgs = {
+  readonly market: Hex;
+  readonly collateralAssets: bigint;
+  readonly borrowAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly reallocations: number;
+  readonly reallocationPenaltyAssets: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
+};
+
+/** Metadata for a direct BlueBundlesV1 collateral supply. */
 export interface BlueSupplyCollateralAction
   extends BaseAction<
     "blueSupplyCollateral",
-    {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      nativeAmount?: bigint;
-    }
+    BlueSupplyCollateralBorrowActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 borrow. */
 export interface BlueBorrowAction
-  extends BaseAction<
-    "blueBorrow",
-    {
-      market: Hex;
-      amount: bigint;
-      receiver: Address;
-      minSharePrice: bigint;
-      /**
-       * Native-token fees paid to PublicAllocator V1.
-       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
-       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
-       */
-      reallocationFee: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
-    }
-  > {}
+  extends BaseAction<"blueBorrow", BlueSupplyCollateralBorrowActionArgs> {}
 
+/** Metadata for a direct BlueBundlesV1 collateral-supply and/or borrow. */
 export interface BlueSupplyCollateralBorrowAction
   extends BaseAction<
     "blueSupplyCollateralBorrow",
-    {
-      market: Hex;
-      collateralAmount: bigint;
-      borrowAmount: bigint;
-      minSharePrice: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      nativeAmount?: bigint;
-      /**
-       * Native-token fees paid to PublicAllocator V1.
-       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
-       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
-       */
-      reallocationFee: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
-    }
+    BlueSupplyCollateralBorrowActionArgs
   > {}
 
+type BlueRepayWithdrawCollateralActionArgs = {
+  readonly market: Hex;
+  readonly repayAssets: bigint;
+  readonly repayShares: bigint;
+  readonly maxRepayAssets: bigint;
+  readonly collateralAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
+};
+
+/** Metadata for a direct BlueBundlesV1 repayment. */
 export interface BlueRepayAction
-  extends BaseAction<
-    "blueRepay",
-    {
-      market: Hex;
-      assets: bigint;
-      shares: bigint;
-      transferAmount: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      maxSharePrice: bigint;
-      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
-      nativeAmount?: bigint;
-    }
-  > {}
+  extends BaseAction<"blueRepay", BlueRepayWithdrawCollateralActionArgs> {}
 
+/** Metadata for a direct BlueBundlesV1 collateral withdrawal. */
 export interface BlueWithdrawCollateralAction
   extends BaseAction<
     "blueWithdrawCollateral",
-    {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      receiver: Address;
-    }
+    BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 repay and/or collateral withdrawal. */
 export interface BlueRepayWithdrawCollateralAction
   extends BaseAction<
     "blueRepayWithdrawCollateral",
-    {
-      market: Hex;
-      repayAssets: bigint;
-      repayShares: bigint;
-      transferAmount: bigint;
-      withdrawAmount: bigint;
-      maxSharePrice: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
-      nativeAmount?: bigint;
-    }
+    BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
     "blueRefinance",
     {
       readonly sourceMarket: Hex;
-      readonly targetMarket: Hex;
-      readonly collateralAmount: bigint;
-      readonly borrowAssets: bigint;
-      readonly borrowShares: bigint;
-      readonly minBorrowSharePrice: bigint;
-      readonly maxRepaySharePrice: bigint;
-      readonly user: Address;
-      /**
-       * Native-token fees paid to PublicAllocator V1.
-       * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
-       * Vault V2 loan-token penalties are reported in `reallocationPenaltyAssets`.
-       */
-      readonly reallocationFee: bigint;
+      readonly destinationMarket: Hex;
+      readonly maxLtv: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -316,56 +373,12 @@ export interface BlueRefinanceAction
  * - `shares`: operate on an exact share count (typical for full position closes,
  *   immune to interest accrual between tx construction and execution).
  *
- * Used by withdraw (asserts on supply side). Repay uses {@link RepayAmountArgs},
- * which additionally supports native wrapping.
+ * Used by BlueBundlesV1 withdrawal; repayment has its own assets-or-shares union because a pure
+ * collateral withdrawal has no repay amount.
  */
-export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
-
-/**
- * Repay funding sources for the **entity layer** (`MorphoBlue.repay` /
- * `MorphoBlue.repayWithdrawCollateral`), which computes the loan-token
- * `transferAmount` itself from live market state.
- *
- * - **assets mode** ({@link DepositAmountArgs}): repay an exact asset total of
- *   `amount` (ERC-20) + `nativeAmount` (wrapped native). Additive — mirrors `blueSupply`.
- * - **shares mode** (`{ shares }`): repay an exact borrow-share count (full close,
- *   immune to interest accrual). `nativeAmount` funds part of the transfer.
- *
- * `nativeAmount` requires the market's loan token to be the chain's wNative.
- */
-export type RepayAmountArgs =
-  | DepositAmountArgs
-  | { shares: bigint; nativeAmount?: bigint };
-
-/**
- * Repay funding sources for the **action layer** (`blueRepay` /
- * `blueRepayWithdrawCollateral`) — a flat, pre-resolved shape. The entity layer
- * ({@link RepayAmountArgs}) derives these from live market state; the action does no
- * amount arithmetic. The mode is discriminated on `shares`:
- *
- * - **assets mode** (`shares` unset/`0n`): repays `transferAmount` assets
- *   (`= amount + nativeAmount`, additive like `blueSupply`), pulling `amount` ERC-20
- *   and wrapping `nativeAmount`. No residual.
- * - **shares mode** (`shares > 0n`): repays an exact borrow-share count (full close),
- *   pulling `transferAmount` ERC-20 (already net of native) and wrapping `nativeAmount`;
- *   the residual loan token is skimmed back to `receiver`.
- *
- * `nativeAmount` requires the market's loan token to be the chain's wNative.
- */
-export interface RepayActionAmountArgs {
-  /** Assets-mode ERC-20 loan tokens pulled from the payer. Omit (or `0n`) in shares mode. */
-  amount?: bigint;
-  /** Shares-mode borrow shares to repay (full close). Omit (or `0n`) in assets mode. */
-  shares?: bigint;
-  /** Native ETH wrapped into wNative to help fund the repay. Loan token must be wNative. */
-  nativeAmount?: bigint;
-  /**
-   * Loan tokens routed into `GeneralAdapter1`. Assets mode: the total repaid
-   * (`amount + nativeAmount`). Shares mode: the ERC-20 pulled
-   * (`toBorrowAssets(shares) − nativeAmount`).
-   */
-  transferAmount: bigint;
-}
+export type AssetsOrSharesArgs =
+  | { readonly assets: bigint }
+  | { readonly shares: bigint };
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction
@@ -528,13 +541,13 @@ export type TransactionAction =
   | VaultV1InKindRedeemAction
   | VaultV1MigrateToV2Action
   | BlueSupplyAction
-  | BlueWithdrawAction
   | BlueSupplyCollateralAction
   | BlueBorrowAction
   | BlueSupplyCollateralBorrowAction
   | BlueRepayAction
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
+  | BlueWithdrawAction
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
@@ -573,21 +586,38 @@ export type DepositAmountArgs =
   | { amount: bigint; nativeAmount?: bigint }
   | { nativeAmount: bigint; amount?: bigint };
 
+/** Mutually exclusive ERC-20 or native funding accepted by fixed bundles entrypoints. */
+export type BundlesFundingArgs =
+  | { readonly amount: bigint; readonly nativeAmount?: never }
+  | { readonly nativeAmount: bigint; readonly amount?: never };
+
+/** Controls token requirements generated for a bundles-funded action. */
+export interface BundlesTokenRequirementsOptions {
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  readonly useSimplePermit?: boolean;
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce; defaults to the lowest unused nonce. */
+  readonly permit2Nonce?: bigint;
+}
+
+/** Mutually exclusive source amount accepted by a Vault V1 to Vault V2 migration. */
+export type VaultV1MigrateToV2AmountArgs =
+  | { readonly shares: bigint; readonly assets?: never }
+  | { readonly assets: bigint; readonly shares?: never };
+
 /**
  * Holds the pre-resolved arguments for an ERC-2612 `permit`: the signed approval
  * of `amount` of `asset` from `owner` to the permitted spender, bounded by the
- * `deadline` timestamp and consuming the given `nonce`. The spender is the
- * GeneralAdapter1/Bundler3 periphery for bundler permits, or the standalone
- * `VaultExitBundlesV1` contract for an in-kind vault redemption permit produced
- * by `encodeVaultSharesPermit`.
+ * `deadline` timestamp and consuming the given `nonce`. The associated
+ * {@link PermitAction} identifies the permitted spender, including fixed-bundle
+ * contracts and the GeneralAdapter1 periphery.
  */
 export interface PermitArgs {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
 }
 
 /**
@@ -597,33 +627,33 @@ export interface PermitArgs {
  * signature must be submitted).
  */
 export interface Permit2Args {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
-  expiration: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
+  readonly expiration: bigint;
 }
 
 /**
  * Signed Morpho Blue authorization payload produced when an integrator opts into offchain
- * signatures (`supportSignature: true`). Consumed by the action layer to emit a
- * `setAuthorizationWithSig` bundler call in place of a standalone `setAuthorization` transaction.
+ * signatures (`supportSignature: true`). Bundler3 consumes it through `setAuthorizationWithSig`;
+ * direct BlueBundlesV1 writes encode it into their signed-authorization struct.
  */
 export interface AuthorizationSignatureArgs {
   /** Account granting the authorization (the position owner). */
-  owner: Address;
-  /** Account being authorized to operate on Morpho on the owner's behalf (GeneralAdapter1). */
-  authorized: Address;
+  readonly owner: Address;
+  /** Account being authorized to operate on Morpho on the owner's behalf. */
+  readonly authorized: Address;
   /** Whether the authorization is granted (`true`) or revoked (`false`). */
-  isAuthorized: boolean;
+  readonly isAuthorized: boolean;
   /** Morpho authorization nonce consumed by the signature. */
-  nonce: bigint;
+  readonly nonce: bigint;
   /** Signature deadline timestamp in seconds. */
-  deadline: bigint;
+  readonly deadline: bigint;
   /** EIP-712 signature over the Morpho `Authorization` typed data. */
-  signature: Hex;
+  readonly signature: Hex;
 }
 
 /** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
@@ -634,27 +664,68 @@ export interface MidnightOfferRootSignatureArgs {
   readonly payload: Hex;
 }
 
+/** EIP-712 payload carried by a signable requirement action. */
+export type RequirementTypedData = TypedDataDefinition<
+  Record<string, unknown>,
+  string
+>;
+
 export interface PermitAction
   extends BaseAction<
     "permit",
-    { spender: Address; amount: bigint; deadline: bigint }
-  > {}
+    {
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
+      /** Permit nonce captured by a prepared requirement, when available. */
+      readonly nonce?: bigint;
+    }
+  > {
+  /**
+   * EIP-712 payload `sign()` signs for this permit, exposed so it can be inspected or displayed
+   * before signing. Required on {@link Requirement.action}; optional here only so hand-built action
+   * metadata (e.g. test fixtures) need not supply it. The payload is deep-frozen and `sign()` signs
+   * this exact payload.
+   */
+  readonly typedData?: RequirementTypedData;
+}
 
 export interface Permit2Action
   extends BaseAction<
     "permit2",
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
-  > {}
+  > {
+  /** EIP-712 payload to sign for this Permit2 AllowanceTransfer. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
+
+/** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
+export interface Permit2SignatureTransferAction
+  extends BaseAction<
+    "permit2SignatureTransfer",
+    {
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly nonce: bigint;
+      readonly deadline: bigint;
+    }
+  > {
+  /** EIP-712 payload to sign for this Permit2 SignatureTransfer. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
 
 /**
- * Signable Morpho authorization requirement. Emitted by the entity layer when a bundled path
- * needs GeneralAdapter1 authorized and the client opts into offchain signatures.
+ * Signable Morpho authorization requirement. Its `authorized` operator is route-specific:
+ * GeneralAdapter1 for Bundler3 flows or BlueBundlesV1 for direct Blue writes.
  */
 export interface AuthorizationAction
   extends BaseAction<
     "authorization",
     { authorized: Address; isAuthorized: boolean; deadline: bigint }
-  > {}
+  > {
+  /** EIP-712 payload to sign for this Morpho authorization. See {@link PermitAction.typedData}. */
+  readonly typedData?: RequirementTypedData;
+}
 
 /** Metadata for a Midnight offer-root signature request. */
 export interface MidnightOfferRootSignatureAction
@@ -665,12 +736,23 @@ export interface MidnightOfferRootSignatureAction
       readonly ratifier: Address;
       readonly offers: number;
     }
-  > {}
+  > {
+  /**
+   * EIP-712 offer-tree payload `sign()` signs for this Midnight ratification, exposed so it can be
+   * inspected or displayed before signing. See {@link PermitAction.typedData}.
+   *
+   * A bare signature over this payload is not enough to build the submit-offers transaction:
+   * `sign()` also derives the ratification payload (`MidnightOfferRootSignature.args.payload`) that
+   * `buildTx()` submits to the mempool.
+   */
+  readonly typedData?: RequirementTypedData;
+}
 
 /** Action metadata supported by signature requirements. */
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
+  | Permit2SignatureTransferAction
   | AuthorizationAction
   | MidnightOfferRootSignatureAction;
 
@@ -681,16 +763,33 @@ export type RequirementSignatureArgs =
   | AuthorizationSignatureArgs
   | MidnightOfferRootSignatureArgs;
 
-/** A signed ERC-2612 permit or Permit2 approval requirement. */
-export interface PermitRequirementSignature {
-  args: PermitArgs | Permit2Args;
-  action: PermitAction | Permit2Action;
+/** A signed ERC-2612 permit requirement. */
+export interface Erc2612RequirementSignature {
+  readonly args: Readonly<PermitArgs>;
+  readonly action: PermitAction;
 }
 
-/** A signed Morpho authorization requirement (consumed via `setAuthorizationWithSig`). */
+/** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
+export interface Permit2AllowanceRequirementSignature {
+  readonly args: Readonly<Permit2Args>;
+  readonly action: Permit2Action;
+}
+
+/** A signed ERC-2612 permit or Permit2 AllowanceTransfer requirement. */
+export type PermitRequirementSignature =
+  | Erc2612RequirementSignature
+  | Permit2AllowanceRequirementSignature;
+
+/** A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts. */
+export interface Permit2SignatureTransferRequirementSignature {
+  readonly args: Readonly<PermitArgs>;
+  readonly action: Permit2SignatureTransferAction;
+}
+
+/** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */
 export interface AuthorizationRequirementSignature {
-  args: AuthorizationSignatureArgs;
-  action: AuthorizationAction;
+  readonly args: AuthorizationSignatureArgs;
+  readonly action: AuthorizationAction;
 }
 
 /** A signed Midnight Ecrecover offer-root requirement. */
@@ -701,8 +800,9 @@ export interface MidnightOfferRootSignature {
 
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
- * `"permit"` / `"permit2"` carry Bundler3 token-approval args, `"authorization"` carries the
- * signed Morpho authorization, and Midnight adds `"midnightOfferRootSignature"`.
+ * `"permit"` / `"permit2"` carry token-approval args, `"permit2SignatureTransfer"` carries a
+ * bundles SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
+ * and Midnight adds `"midnightOfferRootSignature"`.
  */
 export type RequirementSignature<
   TAction extends SignatureRequirementAction | undefined = undefined,
@@ -716,6 +816,7 @@ export type RequirementSignature<
     : never
   :
       | PermitRequirementSignature
+      | Permit2SignatureTransferRequirementSignature
       | AuthorizationRequirementSignature
       | MidnightOfferRootSignature;
 
@@ -731,12 +832,23 @@ type RequirementResult<
 
 /**
  * A signable approval / authorization requirement. `sign()` returns the matching
- * {@link RequirementSignature}; `action` describes the requirement without signing.
+ * {@link RequirementSignature}; `action` describes the requirement without signing and carries the
+ * EIP-712 `typedData` payload so an integrator can inspect or display it before signing.
  *
  * Generic over the signature it produces so permit encoders narrow to
  * {@link PermitRequirementSignature} and the authorization encoder to
  * {@link AuthorizationRequirementSignature}; the two-parameter form is kept for
  * Midnight action requirements that are parameterized by action and args.
+ *
+ * @example
+ * ```ts
+ * const requirement = (await output.getRequirements()).find(isRequirementSignature);
+ * if (requirement == null) return; // nothing to sign (only on-chain approvals, or none)
+ *
+ * const typedData = requirement.action.typedData; // exact EIP-712 payload `sign()` will sign
+ * const signed = await requirement.sign(walletClient, owner);
+ * const tx = output.buildTx([signed]); // Midnight outputs take the single signature instead
+ * ```
  */
 export interface Requirement<
   TSignatureOrAction extends
@@ -744,16 +856,24 @@ export interface Requirement<
     | SignatureRequirementAction = RequirementSignature,
   TArgs extends RequirementSignatureArgs | undefined = undefined,
 > {
-  sign: (
+  /** Signs `action.typedData` with `client`, verifies the signature recovers `userAddress`, and returns the signed requirement. */
+  readonly sign: (
     client: WalletClient,
     userAddress: Address,
   ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
-  action: RequirementResult<TSignatureOrAction, TArgs>["action"];
+  /** Requirement metadata; `typedData` is always populated on SDK-built requirements. */
+  readonly action: RequirementResult<TSignatureOrAction, TArgs>["action"] & {
+    readonly typedData: RequirementTypedData;
+  };
 }
 
 /** Bundler3 token signature requirement. */
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
+
+/** ERC-2612 or Permit2 SignatureTransfer requirement consumed by a fixed bundles contract. */
+export type BundlesTokenSignatureRequirement =
+  Requirement<BundlesTokenRequirementSignature>;
 
 /** Midnight Ecrecover offer-root signature requirement. */
 export type MidnightOfferRootRequirement = Requirement<
@@ -761,14 +881,23 @@ export type MidnightOfferRootRequirement = Requirement<
   MidnightOfferRootSignatureArgs
 >;
 
-/** Permit or Permit2 token signature requirement. */
-export type TokenSignatureRequirement = Bundler3TokenSignatureRequirement;
+/** Any token signature requirement supported by an SDK transaction route. */
+export type TokenSignatureRequirement =
+  | Bundler3TokenSignatureRequirement
+  | BundlesTokenSignatureRequirement;
 
 /** Bundler3 token signature result. */
 export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 
-/** Permit or Permit2 token signature result. */
-export type TokenRequirementSignature = Bundler3TokenRequirementSignature;
+/** Token signature result consumed by a fixed bundles contract. */
+export type BundlesTokenRequirementSignature =
+  | Erc2612RequirementSignature
+  | Permit2SignatureTransferRequirementSignature;
+
+/** Any token signature result supported by an SDK transaction route. */
+export type TokenRequirementSignature =
+  | Bundler3TokenRequirementSignature
+  | BundlesTokenRequirementSignature;
 
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
@@ -891,6 +1020,28 @@ export function isPermitSignature(
 }
 
 /**
+ * Narrows a {@link RequirementSignature} to a Permit2 SignatureTransfer result.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"permit2SignatureTransfer"`.
+ * @example
+ * ```ts
+ * import {
+ *   isPermit2SignatureTransferSignature,
+ *   type RequirementSignature,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const getPermit2Nonce = (signature: RequirementSignature): bigint | undefined =>
+ *   isPermit2SignatureTransferSignature(signature) ? signature.args.nonce : undefined;
+ * ```
+ */
+export function isPermit2SignatureTransferSignature(
+  signature: RequirementSignature,
+): signature is Permit2SignatureTransferRequirementSignature {
+  return signature.action.type === "permit2SignatureTransfer";
+}
+
+/**
  * Narrows a {@link RequirementSignature} to a signed Morpho authorization.
  *
  * @param signature - The signed requirement to test.
@@ -916,12 +1067,14 @@ export function isMidnightOfferRootSignature(
 
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
-  /** The single permit / Permit2 signature, when present. */
-  permit?: PermitRequirementSignature;
+  /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
+  readonly permit?: PermitRequirementSignature;
+  /** The single Permit2 SignatureTransfer signature, when present. */
+  readonly permit2SignatureTransfer?: Permit2SignatureTransferRequirementSignature;
   /** The single Morpho authorization signature, when present. */
-  authorization?: AuthorizationRequirementSignature;
+  readonly authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
-  midnightOfferRoot?: MidnightOfferRootSignature;
+  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
@@ -935,10 +1088,11 @@ export interface SelectedRequirementSignatures {
  *
  * @param signatures - The signatures passed to `buildTx`.
  * @param accepts - Which signature kinds this operation consumes.
- * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
+ * @param accepts.permit - Whether an ERC-2612 or Permit2 AllowanceTransfer signature is consumed.
+ * @param accepts.permit2SignatureTransfer - Whether a Permit2 SignatureTransfer is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
- * @returns The single permit and/or authorization signature, when present.
+ * @returns The accepted signature in each typed slot, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
  * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
  * @example
@@ -954,25 +1108,36 @@ export interface SelectedRequirementSignatures {
 export function selectRequirementSignatures(
   signatures: readonly RequirementSignature[] | undefined,
   accepts: {
-    permit?: boolean;
-    authorization?: boolean;
-    midnightOfferRoot?: boolean;
+    readonly permit?: boolean;
+    readonly permit2SignatureTransfer?: boolean;
+    readonly authorization?: boolean;
+    readonly midnightOfferRoot?: boolean;
   },
 ): SelectedRequirementSignatures {
   if (signatures == null) return {};
 
   const permits = signatures.filter(isPermitSignature);
+  const permit2Transfers = signatures.filter(
+    isPermit2SignatureTransferSignature,
+  );
   const authorizations = signatures.filter(isAuthorizationSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");
+  if (!accepts.permit2SignatureTransfer && permit2Transfers.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
   if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
     throw new UnexpectedRequirementSignatureError("midnightOfferRootSignature");
   if (permits.length > 1)
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
+  if (permit2Transfers.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "permit2SignatureTransfer",
+      permit2Transfers.length,
+    );
   if (authorizations.length > 1)
     throw new AmbiguousRequirementSignaturesError(
       "authorization",
@@ -986,6 +1151,7 @@ export function selectRequirementSignatures(
 
   return {
     permit: permits[0],
+    permit2SignatureTransfer: permit2Transfers[0],
     authorization: authorizations[0],
     midnightOfferRoot: midnightOfferRoots[0],
   };

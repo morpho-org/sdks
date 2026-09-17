@@ -9,7 +9,10 @@ import {
   ReallocationWithdrawExceedsMarketSupplyError,
   type VaultV1Reallocation,
 } from "../types/index.js";
-import { getSupplyTargetUtilization } from "./utilization.js";
+import {
+  getSupplyTargetUtilization,
+  resolveMaxWithdrawalUtilization,
+} from "./utilization.js";
 import { compareMarketIds } from "./validate.js";
 
 type VaultWithdrawalGroup = {
@@ -105,6 +108,8 @@ const capVaultWithdrawals = (
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
  * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+ * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+ * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
  * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets` — the on-chain call would revert regardless of reallocations.
  * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
@@ -125,7 +130,6 @@ const capVaultWithdrawals = (
  *   transport: http(),
  * }).extend(morphoViemExtension());
  *
- * const userAddress = "0x000000000000000000000000000000000000dEaD";
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
@@ -141,14 +145,9 @@ const capVaultWithdrawals = (
  *   amount: borrowAmount,
  *   options: { timestamp: block.timestamp },
  * });
- * const positionData = await market.getPositionData(userAddress);
- * const borrow = market.borrow({
- *   userAddress,
- *   amount: borrowAmount,
- *   positionData,
- *   reallocations,
- * });
- * // borrow.buildTx() includes any required PublicAllocator reallocations.
+ * // Encode `reallocations` explicitly with
+ * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // High-level Blue writes accept Vault V2 reallocations only.
  * ```
  */
 export const computeVaultV1Reallocations = ({
@@ -165,6 +164,17 @@ export const computeVaultV1Reallocations = ({
   readonly options?: ReallocationComputeOptions;
 }): readonly VaultV1Reallocation[] => {
   if (options?.enabled === false) return [];
+  // Reject invalid defaults even when the operation needs no reallocations.
+  resolveMaxWithdrawalUtilization(
+    options?.defaultMaxWithdrawalUtilization,
+    "defaultMaxWithdrawalUtilization",
+  );
+  for (const utilization of Object.values(
+    options?.maxWithdrawalUtilization ?? {},
+  )) {
+    // Reject invalid ceilings even when the operation needs no reallocations.
+    resolveMaxWithdrawalUtilization(utilization);
+  }
   const normalizedOptions = {
     ...options,
     reallocatableVaults:
@@ -322,6 +332,9 @@ export const computeVaultV1Reallocations = ({
  * Deprecated name for the Vault V1 amount-aware reallocation planner.
  *
  * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+ * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+ * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
+ *
  * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
  * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
  */

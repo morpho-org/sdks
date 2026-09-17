@@ -11,6 +11,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { type Address, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
+import { InputExceedsMaxError, NegativeInputError } from "../types/index.js";
 import {
   type InputVaultV1ReallocationData,
   VaultV1ReallocationData,
@@ -293,6 +294,57 @@ const liquidity = (data: VaultV1ReallocationData, marketId: MarketId) =>
   data.getMarket(marketId).liquidity;
 
 describe("VaultV1ReallocationData public allocator integration", () => {
+  test("error: identifies an invalid default withdrawal ceiling", () => {
+    try {
+      makeFixture().computeVaultV1Reallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: parseEther("1") + 1n,
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InputExceedsMaxError);
+      expect(error).toMatchObject({ field: "defaultMaxWithdrawalUtilization" });
+      return;
+    }
+    expect.fail("Expected an invalid default ceiling to throw");
+  });
+
+  test.each([
+    "computeVaultV1Reallocations",
+    "getMarketPublicReallocations",
+  ] as const)(
+    "error: %s validates default and deprecated per-market ceilings before planning",
+    (method) => {
+      for (const [value, error] of [
+        [-1n, NegativeInputError],
+        [parseEther("1") + 1n, InputExceedsMaxError],
+      ] as const) {
+        for (const options of [
+          { defaultMaxWithdrawalUtilization: value },
+          { maxWithdrawalUtilization: { [marketA2.id]: value } },
+          {
+            defaultMaxWithdrawalUtilization: value,
+            maxWithdrawalUtilization: { [marketA2.id]: 0n },
+          },
+          { maxWithdrawalUtilization: { [marketB1.id]: value } },
+        ]) {
+          expect(() => makeFixture()[method](marketA1.id, options)).toThrow(
+            error,
+          );
+        }
+      }
+    },
+  );
+  test.each([0n, parseEther("1")])(
+    "behavior: accepts utilization boundary %s",
+    (value) => {
+      expect(() =>
+        makeFixture().computeVaultV1Reallocations(marketA1.id, {
+          defaultMaxWithdrawalUtilization: value,
+          maxWithdrawalUtilization: { [marketA2.id]: value },
+        }),
+      ).not.toThrow();
+    },
+  );
+
   test.each([
     {
       marketId: marketA1.id,
