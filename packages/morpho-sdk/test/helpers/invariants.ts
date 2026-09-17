@@ -121,9 +121,8 @@ export interface InvariantCheck<
 
 /**
  * Resolve every bundle contract whose balance must be conserved by a bundle.
- * Standalone periphery addresses absent on a chain are filtered out.
- * addresses absent on a chain are filtered out so the returned order matches the
- * balances fetched alongside it.
+ * Standalone periphery addresses absent on a chain are filtered out so the
+ * returned order matches the balances fetched alongside it.
  * @param chainId - The chain id to resolve the bundle contracts for
  * @returns The named, defined bundle contract addresses
  */
