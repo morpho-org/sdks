@@ -32,13 +32,18 @@ import { isMain, reportCliError } from "./workflow.ts";
 
 const BLOCK = 512;
 
+/** Magic + version bytes (257–265) node-tar requires before it honours the `prefix` field. */
+const USTAR_MAGIC = "ustar\u000000";
+
 /** Longest file-name component accepted by ext4, APFS and NTFS. */
 const MAX_SEGMENT_LENGTH = 255;
 
 /**
- * PAX record keys that do not change how node-tar lays out or names entries.
- * `size` is rejected because a `size` override desynchronises header parsing
- * between implementations; `linkpath` is meaningless for regular files.
+ * PAX record keys the parser accepts: `path` because it is explicitly modelled
+ * (it overrides the header name), the rest because they cannot affect how
+ * node-tar lays out or names entries. `size` is rejected because a `size`
+ * override desynchronises header parsing between implementations; `linkpath`
+ * is meaningless for regular files.
  */
 const BENIGN_PAX_KEYS = new Set([
   "atime",
@@ -65,6 +70,26 @@ function decodeSize(field: Buffer, offset: number): number {
     );
   }
   return Number.parseInt(text, 8);
+}
+
+/**
+ * node-tar's checksum: unsigned byte sum with the checksum field counted as
+ * spaces. A header that fails it is skipped by node-tar, which then re-syncs
+ * on the following block, so the gate must reject it rather than trust its
+ * `size`.
+ */
+function verifyChecksum(header: Buffer, offset: number): void {
+  // node-tar decodes the field as a 12-byte octal number (running into the
+  // type flag), so mirror that exactly rather than the 8-byte ustar width.
+  const text = decodeString(header.subarray(148, 160)).trim();
+  let sum = 8 * 0x20;
+  for (let i = 0; i < 148; i++) sum += header.readUInt8(i);
+  for (let i = 156; i < BLOCK; i++) sum += header.readUInt8(i);
+  if (!/^[0-7]+$/.test(text) || Number.parseInt(text, 8) !== sum) {
+    throw new Error(
+      `Tar header at byte ${offset} has an invalid checksum; refusing to publish.`,
+    );
+  }
 }
 
 function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
@@ -109,10 +134,14 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * headers, optionally preceded by one per-entry PAX `x` header whose `path`
  * record overrides the header name. Rejected: global PAX headers (`g`, which
  * node-tar ignores but GNU tar applies), GNU long-name headers (`L`/`K`),
- * links, devices, FIFOs, non-`ustar` magic, non-octal numeric fields, PAX
- * records other than {@link BENIGN_PAX_KEYS}, truncated archives, and a zero
- * block that is followed by further data (node-tar skips a lone zero block and
- * keeps extracting; GNU tar stops there).
+ * links, devices, FIFOs, magic/version bytes other than `ustar\0` + `00`
+ * (node-tar only applies `prefix` for that exact value), an invalid header
+ * checksum (node-tar skips such a header and re-syncs one block later), a
+ * non-octal `size` field, a directory header declaring a non-zero `size`
+ * (node-tar forces it to 0 and reads the next block as a header), PAX records
+ * other than {@link BENIGN_PAX_KEYS}, truncated archives, and a zero block
+ * that is followed by further data (node-tar skips a lone zero block and keeps
+ * extracting; GNU tar stops there).
  *
  * @param tgz - The gzipped archive bytes.
  * @returns The resolved entry paths in archive order; directories end in `/`.
@@ -135,13 +164,20 @@ export function readTarballEntries(tgz: Buffer): string[] {
       break;
     }
 
-    const magic = header.subarray(257, 262).toString("latin1");
-    if (magic !== "ustar") {
+    verifyChecksum(header, offset);
+    const magic = header.subarray(257, 265).toString("latin1");
+    if (magic !== USTAR_MAGIC) {
       throw new Error(
-        `Tar header at byte ${offset} is not ustar/pax (magic "${magic}"); refusing to publish.`,
+        `Tar header at byte ${offset} is not ustar/pax (magic ${JSON.stringify(magic)}); refusing to publish.`,
       );
     }
+    const typeflag = header.readUInt8(156);
     const size = decodeSize(header.subarray(124, 136), offset);
+    if (typeflag === 0x35 && size !== 0) {
+      throw new Error(
+        `Tar header at byte ${offset} is a directory declaring ${size} bytes; node-tar ignores the size and reads the next block as a header. Refusing to publish.`,
+      );
+    }
     const dataStart = offset + BLOCK;
     const next = dataStart + Math.ceil(size / BLOCK) * BLOCK;
     if (next > tar.length) {
@@ -152,7 +188,6 @@ export function readTarballEntries(tgz: Buffer): string[] {
     const name = decodeString(header.subarray(0, 100));
     const prefix = decodeString(header.subarray(345, 500));
     const rawPath = prefix === "" ? name : `${prefix}/${name}`;
-    const typeflag = header.readUInt8(156);
 
     if (typeflag === 0x78) {
       if (pending !== undefined) {
@@ -222,8 +257,8 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * - any entry containing `\` (node-tar strips a leading `\` on every platform
  *   and treats `\` as a separator on Windows, so `package/\./package.json`
  *   lands on `package.json`);
- * - any entry with a `.` / `..` segment or an empty segment (`//`, trailing
- *   `/` on a file), which npm normalizes away before writing;
+ * - any entry with a `.` / `..` segment or an empty segment (`//`, leading
+ *   `/`), which npm normalizes away before writing;
  * - any segment ending in `.` or a space, which the Win32 file APIs trim so
  *   `package/package.json.` lands on `package/package.json`;
  * - any segment longer than 255 characters, which no supported consumer file

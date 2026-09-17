@@ -71,7 +71,12 @@ interface RawHeader {
   readonly type: string;
   readonly data?: Buffer;
   readonly magic?: string;
+  readonly version?: string;
   readonly prefix?: string;
+  /** Raw 12-byte `size` field, overriding the one derived from `data`. */
+  readonly sizeField?: string;
+  /** Written after the (valid) checksum is computed, to corrupt it. */
+  readonly checksumField?: string;
 }
 
 /** Builds a 512-byte ustar header plus padded data block(s) for one entry. */
@@ -80,23 +85,36 @@ function rawEntry({
   type,
   data = Buffer.alloc(0),
   magic = "ustar\0",
+  version = "00",
   prefix = "",
+  sizeField,
+  checksumField,
 }: RawHeader): Buffer {
   const header = Buffer.alloc(512);
   header.write(name, 0, 100, "latin1");
   header.write("0000644\0", 100);
   header.write("0000000\0", 108);
   header.write("0000000\0", 116);
-  header.write(`${data.length.toString(8).padStart(11, "0")}\0`, 124);
+  header.write(
+    sizeField ?? `${data.length.toString(8).padStart(11, "0")}\0`,
+    124,
+    12,
+    "latin1",
+  );
   header.write("00000000000\0", 136);
   header.write("        ", 148);
   header.write(type, 156, 1, "latin1");
   header.write(magic, 257, 6, "latin1");
-  header.write("00", 263);
+  header.write(version, 263, 2, "latin1");
   header.write(prefix, 345, 155, "latin1");
   let checksum = 0;
   for (const byte of header) checksum += byte;
-  header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148);
+  header.write(
+    checksumField ?? `${checksum.toString(8).padStart(6, "0")}\0 `,
+    148,
+    8,
+    "latin1",
+  );
   const padded = Buffer.alloc(Math.ceil(data.length / 512) * 512);
   data.copy(padded);
   return Buffer.concat([header, padded]);
@@ -178,6 +196,15 @@ describe("verifyTarballEntries", () => {
     expect(() =>
       verifyTarballEntries([...VALID, "package/lib/a\u0000b.js"]),
     ).toThrow(/non-ASCII/);
+  });
+
+  test("error: a path segment longer than 255 characters is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, `package/lib/${"a".repeat(255)}.js`]),
+    ).toThrow(/longer than 255/);
+    expect(() =>
+      verifyTarballEntries([...VALID, `package/lib/${"a".repeat(255)}`]),
+    ).not.toThrow();
   });
 
   test("error: exact duplicate entry is rejected", () => {
@@ -427,6 +454,152 @@ describe("readTarballEntries", () => {
         ),
       ),
     ).toThrow(/dangling PAX header/);
+  });
+
+  test("error: a directory header with a non-zero size cannot hide the next header", () => {
+    // node-tar forces type-5 size to 0 and parses the following block as a header.
+    const tgz = rawTarball(
+      MANIFEST_BLOCK,
+      rawEntry({ name: "package/lib/", type: "5", sizeField: "00000001000\0" }),
+      rawEntry({ name: "package/Package.json", type: "0" }),
+    );
+    expect(() => readTarballEntries(tgz)).toThrow(
+      /directory declaring 512 bytes/,
+    );
+  });
+
+  test("error: ustar magic with a non-00 version is rejected instead of applying prefix", () => {
+    // node-tar only joins `prefix` when bytes 257–265 are exactly `ustar\0` + `00`.
+    const tgz = rawTarball(
+      MANIFEST_BLOCK,
+      rawEntry({
+        name: "package/Package.json",
+        type: "0",
+        version: "99",
+        prefix: "package/benign",
+      }),
+    );
+    expect(() => readTarballEntries(tgz)).toThrow(/not ustar\/pax/);
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "package/a.js", type: "0", version: " \0" }),
+        ),
+      ),
+    ).toThrow(/not ustar\/pax/);
+  });
+
+  test("error: a header with an invalid checksum is rejected instead of trusting its size", () => {
+    // node-tar skips a bad-checksum header and re-syncs on the next block, so a
+    // header hidden in the declared payload would be extracted.
+    const hidden = rawEntry({ name: "package/Package.json", type: "0" });
+    const tgz = rawTarball(
+      MANIFEST_BLOCK,
+      rawEntry({
+        name: "package/junk",
+        type: "0",
+        data: hidden,
+        checksumField: "0000000\0",
+      }),
+    );
+    expect(() => readTarballEntries(tgz)).toThrow(/invalid checksum/);
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({
+            name: "package/a.js",
+            type: "0",
+            checksumField: "xxxxxxx\0",
+          }),
+        ),
+      ),
+    ).toThrow(/invalid checksum/);
+  });
+
+  test("error: a non-octal size field is rejected", () => {
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({
+            name: "package/a.js",
+            type: "0",
+            sizeField: "0000000000x\0",
+          }),
+        ),
+      ),
+    ).toThrow(/non-octal size/);
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({
+            name: "package/a.js",
+            type: "0",
+            sizeField: "\x80\0\0\0\0\0\0\0\0\0\0\0",
+          }),
+        ),
+      ),
+    ).toThrow(/non-octal size/);
+  });
+
+  test("error: a header whose size runs past the end of the archive is rejected", () => {
+    const tgz = gzipSync(
+      Buffer.concat([
+        MANIFEST_BLOCK,
+        rawEntry({
+          name: "package/a.js",
+          type: "0",
+          sizeField: "00000010000\0",
+        }),
+      ]),
+    );
+    expect(() => readTarballEntries(tgz)).toThrow(
+      /past the end of the archive/,
+    );
+  });
+
+  test("error: malformed PAX records are rejected", () => {
+    const pax = (data: string) =>
+      rawTarball(
+        MANIFEST_BLOCK,
+        rawEntry({ name: "PaxHeader/x", type: "x", data: Buffer.from(data) }),
+        rawEntry({ name: "package/a.js", type: "0" }),
+      );
+    expect(() => readTarballEntries(pax("99 path=package/a.js\n"))).toThrow(
+      /malformed/,
+    );
+    expect(() => readTarballEntries(pax("x path=package/a.js\n"))).toThrow(
+      /malformed/,
+    );
+    expect(() => readTarballEntries(pax("20 path=package/a.js\n"))).toThrow(
+      /malformed/,
+    );
+    expect(() => readTarballEntries(pax("15 pathpackage\n"))).toThrow(
+      /record without "="/,
+    );
+  });
+
+  test("error: two consecutive PAX headers are rejected", () => {
+    const tgz = rawTarball(
+      MANIFEST_BLOCK,
+      rawEntry({
+        name: "PaxHeader/x",
+        type: "x",
+        data: paxRecords({ path: "package/benign.js" }),
+      }),
+      rawEntry({
+        name: "PaxHeader/x",
+        type: "x",
+        data: paxRecords({ path: "package/Package.json" }),
+      }),
+      rawEntry({ name: "package/a.js", type: "0" }),
+    );
+    expect(() => readTarballEntries(tgz)).toThrow(
+      /second consecutive PAX header/,
+    );
   });
 
   test("error: a regular file whose name ends in a slash is rejected", () => {
