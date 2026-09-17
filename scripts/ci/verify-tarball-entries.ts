@@ -3,16 +3,17 @@
  * verify-tarball-entries.ts — the entry-path alias gate of
  * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
  *
- *   tar -tzf <tarball> --quoting-style=escape | node scripts/ci/verify-tarball-entries.ts
+ *   node scripts/ci/verify-tarball-entries.ts <tarball.tgz>
  *
- * `--quoting-style=escape` guarantees one line per entry: GNU tar renders a
- * stored `\`, newline, control or non-ASCII byte as a `\`-escape instead of
- * emitting it raw, so a crafted name cannot forge an entry boundary and every
- * such name still surfaces to the backslash check below.
- *
- * Reads the newline-separated `tar -t` listing on stdin, exits 0 silently when
- * every entry resolves to a distinct canonical path on every consumer platform,
- * and exits 1 with an `::error::` annotation otherwise.
+ * Reads the raw ustar headers of the gzipped archive itself rather than a
+ * `tar -t` listing: GNU tar resolves PAX `path` records from *global* extended
+ * headers, which npm's extractor (node-tar) deliberately ignores, so a listing
+ * can show a benign name for an entry node-tar extracts under its raw header
+ * name. {@link readTarballEntries} applies node-tar's rules (ustar `prefix`,
+ * per-entry `x` headers only) and fails closed on every header kind it does
+ * not model. Exits 0 silently when every entry resolves to a distinct canonical
+ * path on every consumer platform, and exits 1 with an `::error::` annotation
+ * otherwise.
  *
  * The workflow's literal checks (`package/` prefix, exactly one
  * `package/package.json`, no `.`/`..`/`//` segments) inspect the stored entry
@@ -25,8 +26,170 @@
  */
 
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 
 import { isMain, reportCliError } from "./workflow.ts";
+
+const BLOCK = 512;
+
+/** Longest file-name component accepted by ext4, APFS and NTFS. */
+const MAX_SEGMENT_LENGTH = 255;
+
+/**
+ * PAX record keys that do not change how node-tar lays out or names entries.
+ * `size` is rejected because a `size` override desynchronises header parsing
+ * between implementations; `linkpath` is meaningless for regular files.
+ */
+const BENIGN_PAX_KEYS = new Set([
+  "atime",
+  "ctime",
+  "mtime",
+  "uid",
+  "gid",
+  "uname",
+  "gname",
+  "comment",
+  "path",
+]);
+
+function decodeString(buffer: Buffer): string {
+  const end = buffer.indexOf(0);
+  return buffer.subarray(0, end === -1 ? buffer.length : end).toString("utf8");
+}
+
+function decodeSize(field: Buffer, offset: number): number {
+  const text = decodeString(field).trim();
+  if (!/^[0-7]+$/.test(text)) {
+    throw new Error(
+      `Tar header at byte ${offset} has a non-octal size field; refusing to parse it.`,
+    );
+  }
+  return Number.parseInt(text, 8);
+}
+
+function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
+  const records = new Map<string, string>();
+  let cursor = 0;
+  while (cursor < data.length) {
+    const space = data.indexOf(0x20, cursor);
+    const lengthText =
+      space === -1 ? "" : data.subarray(cursor, space).toString("latin1");
+    const length = /^[1-9][0-9]*$/.test(lengthText)
+      ? Number(lengthText)
+      : Number.NaN;
+    const end = cursor + length;
+    if (Number.isNaN(length) || end > data.length || data[end - 1] !== 0x0a) {
+      throw new Error(
+        `PAX extended header at byte ${offset} is malformed; refusing to parse it.`,
+      );
+    }
+    const record = data.subarray(space + 1, end - 1).toString("utf8");
+    const equals = record.indexOf("=");
+    if (equals === -1) {
+      throw new Error(
+        `PAX extended header at byte ${offset} has a record without "="; refusing to parse it.`,
+      );
+    }
+    const key = record.slice(0, equals);
+    if (!BENIGN_PAX_KEYS.has(key)) {
+      throw new Error(
+        `PAX extended header at byte ${offset} carries unsupported record "${key}"; refusing to publish.`,
+      );
+    }
+    records.set(key, record.slice(equals + 1));
+    cursor = end;
+  }
+  return records;
+}
+
+/**
+ * Lists the entry paths of a gzipped tarball exactly as npm's extractor
+ * (node-tar) will resolve them, and fails closed on anything it does not
+ * model. Accepted: ustar/pax regular-file (`0`/NUL) and directory (`5`)
+ * headers, optionally preceded by one per-entry PAX `x` header whose `path`
+ * record overrides the header name. Rejected: global PAX headers (`g`, which
+ * node-tar ignores but GNU tar applies), GNU long-name headers (`L`/`K`),
+ * links, devices, FIFOs, non-`ustar` magic, non-octal numeric fields, PAX
+ * records other than {@link BENIGN_PAX_KEYS}, truncated archives, and a zero
+ * block that is followed by further data (node-tar skips a lone zero block and
+ * keeps extracting; GNU tar stops there).
+ *
+ * @param tgz - The gzipped archive bytes.
+ * @returns The resolved entry paths in archive order; directories end in `/`.
+ */
+export function readTarballEntries(tgz: Buffer): string[] {
+  const tar = gunzipSync(tgz);
+  const entries: string[] = [];
+  let pending: Map<string, string> | undefined;
+  let offset = 0;
+  while (offset + BLOCK <= tar.length) {
+    const header = tar.subarray(offset, offset + BLOCK);
+    if (header.every((byte) => byte === 0)) {
+      // node-tar skips a lone zero block and keeps extracting, whereas GNU tar
+      // stops listing there; only accept end-of-archive padding.
+      if (!tar.subarray(offset).every((byte) => byte === 0)) {
+        throw new Error(
+          `Tar archive has a zero block at byte ${offset} followed by more data; refusing to publish.`,
+        );
+      }
+      break;
+    }
+
+    const magic = header.subarray(257, 262).toString("latin1");
+    if (magic !== "ustar") {
+      throw new Error(
+        `Tar header at byte ${offset} is not ustar/pax (magic "${magic}"); refusing to publish.`,
+      );
+    }
+    const size = decodeSize(header.subarray(124, 136), offset);
+    const dataStart = offset + BLOCK;
+    const next = dataStart + Math.ceil(size / BLOCK) * BLOCK;
+    if (next > tar.length) {
+      throw new Error(
+        `Tar header at byte ${offset} declares ${size} bytes past the end of the archive.`,
+      );
+    }
+    const name = decodeString(header.subarray(0, 100));
+    const prefix = decodeString(header.subarray(345, 500));
+    const rawPath = prefix === "" ? name : `${prefix}/${name}`;
+    const typeflag = header[156];
+
+    if (typeflag === 0x78) {
+      if (pending !== undefined) {
+        throw new Error(
+          `Tar header at byte ${offset} is a second consecutive PAX header; refusing to publish.`,
+        );
+      }
+      pending = parsePaxRecords(
+        tar.subarray(dataStart, dataStart + size),
+        offset,
+      );
+    } else if (typeflag === 0x30 || typeflag === 0 || typeflag === 0x35) {
+      const path = pending?.get("path") ?? rawPath;
+      pending = undefined;
+      if (typeflag === 0x35) {
+        entries.push(path.endsWith("/") ? path : `${path}/`);
+      } else if (path.endsWith("/")) {
+        throw new Error(
+          `Tar entry "${path}" is a regular file whose name ends in "/"; refusing to publish.`,
+        );
+      } else {
+        entries.push(path);
+      }
+    } else {
+      throw new Error(
+        `Tar entry "${rawPath}" has unsupported type flag ${JSON.stringify(String.fromCharCode(typeflag))} (only regular files, directories and per-entry PAX headers are allowed).`,
+      );
+    }
+    offset = next;
+  }
+  if (pending !== undefined) {
+    throw new Error(
+      "Tarball ends with a dangling PAX header; refusing to publish.",
+    );
+  }
+  return entries;
+}
 
 /** The stored path of the packed manifest every publishable tarball must carry exactly once. */
 export const MANIFEST_ENTRY = "package/package.json";
@@ -58,12 +221,14 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * Rejects:
  * - any entry containing `\` (node-tar strips a leading `\` on every platform
  *   and treats `\` as a separator on Windows, so `package/\./package.json`
- *   lands on `package.json`; under `--quoting-style=escape` this also covers
- *   stored newlines and other bytes tar had to escape);
+ *   lands on `package.json`);
  * - any entry with a `.` / `..` segment or an empty segment (`//`, trailing
  *   `/` on a file), which npm normalizes away before writing;
  * - any segment ending in `.` or a space, which the Win32 file APIs trim so
  *   `package/package.json.` lands on `package/package.json`;
+ * - any segment longer than 255 characters, which no supported consumer file
+ *   system can create (node-tar reports `ENAMETOOLONG` and the entry is
+ *   silently missing from the installed package);
  * - any entry with a character outside printable ASCII, so that case-
  *   insensitive and Unicode-normalizing consumer file systems (e.g. `ſ` → `s`
  *   under macOS caseless matching) cannot fold it onto another entry;
@@ -82,7 +247,9 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * - any regular-file entry that is also an ancestor directory of another
  *   entry in any order (`package/package.json/x` makes node-tar create a
  *   `package.json` directory and skip the real manifest with `ENOTEMPTY`);
- * - a manifest that is not stored literally as `package/package.json`.
+ * - a manifest that is not stored literally as `package/package.json`;
+ * - a listing without a literal `package/package.json` entry (a second one is
+ *   intercepted by the collision check above).
  *
  * @param entries - The stored entry paths, in archive order.
  */
@@ -109,6 +276,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     if (segments.some((s) => s.endsWith(".") || s.endsWith(" "))) {
       throw new Error(
         `Tar entry "${entry}" has a path segment ending in a dot or space, which Windows trims onto another path.`,
+      );
+    }
+    if (segments.some((s) => s.length > MAX_SEGMENT_LENGTH)) {
+      throw new Error(
+        `Tar entry "${entry}" has a path segment longer than ${MAX_SEGMENT_LENGTH} characters.`,
       );
     }
     if (!PRINTABLE_ASCII.test(entry)) {
@@ -169,25 +341,19 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     }
   }
 
-  if (manifestCount !== 1) {
-    throw new Error(
-      `Tarball must contain exactly one ${MANIFEST_ENTRY} (found ${manifestCount}).`,
-    );
+  if (manifestCount === 0) {
+    throw new Error(`Tarball must contain ${MANIFEST_ENTRY} (found 0).`);
   }
 }
 
-/**
- * Splits a `tar -t` listing into entry paths. Empty lines are dropped;
- * nothing else is trimmed, so an entry with leading/trailing whitespace is
- * validated as stored.
- */
-export function parseEntryListing(listing: string): string[] {
-  return listing.split("\n").filter((line) => line !== "");
-}
-
-/** CLI entrypoint: `tar -tzf <tarball> | node scripts/ci/verify-tarball-entries.ts`. */
-export function main(listing: string = readFileSync(0, "utf8")): void {
-  verifyTarballEntries(parseEntryListing(listing));
+/** CLI entrypoint: `node scripts/ci/verify-tarball-entries.ts <tarball.tgz>`. */
+export function main(tarballPath: string | undefined = process.argv[2]): void {
+  if (tarballPath === undefined || tarballPath === "") {
+    throw new Error(
+      "Usage: node scripts/ci/verify-tarball-entries.ts <tarball.tgz>",
+    );
+  }
+  verifyTarballEntries(readTarballEntries(readFileSync(tarballPath)));
 }
 
 if (isMain(import.meta.url)) {
