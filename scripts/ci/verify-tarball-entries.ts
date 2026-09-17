@@ -46,6 +46,8 @@ export function canonicalEntryPath(entry: string): string {
  *   lands on `package.json`);
  * - any entry with a `.` / `..` segment or an empty segment (`//`, trailing
  *   `/` on a file), which npm normalizes away before writing;
+ * - any segment ending in `.` or a space, which the Win32 file APIs trim so
+ *   `package/package.json.` lands on `package/package.json`;
  * - any entry outside `package/`;
  * - any two entries whose canonical forms collide (exact duplicates, case
  *   variants, Unicode normalization variants, `dir` vs `dir/`);
@@ -69,6 +71,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     if (segments.some((s) => s === "" || s === "." || s === "..")) {
       throw new Error(
         `Tar entry "${entry}" has a non-canonical path segment (., .., or empty).`,
+      );
+    }
+    if (segments.some((s) => s.endsWith(".") || s.endsWith(" "))) {
+      throw new Error(
+        `Tar entry "${entry}" has a path segment ending in a dot or space, which Windows trims onto another path.`,
       );
     }
     if (segments[0] !== "package") {

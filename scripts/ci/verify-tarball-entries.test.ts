@@ -129,6 +129,18 @@ describe("verifyTarballEntries", () => {
     );
   });
 
+  test("error: segments ending in a dot or space are rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/package.json."]),
+    ).toThrow(/ending in a dot or space/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib/esm/index.js "]),
+    ).toThrow(/ending in a dot or space/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib./esm/index.js"]),
+    ).toThrow(/ending in a dot or space/);
+  });
+
   test("error: entries outside package/ are rejected", () => {
     expect(() => verifyTarballEntries([...VALID, "zzz/package.json"])).toThrow(
       /outside package\//,
