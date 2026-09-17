@@ -153,8 +153,10 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * (node-tar) will resolve them, and fails closed on anything it does not
  * model. Accepted: ustar/pax regular-file (`0`/NUL) and directory (`5`)
  * headers, optionally preceded by one per-entry PAX `x` header whose `path`
- * record overrides the header name. Rejected: global PAX headers (`g`, which
- * node-tar ignores but GNU tar applies), GNU long-name headers (`L`/`K`),
+ * record overrides the header name. Rejected: global PAX headers (`g`; node-tar
+ * ignores their `path` record, which GNU tar applies, but still applies their
+ * other records, `size` included, so they are rejected wholesale), GNU
+ * long-name headers (`L`/`K`),
  * links, devices, FIFOs, magic/version bytes other than `ustar\0` + `00`
  * (node-tar only applies `prefix` for that exact value), an invalid header
  * checksum (node-tar skips such a header and re-syncs one block later), a
@@ -169,9 +171,10 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * `parseKV` would surface records hidden inside a length-framed value), PAX
  * records other than {@link BENIGN_PAX_KEYS}, two consecutive `x` headers, an
  * `x` header dangling at end of archive, a regular-file header whose resolved
- * path ends in `/`, truncated archives, and a zero block that is followed by
- * further data (node-tar skips a lone zero block and keeps extracting; GNU tar
- * stops there).
+ * path ends in `/`, entry data running past the end of the archive, an archive
+ * without an end-of-archive zero block (`npm pack` always writes one), and a
+ * zero block that is followed by further data (node-tar skips a lone zero
+ * block and keeps extracting; GNU tar stops there).
  *
  * @param tgz - The gzipped archive bytes.
  * @returns The resolved entry paths in archive order; directories end in `/`.
@@ -180,10 +183,12 @@ export function readTarballEntries(tgz: Buffer): string[] {
   const tar = gunzipSync(tgz);
   const entries: string[] = [];
   let pending: Map<string, string> | undefined;
+  let terminated = false;
   let offset = 0;
   while (offset + BLOCK <= tar.length) {
     const header = tar.subarray(offset, offset + BLOCK);
     if (header.every((byte) => byte === 0)) {
+      terminated = true;
       // node-tar skips a lone zero block and keeps extracting, whereas GNU tar
       // stops listing there; only accept end-of-archive padding.
       if (!tar.subarray(offset).every((byte) => byte === 0)) {
@@ -270,6 +275,11 @@ export function readTarballEntries(tgz: Buffer): string[] {
   if (pending !== undefined) {
     throw new Error(
       "Tarball ends with a dangling PAX header; refusing to publish.",
+    );
+  }
+  if (!terminated) {
+    throw new Error(
+      `Tar archive has no end-of-archive zero block (${tar.length - offset} trailing bytes); refusing to publish.`,
     );
   }
   return entries;
@@ -405,26 +415,27 @@ export function verifyTarballEntries(entries: readonly string[]): void {
 
     const canonical = canonicalEntryPath(entry);
     if (!isDirectory) files.set(canonical, entry);
+    // pacote renames `.gitignore` to `.npmignore` on install (skipping the
+    // rename only when the literally spelled sibling `.npmignore` file came
+    // first), so the renamed path joins the collision namespace. The literal
+    // sibling is tolerated: whichever order, both are inert ignore files.
     if (!isDirectory && segments.at(-1) === ".gitignore") {
-      const renamed = canonicalEntryPath(
-        `${segments.slice(0, -1).join("/")}/.npmignore`,
-      );
+      const sibling = `${segments.slice(0, -1).join("/")}/.npmignore`;
+      const renamed = canonicalEntryPath(sibling);
       files.set(renamed, entry);
-      renamedIgnores.set(renamed, entry);
-      const directory = seen.get(renamed);
-      if (directory?.endsWith("/")) {
+      renamedIgnores.set(renamed, sibling);
+      const other = seen.get(renamed);
+      if (other != null && other !== sibling) {
         throw new Error(
-          `Tar entry "${entry}" is renamed to .npmignore by npm on install and collides with directory "${directory}".`,
+          `Tar entry "${entry}" is renamed to .npmignore by npm on install and collides with "${other}".`,
         );
       }
     }
-    if (isDirectory) {
-      const renamedFile = renamedIgnores.get(canonical);
-      if (renamedFile != null) {
-        throw new Error(
-          `Tar entry "${renamedFile}" is renamed to .npmignore by npm on install and collides with directory "${entry}".`,
-        );
-      }
+    const sibling = renamedIgnores.get(canonical);
+    if (sibling != null && entry !== sibling) {
+      throw new Error(
+        `Tar entry "${entry}" collides with a .gitignore that npm renames to "${sibling}" on install.`,
+      );
     }
     for (let depth = 1; depth < segments.length; depth++) {
       const ancestor = canonicalEntryPath(segments.slice(0, depth).join("/"));

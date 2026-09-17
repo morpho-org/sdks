@@ -266,7 +266,8 @@ jobs:
             # entry that aliases another after consumer-side normalization.
             # The gate parses the raw ustar headers itself with node-tar's
             # rules (and rejects every header kind it does not model, e.g.
-            # global PAX headers that GNU tar honours but node-tar ignores),
+            # global PAX headers, whose `path` record GNU tar honours but
+            # node-tar ignores while still applying their other records),
             # so the GNU `tar -t` listing used by the literal checks below can
             # only ever contain the same printable-ASCII names it approved.
             # Logic + tests: scripts/ci/verify-tarball-entries.ts

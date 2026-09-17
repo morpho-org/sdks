@@ -203,7 +203,7 @@ describe("verifyTarballEntries", () => {
 
   test("error: a path segment longer than 255 characters is rejected", () => {
     expect(() =>
-      verifyTarballEntries([...VALID, `package/lib/${"a".repeat(255)}.js`]),
+      verifyTarballEntries([...VALID, `package/lib/${"a".repeat(256)}`]),
     ).toThrow(/longer than 255/);
     expect(() =>
       verifyTarballEntries([...VALID, `package/lib/${"a".repeat(255)}`]),
@@ -287,20 +287,57 @@ describe("verifyTarballEntries", () => {
         "package/config/.npmignore/",
         "package/config/.gitignore",
       ]),
-    ).toThrow(/renamed to \.npmignore .* collides with directory/);
+    ).toThrow(
+      /renamed to \.npmignore .* collides with "package\/config\/\.npmignore\/"/,
+    );
     expect(() =>
       verifyTarballEntries([
         ...VALID,
         "package/config/.gitignore",
         "package/config/.NPMIGNORE/",
       ]),
-    ).toThrow(/renamed to \.npmignore .* collides with directory/);
-    // pacote resolves a sibling .npmignore file gracefully; not an alias.
+    ).toThrow(/collides with a \.gitignore that npm renames/);
+  });
+
+  test("error: a .gitignore and a case-variant .npmignore sibling land on one path", () => {
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.gitignore",
+        "package/config/.NPMIGNORE",
+      ]),
+    ).toThrow(/collides with a \.gitignore that npm renames/);
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.NPMIGNORE",
+        "package/config/.gitignore",
+      ]),
+    ).toThrow(
+      /renamed to \.npmignore .* collides with "package\/config\/\.NPMIGNORE"/,
+    );
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/Config/.npmignore",
+        "package/config/.gitignore",
+      ]),
+    ).toThrow(/renamed to \.npmignore .* collides with/);
+    // The literally spelled sibling is tolerated in both orders: pacote either
+    // skips the rename (.npmignore first) or lets the sibling overwrite the
+    // renamed file (.gitignore first); both are inert ignore files either way.
     expect(() =>
       verifyTarballEntries([
         ...VALID,
         "package/config/.gitignore",
         "package/config/.npmignore",
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.npmignore",
+        "package/config/.gitignore",
       ]),
     ).not.toThrow();
   });
@@ -730,6 +767,20 @@ describe("readTarballEntries", () => {
     expect(() => readTarballEntries(tgz)).toThrow(
       /past the end of the archive/,
     );
+  });
+
+  test("error: an archive without an end-of-archive zero block is rejected", () => {
+    expect(() => readTarballEntries(gzipSync(MANIFEST_BLOCK))).toThrow(
+      /no end-of-archive zero block \(0 trailing bytes\)/,
+    );
+    expect(() =>
+      readTarballEntries(
+        gzipSync(Buffer.concat([MANIFEST_BLOCK, Buffer.alloc(100, 0x41)])),
+      ),
+    ).toThrow(/no end-of-archive zero block \(100 trailing bytes\)/);
+    expect(() =>
+      readTarballEntries(gzipSync(Buffer.concat([MANIFEST_BLOCK, ZERO_BLOCK]))),
+    ).not.toThrow();
   });
 
   test("error: malformed PAX records are rejected", () => {
