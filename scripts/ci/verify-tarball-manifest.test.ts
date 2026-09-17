@@ -110,6 +110,16 @@ describe("verifyPublishConfig", () => {
     ).toThrow('got {"url":"https://registry.npmjs.org"}.');
   });
 
+  test("error: rejects a __proto__ key parsed from JSON", () => {
+    expect(() =>
+      verifyPublishConfig(
+        JSON.parse(
+          '{"publishConfig":{"__proto__":{"proxy":"http://evil.example"}}}',
+        ),
+      ),
+    ).toThrow('Disallowed publishConfig key "__proto__"');
+  });
+
   test("error: rejects a non-object publishConfig", () => {
     expect(() => verifyPublishConfig({ publishConfig: ["public"] })).toThrow(
       "expected an object, got array",
@@ -148,6 +158,16 @@ describe("main", () => {
     expect(() => main([manifestPath])).toThrow(
       `Manifest path "${manifestPath}" is not a regular file.`,
     );
+  });
+
+  test("error: rejects a manifest whose top level is not a JSON object", () => {
+    for (const content of ["null\n", '"public"\n', '["public"]\n']) {
+      const tempDir = createTempDir();
+      const manifestPath = join(tempDir, "package.json");
+      writeFileSync(manifestPath, content);
+
+      expect(() => main([manifestPath])).toThrow("is not a JSON object.");
+    }
   });
 
   test("error: rejects a manifest that is not valid JSON", () => {

@@ -89,9 +89,16 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     throw new Error(`Manifest path "${manifestPath}" is not a regular file.`);
   }
 
-  verifyPublishConfig(
-    JSON.parse(readFileSync(manifestPath, "utf8")) as TarballManifest,
-  );
+  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (
+    manifest === null ||
+    typeof manifest !== "object" ||
+    Array.isArray(manifest)
+  ) {
+    throw new Error(`Manifest at "${manifestPath}" is not a JSON object.`);
+  }
+
+  verifyPublishConfig(manifest as TarballManifest);
 }
 
 if (isMain(import.meta.url)) {
