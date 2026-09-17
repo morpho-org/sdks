@@ -288,6 +288,11 @@ jobs:
 
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
+            # npm flattens every publishConfig key from the packed manifest
+            # into the publish options (including transport keys such as
+            # proxy, https-proxy, strict-ssl, ca) BEFORE the OIDC exchange,
+            # so only `access`/`registry` pinned to npmjs are allowed.
+            node scripts/release/verify-tarball-manifest.mjs "${tmpd}/package/package.json"
             name="$(node -p "require('${tmpd}/package/package.json').name")"
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
@@ -332,9 +337,11 @@ jobs:
             fi
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
-            # publishes explicit and future-proof; `--registry` overrides any
-            # `publishConfig.registry` in the packed manifest so a tampered pack
-            # job cannot redirect the OIDC audience away from npmjs.
+            # publishes explicit and future-proof; `--registry` pins the registry
+            # endpoint, and the per-tarball manifest check above (which runs
+            # before any credentialed step) guarantees no other publishConfig
+            # key can redirect the OIDC exchange or the package PUT away from
+            # npmjs.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
