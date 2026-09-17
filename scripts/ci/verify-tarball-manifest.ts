@@ -80,9 +80,20 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     );
   }
 
-  verifyPublishConfig(
-    JSON.parse(readFileSync(manifestPath, "utf8")) as TarballManifest,
-  );
+  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `Invalid manifest at "${manifestPath}": expected a JSON object root, got ${
+        parsed === null
+          ? "null"
+          : Array.isArray(parsed)
+            ? "array"
+            : typeof parsed
+      }.`,
+    );
+  }
+
+  verifyPublishConfig(parsed as TarballManifest);
 }
 
 if (isMain(import.meta.url)) {

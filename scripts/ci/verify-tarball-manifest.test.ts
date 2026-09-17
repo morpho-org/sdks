@@ -94,6 +94,32 @@ describe("main", () => {
       "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
     );
   });
+
+  test("error: unreadable manifest path", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "verify-manifest-"));
+    tempDirs.push(tempDir);
+
+    expect(() => main([join(tempDir, "missing.json")])).toThrow(/ENOENT/);
+  });
+
+  test("error: malformed manifest JSON", () => {
+    const manifestPath = writeTempFile("{ not json");
+
+    expect(() => main([manifestPath])).toThrow(SyntaxError);
+  });
+
+  test.each([
+    ["null", "null"],
+    ["string", '"public"'],
+    ["number", "42"],
+    ["array", '[{ "publishConfig": { "proxy": "http://proxy.example" } }]'],
+  ])("error: rejects a non-object manifest root (%s)", (type, json) => {
+    const manifestPath = writeTempFile(json);
+
+    expect(() => main([manifestPath])).toThrow(
+      `expected a JSON object root, got ${type}.`,
+    );
+  });
 });
 
 describe("cli", () => {
@@ -129,9 +155,13 @@ describe("cli", () => {
 });
 
 function writeTempManifest(manifest: Record<string, unknown>): string {
+  return writeTempFile(`${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function writeTempFile(contents: string): string {
   const tempDir = mkdtempSync(join(tmpdir(), "verify-manifest-"));
   tempDirs.push(tempDir);
   const manifestPath = join(tempDir, "package.json");
-  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(manifestPath, contents);
   return manifestPath;
 }

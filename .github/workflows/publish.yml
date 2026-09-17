@@ -212,6 +212,16 @@ jobs:
 
       - name: Publish packages
         shell: bash
+        # npm's HTTP agent falls back to these environment variables whenever
+        # the config-level proxy is unset, so pin them empty to guarantee a
+        # direct connection to npmjs for both the OIDC exchange and the PUT.
+        env:
+          HTTPS_PROXY: ""
+          https_proxy: ""
+          HTTP_PROXY: ""
+          http_proxy: ""
+          ALL_PROXY: ""
+          all_proxy: ""
         run: |
           set -euo pipefail
 
@@ -338,8 +348,11 @@ jobs:
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
             # publishes explicit and future-proof. The manifest allowlist above
-            # and explicit transport flags keep both the OIDC exchange and the
-            # package PUT on npmjs without an untrusted proxy or CA policy.
+            # rejects manifest-borne transport settings, `--proxy false` and
+            # `--strict-ssl true` override any .npmrc / npm_config_* values, and
+            # the empty proxy env bindings on this step disable the agent's
+            # environment fallback. (`https-proxy` only accepts null or a URL,
+            # so it cannot be disabled via a flag; the env pin covers it.)
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
@@ -347,7 +360,6 @@ jobs:
               --tag "$publish_tag" \
               --ignore-scripts \
               --proxy false \
-              --https-proxy false \
               --strict-ssl true \
               --registry https://registry.npmjs.org
             published=$((published + 1))
