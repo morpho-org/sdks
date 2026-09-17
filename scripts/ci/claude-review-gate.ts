@@ -20,8 +20,10 @@ import {
   writeStdout,
 } from "./workflow.ts";
 
-const DEFAULT_API_BASE_URL = "https://api.github.com";
-const USER_AGENT = "morpho-sdks-claude-review-gate";
+/** Base URL of the GitHub REST API the review-gate and verdict steps call. */
+export const DEFAULT_API_BASE_URL = "https://api.github.com";
+/** `User-Agent` the review workflow's GitHub API calls send. */
+export const USER_AGENT = "morpho-sdks-claude-review-gate";
 /** Login of the identity the workflow's job token posts reviews as. */
 export const REVIEW_AUTHOR = "github-actions[bot]";
 /** Marker the review engine embeds in the body of every completed review. */
@@ -46,7 +48,7 @@ export interface Review {
 /** Injectable `fetch` boundary so the GitHub API can be stubbed in tests. */
 export type FetchLike = (
   url: URL,
-  init: { headers: Record<string, string>; method: string },
+  init: { body?: string; headers: Record<string, string>; method: string },
 ) => Promise<{
   headers: { get(name: string): string | null };
   json(): Promise<unknown>;
@@ -180,19 +182,22 @@ export function getMaxReviewId(reviews: readonly Review[]): number {
   );
 }
 
+/** Inputs of {@link selectNewReviews} and {@link countNewReviews}. */
+export interface NewReviewsOptions {
+  readonly headSha: string;
+  readonly maxIdBefore: number;
+  readonly runId: string;
+}
+
 /**
- * Counts the workflow's reviews created after the snapshot, attached to the expected head and
+ * Selects the workflow's reviews created after the snapshot, attached to the expected head and
  * carrying this run's marker. The run marker is what distinguishes this job's review from one an
  * overlapping `@claude` run (separate concurrency group, same bot identity, same head) posted.
  */
-export function countNewReviews(
+export function selectNewReviews(
   reviews: readonly Review[],
-  options: {
-    readonly headSha: string;
-    readonly maxIdBefore: number;
-    readonly runId: string;
-  },
-): number {
+  options: NewReviewsOptions,
+): Review[] {
   const marker = runMarker(options.runId);
 
   return selectClaudeReviews(reviews).filter(
@@ -200,7 +205,15 @@ export function countNewReviews(
       review.id > options.maxIdBefore &&
       review.commit_id === options.headSha &&
       review.body?.includes(marker) === true,
-  ).length;
+  );
+}
+
+/** Counts the reviews {@link selectNewReviews} accepts — the ones {@link verify} treats as posted. */
+export function countNewReviews(
+  reviews: readonly Review[],
+  options: NewReviewsOptions,
+): number {
+  return selectNewReviews(reviews, options).length;
 }
 
 /**

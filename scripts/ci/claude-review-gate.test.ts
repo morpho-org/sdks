@@ -16,6 +16,7 @@ import {
   type Review,
   runMarker,
   selectClaudeReviews,
+  selectNewReviews,
   snapshot,
   verify,
 } from "./claude-review-gate.ts";
@@ -155,6 +156,23 @@ describe("getMaxReviewId", () => {
   test("behavior: ignores foreign marked reviews and returns 0 without any", () => {
     expect(getMaxReviewId([])).toBe(0);
     expect(getMaxReviewId([humanReview(99), botPlaceholder(98)])).toBe(0);
+  });
+});
+
+describe("selectNewReviews", () => {
+  test("default: returns the reviews countNewReviews counts", () => {
+    const reviews = [
+      claudeReview(10),
+      claudeReview(11),
+      claudeReview(12, { commitId: OLD_HEAD }),
+    ];
+
+    expect(selectNewReviews(reviews, countOptions).map((r) => r.id)).toEqual([
+      11,
+    ]);
+    expect(countNewReviews(reviews, countOptions)).toBe(
+      selectNewReviews(reviews, countOptions).length,
+    );
   });
 });
 

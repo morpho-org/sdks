@@ -4,6 +4,7 @@
  * lives here, tested, rather than as ordered shell lines in `.github/workflows/claude.yml`.
  *
  *   node post-claude.ts verify-review              # trusted-scripts verify, then claude-review-gate verify
+ *   node post-claude.ts publish-verdict            # trusted-scripts verify, then claude-verdict-check publish
  *   node post-claude.ts scrub <input> <output>     # trusted-scripts verify, then scrub-transcript
  *
  * Reads `TRUSTED_SCRIPTS_DIR` and `SCRIPTS_DIGEST` from the environment for the integrity check; the
@@ -11,6 +12,7 @@
  */
 
 import { type FetchLike, main as gateMain } from "./claude-review-gate.ts";
+import { main as verdictMain } from "./claude-verdict-check.ts";
 import { main as scrubMain } from "./scrub-transcript.ts";
 import { verify as verifyTrusted } from "./trusted-scripts.ts";
 import {
@@ -37,9 +39,13 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
   const writeOutput = options.writeOutput ?? writeStdout;
   const [mode, ...rest] = argv;
 
-  if (mode !== "verify-review" && mode !== "scrub") {
+  if (
+    mode !== "verify-review" &&
+    mode !== "publish-verdict" &&
+    mode !== "scrub"
+  ) {
     throw new Error(
-      `Unknown mode "${mode ?? ""}". Usage: post-claude.ts <verify-review | scrub <input> <output>>`,
+      `Unknown mode "${mode ?? ""}". Usage: post-claude.ts <verify-review | publish-verdict | scrub <input> <output>>`,
     );
   }
 
@@ -49,6 +55,10 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
 
   if (mode === "verify-review") {
     await gateMain({ ...options, argv: ["verify"], env, writeOutput });
+    return;
+  }
+  if (mode === "publish-verdict") {
+    await verdictMain({ ...options, argv: ["publish"], env, writeOutput });
     return;
   }
   scrubMain({ ...options, argv: rest, env, writeOutput });
