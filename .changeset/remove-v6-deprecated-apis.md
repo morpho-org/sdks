@@ -4,7 +4,7 @@
 "@morpho-org/morpho-ts": major
 "@morpho-org/blue-sdk": major
 "@morpho-org/blue-sdk-viem": major
-"@morpho-org/evm-simulation": patch
+"@morpho-org/evm-simulation": minor
 "@morpho-org/midnight-sdk": patch
 "@morpho-org/morpho-test": patch
 ---
@@ -21,7 +21,8 @@ morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk 
 This completes removal of the old migration-sdk-viem implementation, including its Aave and
 Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
 entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
-supported. evm-simulation now checks retention only on those standalone bundle contracts.
+supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+Bundler3 and adapter addresses are no longer guarded.
 
 Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
 Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop

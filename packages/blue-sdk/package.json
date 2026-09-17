@@ -20,7 +20,8 @@
   "type": "module",
   "main": "src/index.ts",
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",

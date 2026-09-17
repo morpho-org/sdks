@@ -12,11 +12,13 @@ import {
   type MidnightOfferRootSignature,
   type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
+  type RequirementSignature,
   selectRequirementSignatures,
 } from "./action.js";
 import {
   AmbiguousRequirementSignaturesError,
   UnexpectedRequirementSignatureError,
+  UnsupportedRequirementSignatureError,
 } from "./error.js";
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
@@ -232,6 +234,19 @@ describe("selectRequirementSignatures", () => {
         authorization: true,
       }),
     ).toThrow(UnexpectedRequirementSignatureError);
+  });
+
+  test("error: UnsupportedRequirementSignatureError", () => {
+    expect(() =>
+      selectRequirementSignatures(
+        [
+          {
+            action: { type: "permit2", args: {} },
+          } as unknown as RequirementSignature,
+        ],
+        {},
+      ),
+    ).toThrow(UnsupportedRequirementSignatureError);
   });
 
   test("error: AmbiguousRequirementSignaturesError on duplicate permits", () => {

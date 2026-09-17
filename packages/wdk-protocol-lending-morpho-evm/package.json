@@ -34,7 +34,8 @@
     "lib",
     "bare.js",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "MIGRATION.md"
   ],
   "sideEffects": [
     "./bare.js"

@@ -127,10 +127,9 @@ If the diff touches protocol-facing SDK surface — action/entity/helper code, v
 
 Do **not** dump huge ABI files wholesale. Instead, search/read narrow excerpts around the relevant symbol(s) from:
 
-1. `packages/morpho-ts/src/abis.ts` and `packages/blue-sdk-viem/src/abis.ts` — canonical and facade ABIs for Morpho Blue, vaults, fixed bundles, factories, BluePublicAllocator, adapters, and permits.
-2. `packages/liquidation-sdk-viem/src/abis.ts` — liquidation-specific ABIs when liquidation code is touched.
-3. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
-4. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
+1. `packages/morpho-ts/src/abis.ts`, `packages/blue-sdk-viem/src/abis.ts`, and `packages/morpho-sdk/src/abis.ts` — canonical and facade ABIs for Morpho Blue, vaults, factories, BluePublicAllocator, adapters, and permits, plus the BlueBundlesV1 / VaultBundlesV1 / VaultExitBundlesV1 fixed-bundle ABIs.
+2. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
+3. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
 
 If no matching ABI/address/constant excerpt is found for a changed protocol call, record that absence in `<PROJECT_CONTEXT>` instead of letting agents infer from memory.
 

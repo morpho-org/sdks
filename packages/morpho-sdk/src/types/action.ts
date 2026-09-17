@@ -4,6 +4,7 @@ import type { Deallocation } from "./deallocation.js";
 import {
   AmbiguousRequirementSignaturesError,
   UnexpectedRequirementSignatureError,
+  UnsupportedRequirementSignatureError,
 } from "./error.js";
 
 /**
@@ -1033,6 +1034,7 @@ export interface SelectedRequirementSignatures {
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
  * @returns The accepted signature in each typed slot, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
+ * @throws {UnsupportedRequirementSignatureError} when a signature has an unsupported action type.
  * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
  * @example
  * ```ts
@@ -1061,6 +1063,16 @@ export function selectRequirementSignatures(
   );
   const authorizations = signatures.filter(isAuthorizationSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
+
+  const unsupported = signatures.find(
+    (signature): boolean =>
+      !isPermitSignature(signature) &&
+      !isPermit2SignatureTransferSignature(signature) &&
+      !isAuthorizationSignature(signature) &&
+      !isMidnightOfferRootSignature(signature),
+  );
+  if (unsupported != null)
+    throw new UnsupportedRequirementSignatureError(unsupported.action.type);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");

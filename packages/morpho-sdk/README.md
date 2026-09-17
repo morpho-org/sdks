@@ -24,6 +24,9 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+deposit or Blue write integrations.
+
 ## Actions
 
 Each entity exposes a set of actions. Common vault writes call VaultBundlesV1, Blue writes call

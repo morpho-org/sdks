@@ -19,6 +19,7 @@ export type {
   FetchParameters,
   InputAllocation,
   MetaMorphoCall,
+  Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs,
 } from "@morpho-org/blue-sdk-viem";

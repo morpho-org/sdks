@@ -159,6 +159,7 @@ The standard WDK `supply` and `quoteSupply` methods use the same VaultBundlesV1 
 approved ERC-20 assets or native funding; signed deposits use the prepared handle.
 ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. Permit2 uses SignatureTransfer,
 with an ERC-20 approval to Permit2 and a signed transfer naming VaultBundlesV1 as spender.
+See [MIGRATION.md](./MIGRATION.md) for migration from the removed legacy supply route.
 
 ## Morpho SDK Requirements
 
@@ -214,6 +215,8 @@ const requirements = await morpho.getWithdrawCollateralRequirements({
   amount: 1_000_000n
 })
 ```
+
+See [Migrating to 2.0](./MIGRATION.md) for the complete breaking-change checklist.
 
 ## Fork E2E Test
 

@@ -945,6 +945,18 @@ export class UnexpectedRequirementSignatureError extends Error {
   }
 }
 
+/** Thrown when `buildTx` receives a requirement signature whose action type is not supported. */
+export class UnsupportedRequirementSignatureError extends Error {
+  /**
+   * @param type - The unsupported signature action type.
+   */
+  constructor(public readonly type: string) {
+    super(
+      `Received a requirement signature with unsupported action type "${type}". Re-run getRequirements() and sign the current requirements.`,
+    );
+  }
+}
+
 /** Thrown when a viem client's account address does not match the address required by the call. */
 export class AddressMismatchError extends Error {
   constructor(clientAddress: Address, argsAddress: Address) {
