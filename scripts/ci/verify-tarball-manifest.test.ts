@@ -2,12 +2,14 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { main, verifyPublishConfig } from "./verify-tarball-manifest.ts";
 
-const scriptPath = new URL("./verify-tarball-manifest.ts", import.meta.url)
-  .pathname;
+const scriptPath = fileURLToPath(
+  new URL("./verify-tarball-manifest.ts", import.meta.url),
+);
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -142,19 +144,19 @@ describe("cli", () => {
       publishConfig: { proxy: "http://evil.example" },
     });
 
+    let execError: { status: number; stderr: string } | undefined;
     try {
       execFileSync("node", [scriptPath, manifestPath], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-      expect.unreachable("expected the CLI to exit non-zero");
     } catch (error) {
-      const execError = error as { status: number; stderr: string };
-      expect(execError.status).toBe(1);
-      expect(execError.stderr).toContain(
-        'Disallowed publishConfig key "proxy"',
-      );
+      execError = error as { status: number; stderr: string };
     }
+
+    expect(execError, "expected the CLI to exit non-zero").toBeDefined();
+    expect(execError?.status).toBe(1);
+    expect(execError?.stderr).toContain('Disallowed publishConfig key "proxy"');
   });
 });
 

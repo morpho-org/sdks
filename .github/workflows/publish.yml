@@ -339,7 +339,8 @@ jobs:
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
             # publishes explicit and future-proof; `--registry` pins the registry
             # endpoint, and the per-tarball manifest check above (which runs
-            # before any credentialed step) guarantees no other publishConfig
+            # before the OIDC token exchange inside `npm publish`, the first
+            # npm-credentialed operation) guarantees no other publishConfig
             # key can redirect the OIDC exchange or the package PUT away from
             # npmjs.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
