@@ -116,6 +116,13 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
       );
     }
     const record = data.subarray(space + 1, end - 1).toString("utf8");
+    // node-tar's `parseKV` splits the whole body on "\n" instead of framing by
+    // length, so a newline inside a value lets it see records this loop does not.
+    if (record.includes("\n")) {
+      throw new Error(
+        `PAX extended header at byte ${offset} has a record containing a newline; refusing to publish.`,
+      );
+    }
     const equals = record.indexOf("=");
     if (equals === -1) {
       throw new Error(
@@ -151,11 +158,13 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * header; it processes an `x` header normally, so that rejection is only
  * fail-closed), an `x` header larger than {@link MAX_META_ENTRY_SIZE} (node-tar
  * ignores it, `path` record included), malformed PAX records (bad length
- * framing or no `=`), PAX records other than {@link BENIGN_PAX_KEYS}, two
- * consecutive `x` headers, an `x` header dangling at end of archive, a
- * regular-file header whose resolved path ends in `/`, truncated archives, and
- * a zero block that is followed by further data (node-tar skips a lone zero
- * block and keeps extracting; GNU tar stops there).
+ * framing, no `=`, or a newline inside a record — node-tar's line-split
+ * `parseKV` would surface records hidden inside a length-framed value), PAX
+ * records other than {@link BENIGN_PAX_KEYS}, two consecutive `x` headers, an
+ * `x` header dangling at end of archive, a regular-file header whose resolved
+ * path ends in `/`, truncated archives, and a zero block that is followed by
+ * further data (node-tar skips a lone zero block and keeps extracting; GNU tar
+ * stops there).
  *
  * @param tgz - The gzipped archive bytes.
  * @returns The resolved entry paths in archive order; directories end in `/`.

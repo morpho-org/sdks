@@ -705,6 +705,28 @@ describe("readTarballEntries", () => {
     );
   });
 
+  test("error: a PAX value embedding a newline cannot smuggle a path record", () => {
+    // node-tar's `parseKV` splits the body on "\n" and honours any line whose
+    // length prefix is self-consistent, so a `comment` value containing
+    // `<len> path=package/package.json` renames the next entry for node-tar
+    // while a length-framed parser only sees a benign `comment`.
+    const inner = paxRecords({ path: "package/package.json" }).toString("utf8");
+    const value = `AAAA\n${inner.slice(0, -1)}`;
+    const body = `comment=${value}\n`;
+    const length = body.length + String(body.length + 3).length + 1;
+    const record = Buffer.from(`${length} ${body}`);
+    expect(record.length).toBe(length);
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "PaxHeader/x", type: "x", data: record }),
+          rawEntry({ name: "package/readme.md", type: "0" }),
+        ),
+      ),
+    ).toThrow(/containing a newline/);
+  });
+
   test("error: two consecutive PAX headers are rejected", () => {
     const tgz = rawTarball(
       MANIFEST_BLOCK,
