@@ -4,14 +4,7 @@ import type { CallParameters, UnionPick } from "viem";
 export type FetchParameters = UnionPick<
   CallParameters,
   "account" | "blockNumber" | "blockTag" | "stateOverride"
-> & {
-  /**
-   * Chain id used to resolve protocol addresses.
-   *
-   * @deprecated Configure the viem client's chain instead. This override will be removed in the next major version.
-   */
-  chainId?: number;
-};
+>;
 
 /** Fetch parameters for readers that can use deployless bytecode queries. */
 export type DeploylessFetchParameters = FetchParameters & {

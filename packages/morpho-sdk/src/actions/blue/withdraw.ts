@@ -56,7 +56,7 @@ export interface BlueWithdrawParams {
  *
  * Vault V2 allocator penalties and referral fees reduce the assets received. Shares mode has no
  * saturated full-close sentinel or onchain minimum-assets guarantee, and this route has no
- * Bundler3 share-price bound or `slippageTolerance` input.
+ * share-price bound or `slippageTolerance` input.
  *
  * @param params - Withdrawal encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.
@@ -77,9 +77,9 @@ export interface BlueWithdrawParams {
  * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
  *   reallocation amount is provided.
  * @throws {InputExceedsMaxError} when a withdraw amount, fee, reallocation amount, or penalty exceeds its ABI bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
- * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
+ * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
  * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.

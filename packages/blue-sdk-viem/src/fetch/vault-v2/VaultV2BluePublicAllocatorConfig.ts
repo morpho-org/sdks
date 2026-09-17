@@ -29,7 +29,6 @@ import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarket
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns Hydrated vault allocator configuration with penalty calculations.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -55,7 +54,7 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2BluePublicAllocatorConfig> {
-  const chainId = parameters.chainId ?? (await getChainId(client));
+  const chainId = await getChainId(client);
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [canPullFromIdle, penalty] = await readContract(client, {
     ...parameters,
@@ -87,7 +86,6 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
  * @param parameters.targetMarketParams - Optional target market whose config and cap ids are fetched even when the adapter has no current position.
  * @returns Vault-wide config when the BluePublicAllocator is authorized, active-adapter set, adapter-market configs keyed by `adapterMarketCapId`, and allocations keyed by derived id.
@@ -123,7 +121,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
     readonly targetMarketParams?: MarketParams;
   } = {},
 ) {
-  const chainId = parameters.chainId ?? (await getChainId(client));
+  const chainId = await getChainId(client);
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const marketRequests: {
     readonly adapter: Address;
@@ -226,10 +224,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
       functionName: "isAllocator",
       args: [allocator],
     }),
-    fetchVaultV2BluePublicAllocatorConfig(vault.address, client, {
-      ...parameters,
-      chainId,
-    }),
+    fetchVaultV2BluePublicAllocatorConfig(vault.address, client, parameters),
     Promise.all(
       adapterList.map((adapter) =>
         readContract(client, {
@@ -248,7 +243,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
           adapter,
           adapterMarketCapId,
           client,
-          { ...parameters, chainId },
+          parameters,
         ),
       ),
     ),

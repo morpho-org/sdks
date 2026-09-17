@@ -116,22 +116,20 @@ For each unique package directory among the changed files (e.g. a file at `packa
 1. `packages/<pkg>/AGENTS.md` — package-specific refinements (refines the root for this package; root wins on contradictions).
 2. `packages/<pkg>/README.md` — public-facing description.
 3. `packages/<pkg>/ARCHITECTURE.md` — if present.
-4. Any other top-level `*.md` in the package (e.g. `packages/morpho-sdk/BUNDLER3.md`).
+4. Any other top-level `*.md` in the package.
 5. Nested `AGENTS.md` along the path of touched files (at any depth — e.g. `packages/morpho-sdk/src/actions/AGENTS.md`).
 
 Use the Glob tool: `**/AGENTS.md` and `packages/*/*.md`. Filter to paths that prefix at least one changed file's directory.
 
 ### Protocol source-of-truth context (when relevant)
 
-If the diff touches protocol-facing SDK surface — action/entity/helper code, viem/wagmi contract calls, typed-data helpers, ABI/address/constant registries, or files mentioning `encodeFunctionData`, `readContract`, `writeContract`, `simulateContract`, `MarketParams`, `VaultV2`, `MetaMorpho`, `bundler3`, `GeneralAdapter1`, `PublicAllocator`, `Permit2`, `LLTV`, `WAD`, `maxSharePrice`, `minSharePrice`, `abi`, or `functionName` — add targeted protocol context for `morpho-protocol` and `web3-security`.
+If the diff touches protocol-facing SDK surface — action/entity/helper code, viem/wagmi contract calls, typed-data helpers, ABI/address/constant registries, or files mentioning `encodeFunctionData`, `readContract`, `writeContract`, `simulateContract`, `MarketParams`, `VaultV2`, `MetaMorpho`, `BlueBundlesV1`, `VaultBundlesV1`, `VaultExitBundlesV1`, `BluePublicAllocator`, `Permit2`, `LLTV`, `WAD`, `maxSharePrice`, `minSharePrice`, `abi`, or `functionName` — add targeted protocol context for `morpho-protocol` and `web3-security`.
 
 Do **not** dump huge ABI files wholesale. Instead, search/read narrow excerpts around the relevant symbol(s) from:
 
-1. `packages/blue-sdk-viem/src/abis.ts` — Morpho Blue, MetaMorpho, VaultV2, factories, PublicAllocator, adapter ABIs, permit ABIs.
-2. `packages/bundler-sdk-viem/src/abis.ts` — bundler3 and adapter ABIs.
-3. `packages/liquidation-sdk-viem/src/abis.ts` — liquidation-specific ABIs when liquidation code is touched.
-4. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
-5. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
+1. `packages/morpho-ts/src/abis.ts`, `packages/blue-sdk-viem/src/abis.ts`, and `packages/morpho-sdk/src/abis.ts` — canonical and facade ABIs for Morpho Blue, vaults, factories, BluePublicAllocator, adapters, and permits, plus the BlueBundlesV1 / VaultBundlesV1 / VaultExitBundlesV1 fixed-bundle ABIs.
+2. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
+3. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
 
 If no matching ABI/address/constant excerpt is found for a changed protocol call, record that absence in `<PROJECT_CONTEXT>` instead of letting agents infer from memory.
 

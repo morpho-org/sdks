@@ -95,7 +95,7 @@ Options:
 - `borrowMarketParams` (object): explicit Morpho Blue market params.
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
 - `presets` (object): `{ earn?: string, borrow?: string }`.
-- `slippageTolerance` (bigint): applied to Morpho Vault V2 flows only. BlueBundlesV1 market writes do not expose Bundler3 share-price bounds.
+- `slippageTolerance` (bigint): applied to Morpho Vault V2 flows only. BlueBundlesV1 market writes do not expose share-price bounds.
 - `supportSignature` (boolean): enable SDK permit/permit2 requirements.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
@@ -159,7 +159,7 @@ The standard WDK `supply` and `quoteSupply` methods use the same VaultBundlesV1 
 approved ERC-20 assets or native funding; signed deposits use the prepared handle.
 ERC-20 approvals and ERC-2612 permits target VaultBundlesV1. Permit2 uses SignatureTransfer,
 with an ERC-20 approval to Permit2 and a signed transfer naming VaultBundlesV1 as spender.
-See [MIGRATION.md](./MIGRATION.md) for migration from the removed Bundler3 supply route.
+See [MIGRATION.md](./MIGRATION.md) for migration from the removed legacy supply route.
 
 ## Morpho SDK Requirements
 

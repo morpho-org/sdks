@@ -1,5 +1,6 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddress,
   getChainAddresses,
   MathLib,
   marketParamsAbi,
@@ -304,9 +305,7 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       initialSupplyShares.reduce((total, shares) => total + shares, 0n),
     );
 
-    const { blue = getChainAddresses(mainnet.id).morpho } = getChainAddresses(
-      mainnet.id,
-    );
+    const blue = getChainAddress(mainnet.id, "blue");
     await client.deal({ erc20: USDC, account: blue, amount: 0n });
     const balanceLimitedVaultData = await vault.getData();
     const balanceLimitedExit = withChainTimestamp(

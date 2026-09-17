@@ -192,7 +192,7 @@ package prefix, matching the PR that will implement it:
 ```
 feat(morpho-sdk): route Blue supply/withdraw through BlueBundlesV1
 fix(blue-sdk): pin BlueBundlesV1 ABI and registry address
-chore(liquidity-sdk-viem): widen morpho-sdk peer range to ^6.0.0
+chore(blue-sdk-viem): widen blue-sdk peer range
 ```
 
 Description — use this template. It is deliberately the **inverse of the TIB**: everything here is

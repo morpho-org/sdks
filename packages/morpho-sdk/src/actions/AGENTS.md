@@ -13,21 +13,16 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
-- `signatures/` — pure helpers that reshape signed requirements for their destination.
-  `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
-  composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
-  authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
-  for VaultExitBundlesV1.
 
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 and Vault V2
-   write paths** encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths**
+2. Encode calldata. **Vault V1 and Vault V2 write paths** encode one registered
+   `VaultBundlesV1` entrypoint directly. **Blue write paths**
    encode one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
    `MidnightBundles` function call directly. Other **direct calls** (Midnight collateral supply /
    redeem / offer cancellation) encode their target contract call directly. Vault `inKindRedeem` and
-   `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 rather than composing a Bundler3 bundle;
+   `vaultV2/forceWithdraw` actions encode VaultExitBundlesV1 directly;
    `vaultV2/forceRedeem` stays on `VaultV2.multicall`.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
@@ -35,12 +30,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 ## Native funding (canonical statement)
 
 Native funding is valid only for assets/collateral configured as wNative; reject it on any other
-asset with the dedicated error. On **Bundler3 paths**, `nativeAmount > 0` prepends
-`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value` from those
-value-carrying calls. On direct **VaultBundlesV1 vault deposits**, encode the gross native amount as
+asset with the dedicated error. On direct **VaultBundlesV1 vault deposits**, encode the gross native amount as
 the deposit assets and send that same amount as `tx.value` to `vaultBundlesV1Deposit`; the
-standalone contract wraps the value internally, so these paths do not add Bundler3 actions or a
-token permit.
+standalone contract wraps the value internally, so these paths do not add a token permit.
 Direct BlueBundlesV1 funding sends the native amount as `tx.value`; it is exclusive with an ERC-20
 token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
 position and takes no native funding.
@@ -58,13 +50,7 @@ market. BlueBundlesV1 executes every allocation unconditionally; aggregate penal
 or withdrawal proceeds, and those builders reject an aggregate penalty above `borrowAssets` (or, in
 withdraw assets mode, the withdrawn amount). Migration instead adds penalties to destination debt,
 which the entity health check and encoded `maxLtv` bound. Penalties do not add native value or a
-separate GeneralAdapter1 funding requirement.
-
-PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders
-remain public only for compatibility and advanced composition. All Vault V1 planning and low-level
-composition compatibility surfaces are deprecated and will be removed in the next major. Their
-`VaultV1Reallocation` outputs are not accepted by the high-level Blue write methods; new write
-integrations use `VaultV2BlueReallocation`.
+separate funding requirement.
 
 ## Discriminated unions
 
