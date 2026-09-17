@@ -75,13 +75,51 @@ describe("secretRepresentations", () => {
     expect(secretRepresentations("").size).toBe(0);
   });
 
-  test("behavior: a non-URL secret keeps only its raw serialization variants", () => {
-    const representations = secretRepresentations("plain-secret-token");
+  test("behavior: includes a JSON-escaped form distinct from the raw value", () => {
+    const secret = 'tok"en\\secret';
+    const escaped = JSON.stringify(secret).slice(1, -1);
+    const representations = secretRepresentations(secret);
 
-    expect(representations.has("plain-secret-token")).toBe(true);
-    expect(representations.has(encodeURIComponent("plain-secret-token"))).toBe(
-      true,
+    expect(escaped).not.toBe(secret);
+    expect(representations.has(escaped)).toBe(true);
+  });
+
+  test("behavior: a non-URL secret keeps only its raw serialization variants", () => {
+    const secret = "plain secret/token";
+    const representations = secretRepresentations(secret);
+
+    // The JSON-escaped form equals the raw value here, so only the raw and
+    // percent-encoded representations remain.
+    expect([...representations].sort()).toEqual(
+      [secret, encodeURIComponent(secret)].sort(),
     );
+  });
+
+  test("behavior: derives the decoded path segment", () => {
+    const representations = secretRepresentations(
+      "https://rpc.example.com/v2/KEY%2FSECRET0123",
+    );
+
+    expect(representations.has("KEY%2FSECRET0123")).toBe(true);
+    expect(representations.has("KEY/SECRET0123")).toBe(true);
+  });
+
+  test("behavior: derives the basic-auth Authorization value", () => {
+    const representations = secretRepresentations(
+      "https://user0123:pass0123@rpc.example.com/",
+    );
+
+    expect(
+      representations.has(Buffer.from("user0123:pass0123").toString("base64")),
+    ).toBe(true);
+  });
+
+  test("behavior: skips a short basic-auth password", () => {
+    const representations = secretRepresentations(
+      "https://u:1@rpc.example.com/",
+    );
+
+    expect(representations.has("1")).toBe(false);
   });
 });
 
@@ -134,6 +172,31 @@ describe("redactSecrets", () => {
     expect(
       redactSecrets(`${MAINNET} ${MAINNET} ${MAINNET}`, [MAINNET]).replacements,
     ).toBe(3);
+  });
+
+  test("behavior: redacts a report containing only the JSON-escaped form", () => {
+    const secret = 'tok"en\\secret';
+    const escaped = JSON.stringify(secret).slice(1, -1);
+
+    expect(redactSecrets(`{"token":"${escaped}"}`, [secret])).toEqual({
+      content: `{"token":"${REDACTION}"}`,
+      replacements: 1,
+    });
+  });
+
+  test("behavior: masks token-shaped strings without a configured secret", () => {
+    expect(redactSecrets("Authorization: Bearer abcdef0123456789", [])).toEqual(
+      {
+        content: `Authorization: Bearer ${REDACTION}`,
+        replacements: 1,
+      },
+    );
+    expect(
+      redactSecrets("fatal: token ghp_abcdefghij0123456789 rejected", []),
+    ).toEqual({
+      content: `fatal: token ${REDACTION} rejected`,
+      replacements: 1,
+    });
   });
 });
 
@@ -194,6 +257,18 @@ describe("sanitizeReports", () => {
 
     // Only the real regular file is scrubbed and published; the symlink is ignored.
     expect(result.files).toBe(1);
+  });
+
+  test("error: a pre-existing output directory is refused", () => {
+    const inputDir = makeTempDir();
+    writeFileSync(join(inputDir, "blue-sdk.json"), `leak ${MAINNET}`);
+    const outputDir = join(makeTempDir(), "sanitized");
+    mkdirSync(outputDir, { recursive: true });
+    writeFileSync(join(outputDir, "planted.json"), "unscrubbed");
+
+    expect(() =>
+      sanitizeReports({ inputDir, outputDir, secrets: [MAINNET] }),
+    ).toThrow(/EEXIST/);
   });
 });
 

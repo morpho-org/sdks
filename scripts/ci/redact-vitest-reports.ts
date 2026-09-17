@@ -27,7 +27,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { readSecretValues } from "./scrub-transcript.ts";
+import { readSecretValues, SECRET_PATTERNS } from "./scrub-transcript.ts";
 import {
   isMain,
   readRequiredEnv,
@@ -36,22 +36,24 @@ import {
 } from "./workflow.ts";
 
 /** Replacement written over every redacted credential occurrence. */
-export const REDACTION = "<redacted-rpc-url>";
+export const REDACTION = "<redacted-secret>";
 
 /**
  * Minimum length for a credential fragment derived from a secret URL (path segment, query value,
- * basic-auth username) to be redacted on its own. Guards against blanking short, non-secret URL
- * parts such as `/v2` or `chain=1`; the host is never redacted, so failure reports still say which
+ * basic-auth username or password) to be redacted on its own. Guards against blanking short,
+ * non-secret URL parts such as `/v2` or `chain=1` — a 1-character password would otherwise mask
+ * every digit in the report; the host is never redacted, so failure reports still say which
  * chain's fork broke.
  */
 export const MIN_DERIVED_SECRET_LENGTH = 8;
 
 /**
  * Every string form of a single secret that must not survive into an uploaded report: the raw
- * value, and — when it parses as a URL — its credential-bearing fragments (basic-auth username of
- * meaningful length, password, long query values, and the API-key path segment). Each is expanded
- * to its raw, JSON-escaped, and percent-encoded representations, since a blob report may embed any
- * of them.
+ * value, and — when it parses as a URL — its credential-bearing fragments (basic-auth username and
+ * password of meaningful length, the base64 HTTP Basic authorization value they form, long query
+ * values, and the API-key path segment). Percent-encoded fragments additionally contribute their
+ * decoded form (e.g. `KEY%2FSECRET0123` also masks `KEY/SECRET0123`). Each is expanded to its raw,
+ * JSON-escaped, and percent-encoded representations, since a blob report may embed any of them.
  *
  * @param secret Secret value to enumerate (typically a fork RPC URL).
  * @returns The set of concrete strings to search for and redact.
@@ -66,19 +68,38 @@ export function secretRepresentations(secret: string): Set<string> {
   if (secret === "") return values;
   values.add(secret);
 
+  const decodeComponent = (value: string): string => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      // Malformed percent escapes decode as themselves.
+      return value;
+    }
+  };
+  const addDerived = (fragment: string): void => {
+    if (fragment.length < MIN_DERIVED_SECRET_LENGTH) return;
+    values.add(fragment);
+    const decoded = decodeComponent(fragment);
+    if (decoded !== fragment && decoded.length >= MIN_DERIVED_SECRET_LENGTH)
+      values.add(decoded);
+  };
+
   try {
     const url = new URL(secret);
-    if (url.username.length >= MIN_DERIVED_SECRET_LENGTH)
-      values.add(url.username);
-    if (url.password !== "") values.add(url.password);
+    if (url.username !== "" || url.password !== "") {
+      // The HTTP Basic authorization value derived from the credentials.
+      values.add(
+        Buffer.from(
+          `${decodeComponent(url.username)}:${decodeComponent(url.password)}`,
+        ).toString("base64"),
+      );
+    }
+    addDerived(url.username);
+    addDerived(url.password);
     for (const value of url.searchParams.values())
       if (value.length >= MIN_DERIVED_SECRET_LENGTH) values.add(value);
     const lastPathSegment = url.pathname.split("/").filter(Boolean).at(-1);
-    if (
-      lastPathSegment != null &&
-      lastPathSegment.length >= MIN_DERIVED_SECRET_LENGTH
-    )
-      values.add(lastPathSegment);
+    if (lastPathSegment != null) addDerived(lastPathSegment);
   } catch {
     // A non-URL secret only needs its raw serialization variants redacted.
   }
@@ -98,7 +119,9 @@ export function secretRepresentations(secret: string): Set<string> {
  *
  * Representations are replaced longest-first so a full URL is masked before its own fragments,
  * keeping the replacement count meaningful. The replacement token contains no JSON metacharacters,
- * so a valid JSON report stays valid.
+ * so a valid JSON report stays valid. After the exact-value pass, {@link SECRET_PATTERNS} masks
+ * token-shaped strings (GitHub/Anthropic tokens, JWTs, `Authorization` header values) that appear
+ * without a configured secret, as `scrubTranscript` does.
  *
  * @param content Report contents to sanitize.
  * @param secrets Secret values that must not remain (empty entries are ignored).
@@ -132,6 +155,13 @@ export function redactSecrets(
     redacted = parts.join(REDACTION);
   }
 
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, (_match: string, prefix?: string) => {
+      replacements += 1;
+      return typeof prefix === "string" ? `${prefix}${REDACTION}` : REDACTION;
+    });
+  }
+
   return { content: redacted, replacements };
 }
 
@@ -139,7 +169,7 @@ export function redactSecrets(
 export interface SanitizeReportsOptions {
   /** Directory the Vitest blob reporter wrote to. */
   readonly inputDir: string;
-  /** Directory to write sanitized copies into; created if absent. */
+  /** Directory to write sanitized copies into; must not already exist (fail-closed). */
   readonly outputDir: string;
   /** Secret values that must not be uploaded (empty entries are ignored). */
   readonly secrets: readonly string[];
@@ -147,13 +177,16 @@ export interface SanitizeReportsOptions {
 
 /**
  * Sanitizes every regular file in a Vitest blob-report directory, writing the scrubbed copies into a
- * fresh output directory. A missing or empty input directory is a benign no-op — a hard test crash
- * can leave no report — and non-regular entries (symlinks, sub-directories) are skipped rather than
- * followed, so only real report files are ever published.
+ * fresh output directory that must not already exist — the artifact upload ships the whole directory,
+ * so a pre-existing one could publish pre-planted, unscrubbed files. A missing or empty input
+ * directory is a benign no-op — a hard test crash can leave no report — and non-regular entries
+ * (symlinks, sub-directories) are skipped rather than followed, so only real report files are ever
+ * published.
  *
  * @param options Input/output directories and the secrets to redact.
  * @returns The number of files scrubbed and the total credential occurrences redacted.
- * @throws {Error} When a report cannot be read or a sanitized copy cannot be written (fail-closed).
+ * @throws {Error} When the output directory already exists, a report cannot be read, or a sanitized
+ *   copy cannot be written (fail-closed).
  * @example
  * ```ts
  * sanitizeReports({
@@ -175,7 +208,7 @@ export function sanitizeReports(options: SanitizeReportsOptions): {
   );
   if (reportFiles.length === 0) return { files: 0, replacements: 0 };
 
-  mkdirSync(outputDir, { recursive: true });
+  mkdirSync(outputDir);
 
   let files = 0;
   let replacements = 0;
