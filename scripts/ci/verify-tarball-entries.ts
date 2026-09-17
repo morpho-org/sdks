@@ -45,6 +45,9 @@ export function canonicalEntryPath(entry: string): string {
 
 const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 
+/** Win32 reserved device basenames, matched before any `.` and case-insensitively. */
+const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
+
 /**
  * Verifies that a tarball's entry listing cannot alias one entry onto another
  * after npm extraction.
@@ -64,6 +67,9 @@ const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
  * - any segment containing `~`, the marker of a Windows 8.3 short name
  *   (`LONGFI~1.JS`) through which a second entry can reach an already
  *   extracted long-name file;
+ * - any segment whose basename is a Win32 reserved device (`CON`, `NUL`,
+ *   `COM1`, ... — with or without an extension), which does not extract as
+ *   an ordinary file on Windows;
  * - any entry outside `package/`;
  * - any two entries whose canonical forms collide (exact duplicates, case
  *   variants, `dir` vs `dir/`);
@@ -107,6 +113,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     if (segments.some((s) => s.includes("~"))) {
       throw new Error(
         `Tar entry "${entry}" has a path segment containing "~", which can alias a Windows 8.3 short name.`,
+      );
+    }
+    if (segments.some((s) => DOS_DEVICE.test(s))) {
+      throw new Error(
+        `Tar entry "${entry}" has a path segment that is a Windows reserved device name.`,
       );
     }
     if (segments[0] !== "package") {

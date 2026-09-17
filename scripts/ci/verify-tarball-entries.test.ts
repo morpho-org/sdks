@@ -175,6 +175,26 @@ describe("verifyTarballEntries", () => {
     ).toThrow(/containing "~"/);
   });
 
+  test("error: Windows reserved device basenames are rejected", () => {
+    for (const bad of [
+      "package/lib/CON",
+      "package/lib/con.txt",
+      "package/COM1.js",
+      "package/Nul/x.js",
+    ]) {
+      expect(() => verifyTarballEntries([...VALID, bad])).toThrow(
+        /reserved device name/,
+      );
+    }
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/console.js",
+        "package/config/x.js",
+      ]),
+    ).not.toThrow();
+  });
+
   test("error: empty listing is rejected", () => {
     expect(() => verifyTarballEntries([])).toThrow(/found 0/);
   });
