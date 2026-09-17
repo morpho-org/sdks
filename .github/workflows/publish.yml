@@ -301,10 +301,12 @@ jobs:
             # npm flattens every publishConfig key from the packed manifest
             # into the publish options (including transport keys such as
             # proxy, https-proxy, strict-ssl, ca) BEFORE the OIDC exchange,
-            # so only `access`/`registry` pinned to npmjs are allowed.
-            node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json"
-            name="$(node -p "JSON.parse(require('node:fs').readFileSync('${tmpd}/package/package.json', 'utf8')).name")"
-            version="$(node -p "JSON.parse(require('node:fs').readFileSync('${tmpd}/package/package.json', 'utf8')).version")"
+            # so only `access`/`registry` pinned to npmjs are allowed. The
+            # same validator emits the manifest's validated `name@version`
+            # identity used for the duplicate/bijection check below.
+            identity="$(node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
+            name="${identity%@*}"
+            version="${identity##*@}"
             rm -rf "$tmpd"
 
             if [ -n "${received_version[$name]:-}" ]; then

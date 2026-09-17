@@ -5,25 +5,39 @@
  *
  *   node scripts/ci/verify-tarball-manifest.ts <path/to/package.json>
  *
- * Exits 0 silently when the manifest's `publishConfig` is restricted to the
- * allowlist; exits 1 with an `::error::` annotation otherwise. The manifest
- * path must be a regular file (a symlink or directory is rejected) and its
- * contents are parsed as JSON, never executed.
+ * Exits 0 and prints the validated `name@version` when the manifest's
+ * `publishConfig` is restricted to the allowlist; exits 1 with an `::error::`
+ * annotation otherwise. The manifest path must be a regular file (a symlink or
+ * directory is rejected) and its contents are parsed as JSON, never executed.
+ * Nothing besides `name@version` may be printed on stdout.
  */
 
 import { lstatSync, readFileSync } from "node:fs";
 
-import { isMain, reportCliError } from "./workflow.ts";
+import { isMain, reportCliError, writeStdout } from "./workflow.ts";
 
 const NPMJS_REGISTRY_URLS = new Set([
   "https://registry.npmjs.org",
   "https://registry.npmjs.org/",
 ]);
 
+const NPM_NAME_PATTERN =
+  /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+// Official semver regex from https://semver.org (no leading `v`, no whitespace).
+const SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+
 /** The part of a packed package manifest this validator inspects. */
 export interface TarballManifest {
   readonly publishConfig?: unknown;
   readonly [key: string]: unknown;
+}
+
+/** The validated `name`/`version` identity of a packed package manifest. */
+export interface TarballIdentity {
+  readonly name: string;
+  readonly version: string;
 }
 
 /**
@@ -76,6 +90,42 @@ export function verifyPublishConfig(manifest: TarballManifest): void {
   }
 }
 
+/**
+ * Verifies that a packed package manifest's `name` and `version` are safe to
+ * trust for the artifact bijection check in `publish.yml`, and returns them.
+ */
+export function verifyManifestIdentity(
+  manifest: TarballManifest,
+): TarballIdentity {
+  const { name, version } = manifest;
+  if (
+    typeof name !== "string" ||
+    name.length > 214 ||
+    !NPM_NAME_PATTERN.test(name)
+  ) {
+    throw new Error(
+      `Invalid name in manifest: expected an npm package name, got ${JSON.stringify(name)}.`,
+    );
+  }
+  if (typeof version !== "string" || !SEMVER_PATTERN.test(version)) {
+    throw new Error(
+      `Invalid version in manifest: expected a semver version, got ${JSON.stringify(version)}.`,
+    );
+  }
+  return { name, version };
+}
+
+/**
+ * Runs every manifest gate (`publishConfig` allowlist first, then identity)
+ * and returns the validated `name`/`version`.
+ */
+export function verifyTarballManifest(
+  manifest: TarballManifest,
+): TarballIdentity {
+  verifyPublishConfig(manifest);
+  return verifyManifestIdentity(manifest);
+}
+
 /** CLI entrypoint: `node scripts/ci/verify-tarball-manifest.ts <manifest-path>`. */
 export function main(argv: readonly string[] = process.argv.slice(2)): void {
   const manifestPath = argv[0];
@@ -98,7 +148,8 @@ export function main(argv: readonly string[] = process.argv.slice(2)): void {
     throw new Error(`Manifest at "${manifestPath}" is not a JSON object.`);
   }
 
-  verifyPublishConfig(manifest as TarballManifest);
+  const { name, version } = verifyTarballManifest(manifest as TarballManifest);
+  writeStdout(`${name}@${version}\n`);
 }
 
 if (isMain(import.meta.url)) {

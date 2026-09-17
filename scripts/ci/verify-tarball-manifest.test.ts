@@ -11,7 +11,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { main, verifyPublishConfig } from "./verify-tarball-manifest.ts";
+import {
+  main,
+  verifyManifestIdentity,
+  verifyPublishConfig,
+  verifyTarballManifest,
+} from "./verify-tarball-manifest.ts";
 
 const scriptPath = fileURLToPath(
   new URL("./verify-tarball-manifest.ts", import.meta.url),
@@ -130,10 +135,78 @@ describe("verifyPublishConfig", () => {
   });
 });
 
+describe("verifyManifestIdentity", () => {
+  test("default", () => {
+    expect(
+      verifyManifestIdentity({ name: "@morpho-org/alpha", version: "1.2.3" }),
+    ).toEqual({ name: "@morpho-org/alpha", version: "1.2.3" });
+    expect(
+      verifyManifestIdentity({
+        name: "morpho-ts",
+        version: "0.0.0-beta.1+build.5",
+      }),
+    ).toEqual({ name: "morpho-ts", version: "0.0.0-beta.1+build.5" });
+  });
+
+  test("error: rejects a missing or non-string name", () => {
+    expect(() => verifyManifestIdentity({ version: "1.0.0" })).toThrow(
+      "Invalid name in manifest: expected an npm package name, got undefined.",
+    );
+    expect(() =>
+      verifyManifestIdentity({ name: 42, version: "1.0.0" }),
+    ).toThrow(
+      "Invalid name in manifest: expected an npm package name, got 42.",
+    );
+  });
+
+  test("error: rejects names with uppercase, whitespace, or newlines", () => {
+    for (const name of ["Morpho", "morpho ts", "morpho\nts"]) {
+      expect(() => verifyManifestIdentity({ name, version: "1.0.0" })).toThrow(
+        `Invalid name in manifest: expected an npm package name, got ${JSON.stringify(name)}.`,
+      );
+    }
+  });
+
+  test("error: rejects a missing, non-string, or non-semver version", () => {
+    expect(() => verifyManifestIdentity({ name: "alpha" })).toThrow(
+      "Invalid version in manifest: expected a semver version, got undefined.",
+    );
+    expect(() => verifyManifestIdentity({ name: "alpha", version: 1 })).toThrow(
+      "Invalid version in manifest: expected a semver version, got 1.",
+    );
+    for (const version of ["v1.0.0", "1.0.0\n"]) {
+      expect(() => verifyManifestIdentity({ name: "alpha", version })).toThrow(
+        `Invalid version in manifest: expected a semver version, got ${JSON.stringify(version)}.`,
+      );
+    }
+  });
+});
+
+describe("verifyTarballManifest", () => {
+  test("default", () => {
+    expect(
+      verifyTarballManifest({
+        name: "@morpho-org/alpha",
+        version: "1.2.3",
+        publishConfig: { access: "public" },
+      }),
+    ).toEqual({ name: "@morpho-org/alpha", version: "1.2.3" });
+  });
+
+  test("error: rejects a bad publishConfig before checking identity", () => {
+    expect(() =>
+      verifyTarballManifest({
+        publishConfig: { proxy: "http://evil.example" },
+      }),
+    ).toThrow('Disallowed publishConfig key "proxy"');
+  });
+});
+
 describe("main", () => {
   test("default", () => {
     const manifestPath = writeTempManifest({
       name: "@morpho-org/alpha",
+      version: "1.2.3",
       publishConfig: {
         access: "public",
         registry: "https://registry.npmjs.org/",
@@ -196,16 +269,17 @@ describe("main", () => {
 describe("cli", () => {
   test("default", () => {
     const manifestPath = writeTempManifest({
-      name: "@morpho-org/alpha",
+      name: "@morpho-org/foo",
+      version: "1.2.3",
       publishConfig: {
         access: "public",
         registry: "https://registry.npmjs.org/",
       },
     });
 
-    expect(() =>
+    expect(
       execFileSync("node", [scriptPath, manifestPath], { encoding: "utf8" }),
-    ).not.toThrow();
+    ).toBe("@morpho-org/foo@1.2.3\n");
   });
 
   test("error: exits 1 with the message on stderr", () => {
