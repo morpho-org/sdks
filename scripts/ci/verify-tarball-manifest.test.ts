@@ -159,8 +159,8 @@ describe("verifyManifestIdentity", () => {
     );
   });
 
-  test("error: rejects names with uppercase, whitespace, or newlines", () => {
-    for (const name of ["Morpho", "morpho ts", "morpho\nts"]) {
+  test("error: rejects names with uppercase, whitespace, newlines, or over 214 chars", () => {
+    for (const name of ["Morpho", "morpho ts", "morpho\nts", "a".repeat(215)]) {
       expect(() => verifyManifestIdentity({ name, version: "1.0.0" })).toThrow(
         `Invalid name in manifest: expected an npm package name, got ${JSON.stringify(name)}.`,
       );
