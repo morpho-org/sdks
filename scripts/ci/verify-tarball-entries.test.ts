@@ -77,6 +77,7 @@ interface RawHeader {
   readonly sizeField?: string;
   /** Written after the (valid) checksum is computed, to corrupt it. */
   readonly checksumField?: string;
+  readonly linkname?: string;
 }
 
 /** Builds a 512-byte ustar header plus padded data block(s) for one entry. */
@@ -89,6 +90,7 @@ function rawEntry({
   prefix = "",
   sizeField,
   checksumField,
+  linkname = "",
 }: RawHeader): Buffer {
   const header = Buffer.alloc(512);
   header.write(name, 0, 100, "latin1");
@@ -104,6 +106,7 @@ function rawEntry({
   header.write("00000000000\0", 136);
   header.write("        ", 148);
   header.write(type, 156, 1, "latin1");
+  header.write(linkname, 157, 100, "latin1");
   header.write(magic, 257, 6, "latin1");
   header.write(version, 263, 2, "latin1");
   header.write(prefix, 345, 155, "latin1");
@@ -516,6 +519,41 @@ describe("readTarballEntries", () => {
         ),
       ),
     ).toThrow(/invalid checksum/);
+  });
+
+  test("error: a non-link header carrying a linkname cannot hide the next header", () => {
+    // node-tar warns `linkpath forbidden`, skips one block without consuming
+    // the declared body, and parses the payload as the next header.
+    const hidden = rawEntry({ name: "package/Package.json", type: "0" });
+    for (const type of ["0", "x"]) {
+      expect(() =>
+        readTarballEntries(
+          rawTarball(
+            MANIFEST_BLOCK,
+            rawEntry({
+              name: "package/junk",
+              type,
+              data: hidden,
+              linkname: "x",
+            }),
+            rawEntry({ name: "package/benign.js", type: "0" }),
+          ),
+        ),
+      ).toThrow(/carries a linkname/);
+    }
+  });
+
+  test("error: a header with an empty path is rejected", () => {
+    // node-tar warns `path is required` and re-syncs on the next block.
+    const hidden = rawEntry({ name: "package/Package.json", type: "0" });
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "", type: "x", data: hidden }),
+        ),
+      ),
+    ).toThrow(/empty path/);
   });
 
   test("error: a non-octal size field is rejected", () => {

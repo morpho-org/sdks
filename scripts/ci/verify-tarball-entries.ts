@@ -138,7 +138,9 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * (node-tar only applies `prefix` for that exact value), an invalid header
  * checksum (node-tar skips such a header and re-syncs one block later), a
  * non-octal `size` field, a directory header declaring a non-zero `size`
- * (node-tar forces it to 0 and reads the next block as a header), PAX records
+ * (node-tar forces it to 0 and reads the next block as a header), an empty
+ * path or a non-empty linkname (node-tar skips such a header without
+ * consuming its declared body), PAX records
  * other than {@link BENIGN_PAX_KEYS}, truncated archives, and a zero block
  * that is followed by further data (node-tar skips a lone zero block and keeps
  * extracting; GNU tar stops there).
@@ -188,6 +190,18 @@ export function readTarballEntries(tgz: Buffer): string[] {
     const name = decodeString(header.subarray(0, 100));
     const prefix = decodeString(header.subarray(345, 500));
     const rawPath = prefix === "" ? name : `${prefix}/${name}`;
+    // node-tar skips (one block, no body) any header with an empty path or a
+    // non-empty linkname on a non-link entry, then re-syncs on the next block.
+    if (rawPath === "") {
+      throw new Error(
+        `Tar header at byte ${offset} has an empty path; refusing to publish.`,
+      );
+    }
+    if (decodeString(header.subarray(157, 257)) !== "") {
+      throw new Error(
+        `Tar header at byte ${offset} ("${rawPath}") carries a linkname; refusing to publish.`,
+      );
+    }
 
     if (typeflag === 0x78) {
       if (pending !== undefined) {
