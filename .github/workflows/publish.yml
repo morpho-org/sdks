@@ -247,9 +247,11 @@ jobs:
           # the allowlist below. We close that structurally: reject any tarball
           # that is not a single-rooted `package/` archive with exactly one
           # `package/package.json` and no symlink/hardlink/device entries. The
-          # manifest entry itself must be a regular file with no descendants and
-          # is parsed as JSON, never `require()`d, so a directory-shaped manifest
-          # cannot smuggle executable code into this job. Once that invariant
+          # manifest entry must have no descendants, and after extraction
+          # `scripts/ci/verify-tarball-manifest.ts` requires it to be a regular
+          # file (not a directory or symlink) before it is parsed as JSON,
+          # never `require()`d, so a directory-shaped manifest cannot smuggle
+          # executable code into this job. Once that invariant
           # holds there is exactly one manifest in the archive, so the literal
           # read below is the same manifest npm will publish. (A
           # registry-aware `npm publish --dry-run` cannot be used for this: it
@@ -286,11 +288,6 @@ jobs:
             pj_children="$(printf '%s\n' "$entries" | grep -cE '^package/package\.json/' || true)"
             if [ "$pj_children" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} has ${pj_children} entr(y/ies) below package/package.json (manifest must be a regular file); refusing to publish."
-              exit 1
-            fi
-            pj_regular="$(tar -tvzf "$tgz" | awk '$NF == "package/package.json" && substr($1, 1, 1) == "-"' | grep -c . || true)"
-            if [ "$pj_regular" != "1" ]; then
-              echo "::error::Tarball ${tgz##*/}: package/package.json is not a regular file; refusing to publish."
               exit 1
             fi
             irregular="$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)"

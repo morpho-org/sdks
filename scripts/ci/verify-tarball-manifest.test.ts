@@ -99,6 +99,17 @@ describe("verifyPublishConfig", () => {
     );
   });
 
+  test("error: reports non-string access and registry values verbatim", () => {
+    expect(() =>
+      verifyPublishConfig({ publishConfig: { access: ["public"] } }),
+    ).toThrow('expected "public", got ["public"].');
+    expect(() =>
+      verifyPublishConfig({
+        publishConfig: { registry: { url: "https://registry.npmjs.org" } },
+      }),
+    ).toThrow('got {"url":"https://registry.npmjs.org"}.');
+  });
+
   test("error: rejects a non-object publishConfig", () => {
     expect(() => verifyPublishConfig({ publishConfig: ["public"] })).toThrow(
       "expected an object, got array",
@@ -137,6 +148,17 @@ describe("main", () => {
     expect(() => main([manifestPath])).toThrow(
       `Manifest path "${manifestPath}" is not a regular file.`,
     );
+  });
+
+  test("error: rejects a manifest that is not valid JSON", () => {
+    const tempDir = createTempDir();
+    const manifestPath = join(tempDir, "package.json");
+    writeFileSync(
+      manifestPath,
+      'module.exports = { name: "x" }; process.exit(42)\n',
+    );
+
+    expect(() => main([manifestPath])).toThrow(SyntaxError);
   });
 
   test("error: rejects a symlink at the manifest path", () => {
@@ -187,24 +209,49 @@ describe("cli", () => {
     expect(execError?.stderr).toContain('Disallowed publishConfig key "proxy"');
   });
 
+  test("error: exits 1 for a manifest that is not valid JSON", () => {
+    const tempDir = createTempDir();
+    const manifestPath = join(tempDir, "package.json");
+    writeFileSync(
+      manifestPath,
+      'module.exports = { name: "x" }; process.exit(42)\n',
+    );
+
+    let execError: { status: number; stderr: string } | undefined;
+    try {
+      execFileSync("node", [scriptPath, manifestPath], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      execError = error as { status: number; stderr: string };
+    }
+
+    expect(execError, "expected the CLI to exit non-zero").toBeDefined();
+    expect(execError?.status).toBe(1);
+    expect(execError?.stderr).toContain("::error::");
+  });
+
   test("error: exits 1 for a directory at the manifest path", () => {
     const tempDir = createTempDir();
     const manifestPath = join(tempDir, "package.json");
     mkdirSync(manifestPath);
     writeFileSync(join(manifestPath, "index.js"), "process.exit(42)\n");
 
+    let execError: { status: number; stderr: string } | undefined;
     try {
       execFileSync("node", [scriptPath, manifestPath], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-      expect.unreachable("expected the CLI to exit non-zero");
     } catch (error) {
-      const execError = error as { status: number; stderr: string };
-      expect(execError.status).toBe(1);
-      expect(execError.stderr).toContain("::error::");
-      expect(execError.stderr).toContain("is not a regular file");
+      execError = error as { status: number; stderr: string };
     }
+
+    expect(execError, "expected the CLI to exit non-zero").toBeDefined();
+    expect(execError?.status).toBe(1);
+    expect(execError?.stderr).toContain("::error::");
+    expect(execError?.stderr).toContain("is not a regular file");
   });
 });
 

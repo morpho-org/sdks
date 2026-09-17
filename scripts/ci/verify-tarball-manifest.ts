@@ -57,14 +57,14 @@ export function verifyPublishConfig(manifest: TarballManifest): void {
       case "access":
         if (value !== "public") {
           throw new Error(
-            `Invalid publishConfig.access in manifest: expected "public", got "${value}".`,
+            `Invalid publishConfig.access in manifest: expected "public", got ${JSON.stringify(value)}.`,
           );
         }
         break;
       case "registry":
         if (typeof value !== "string" || !NPMJS_REGISTRY_URLS.has(value)) {
           throw new Error(
-            `Invalid publishConfig.registry in manifest: expected "${[...NPMJS_REGISTRY_URLS].join('" or "')}", got "${value}".`,
+            `Invalid publishConfig.registry in manifest: expected "${[...NPMJS_REGISTRY_URLS].join('" or "')}", got ${JSON.stringify(value)}.`,
           );
         }
         break;
