@@ -16,7 +16,10 @@ import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
 } from "../helpers/constant.js";
-import { getSupplyTargetUtilization } from "../helpers/utilization.js";
+import {
+  getSupplyTargetUtilization,
+  resolveMaxWithdrawalUtilization,
+} from "../helpers/utilization.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
@@ -353,6 +356,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
    * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";
@@ -401,6 +406,16 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     } = options;
 
     if (!enabled) return { withdrawals: [], data: this };
+
+    // Validate every supplied ceiling, including overrides for unused markets.
+    resolveMaxWithdrawalUtilization(
+      defaultMaxWithdrawalUtilization,
+      "defaultMaxWithdrawalUtilization",
+    );
+    for (const utilization of Object.values(maxWithdrawalUtilization)) {
+      // Reject invalid deprecated map entries before any withdrawal planning.
+      resolveMaxWithdrawalUtilization(utilization);
+    }
 
     const accrualTimestamp = BigInt(
       timestamp ?? this.getMarket(marketId).lastUpdate,
@@ -493,6 +508,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
    * `VaultV2BlueReallocationData.computeVaultV2BlueReallocations`.
@@ -517,6 +534,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getPublicReallocationLiquidity`.
@@ -579,6 +598,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
+   * @throws {NegativeInputError} when reallocation is needed and a withdrawal utilization ceiling is negative.
+   * @throws {InputExceedsMaxError} when reallocation is needed and a withdrawal utilization ceiling exceeds WAD.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @deprecated Vault V1 shared-liquidity metrics will be removed in the next major. Use
    * `VaultV2BlueReallocationData.getAvailableLiquidityToUtilization`.

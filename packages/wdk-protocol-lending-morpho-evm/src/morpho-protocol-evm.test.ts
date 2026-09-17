@@ -1,7 +1,15 @@
-import type {
-  RequirementSignature,
-  VaultReallocation,
-  VaultV2BlueReallocation,
+import * as morphoSdk from "@morpho-org/morpho-sdk";
+import {
+  AddressMismatchError,
+  type AuthorizationRequirementSignature,
+  type BundlesTokenRequirementSignature,
+  ChainIdMismatchError,
+  type Erc2612RequirementSignature,
+  MixedBundlesFundingError,
+  NegativeInputError,
+  NonPositiveInputError,
+  VaultAssetMismatchError,
+  type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
 import * as viem from "viem";
@@ -9,10 +17,15 @@ import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { MissingWalletProviderError } from "./errors.js";
 import type {
+  AuthorizationOrSignatureRequirement,
+  BlueApprovalOrSignatureRequirement,
+  BundlesApprovalOrSignatureRequirement,
   MorphoBorrowOptions,
-  MorphoBorrowWithVaultV2ReallocationsOptions,
+  MorphoCollateralSupplyOptions,
+  MorphoExclusiveSupplyOptions,
+  PreparedMorphoSupply,
   RequirementApproval,
-  RequirementAuthorization,
+  RequirementOptions,
   RequirementSignatureRequest,
 } from "./morpho-protocol-evm.js";
 
@@ -31,6 +44,11 @@ const MARKET_PARAMS = {
   irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
   lltv: 860000000000000000n,
 } as const;
+const NOW_MS = 1_800_000_000_000;
+const BLUE_BUNDLES_V1_DEADLINE = 1_800_007_200n;
+const SIGNATURE_DEADLINE = 1_800_003_600n;
+
+vi.spyOn(Date, "now").mockReturnValue(NOW_MS);
 
 const SUPPLY_TX = {
   to: "0x0000000000000000000000000000000000000001",
@@ -91,6 +109,9 @@ const supplyAction = {
   buildTx: vi.fn().mockReturnValue(SUPPLY_TX),
 };
 const withdrawAction = {
+  getRequirements: vi
+    .fn()
+    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
   buildTx: vi.fn().mockReturnValue(WITHDRAW_TX),
 };
 const borrowAction = {
@@ -112,6 +133,9 @@ const supplyCollateralAction = {
   buildTx: vi.fn().mockReturnValue(SUPPLY_COLLATERAL_TX),
 };
 const withdrawCollateralAction = {
+  getRequirements: vi
+    .fn()
+    .mockResolvedValue([{ action: { type: "blueAuthorization" } }]),
   buildTx: vi.fn().mockReturnValue(WITHDRAW_COLLATERAL_TX),
 };
 
@@ -168,12 +192,8 @@ const createClientMock = vi.fn<(parameters: unknown) => unknown>(() => ({
   extend: extendMock,
 }));
 
-const { ChainIdMismatchError } = await vi.importActual<
-  typeof import("@morpho-org/morpho-sdk")
->("@morpho-org/morpho-sdk");
-
 vi.doMock("@morpho-org/morpho-sdk", () => ({
-  ChainIdMismatchError,
+  ...morphoSdk,
   morphoViemExtension: morphoViemExtensionMock,
 }));
 
@@ -193,7 +213,11 @@ const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import(
 const { WalletAccountEvmErc4337 } = await import(
   "@tetherto/wdk-wallet-evm-erc-4337"
 );
-const { default: MorphoProtocolEvm } = await import("./morpho-protocol-evm.js");
+const {
+  default: MorphoProtocolEvm,
+  MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
+} = await import("./morpho-protocol-evm.js");
 
 describe.sequential("MorphoProtocolEvm", () => {
   let account: InstanceType<typeof WalletAccountEvm>;
@@ -229,7 +253,92 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
   });
 
-  describe("supply", () => {
+  describe("prepareSupply", () => {
+    describe("prepareSupply funding validation", () => {
+      test.each([
+        { value: 0, errorClass: NonPositiveInputError },
+        { value: 0n, errorClass: NonPositiveInputError },
+        { value: -1, errorClass: NegativeInputError },
+        { value: -1n, errorClass: NegativeInputError },
+      ])(
+        "error: $errorClass.name for funding $value",
+        async ({ value, errorClass }) => {
+          for (const field of ["amount", "nativeAmount"] as const) {
+            const funding =
+              field === "amount" ? { amount: value } : { nativeAmount: value };
+            const result = protocol.prepareSupply({ token: TOKEN, ...funding });
+
+            await expect(result).rejects.toBeInstanceOf(errorClass);
+            await expect(result).rejects.toMatchObject({
+              field,
+              value: BigInt(value),
+            });
+          }
+
+          expect(vaultV2Entity.getData).not.toHaveBeenCalled();
+          expect(vaultV2Entity.deposit).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    test.each(["prepareSupply", "supply", "quoteSupply"] as const)(
+      "error: MixedBundlesFundingError from %s for vault mixed funding",
+      async (method) => {
+        const mixedFunding = {
+          token: TOKEN,
+          amount: 50_000n,
+          nativeAmount: 50_000n,
+        } as unknown as MorphoExclusiveSupplyOptions;
+
+        await expect(protocol[method](mixedFunding)).rejects.toBeInstanceOf(
+          MixedBundlesFundingError,
+        );
+        expect(vaultV2Entity.getData).not.toHaveBeenCalled();
+        expect(vaultV2Entity.deposit).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each(["amount", "nativeAmount"] as const)(
+      "error: VaultAssetMismatchError from prepareSupply with %s",
+      async (field) => {
+        const funding =
+          field === "amount"
+            ? { amount: 100_000n }
+            : { nativeAmount: 100_000n };
+
+        await expect(
+          protocol.prepareSupply({ token: COLLATERAL, ...funding }),
+        ).rejects.toBeInstanceOf(VaultAssetMismatchError);
+
+        expect(vaultV2Entity.deposit).not.toHaveBeenCalled();
+      },
+    );
+
+    test("types: vault funding is ERC-20 or native, never both", () => {
+      expectTypeOf<
+        Parameters<typeof protocol.supply>[0]
+      >().toEqualTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<
+        Parameters<typeof protocol.quoteSupply>[0]
+      >().toEqualTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<"requirementSignature">().not.toMatchTypeOf<
+        keyof MorphoExclusiveSupplyOptions
+      >();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        nativeAmount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        nativeAmount: bigint;
+      }>().not.toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+    });
+
     test("should build a vault deposit with morpho-sdk and send it", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
 
@@ -245,11 +354,11 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
         amount: 100_000n,
-        nativeAmount: undefined,
         userAddress: ADDRESS,
         vaultData,
         slippageTolerance: undefined,
       });
+      expect(supplyAction.buildTx).toHaveBeenCalledWith(undefined);
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...SUPPLY_TX,
         ...POPULATED_TRANSACTION,
@@ -344,22 +453,133 @@ describe.sequential("MorphoProtocolEvm", () => {
       mockGetChainId.mockImplementationOnce(() => observedChain.promise);
       const options = { token: TOKEN, amount: 100_000n };
       const requirementOptions = { useSimplePermit: true };
-      const pending = protocol.getSupplyRequirements(
-        options,
-        requirementOptions,
-      );
+      const pending = protocol.prepareSupply(options);
       options.amount = 200_000n;
-      requirementOptions.useSimplePermit = false;
       observedChain.resolve(1);
-      const requirements = await pending;
+      const prepared = await pending;
+      expectTypeOf(prepared).toEqualTypeOf<PreparedMorphoSupply>();
+      expect(Object.isFrozen(prepared)).toBe(true);
+      const promise = prepared.getRequirements(requirementOptions);
+      requirementOptions.useSimplePermit = false;
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<readonly BundlesApprovalOrSignatureRequirement[]>
+      >();
+      const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 100_000n }),
       );
+      expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
       expect(supplyAction.getRequirements).toHaveBeenCalledWith({
         useSimplePermit: true,
       });
+    });
+
+    test.each(["getRequirements", "submit", "quote"] as const)(
+      "error: ChainIdMismatchError after preparing ERC-20 or native funding (%s)",
+      async (method) => {
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        account.sendTransaction = vi.fn();
+        account.quoteSendTransaction = vi.fn();
+        for (const options of [
+          { token: TOKEN, amount: 100_000n },
+          { token: COLLATERAL, nativeAmount: 100_000n },
+        ]) {
+          mockGetChainId.mockResolvedValue(1);
+          vaultV2Entity.getData.mockResolvedValueOnce({
+            ...vaultData,
+            asset: options.token,
+          });
+          const prepared = await protocol.prepareSupply(options);
+          mockGetChainId.mockResolvedValue(8453);
+
+          await expect(prepared[method]()).rejects.toBeInstanceOf(
+            ChainIdMismatchError,
+          );
+        }
+        expect(supplyAction.getRequirements).not.toHaveBeenCalled();
+        expect(supplyAction.buildTx).not.toHaveBeenCalled();
+        expect(account.getTokenBalance).not.toHaveBeenCalled();
+        expect(account.sendTransaction).not.toHaveBeenCalled();
+        expect(account.quoteSendTransaction).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each(["submit", "quote"] as const)(
+      "behavior: prepared supply forwards its token signature to %s",
+      async (method) => {
+        const signature = {
+          args: {
+            owner: ADDRESS,
+            asset: TOKEN,
+            amount: 100_000n,
+            nonce: 7n,
+            deadline: SIGNATURE_DEADLINE,
+            signature: "0x1234",
+          },
+          action: {
+            type: "permit2SignatureTransfer",
+            args: {
+              spender: "0x0000000000000000000000000000000000000001",
+              amount: 100_000n,
+              nonce: 7n,
+              deadline: SIGNATURE_DEADLINE,
+            },
+          },
+        } satisfies BundlesTokenRequirementSignature;
+        account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+        account.sendTransaction = vi
+          .fn()
+          .mockResolvedValue({ hash: "supply-hash", fee: 123n });
+        account.quoteSendTransaction = vi.fn().mockResolvedValue({ fee: 123n });
+        const prepared = await protocol.prepareSupply({
+          token: TOKEN,
+          amount: 100_000n,
+        });
+
+        const result = await prepared[method](signature);
+
+        expect(supplyAction.buildTx).toHaveBeenCalledWith([signature]);
+        expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
+        expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
+        if (method === "submit") {
+          expect(account.signTransaction).toHaveBeenCalledWith({
+            ...SUPPLY_TX,
+            ...POPULATED_TRANSACTION,
+          });
+          expect(result).toEqual({
+            hash: "dummy-transaction-hash",
+            fee: 123n,
+          });
+        } else {
+          expect(account.signTransaction).not.toHaveBeenCalled();
+          expect(sendRawTransactionMock).not.toHaveBeenCalled();
+          expect(result).toEqual({ fee: 123n });
+        }
+      },
+    );
+
+    test("behavior: prepared supply checks the balance of the token it was prepared with", async () => {
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+      } as { token: string; amount: bigint };
+
+      const prepared = await protocol.prepareSupply(options);
+
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-supply-hash", fee: 12_345n });
+
+      // A caller reusing its own options object must not retarget the balance check
+      // away from the asset the prepared action actually deposits.
+      options.token = COLLATERAL;
+
+      await prepared.submit();
+
+      expect(account.getTokenBalance).toHaveBeenCalledWith(TOKEN);
     });
 
     test("rejects a signer result bound to another chain", async () => {
@@ -408,7 +628,11 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
 
-      await protocol.supply({ token: TOKEN, amount: 100_000n });
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      await prepared.submit();
 
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
     });
@@ -453,16 +677,18 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
 
-      await protocol.supply({ token: TOKEN, amount: 100_000n });
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      await prepared.submit();
 
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
       expect(morphoViemExtensionMock).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: { origin: "before" } }),
       );
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          amount: 100_000n,
-        }),
+        expect.objectContaining({ vaultData, amount: 100_000n }),
       );
     });
 
@@ -477,21 +703,19 @@ describe.sequential("MorphoProtocolEvm", () => {
       await protocol.supply({ token: COLLATERAL, nativeAmount: 100_000n });
 
       expect(account.getTokenBalance).not.toHaveBeenCalled();
-      expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
-        amount: 0n,
-        nativeAmount: 100_000n,
-        userAddress: ADDRESS,
-        vaultData: expect.objectContaining({ asset: COLLATERAL }),
-        slippageTolerance: undefined,
-      });
+      expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nativeAmount: 100_000n,
+          userAddress: ADDRESS,
+          vaultData: expect.objectContaining({ asset: COLLATERAL }),
+        }),
+      );
     });
 
     test("should reject zero deposit amount across erc20 and native sources", async () => {
       await expect(
-        protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+        protocol.prepareSupply({ token: TOKEN, amount: 0n }),
+      ).rejects.toBeInstanceOf(NonPositiveInputError);
     });
 
     test("should use vaultV2 when the selected preset is configured", async () => {
@@ -504,7 +728,11 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
 
-      await protocol.supply({ token: TOKEN, amount: 100_000n });
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      await prepared.submit();
 
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
     });
@@ -525,21 +753,22 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should throw if 'token' is invalid", async () => {
       await expect(
-        protocol.supply({ token: "invalid-token-address", amount: 100_000n }),
+        protocol.prepareSupply({
+          token: "invalid-token-address",
+          amount: 100_000n,
+        }),
       ).rejects.toThrow("'token' must be a valid address.");
     });
 
     test("should throw if 'amount' and 'nativeAmount' are zero", async () => {
       await expect(
-        protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+        protocol.prepareSupply({ token: TOKEN, amount: 0n }),
+      ).rejects.toBeInstanceOf(NonPositiveInputError);
     });
 
     test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {
       await expect(
-        protocol.supply({
+        protocol.prepareSupply({
           token: TOKEN,
           amount: Number.MAX_SAFE_INTEGER + 1,
         }),
@@ -550,7 +779,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should reject 'nativeAmount' numbers above Number.MAX_SAFE_INTEGER", async () => {
       await expect(
-        protocol.supply({
+        protocol.prepareSupply({
           token: TOKEN,
           nativeAmount: Number.MAX_SAFE_INTEGER + 1,
         }),
@@ -582,6 +811,9 @@ describe.sequential("MorphoProtocolEvm", () => {
         token: TOKEN,
         amount: 100_000n,
       });
+
+      expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
+      expect(supplyAction.buildTx).toHaveBeenCalledWith(undefined);
 
       expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
       expect(result).toEqual({ fee: 12_345n });
@@ -624,6 +856,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     ])(
       "should route $name through the WDK quote API",
       async ({ quote, transaction }) => {
+        withdrawAction.getRequirements.mockResolvedValue([]);
         account.quoteSendTransaction = vi
           .fn()
           .mockResolvedValue({ fee: 12_345n });
@@ -648,13 +881,23 @@ describe.sequential("MorphoProtocolEvm", () => {
       await pending;
 
       expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 100_000n }),
+        expect.objectContaining({ collateralAssets: 100_000n }),
       );
     });
   });
 
   describe("withdraw", () => {
+    beforeEach(() => {
+      // `vi.clearAllMocks()` keeps implementations, so restore the shared default here and let
+      // individual tests opt into an already-satisfied allowance.
+      withdrawAction.getRequirements.mockResolvedValue([
+        { action: { type: "erc20Approval" } },
+      ]);
+    });
+
     test("should build a vault withdraw with morpho-sdk and send it", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
+
       const result = await protocol.withdraw({
         token: TOKEN,
         amount: 100_000n,
@@ -663,6 +906,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        slippageTolerance: undefined,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...WITHDRAW_TX,
@@ -674,6 +918,90 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
     });
 
+    test("behavior: forwards the configured slippage tolerance", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
+      const configured = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+
+      await configured.withdraw({ token: TOKEN, amount: 100_000n });
+
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
+        amount: 100_000n,
+        userAddress: ADDRESS,
+        slippageTolerance: 5_000_000_000_000_000n,
+      });
+    });
+
+    test("should expose and consume vault-share requirements", async () => {
+      const options = { token: TOKEN, amount: 100_000n };
+      const prepared = await protocol.prepareWithdraw(options);
+      expect(Object.isFrozen(prepared)).toBe(true);
+      const requirements = await prepared.getRequirements();
+      expectTypeOf(requirements).toEqualTypeOf<
+        readonly (
+          | RequirementApproval
+          | RequirementSignatureRequest<Erc2612RequirementSignature>
+        )[]
+      >();
+      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+
+      const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
+        action: { type: "permit" },
+      } as unknown as Erc2612RequirementSignature;
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+      await prepared.submit(requirementSignature);
+      expect(withdrawAction.buildTx).toHaveBeenCalledWith([
+        requirementSignature,
+      ]);
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledTimes(1);
+    });
+
+    test("should submit a prepared withdrawal without a signature once the allowance matches", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
+      const prepared = await protocol.prepareWithdraw({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      const result = await prepared.submit();
+
+      expect(withdrawAction.buildTx).toHaveBeenCalledWith(undefined);
+      expect(account.signTransaction).toHaveBeenCalledWith({
+        ...WITHDRAW_TX,
+        ...POPULATED_TRANSACTION,
+      });
+      expect(result).toEqual({
+        hash: "dummy-transaction-hash",
+        fee: 12_345n,
+      });
+    });
+
+    test("error: UnresolvedVaultWithdrawRequirementsError on prepared submit without a signature", async () => {
+      const prepared = await protocol.prepareWithdraw({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      account.sendTransaction = vi.fn();
+
+      // Never awaits prepared.getRequirements() first — submit() must re-resolve the allowance
+      // itself rather than building against a stale, possibly oversized leftover approval.
+      await expect(prepared.submit()).rejects.toBeInstanceOf(
+        UnresolvedVaultWithdrawRequirementsError,
+      );
+      expect(withdrawAction.buildTx).not.toHaveBeenCalled();
+      expect(account.sendTransaction).not.toHaveBeenCalled();
+    });
+
     test("should throw if 'to' is not the wallet address", async () => {
       await expect(
         protocol.withdraw({
@@ -681,14 +1009,24 @@ describe.sequential("MorphoProtocolEvm", () => {
           amount: 100_000n,
           to: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
         }),
-      ).rejects.toThrow(
-        "'to' must equal the wallet account address for Morpho vault withdrawals.",
-      );
+      ).rejects.toBeInstanceOf(AddressMismatchError);
+    });
+
+    test("error: UnresolvedVaultWithdrawRequirementsError", async () => {
+      account.sendTransaction = vi.fn();
+
+      await expect(
+        protocol.withdraw({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(UnresolvedVaultWithdrawRequirementsError);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+      expect(withdrawAction.buildTx).not.toHaveBeenCalled();
+      expect(account.sendTransaction).not.toHaveBeenCalled();
     });
 
     test("snapshots withdraw options before resolving chain state", async () => {
       const observedChain = Promise.withResolvers<number>();
       mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      withdrawAction.getRequirements.mockResolvedValue([]);
       const options = { token: TOKEN, amount: 100_000n };
 
       const pending = protocol.withdraw(options);
@@ -703,12 +1041,9 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("borrow", () => {
-    test("types: borrow reallocations require replayable arrays", () => {
+    test("types: borrow accepts only Vault V2 reallocations", () => {
       expectTypeOf<
         NonNullable<MorphoBorrowOptions["reallocations"]>
-      >().toEqualTypeOf<readonly VaultReallocation[]>();
-      expectTypeOf<
-        MorphoBorrowWithVaultV2ReallocationsOptions["reallocations"]
       >().toEqualTypeOf<readonly VaultV2BlueReallocation[]>();
     });
 
@@ -724,11 +1059,11 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
       expect(marketEntity.getPositionData).toHaveBeenCalledWith(ADDRESS);
       expect(marketEntity.borrow).toHaveBeenCalledWith({
-        amount: 100_000n,
         userAddress: ADDRESS,
+        borrowAssets: 100_000n,
         positionData,
-        slippageTolerance: undefined,
         reallocations: undefined,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...BORROW_TX,
@@ -758,11 +1093,11 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       expect(marketEntity.borrow).toHaveBeenCalledWith({
-        amount: 100_000n,
         userAddress: ADDRESS,
+        borrowAssets: 100_000n,
         positionData,
-        slippageTolerance: undefined,
         reallocations: [reallocation],
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
     });
 
@@ -798,13 +1133,13 @@ describe.sequential("MorphoProtocolEvm", () => {
           type: "authorization",
           args: { authorized: adapter, isAuthorized: true, deadline: 2n },
         },
-      } satisfies RequirementSignature;
+      } satisfies AuthorizationRequirementSignature;
       const options = {
         token: TOKEN,
         amount: 100_000n,
         reallocations: [reallocation],
         requirementSignature,
-      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
+      } satisfies MorphoBorrowOptions;
 
       const pending = protocol.borrow(options);
       options.amount = 200_000n;
@@ -818,7 +1153,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(marketEntity.borrow).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 100_000n,
+          borrowAssets: 100_000n,
           reallocations: [
             expect.objectContaining({
               assets: 50_000n,
@@ -841,35 +1176,6 @@ describe.sequential("MorphoProtocolEvm", () => {
           action: expect.objectContaining({
             args: expect.objectContaining({ deadline: 2n }),
           }),
-        }),
-      );
-    });
-
-    test("snapshots Vault V1 reallocation withdrawals", async () => {
-      const observedChain = Promise.withResolvers<number>();
-      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
-      const withdrawal = {
-        marketParams: new MarketParams(MARKET_PARAMS),
-        amount: 50_000n,
-      };
-      const options = {
-        token: TOKEN,
-        amount: 100_000n,
-        reallocations: [{ vault: VAULT, fee: 1n, withdrawals: [withdrawal] }],
-      } satisfies MorphoBorrowOptions;
-
-      const pending = protocol.getBorrowRequirements(options);
-      withdrawal.amount = 75_000n;
-      observedChain.resolve(1);
-      await pending;
-
-      expect(marketEntity.borrow).toHaveBeenCalledWith(
-        expect.objectContaining({
-          reallocations: [
-            expect.objectContaining({
-              withdrawals: [expect.objectContaining({ amount: 50_000n })],
-            }),
-          ],
         }),
       );
     });
@@ -916,7 +1222,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       } satisfies MorphoBorrowOptions;
       const promise = protocol.getBorrowRequirements(options);
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>
+        Promise<readonly AuthorizationOrSignatureRequirement[]>
       >();
       const requirements = await promise;
 
@@ -924,7 +1230,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(borrowAction.getRequirements).toHaveBeenCalled();
     });
 
-    test("types: Vault V2 borrow requirements opt into approval results", async () => {
+    test("types: Vault V2 borrow requirements remain authorization-only", async () => {
       const options = {
         token: TOKEN,
         amount: 100_000n,
@@ -939,17 +1245,11 @@ describe.sequential("MorphoProtocolEvm", () => {
             penalty: 1n,
           },
         ],
-      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
+      } satisfies MorphoBorrowOptions;
 
       const promise = protocol.getBorrowRequirements(options);
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<
-          (
-            | RequirementApproval
-            | RequirementAuthorization
-            | RequirementSignatureRequest
-          )[]
-        >
+        Promise<readonly AuthorizationOrSignatureRequirement[]>
       >();
       await promise;
     });
@@ -962,8 +1262,9 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should fold a signed authorization into the bundle when provided", async () => {
       const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
         action: { type: "authorization" },
-      } as unknown as RequirementSignature;
+      } as unknown as AuthorizationRequirementSignature;
 
       await protocol.borrow({
         token: TOKEN,
@@ -976,6 +1277,9 @@ describe.sequential("MorphoProtocolEvm", () => {
           action: expect.objectContaining({ type: "authorization" }),
         }),
       ]);
+      expect(marketEntity.borrow).toHaveBeenCalledWith(
+        expect.objectContaining({ deadline: SIGNATURE_DEADLINE }),
+      );
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {
@@ -1007,10 +1311,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       const result = await protocol.repay({ token: TOKEN, amount: "max" });
 
       expect(marketEntity.repay).toHaveBeenCalledWith({
-        shares: 22n,
+        repayShares: viem.maxUint256,
         userAddress: ADDRESS,
         positionData,
-        slippageTolerance: undefined,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...REPAY_TX,
@@ -1029,28 +1333,80 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(account.getTokenBalance).toHaveBeenCalledWith(TOKEN);
       expect(marketEntity.repay).toHaveBeenCalledWith({
-        amount: 100_000n,
+        repayAssets: 100_000n,
         userAddress: ADDRESS,
         positionData,
-        slippageTolerance: undefined,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
     });
 
     test("should pass requirement options to morpho-sdk repay requirements", async () => {
-      const requirementOptions = { useSimplePermit: true };
-      const requirements = await protocol.getRepayRequirements(
+      const requirementOptions = {
+        useSimplePermit: true,
+        permit2Nonce: 7n,
+      } satisfies RequirementOptions;
+      const promise = protocol.getRepayRequirements(
         { token: TOKEN, amount: 100_000n },
         requirementOptions,
       );
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<readonly BlueApprovalOrSignatureRequirement[]>
+      >();
+      const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
       expect(repayAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );
     });
+
+    test("should fold a token signature and its deadline into max repay", async () => {
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-repay-hash", fee: 12_345n });
+      const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
+        action: { type: "permit2SignatureTransfer" },
+      } as unknown as BundlesTokenRequirementSignature;
+
+      await protocol.repay({
+        token: TOKEN,
+        amount: "max",
+        requirementSignature,
+      });
+
+      expect(repayAction.buildTx).toHaveBeenCalledWith([requirementSignature]);
+      expect(marketEntity.repay).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repayShares: viem.maxUint256,
+          deadline: SIGNATURE_DEADLINE,
+        }),
+      );
+    });
   });
 
   describe("collateral", () => {
+    test("types: collateral funding is ERC-20 or native, never both", () => {
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+      }>().toMatchTypeOf<MorphoCollateralSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        nativeAmount: bigint;
+      }>().toMatchTypeOf<MorphoCollateralSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        nativeAmount: bigint;
+      }>().not.toMatchTypeOf<MorphoCollateralSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        slippageTolerance: bigint;
+      }>().not.toMatchTypeOf<MorphoCollateralSupplyOptions>();
+    });
+
     test("should build a supply collateral transaction with morpho-sdk", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
 
@@ -1060,9 +1416,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       expect(marketEntity.supplyCollateral).toHaveBeenCalledWith({
-        amount: 100_000n,
+        collateralAssets: 100_000n,
         nativeAmount: undefined,
         userAddress: ADDRESS,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...SUPPLY_COLLATERAL_TX,
@@ -1084,11 +1441,32 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(account.getTokenBalance).not.toHaveBeenCalled();
       expect(marketEntity.supplyCollateral).toHaveBeenCalledWith({
-        amount: 0n,
+        collateralAssets: 100_000n,
         nativeAmount: 100_000n,
         userAddress: ADDRESS,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
     });
+
+    test.each([
+      "supplyCollateral",
+      "getSupplyCollateralRequirements",
+      "quoteSupplyCollateral",
+    ] as const)(
+      "error: MixedBlueCollateralFundingError from %s",
+      async (method) => {
+        const mixedFunding = {
+          token: COLLATERAL,
+          amount: 50_000n,
+          nativeAmount: 50_000n,
+        } as unknown as MorphoCollateralSupplyOptions;
+
+        await expect(protocol[method](mixedFunding)).rejects.toBeInstanceOf(
+          MixedBlueCollateralFundingError,
+        );
+        expect(marketEntity.supplyCollateral).not.toHaveBeenCalled();
+      },
+    );
 
     test("should build a withdraw collateral transaction with morpho-sdk", async () => {
       const result = await protocol.withdrawCollateral({
@@ -1097,9 +1475,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith({
-        amount: 100_000n,
+        collateralAssets: 100_000n,
         userAddress: ADDRESS,
         positionData,
+        deadline: BLUE_BUNDLES_V1_DEADLINE,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
         ...WITHDRAW_COLLATERAL_TX,
@@ -1112,15 +1491,60 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should pass requirement options to morpho-sdk supply collateral requirements", async () => {
-      const requirementOptions = { useSimplePermit: true };
-      const requirements = await protocol.getSupplyCollateralRequirements(
+      const requirementOptions = {
+        useSimplePermit: true,
+        permit2Nonce: 11n,
+      } satisfies RequirementOptions;
+      const promise = protocol.getSupplyCollateralRequirements(
         { token: COLLATERAL, amount: 100_000n },
         requirementOptions,
       );
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<readonly BlueApprovalOrSignatureRequirement[]>
+      >();
+      const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
       expect(supplyCollateralAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
+      );
+    });
+
+    test("should return withdraw collateral requirements", async () => {
+      const promise = protocol.getWithdrawCollateralRequirements({
+        token: COLLATERAL,
+        amount: 100_000n,
+      });
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<readonly AuthorizationOrSignatureRequirement[]>
+      >();
+      const requirements = await promise;
+
+      expect(requirements).toEqual([{ action: { type: "blueAuthorization" } }]);
+      expect(withdrawCollateralAction.getRequirements).toHaveBeenCalledWith();
+    });
+
+    test("should fold a signed authorization into collateral withdrawal", async () => {
+      account.sendTransaction = vi.fn().mockResolvedValue({
+        hash: "dummy-withdraw-collateral-hash",
+        fee: 12_345n,
+      });
+      const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
+        action: { type: "authorization" },
+      } as unknown as AuthorizationRequirementSignature;
+
+      await protocol.withdrawCollateral({
+        token: COLLATERAL,
+        amount: 100_000n,
+        requirementSignature,
+      });
+
+      expect(withdrawCollateralAction.buildTx).toHaveBeenCalledWith([
+        requirementSignature,
+      ]);
+      expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith(
+        expect.objectContaining({ deadline: SIGNATURE_DEADLINE }),
       );
     });
   });
@@ -1164,13 +1588,14 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(account.quoteSendTransaction).not.toHaveBeenCalled();
 
       readContractMock.mockResolvedValue(100_000n);
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
       const observedChain = Promise.withResolvers<number>();
       mockGetChainId.mockImplementationOnce(() => observedChain.promise);
       const config = { paymasterToken: { address: TOKEN } };
-      const pending = protocol.supply(
-        { token: TOKEN, amount: 100_000n },
-        config,
-      );
+      const pending = prepared.submit(undefined, config);
       config.paymasterToken.address = COLLATERAL;
       observedChain.resolve(1);
       const result = await pending;
@@ -1393,7 +1818,10 @@ describe.sequential("MorphoProtocolEvm", () => {
       await result;
 
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 0n, nativeAmount: 100_000n }),
+        expect.objectContaining({ nativeAmount: 100_000n }),
+      );
+      expect(vaultV2Entity.deposit).not.toHaveBeenCalledWith(
+        expect.objectContaining({ amount: expect.anything() }),
       );
     });
   });
@@ -1572,6 +2000,11 @@ describe.sequential("MorphoProtocolEvm", () => {
         expect(account.getTokenBalance).toHaveBeenCalled(),
       );
 
+      // prepareSupply observes the chain once and revalidates after building the action; the
+      // prepared submit revalidates again before the balance check.
+      const observationsBeforeBalance = mockGetChainId.mock.calls.length;
+      expect(observationsBeforeBalance).toBe(3);
+
       const switchedChain = Promise.withResolvers<number>();
       const terminalChain = Promise.withResolvers<number>();
       mockGetChainId
@@ -1579,7 +2012,11 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockImplementationOnce(() => terminalChain.promise);
       const switchedPosition = protocol.getMarketPosition();
       balance.resolve(100_000n);
-      await vi.waitFor(() => expect(mockGetChainId).toHaveBeenCalledTimes(3));
+      await vi.waitFor(() =>
+        expect(mockGetChainId).toHaveBeenCalledTimes(
+          observationsBeforeBalance + 2,
+        ),
+      );
 
       terminalChain.resolve(1);
       await Promise.resolve();
@@ -1610,10 +2047,12 @@ describe.sequential("MorphoProtocolEvm", () => {
       supplyAction.getRequirements.mockImplementationOnce(
         () => requirementResult.promise,
       );
-      const requirements = protocol.getSupplyRequirements({
+      const prepared = await protocol.prepareSupply({
         token: TOKEN,
         amount: 100_000n,
       });
+      mockGetChainId.mockClear();
+      const requirements = prepared.getRequirements();
       await vi.waitFor(() =>
         expect(supplyAction.getRequirements).toHaveBeenCalledOnce(),
       );
@@ -1742,10 +2181,12 @@ describe.sequential("MorphoProtocolEvm", () => {
         borrowMarketParams: MARKET_PARAMS,
       });
 
-      await expect(
-        protocol.supply({ token: TOKEN, amount: 100_000n }),
-      ).rejects.toThrow(
-        "The 'supply(options)' method requires the protocol to be initialized with a non read-only account.",
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      await expect(prepared.submit()).rejects.toThrow(
+        "The 'preparedSupply.submit()' method requires the protocol to be initialized with a non read-only account.",
       );
     });
   });
