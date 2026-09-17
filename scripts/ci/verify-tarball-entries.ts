@@ -76,77 +76,7 @@ function decodeString(buffer: Buffer): string {
   return buffer.toString("utf8").replace(/\0.*/, "");
 }
 
-function decodeSize(field: Buffer, offset: number): number {
-  const text = decodeString(field).trim();
-  if (!/^[0-7]+$/.test(text)) {
-    throw new Error(
-      `Tar header at byte ${offset} has a non-octal size field; refusing to parse it.`,
-    );
-  }
-  return Number.parseInt(text, 8);
-}
-
-/**
- * node-tar's checksum: unsigned byte sum with the checksum field counted as
- * spaces. A header that fails it is skipped by node-tar, which then re-syncs
- * on the following block, so the gate must reject it rather than trust its
- * `size`.
- */
-function verifyChecksum(header: Buffer, offset: number): void {
-  // node-tar decodes the field as a 12-byte octal number (running into the
-  // type flag), so mirror that exactly rather than the 8-byte ustar width.
-  const text = decodeString(header.subarray(148, 160)).trim();
-  let sum = 8 * 0x20;
-  for (let i = 0; i < 148; i++) sum += header.readUInt8(i);
-  for (let i = 156; i < BLOCK; i++) sum += header.readUInt8(i);
-  if (!/^[0-7]+$/.test(text) || Number.parseInt(text, 8) !== sum) {
-    throw new Error(
-      `Tar header at byte ${offset} has an invalid checksum; refusing to publish.`,
-    );
-  }
-}
-
-function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
-  const records = new Map<string, string>();
-  let cursor = 0;
-  while (cursor < data.length) {
-    const space = data.indexOf(0x20, cursor);
-    const lengthText =
-      space === -1 ? "" : data.subarray(cursor, space).toString("latin1");
-    const length = /^[1-9][0-9]*$/.test(lengthText)
-      ? Number(lengthText)
-      : Number.NaN;
-    const end = cursor + length;
-    if (Number.isNaN(length) || end > data.length || data[end - 1] !== 0x0a) {
-      throw new Error(
-        `PAX extended header at byte ${offset} is malformed; refusing to parse it.`,
-      );
-    }
-    const record = data.subarray(space + 1, end - 1).toString("utf8");
-    // node-tar's `parseKV` splits the whole body on "\n" instead of framing by
-    // length, so a newline inside a value lets it see records this loop does not.
-    if (record.includes("\n")) {
-      throw new Error(
-        `PAX extended header at byte ${offset} has a record containing a newline; refusing to publish.`,
-      );
-    }
-    const equals = record.indexOf("=");
-    if (equals === -1) {
-      throw new Error(
-        `PAX extended header at byte ${offset} has a record without "="; refusing to parse it.`,
-      );
-    }
-    const key = record.slice(0, equals);
-    if (!BENIGN_PAX_KEYS.has(key)) {
-      throw new Error(
-        `PAX extended header at byte ${offset} carries unsupported record "${key}"; refusing to publish.`,
-      );
-    }
-    records.set(key, record.slice(equals + 1));
-    cursor = end;
-  }
-  return records;
-}
+const OCTAL = /^[0-7]+$/;
 
 /**
  * Lists the entry paths of a gzipped tarball exactly as npm's extractor
@@ -199,7 +129,20 @@ export function readTarballEntries(tgz: Buffer): string[] {
       break;
     }
 
-    verifyChecksum(header, offset);
+    // node-tar's checksum: unsigned byte sum with the checksum field counted
+    // as spaces, decoded as a 12-byte octal number (running into the type
+    // flag) rather than the 8-byte ustar width. A header that fails it is
+    // skipped by node-tar, which re-syncs on the following block, so reject it
+    // rather than trust its `size`.
+    const checksumText = decodeString(header.subarray(148, 160)).trim();
+    let sum = 8 * 0x20;
+    for (let i = 0; i < 148; i++) sum += header.readUInt8(i);
+    for (let i = 156; i < BLOCK; i++) sum += header.readUInt8(i);
+    if (!OCTAL.test(checksumText) || Number.parseInt(checksumText, 8) !== sum) {
+      throw new Error(
+        `Tar header at byte ${offset} has an invalid checksum; refusing to publish.`,
+      );
+    }
     const magic = header.subarray(257, 265).toString("latin1");
     if (magic !== USTAR_MAGIC) {
       throw new Error(
@@ -207,7 +150,13 @@ export function readTarballEntries(tgz: Buffer): string[] {
       );
     }
     const typeflag = header.readUInt8(156);
-    const size = decodeSize(header.subarray(124, 136), offset);
+    const sizeText = decodeString(header.subarray(124, 136)).trim();
+    if (!OCTAL.test(sizeText)) {
+      throw new Error(
+        `Tar header at byte ${offset} has a non-octal size field; refusing to parse it.`,
+      );
+    }
+    const size = Number.parseInt(sizeText, 8);
     if (typeflag === 0x35 && size !== 0) {
       throw new Error(
         `Tar header at byte ${offset} is a directory declaring ${size} bytes; node-tar ignores the size and reads the next block as a header. Refusing to publish.`,
@@ -249,10 +198,50 @@ export function readTarballEntries(tgz: Buffer): string[] {
           `Tar header at byte ${offset} is a PAX header of ${size} bytes; node-tar ignores meta entries above ${MAX_META_ENTRY_SIZE} bytes together with their path override. Refusing to publish.`,
         );
       }
-      pending = parsePaxRecords(
-        tar.subarray(dataStart, dataStart + size),
-        offset,
-      );
+      const data = tar.subarray(dataStart, dataStart + size);
+      pending = new Map<string, string>();
+      let cursor = 0;
+      while (cursor < data.length) {
+        const space = data.indexOf(0x20, cursor);
+        const lengthText =
+          space === -1 ? "" : data.subarray(cursor, space).toString("latin1");
+        const length = /^[1-9][0-9]*$/.test(lengthText)
+          ? Number(lengthText)
+          : Number.NaN;
+        const end = cursor + length;
+        if (
+          Number.isNaN(length) ||
+          end > data.length ||
+          data[end - 1] !== 0x0a
+        ) {
+          throw new Error(
+            `PAX extended header at byte ${offset} is malformed; refusing to parse it.`,
+          );
+        }
+        const record = data.subarray(space + 1, end - 1).toString("utf8");
+        // node-tar's `parseKV` splits the whole body on "\n" instead of framing
+        // by length, so a newline inside a value lets it see records this loop
+        // does not.
+        if (record.includes("\n")) {
+          throw new Error(
+            `PAX extended header at byte ${offset} has a record containing a newline; refusing to publish.`,
+          );
+        }
+        const equals = record.indexOf("=");
+        if (equals === -1) {
+          throw new Error(
+            `PAX extended header at byte ${offset} has a record without "="; refusing to parse it.`,
+          );
+        }
+        const key = record.slice(0, equals);
+        if (!BENIGN_PAX_KEYS.has(key)) {
+          throw new Error(
+            `PAX extended header at byte ${offset} carries unsupported record "${key}"; refusing to publish.`,
+          );
+        }
+        pending.set(key, record.slice(equals + 1));
+        cursor = end;
+      }
     } else if (typeflag === 0x30 || typeflag === 0 || typeflag === 0x35) {
       const path = pending?.get("path") ?? rawPath;
       pending = undefined;
@@ -305,8 +294,9 @@ const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 /** Printable ASCII characters Win32 rejects in a path segment (`/` and `\` are handled separately). */
 const WIN32_INVALID = /[<>:"|?*]/;
 
-/** Win32 reserved device basenames, matched before any `.` and case-insensitively. */
-const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
+/** Win32 reserved device basenames (incl. the `CONIN$`/`CONOUT$` console pseudofiles), matched before any `.` and case-insensitively. */
+const DOS_DEVICE =
+  /^(con|prn|aux|nul|com[1-9]|lpt[1-9]|conin\$|conout\$)(\.|$)/i;
 
 /**
  * Verifies that a tarball's entry listing cannot alias one entry onto another

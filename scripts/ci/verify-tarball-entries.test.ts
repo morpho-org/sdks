@@ -386,6 +386,8 @@ describe("verifyTarballEntries", () => {
       "package/lib/con.txt",
       "package/COM1.js",
       "package/Nul/x.js",
+      "package/CONIN$",
+      "package/lib/conout$.js",
     ]) {
       expect(() => verifyTarballEntries([...VALID, bad])).toThrow(
         /reserved device name/,
