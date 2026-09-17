@@ -596,6 +596,21 @@ describe("readTarballEntries", () => {
       }),
     );
     expect(() => readTarballEntries(tgz)).toThrow(/invalid checksum/);
+    // node-tar decodes 12 bytes, running into the type flag: an 8-digit field
+    // with no NUL terminator is correct under an 8-byte read but not for node-tar.
+    const eightDigits = rawEntry({
+      name: "package/junk",
+      type: "0",
+      data: hidden,
+    });
+    const sum = Number.parseInt(
+      eightDigits.subarray(148, 156).toString("latin1").replace(/\0.*/, ""),
+      8,
+    );
+    eightDigits.write(sum.toString(8).padStart(8, "0"), 148, 8, "latin1");
+    expect(() =>
+      readTarballEntries(rawTarball(MANIFEST_BLOCK, eightDigits)),
+    ).toThrow(/invalid checksum/);
     expect(() =>
       readTarballEntries(
         rawTarball(
@@ -773,8 +788,10 @@ describe("readTarballEntries", () => {
   });
 
   test("behavior: the prefix window follows node-tar's byte-475 rule", () => {
-    const short = "p".repeat(129);
-    const long = "q".repeat(140);
+    // 130 chars fill bytes 345..474 (byte 475 still zero); 131 is the first
+    // length that flips byte 475 and the 155-byte window.
+    const short = "p".repeat(130);
+    const long = "q".repeat(131);
     expect(
       readTarballEntries(
         rawTarball(
@@ -784,6 +801,17 @@ describe("readTarballEntries", () => {
         ),
       ),
     ).toEqual([MANIFEST_ENTRY, `${short}/a.js`, `${long}/b.js`]);
+    // decString survivors after NUL + newline apply to the prefix field too.
+    expect(() =>
+      verifyTarballEntries(
+        readTarballEntries(
+          rawTarball(
+            MANIFEST_BLOCK,
+            rawEntry({ name: "a.js", type: "0", prefix: "package\0x\nY" }),
+          ),
+        ),
+      ),
+    ).toThrow(/non-ASCII/);
     // A NUL before byte 475 with a non-zero byte 475 makes node-tar join an
     // empty prefix, producing `/package/...`; GNU tar would ignore the prefix.
     expect(() =>
