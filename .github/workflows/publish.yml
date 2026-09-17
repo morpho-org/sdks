@@ -348,11 +348,11 @@ jobs:
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
             # publishes explicit and future-proof. The manifest allowlist above
-            # rejects manifest-borne transport settings, `--proxy false` and
-            # `--strict-ssl true` override any .npmrc / npm_config_* values, and
-            # the empty proxy env bindings on this step disable the agent's
-            # environment fallback. (`https-proxy` only accepts null or a URL,
-            # so it cannot be disabled via a flag; the env pin covers it.)
+            # rejects manifest-borne transport settings; `--proxy false`,
+            # `--https-proxy null` and `--strict-ssl true` override any .npmrc /
+            # npm_config_* values (npm-registry-fetch prefers `https-proxy` over
+            # `proxy`, so both must be pinned); and the empty proxy env bindings
+            # on this step disable the agent's environment fallback.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
@@ -360,6 +360,7 @@ jobs:
               --tag "$publish_tag" \
               --ignore-scripts \
               --proxy false \
+              --https-proxy null \
               --strict-ssl true \
               --registry https://registry.npmjs.org
             published=$((published + 1))
