@@ -57,9 +57,16 @@ const BENIGN_PAX_KEYS = new Set([
   "path",
 ]);
 
+/** node-tar's `maxMetaEntrySize`: an `x` header larger than this is ignored wholesale, `path` record included. */
+const MAX_META_ENTRY_SIZE = 1024 * 1024;
+
+/**
+ * Byte-for-byte mirror of node-tar's `decString`: `.` does not match a newline,
+ * so bytes after a NUL-then-newline survive. Any such leftover then trips the
+ * linkname / printable-ASCII rejections instead of being silently dropped.
+ */
 function decodeString(buffer: Buffer): string {
-  const end = buffer.indexOf(0);
-  return buffer.subarray(0, end === -1 ? buffer.length : end).toString("utf8");
+  return buffer.toString("utf8").replace(/\0.*/, "");
 }
 
 function decodeSize(field: Buffer, offset: number): number {
@@ -139,11 +146,15 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * checksum (node-tar skips such a header and re-syncs one block later), a
  * non-octal `size` field, a directory header declaring a non-zero `size`
  * (node-tar forces it to 0 and reads the next block as a header), an empty
- * path or a non-empty linkname (node-tar skips such a header without
- * consuming its declared body), PAX records
- * other than {@link BENIGN_PAX_KEYS}, truncated archives, and a zero block
- * that is followed by further data (node-tar skips a lone zero block and keeps
- * extracting; GNU tar stops there).
+ * path or a non-empty linkname (on a file/directory header node-tar skips it
+ * without consuming its declared body; on an `x` header the rejection is only
+ * fail-closed), an `x` header larger than {@link MAX_META_ENTRY_SIZE} (node-tar
+ * ignores it, `path` record included), malformed PAX records (bad length
+ * framing or no `=`), PAX records other than {@link BENIGN_PAX_KEYS}, two
+ * consecutive `x` headers, an `x` header dangling at end of archive, a
+ * regular-file header whose resolved path ends in `/`, truncated archives, and
+ * a zero block that is followed by further data (node-tar skips a lone zero
+ * block and keeps extracting; GNU tar stops there).
  *
  * @param tgz - The gzipped archive bytes.
  * @returns The resolved entry paths in archive order; directories end in `/`.
@@ -190,8 +201,10 @@ export function readTarballEntries(tgz: Buffer): string[] {
     const name = decodeString(header.subarray(0, 100));
     const prefix = decodeString(header.subarray(345, 500));
     const rawPath = prefix === "" ? name : `${prefix}/${name}`;
-    // node-tar skips (one block, no body) any header with an empty path or a
-    // non-empty linkname on a non-link entry, then re-syncs on the next block.
+    // node-tar skips (one block, no body) a header with an empty path, or a
+    // non-empty linkname on a regular file/directory, then re-syncs on the next
+    // block. It processes an `x` header carrying a linkname normally; rejecting
+    // it too is merely fail-closed.
     if (rawPath === "") {
       throw new Error(
         `Tar header at byte ${offset} has an empty path; refusing to publish.`,
@@ -207,6 +220,11 @@ export function readTarballEntries(tgz: Buffer): string[] {
       if (pending !== undefined) {
         throw new Error(
           `Tar header at byte ${offset} is a second consecutive PAX header; refusing to publish.`,
+        );
+      }
+      if (size > MAX_META_ENTRY_SIZE) {
+        throw new Error(
+          `Tar header at byte ${offset} is a PAX header of ${size} bytes; node-tar ignores meta entries above ${MAX_META_ENTRY_SIZE} bytes together with their path override. Refusing to publish.`,
         );
       }
       pending = parsePaxRecords(

@@ -522,8 +522,10 @@ describe("readTarballEntries", () => {
   });
 
   test("error: a non-link header carrying a linkname cannot hide the next header", () => {
-    // node-tar warns `linkpath forbidden`, skips one block without consuming
-    // the declared body, and parses the payload as the next header.
+    // For a file/directory header node-tar warns `linkpath forbidden`, skips one
+    // block without consuming the declared body, and parses the payload as the
+    // next header. It processes an `x` header with a linkname normally; the
+    // gate rejects that too, fail-closed.
     const hidden = rawEntry({ name: "package/Package.json", type: "0" });
     for (const type of ["0", "x"]) {
       expect(() =>
@@ -541,6 +543,88 @@ describe("readTarballEntries", () => {
         ),
       ).toThrow(/carries a linkname/);
     }
+  });
+
+  test("error: a linkname hidden behind NUL + newline is still seen (node-tar decString)", () => {
+    // node-tar decodes fields with `.replace(/\0.*/, "")`, so `\0x\nY` reads
+    // as the non-empty linkpath "\nY"; the gate must not cut at the first NUL.
+    const hidden = rawEntry({ name: "package/Package.json", type: "0" });
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({
+            name: "package/junk",
+            type: "0",
+            data: hidden,
+            linkname: "\0x\nY",
+          }),
+        ),
+      ),
+    ).toThrow(/carries a linkname/);
+    // The same decode applies to the name: node-tar would extract "package/a\nY".
+    expect(() =>
+      verifyTarballEntries(
+        readTarballEntries(
+          rawTarball(
+            MANIFEST_BLOCK,
+            rawEntry({ name: "package/a\0x\nY", type: "0" }),
+          ),
+        ),
+      ),
+    ).toThrow(/non-ASCII/);
+  });
+
+  test("error: a PAX header above node-tar's maxMetaEntrySize is rejected", () => {
+    // node-tar ignores meta entries > 1 MiB wholesale, so the raw name of the
+    // following header would be extracted instead of the PAX `path`.
+    const records = paxRecords({ path: "package/benign.js" });
+    const padded = Buffer.alloc(1024 * 1024 + 1);
+    records.copy(padded);
+    expect(() =>
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "PaxHeader/x", type: "x", data: padded }),
+          rawEntry({ name: "package/Package.json", type: "0" }),
+        ),
+      ),
+    ).toThrow(/PAX header of 1048577 bytes/);
+    // Exactly 1 MiB is still applied by node-tar (strict `>`), so it must parse.
+    const limit = Buffer.alloc(1024 * 1024);
+    limit.write(
+      `${(1024 * 1024).toString()} comment=${"a".repeat(1024 * 1024 - 17)}\n`,
+    );
+    expect(
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "PaxHeader/x", type: "x", data: limit }),
+          rawEntry({ name: "package/a.js", type: "0" }),
+        ),
+      ),
+    ).toEqual([MANIFEST_ENTRY, "package/a.js"]);
+  });
+
+  test("default: a NUL type flag is a legacy regular file", () => {
+    expect(
+      readTarballEntries(
+        rawTarball(
+          MANIFEST_BLOCK,
+          rawEntry({ name: "package/a.js", type: "\0" }),
+        ),
+      ),
+    ).toEqual([MANIFEST_ENTRY, "package/a.js"]);
+    expect(() =>
+      verifyTarballEntries(
+        readTarballEntries(
+          rawTarball(
+            MANIFEST_BLOCK,
+            rawEntry({ name: "package/Package.json", type: "\0" }),
+          ),
+        ),
+      ),
+    ).toThrow(/aliases package\/package\.json/);
   });
 
   test("error: a header with an empty path is rejected", () => {
@@ -615,6 +699,7 @@ describe("readTarballEntries", () => {
     expect(() => readTarballEntries(pax("20 path=package/a.js\n"))).toThrow(
       /malformed/,
     );
+    expect(() => readTarballEntries(pax("nospace\n"))).toThrow(/malformed/);
     expect(() => readTarballEntries(pax("15 pathpackage\n"))).toThrow(
       /record without "="/,
     );
