@@ -52,11 +52,9 @@ function buildTarball(dir: string, entries: readonly string[]): string {
 }
 
 describe("canonicalEntryPath", () => {
-  test("default: lowercases, NFC-normalizes and drops the trailing slash", () => {
+  test("default: lowercases and drops the trailing slash", () => {
     expect(canonicalEntryPath("package/Lib/")).toBe("package/lib");
-    expect(canonicalEntryPath("package/caf\u0065\u0301.js")).toBe(
-      "package/caf\u00e9.js",
-    );
+    expect(canonicalEntryPath("package/README.md")).toBe("package/readme.md");
   });
 });
 
@@ -95,14 +93,17 @@ describe("verifyTarballEntries", () => {
     ).toThrow(/resolve to the same path/);
   });
 
-  test("error: Unicode-normalization collision is rejected", () => {
+  test("error: non-ASCII and control characters are rejected", () => {
+    // U+017F folds to `s` under Unicode caseless matching but not toLowerCase().
     expect(() =>
-      verifyTarballEntries([
-        ...VALID,
-        "package/caf\u00e9.js",
-        "package/caf\u0065\u0301.js",
-      ]),
-    ).toThrow(/resolve to the same path/);
+      verifyTarballEntries([...VALID, "package/package.j\u017fon"]),
+    ).toThrow(/non-ASCII/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/caf\u0065\u0301.js"]),
+    ).toThrow(/non-ASCII/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib/a\u0000b.js"]),
+    ).toThrow(/non-ASCII/);
   });
 
   test("error: exact duplicate entry is rejected", () => {

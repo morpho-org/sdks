@@ -28,13 +28,17 @@ export const MANIFEST_ENTRY = "package/package.json";
 
 /**
  * Canonical form of a tar entry path under which two entries collide on some
- * supported consumer file system: Unicode NFC (HFS+/APFS normalization),
- * case-folded (Windows/macOS), and without a trailing `/` (directory entries
- * share the namespace of regular files).
+ * supported consumer file system: case-folded (Windows/macOS) and without a
+ * trailing `/` (directory entries share the namespace of regular files).
+ * Callers must reject non-ASCII names first (see {@link verifyTarballEntries});
+ * ASCII case folding is exact, whereas full Unicode caseless matching and
+ * HFS+/APFS normalization cannot be reproduced faithfully in JavaScript.
  */
 export function canonicalEntryPath(entry: string): string {
-  return entry.normalize("NFC").toLowerCase().replace(/\/+$/, "");
+  return entry.toLowerCase().replace(/\/+$/, "");
 }
+
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 
 /**
  * Verifies that a tarball's entry listing cannot alias one entry onto another
@@ -48,9 +52,12 @@ export function canonicalEntryPath(entry: string): string {
  *   `/` on a file), which npm normalizes away before writing;
  * - any segment ending in `.` or a space, which the Win32 file APIs trim so
  *   `package/package.json.` lands on `package/package.json`;
+ * - any entry with a character outside printable ASCII, so that case-
+ *   insensitive and Unicode-normalizing consumer file systems (e.g. `ſ` → `s`
+ *   under macOS caseless matching) cannot fold it onto another entry;
  * - any entry outside `package/`;
  * - any two entries whose canonical forms collide (exact duplicates, case
- *   variants, Unicode normalization variants, `dir` vs `dir/`);
+ *   variants, `dir` vs `dir/`);
  * - a manifest that is not stored literally as `package/package.json`.
  *
  * @param entries - The stored entry paths, in archive order.
@@ -78,6 +85,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
         `Tar entry "${entry}" has a path segment ending in a dot or space, which Windows trims onto another path.`,
       );
     }
+    if (!PRINTABLE_ASCII.test(entry)) {
+      throw new Error(
+        `Tar entry "${entry}" contains a non-ASCII or control character; consumer file systems may fold it onto another path.`,
+      );
+    }
     if (segments[0] !== "package") {
       throw new Error(`Tar entry "${entry}" is outside package/.`);
     }
@@ -92,7 +104,7 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     const previous = seen.get(canonical);
     if (previous != null) {
       throw new Error(
-        `Tar entries "${previous}" and "${entry}" resolve to the same path on a case-insensitive or Unicode-normalizing file system.`,
+        `Tar entries "${previous}" and "${entry}" resolve to the same path on a case-insensitive file system.`,
       );
     }
     seen.set(canonical, entry);
