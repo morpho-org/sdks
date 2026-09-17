@@ -152,7 +152,7 @@ export function readTarballEntries(tgz: Buffer): string[] {
     const name = decodeString(header.subarray(0, 100));
     const prefix = decodeString(header.subarray(345, 500));
     const rawPath = prefix === "" ? name : `${prefix}/${name}`;
-    const typeflag = header[156];
+    const typeflag = header.readUInt8(156);
 
     if (typeflag === 0x78) {
       if (pending !== undefined) {
