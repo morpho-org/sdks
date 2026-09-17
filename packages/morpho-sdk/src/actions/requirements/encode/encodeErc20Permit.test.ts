@@ -1,14 +1,18 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, isHex } from "viem";
+import { type Address, isHex, maxUint256, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { signTypedData } from "viem/actions";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { test } from "../../../../test/unit.js";
 import {
   AddressMismatchError,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
   InvalidSignatureError,
+  NonPositiveInputError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
@@ -33,6 +37,7 @@ describe("encodeErc20Permit", () => {
       await expect(
         encodeErc20Permit(client, {
           token: usdc,
+          owner: client.account.address,
           spender: generalAdapter1,
           amount: mockAmount,
           chainId: mainnet.id + 1,
@@ -49,6 +54,7 @@ describe("encodeErc20Permit", () => {
       await expect(
         encodeErc20Permit(client, {
           token: usdc,
+          owner: client.account.address,
           spender,
           amount: mockAmount,
           chainId: mainnet.id,
@@ -57,11 +63,60 @@ describe("encodeErc20Permit", () => {
       ).rejects.toThrow(UnsupportedErc20ApprovalSpenderError);
     });
 
+    test("should throw NonPositiveInputError when explicit deadline is not positive", async ({
+      client,
+    }) => {
+      await expect(
+        encodeErc20Permit(client, {
+          token: usdc,
+          owner: client.account.address,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+          deadline: 0n,
+        }),
+      ).rejects.toThrow(NonPositiveInputError);
+    });
+
+    test("should throw InputExceedsMaxError when explicit deadline exceeds uint256", async ({
+      client,
+    }) => {
+      await expect(
+        encodeErc20Permit(client, {
+          token: usdc,
+          owner: client.account.address,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+          deadline: maxUint256 + 1n,
+        }),
+      ).rejects.toThrow(InputExceedsMaxError);
+    });
+
+    test("should throw ExpiredDeadlineError when explicit deadline is already elapsed", async ({
+      client,
+    }) => {
+      await expect(
+        encodeErc20Permit(client, {
+          token: usdc,
+          owner: client.account.address,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+          deadline: 1n,
+        }),
+      ).rejects.toThrow(ExpiredDeadlineError);
+    });
+
     test("should sign permit for non-DAI token", async ({ client }) => {
       const userAddress = client.account.address;
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -83,15 +138,16 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
       });
 
-      await expect(permit.sign(client, differentAddress)).rejects.toThrow(
-        new AddressMismatchError(client.account.address, differentAddress),
-      );
+      await expect(
+        permit.sign(client, differentAddress),
+      ).rejects.toBeInstanceOf(AddressMismatchError);
     });
 
     test("should throw InvalidSignatureError when signature verification fails", async ({
@@ -110,6 +166,7 @@ describe("encodeErc20Permit", () => {
       };
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -128,6 +185,7 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -156,6 +214,7 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -181,6 +240,7 @@ describe("encodeErc20Permit", () => {
     test("should have correct action structure", async ({ client }) => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
+        owner: client.account.address,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -193,6 +253,67 @@ describe("encodeErc20Permit", () => {
       expect(permit.action.args).toHaveProperty("deadline");
       expect(permit.action.args.spender).toEqual(generalAdapter1);
       expect(permit.action.args.amount).toEqual(mockAmount);
+    });
+  });
+
+  describe("action.typedData", () => {
+    test("default", async ({ client }) => {
+      const userAddress = client.account.address;
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        owner: client.account.address,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+
+      const typedData = permit.action.typedData;
+
+      expect(typedData.primaryType).toBe("Permit");
+      expect(typedData.domain).toMatchObject({
+        chainId: mainnet.id,
+        verifyingContract: usdc,
+      });
+      expect(typedData.message).toMatchObject({
+        owner: userAddress,
+        spender: generalAdapter1,
+        value: mockAmount,
+        nonce: mockNonce,
+      });
+      expect(Object.isFrozen(typedData)).toBe(true);
+      expect(Object.isFrozen(typedData.message)).toBe(true);
+      expect(Object.isFrozen(typedData.domain)).toBe(true);
+    });
+
+    test("behavior: signing action.typedData externally matches sign()", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        owner: client.account.address,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+
+      const typedData = permit.action.typedData;
+      const externalSignature = await signTypedData(client, {
+        ...typedData,
+        account: client.account,
+      });
+      const signed = await permit.sign(client, userAddress);
+
+      expect(externalSignature).toEqual(signed.args.signature);
+      expect(
+        await verifyTypedData({
+          ...typedData,
+          address: userAddress,
+          signature: externalSignature,
+        }),
+      ).toBe(true);
     });
   });
 });

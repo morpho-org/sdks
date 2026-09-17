@@ -1,0 +1,35 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@morpho-org/blue-sdk": "6.7.0",
+    "@morpho-org/blue-sdk-viem": "5.4.0",
+    "@morpho-org/evm-simulation": "4.1.5",
+    "@morpho-org/liquidity-sdk-viem": "4.1.2",
+    "@morpho-org/midnight-sdk": "1.3.0",
+    "@morpho-org/morpho-sdk": "5.8.0",
+    "@morpho-org/morpho-test": "4.0.3",
+    "@morpho-org/morpho-ts": "2.11.0",
+    "@morpho-org/test": "2.10.0",
+    "@morpho-org/wdk-protocol-lending-morpho-evm": "1.1.0"
+  },
+  "changesets": [
+    "auto-permit2-nonce",
+    "blue-authorization-deadline-guard",
+    "blue-bundles-permit2-guards",
+    "blue-bundles-position-actions",
+    "blue-bundles-refinance",
+    "blue-bundles-supply-withdraw",
+    "blue-v2-only-reallocations",
+    "dedupe-referral-fee-and-signature-guards",
+    "document-core-transaction-types",
+    "requirement-get-typed-data",
+    "safe-blue-snapshots",
+    "vault-bundles-deposit",
+    "vault-bundles-prerequisites",
+    "vault-bundles-redeem",
+    "vault-bundles-withdraw",
+    "vault-exit-bundles-inkind-refactor",
+    "vault-v2-force-withdraw-via-vault-exit-bundles"
+  ]
+}

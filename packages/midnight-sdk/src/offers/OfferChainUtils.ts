@@ -81,7 +81,8 @@ export namespace OfferChainUtils {
    * Use before a make-borrow or supply-collateral-and-make-borrow flow when a
    * borrower wants one displayed fixed borrow rate across a longer window. Map
    * the returned legs to `Offer.create({ buy: false, ... })`, then group and
-   * submit them through the maker flow.
+   * submit them through the maker flow. Pass the same market tick spacing to
+   * `Offer.create` so leg validation uses the chain's grid.
    *
    * Borrow chains read their target rate at each leg's expiry edge. If a leg
    * would need to extend past `chainEndTimestamp`, it is dropped rather than
@@ -111,6 +112,7 @@ export namespace OfferChainUtils {
    *     ...baseOffer,
    *     buy: false,
    *     tick: leg.tick,
+   *     tickSpacing: market.tickSpacing,
    *     start: leg.startTimestamp,
    *     expiry: leg.expiryTimestamp,
    *   }),
@@ -246,7 +248,8 @@ export namespace OfferChainUtils {
    * Use before a make-lend flow when a lender wants one displayed fixed lend
    * rate across a longer window. Map the returned legs to
    * `Offer.create({ buy: true, ... })`, then group and submit them through the
-   * maker flow.
+   * maker flow. Pass the same market tick spacing to `Offer.create` so leg
+   * validation uses the chain's grid.
    *
    * Lend chains read their target rate at each leg's start edge. The first leg
    * may start before `chainStartTimestamp`; clamping that edge would move the
@@ -276,6 +279,7 @@ export namespace OfferChainUtils {
    *     ...baseOffer,
    *     buy: true,
    *     tick: leg.tick,
+   *     tickSpacing: market.tickSpacing,
    *     start: leg.startTimestamp,
    *     expiry: leg.expiryTimestamp,
    *   }),

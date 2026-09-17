@@ -144,6 +144,7 @@ export const getGeneralAdapterRequirements = async (
         // the pulled amount leaves no residual direct allowance after inclusion.
         return getGeneralAdapterRequirementsPermit(viemClient, {
           token: address,
+          owner: from,
           chainId,
           args: { amount },
           nonce: erc2612Nonce,
