@@ -146,8 +146,9 @@ function parsePaxRecords(data: Buffer, offset: number): Map<string, string> {
  * checksum (node-tar skips such a header and re-syncs one block later), a
  * non-octal `size` field, a directory header declaring a non-zero `size`
  * (node-tar forces it to 0 and reads the next block as a header), an empty
- * path or a non-empty linkname (on a file/directory header node-tar skips it
- * without consuming its declared body; on an `x` header the rejection is only
+ * path on any header kind (node-tar skips it without consuming its declared
+ * body), a non-empty linkname (node-tar likewise skips a file/directory
+ * header; it processes an `x` header normally, so that rejection is only
  * fail-closed), an `x` header larger than {@link MAX_META_ENTRY_SIZE} (node-tar
  * ignores it, `path` record included), malformed PAX records (bad length
  * framing or no `=`), PAX records other than {@link BENIGN_PAX_KEYS}, two
