@@ -256,7 +256,20 @@ jobs:
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            entries="$(tar -tzf "$tgz")"
+            # `--quoting-style=literal` so the listing carries the stored bytes
+            # (no `\\`/octal escaping) and the alias gate below sees exactly
+            # what npm's extractor will resolve.
+            entries="$(tar -tzf "$tgz" --quoting-style=literal)"
+            # npm's extractor (node-tar) does not extract the stored names the
+            # literal checks below inspect: it strips a leading `\` as a root
+            # indicator on every platform and treats `\` as a separator on
+            # Windows, and case-insensitive consumer file systems (Windows,
+            # macOS) collapse `Package.json` onto `package.json`. A later entry
+            # such as `package/\./package.json` or `package/Package.json` would
+            # overwrite the validated manifest at install time. Reject any
+            # entry that aliases another after consumer-side normalization.
+            # Logic + tests: scripts/ci/verify-tarball-entries.ts
+            printf '%s\n' "$entries" | node scripts/ci/verify-tarball-entries.ts
             # Count-based checks (not `grep -q`) so behaviour is identical across
             # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
             #

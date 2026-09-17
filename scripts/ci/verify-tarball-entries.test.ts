@@ -1,0 +1,200 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, test } from "vitest";
+
+import {
+  canonicalEntryPath,
+  MANIFEST_ENTRY,
+  main,
+  parseEntryListing,
+  verifyTarballEntries,
+} from "./verify-tarball-entries.ts";
+
+const SCRIPT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "verify-tarball-entries.ts",
+);
+
+const VALID = [
+  "package/package.json",
+  "package/README.md",
+  "package/lib/",
+  "package/lib/esm/index.js",
+  "package/lib/cjs/index.js",
+];
+
+function withTempDir<T>(fn: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "tarball-entries-"));
+  try {
+    return fn(dir);
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+  }
+}
+
+/** Builds a gzipped tarball whose stored entry names are exactly `entries`, in order. */
+function buildTarball(dir: string, entries: readonly string[]): string {
+  for (const entry of entries) {
+    const target = join(dir, entry);
+    if (entry.endsWith("/")) {
+      mkdirSync(target, { recursive: true });
+    } else {
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, `{"entry":"${entry}"}`);
+    }
+  }
+  const tgz = join(dir, "out.tgz");
+  execFileSync("tar", ["-czf", tgz, "-C", dir, "--no-recursion", ...entries]);
+  return tgz;
+}
+
+describe("canonicalEntryPath", () => {
+  test("default: lowercases, NFC-normalizes and drops the trailing slash", () => {
+    expect(canonicalEntryPath("package/Lib/")).toBe("package/lib");
+    expect(canonicalEntryPath("package/caf\u0065\u0301.js")).toBe(
+      "package/caf\u00e9.js",
+    );
+  });
+});
+
+describe("verifyTarballEntries", () => {
+  test("default: a single-rooted package/ archive with one literal manifest passes", () => {
+    expect(() => verifyTarballEntries(VALID)).not.toThrow();
+  });
+
+  test("error: backslash-dot alias onto the manifest is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/\\./package.json"]),
+    ).toThrow(/contains a backslash/);
+  });
+
+  test("error: any backslash anywhere is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib\\evil.js"]),
+    ).toThrow(/contains a backslash/);
+  });
+
+  test("error: case-variant manifest alias is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/Package.json"]),
+    ).toThrow(/aliases package\/package\.json/);
+  });
+
+  test("error: PACKAGE/ root variant is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "PACKAGE/package.json"]),
+    ).toThrow(/outside package\//);
+  });
+
+  test("error: case-colliding non-manifest entries are rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib/esm/Index.js"]),
+    ).toThrow(/resolve to the same path/);
+  });
+
+  test("error: Unicode-normalization collision is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/caf\u00e9.js",
+        "package/caf\u0065\u0301.js",
+      ]),
+    ).toThrow(/resolve to the same path/);
+  });
+
+  test("error: exact duplicate entry is rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/lib/esm/index.js"]),
+    ).toThrow(/resolve to the same path/);
+  });
+
+  test("error: directory entry colliding with a file entry is rejected", () => {
+    expect(() => verifyTarballEntries([...VALID, "package/lib"])).toThrow(
+      /resolve to the same path/,
+    );
+  });
+
+  test("error: dot and dot-dot segments are rejected", () => {
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/./index.js"]),
+    ).toThrow(/non-canonical/);
+    expect(() =>
+      verifyTarballEntries([...VALID, "package/../index.js"]),
+    ).toThrow(/non-canonical/);
+    expect(() => verifyTarballEntries([...VALID, "package//index.js"])).toThrow(
+      /non-canonical/,
+    );
+  });
+
+  test("error: entries outside package/ are rejected", () => {
+    expect(() => verifyTarballEntries([...VALID, "zzz/package.json"])).toThrow(
+      /outside package\//,
+    );
+    expect(() => verifyTarballEntries([...VALID, "packages/index.js"])).toThrow(
+      /outside package\//,
+    );
+  });
+
+  test("error: missing manifest is rejected", () => {
+    expect(() =>
+      verifyTarballEntries(VALID.filter((e) => e !== MANIFEST_ENTRY)),
+    ).toThrow(/exactly one package\/package\.json \(found 0\)/);
+  });
+
+  test("error: empty listing is rejected", () => {
+    expect(() => verifyTarballEntries([])).toThrow(/found 0/);
+  });
+});
+
+describe("parseEntryListing", () => {
+  test("default: splits on newlines and drops empty lines without trimming", () => {
+    expect(
+      parseEntryListing("package/package.json\npackage/ a.js\n\n"),
+    ).toEqual(["package/package.json", "package/ a.js"]);
+  });
+});
+
+describe("main", () => {
+  test("default: accepts a listing argument", () => {
+    expect(() => main(`${VALID.join("\n")}\n`)).not.toThrow();
+  });
+
+  test("behavior: real tar listings are validated end to end via stdin", () => {
+    withTempDir((dir) => {
+      const ok = buildTarball(join(dir, "ok"), VALID);
+      const okResult = spawnSync(process.execPath, [SCRIPT], {
+        encoding: "utf8",
+        input: execFileSync("tar", ["-tzf", ok], { encoding: "utf8" }),
+      });
+      expect(okResult.status).toBe(0);
+      expect(okResult.stderr).toBe("");
+
+      const alias = buildTarball(join(dir, "alias"), [
+        "package/package.json",
+        "package/\\./package.json",
+      ]);
+      const aliasResult = spawnSync(process.execPath, [SCRIPT], {
+        encoding: "utf8",
+        input: execFileSync("tar", ["-tzf", alias], { encoding: "utf8" }),
+      });
+      expect(aliasResult.status).toBe(1);
+      expect(aliasResult.stderr).toMatch(/^::error::.*contains a backslash/);
+
+      const caseVariant = buildTarball(join(dir, "case"), [
+        "package/package.json",
+        "package/Package.json",
+      ]);
+      const caseResult = spawnSync(process.execPath, [SCRIPT], {
+        encoding: "utf8",
+        input: execFileSync("tar", ["-tzf", caseVariant], { encoding: "utf8" }),
+      });
+      expect(caseResult.status).toBe(1);
+      expect(caseResult.stderr).toMatch(
+        /^::error::.*aliases package\/package\.json/,
+      );
+    });
+  });
+});
