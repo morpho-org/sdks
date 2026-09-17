@@ -273,6 +273,55 @@ describe("verifyTarballEntries", () => {
     ).not.toThrow();
   });
 
+  test("error: a .gitignore renamed to .npmignore by pacote cannot collide with a directory", () => {
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.gitignore",
+        "package/config/.npmignore/child",
+      ]),
+    ).toThrow(/is a regular file but .* is stored beneath it/);
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.npmignore/",
+        "package/config/.gitignore",
+      ]),
+    ).toThrow(/renamed to \.npmignore .* collides with directory/);
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.gitignore",
+        "package/config/.NPMIGNORE/",
+      ]),
+    ).toThrow(/renamed to \.npmignore .* collides with directory/);
+    // pacote resolves a sibling .npmignore file gracefully; not an alias.
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        "package/config/.gitignore",
+        "package/config/.npmignore",
+      ]),
+    ).not.toThrow();
+  });
+
+  test("error: entry paths at or above macOS PATH_MAX are rejected", () => {
+    const segment = "a".repeat(250);
+    const base = `package/${segment}/${segment}/${segment}/${segment}/`;
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        `${base}${"b".repeat(1023 - base.length)}`,
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      verifyTarballEntries([
+        ...VALID,
+        `${base}${"b".repeat(1024 - base.length)}`,
+      ]),
+    ).toThrow(/1024 characters long/);
+  });
+
   test("error: segments containing a tilde (Windows 8.3 short names) are rejected", () => {
     expect(() =>
       verifyTarballEntries([...VALID, "package/LONGFI~1.JS"]),

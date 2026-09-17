@@ -39,6 +39,13 @@ const USTAR_MAGIC = "ustar\u000000";
 const MAX_SEGMENT_LENGTH = 255;
 
 /**
+ * macOS `PATH_MAX`; a stored entry path at or beyond it cannot be created on
+ * any macOS consumer once the install prefix is prepended, and node-tar drops
+ * the entry with a warning rather than failing the install.
+ */
+const MAX_PATH_LENGTH = 1024;
+
+/**
  * PAX record keys the parser accepts: `path` because it is explicitly modelled
  * (it overrides the header name), the rest because they cannot affect how
  * node-tar lays out or names entries. `size` is rejected because a `size`
@@ -306,6 +313,8 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * - any segment longer than 255 characters, which no supported consumer file
  *   system can create (node-tar reports `ENAMETOOLONG` and the entry is
  *   silently missing from the installed package);
+ * - any entry path of 1024 characters or more (macOS `PATH_MAX`, which the
+ *   consumer's install prefix only makes tighter), for the same reason;
  * - any entry with a character outside printable ASCII, so that case-
  *   insensitive and Unicode-normalizing consumer file systems (e.g. `ſ` → `s`
  *   under macOS caseless matching) cannot fold it onto another entry;
@@ -324,6 +333,10 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * - any regular-file entry that is also an ancestor directory of another
  *   entry in any order (`package/package.json/x` makes node-tar create a
  *   `package.json` directory and skip the real manifest with `ENOTEMPTY`);
+ * - a `.gitignore` file whose install-time name collides with a directory or
+ *   ancestor path: npm's extractor (pacote) renames `.gitignore` to
+ *   `.npmignore` while extracting, so `config/.gitignore` occupies
+ *   `config/.npmignore` and any `config/.npmignore/child` entry is lost;
  * - a manifest that is not stored literally as `package/package.json`;
  * - a listing without a literal `package/package.json` entry (a second one is
  *   intercepted by the collision check above).
@@ -334,6 +347,7 @@ export function verifyTarballEntries(entries: readonly string[]): void {
   const seen = new Map<string, string>();
   const files = new Map<string, string>();
   const ancestors = new Map<string, string>();
+  const renamedIgnores = new Map<string, string>();
   let manifestCount = 0;
 
   for (const entry of entries) {
@@ -358,6 +372,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     if (segments.some((s) => s.length > MAX_SEGMENT_LENGTH)) {
       throw new Error(
         `Tar entry "${entry}" has a path segment longer than ${MAX_SEGMENT_LENGTH} characters.`,
+      );
+    }
+    if (entry.length >= MAX_PATH_LENGTH) {
+      throw new Error(
+        `Tar entry "${entry}" is ${entry.length} characters long; paths of ${MAX_PATH_LENGTH} or more cannot be extracted on macOS.`,
       );
     }
     if (!PRINTABLE_ASCII.test(entry)) {
@@ -386,6 +405,27 @@ export function verifyTarballEntries(entries: readonly string[]): void {
 
     const canonical = canonicalEntryPath(entry);
     if (!isDirectory) files.set(canonical, entry);
+    if (!isDirectory && segments.at(-1) === ".gitignore") {
+      const renamed = canonicalEntryPath(
+        `${segments.slice(0, -1).join("/")}/.npmignore`,
+      );
+      files.set(renamed, entry);
+      renamedIgnores.set(renamed, entry);
+      const directory = seen.get(renamed);
+      if (directory?.endsWith("/")) {
+        throw new Error(
+          `Tar entry "${entry}" is renamed to .npmignore by npm on install and collides with directory "${directory}".`,
+        );
+      }
+    }
+    if (isDirectory) {
+      const renamedFile = renamedIgnores.get(canonical);
+      if (renamedFile != null) {
+        throw new Error(
+          `Tar entry "${renamedFile}" is renamed to .npmignore by npm on install and collides with directory "${entry}".`,
+        );
+      }
+    }
     for (let depth = 1; depth < segments.length; depth++) {
       const ancestor = canonicalEntryPath(segments.slice(0, depth).join("/"));
       ancestors.set(ancestor, entry);
