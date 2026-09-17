@@ -941,7 +941,9 @@ describe("main", () => {
         encoding: "utf8",
       });
       expect(aliasResult.status).toBe(1);
-      expect(aliasResult.stderr).toMatch(/^::error::.*contains a backslash/);
+      expect(aliasResult.stderr).toMatch(
+        new RegExp(`^::error::Tarball ${alias} failed.*contains a backslash`),
+      );
 
       const caseVariant = buildTarball(join(dir, "case"), [
         "package/package.json",

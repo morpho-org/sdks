@@ -484,7 +484,13 @@ export function main(tarballPath: string | undefined = process.argv[2]): void {
       "Usage: node scripts/ci/verify-tarball-entries.ts <tarball.tgz>",
     );
   }
-  verifyTarballEntries(readTarballEntries(readFileSync(tarballPath)));
+  try {
+    verifyTarballEntries(readTarballEntries(readFileSync(tarballPath)));
+  } catch (cause: unknown) {
+    throw new Error(`Tarball ${tarballPath} failed the entry-path gate.`, {
+      cause,
+    });
+  }
 }
 
 if (isMain(import.meta.url)) {
