@@ -104,7 +104,8 @@ When agents have failed, never approve — `REQUEST_CHANGES` with the WARNING li
 ```
 <!-- CLAUDE_REVIEW_COMPLETE -->
 <!-- CLAUDE_REVIEW_RUN:<run id> -->  <!-- Copy verbatim from the prompt when it provides one -->
-<!-- CLAUDE_VERDICT:APPROVE -->  <!-- Only include for approvals -->
+<!-- Only include the next line for approvals; it must stand alone on its line -->
+<!-- CLAUDE_VERDICT:APPROVE -->
 ## Code Review Summary
 
 ### Overview

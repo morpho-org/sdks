@@ -158,6 +158,14 @@ describe("findVerdictCheckRun", () => {
     expect(findVerdictCheckRun({ check_runs: [] })).toBeNull();
   });
 
+  test("behavior: entry with null app is skipped", () => {
+    expect(
+      findVerdictCheckRun({
+        check_runs: [{ app: null, id: 7, name: CHECK_NAME }],
+      }),
+    ).toBeNull();
+  });
+
   test("error: malformed payloads are rejected", () => {
     expect(() => findVerdictCheckRun({ check_runs: [{}] })).toThrow(
       /Malformed check-run entry/,
@@ -280,6 +288,22 @@ describe("upsertCheckRun", () => {
         token: "ghs_test",
       }),
     ).rejects.toThrow(/PATCH .*check-runs\/99 failed with 422/);
+  });
+
+  test("error: POST surfaces a non-2xx response", async () => {
+    const { fetchImpl } = createFetch({ postStatus: 422 });
+
+    await expect(
+      upsertCheckRun({
+        conclusion: "success",
+        fetchImpl,
+        headSha: HEAD,
+        repository: "morpho-org/sdks",
+        summary: "s",
+        title: "t",
+        token: "ghs_test",
+      }),
+    ).rejects.toThrow(/POST .*check-runs failed with 422/);
   });
 });
 
