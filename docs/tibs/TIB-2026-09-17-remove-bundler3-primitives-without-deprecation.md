@@ -54,7 +54,7 @@ Bundler3-only requirement, signature, action, and error types, and the five part
 classes. `morpho-ts` 2.x carries the `bundler3` registry tree and legacy MORPHO token-wrapper
 entries; `blue-sdk` 6.x re-exports that tree and models `Holding.permit2BundlerAllowance`,
 `User.isBundlerAuthorized`, and the `Permit2Allowance`/`IPermit2Allowance` types; `blue-sdk-viem`
-5.x re-exports the ABIs and reads GeneralAdapter allowance and bundler authorization in its fetchers.
+5.x reads GeneralAdapter allowance and bundler authorization in `fetchHolding`/`fetchUser`.
 None of these carry `@deprecated` JSDoc in a published release.
 
 ## Decision
@@ -78,8 +78,8 @@ bounded to this list:
 - `blue-sdk` 7.0.0: the `bundler3` registry re-exports, `ERC20_ALLOWANCE_RECIPIENTS`'s
   `bundler3.generalAdapter1` key, `Holding.permit2BundlerAllowance`, `User.isBundlerAuthorized`,
   `Permit2Allowance`, and `IPermit2Allowance`.
-- `blue-sdk-viem` 6.0.0: the Bundler3 ABI re-exports and the GeneralAdapter allowance and bundler
-  authorization reads in `fetchHolding`/`fetchUser`.
+- `blue-sdk-viem` 6.0.0: the GeneralAdapter allowance and bundler authorization reads in
+  `fetchHolding`/`fetchUser` (and the fields they populated).
 
 Everything else keeps the §7 4-step flow. The exception does not waive major changesets, migration
 guides, the maintained-dependent audit and bumps, or continued availability of the previous majors.

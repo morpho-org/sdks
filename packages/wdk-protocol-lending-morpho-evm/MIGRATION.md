@@ -40,6 +40,14 @@ these deposits. There is no Bundler3 fallback.
   reusable maximum approval; the later BlueBundlesV1 transaction still uses a bounded funding cap
   and refunds excess.
 
+## Deprecation-window exception
+
+`BlueApprovalOrSignatureRequirement` and the Bundler3-routed input shapes were deprecated only during
+the 2.0.0 prerelease and are removed without a published deprecation window. This is the one-time
+lifecycle deviation recorded in
+[`TIB-2026-09-17`](../../docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
+Stay on 1.x if an integration still depends on those inputs.
+
 ## TypeScript output changes
 
 - Prepared-handle `getRequirements()` returns a readonly array. Treat it as an immutable result instead of
