@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { main, verifyPublishConfig } from "./verify-tarball-manifest.mjs";
+import { main, verifyPublishConfig } from "./verify-tarball-manifest.ts";
 
-const scriptPath = new URL("./verify-tarball-manifest.mjs", import.meta.url)
+const scriptPath = new URL("./verify-tarball-manifest.ts", import.meta.url)
   .pathname;
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -116,7 +116,7 @@ describe("main", () => {
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/verify-tarball-manifest.mjs <manifest-path>",
+      "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
     );
   });
 });
@@ -149,13 +149,16 @@ describe("cli", () => {
       });
       expect.unreachable("expected the CLI to exit non-zero");
     } catch (error) {
-      expect(error.status).toBe(1);
-      expect(error.stderr).toContain('Disallowed publishConfig key "proxy"');
+      const execError = error as { status: number; stderr: string };
+      expect(execError.status).toBe(1);
+      expect(execError.stderr).toContain(
+        'Disallowed publishConfig key "proxy"',
+      );
     }
   });
 });
 
-function writeTempManifest(manifest) {
+function writeTempManifest(manifest: Record<string, unknown>): string {
   const tempDir = mkdtempSync(join(tmpdir(), "verify-manifest-"));
   tempDirs.push(tempDir);
   const manifestPath = join(tempDir, "package.json");

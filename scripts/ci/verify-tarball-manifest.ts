@@ -1,14 +1,28 @@
 #!/usr/bin/env node
+/**
+ * verify-tarball-manifest.ts — the publishConfig allowlist gate of
+ * `.github/workflows/publish.yml`. Run with Node's native TypeScript support:
+ *
+ *   node scripts/ci/verify-tarball-manifest.ts <path/to/package.json>
+ *
+ * Exits 0 silently when the manifest's `publishConfig` is restricted to the
+ * allowlist; exits 1 with an `::error::` annotation otherwise.
+ */
 
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
-import { getErrorMessage } from "./helpers.mjs";
+import { isMain, reportCliError } from "./workflow.ts";
 
 const NPMJS_REGISTRY_URLS = new Set([
   "https://registry.npmjs.org",
   "https://registry.npmjs.org/",
 ]);
+
+/** The part of a packed package manifest this validator inspects. */
+export interface TarballManifest {
+  readonly publishConfig?: unknown;
+  readonly [key: string]: unknown;
+}
 
 /**
  * Verifies that a packed package manifest's `publishConfig` cannot redirect
@@ -19,11 +33,8 @@ const NPMJS_REGISTRY_URLS = new Set([
  * exchange, so keys such as `proxy`, `https-proxy`, `strict-ssl`, or `ca`
  * would route credentialed requests through attacker-controlled transport
  * even with `--registry https://registry.npmjs.org` pinned on the CLI.
- *
- * @param {{ publishConfig?: unknown }} manifest The parsed package manifest.
- * @returns {void}
  */
-export function verifyPublishConfig(manifest) {
+export function verifyPublishConfig(manifest: TarballManifest): void {
   const publishConfig = manifest.publishConfig;
   if (publishConfig == null) {
     return;
@@ -37,7 +48,9 @@ export function verifyPublishConfig(manifest) {
     );
   }
 
-  for (const [key, value] of Object.entries(publishConfig)) {
+  for (const [key, value] of Object.entries(
+    publishConfig as Record<string, unknown>,
+  )) {
     switch (key) {
       case "access":
         if (value !== "public") {
@@ -61,31 +74,24 @@ export function verifyPublishConfig(manifest) {
   }
 }
 
-/**
- * Runs the tarball manifest verification CLI.
- *
- * @param {string[]} args CLI arguments.
- * @returns {void}
- */
-export function main(args = process.argv.slice(2)) {
-  const [manifestPath] = args;
+/** CLI entrypoint: `node scripts/ci/verify-tarball-manifest.ts <manifest-path>`. */
+export function main(argv: readonly string[] = process.argv.slice(2)): void {
+  const manifestPath = argv[0];
   if (manifestPath == null) {
     throw new Error(
-      "Usage: node scripts/release/verify-tarball-manifest.mjs <manifest-path>",
+      "Usage: node scripts/ci/verify-tarball-manifest.ts <manifest-path>",
     );
   }
 
-  verifyPublishConfig(JSON.parse(readFileSync(manifestPath, "utf8")));
+  verifyPublishConfig(
+    JSON.parse(readFileSync(manifestPath, "utf8")) as TarballManifest,
+  );
 }
 
-if (
-  process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isMain(import.meta.url)) {
   try {
     main();
-  } catch (error) {
-    process.stderr.write(`${getErrorMessage(error)}\n`);
-    process.exitCode = 1;
+  } catch (error: unknown) {
+    reportCliError(error);
   }
 }

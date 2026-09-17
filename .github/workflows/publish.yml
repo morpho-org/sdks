@@ -292,7 +292,7 @@ jobs:
             # into the publish options (including transport keys such as
             # proxy, https-proxy, strict-ssl, ca) BEFORE the OIDC exchange,
             # so only `access`/`registry` pinned to npmjs are allowed.
-            node scripts/release/verify-tarball-manifest.mjs "${tmpd}/package/package.json"
+            node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json"
             name="$(node -p "require('${tmpd}/package/package.json').name")"
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
