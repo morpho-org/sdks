@@ -34,7 +34,9 @@ migration-adapter surfaces (including registry and ABI re-exports), compatibilit
 helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
 five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
 consumers must migrate to the standalone bundle actions and canonical exports or stay on the
-previous major versions.
+previous major versions. The deviation and its symbol scope are recorded in
+`docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+AGENTS.md release exception.
 
 Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
 v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
