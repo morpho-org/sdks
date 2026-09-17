@@ -215,15 +215,15 @@ jobs:
         # npm's HTTP agent falls back to these environment variables whenever
         # the config-level proxy is unset, so pin them empty to guarantee a
         # direct connection to npmjs for both the OIDC exchange and the PUT.
+        # GitHub treats env keys case-insensitively (both cases is a duplicate-
+        # key parse error), so the lowercase variants are cleared in the script.
         env:
           HTTPS_PROXY: ""
-          https_proxy: ""
           HTTP_PROXY: ""
-          http_proxy: ""
           ALL_PROXY: ""
-          all_proxy: ""
         run: |
           set -euo pipefail
+          export https_proxy="" http_proxy="" all_proxy=""
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
