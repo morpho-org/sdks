@@ -44,7 +44,6 @@ import {
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
-  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis.js";
@@ -55,11 +54,7 @@ import { abi as vaultV2QueryAbi } from "../../queries/vault-v2/GetVaultV2.js";
 import { abi as marketAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1Adapter.js";
 import { abi as marketAdapterV2QueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import { abi as vaultAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
-import {
-  fetchAccrualVaultV2,
-  fetchAccrualVaultV2Deployless,
-  fetchVaultV2,
-} from "./VaultV2.js";
+import { fetchAccrualVaultV2, fetchVaultV2 } from "./VaultV2.js";
 import {
   fetchAccrualVaultV2Adapter,
   fetchVaultV2Adapter,
@@ -74,6 +69,10 @@ import {
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
 const VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID = 9_101_002;
+const VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN = {
+  ...mainnet,
+  id: VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID,
+};
 
 const VAULT: Address = "0x1111111111111111111111111111111111111111";
 const ASSET: Address = "0x2222222222222222222222222222222222222222";
@@ -91,8 +90,7 @@ if (
   registerCustomAddresses({
     addresses: {
       [VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID]: {
-        morpho: ADDRESSES.morpho,
-        bundler3: ADDRESSES.bundler3,
+        blue: ADDRESSES.blue,
         adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
         vaultV2Factory: ADDRESSES.vaultV2Factory,
       } satisfies ChainAddresses,
@@ -328,19 +326,18 @@ describe("fetchVaultV2", () => {
       isLiquidityAdapterKnown: false,
     });
 
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchVaultV2(VAULT, handle.client, {});
 
     expect(vault.liquidityAllocations).toBeUndefined();
   });
 
   test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.CornMainnet,
+    });
 
-    await expect(
-      fetchVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
-    ).rejects.toThrow(UnknownFactory);
+    await expect(fetchVaultV2(VAULT, client)).rejects.toThrow(UnknownFactory);
   });
 
   test("uses multicall and Vault V1 adapter liquidity allocations", async () => {
@@ -363,9 +360,7 @@ describe("fetchVaultV2", () => {
       VaultV2MorphoVaultV1Adapter.adapterCapId(ADAPTER),
     ]);
 
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchVaultV2(VAULT, handle.client, {});
 
     expect(vault.liquidityAllocations).toHaveLength(1);
     expect(vault.liquidityAllocations?.[0]?.id).toBe(
@@ -392,7 +387,6 @@ describe("fetchVaultV2", () => {
     });
 
     const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -445,7 +439,6 @@ describe("fetchVaultV2", () => {
       });
 
       const vault = await fetchVaultV2(VAULT, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       });
 
@@ -459,12 +452,10 @@ describe("fetchVaultV2", () => {
   );
 
   test("passes zero for missing deployless adapter factories", async () => {
-    const handle = createMockClient(mainnet);
+    const handle = createMockClient(VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN);
     mockDeploylessRead(handle, vaultV2QueryAbi, "query", vaultV2Result);
 
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID,
-    });
+    const vault = await fetchVaultV2(VAULT, handle.client, {});
 
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
   });
@@ -486,9 +477,7 @@ describe("fetchVaultV2", () => {
       result: 0n,
     });
 
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchVaultV2(VAULT, handle.client, {});
 
     expect(vault.adapters).toEqual([]);
     expect(vault.liquidityAllocations).toBeUndefined();
@@ -517,9 +506,9 @@ describe("fetchVaultV2", () => {
       result: false,
     });
 
-    await expect(
-      fetchVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toThrow(UnsupportedVaultV2AdapterError);
+    await expect(fetchVaultV2(VAULT, handle.client, {})).rejects.toThrow(
+      UnsupportedVaultV2AdapterError,
+    );
   });
 
   test("uses multicall and market-v1-adapter-v2 liquidity allocations", async () => {
@@ -550,9 +539,7 @@ describe("fetchVaultV2", () => {
       VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(ADAPTER, MARKET_PARAMS),
     ]);
 
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchVaultV2(VAULT, handle.client, {});
 
     expect(vault.liquidityAllocations).toHaveLength(3);
   });
@@ -561,9 +548,9 @@ describe("fetchVaultV2", () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
 
-    await expect(
-      fetchVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toThrow(UnsupportedVaultV2AdapterError);
+    await expect(fetchVaultV2(VAULT, handle.client, {})).rejects.toThrow(
+      UnsupportedVaultV2AdapterError,
+    );
   });
 
   test("throws forced deployless failures", async () => {
@@ -572,7 +559,6 @@ describe("fetchVaultV2", () => {
 
     await expect(
       fetchVaultV2(VAULT, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -582,9 +568,9 @@ describe("fetchVaultV2", () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
-    await expect(
-      fetchVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toThrow("reverted");
+    await expect(fetchVaultV2(VAULT, handle.client, {})).rejects.toThrow(
+      "reverted",
+    );
   });
 
   test("throws UnknownOfFactory when the factory does not recognize the vault", async () => {
@@ -620,19 +606,21 @@ describe("fetchVaultV2", () => {
       });
     }
 
-    await expect(
-      fetchVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toThrow(UnknownOfFactory);
+    await expect(fetchVaultV2(VAULT, handle.client, {})).rejects.toThrow(
+      UnknownOfFactory,
+    );
   });
 });
 
 describe("fetchVaultV2Adapter", () => {
   test("throws when the chain has no adapter factories", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient(
+      VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN,
+    );
 
-    await expect(
-      fetchVaultV2Adapter(ADAPTER, client, { chainId: ChainId.CornMainnet }),
-    ).rejects.toThrow(UnsupportedVaultV2AdapterError);
+    await expect(fetchVaultV2Adapter(ADAPTER, client)).rejects.toThrow(
+      UnsupportedVaultV2AdapterError,
+    );
   });
 
   test("defaults parameters and catches factory read failures", async () => {
@@ -685,7 +673,7 @@ describe("fetchVaultV2Adapter", () => {
       parentAllocation: 77n,
     });
 
-    const parameters = { chainId: CHAIN_ID };
+    const parameters = {};
 
     const adapter = await fetchVaultV2Adapter(
       ADAPTER,
@@ -696,7 +684,7 @@ describe("fetchVaultV2Adapter", () => {
     expect(adapter).toBeInstanceOf(VaultV2MorphoVaultV1Adapter);
     expect((adapter as VaultV2MorphoVaultV1Adapter).morphoVaultV1).toBe(VAULT);
     expect((adapter as VaultV2MorphoVaultV1Adapter).parentAllocation).toBe(77n);
-    expect(parameters).toStrictEqual({ chainId: CHAIN_ID });
+    expect(parameters).toStrictEqual({});
   });
 
   test("routes to the MorphoMarketV1 adapter fetcher", async () => {
@@ -725,9 +713,7 @@ describe("fetchVaultV2Adapter", () => {
       marketParamsList: [marketQueryResult.marketParams],
     });
 
-    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {});
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoMarketV1Adapter);
     expect(
@@ -762,9 +748,7 @@ describe("fetchVaultV2Adapter", () => {
       marketSupplyShares: [{ marketId: ID, supplyShares: 99n }],
     });
 
-    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const adapter = await fetchVaultV2Adapter(ADAPTER, handle.client, {});
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoMarketV1AdapterV2);
     expect((adapter as VaultV2MorphoMarketV1AdapterV2).supplyShares[ID]).toBe(
@@ -794,7 +778,7 @@ describe("fetchVaultV2Adapter", () => {
     });
 
     await expect(
-      fetchVaultV2Adapter(ADAPTER, handle.client, { chainId: CHAIN_ID }),
+      fetchVaultV2Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
 
@@ -817,49 +801,49 @@ describe("fetchVaultV2Adapter", () => {
     });
 
     await expect(
-      fetchAccrualVaultV2Adapter(ADAPTER, handle.client, { chainId: CHAIN_ID }),
+      fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
 
   test("fetchAccrualVaultV2Adapter throws when the chain has no adapter factories", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient(
+      VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN,
+    );
 
-    await expect(
-      fetchAccrualVaultV2Adapter(ADAPTER, client, {
-        chainId: ChainId.CornMainnet,
-      }),
-    ).rejects.toThrow(UnsupportedVaultV2AdapterError);
+    await expect(fetchAccrualVaultV2Adapter(ADAPTER, client)).rejects.toThrow(
+      UnsupportedVaultV2AdapterError,
+    );
   });
 });
 
 describe("individual adapter fetchers", () => {
   test("fetchVaultV2MorphoVaultV1Adapter throws UnknownFactory when no factory is configured", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient(
+      VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN,
+    );
 
     await expect(
-      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, client, {
-        chainId: ChainId.CornMainnet,
-      }),
+      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, client),
     ).rejects.toThrow(UnknownFactory);
   });
 
   test("fetchVaultV2MorphoMarketV1Adapter throws UnknownFactory when no factory is configured", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient(
+      VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN,
+    );
 
     await expect(
-      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, client, {
-        chainId: ChainId.CornMainnet,
-      }),
+      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, client),
     ).rejects.toThrow(UnknownFactory);
   });
 
   test("fetchVaultV2MorphoMarketV1AdapterV2 throws UnknownFactory when no factory is configured", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient(
+      VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN,
+    );
 
     await expect(
-      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, client, {
-        chainId: ChainId.CornMainnet,
-      }),
+      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, client),
     ).rejects.toThrow(UnknownFactory);
   });
 
@@ -869,7 +853,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -880,9 +863,7 @@ describe("individual adapter fetchers", () => {
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
     await expect(
-      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow("reverted");
   });
 
@@ -923,7 +904,7 @@ describe("individual adapter fetchers", () => {
     const adapter = await fetchVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       handle.client,
-      { chainId: CHAIN_ID },
+      {},
     );
 
     expect(adapter.morphoVaultV1).toBe(VAULT);
@@ -1008,9 +989,7 @@ describe("individual adapter fetchers", () => {
     });
 
     await expect(
-      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow(UnknownOfFactory);
   });
 
@@ -1048,7 +1027,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoVaultV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       }),
     ).rejects.toThrow(UnknownOfFactory);
@@ -1060,7 +1038,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1071,9 +1048,7 @@ describe("individual adapter fetchers", () => {
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
     await expect(
-      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow("reverted");
   });
 
@@ -1114,7 +1089,7 @@ describe("individual adapter fetchers", () => {
     const adapter = await fetchVaultV2MorphoMarketV1Adapter(
       ADAPTER,
       handle.client,
-      { chainId: CHAIN_ID },
+      {},
     );
 
     expect(adapter.marketParamsList[0]?.id).toBe(ID);
@@ -1191,9 +1166,7 @@ describe("individual adapter fetchers", () => {
     });
 
     await expect(
-      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {}),
     ).rejects.toThrow(UnknownOfFactory);
   });
 
@@ -1225,7 +1198,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1Adapter(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       }),
     ).rejects.toThrow(UnknownOfFactory);
@@ -1237,7 +1209,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1248,9 +1219,7 @@ describe("individual adapter fetchers", () => {
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
     await expect(
-      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {}),
     ).rejects.toThrow("reverted");
   });
 
@@ -1292,7 +1261,7 @@ describe("individual adapter fetchers", () => {
     const adapter = await fetchVaultV2MorphoMarketV1AdapterV2(
       ADAPTER,
       handle.client,
-      { chainId: CHAIN_ID },
+      {},
     );
 
     expect(adapter.marketIds).toEqual([ID]);
@@ -1367,9 +1336,7 @@ describe("individual adapter fetchers", () => {
     }
 
     await expect(
-      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {}),
     ).rejects.toThrow(UnknownOfFactory);
   });
 
@@ -1396,7 +1363,6 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       }),
     ).rejects.toThrow(UnknownOfFactory);
@@ -1469,15 +1435,17 @@ describe("individual adapter fetchers", () => {
       encodeReadResult(marketQueryAbi, "query", marketQueryResult),
     ]);
     mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "position",
       result: [11n, 12n, 13n],
     });
 
-    const adapter = await fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const adapter = await fetchAccrualVaultV2Adapter(
+      ADAPTER,
+      handle.client,
+      {},
+    );
 
     expect(adapter).toBeInstanceOf(VaultV2MorphoMarketV1Adapter);
     expect(
@@ -1538,12 +1506,6 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
-        hasPublicAllocator: true,
-        publicAllocatorConfig: {
-          admin: zeroAddress,
-          fee: 0n,
-          accruedFee: 0n,
-        },
       }),
     ]);
     mockRead(handle, {
@@ -1552,9 +1514,11 @@ describe("individual adapter fetchers", () => {
       functionName: "balanceOf",
       result: 99n,
     });
-    const adapter = await fetchAccrualVaultV2Adapter(ADAPTER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const adapter = await fetchAccrualVaultV2Adapter(
+      ADAPTER,
+      handle.client,
+      {},
+    );
 
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
     expect((adapter as AccrualVaultV2MorphoVaultV1Adapter).shares).toBe(99n);
@@ -1598,12 +1562,6 @@ describe("individual adapter fetchers", () => {
         lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
-        hasPublicAllocator: true,
-        publicAllocatorConfig: {
-          admin: zeroAddress,
-          fee: 0n,
-          accruedFee: 0n,
-        },
       }),
     ]);
     mockRead(handle, {
@@ -1615,7 +1573,7 @@ describe("individual adapter fetchers", () => {
     const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       handle.client,
-      { chainId: CHAIN_ID },
+      {},
     );
 
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
@@ -1626,7 +1584,7 @@ describe("individual adapter fetchers", () => {
   });
 });
 
-describe("fetchAccrualVaultV2", () => {
+describe("fetchAccrualVaultV2 deployless path", () => {
   test("falls back to sequential reads when the single deployless call fails", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [
@@ -1710,9 +1668,7 @@ describe("fetchAccrualVaultV2", () => {
       result: 12n,
     });
 
-    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
     expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
@@ -1727,7 +1683,6 @@ describe("fetchAccrualVaultV2", () => {
 
     await expect(
       fetchAccrualVaultV2(VAULT, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1739,7 +1694,7 @@ describe("fetchAccrualVaultV2", () => {
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
     await expect(
-      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+      fetchAccrualVaultV2(VAULT, handle.client, {}),
     ).rejects.toBeInstanceOf(UnknownOfFactory);
   });
 
@@ -1748,16 +1703,19 @@ describe("fetchAccrualVaultV2", () => {
     mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
 
     await expect(
-      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+      fetchAccrualVaultV2(VAULT, handle.client, {}),
     ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
   });
 
   test("rethrows UnknownFactory without attempting the deployless call", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.CornMainnet,
+    });
 
-    await expect(
-      fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
-    ).rejects.toBeInstanceOf(UnknownFactory);
+    await expect(fetchAccrualVaultV2(VAULT, client)).rejects.toBeInstanceOf(
+      UnknownFactory,
+    );
   });
 });
 
@@ -1786,8 +1744,6 @@ const emptyVaultV1QueryResult = {
   lostAssets: 0n,
   supplyQueue: [],
   withdrawQueue: [],
-  hasPublicAllocator: false,
-  publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
 };
 
 function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
@@ -1884,7 +1840,7 @@ const accrualVaultV2Result = {
   ],
 };
 
-describe("fetchAccrualVaultV2Deployless", () => {
+describe("fetchAccrualVaultV2 deployless path", () => {
   test("decodes the full accrual tree in a single deployless call", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(
@@ -1894,9 +1850,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       accrualVaultV2Result,
     );
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     expect(vault).toBeInstanceOf(AccrualVaultV2);
     expect(vault.address).toBe(VAULT);
@@ -1944,9 +1898,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       ],
     });
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
     const [adapter] = vault.accrualAdapters;
 
     expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoVaultV1Adapter);
@@ -2020,13 +1972,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       result: [0n, 0n],
     });
     mockRead(sequentialHandle, {
-      address: ADDRESSES.vaultV1PublicAllocator!,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "flowCaps",
-      result: [0n, 0n],
-    });
-    mockRead(sequentialHandle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "position",
       result: [position.supplyShares, 0n, 0n],
@@ -2034,7 +1980,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const sequential = await fetchAccrualVaultV2MorphoVaultV1Adapter(
       ADAPTER,
       sequentialHandle.client,
-      { blockNumber: 1n, chainId: CHAIN_ID },
+      { blockNumber: 1n },
     );
 
     const deploylessHandle = createMockClient(mainnet);
@@ -2061,8 +2007,6 @@ describe("fetchAccrualVaultV2Deployless", () => {
               pendingCap: { value: 0n, validAt: 0n },
               position,
               market,
-              flowCapMaxIn: 0n,
-              flowCapMaxOut: 0n,
             },
           ],
           vaultV1Shares: 25n * unit,
@@ -2073,10 +2017,10 @@ describe("fetchAccrualVaultV2Deployless", () => {
         },
       ],
     });
-    const deployless = await fetchAccrualVaultV2Deployless(
+    const deployless = await fetchAccrualVaultV2(
       VAULT,
       deploylessHandle.client,
-      { blockNumber: 1n, chainId: CHAIN_ID },
+      { blockNumber: 1n },
     );
     const deploylessAdapter = deployless.accrualAdapters[0] as
       | AccrualVaultV2MorphoVaultV1Adapter
@@ -2109,9 +2053,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       isLiquidityAdapterKnown: false,
     });
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     expect(vault.liquidityAllocations).toBeUndefined();
   });
@@ -2126,9 +2068,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       liquidityAllocations: [],
     });
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     expect(vault.accrualLiquidityAdapter).toBeUndefined();
     expect(vault.liquidityAllocations).toBeUndefined();
@@ -2141,9 +2081,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       adapters: [marketV1AdapterUncreatedQueryResult(ADAPTER_2)],
     });
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     const [adapter] = vault.accrualAdapters;
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1Adapter;
@@ -2165,9 +2103,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       accrualVaultV2Result,
     );
 
-    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {});
 
     expect(vault).toBeInstanceOf(AccrualVaultV2);
     expect(vault.assetBalance).toBe(777n);
@@ -2181,20 +2117,19 @@ describe("fetchAccrualVaultV2Deployless", () => {
     mockDeploylessReads(handle, ["0x"]);
 
     await expect(
-      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchAccrualVaultV2(VAULT, handle.client, {}),
     ).rejects.toThrow();
   });
 
   test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.CornMainnet,
+    });
 
-    await expect(
-      fetchAccrualVaultV2Deployless(VAULT, client, {
-        chainId: ChainId.CornMainnet,
-      }),
-    ).rejects.toBeInstanceOf(UnknownFactory);
+    await expect(fetchAccrualVaultV2(VAULT, client)).rejects.toBeInstanceOf(
+      UnknownFactory,
+    );
   });
 
   test("maps unsupported adapter reverts to UnsupportedVaultV2AdapterError", async () => {
@@ -2202,9 +2137,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
 
     await expect(
-      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchAccrualVaultV2(VAULT, handle.client, {}),
     ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
   });
 
@@ -2213,9 +2146,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
 
     await expect(
-      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-        chainId: CHAIN_ID,
-      }),
+      fetchAccrualVaultV2(VAULT, handle.client, {}),
     ).rejects.toBeInstanceOf(UnknownOfFactory);
   });
 });

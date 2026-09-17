@@ -31,7 +31,6 @@ export {
 export type {
   AccountData,
   AuthorizationOrSignatureRequirement,
-  BlueApprovalOrSignatureRequirement,
   BundlesApprovalOrSignatureRequirement,
   Eip1193Provider,
   Erc4337TransactionConfig,

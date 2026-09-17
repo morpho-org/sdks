@@ -2,7 +2,6 @@ import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  getChainAddresses,
   type MarketParams,
   MarketUtils,
   MathLib,
@@ -128,8 +127,8 @@ export interface VaultV2Actions {
    *   two hours from handle creation.
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an underlying market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
@@ -367,7 +366,7 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -493,7 +492,7 @@ export interface VaultV2Actions {
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
    *   deadline differs from this operation. Any handle built from the same inputs accepts the
    *   permit; the nonce is verified onchain by the vault's `permit`.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -585,7 +584,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
       ...parameters,
-      chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     });
   }
@@ -1010,8 +1008,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    const addresses = getChainAddresses(this.chainId);
-    const blue = addresses.blue ?? addresses.morpho;
+    const blue = getChainAddress(this.chainId, "blue");
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {

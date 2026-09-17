@@ -15,7 +15,7 @@ export interface AssetChangeEntry {
  * any real token address. `eth_simulateV1` synthesizes native moves from the
  * sentinel `0xeee…eee`, and Tenderly may echo it — in checksummed or any other
  * case — as an asset change's `contractAddress`. Native ETH is keyed by the exact
- * `ethAddress` constant here and in the bundler-retention guard, so a checksummed
+ * `ethAddress` constant here and in the bundles-retention guard, so a checksummed
  * sentinel would land on a separate map key and silently escape retention checks.
  * This is the single source of truth for token normalization shared by the
  * transfer-log parser and the Tenderly asset-change mapper.

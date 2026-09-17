@@ -457,7 +457,7 @@ describe("parseTransfers", () => {
     // per-tx scoping now keeps both as distinct events. The token is
     // wnative-shaped (it emitted a Withdrawal somewhere in the bundle), so the
     // dedup miss surfaces a warn — giving us observability before
-    // assertNoBundlerRetention can false-positive.
+    // assertNoBundlesRetention can false-positive.
     const calls = [
       makeCall([
         {

@@ -21,9 +21,7 @@ import {
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
   type Erc2612RequirementSignature,
-  type Permit2AllowanceRequirementSignature,
   type Permit2SignatureTransferRequirementSignature,
-  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 import {
   getBlueBundlesV1SignedAuthorization,
@@ -337,45 +335,6 @@ describe("getBlueBundlesV1TokenPermit", () => {
 
     expect(thrown).toBeInstanceOf(BundlesRequirementSignatureMismatchError);
     expect(thrown).toMatchObject({ field: "deadline" });
-  });
-
-  test("error: UnexpectedRequirementSignatureError rejects a Permit2 AllowanceTransfer signature", () => {
-    const permit2Allowance: Permit2AllowanceRequirementSignature = {
-      args: {
-        owner,
-        nonce: 1n,
-        asset,
-        signature: serializedSignature,
-        amount: permitAmount,
-        deadline: permitDeadline,
-        expiration: permitDeadline,
-      },
-      action: {
-        type: "permit2",
-        args: {
-          spender: blueBundlesV1,
-          amount: permitAmount,
-          deadline: permitDeadline,
-          expiration: permitDeadline,
-        },
-      },
-    };
-
-    let thrown: unknown;
-    try {
-      getBlueBundlesV1TokenPermit({
-        chainId,
-        userAddress: owner,
-        token: asset,
-        amount: permitAmount,
-        requirementSignature:
-          permit2Allowance as unknown as BundlesTokenRequirementSignature,
-      });
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toBeInstanceOf(UnexpectedRequirementSignatureError);
   });
 
   test("error: BundlesRequirementSignatureMismatchError preserves the parser cause for a malformed signature", () => {

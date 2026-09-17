@@ -17,28 +17,6 @@ export interface Pending<T> {
   validAt: bigint;
 }
 
-/**
- * PublicAllocator configuration attached to a MetaMorpho vault.
- * @deprecated Vault V1 PublicAllocator support is deprecated. Use {@link IVaultV2BluePublicAllocatorConfig} for Vault V2 integrations.
- */
-export interface VaultPublicAllocatorConfig {
-  /**
-   * The PublicAllocator's admin address.
-   * @deprecated Vault V1 PublicAllocator support is deprecated.
-   */
-  admin: Address;
-  /**
-   * The PublicAllocator's reallocation fee (in native token).
-   * @deprecated Vault V1 PublicAllocator support is deprecated.
-   */
-  fee: bigint;
-  /**
-   * The PublicAllocator's reallocation fee accrued so far (in native token).
-   * @deprecated Vault V1 PublicAllocator support is deprecated.
-   */
-  accruedFee: bigint;
-}
-
 /** Plain input shape for a MetaMorpho vault. */
 export interface IVault extends IVaultConfig {
   curator: Address;
@@ -57,8 +35,6 @@ export interface IVault extends IVaultConfig {
   totalAssets: bigint;
   lastTotalAssets: bigint;
   lostAssets?: bigint;
-  /** @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations. */
-  publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
 /** Represents a MetaMorpho vault and its governance, queue, and accounting state. */
@@ -136,17 +112,10 @@ export class Vault extends VaultToken implements IVault {
    */
   public lostAssets?: bigint;
 
-  /**
-   * The MetaMorpho vault's public allocator configuration.
-   * @deprecated Vault V1 PublicAllocator support is deprecated. Use Vault V2 BluePublicAllocator configuration for new integrations.
-   */
-  public publicAllocatorConfig?: VaultPublicAllocatorConfig;
-
   constructor({
     curator,
     owner,
     guardian,
-    publicAllocatorConfig,
     fee,
     feeRecipient,
     skimRecipient,
@@ -181,7 +150,6 @@ export class Vault extends VaultToken implements IVault {
     this.withdrawQueue = withdrawQueue;
     this.lastTotalAssets = lastTotalAssets;
     this.lostAssets = lostAssets;
-    this.publicAllocatorConfig = publicAllocatorConfig;
   }
 
   /**
@@ -259,8 +227,6 @@ export interface CollateralAllocation {
   lltvs: Set<bigint>;
   oracles: Set<Address>;
   markets: Set<MarketId>;
-  /** @deprecated Sum `vault.getAllocationProportion(marketId)` over `markets`. */
-  proportion: bigint;
 }
 
 /** Plain input shape for a MetaMorpho vault paired with accrued market allocations. */
@@ -324,14 +290,12 @@ export class AccrualVault extends Vault implements IAccrualVault {
             lltvs: new Set(),
             oracles: new Set(),
             markets: new Set(),
-            proportion: 0n,
           }),
         );
 
       exposure.lltvs.add(position.market.params.lltv);
       exposure.oracles.add(position.market.params.oracle);
       exposure.markets.add(marketId);
-      exposure.proportion += this.getAllocationProportion(marketId);
     }
   }
 
@@ -518,56 +482,6 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * Returns the vault's deposit capacity for a requested asset amount.
-   *
-   * @param assets - Maximum underlying asset amount being considered.
-   * @returns A capacity limit containing the depositable asset amount and either the `cap` or
-   *   `balance` limiting reason.
-   * @deprecated Use {@link AccrualVault.maxDeposit} instead.
-   * @example
-   * ```ts
-   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
-   * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
-   *
-   * const client = createPublicClient({ chain: mainnet, transport: http() });
-   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
-   * const vault = await fetchAccrualVault(vaultAddress, client);
-   * const limit = vault.getDepositCapacityLimit(1_000_000n);
-   * // limit satisfies CapacityLimit
-   * ```
-   */
-  public getDepositCapacityLimit(assets: bigint): CapacityLimit {
-    return this.maxDeposit(assets);
-  }
-
-  /**
-   * Returns the vault's withdraw capacity for a requested share amount.
-   *
-   * @param shares - Maximum vault share amount being considered.
-   * @returns A capacity limit containing the withdrawable asset amount and either the `liquidity`
-   *   or `balance` limiting reason.
-   * @deprecated Use {@link AccrualVault.maxWithdraw} instead.
-   * @example
-   * ```ts
-   * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
-   * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
-   *
-   * const client = createPublicClient({ chain: mainnet, transport: http() });
-   * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
-   * const vault = await fetchAccrualVault(vaultAddress, client);
-   * const limit = vault.getWithdrawCapacityLimit(
-   *   1_000_000_000_000_000_000n,
-   * );
-   * // limit satisfies CapacityLimit
-   * ```
-   */
-  public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
-    return this.maxWithdraw(shares);
-  }
-
-  /**
    * Returns the requested asset amount depositable through markets in the supply queue.
    *
    * @param assets - Maximum underlying asset amount being considered.
@@ -715,18 +629,6 @@ export class AccrualVault extends Vault implements IAccrualVault {
       );
 
       vault.totalAssets += vault.lostAssets;
-
-      // The constructor cached proportions against allocated assets only. Adding `lostAssets`
-      // changes their denominator, so recompute them against the final `totalAssets`.
-      for (const exposure of vault.collateralAllocations.values()) {
-        exposure.proportion = exposure.markets
-          .values()
-          .reduce(
-            (total, marketId) =>
-              total + vault.getAllocationProportion(marketId),
-            0n,
-          );
-      }
     }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);

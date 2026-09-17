@@ -52,7 +52,6 @@ export const decodeBytes32String = (hexOrStr: string) => {
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Token`, `ConstantWrappedToken`, or `ExchangeRateWrappedToken` entity.
  * @example
@@ -74,12 +73,12 @@ export async function fetchToken(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
+  const chainId = await getChainId(client);
 
   if (typeof address === "string" && isAddressEqual(address, NATIVE_ADDRESS))
-    return Token.native(parameters.chainId);
+    return Token.native(chainId);
 
-  const { wstEth, stEth } = getChainAddresses(parameters.chainId);
+  const { wstEth, stEth } = getChainAddresses(chainId);
   const isWstEth =
     wstEth != null &&
     typeof address === "string" &&
@@ -113,7 +112,7 @@ export async function fetchToken(
           token.stEthPerWstEth,
         );
 
-      const unwrapToken = getUnwrappedToken(address, parameters.chainId);
+      const unwrapToken = getUnwrappedToken(address, chainId);
       if (unwrapToken)
         return new ConstantWrappedToken(metadata, unwrapToken, token.decimals);
 
@@ -170,19 +169,18 @@ export async function fetchToken(
       .then(
         ([
           fields,
-          // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
-          name,
+          domainName,
           version,
-          chainId,
+          domainChainId,
           verifyingContract,
           salt,
           extensions,
         ]) =>
           new Eip5267Domain({
             fields,
-            name,
+            name: domainName,
             version,
-            chainId,
+            chainId: domainChainId,
             verifyingContract,
             salt,
             extensions,
@@ -210,7 +208,7 @@ export async function fetchToken(
     return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
   }
 
-  const unwrapToken = getUnwrappedToken(address, parameters.chainId);
+  const unwrapToken = getUnwrappedToken(address, chainId);
   if (unwrapToken)
     return new ConstantWrappedToken(token, unwrapToken, token.decimals);
 

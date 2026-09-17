@@ -26,7 +26,6 @@
     "./augment": "./src/augment.ts",
     "./augment/*": "./src/augment/*.ts",
     "./blue/*": "./src/blue/*.ts",
-    "./bundler": "./src/bundler/index.ts",
     "./constants": "./src/constants.ts",
     "./entities": "./src/entities/index.ts",
     "./errors": "./src/errors.ts",
@@ -53,9 +52,6 @@
       ],
       "blue/*": [
         "src/blue/*.ts"
-      ],
-      "bundler": [
-        "src/bundler/index.ts"
       ],
       "constants": [
         "src/constants.ts"
@@ -153,11 +149,6 @@
         "import": "./lib/esm/blue/*.js",
         "require": "./lib/cjs/blue/*.js"
       },
-      "./bundler": {
-        "types": "./lib/esm/bundler/index.d.ts",
-        "import": "./lib/esm/bundler/index.js",
-        "require": "./lib/cjs/bundler/index.js"
-      },
       "./constants": {
         "types": "./lib/esm/constants.d.ts",
         "import": "./lib/esm/constants.js",
@@ -222,9 +213,6 @@
         ],
         "blue/*": [
           "lib/esm/blue/*.d.ts"
-        ],
-        "bundler": [
-          "lib/esm/bundler/index.d.ts"
         ],
         "constants": [
           "lib/esm/constants.d.ts"

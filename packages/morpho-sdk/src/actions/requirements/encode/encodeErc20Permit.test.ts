@@ -18,10 +18,9 @@ import {
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
 
 describe("encodeErc20Permit", () => {
-  const {
-    usdc,
-    bundler3: { generalAdapter1 },
-  } = addressesRegistry[mainnet.id];
+  const { usdc } = addressesRegistry[mainnet.id];
+  const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
+  if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");
 
   const mockAmount = 1000000n;
   const mockNonce = 0n;
@@ -38,7 +37,7 @@ describe("encodeErc20Permit", () => {
         encodeErc20Permit(client, {
           token: usdc,
           owner: client.account.address,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
           amount: mockAmount,
           chainId: mainnet.id + 1,
           nonce: mockNonce,
@@ -70,7 +69,7 @@ describe("encodeErc20Permit", () => {
         encodeErc20Permit(client, {
           token: usdc,
           owner: client.account.address,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
           amount: mockAmount,
           chainId: mainnet.id,
           nonce: mockNonce,
@@ -86,7 +85,7 @@ describe("encodeErc20Permit", () => {
         encodeErc20Permit(client, {
           token: usdc,
           owner: client.account.address,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
           amount: mockAmount,
           chainId: mainnet.id,
           nonce: mockNonce,
@@ -102,7 +101,7 @@ describe("encodeErc20Permit", () => {
         encodeErc20Permit(client, {
           token: usdc,
           owner: client.account.address,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
           amount: mockAmount,
           chainId: mainnet.id,
           nonce: mockNonce,
@@ -117,7 +116,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -139,7 +138,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -167,7 +166,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -186,7 +185,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -215,7 +214,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -241,7 +240,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -251,7 +250,7 @@ describe("encodeErc20Permit", () => {
       expect(permit.action.args).toHaveProperty("spender");
       expect(permit.action.args).toHaveProperty("amount");
       expect(permit.action.args).toHaveProperty("deadline");
-      expect(permit.action.args.spender).toEqual(generalAdapter1);
+      expect(permit.action.args.spender).toEqual(blueBundlesV1);
       expect(permit.action.args.amount).toEqual(mockAmount);
     });
   });
@@ -262,7 +261,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -277,7 +276,7 @@ describe("encodeErc20Permit", () => {
       });
       expect(typedData.message).toMatchObject({
         owner: userAddress,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         value: mockAmount,
         nonce: mockNonce,
       });
@@ -293,7 +292,7 @@ describe("encodeErc20Permit", () => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
         owner: client.account.address,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,

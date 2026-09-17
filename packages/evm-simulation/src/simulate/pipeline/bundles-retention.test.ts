@@ -27,40 +27,32 @@ vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
 import { BlacklistViolationError } from "../../errors.js";
 import { makeCall, makeTransferLog } from "../../test-helpers/index.js";
 import { parseTransfers } from "../parsing/transfers.js";
-import { assertNoBundlerRetention } from "./bundler-retention.js";
+import { assertNoBundlesRetention } from "./bundles-retention.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const DAI: Address = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 // Pulled from blue-sdk so tests exercise the real Set membership check.
-const BUNDLER = getAddress(getChainAddresses(1).bundler3.bundler3) as Address;
-// The standalone `bundles` periphery contracts must be guarded like bundler3.
 const bundles = getChainAddresses(1).bundles!;
+const BUNDLES_TARGET = getAddress(bundles.vaultBundlesV1!) as Address;
 const BLUE_BUNDLES = getAddress(bundles.blueBundlesV1!) as Address;
 const VAULT_EXIT_BUNDLES = getAddress(bundles.vaultExitBundlesV1) as Address;
 
 // Synthetic chainIds owned by exactly one case each — see chainAddressOverrides.
-const NO_BUNDLER_CHAIN_ID = 1_000_001;
+const NO_BUNDLES_CHAIN_ID = 1_000_001;
 const SDK_ERROR_CHAIN_ID = 1_000_002;
-const ONLY_BUNDLES_CHAIN_ID = 1_000_003;
 
-// Neither bundler3 nor bundles cataloged — retention check fully skipped.
-chainAddressOverrides.set(NO_BUNDLER_CHAIN_ID, () => ({
+// No bundles cataloged — retention check fully skipped.
+chainAddressOverrides.set(NO_BUNDLES_CHAIN_ID, () => ({
   ...addressesRegistry[1],
-  bundler3: undefined as never,
   bundles: undefined,
-}));
-// bundler3 absent but bundles present — the check still guards `bundles`.
-chainAddressOverrides.set(ONLY_BUNDLES_CHAIN_ID, () => ({
-  ...addressesRegistry[1],
-  bundler3: undefined as never,
 }));
 chainAddressOverrides.set(SDK_ERROR_CHAIN_ID, () => {
   throw new Error("unexpected SDK bug");
 });
 
-describe("assertNoBundlerRetention", () => {
+describe("assertNoBundlesRetention", () => {
   it("does not throw for transfers to non-blacklisted addresses", () => {
     const transfers = parseTransfers([
       makeCall([
@@ -73,7 +65,7 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
   });
 
@@ -84,13 +76,13 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
   });
 
   it("does not throw for empty transfers", () => {
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers: [], assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers: [], assetChanges: [] }),
     ).not.toThrow();
   });
 
@@ -106,7 +98,7 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 999999,
         transfers,
         assetChanges: [],
@@ -114,12 +106,12 @@ describe("assertNoBundlerRetention", () => {
     ).not.toThrow();
   });
 
-  it("warns and skips when blue-sdk knows the chain but has no bundler3 or bundles config", () => {
+  it("warns and skips when blue-sdk knows the chain but has no bundles config", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     expect(() =>
-      assertNoBundlerRetention({
-        chainId: NO_BUNDLER_CHAIN_ID,
+      assertNoBundlesRetention({
+        chainId: NO_BUNDLES_CHAIN_ID,
         transfers: [],
         assetChanges: [],
         logger,
@@ -127,8 +119,8 @@ describe("assertNoBundlerRetention", () => {
     ).not.toThrow();
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "Chain known to blue-sdk but has no bundler3 or bundles config, retention check skipped",
-      { chainId: NO_BUNDLER_CHAIN_ID },
+      "Chain known to blue-sdk but has no bundles config, retention check skipped",
+      { chainId: NO_BUNDLES_CHAIN_ID },
     );
   });
 
@@ -145,7 +137,7 @@ describe("assertNoBundlerRetention", () => {
     ]);
 
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: SDK_ERROR_CHAIN_ID,
         transfers,
         assetChanges: [],
@@ -153,56 +145,56 @@ describe("assertNoBundlerRetention", () => {
     ).toThrow("unexpected SDK bug");
   });
 
-  it("does not throw when bundler passes tokens through (net zero)", () => {
+  it("does not throw when bundles contract passes tokens through (net zero)", () => {
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
         makeTransferLog({
           token: USDC,
-          from: BUNDLER,
+          from: BUNDLES_TARGET,
           to: VAULT,
           amount: 1000000n,
         }),
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
   });
 
-  it("throws when bundler retains tokens above dust threshold", () => {
+  it("throws when bundles contract retains tokens above dust threshold", () => {
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).toThrow(BlacklistViolationError);
   });
 
-  it("throws when bundler retains partial amount above dust", () => {
+  it("throws when bundles contract retains partial amount above dust", () => {
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
         makeTransferLog({
           token: USDC,
-          from: BUNDLER,
+          from: BUNDLES_TARGET,
           to: VAULT,
           amount: 500000n,
         }),
@@ -210,17 +202,22 @@ describe("assertNoBundlerRetention", () => {
     ]);
     // Net retention: 500000 > DUST_THRESHOLD (100)
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).toThrow(BlacklistViolationError);
   });
 
-  it("does not throw when bundler retention is below dust threshold", () => {
+  it("does not throw when bundles contract retention is below dust threshold", () => {
     const transfers = parseTransfers([
       makeCall([
-        makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 150n }),
         makeTransferLog({
           token: USDC,
-          from: BUNDLER,
+          from: USER,
+          to: BUNDLES_TARGET,
+          amount: 150n,
+        }),
+        makeTransferLog({
+          token: USDC,
+          from: BUNDLES_TARGET,
           to: VAULT,
           amount: 100n,
         }),
@@ -228,28 +225,28 @@ describe("assertNoBundlerRetention", () => {
     ]);
     // Net retention: 50 <= DUST_THRESHOLD (100)
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
   });
 
-  it("warns instead of throwing when bundler is swept (net negative) above dust", () => {
-    // Bundler sends more than it receives in this bundle — a pre-existing
+  it("warns instead of throwing when bundles contract is swept (net negative) above dust", () => {
+    // Bundles contract sends more than it receives in this bundle — a pre-existing
     // balance is being drawn down, not retained by the current bundle.
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
           token: USDC,
-          from: BUNDLER,
+          from: BUNDLES_TARGET,
           to: VAULT,
           amount: 1000000n,
         }),
-        // No corresponding inbound — bundler had pre-existing balance.
+        // No corresponding inbound — bundles contract had pre-existing balance.
       ]),
     ]);
 
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers,
         assetChanges: [],
@@ -257,11 +254,11 @@ describe("assertNoBundlerRetention", () => {
       }),
     ).not.toThrow();
     expect(logger.warn).toHaveBeenCalledWith(
-      "Simulation detected pre-existing balance being swept from a restricted bundler or bundles contract",
+      "Simulation detected pre-existing balance being swept from a restricted bundles contract",
       {
         changes: [
           {
-            address: BUNDLER,
+            address: BUNDLES_TARGET,
             token: USDC,
             netSwept: "1000000",
           },
@@ -270,26 +267,26 @@ describe("assertNoBundlerRetention", () => {
     );
   });
 
-  it("flags retention per (bundler,token) pair — tokenA retained, tokenB clean", () => {
+  it("flags retention per (bundles contract,token) pair — tokenA retained, tokenB clean", () => {
     const transfers = parseTransfers([
       makeCall([
         // USDC retained: 1M in, 0 out
         makeTransferLog({
           token: USDC,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
         // DAI clean: 1M in, 1M out (net zero)
         makeTransferLog({
           token: DAI,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
         makeTransferLog({
           token: DAI,
-          from: BUNDLER,
+          from: BUNDLES_TARGET,
           to: VAULT,
           amount: 1000000n,
         }),
@@ -297,7 +294,7 @@ describe("assertNoBundlerRetention", () => {
     ]);
 
     try {
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] });
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] });
       expect.fail("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(BlacklistViolationError);
@@ -312,18 +309,23 @@ describe("assertNoBundlerRetention", () => {
   it("BlacklistViolationError.assetChanges includes {address, token, netRetained}", () => {
     const transfers = parseTransfers([
       makeCall([
-        makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 777n }),
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BUNDLES_TARGET,
+          amount: 777n,
+        }),
       ]),
     ]);
 
     try {
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] });
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] });
       expect.fail("should have thrown");
     } catch (err) {
       const changes = (err as BlacklistViolationError).assetChanges ?? [];
       expect(changes).toHaveLength(1);
       const entry = changes[0]!;
-      expect(entry.address?.toLowerCase()).toBe(BUNDLER.toLowerCase());
+      expect(entry.address?.toLowerCase()).toBe(BUNDLES_TARGET.toLowerCase());
       expect(entry.token?.toLowerCase()).toBe(USDC.toLowerCase());
       expect(entry.netRetained).toBe("777");
     }
@@ -331,8 +333,7 @@ describe("assertNoBundlerRetention", () => {
 
   // ─── Bundles periphery ─────────────────────────────────────────────────────
   // The standalone `bundles` contracts (VaultExitBundlesV1, VaultBundlesV1,
-  // BlueBundlesV1) route user value outside Bundler3 and must be guarded like
-  // the bundler3 registry — retention above dust is a blacklist violation.
+  // BlueBundlesV1) route user value and must not retain it above dust.
 
   it("behavior: throws when BlueBundlesV1 retains tokens above dust threshold", () => {
     const transfers = parseTransfers([
@@ -346,7 +347,7 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).toThrow(BlacklistViolationError);
   });
 
@@ -362,7 +363,7 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).toThrow(BlacklistViolationError);
   });
 
@@ -384,46 +385,28 @@ describe("assertNoBundlerRetention", () => {
       ]),
     ]);
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
-  });
-
-  it("behavior: guards bundles even when the chain has no bundler3 config", () => {
-    const transfers = parseTransfers([
-      makeCall([
-        makeTransferLog({
-          token: USDC,
-          from: USER,
-          to: BLUE_BUNDLES,
-          amount: 1000000n,
-        }),
-      ]),
-    ]);
-    expect(() =>
-      assertNoBundlerRetention({
-        chainId: ONLY_BUNDLES_CHAIN_ID,
-        transfers,
-        assetChanges: [],
-      }),
-    ).toThrow(BlacklistViolationError);
   });
 
   // ─── Native ETH ──────────────────────────────────────────────────────────
   // Native ETH emits no event log, so it never reaches `transfers` on the
   // Tenderly primary backend — it must be read from `assetChanges`. Regression
-  // suite for Cantina finding 1440 (native ETH retained by bundler3 silently
-  // passing the guard).
+  // suite for Cantina finding 1440 (retained native ETH silently passing the guard).
   const ONE_ETH = 1_000000000000000000n;
 
-  it("behavior: throws when bundler retains native ETH reported only in assetChanges (Tenderly path)", () => {
+  it("behavior: throws when bundles contract retains native ETH reported only in assetChanges (Tenderly path)", () => {
     // Tenderly derives native ETH into assetChanges and emits no transfer log.
     // Before the fix this resolved instead of throwing (finding 1440).
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers: [],
         assetChanges: [
-          { account: BUNDLER, changes: [{ token: ethAddress, diff: ONE_ETH }] },
+          {
+            account: BUNDLES_TARGET,
+            changes: [{ token: ethAddress, diff: ONE_ETH }],
+          },
         ],
       }),
     ).toThrow(BlacklistViolationError);
@@ -433,14 +416,23 @@ describe("assertNoBundlerRetention", () => {
     // eth_simulateV1 synthesizes native moves as `ethAddress` transfer logs and
     // derives assetChanges from them. The guard must not sum both sources.
     const transfers = [
-      { token: ethAddress, from: USER, to: BUNDLER, amount: ONE_ETH, txIdx: 0 },
+      {
+        token: ethAddress,
+        from: USER,
+        to: BUNDLES_TARGET,
+        amount: ONE_ETH,
+        txIdx: 0,
+      },
     ];
     try {
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers,
         assetChanges: [
-          { account: BUNDLER, changes: [{ token: ethAddress, diff: ONE_ETH }] },
+          {
+            account: BUNDLES_TARGET,
+            changes: [{ token: ethAddress, diff: ONE_ETH }],
+          },
         ],
       });
       expect.fail("should have thrown");
@@ -458,20 +450,29 @@ describe("assertNoBundlerRetention", () => {
     // Defense in depth: a backend that populates native transfers but not
     // assetChanges must still trip the guard.
     const transfers = [
-      { token: ethAddress, from: USER, to: BUNDLER, amount: ONE_ETH, txIdx: 0 },
+      {
+        token: ethAddress,
+        from: USER,
+        to: BUNDLES_TARGET,
+        amount: ONE_ETH,
+        txIdx: 0,
+      },
     ];
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).toThrow(BlacklistViolationError);
   });
 
-  it("behavior: does not throw when native ETH passes through the bundler (net zero)", () => {
+  it("behavior: does not throw when native ETH passes through the bundles contract (net zero)", () => {
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers: [],
         assetChanges: [
-          { account: BUNDLER, changes: [{ token: ethAddress, diff: 0n }] },
+          {
+            account: BUNDLES_TARGET,
+            changes: [{ token: ethAddress, diff: 0n }],
+          },
         ],
       }),
     ).not.toThrow();
@@ -479,19 +480,22 @@ describe("assertNoBundlerRetention", () => {
 
   it("behavior: does not throw for native ETH retention below dust threshold", () => {
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers: [],
         assetChanges: [
-          { account: BUNDLER, changes: [{ token: ethAddress, diff: 50n }] },
+          {
+            account: BUNDLES_TARGET,
+            changes: [{ token: ethAddress, diff: 50n }],
+          },
         ],
       }),
     ).not.toThrow();
   });
 
-  it("behavior: ignores native ETH assetChanges for non-bundler accounts", () => {
+  it("behavior: ignores native ETH assetChanges for non-bundles contract accounts", () => {
     expect(() =>
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers: [],
         assetChanges: [
@@ -508,17 +512,20 @@ describe("assertNoBundlerRetention", () => {
         makeTransferLog({
           token: USDC,
           from: USER,
-          to: BUNDLER,
+          to: BUNDLES_TARGET,
           amount: 1000000n,
         }),
       ]),
     ]);
     try {
-      assertNoBundlerRetention({
+      assertNoBundlesRetention({
         chainId: 1,
         transfers,
         assetChanges: [
-          { account: BUNDLER, changes: [{ token: ethAddress, diff: ONE_ETH }] },
+          {
+            account: BUNDLES_TARGET,
+            changes: [{ token: ethAddress, diff: ONE_ETH }],
+          },
         ],
       });
       expect.fail("should have thrown");

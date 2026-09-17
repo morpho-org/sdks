@@ -42,8 +42,8 @@ interface EncodeErc20PermitParams {
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.owner - Account that owns the tokens and signs the permit.
- * @param params.spender - Permit spender. Must be GeneralAdapter1, MidnightBundles,
- *   VaultBundlesV1, or BlueBundlesV1 for the chain.
+ * @param params.spender - Permit spender. Must be MidnightBundles, VaultBundlesV1, or
+ *   BlueBundlesV1 for the chain.
  * @param params.amount - Permit allowance amount.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The owner's current EIP-2612 nonce on `token`.
@@ -53,8 +53,8 @@ interface EncodeErc20PermitParams {
  *   `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1,
- *   MidnightBundles, VaultBundlesV1, or BlueBundlesV1 for `chainId`.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not MidnightBundles,
+ *   VaultBundlesV1, or BlueBundlesV1 for `chainId`.
  * @throws {NonPositiveInputError} when an explicit `deadline` is not positive.
  * @throws {InputExceedsMaxError} when an explicit `deadline` exceeds `uint256`.
  * @throws {ExpiredDeadlineError} when an explicit `deadline` is positive but not in the future.
@@ -73,7 +73,7 @@ interface EncodeErc20PermitParams {
  * const requirement = await encodeErc20Permit(client, {
  *   token: USDC, // Must implement standard ERC-2612. DAI is routed through Permit2 by requirement helpers.
  *   owner,
- *   spender: generalAdapter1,
+ *   spender: blueBundlesV1,
  *   amount: 1_000_000n,
  *   chainId: 1,
  *   nonce: 0n,
@@ -96,12 +96,7 @@ export const encodeErc20Permit = async (
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: [
-      "generalAdapter1",
-      "midnightBundles",
-      "vaultBundlesV1",
-      "blueBundlesV1",
-    ],
+    allowed: ["midnightBundles", "vaultBundlesV1", "blueBundlesV1"],
   });
 
   const now = Time.timestamp();
