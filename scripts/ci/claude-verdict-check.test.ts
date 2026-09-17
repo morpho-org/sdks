@@ -10,11 +10,12 @@ import {
 import {
   APPROVE_VERDICT_MARKER,
   CHECK_NAME,
-  createCheckRun,
   determineVerdict,
+  findVerdictCheckRun,
   latestReview,
   main,
   publish,
+  upsertCheckRun,
   verdictCheck,
 } from "./claude-verdict-check.ts";
 
@@ -37,7 +38,7 @@ const review = (
   } = {},
 ): Review => ({
   body: `Summary\n\n<!-- ${REVIEW_MARKER} -->\n${runMarker(runId)}${
-    approve ? `\n<!-- ${APPROVE_VERDICT_MARKER} -->` : ""
+    approve ? `\n${APPROVE_VERDICT_MARKER}` : ""
   }`,
   commit_id: commitId,
   id,
@@ -59,16 +60,50 @@ describe("determineVerdict", () => {
     expect(determineVerdict(review(10))).toBe("approve");
   });
 
-  test("behavior: a REQUEST_CHANGES review has no approve marker", () => {
+  test("behavior: the marker must stand alone on its own line", () => {
     expect(
-      determineVerdict(
-        review(10, { approve: false, state: "CHANGES_REQUESTED" }),
-      ),
+      determineVerdict({
+        ...review(10, { approve: false }),
+        body: `Review\n${APPROVE_VERDICT_MARKER}\nThanks`,
+      }),
+    ).toBe("approve");
+    expect(
+      determineVerdict({
+        ...review(10, { approve: false }),
+        body: `Review\r\n${APPROVE_VERDICT_MARKER}\r\nThanks`,
+      }),
+    ).toBe("approve");
+    expect(
+      determineVerdict({
+        ...review(10, { approve: false }),
+        body: "CLAUDE_VERDICT:APPROVE",
+      }),
     ).toBe("changes");
+    expect(
+      determineVerdict({
+        ...review(10, { approve: false }),
+        body: "It emits <!-- CLAUDE_VERDICT:APPROVE --> when complete.",
+      }),
+    ).toBe("changes");
+  });
+
+  test("behavior: a changes-requested review is never approve", () => {
+    expect(determineVerdict(review(10, { state: "CHANGES_REQUESTED" }))).toBe(
+      "changes",
+    );
   });
 
   test("behavior: a null body is treated as changes", () => {
     expect(determineVerdict({ ...review(10), body: null })).toBe("changes");
+  });
+
+  test("sanity: the exported marker matches the anchored line", () => {
+    expect(APPROVE_VERDICT_MARKER).toMatch(
+      /^<!-- CLAUDE_VERDICT:APPROVE -->[ \t\r]*$/,
+    );
+    expect(
+      determineVerdict({ ...review(10), body: APPROVE_VERDICT_MARKER }),
+    ).toBe("approve");
   });
 });
 
@@ -97,11 +132,47 @@ describe("verdictCheck", () => {
   });
 });
 
-describe("createCheckRun", () => {
-  test("default: POSTs a completed check-run with the job token", async () => {
+describe("findVerdictCheckRun", () => {
+  test("default: finds the GitHub Actions verdict check-run", () => {
+    expect(
+      findVerdictCheckRun({
+        check_runs: [
+          { app: { slug: "github-actions" }, id: 42, name: CHECK_NAME },
+        ],
+      }),
+    ).toBe(42);
+  });
+
+  test("behavior: ignores runs from another app and other names", () => {
+    expect(
+      findVerdictCheckRun({
+        check_runs: [
+          { app: { slug: "other-app" }, id: 1, name: CHECK_NAME },
+          { app: { slug: "github-actions" }, id: 2, name: "Other Check" },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  test("behavior: an empty list has no existing verdict", () => {
+    expect(findVerdictCheckRun({ check_runs: [] })).toBeNull();
+  });
+
+  test("error: malformed payloads are rejected", () => {
+    expect(() => findVerdictCheckRun({ check_runs: [{}] })).toThrow(
+      /Malformed check-run entry/,
+    );
+    expect(() => findVerdictCheckRun({})).toThrow(
+      /Malformed check-runs payload/,
+    );
+  });
+});
+
+describe("upsertCheckRun", () => {
+  test("default: GETs then POSTs a completed check-run with the job token", async () => {
     const { fetchImpl, requests } = createFetch();
 
-    await createCheckRun({
+    await upsertCheckRun({
       conclusion: "success",
       fetchImpl,
       headSha: HEAD,
@@ -111,9 +182,20 @@ describe("createCheckRun", () => {
       token: "ghs_test",
     });
 
-    expect(requests).toHaveLength(1);
-    const request = requests[0];
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.url.pathname).toBe(
+      "/repos/morpho-org/sdks/commits/c462f0c49c0f35e3cb065cf2247312502d1f8062/check-runs",
+    );
+    expect(requests[0]?.url.search).toBe(
+      "?check_name=Claude%20Review%20Verdict&per_page=100",
+    );
+    expect(requests[0]?.init.method).toBe("GET");
+    const request = requests[1];
+    expect(requests.filter((item) => item.init.method === "POST")).toHaveLength(
+      1,
+    );
     expect(request?.url.pathname).toBe("/repos/morpho-org/sdks/check-runs");
+    expect(request?.url.search).toBe("");
     expect(request?.init.method).toBe("POST");
     expect(request?.init.headers.Authorization).toBe("Bearer ghs_test");
     const payload = JSON.parse(request?.init.body ?? "{}");
@@ -126,11 +208,46 @@ describe("createCheckRun", () => {
     });
   });
 
-  test("error: surfaces a non-2xx response", async () => {
-    const { fetchImpl } = createFetch({ postStatus: 403 });
+  test("behavior: PATCHes an existing GitHub Actions verdict check-run", async () => {
+    const { fetchImpl, requests } = createFetch({
+      checkRuns: {
+        check_runs: [
+          { app: { slug: "github-actions" }, id: 99, name: CHECK_NAME },
+        ],
+      },
+    });
+
+    await upsertCheckRun({
+      conclusion: "neutral",
+      fetchImpl,
+      headSha: HEAD,
+      repository: "morpho-org/sdks",
+      summary: "needs work",
+      title: "🔄 Changes requested by Claude",
+      token: "ghs_test",
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.url.pathname).toBe(
+      "/repos/morpho-org/sdks/check-runs/99",
+    );
+    expect(requests[1]?.init.method).toBe("PATCH");
+    expect(JSON.parse(requests[1]?.init.body ?? "{}")).toEqual({
+      conclusion: "neutral",
+      name: CHECK_NAME,
+      output: {
+        summary: "needs work",
+        title: "🔄 Changes requested by Claude",
+      },
+      status: "completed",
+    });
+  });
+
+  test("error: GET surfaces a non-2xx response", async () => {
+    const { fetchImpl } = createFetch({ checkRunsStatus: 403 });
 
     await expect(
-      createCheckRun({
+      upsertCheckRun({
         conclusion: "success",
         fetchImpl,
         headSha: HEAD,
@@ -139,7 +256,30 @@ describe("createCheckRun", () => {
         title: "t",
         token: "ghs_test",
       }),
-    ).rejects.toThrow(/failed with 403/);
+    ).rejects.toThrow(/GET .*check-runs failed with 403/);
+  });
+
+  test("error: PATCH surfaces a non-2xx response", async () => {
+    const { fetchImpl } = createFetch({
+      checkRuns: {
+        check_runs: [
+          { app: { slug: "github-actions" }, id: 99, name: CHECK_NAME },
+        ],
+      },
+      patchStatus: 422,
+    });
+
+    await expect(
+      upsertCheckRun({
+        conclusion: "success",
+        fetchImpl,
+        headSha: HEAD,
+        repository: "morpho-org/sdks",
+        summary: "s",
+        title: "t",
+        token: "ghs_test",
+      }),
+    ).rejects.toThrow(/PATCH .*check-runs\/99 failed with 422/);
   });
 });
 
@@ -175,6 +315,23 @@ describe("publish", () => {
 
     await expect(publish({ env, fetchImpl })).resolves.toBe("approve");
     expect(requests.some((r) => r.init.method === "POST")).toBe(true);
+  });
+
+  test("behavior: updates an existing verdict check-run on rerun", async () => {
+    const { fetchImpl, requests } = createFetch({
+      checkRuns: {
+        check_runs: [
+          { app: { slug: "github-actions" }, id: 123, name: CHECK_NAME },
+        ],
+      },
+      reviews: [review(9)],
+    });
+
+    await expect(publish({ env, fetchImpl })).resolves.toBe("approve");
+
+    expect(requests.filter((r) => r.init.method === "POST")).toHaveLength(0);
+    const patch = requests.find((r) => r.init.method === "PATCH");
+    expect(patch?.url.pathname).toBe("/repos/morpho-org/sdks/check-runs/123");
   });
 
   test("error: fails when this run posted no review", async () => {
@@ -222,6 +379,9 @@ describe("main", () => {
 });
 
 interface FetchScenario {
+  readonly checkRuns?: unknown;
+  readonly checkRunsStatus?: number;
+  readonly patchStatus?: number;
   readonly postStatus?: number;
   readonly reviews?: readonly Review[];
 }
@@ -235,8 +395,30 @@ function createFetch(scenario: FetchScenario = {}) {
     requests.push({ init, url: new URL(url) });
     const headers = new Headers();
 
-    if (init.method === "POST") {
-      const status = scenario.postStatus ?? 201;
+    if (url.pathname.endsWith("/reviews")) {
+      return {
+        headers,
+        json: async () => scenario.reviews ?? [],
+        ok: true,
+        status: 200,
+      };
+    }
+
+    if (init.method === "GET") {
+      const status = scenario.checkRunsStatus ?? 200;
+      return {
+        headers,
+        json: async () => scenario.checkRuns ?? { check_runs: [] },
+        ok: status >= 200 && status < 300,
+        status,
+      };
+    }
+
+    if (init.method === "POST" || init.method === "PATCH") {
+      const status =
+        init.method === "POST"
+          ? (scenario.postStatus ?? 201)
+          : (scenario.patchStatus ?? 200);
       return {
         headers,
         json: async () => ({ id: 1 }),
@@ -245,12 +427,7 @@ function createFetch(scenario: FetchScenario = {}) {
       };
     }
 
-    return {
-      headers,
-      json: async () => scenario.reviews ?? [],
-      ok: true,
-      status: 200,
-    };
+    throw new Error(`Unexpected ${init.method} ${url.pathname}`);
   };
 
   return { fetchImpl, requests };

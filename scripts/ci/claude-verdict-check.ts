@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * claude-verdict-check.ts — publishes a *cosmetic* check-run reflecting Claude's review verdict on a
- * pull request, so a reviewer sees Claude's stance (approve / changes requested) at a glance. Run with
- * Node's native TypeScript support:
+ * pull request, so a reviewer sees Claude's stance (approve / changes requested) at a glance. The
+ * `publish` mode runs in the isolated `claude-verdict` job. Run with Node's native TypeScript support:
  *
- *   node scripts/ci/claude-verdict-check.ts publish   # after the review gate passes
+ *   node scripts/ci/claude-verdict-check.ts publish   # in the claude-verdict job
  *
  * The check-run is informational only: `github-actions[bot]` cannot formally approve a PR (the reviews
  * API rejects `event: APPROVE` with HTTP 422), so this never gates merge — a human still approves. The
@@ -31,10 +31,11 @@ import {
   writeStdout,
 } from "./workflow.ts";
 
-/** Name of the check-run this step publishes; stable so reruns update the same PR check. */
+/** Name of the check-run this step publishes; stable so reruns update the same check-run. */
 export const CHECK_NAME = "Claude Review Verdict";
 /** Body marker the review engine embeds only when Claude's verdict is to approve. */
-export const APPROVE_VERDICT_MARKER = "CLAUDE_VERDICT:APPROVE";
+export const APPROVE_VERDICT_MARKER = "<!-- CLAUDE_VERDICT:APPROVE -->";
+const APPROVE_VERDICT_LINE = /^<!-- CLAUDE_VERDICT:APPROVE -->[ \t\r]*$/m;
 
 /** Claude's stance on the pull request, derived from the review it posted. */
 export type Verdict = "approve" | "changes";
@@ -57,11 +58,13 @@ export interface VerdictCheck {
 }
 
 /**
- * Reads Claude's verdict from a posted review: the approve marker means approve, its absence means the
- * review requested changes (or a review agent failed — the engine never approves in that case).
+ * Reads Claude's verdict from a posted review. A changes-requested review is never approve, and the
+ * marker only counts when it stands alone on a line, so a review quoting it inline (for example while
+ * reviewing these scripts) is not misread.
  */
 export function determineVerdict(review: Review): Verdict {
-  return review.body?.includes(APPROVE_VERDICT_MARKER) === true
+  if (review.state === "CHANGES_REQUESTED") return "changes";
+  return review.body != null && APPROVE_VERDICT_LINE.test(review.body)
     ? "approve"
     : "changes";
 }
@@ -94,8 +97,8 @@ export function verdictCheck(verdict: Verdict): VerdictCheck {
   };
 }
 
-/** Inputs of {@link createCheckRun}. */
-export interface CreateCheckRunOptions {
+/** Inputs of {@link upsertCheckRun}. */
+export interface UpsertCheckRunOptions {
   readonly apiBaseUrl?: string;
   readonly conclusion: "neutral" | "success";
   readonly fetchImpl?: FetchLike;
@@ -106,37 +109,94 @@ export interface CreateCheckRunOptions {
   readonly token: string;
 }
 
-/** Creates a completed check-run on the head commit, throwing on any non-2xx response. */
-export async function createCheckRun(
-  options: CreateCheckRunOptions,
+/** @internal */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Finds the GitHub Actions check-run for the verdict, rejecting malformed API payloads.
+ */
+export function findVerdictCheckRun(payload: unknown): number | null {
+  if (!isRecord(payload) || !Array.isArray(payload.check_runs)) {
+    throw new Error("Malformed check-runs payload.");
+  }
+
+  for (const entry of payload.check_runs) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.id !== "number" ||
+      !Number.isInteger(entry.id) ||
+      typeof entry.name !== "string" ||
+      !(
+        entry.app === null ||
+        (isRecord(entry.app) && typeof entry.app.slug === "string")
+      )
+    ) {
+      throw new Error("Malformed check-run entry.");
+    }
+    const appSlug = entry.app === null ? null : entry.app.slug;
+    if (entry.name === CHECK_NAME && appSlug === "github-actions") {
+      return entry.id;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Updates the existing verdict check-run for the head commit or creates one when none exists,
+ * throwing on any non-2xx response.
+ */
+export async function upsertCheckRun(
+  options: UpsertCheckRunOptions,
 ): Promise<void> {
   const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
-  const url = new URL(
-    `repos/${options.repository}/check-runs`,
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${options.token}`,
+    "Content-Type": "application/json",
+    "User-Agent": USER_AGENT,
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  const checkRunsUrl = new URL(
+    `repos/${options.repository}/commits/${options.headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&per_page=100`,
     options.apiBaseUrl ?? DEFAULT_API_BASE_URL,
   );
+  const checkRunsResponse = await fetchImpl(checkRunsUrl, {
+    headers,
+    method: "GET",
+  });
 
+  if (!checkRunsResponse.ok) {
+    throw new Error(
+      `GitHub API GET ${checkRunsUrl.pathname} failed with ${checkRunsResponse.status}.`,
+    );
+  }
+
+  const existingId = findVerdictCheckRun(await checkRunsResponse.json());
+  const method = existingId == null ? "POST" : "PATCH";
+  const url = new URL(
+    existingId == null
+      ? `repos/${options.repository}/check-runs`
+      : `repos/${options.repository}/check-runs/${existingId}`,
+    options.apiBaseUrl ?? DEFAULT_API_BASE_URL,
+  );
   const response = await fetchImpl(url, {
     body: JSON.stringify({
       conclusion: options.conclusion,
-      head_sha: options.headSha,
+      ...(existingId == null ? { head_sha: options.headSha } : {}),
       name: CHECK_NAME,
       output: { summary: options.summary, title: options.title },
       status: "completed",
     }),
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${options.token}`,
-      "Content-Type": "application/json",
-      "User-Agent": USER_AGENT,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    method: "POST",
+    headers,
+    method,
   });
 
   if (!response.ok) {
     throw new Error(
-      `GitHub API POST ${url.pathname} failed with ${response.status}.`,
+      `GitHub API ${method} ${url.pathname} failed with ${response.status}.`,
     );
   }
 }
@@ -170,7 +230,7 @@ export async function publish(options: RunOptions = {}): Promise<Verdict> {
 
   const verdict = determineVerdict(review);
   const check = verdictCheck(verdict);
-  await createCheckRun({
+  await upsertCheckRun({
     apiBaseUrl: options.apiBaseUrl,
     conclusion: check.conclusion,
     fetchImpl: options.fetchImpl,

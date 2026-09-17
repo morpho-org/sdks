@@ -38,12 +38,13 @@ jobs:
         (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
       )
     runs-on: ubuntu-latest
+    outputs:
+      max_id: ${{ steps.reviews_before.outputs.max_id }}
     permissions:
       contents: read
       pull-requests: write
       issues: write
       actions: read # Required for Claude to read CI results on PRs
-      checks: write # Required to publish the cosmetic Claude-verdict check-run
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -171,47 +172,6 @@ jobs:
           MAX_ID_BEFORE="$MAX_ID_BEFORE"
           "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
 
-      # Cosmetic verdict surface: publish a non-blocking check-run mirroring Claude's APPROVE /
-      # REQUEST_CHANGES verdict so a reviewer sees Claude's stance at a glance. It never gates merge — a
-      # bot cannot formally approve a PR (the reviews API rejects `event: APPROVE`), so this is purely
-      # informational; a human still approves. Best-effort: a checks-API hiccup must not fail the review
-      # job (`continue-on-error`). Only runs once the gate above confirmed a review exists on this head,
-      # and executes the trusted default-branch copy under the same env-hardening, since the workspace
-      # now holds the PR head.
-      - name: Publish Claude verdict check
-        if: success() && github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          BASH_ENV: ''
-          SHELLOPTS: ''
-          PS4: ''
-          LD_PRELOAD: ''
-          LD_AUDIT: ''
-          LD_LIBRARY_PATH: ''
-          NODE_OPTIONS: ''
-          TRUSTED_TEMP: ${{ runner.temp }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
-          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          MAX_ID_BEFORE: ${{ steps.reviews_before.outputs.max_id }}
-        run: >-
-          /usr/bin/env -i
-          HOME="$HOME"
-          RUNNER_TEMP="$TRUSTED_TEMP"
-          TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
-          SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
-          GH_TOKEN="$GH_TOKEN"
-          GITHUB_REPOSITORY="$REPOSITORY"
-          GITHUB_RUN_ID="$RUN_ID"
-          PR_NUMBER="$PR_NUMBER"
-          HEAD_SHA="$HEAD_SHA"
-          MAX_ID_BEFORE="$MAX_ID_BEFORE"
-          "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" publish-verdict
-
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
       # and mask the job's secrets plus token-shaped strings first (scripts/ci/scrub-transcript.ts).
@@ -269,3 +229,35 @@ jobs:
           name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.scrub.outputs.path }}
           retention-days: 7
+
+  # Cosmetic verdict surface: a non-blocking check-run mirroring Claude's verdict so a reviewer sees
+  # Claude's stance at a glance. It never gates merge — a bot cannot formally approve a PR (the reviews
+  # API rejects `event: APPROVE`); a human still approves. It runs as its own job so `checks: write`
+  # is never held by the job in which Claude executes over PR-controlled content (that token could
+  # otherwise forge check-runs). Fresh default-branch checkout on a fresh runner: no PR code ever ran
+  # here, so the workspace script is trusted as-is. Best-effort: a checks-API hiccup must not fail the run.
+  claude-verdict:
+    needs: claude
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Publish Claude verdict check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MAX_ID_BEFORE: ${{ needs.claude.outputs.max_id }}
+        run: node scripts/ci/claude-verdict-check.ts publish

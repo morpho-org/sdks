@@ -79,21 +79,6 @@ describe("post-claude main", () => {
     ]);
   });
 
-  test("default: publish-verdict checks the trusted copy, then publishes the verdict", async () => {
-    const { digest, trusted } = trustedFixture();
-    const out: string[] = [];
-
-    await main({
-      argv: ["publish-verdict"],
-      env: gateEnv(trusted, digest),
-      fetchImpl: okFetch,
-      writeOutput: (m) => out.push(m),
-    });
-
-    expect(out[0]).toBe(`Trusted scripts in ${trusted} match the snapshot.\n`);
-    expect(out[1]).toContain("Published Claude verdict");
-  });
-
   test("error: a tampered trusted copy stops before the authenticated gate runs", async () => {
     const { digest, trusted } = trustedFixture();
     writeFileSync(join(trusted, "a.ts"), "tampered");
