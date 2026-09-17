@@ -389,6 +389,10 @@ v6 prerelease:
   `VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
   `BundlesPermitMismatchError`, `BundlesRequirementSignatureMismatchError`,
   `Permit2SignatureTransferNonceAlreadyUsedError`, and `ReferralFeeRecipientMissingError`.
+- `UnsupportedRequirementSignatureError` is thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support, such as a stale v5 `permit2` signature. `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
 - `getVaultExitBundlesV1PermitStruct` and its parameter/result types are removed. Use
   `getBundlesSharesPermit` and `BundleSharesPermit`.
 

@@ -39,3 +39,8 @@ previous major versions.
 Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
 v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
 and blue-sdk-viem majors.
+
+Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+`getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+`UnexpectedRequirementSignatureError("permit")` for that case.

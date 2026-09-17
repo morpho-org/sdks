@@ -15,6 +15,7 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData as getBlueAuthorizationTypedData,
+  getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
   MetaMorphoAction as BlueMetaMorphoAction,
