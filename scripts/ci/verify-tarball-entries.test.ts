@@ -175,6 +175,21 @@ describe("verifyTarballEntries", () => {
     ).toThrow(/containing "~"/);
   });
 
+  test("error: characters invalid in Windows file names are rejected", () => {
+    for (const bad of [
+      "package/lib/a*.js",
+      'package/lib/a"b.js',
+      "package/lib/a:b.js",
+      "package/lib/a?.js",
+      "package/lib/a<b>.js",
+      "package/lib/a|b.js",
+    ]) {
+      expect(() => verifyTarballEntries([...VALID, bad])).toThrow(
+        /invalid in a Windows file name/,
+      );
+    }
+  });
+
   test("error: Windows reserved device basenames are rejected", () => {
     for (const bad of [
       "package/lib/CON",

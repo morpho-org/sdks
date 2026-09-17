@@ -45,6 +45,9 @@ export function canonicalEntryPath(entry: string): string {
 
 const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 
+/** Printable ASCII characters Win32 rejects in a path segment (`/` and `\` are handled separately). */
+const WIN32_INVALID = /[<>:"|?*]/;
+
 /** Win32 reserved device basenames, matched before any `.` and case-insensitively. */
 const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
 
@@ -64,6 +67,9 @@ const DOS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * - any entry with a character outside printable ASCII, so that case-
  *   insensitive and Unicode-normalizing consumer file systems (e.g. `ſ` → `s`
  *   under macOS caseless matching) cannot fold it onto another entry;
+ * - any segment containing a character Win32 cannot store in a file name
+ *   (`<`, `>`, `:`, `"`, `|`, `?`, `*`), which node-tar does not translate on
+ *   Windows so the entry could not be extracted at all;
  * - any segment containing `~`, the marker of a Windows 8.3 short name
  *   (`LONGFI~1.JS`) through which a second entry can reach an already
  *   extracted long-name file;
@@ -108,6 +114,11 @@ export function verifyTarballEntries(entries: readonly string[]): void {
     if (!PRINTABLE_ASCII.test(entry)) {
       throw new Error(
         `Tar entry "${entry}" contains a non-ASCII or control character; consumer file systems may fold it onto another path.`,
+      );
+    }
+    if (WIN32_INVALID.test(entry)) {
+      throw new Error(
+        `Tar entry "${entry}" contains a character that is invalid in a Windows file name.`,
       );
     }
     if (segments.some((s) => s.includes("~"))) {
