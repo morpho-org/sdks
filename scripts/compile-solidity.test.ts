@@ -32,8 +32,8 @@ describe("compile-solidity", () => {
         join(root, "node_modules"),
       );
       copyFileSync(
-        join(import.meta.dirname, "compile-solidity.js"),
-        join(scripts, "compile-solidity.js"),
+        join(import.meta.dirname, "compile-solidity.ts"),
+        join(scripts, "compile-solidity.ts"),
       );
       // An interface exercises cleanup without producing artifacts that need formatting.
       writeFileSync(
@@ -55,7 +55,7 @@ describe("compile-solidity", () => {
       );
 
       execFileSync(process.execPath, [
-        join(scripts, "compile-solidity.js"),
+        join(scripts, "compile-solidity.ts"),
         "blue-sdk-viem",
       ]);
 

@@ -57,7 +57,7 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        run: node scripts/release/detect-pending-changesets.mjs
+        run: node scripts/release/detect-pending-changesets.ts
 
       - name: Skip until version PR is merged
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -371,7 +371,7 @@ jobs:
           if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             while IFS= read -r -d '' manifest; do
               tag="$(
-                node scripts/release/compute-pending-tag.mjs "$manifest"
+                node scripts/release/compute-pending-tag.ts "$manifest"
               )"
 
               if [ -z "$tag" ]; then
@@ -481,7 +481,7 @@ jobs:
           for tag in "${tags[@]}"; do
             body_file="${releases_dir}/${tag//\//__}.md"
 
-            node scripts/release/github-release-body.mjs "${tag}" "${body_file}"
+            node scripts/release/github-release-body.ts "${tag}" "${body_file}"
 
             if gh release view "${tag}" >/dev/null 2>&1; then
               gh release edit "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"

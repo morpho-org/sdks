@@ -16,9 +16,9 @@ import {
   matchReleaseTag,
   readReleasePackages,
   writeGitHubReleaseBody,
-} from "./github-release-body.mjs";
+} from "./github-release-body.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -393,12 +393,16 @@ describe("main", () => {
 
   test("error: missing arguments", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/github-release-body.mjs <tag> <body-file>",
+      "Usage: node scripts/release/github-release-body.ts <tag> <body-file>",
     );
   });
 });
 
-function releasePackage(options) {
+function releasePackage(options: {
+  changelogPath?: string;
+  name: string;
+  version: string;
+}) {
   return {
     changelogPath: options.changelogPath ?? "CHANGELOG.md",
     name: options.name,
@@ -406,7 +410,7 @@ function releasePackage(options) {
   };
 }
 
-function changelogFor(version, body) {
+function changelogFor(version: string, body: string) {
   return [
     "# Changelog",
     "",
@@ -434,7 +438,12 @@ function createTempDir() {
   return tempDir;
 }
 
-function writePackage(options) {
+function writePackage(options: {
+  changelog?: string;
+  dir: string;
+  manifest: unknown;
+  packagesDir: string;
+}) {
   const packageDir = join(options.packagesDir, options.dir);
   mkdirSync(packageDir, { recursive: true });
   writeFileSync(

@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
 
 describe("getErrorMessage", () => {
   test("default", () => {
