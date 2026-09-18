@@ -3,7 +3,6 @@ import {
   type AccrualVaultV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
   Eip5267Domain,
-  getChainAddresses,
   type MarketParams,
   MarketUtils,
   MathLib,
@@ -114,6 +113,7 @@ export interface VaultV1Actions {
    * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
    *   transaction builder.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
@@ -362,9 +362,9 @@ export interface VaultV1Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612
-   *   or names another spender, amount, or deadline than the prepared cap.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit asset, owner, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612, has
+   *   the wrong asset, owner, or signature encoding, or names another spender, amount, or deadline
+   *   than the prepared cap.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -431,8 +431,8 @@ export interface VaultV1Actions {
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
    * @throws {UnknownBlueMarketAllocationError} when a source withdraw-queue market has no allocation snapshot.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {UnsupportedBlueMarketIrmError} when an allocated source or target market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `sourceVault` belongs to another vault.
    * @throws {VaultAssetMismatchError} when the source and destination vault assets differ.
    * @throws {SameVaultMigrationError} when the source and destination vault addresses are equal.
@@ -528,7 +528,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
-      chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     });
   }
@@ -856,8 +855,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    const addresses = getChainAddresses(this.chainId);
-    const blue = addresses.blue ?? addresses.morpho;
+    const blue = getChainAddress(this.chainId, "blue");
     let covered = 0n;
     const assignedByMarket = new Map<string, bigint>();
     for (const marketParams of marketParamsListSnapshot) {

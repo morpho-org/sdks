@@ -96,18 +96,18 @@ at the SDK level. The differences are at the protocol layer:
 - **Write routing**: `client.morpho.blue(marketParams, chainId)` preserves `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance`. These methods map to the five registered
-  BlueBundlesV1 entrypoints. There is no Bundler3 fallback or second BlueBundlesV1 entity.
+  BlueBundlesV1 entrypoints. There is no second BlueBundlesV1 entity.
 - **Contract-owned composition**: BlueBundlesV1 enforces token pulls, optional native wrapping,
   operation ordering, Morpho authorization consumption, referral fees, refunds, and residue
   handling. Combined methods support either non-zero leg or both legs.
 - **LLTV buffer**: Borrow, collateral-withdraw, and migration legs validate that the resulting
   position stays below `LLTV - buffer` (default 0.5%). Pure collateral supply and pure repay disable
   the onchain LTV cap so they can improve an unhealthy position.
-- **No Blue share-price slippage input**: BlueBundlesV1 has no Bundler3 `minSharePrice` /
-  `maxSharePrice` checks, so high-level Blue writes do not accept `slippageTolerance`.
+- **No Blue share-price slippage input**: BlueBundlesV1 has no `minSharePrice` / `maxSharePrice`
+  checks, so high-level Blue writes do not accept `slippageTolerance`.
 - **V2-only write reallocations**: Optional high-level Blue reallocations are
   `VaultV2BlueReallocation` calls mapped to BlueBundlesV1 `PublicAllocations`. PublicAllocator V1
-  data and low-level helpers remain public but are not accepted by these writes.
+  APIs and low-level composition helpers were removed in v6; direct Vault V1 flows remain.
 - **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
   `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
   `borrowAssets`, `collateral`.
@@ -132,7 +132,6 @@ force the vault to pull assets back to vault level and withdraw/redeem after.
 
 ## Contract Routing
 
-This is the most important routing decision in the SDK. "Bundled" does not always mean Bundler3:
 Vaults, Blue, and Midnight use fixed, protocol-owned bundle contracts directly.
 
 ### Vault deposits: Direct VaultBundlesV1 calls
@@ -154,7 +153,7 @@ High-level deposits must preserve this guard.
 Funding accepts exactly one of `amount` or `nativeAmount`. Native funding requires the vault asset
 to be the chain's wrapped-native token, otherwise `NativeAmountOnNonWNativeVaultError` is thrown.
 It needs no token approval or permit; `tx.value` is the full gross native amount and wrapping
-happens inside VaultBundlesV1. The action does not encode Bundler3 sub-actions.
+happens inside VaultBundlesV1.
 
 Classic approvals and ERC-2612 permits name VaultBundlesV1 as spender. Permit2 SignatureTransfer
 keeps the ERC-20 allowance on canonical Permit2 and names VaultBundlesV1 in the signed transfer.
@@ -167,7 +166,7 @@ then deposits net assets into Vault V2 with a destination maximum-share-price bo
 ### Withdrawals and redemptions: VaultBundlesV1
 
 **Withdraw (V1 & V2)** routes through the chain's registered **VaultBundlesV1** periphery
-contract — not the vault directly, and not through Bundler3/the general adapter. VaultBundlesV1
+contract rather than the vault directly. VaultBundlesV1
 burns `msg.sender`'s vault shares and pays out the requested `assets`, minus an optional referral
 fee. Because asset-mode calldata carries no maximum-shares argument, the vault-share allowance
 _is_ the only cap on that burn: `getRequirements()` derives the exact allowance from the vault
@@ -208,8 +207,7 @@ ERC-20 prerequisite on canonical Permit2 while its SignatureTransfer payload tar
 BlueBundlesV1; Morpho authorization grants BlueBundlesV1 operator rights.
 
 BlueBundlesV1 entrypoints own the atomic ordering. Vault V2 public allocations are encoded inside
-the fixed call rather than prepended as arbitrary Bundler3 actions. Blue writes therefore have no
-GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound input.
+the fixed call. Blue writes therefore have no PublicAllocator V1 plan or share-price-bound input.
 
 ### Summary
 
@@ -244,7 +242,7 @@ morpho-sdk
 Provides protocol-level constants and math:
 
 - **`getChainAddresses(chainId)`** — resolves contract addresses for the target chain, including
-  `bundler3.generalAdapter1`, `bundles.blueBundlesV1`, `bundles.vaultBundlesV1`, `permit2`, and others.
+  `bundles.blueBundlesV1`, `bundles.vaultBundlesV1`, `permit2`, and others.
 - **`MathLib`** — fixed-point arithmetic (`mulDivUp`, `wToRay`, `min`, `WAD`, `RAY`).
 - **`DEFAULT_SLIPPAGE_TOLERANCE`** — the default 0.03% slippage used for deposit `maxSharePrice`.
 - **`MarketParams`** and **`marketParamsAbi`** — used when encoding force-deallocation data
@@ -260,24 +258,14 @@ On-chain data fetching and contract ABIs:
 - **`fetchHolding`** — reads a user's token allowances, EIP-2612 nonce, and Permit2 state.
   Used by the requirements system to determine what approvals are needed.
 - **`fetchToken`** — token metadata lookups.
-- **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData`, and
-  `getPermit2TransferFromTypedData` — used to build EIP-712 signing payloads for ERC-2612,
-  Permit2 AllowanceTransfer, and Permit2 SignatureTransfer flows.
+- **Typed data helpers**: `getPermitTypedData` and `getPermit2TransferFromTypedData` — used to build
+  EIP-712 signing payloads for ERC-2612 and Permit2 SignatureTransfer flows.
 
 ### Local VaultBundlesV1 ABI
 
 `vaultBundlesV1Abi` is pinned in this package's [`src/abis.ts`](./src/abis.ts) and exported from
 `@morpho-org/morpho-sdk/abis`. Both vault deposit builders use this local ABI to encode
 `vaultBundlesV1Deposit`.
-
-### Local Bundler Encoding
-
-Explicit low-level bundle encoding:
-
-- **`BundlerAction.encodeBundle(chainId, actions)`** — takes an array of bundler `Action`
-  objects (e.g. `erc20TransferFrom`, `erc4626Deposit`, `permit`, `approve2`, `transferFrom2`)
-  and encodes them into a single calldata blob targeting the Bundler3 contract.
-- **`Action` type** — the typed action union used inside bundles.
 
 ### `@morpho-org/morpho-ts`
 
@@ -315,9 +303,6 @@ Withdrawals, redemptions, and V1-to-V2 migrations resolve source-vault share aut
 allowance must equal the resolved share cap; an existing larger allowance is replaced. Asset-mode
 withdrawals re-read allowance on every `getRequirements()` call while keeping their quoted cap
 fixed. Signatures and unsigned approvals use the same VaultBundlesV1 spender.
-
-The low-level `getGeneralAdapterRequirements` resolver remains available for explicit Bundler3
-composition using GeneralAdapter1 and Permit2 AllowanceTransfer.
 
 ### BlueBundlesV1 requirement decision
 

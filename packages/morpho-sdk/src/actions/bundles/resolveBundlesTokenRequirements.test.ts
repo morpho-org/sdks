@@ -325,7 +325,7 @@ describe("resolveBundlesTokenRequirements", () => {
       expect(() =>
         resolveBundlesTokenRequirements({
           token: usdc,
-          spender: getChainAddress(chainId, "bundler3.generalAdapter1"),
+          spender: "0x1111111111111111111111111111111111111111",
           owner,
           chainId,
           amount,

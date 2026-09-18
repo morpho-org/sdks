@@ -5,70 +5,9 @@ import { describe, expect, test, vi } from "vitest";
 import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
-import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
 describe("MorphoBlue reallocation APIs", () => {
-  test("getVaultV1Reallocations error: ChainIdMismatchError", () => {
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http("https://rpc.example"),
-    });
-    const morphoClient = publicClient.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.getVaultV1Reallocations({
-        reallocationData: new VaultV1ReallocationData({
-          chainId: mainnet.id + 1,
-        }),
-        borrowAmount: 1n,
-      }),
-    ).toThrow(ChainIdMismatchError);
-  });
-
-  test("deprecated getReallocations delegates to the Vault V1 planner", () => {
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http("https://rpc.example"),
-    });
-    const market = publicClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const expected = [] as const;
-    const canonical = vi
-      .spyOn(market, "getVaultV1Reallocations")
-      .mockReturnValue(expected);
-    const params = {
-      reallocationData: new VaultV1ReallocationData({ chainId: mainnet.id }),
-      borrowAmount: 1n,
-    } as const;
-
-    expect(market.getReallocations(params)).toBe(expected);
-    expect(canonical).toHaveBeenCalledWith(params);
-  });
-
-  test("deprecated getReallocationData delegates to the Vault V1 fetcher", async () => {
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http("https://rpc.example"),
-    });
-    const market = publicClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const expected = new VaultV1ReallocationData({ chainId: mainnet.id });
-    const canonical = vi
-      .spyOn(market, "getVaultV1ReallocationData")
-      .mockResolvedValue(expected);
-    const params = {
-      vaultAddresses: [],
-      block: { number: 0n, timestamp: 0n },
-    } as const;
-
-    await expect(market.getReallocationData(params)).resolves.toBe(expected);
-    expect(canonical).toHaveBeenCalledWith(params);
-  });
-
   test("error: getVaultV2BlueReallocationData validates the client chain", async () => {
     const publicClient = createPublicClient({
       chain: mainnet,

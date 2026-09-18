@@ -29,15 +29,15 @@ import {
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
-  InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementApproval,
   NonPositiveInputError,
   type PermitRequirementSignature,
-  UnsupportedInKindAdapterError,
   VaultAddressMismatchError,
+  VaultV2SingleAdapterRequiredError,
+  VaultV2UnsupportedExitAdapterError,
 } from "../../types/index.js";
 
 const mockV2Requirements = (
@@ -244,7 +244,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     },
   );
 
-  test("error: InKindRedeemRequiresSingleAdapterError", () => {
+  test("error: VaultV2SingleAdapterRequiredError", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
@@ -257,7 +257,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data({ adapters: "empty" }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedeemRequiresSingleAdapterError);
+    ).toThrow(VaultV2SingleAdapterRequiredError);
   });
 
   test("error: validates chain and vault snapshot address", () => {
@@ -420,7 +420,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data({ adapters: "legacy" }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(UnsupportedInKindAdapterError);
+    ).toThrow(VaultV2UnsupportedExitAdapterError);
   });
 
   test("behavior: treats markets absent from the adapter snapshot as zero", () => {

@@ -11,10 +11,10 @@ import {
 import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
+  BundlesPermitMismatchError,
   InputExceedsMaxError,
   NonPositiveInputError,
   type PermitRequirementSignature,
-  VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 import { vaultV2InKindRedeem } from "./inKindRedeem.js";
 
@@ -65,11 +65,6 @@ registerCustomAddresses({
   addresses: {
     [chainId]: {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000010",
-        generalAdapter1: "0x0000000000000000000000000000000000000011",
-      },
       bundles: { vaultExitBundlesV1 },
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000012",
     },
@@ -187,7 +182,7 @@ describe("vaultV2InKindRedeem", () => {
     `);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError on deadline disagreement", () => {
+  test("error: BundlesPermitMismatchError on deadline disagreement", () => {
     expect(() =>
       vaultV2InKindRedeem({
         vault: { chainId, address: vault },
@@ -209,10 +204,10 @@ describe("vaultV2InKindRedeem", () => {
           },
         },
       }),
-    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+    ).toThrow(BundlesPermitMismatchError);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError on amount disagreement", () => {
+  test("error: BundlesPermitMismatchError on amount disagreement", () => {
     expect(() =>
       vaultV2InKindRedeem({
         vault: { chainId, address: vault },
@@ -234,10 +229,10 @@ describe("vaultV2InKindRedeem", () => {
           },
         },
       }),
-    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+    ).toThrow(BundlesPermitMismatchError);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another owner", () => {
+  test("error: BundlesPermitMismatchError for a permit with another owner", () => {
     expect(() =>
       vaultV2InKindRedeem({
         vault: { chainId, address: vault },
@@ -256,10 +251,10 @@ describe("vaultV2InKindRedeem", () => {
           },
         },
       }),
-    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+    ).toThrow(BundlesPermitMismatchError);
   });
 
-  test("error: VaultExitBundlesV1PermitMismatchError for a permit with another spender", () => {
+  test("error: BundlesPermitMismatchError for a permit with another spender", () => {
     expect(() =>
       vaultV2InKindRedeem({
         vault: { chainId, address: vault },
@@ -281,7 +276,7 @@ describe("vaultV2InKindRedeem", () => {
           },
         },
       }),
-    ).toThrow(VaultExitBundlesV1PermitMismatchError);
+    ).toThrow(BundlesPermitMismatchError);
   });
 
   test("behavior: calldata round-trips across valid primitive inputs", () => {

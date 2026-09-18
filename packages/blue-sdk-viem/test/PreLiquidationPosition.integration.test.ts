@@ -16,7 +16,7 @@ import {
 } from "../src/index.js";
 import { preLiquidationTest } from "./setup.js";
 
-const { morpho } = getChainAddresses(ChainId.EthMainnet);
+const { blue } = getChainAddresses(ChainId.EthMainnet);
 const { usdt_wbtc } = markets[ChainId.EthMainnet];
 
 const supplyAssets = parseUnits("10", 6);
@@ -46,11 +46,11 @@ describe("augment/Position", () => {
     await client.approve({
       account: supplier,
       address: usdt_wbtc.loanToken,
-      args: [morpho, maxUint256],
+      args: [blue, maxUint256],
     });
     await client.writeContract({
       account: supplier,
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "supply",
       args: [usdt_wbtc, supplyAssets, 0n, supplier.address, "0x"],
@@ -62,16 +62,16 @@ describe("augment/Position", () => {
     });
     await client.approve({
       address: usdt_wbtc.collateralToken,
-      args: [morpho, maxUint256],
+      args: [blue, maxUint256],
     });
     await client.writeContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "supplyCollateral",
       args: [usdt_wbtc, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "borrow",
       args: [
@@ -91,7 +91,7 @@ describe("augment/Position", () => {
     });
 
     await client.writeContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "setAuthorization",
       args: [preLiquidationAddress, true],

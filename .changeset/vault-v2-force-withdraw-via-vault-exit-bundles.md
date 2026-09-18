@@ -34,9 +34,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - The vault's `receiveAssetsGate` must allow VaultExitBundlesV1 as an asset recipient.
 - Only one VaultExitBundlesV1 call can execute per transaction (its `initiator` guard is transient
   and never cleared).
-- `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are deprecated aliases
-  of the new canonical `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`;
-  `instanceof` keeps working for both names.
+- The legacy in-kind adapter errors are removed. Use `VaultV2SingleAdapterRequiredError` and
+  `VaultV2UnsupportedExitAdapterError`.
 
 **Additions**
 
@@ -56,7 +55,7 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - Referral-fee inputs are validated eagerly at handle creation, before any RPC: `referralFeePct < 0`
   throws `NegativeInputError`, `referralFeePct >= WAD` throws `ReferralFeePctExceededError` (which
   extends `InputExceedsMaxError`), and a positive pct with a missing or zero recipient throws
-  `ReferralFeeRecipientMissingError` (aliased as the legacy `MissingReferralFeeRecipientError`).
+  `ReferralFeeRecipientMissingError`.
 - `previewVaultV2ForceWithdraw(vaultData, params)` returns the penalty-free leg, penalised leg,
   penalty, referral fee, net payout, and `maxExitAssets`, with no RPC.
 - `resolveVaultV2ForceWithdrawEligibility`, `computeVaultV2ForceWithdrawPlan`,

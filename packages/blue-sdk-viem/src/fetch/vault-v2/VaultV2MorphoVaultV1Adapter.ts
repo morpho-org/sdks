@@ -31,7 +31,6 @@ import { fetchAccrualVault } from "../Vault.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2MorphoVaultV1Adapter` entity.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
@@ -56,9 +55,9 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
+  const { morphoVaultV1AdapterFactory } = getChainAddresses(
+    await getChainId(client),
+  );
 
   /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
   if (!morphoVaultV1AdapterFactory) {
@@ -153,7 +152,6 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` with adapter shares and nested Vault
  *   V1 allocation state for later projection.
@@ -179,8 +177,6 @@ export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const adapter = await fetchVaultV2MorphoVaultV1Adapter(
     address,
     client,

@@ -14,7 +14,7 @@ export async function supplyCollateral(params: {
   collateralAmount: bigint;
 }) {
   const { client, chainId, market, collateralAmount } = params;
-  const { morpho } = getChainAddresses(chainId);
+  const { blue: morpho } = getChainAddresses(chainId);
   await client.deal({
     erc20: market.collateralToken,
     amount: collateralAmount,
@@ -45,7 +45,7 @@ export async function supplyLoan(params: {
   supplyAmount: bigint;
 }) {
   const { client, chainId, market, supplyAmount } = params;
-  const { morpho } = getChainAddresses(chainId);
+  const { blue: morpho } = getChainAddresses(chainId);
   await client.deal({
     erc20: market.loanToken,
     amount: supplyAmount,
@@ -76,21 +76,7 @@ export async function borrow(params: {
   borrowAmount: bigint;
 }) {
   const { client, chainId, market, borrowAmount } = params;
-  const { morpho } = getChainAddresses(chainId);
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-
-  // Authorize GA1 on Morpho
-  await client.sendTransaction({
-    to: morpho,
-    data: encodeFunctionData({
-      abi: blueAbi,
-      functionName: "setAuthorization",
-      args: [generalAdapter1, true],
-    }),
-    value: 0n,
-  });
+  const { blue: morpho } = getChainAddresses(chainId);
 
   // Borrow directly from Morpho
   await client.sendTransaction({

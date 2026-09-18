@@ -384,19 +384,6 @@ describe("VaultV2MorphoMarketV1Adapter", () => {
       VaultV2MorphoMarketV1Adapter.collateralCapId(params.collateralToken),
       VaultV2MorphoMarketV1Adapter.adapterMarketCapId(adapter.address, params),
     ]);
-    expect(
-      VaultV2MorphoMarketV1Adapter.marketParamsId(adapter.address, params),
-    ).toBe(
-      VaultV2MorphoMarketV1Adapter.adapterMarketCapId(adapter.address, params),
-    );
-    expect(VaultV2MorphoMarketV1Adapter.adapterId(adapter.address)).toBe(
-      VaultV2MorphoMarketV1Adapter.adapterCapId(adapter.address),
-    );
-    expect(
-      VaultV2MorphoMarketV1Adapter.collateralId(params.collateralToken),
-    ).toBe(
-      VaultV2MorphoMarketV1Adapter.collateralCapId(params.collateralToken),
-    );
   });
 });
 
@@ -480,22 +467,6 @@ describe("VaultV2MorphoMarketV1AdapterV2", () => {
         m.params,
       ),
     ]);
-    expect(
-      VaultV2MorphoMarketV1AdapterV2.marketParamsId(adapter.address, m.params),
-    ).toBe(
-      VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
-        adapter.address,
-        m.params,
-      ),
-    );
-    expect(VaultV2MorphoMarketV1AdapterV2.adapterId(adapter.address)).toBe(
-      VaultV2MorphoMarketV1AdapterV2.adapterCapId(adapter.address),
-    );
-    expect(
-      VaultV2MorphoMarketV1AdapterV2.collateralId(m.params.collateralToken),
-    ).toBe(
-      VaultV2MorphoMarketV1AdapterV2.collateralCapId(m.params.collateralToken),
-    );
   });
 });
 
@@ -609,9 +580,6 @@ describe("VaultV2MorphoVaultV1Adapter", () => {
     );
     expect(adapter.morphoVaultV1).toBe(RECIPIENT);
     expect(adapter.ids()).toStrictEqual([adapter.adapterId]);
-    expect(VaultV2MorphoVaultV1Adapter.adapterId(adapter.address)).toBe(
-      VaultV2MorphoVaultV1Adapter.adapterCapId(adapter.address),
-    );
   });
 });
 
@@ -670,17 +638,5 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
       value: 0n,
       limiter: CapacityLimitReason.position,
     });
-  });
-
-  test("supports the deprecated parent allocation constructor argument", () => {
-    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
-      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
-      {} as AccrualVault,
-      10n,
-      0n,
-    );
-
-    expect(adapter.parentAllocation).toBe(0n);
-    expect(adapter.realAssets()).toBe(0n);
   });
 });

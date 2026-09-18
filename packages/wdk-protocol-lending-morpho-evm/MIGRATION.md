@@ -10,6 +10,8 @@ VaultBundlesV1 with `MorphoExclusiveSupplyOptions` and existing token approvals 
 funding. Signed deposits use `prepareSupply`. The exported `MorphoSupplyOptions`,
 `MorphoErc20SupplyOptions`, `MorphoNativeSupplyOptions`, and
 `ApprovalOrSignatureRequirement` compatibility types are removed.
+Bundler3-routed supply inputs and option-level requirement signatures are no longer accepted;
+use the prepared VaultBundlesV1 handle instead.
 
 Use `MorphoExclusiveSupplyOptions` with `prepareSupply`, then call the same handle's
 `getRequirements`, `submit`, and `quote`. Every vault deposit uses VaultBundlesV1,
@@ -38,6 +40,14 @@ these deposits. There is no Bundler3 fallback.
   reusable maximum approval; the later BlueBundlesV1 transaction still uses a bounded funding cap
   and refunds excess.
 
+## Deprecation-window exception
+
+`BlueApprovalOrSignatureRequirement` and the Bundler3-routed input shapes were deprecated only during
+the 2.0.0 prerelease and are removed without a published deprecation window. This is the one-time
+lifecycle deviation recorded in
+[`TIB-2026-09-17`](../../docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
+Stay on 1.x if an integration still depends on those inputs.
+
 ## TypeScript output changes
 
 - Prepared-handle `getRequirements()` returns a readonly array. Treat it as an immutable result instead of
@@ -49,7 +59,8 @@ these deposits. There is no Bundler3 fallback.
   `AuthorizationRequirementSignature`.
 - Use `BundlesApprovalOrSignatureRequirement` for prepared vault deposits and Blue token-funded writes, and
   `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization.
-  `BlueApprovalOrSignatureRequirement` remains a deprecated alias of the first.
+- Remove imports of `BlueApprovalOrSignatureRequirement`; use
+  `BundlesApprovalOrSignatureRequirement` instead.
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
   Vault token and share signatures are passed to `PreparedMorphoSupply.submit` / `.quote`

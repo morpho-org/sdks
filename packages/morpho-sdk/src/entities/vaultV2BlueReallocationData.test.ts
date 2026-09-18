@@ -1469,11 +1469,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         supplyQueue: [targetMarket.id],
         totalSupply: 30n,
         lastTotalAssets: 30n,
-        publicAllocatorConfig: {
-          admin: VAULT,
-          fee: 1n,
-          accruedFee: 2n,
-        },
       },
       [
         {
@@ -1484,12 +1479,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
             pendingCap: { value: 2_000n, validAt: TIMESTAMP + 3n },
             removableAt: 0n,
             enabled: true,
-            publicAllocatorConfig: {
-              vault: NESTED_VAULT,
-              marketId: targetMarket.id,
-              maxIn: 100n,
-              maxOut: 200n,
-            },
           },
           position: nestedPosition,
         },
@@ -1501,12 +1490,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
             pendingCap: { value: 0n, validAt: 0n },
             removableAt: 0n,
             enabled: true,
-            publicAllocatorConfig: {
-              vault: NESTED_VAULT,
-              marketId: sourceMarket.id,
-              maxIn: 0n,
-              maxOut: 0n,
-            },
           },
           position: nestedSourcePosition,
         },

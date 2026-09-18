@@ -66,7 +66,7 @@ Pick a different color per row. Keep descriptions ultra-short.]
 
 |     | Feature  | Description                                            |
 | --- | -------- | ------------------------------------------------------ |
-| 🟣  | deposit  | Route deposits through bundler3 via general adapter    |
+| 🟣  | deposit  | Route deposits through the fixed vault bundle periphery |
 | 🔵  | withdraw | Direct vault withdrawal with share-to-asset conversion |
 
 [Additionally, present each new function with a simple summary table
@@ -74,7 +74,7 @@ to give reviewers a quick overview of signatures and purpose:]
 
 | Function            | Parameters                         | Returns       | Purpose                                    |
 | ------------------- | ---------------------------------- | ------------- | ------------------------------------------ |
-| `vaultV1Deposit()`  | `client, { vault, assets, owner }` | `Transaction` | Build a deposit tx routed through bundler3 |
+| `vaultV1Deposit()`  | `client, { vault, assets, owner }` | `Transaction` | Build a deposit through VaultBundlesV1     |
 | `vaultV1Withdraw()` | `client, { vault, assets, owner }` | `Transaction` | Build a direct vault withdrawal tx         |
 
 ## Architecture (optional)
@@ -90,9 +90,8 @@ graph LR
   User -->|"deposit()"| Client
   Client --> VaultEntity
   VaultEntity --> DepositAction
-  DepositAction -->|"bundle"| GeneralAdapter
-  GeneralAdapter --> Bundler3
-  Bundler3 -->|"tx"| Vault
+  DepositAction -->|"tx"| VaultBundlesV1
+  VaultBundlesV1 --> Vault
 ```
 
 - If the PR adds **non-transactional features or modules**, create a
