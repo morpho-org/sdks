@@ -237,53 +237,23 @@ jobs:
             }
           ')
 
-          # Inventory the received tarballs by reading name/version from inside
-          # each, rejecting duplicates.
-          #
-          # npm's manifest reader (pacote) strips the leading path component of
-          # every tar entry, so a tarball smuggling a second top-level directory
-          # (e.g. `zzz/package.json`) can make `npm publish` ship a different
-          # name/version than a naive read of `package/package.json` — defeating
-          # the allowlist below. We close that structurally: reject any tarball
-          # that is not a single-rooted `package/` archive with exactly one
-          # `package/package.json` and no symlink/hardlink/device entries. Once
-          # that invariant holds there is exactly one manifest in the archive, so
-          # the literal read below is the same manifest npm will publish. (A
-          # registry-aware `npm publish --dry-run` cannot be used for this: it
-          # errors on versions already on the registry, which the idempotent
-          # rerun path relies on being publishable-or-skippable.)
+          # Inventory the received tarballs by reading name/version through
+          # the same pacote manifest reader that npm publish uses, rejecting
+          # duplicates. The GNU tar listing checks below remain defense in
+          # depth for archive structure and irregular entries.
           declare -A received_version
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            # npm's extractor (node-tar) does not extract the stored names the
-            # literal checks below inspect: it strips a leading `\` as a root
-            # indicator on every platform and treats `\` as a separator on
-            # Windows, and case-insensitive consumer file systems (Windows,
-            # macOS) collapse `Package.json` onto `package.json`. A later entry
-            # such as `package/\./package.json` or `package/Package.json` would
-            # overwrite the validated manifest at install time. Reject any
-            # entry that aliases another after consumer-side normalization.
-            # The gate parses the raw ustar headers itself with node-tar's
-            # rules (and rejects every header kind it does not model, e.g.
-            # global PAX headers, whose `path` record GNU tar honours but
-            # node-tar ignores while still applying their other records),
-            # so the GNU `tar -t` listing used by the literal checks below can
-            # only ever contain the same printable-ASCII names it approved.
-            # Logic + tests: scripts/ci/verify-tarball-entries.ts
-            node scripts/ci/verify-tarball-entries.ts "$tgz"
             # `--quoting-style=escape` keeps one line per entry (a stored
             # newline or control byte is rendered as `\n`/octal rather than
-            # raw); the gate above already guarantees none is present.
+            # raw).
             entries="$(tar -tzf "$tgz" --quoting-style=escape)"
             # Count-based checks (not `grep -q`) so behaviour is identical across
             # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
             #
-            # Reject non-canonical entry paths first: pacote normalizes `.`/`..`
-            # segments and `//` before resolving the manifest, so an entry like
-            # `package/./package.json` aliases onto the root `package.json` after
-            # the leading component is stripped — it would be published while the
-            # exact-path checks below still read the benign `package/package.json`.
+            # Reject non-canonical entry paths as a defense-in-depth archive
+            # structure check; pacote remains the source of truth for identity.
             noncanon="$(printf '%s\n' "$entries" | grep -cE '(^|/)\.\.?(/|$)|//' || true)"
             if [ "$noncanon" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} has ${noncanon} non-canonical path(s) (., .., //); refusing to publish."
@@ -305,11 +275,10 @@ jobs:
               exit 1
             fi
 
-            tmpd="$(mktemp -d)"
-            tar -xzf "$tgz" -C "$tmpd" package/package.json
-            name="$(node -p "require('${tmpd}/package/package.json').name")"
-            version="$(node -p "require('${tmpd}/package/package.json').version")"
-            rm -rf "$tmpd"
+            # Read name/version through the exact code path `npm publish` uses
+            # (pacote.manifest → node-tar extraction), so the identity we check
+            # against the source allowlist is the identity npm will publish.
+            IFS=$'\t' read -r name version < <(node scripts/ci/read-tarball-identity.ts "$tgz")
 
             if [ -n "${received_version[$name]:-}" ]; then
               echo "::error::Duplicate tarball for ${name} in the artifact."
