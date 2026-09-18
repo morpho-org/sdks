@@ -263,6 +263,60 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test.each([true, false])(
+    "error: rejects a gitignore rename ancestor collision (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const tgz = buildFileAncestorTarball({
+          ancestor: "package/config/.gitignore",
+          descendant: "package/config/.npmignore/child.js",
+          dir,
+          fileFirst,
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/ancestor/);
+      });
+    },
+  );
+
+  test.each([true, false])(
+    "default: tolerates a literal npmignore sibling (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const ignoreEntries = fileFirst
+          ? ["package/config/.gitignore", "package/config/.npmignore"]
+          : ["package/config/.npmignore", "package/config/.gitignore"];
+        const tgz = buildTarball(dir, {
+          entries: ["package/", "package/package.json", ...ignoreEntries],
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).resolves.toBeUndefined();
+      });
+    },
+  );
+
+  test.each([true, false])(
+    "error: rejects a case-folded gitignore rename ancestor (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const tgz = buildFileAncestorTarball({
+          ancestor: "package/.gitignore",
+          descendant: "package/.NPMIGNORE/x",
+          dir,
+          fileFirst,
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/ancestor/);
+      });
+    },
+  );
+
   test("error: rejects entries outside package", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {

@@ -62,7 +62,8 @@ export function loadBundledTar(npmRoot: string): EntryLister {
  * @remarks
  * Rejects path segments that Windows cannot represent safely, including
  * non-ASCII characters, 8.3 aliases, trailing dots or spaces, reserved device
- * names, and characters rejected by Win32.
+ * names, and characters rejected by Win32. It also models pacote's
+ * `.gitignore` to `.npmignore` rename during extraction.
  *
  * @param path - The path stored in the archive.
  * @returns The normalized, case-folded path.
@@ -115,9 +116,7 @@ export function foldEntryPath(path: string): string {
  * @param entries - The entries exposed by node-tar.
  */
 export function verifyTarballEntries(entries: readonly TarEntry[]): void {
-  const originals = new Map<string, { path: string; type: string }>();
-  const prefixes = new Set<string>();
-  for (const { path, type } of entries) {
+  const normalizedEntries = entries.map(({ path, type }) => {
     if (type !== "File" && type !== "Directory") {
       throw new Error(`Entry "${path}" has unsupported type "${type}".`);
     }
@@ -126,40 +125,76 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
     if (folded !== "package" && !folded.startsWith("package/")) {
       throw new Error(`Entry "${path}" is outside package/.`);
     }
+    return { path, type, folded };
+  });
 
-    const original = originals.get(folded);
-    if (original !== undefined) {
-      throw new Error(
-        `Entries "${original.path}" and "${path}" collide as "${folded}" on case-insensitive or Windows filesystems.`,
-      );
+  const npmignoreFiles = new Set(
+    normalizedEntries
+      .filter(
+        ({ folded, type }) => type === "File" && folded.endsWith("/.npmignore"),
+      )
+      .map(({ folded }) => folded),
+  );
+  const originals = new Map<
+    string,
+    { path: string; type: string; isGitignoreAlias: boolean }
+  >();
+  const prefixes = new Set<string>();
+  for (const { path, type, folded } of normalizedEntries) {
+    const aliases = [{ folded, isGitignoreAlias: false }];
+    const npmignoreSibling = folded.replace(/\.gitignore$/, ".npmignore");
+    if (
+      type === "File" &&
+      folded.endsWith("/.gitignore") &&
+      !npmignoreFiles.has(npmignoreSibling)
+    ) {
+      aliases.push({ folded: npmignoreSibling, isGitignoreAlias: true });
     }
 
-    const foldedSegments = folded.split("/");
-    const ancestorFile = foldedSegments
-      .slice(1)
-      .map((_, index) => foldedSegments.slice(0, index + 1).join("/"))
-      .map((ancestor) => originals.get(ancestor))
-      .find((entry) => entry?.type === "File");
-    if (ancestorFile !== undefined) {
-      throw new Error(
-        `Entries "${ancestorFile.path}" and "${path}" collide: a file is an ancestor of another entry.`,
-      );
-    }
-
-    if (type === "File" && prefixes.has(folded)) {
-      const descendant = [...originals.entries()].find(([candidate]) =>
-        candidate.startsWith(`${folded}/`),
-      )?.[1];
-      if (descendant !== undefined) {
+    for (const alias of aliases) {
+      const original = originals.get(alias.folded);
+      if (
+        original !== undefined &&
+        !(
+          alias.isGitignoreAlias !== original.isGitignoreAlias &&
+          type === "File" &&
+          original.type === "File"
+        )
+      ) {
         throw new Error(
-          `Entries "${path}" and "${descendant.path}" collide: a file is an ancestor of another entry.`,
+          `Entries "${original.path}" and "${path}" collide as "${alias.folded}" on case-insensitive or Windows filesystems.`,
         );
       }
-    }
 
-    originals.set(folded, { path, type });
-    for (let index = 1; index < foldedSegments.length; index += 1) {
-      prefixes.add(foldedSegments.slice(0, index).join("/"));
+      const foldedSegments = alias.folded.split("/");
+      const ancestorFile = foldedSegments
+        .slice(1)
+        .map((_, index) => foldedSegments.slice(0, index + 1).join("/"))
+        .map((ancestor) => originals.get(ancestor))
+        .find((entry) => entry?.type === "File");
+      if (ancestorFile !== undefined) {
+        throw new Error(
+          `Entries "${ancestorFile.path}" and "${path}" collide: a file is an ancestor of another entry.`,
+        );
+      }
+
+      if (type === "File" && prefixes.has(alias.folded)) {
+        const descendant = [...originals.entries()].find(([candidate]) =>
+          candidate.startsWith(`${alias.folded}/`),
+        )?.[1];
+        throw new Error(
+          `Entries "${path}" and "${descendant?.path ?? `${alias.folded}/…`}" collide: a file is an ancestor of another entry.`,
+        );
+      }
+
+      originals.set(alias.folded, {
+        path,
+        type,
+        isGitignoreAlias: alias.isGitignoreAlias,
+      });
+      for (let index = 1; index < foldedSegments.length; index += 1) {
+        prefixes.add(foldedSegments.slice(0, index).join("/"));
+      }
     }
   }
 
