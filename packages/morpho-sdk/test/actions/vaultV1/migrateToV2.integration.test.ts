@@ -44,7 +44,8 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = withChainTimestamp(await client.timestamp(), () =>
+        const timestamp = await client.timestamp();
+        const migrate = withChainTimestamp(timestamp, () =>
           vaultV1.migrateToV2({
             userAddress: client.account.address,
             sourceVault,
@@ -53,9 +54,8 @@ describe("MigrateToV2 VaultV1", () => {
           }),
         );
 
-        const requirements = await withChainTimestamp(
-          await client.timestamp(),
-          () => migrate.getRequirements(),
+        const requirements = await withChainTimestamp(timestamp, () =>
+          migrate.getRequirements(),
         );
 
         expect(requirements.length).toBe(1);
@@ -120,7 +120,8 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = withChainTimestamp(await client.timestamp(), () =>
+        const timestamp = await client.timestamp();
+        const migrate = withChainTimestamp(timestamp, () =>
           vaultV1.migrateToV2({
             userAddress: client.account.address,
             sourceVault,
@@ -129,9 +130,8 @@ describe("MigrateToV2 VaultV1", () => {
           }),
         );
 
-        const requirements = await withChainTimestamp(
-          await client.timestamp(),
-          () => migrate.getRequirements(),
+        const requirements = await withChainTimestamp(timestamp, () =>
+          migrate.getRequirements(),
         );
 
         if (!isRequirementSignature(requirements[0])) {
@@ -157,9 +157,7 @@ describe("MigrateToV2 VaultV1", () => {
         expect(requirementSignature.args.amount).toEqual(shares);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
-        expect(requirementSignature.args.deadline).toBeGreaterThan(
-          await client.timestamp(),
-        );
+        expect(requirementSignature.args.deadline).toBeGreaterThan(timestamp);
 
         const tx = migrate.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
@@ -209,16 +207,18 @@ describe("MigrateToV2 VaultV1", () => {
         const sourceVault = await vaultV1.getData();
         const targetVault = await vaultV2.getData();
 
-        const migrate = vaultV1.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          assets,
-        });
+        const timestamp = await client.timestamp();
+        const migrate = withChainTimestamp(timestamp, () =>
+          vaultV1.migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            assets,
+          }),
+        );
 
-        const requirements = await withChainTimestamp(
-          await client.timestamp(),
-          () => migrate.getRequirements(),
+        const requirements = await withChainTimestamp(timestamp, () =>
+          migrate.getRequirements(),
         );
 
         expect(requirements.length).toBe(1);

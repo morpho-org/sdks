@@ -331,7 +331,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(afterPosition.supplyShares).toBeLessThan(positionData.supplyShares);
     expect(
       await client.readContract({
-        address: getChainAddress(mainnet.id, "morpho"),
+        address: getChainAddress(mainnet.id, "blue"),
         abi: blueAbi,
         functionName: "isAuthorized",
         args: [
@@ -854,7 +854,7 @@ describe("BlueBundlesV1 Blue writes", () => {
       supplyAmount: supplied,
     });
 
-    const morpho = getChainAddress(mainnet.id, "morpho");
+    const morpho = getChainAddress(mainnet.id, "blue");
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
     // `supportSignature: false` forces the standalone (unsigned) authorization transaction rather
     // than a signable requirement.
@@ -922,7 +922,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
     "%s: executes market and idle reallocations through live Base contracts",
     async (operation, { client }) => {
       const anvilClient = client as AnvilTestClient;
-      const { morpho, vaultV2BluePublicAllocator: allocator } =
+      const { blue: morpho, vaultV2BluePublicAllocator: allocator } =
         getChainAddresses(base.id);
       assert(allocator != null);
       const sourceDepositAssets = parseUnits("100", 6);
@@ -1254,7 +1254,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
     "withdraw: deducts market and idle reallocation penalties from proceeds",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
-      const { morpho, vaultV2BluePublicAllocator: allocator } =
+      const { blue: morpho, vaultV2BluePublicAllocator: allocator } =
         getChainAddresses(base.id);
       assert(allocator != null);
       const sourceDepositAssets = parseUnits("100", 6);
@@ -1568,7 +1568,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
     "refinance: an above-debt Vault V2 penalty and referral fee increase destination debt",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;
-      const { morpho, vaultV2BluePublicAllocator: allocator } =
+      const { blue: morpho, vaultV2BluePublicAllocator: allocator } =
         getChainAddresses(base.id);
       assert(allocator != null);
       const depositAssets = parseUnits("100", 6);

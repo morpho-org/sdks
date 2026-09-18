@@ -9,6 +9,5 @@ export * from "./blue/index.js";
 export * from "./bundles/index.js";
 export * from "./midnight/index.js";
 export * from "./requirements/index.js";
-export * from "./signatures/index.js";
 export * from "./vaultV1/index.js";
 export * from "./vaultV2/index.js";

@@ -18,7 +18,6 @@ import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { MissingWalletProviderError } from "./errors.js";
 import type {
   AuthorizationOrSignatureRequirement,
-  BlueApprovalOrSignatureRequirement,
   BundlesApprovalOrSignatureRequirement,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
@@ -1194,7 +1193,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         MARKET_ID,
         expect.any(Object),
         {
-          chainId: 1,
           deployless: undefined,
         },
       );
@@ -1350,7 +1348,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementOptions,
       );
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<readonly BlueApprovalOrSignatureRequirement[]>
+        Promise<readonly BundlesApprovalOrSignatureRequirement[]>
       >();
       const requirements = await promise;
 
@@ -1500,7 +1498,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementOptions,
       );
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<readonly BlueApprovalOrSignatureRequirement[]>
+        Promise<readonly BundlesApprovalOrSignatureRequirement[]>
       >();
       const requirements = await promise;
 

@@ -23,7 +23,7 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 
 1. Read the diff and changed files, then identify every touched protocol verb, ABI name, address constant, operation type, typed-data domain, share-price/slippage field, LLTV/accounting helper, or adapter route.
 2. Before claiming a protocol mismatch, inspect the relevant pinned source of truth from `<PROJECT_CONTEXT>`: package/nested `AGENTS.md`, ABI exports (`packages/*-viem/src/abis.ts`), address/constant registries, and operation/action type definitions. If the needed ABI/source excerpt is missing from context, say so; do not guess from memory.
-3. Compare the encoded output or returned entity against the protocol path expected by the local docs: direct vault calls vs bundler3 routes, `GeneralAdapter1` authorization/spender semantics, `PublicAllocator.reallocateTo` ordering, native wrapping rules, and V1/V2/Market naming.
+3. Compare the encoded output or returned entity against the protocol path expected by the local docs: direct calls vs registered fixed-bundle routes, bundle authorization/spender semantics, `BluePublicAllocator` allocation shapes, native wrapping rules, and V1/V2/Market naming.
 4. Return only actionable findings introduced by the diff. No protocol redesigns unless the diff already changes that surface.
 
 ## What to flag
@@ -37,9 +37,9 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 
 ### Morpho operation routing
 
-- A bundled path encoded as a direct call, or a direct vault/market call routed through bundler3 contrary to `packages/morpho-sdk/AGENTS.md` and `src/actions/AGENTS.md`.
-- Wrong `to` contract, spender, operator, or adapter: e.g. approval to a caller-provided address instead of `GeneralAdapter1`, missing Morpho authorization for a bundled Blue path, or `forceDeallocate` targeting the wrong adapter data shape.
-- Incorrect ordering inside bundles: native transfer/wrap after the consuming action, `reallocateTo` after `morphoBorrow`, repay/withdraw sequencing reversed, or nested callback sender semantics lost.
+- A fixed-bundle path encoded as a direct call, or a direct vault/market call routed through the wrong registered periphery contrary to `packages/morpho-sdk/AGENTS.md` and `src/actions/AGENTS.md`.
+- Wrong `to` contract, spender, operator, or adapter: e.g. approval to a caller-provided address instead of the registered fixed bundle, missing Morpho authorization for a BlueBundlesV1 path, or `forceDeallocate` targeting the wrong adapter data shape.
+- Incorrect fixed-bundle entrypoint or argument ordering, including native funding, BluePublicAllocator calls, repay/withdraw sequencing, or callback sender semantics.
 - V1/V2/Market terminology drift that makes the code call a VaultV1/MetaMorpho concept with a VaultV2 adapter assumption, or vice versa.
 
 ### Accounting and protocol invariants
@@ -49,7 +49,7 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 - Missing or inverted `minSharePrice` / `maxSharePrice` protection on deposit/borrow/repay paths; loss of the inflation-attack guard from the documented route.
 - LLTV, LLTV-buffer, WAD, or `ORACLE_PRICE_SCALE` math that changes units or compares scaled values directly to unscaled values.
 - Partial-vs-full repay semantics drift: asset repay where share repay is required, upper-bound transfer missing, or over-repayment not handled as the protocol expects.
-- Reallocation fee/value accounting drift (`tx.value` not summing fees, native wrapping value mixed with allocator fees, or value attached to a nonpayable call).
+- Reallocation penalty accounting drift (penalties omitted from proceeds or destination debt, added to native `tx.value`, or value attached to a nonpayable call).
 
 ### State model and typed data
 

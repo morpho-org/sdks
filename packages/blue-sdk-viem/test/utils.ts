@@ -125,11 +125,8 @@ export async function deployMorphoMarketV1Adapter(
   version: "1" | "2",
   initialSetup?: { marketParams: MarketParams; deposit: bigint },
 ): Promise<{ address: Address; supplyShares?: bigint }> {
-  const {
-    morphoMarketV1AdapterV2Factory,
-    morphoMarketV1AdapterFactory,
-    morpho,
-  } = getChainAddresses(client.chain.id);
+  const { morphoMarketV1AdapterV2Factory, morphoMarketV1AdapterFactory, blue } =
+    getChainAddresses(client.chain.id);
 
   const txHash = await (version === "2"
     ? client.writeContract({
@@ -142,7 +139,7 @@ export async function deployMorphoMarketV1Adapter(
         address: morphoMarketV1AdapterFactory!,
         abi: morphoMarketV1AdapterFactoryAbi,
         functionName: "createMorphoMarketV1Adapter",
-        args: [vaultAddress, morpho],
+        args: [vaultAddress, blue],
       }));
 
   const receipt = await client.waitForTransactionReceipt({ hash: txHash });
@@ -268,7 +265,7 @@ export async function deployMorphoMarketV1Adapter(
   });
 
   const { supplyShares } = await readContractRestructured(client, {
-    address: morpho,
+    address: blue,
     abi: blueAbi,
     functionName: "position",
     args: [marketParams.id, adapterAddress],

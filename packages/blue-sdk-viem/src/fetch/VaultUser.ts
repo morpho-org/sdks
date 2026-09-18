@@ -1,7 +1,7 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 
-import { getChainId, readContract } from "viem/actions";
+import { readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import { abi, code } from "../queries/GetVaultUser.js";
 import type { DeploylessFetchParameters } from "../types.js";
@@ -20,7 +20,6 @@ import { fetchVaultConfig } from "./VaultConfig.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultUser` entity.
  * @example
@@ -44,8 +43,6 @@ export async function fetchVaultUser(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
     try {

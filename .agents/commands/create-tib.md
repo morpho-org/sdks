@@ -59,7 +59,7 @@ so it belongs in the TIB; the mechanics that produce it do not.
 An architectural choice earns its place **only when it has an observable or semver consequence, or
 when it _is_ the decision**:
 
-- ✅ _"The returned transaction targets `BlueBundlesV1`, never Bundler3"_ — architecture, but
+- ✅ _"The returned transaction targets `BlueBundlesV1`, not the core Blue contract"_ — architecture, but
   integrators simulate the transaction, so it is observable. It stays.
 - ❌ _"Simple actions delegate to the combined encoder with a zero inactive leg"_ — architecture with
   no observable consequence. It belongs in the code, not the brief.

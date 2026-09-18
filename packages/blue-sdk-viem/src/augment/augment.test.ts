@@ -11,7 +11,6 @@ import {
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
@@ -29,7 +28,6 @@ import {
   fetchVaultConfig,
   fetchVaultMarketAllocation,
   fetchVaultMarketConfig,
-  fetchVaultMarketPublicAllocatorConfig,
   fetchVaultUser,
 } from "../fetch/index.js";
 
@@ -83,11 +81,6 @@ describe("blue-sdk augmentations", () => {
       label: "VaultMarketConfig.fetch",
       get: () => VaultMarketConfig.fetch,
       expected: fetchVaultMarketConfig,
-    },
-    {
-      label: "VaultMarketPublicAllocatorConfig.fetch",
-      get: () => VaultMarketPublicAllocatorConfig.fetch,
-      expected: fetchVaultMarketPublicAllocatorConfig,
     },
     {
       label: "VaultUser.fetch",

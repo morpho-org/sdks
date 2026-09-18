@@ -11,7 +11,7 @@ import {
   type Transaction,
   type VaultV2InKindRedeemAction,
 } from "../../types/index.js";
-import { getVaultExitBundlesV1PermitStruct } from "../signatures/getVaultExitBundlesV1PermitStruct.js";
+import { getBundlesSharesPermit } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2InKindRedeem}. */
 export interface VaultV2InKindRedeemParams {
@@ -52,7 +52,7 @@ export interface VaultV2InKindRedeemParams {
  * @throws {InputExceedsMaxError} when the bundle or permit deadline exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
+ * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
  * @example
  * ```ts
  * import { vaultV2InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -81,7 +81,7 @@ export const vaultV2InKindRedeem = ({
     irm: marketParams.irm,
     lltv: marketParams.lltv,
   }));
-  const sharesPermit = getVaultExitBundlesV1PermitStruct({
+  const sharesPermit = getBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
     requirementSignature: args.requirementSignature,
