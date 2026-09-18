@@ -275,6 +275,9 @@ jobs:
               exit 1
             fi
 
+            # Fail closed on entries a case-insensitive or Windows consumer would
+            # resolve to the same path (SDK-672/673), parsed with npm's bundled node-tar.
+            node scripts/ci/verify-tarball-collisions.ts "$tgz"
             # Read name/version through the exact code path `npm publish` uses
             # (pacote.manifest → node-tar extraction), so the identity we check
             # against the source allowlist is the identity npm will publish.
