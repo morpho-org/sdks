@@ -23,7 +23,6 @@ import {
   BundlesRequirementSignatureMismatchError,
   type BundlesTokenRequirementSignature,
   DepositOwnerMismatchError,
-  type Erc2612RequirementSignature,
   type Metadata,
   NativeFundingAmountMismatchError,
   NegativeInputError,
@@ -283,20 +282,11 @@ export const selectBlueBundlesV1RequirementSignatures = (
       permit2SignatureTransfer: accepts.token,
       authorization: accepts.authorization,
     });
-  if (permit?.action.type === "permit2") {
-    throw new BundlesRequirementSignatureMismatchError({
-      field: "type",
-      expected: "permit or permit2SignatureTransfer",
-      actual: permit.action.type,
-    });
-  }
   if (permit != null && permit2SignatureTransfer != null) {
     throw new AmbiguousRequirementSignaturesError("permit", 2);
   }
   return {
-    token:
-      (permit as Erc2612RequirementSignature | undefined) ??
-      permit2SignatureTransfer,
+    token: permit ?? permit2SignatureTransfer,
     authorization,
   };
 };

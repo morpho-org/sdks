@@ -130,9 +130,9 @@ describe("MorphoBlue validation", () => {
     const positionData = makeWethPosition();
     const now = 1_800_000_000n;
     const deadline = now + 3_600n;
-    const borrowAssets = positionData.market
+    const borrowAssets = positionData
       .accrueInterest(deadline)
-      .toBorrowAssets(positionData.borrowShares, "Up");
+      .market.toBorrowAssets(positionData.borrowShares, "Up");
 
     const repay = withChainTimestamp(now, () =>
       market.repay({
@@ -187,9 +187,9 @@ describe("MorphoBlue validation", () => {
     const now = 1_800_000_000n;
     const deadline = now + 3_600n;
 
-    const borrowAssets = positionData.market
+    const borrowAssets = positionData
       .accrueInterest(deadline)
-      .toBorrowAssets(positionData.borrowShares, "Up");
+      .market.toBorrowAssets(positionData.borrowShares, "Up");
 
     const action = withChainTimestamp(now, () =>
       market.repayWithdrawCollateral({

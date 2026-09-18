@@ -7,7 +7,7 @@ import { Market } from "../src/augment/Market.js";
 import { blueAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
-const { morpho, adaptiveCurveIrm } = addressesRegistry[ChainId.EthMainnet];
+const { blue, adaptiveCurveIrm } = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth, usdc_idle, eth_wstEth, crvUsd_stkcvx2BTC } =
   markets[ChainId.EthMainnet];
 
@@ -50,7 +50,7 @@ describe("augment/Market", () => {
     client,
   }) => {
     const owner = await client.readContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "owner",
     });
@@ -70,13 +70,13 @@ describe("augment/Market", () => {
     await client.setBalance({ address: owner, value: BigInt(1e18) });
     await client.writeContract({
       account: owner,
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "enableIrm",
       args: [params.irm],
     });
     await client.writeContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "createMarket",
       args: [{ ...params }],
@@ -105,7 +105,7 @@ describe("augment/Market", () => {
       oracle: randomAddress(),
     });
     await client.writeContract({
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "createMarket",
       args: [{ ...params }],

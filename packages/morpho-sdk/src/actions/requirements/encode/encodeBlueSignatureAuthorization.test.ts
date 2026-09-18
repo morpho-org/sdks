@@ -25,9 +25,8 @@ const account = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 );
 
-const {
-  bundler3: { generalAdapter1 },
-} = addressesRegistry[mainnet.id];
+const blueBundlesV1 = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
+if (blueBundlesV1 == null) throw new Error("BlueBundlesV1 is not registered");
 
 function walletClient(chainId: number = mainnet.id) {
   const chain: Chain = { ...mainnet, id: chainId };
@@ -39,7 +38,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(mainnet.id), {
         owner: account.address,
-        authorized: generalAdapter1,
+        authorized: blueBundlesV1,
         chainId: mainnet.id + 1,
         nonce: 0n,
       }),
@@ -50,7 +49,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
       owner: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
     });
@@ -61,7 +60,7 @@ describe("encodeBlueSignatureAuthorization", () => {
 
     expect(signed.action.type).toBe("authorization");
     expect(signed.args.owner).toBe(account.address);
-    expect(signed.args.authorized).toBe(generalAdapter1);
+    expect(signed.args.authorized).toBe(blueBundlesV1);
     expect(signed.args.isAuthorized).toBe(true);
     expect(signed.args.nonce).toBe(0n);
     expect(isHex(signed.args.signature)).toBe(true);
@@ -70,7 +69,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const typedData = getAuthorizationTypedData(
       {
         authorizer: account.address,
-        authorized: generalAdapter1,
+        authorized: blueBundlesV1,
         isAuthorized: true,
         nonce: 0n,
         deadline: signed.args.deadline,
@@ -90,7 +89,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
         owner: account.address,
-        authorized: generalAdapter1,
+        authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
         deadline: 0n,
@@ -102,7 +101,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
         owner: account.address,
-        authorized: generalAdapter1,
+        authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
         deadline: maxUint256 + 1n,
@@ -114,7 +113,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     await expect(
       encodeBlueSignatureAuthorization(walletClient(), {
         owner: account.address,
-        authorized: generalAdapter1,
+        authorized: blueBundlesV1,
         chainId: mainnet.id,
         nonce: 0n,
         deadline: 1n,
@@ -126,7 +125,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
       owner: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 1n,
       isAuthorized: false,
@@ -140,7 +139,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
       owner: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
     });
@@ -154,7 +153,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
       owner: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
     });
@@ -164,7 +163,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     expect(typedData.primaryType).toBe("Authorization");
     expect(typedData.message).toMatchObject({
       authorizer: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       isAuthorized: true,
       nonce: 0n,
     });
@@ -174,7 +173,7 @@ describe("encodeBlueSignatureAuthorization", () => {
     const client = walletClient();
     const requirement = await encodeBlueSignatureAuthorization(client, {
       owner: account.address,
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       chainId: mainnet.id,
       nonce: 0n,
     });

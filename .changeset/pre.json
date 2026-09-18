@@ -5,7 +5,7 @@
     "@morpho-org/blue-sdk": "6.7.0",
     "@morpho-org/blue-sdk-viem": "5.4.0",
     "@morpho-org/evm-simulation": "4.1.5",
-    "@morpho-org/liquidity-sdk-viem": "4.1.2",
+    "@morpho-org/liquidity-sdk-viem": "4.2.0",
     "@morpho-org/midnight-sdk": "1.3.0",
     "@morpho-org/morpho-sdk": "5.8.0",
     "@morpho-org/morpho-test": "4.0.3",

@@ -159,7 +159,7 @@ describe("encodeErc20Permit2SignatureTransfer", () => {
 
   test("error: UnsupportedErc20ApprovalSpenderError when spender is not BlueBundlesV1", () => {
     // Permit2 SignatureTransfer for a direct Blue write must name BlueBundlesV1; any other spender
-    // (e.g. GeneralAdapter1) is rejected before signing.
+    // is rejected before signing.
     expect(() =>
       encodeErc20Permit2SignatureTransfer({
         ...base(),

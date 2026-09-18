@@ -12,11 +12,13 @@ import {
   type MidnightOfferRootSignature,
   type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
+  type RequirementSignature,
   selectRequirementSignatures,
 } from "./action.js";
 import {
   AmbiguousRequirementSignaturesError,
   UnexpectedRequirementSignatureError,
+  UnsupportedRequirementSignatureError,
 } from "./error.js";
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
@@ -36,27 +38,6 @@ const permitSignature: PermitRequirementSignature = {
     amount: 1n,
     nonce: 0n,
     deadline: 1_900_000_000n,
-    signature: SIGNATURE,
-  },
-};
-
-const permit2Signature: PermitRequirementSignature = {
-  action: {
-    type: "permit2",
-    args: {
-      spender: SPENDER,
-      amount: 1n,
-      deadline: 1_900_000_000n,
-      expiration: 1_900_000_000n,
-    },
-  },
-  args: {
-    owner: OWNER,
-    asset: TOKEN,
-    amount: 1n,
-    nonce: 0n,
-    deadline: 1_900_000_000n,
-    expiration: 1_900_000_000n,
     signature: SIGNATURE,
   },
 };
@@ -115,10 +96,6 @@ describe("isPermitSignature", () => {
     expect(isPermitSignature(permitSignature)).toBe(true);
   });
 
-  test("behavior: true for permit2", () => {
-    expect(isPermitSignature(permit2Signature)).toBe(true);
-  });
-
   test("behavior: false for authorization", () => {
     expect(isPermitSignature(authorizationSignature)).toBe(false);
   });
@@ -132,10 +109,6 @@ describe("isAuthorizationSignature", () => {
   test("behavior: false for permit", () => {
     expect(isAuthorizationSignature(permitSignature)).toBe(false);
   });
-
-  test("behavior: false for permit2", () => {
-    expect(isAuthorizationSignature(permit2Signature)).toBe(false);
-  });
 });
 
 describe("isPermit2SignatureTransferSignature", () => {
@@ -143,10 +116,6 @@ describe("isPermit2SignatureTransferSignature", () => {
     expect(
       isPermit2SignatureTransferSignature(permit2SignatureTransferSignature),
     ).toBe(true);
-  });
-
-  test("behavior: false for Permit2 AllowanceTransfer", () => {
-    expect(isPermit2SignatureTransferSignature(permit2Signature)).toBe(false);
   });
 });
 
@@ -267,9 +236,22 @@ describe("selectRequirementSignatures", () => {
     ).toThrow(UnexpectedRequirementSignatureError);
   });
 
+  test("error: UnsupportedRequirementSignatureError", () => {
+    expect(() =>
+      selectRequirementSignatures(
+        [
+          {
+            action: { type: "permit2", args: {} },
+          } as unknown as RequirementSignature,
+        ],
+        {},
+      ),
+    ).toThrow(UnsupportedRequirementSignatureError);
+  });
+
   test("error: AmbiguousRequirementSignaturesError on duplicate permits", () => {
     expect(() =>
-      selectRequirementSignatures([permitSignature, permit2Signature], {
+      selectRequirementSignatures([permitSignature, permitSignature], {
         permit: true,
       }),
     ).toThrow(AmbiguousRequirementSignaturesError);

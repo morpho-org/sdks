@@ -65,7 +65,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * Encodes a direct BlueBundlesV1 collateral supply and/or borrow transaction.
  *
  * Reallocations are Vault V2-only and require a borrow leg. Penalties and referral fees reduce
- * borrow proceeds. This route has no Bundler3 share-price bound or `slippageTolerance` input.
+ * borrow proceeds. This route has no share-price bound or `slippageTolerance` input.
  *
  * @param params - Combined-operation encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.
@@ -89,8 +89,9 @@ export interface BlueSupplyCollateralBorrowParams {
  *   or a reallocation amount is not positive.
  * @throws {ReallocationsRequireBorrowError} when reallocations accompany no borrow.
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
+ * @throws {InvalidVaultV2BlueReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
  * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.

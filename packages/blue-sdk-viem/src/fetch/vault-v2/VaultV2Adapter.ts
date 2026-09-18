@@ -35,7 +35,6 @@ import {
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated supported VaultV2 adapter entity.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
@@ -58,14 +57,13 @@ export async function fetchVaultV2Adapter(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
   const {
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
-  } = getChainAddresses(parameters.chainId);
+  } = getChainAddresses(await getChainId(client));
 
   const [
     isMorphoVaultV1Adapter,
@@ -130,7 +128,6 @@ export async function fetchVaultV2Adapter(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated supported VaultV2 accrual adapter entity.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
@@ -156,14 +153,13 @@ export async function fetchAccrualVaultV2Adapter(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
   const {
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
-  } = getChainAddresses(parameters.chainId);
+  } = getChainAddresses(await getChainId(client));
 
   const [
     isMorphoVaultV1Adapter,

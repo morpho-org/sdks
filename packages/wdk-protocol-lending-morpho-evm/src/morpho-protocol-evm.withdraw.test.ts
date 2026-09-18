@@ -267,6 +267,31 @@ describe.sequential("prepared withdrawal adapter", () => {
           amount: 1_000n,
           deadline: 1_900_000_000n,
         },
+        typedData: {
+          domain: {
+            name: "Vault Shares",
+            version: "1",
+            chainId: 1,
+            verifyingContract: VAULT,
+          },
+          types: {
+            Permit: [
+              { name: "owner", type: "address" },
+              { name: "spender", type: "address" },
+              { name: "value", type: "uint256" },
+              { name: "nonce", type: "uint256" },
+              { name: "deadline", type: "uint256" },
+            ],
+          },
+          primaryType: "Permit",
+          message: {
+            owner,
+            spender: VAULT,
+            value: 1_000n,
+            nonce: 0n,
+            deadline: 1_900_000_000n,
+          },
+        },
       },
     } as const satisfies Erc2612RequirementSignature;
     // Signing is SDK-owned; this adapter test verifies the public return type and forwarding.
