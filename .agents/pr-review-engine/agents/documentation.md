@@ -91,7 +91,7 @@ For diffs that touch `AGENTS.md` or any persona file, flag:
 
 ## Fix rubric
 
-(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+(Consumed by `/fix-pr` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
 
 Mechanical fixes only:
 

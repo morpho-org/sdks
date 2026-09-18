@@ -212,8 +212,18 @@ jobs:
 
       - name: Publish packages
         shell: bash
+        # npm's HTTP agent falls back to these environment variables whenever
+        # the config-level proxy is unset, so pin them empty to guarantee a
+        # direct connection to npmjs for both the OIDC exchange and the PUT.
+        # GitHub treats env keys case-insensitively (both cases is a duplicate-
+        # key parse error), so the lowercase variants are cleared in the script.
+        env:
+          HTTPS_PROXY: ""
+          HTTP_PROXY: ""
+          ALL_PROXY: ""
         run: |
           set -euo pipefail
+          export https_proxy="" http_proxy="" all_proxy=""
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
@@ -288,6 +298,11 @@ jobs:
 
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
+            # npm flattens every publishConfig key from the packed manifest
+            # into the publish options (including transport keys such as
+            # proxy, https-proxy, strict-ssl, and ca) before the OIDC exchange.
+            # Accept only the expected npmjs packaging fields.
+            node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json"
             name="$(node -p "require('${tmpd}/package/package.json').name")"
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
@@ -332,15 +347,21 @@ jobs:
             fi
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
-            # publishes explicit and future-proof; `--registry` overrides any
-            # `publishConfig.registry` in the packed manifest so a tampered pack
-            # job cannot redirect the OIDC audience away from npmjs.
+            # publishes explicit and future-proof. The manifest allowlist above
+            # rejects manifest-borne transport settings; `--proxy false`,
+            # `--https-proxy null` and `--strict-ssl true` override any .npmrc /
+            # npm_config_* values (npm-registry-fetch prefers `https-proxy` over
+            # `proxy`, so both must be pinned); and the empty proxy env bindings
+            # on this step disable the agent's environment fallback.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
               --access public \
               --tag "$publish_tag" \
               --ignore-scripts \
+              --proxy false \
+              --https-proxy null \
+              --strict-ssl true \
               --registry https://registry.npmjs.org
             published=$((published + 1))
           done

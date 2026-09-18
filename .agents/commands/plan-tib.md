@@ -3,14 +3,14 @@
 Turn an accepted **TIB** into the disposable **implementation plan** that carries it out: a set of
 Linear tickets, each scoped to **one PR**, each describing **how** the code will be written.
 
-`plan-tib` is the sibling of [`tib-create`](./tib-create.md). They split one decision across two
+`plan-tib` is the sibling of [`create-tib`](./create-tib.md). They split one decision across two
 artifacts:
 
-- **`tib-create` → the TIB.** Frozen, in the repo, answers **what + why**. Contains only
+- **`create-tib` → the TIB.** Frozen, in the repo, answers **what + why**. Contains only
   observable/contractual decisions (signatures, behavior, invariants, rationale).
 - **`plan-tib` → the tickets.** Disposable, in Linear, answers **how**. Contains exactly the
   material the TIB deliberately excluded — the "what does NOT belong in a TIB" cheat sheet from
-  `tib-create`: files to touch, private signatures, encoder structure, edit order, test file names
+  `create-tib`: files to touch, private signatures, encoder structure, edit order, test file names
   and cases, the changeset and release plumbing.
 
 > **One TIB → N tickets → N PRs.** The tickets are the *inverse* of the TIB. If a detail would read
@@ -368,7 +368,7 @@ declared a `blockedBy` / `blocks` on a ticket not yet created — so the author 
 remaining milestones are created.
 
 Then remind the author: the tickets are disposable and regenerable from the TIB — if the code drifts
-from a ticket, fix the ticket or re-run `/plan-tib`; the TIB stays frozen (`tib-create` Step 6.5).
+from a ticket, fix the ticket or re-run `/plan-tib`; the TIB stays frozen (`create-tib` Step 6.5).
 
 ---
 

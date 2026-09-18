@@ -1,7 +1,7 @@
 <!--
-This template mirrors the `## Canonical template` in `.agents/commands/tib-create.md`,
+This template mirrors the `## Canonical template` in `.agents/commands/create-tib.md`,
 which is the single source of truth for TIB structure. Prefer running
-`/tib-create "<decision title>"` — it resolves metadata, applies the full rulebook, and
+`/create-tib "<decision title>"` — it resolves metadata, applies the full rulebook, and
 drafts the brief for you. Keep this file in sync whenever that canonical template changes.
 
 TIB = what + why. Code and Linear tickets = how. Once accepted a TIB is never substantively

@@ -80,7 +80,7 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 
 ## Fix rubric
 
-(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+(Consumed by `/fix-pr` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
 
 Apply fixes only when the suggestion is unambiguous and local — inlining a typed ABI for a `0x` literal, adding a `chainId` check before a `writeContract` / `simulateContract`, surfacing a decoded revert reason, inserting an EIP-712 domain-separator check on a permit. **Do not** auto-apply changes that re-architect a transaction flow, alter approval amounts, change signing semantics, or touch share-price/LLTV accounting — surface those for human review.
 
