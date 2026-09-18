@@ -3,7 +3,7 @@
 | Field             | Value                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Date**          | 2026-09-18                                                                                                   |
-| **Author**        | @jinmel, revising the 2026-06-15 draft by @foulques                                                          |
+| **Author**        | @foulques, @jinmel                                                                                           |
 | **Scope**         | `evm-simulation` next major (5.0.0) plus one prerequisite deprecation minor; consumers: Vaults frontend and write API |
 
 ## Context
@@ -251,6 +251,7 @@ rules.
 | Reject top-level callbacks | Callbacks rely on surrounding execution context; accepting them as entrypoints applies the wrong rules |
 | Reject unknown payloads or effects | Unmodeled behavior must not receive a successful verification based on partial coverage |
 | Only contract-defined sentinels imply MAX | Treating a literal as MAX can hide an incomplete close or reject an intentional partial action |
+| Recognize only the `morpho-sdk` transaction-metadata suffix appended to `data`; reject any other trailing bytes | The SDK appends an origin/timestamp suffix after the ABI payload, so a decoder must know exactly where calldata ends; unknown trailing bytes can change how a contract reads its arguments or carry an unmodeled payload |
 
 Registered operators are `bundler3.generalAdapter1` and `bundles.blueBundlesV1`. A pre-liquidation
 ("AutoDeleverage") operator is valid only when the chain's registered `preLiquidationFactory` reports
