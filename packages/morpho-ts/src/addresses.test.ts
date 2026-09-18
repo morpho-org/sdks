@@ -472,6 +472,48 @@ describe("addressesRegistry", () => {
       20_320_779n,
     ],
     [
+      ChainId.RobinhoodMainnet,
+      "midnight",
+      "0x6120765Ba5336150BbdDdD0Cd9108B5bFD369632",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightBundles",
+      "0x71aa985ff80AbcE3b8b443845633674Ca9f7575C",
+      65_387_381n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x53cbCd884CABA07762c72F43283D3fa72de42D4f",
+      65_391_242n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightMempool",
+      "0xcEF685D4796FA80F71a97e803D2c0b6719F1b4E2",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "ecrecoverRatifier",
+      "0x90B800999e4ACd1bD20283BD450bBd2e06D91F7C",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "ecrecoverAuthorizer",
+      "0x75FCdD113fe33a8bEd3CD3C35955DE094Bd2bdf8",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "setterRatifier",
+      "0x708d6Bf6F847202a0755bb5636bE663B174242ea",
+      65_366_296n,
+    ],
+    [
       ChainId.ScrollMainnet,
       "vaultV2Factory",
       "0x474cdCF6B3be2eb770065b88d2F7c57A9BC609E0",
