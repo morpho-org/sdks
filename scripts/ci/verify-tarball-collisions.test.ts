@@ -211,6 +211,22 @@ describe("verifyTarballEntries", () => {
     await expect(main(undefined)).rejects.toThrow(/Usage/);
   });
 
+  test("error: CLI exits nonzero with ::error:: on a missing tarball", async () => {
+    await withTempDir(async (dir) => {
+      const result = spawnSync(
+        process.execPath,
+        [SCRIPT, join(dir, "missing.tgz")],
+        {
+          encoding: "utf8",
+        },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toMatch(/::error::.*Unable to list tarball/);
+    });
+  });
+
   test("behavior: CLI reports accepted entry count", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {

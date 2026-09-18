@@ -59,7 +59,7 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 - New workflows that publish — require explicit dry-run path and a maintainer-approval gate (`environment:` with required reviewers) before the publish step.
 - Provenance/SBOM toggles: any change that disables `--provenance` or removes a SLSA/SBOM emit step → **medium** finding minimum, **high** if the package is in the runtime/peer surface.
 
-### Artifact identity / path injection (HIGH)
+### Artifact identity / path injection (HIGH → CRITICAL)
 
 Per AGENTS.md §10 — a privileged job validating an artifact from an unprivileged job must read the checked value through the consumer's own code path (for npm tarballs: bundled `pacote.manifest`, via `scripts/ci/read-tarball-identity.ts`). Flag any diff that:
 

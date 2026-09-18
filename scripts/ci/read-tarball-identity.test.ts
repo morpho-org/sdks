@@ -188,7 +188,13 @@ describe("readTarballIdentity", () => {
   });
 
   test("error: missing tarball argument reports usage", async () => {
-    await expect(main(undefined)).rejects.toThrow(/Usage/);
+    await expect(main("")).rejects.toThrow(/Usage/);
+  });
+
+  test("behavior: formatIdentity emits tab-separated name/version", () => {
+    expect(formatIdentity({ name: "@morpho/example", version: "1.2.3" })).toBe(
+      "@morpho/example\t1.2.3\n",
+    );
   });
 
   test("behavior: CLI prints the package identity", async () => {
@@ -208,11 +214,24 @@ describe("readTarballIdentity", () => {
 
       expect(result.status).toBe(0);
       expect(result.stderr).toBe("");
-      expect(result.stdout).toBe(
-        formatIdentity({
-          name: "@morpho/example",
-          version: "1.2.3",
-        }),
+      expect(result.stdout).toBe("@morpho/example\t1.2.3\n");
+    });
+  });
+
+  test("error: CLI exits nonzero with ::error:: on a missing tarball", async () => {
+    await withTempDir(async (dir) => {
+      const result = spawnSync(
+        process.execPath,
+        [SCRIPT, join(dir, "missing.tgz")],
+        {
+          encoding: "utf8",
+        },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toMatch(
+        /::error::.*Unable to read tarball manifest/,
       );
     });
   });
@@ -223,5 +242,21 @@ describe("readTarballIdentity", () => {
         manifest: async () => ({ name: 1 }),
       }),
     ).rejects.toThrow(/manifest name must be a non-empty string/);
+  });
+
+  test("error: loadBundledPacote rejects a module without manifest()", async () => {
+    await withTempDir(async (dir) => {
+      const npmDir = join(dir, "npm");
+      const pacoteDir = join(npmDir, "node_modules", "pacote");
+      mkdirSync(pacoteDir, { recursive: true });
+      writeFileSync(join(npmDir, "package.json"), '{"name":"npm"}');
+      writeFileSync(
+        join(pacoteDir, "package.json"),
+        '{"name":"pacote","main":"index.js"}',
+      );
+      writeFileSync(join(pacoteDir, "index.js"), "module.exports = {};");
+
+      expect(() => loadBundledPacote(dir)).toThrow(/does not expose manifest/);
+    });
   });
 });
