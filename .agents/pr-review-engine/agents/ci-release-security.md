@@ -66,6 +66,7 @@ Per AGENTS.md §10 — a privileged job validating an artifact from an unprivile
 - Derives the published name/version from a literal `tar -x <path>` / `tar -t | grep` / `node -p require(...)` on an extracted file instead of the pacote read. **High**.
 - Adds or extends hand-rolled tar/PAX/ustar/path-normalization logic under `scripts/ci/` to predict node-tar behaviour. **High** — the fix is reusing the toolchain's reader, not more emulation.
 - Removes the pacote read or demotes it below a GNU-tar structural check as the identity source of truth. **Critical**.
+- Changes to `scripts/ci/verify-tarball-collisions.ts` that loosen a segment rule or drop `strict: true` — **high**; the script may model consumer filesystem folding but must not parse archive bytes itself.
 
 ### Release-commit signing & write-token hardening (HIGH → CRITICAL)
 

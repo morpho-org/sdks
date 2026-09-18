@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -9,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -104,6 +106,12 @@ function buildFileDirectoryCollisionTarball(dir: string): string {
   const compressed = execFileSync("gzip", ["-c", archive]);
   writeFileSync(tgz, compressed);
   return tgz;
+}
+
+function corruptSecondHeaderChecksum(tgz: string): void {
+  const tar = gunzipSync(readFileSync(tgz));
+  tar.fill(0, 512 + 148, 512 + 156);
+  writeFileSync(tgz, gzipSync(tar));
 }
 
 function tarReader() {
@@ -207,8 +215,29 @@ describe("verifyTarballEntries", () => {
     );
   });
 
+  test("error: rejects a trailing dot", () => {
+    expect(() => foldEntryPath("package/package.json.")).toThrow(/trailing/);
+  });
+
+  test("error: rejects a Windows 8.3 alias", () => {
+    expect(() => foldEntryPath("package/packag~1.jso")).toThrow(/8\.3/);
+  });
+
+  test("error: rejects non-ASCII path segments", () => {
+    expect(() => foldEntryPath("package/ſcript.js")).toThrow(/non-ASCII/);
+    expect(() => foldEntryPath("package/café.js")).toThrow(/non-ASCII/);
+  });
+
+  test("error: rejects reserved Windows device names", () => {
+    expect(() => foldEntryPath("package/nul.js")).toThrow(/reserved/);
+  });
+
+  test("error: rejects characters Win32 rejects", () => {
+    expect(() => foldEntryPath("package/a:b")).toThrow(/rejects/);
+  });
+
   test("error: missing tarball argument reports usage", async () => {
-    await expect(main(undefined)).rejects.toThrow(/Usage/);
+    await expect(main("")).rejects.toThrow(/Usage/);
   });
 
   test("error: CLI exits nonzero with ::error:: on a missing tarball", async () => {
@@ -252,6 +281,35 @@ describe("verifyTarballEntries", () => {
     ).rejects.toMatchObject({
       message: expect.stringMatching(/Unable to list tarball/),
       cause: expect.anything(),
+    });
+  });
+
+  test("error: rejects a corrupted tar header checksum", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: ["package/", "package/package.json"],
+      });
+      corruptSecondHeaderChecksum(tgz);
+
+      await expect(listTarballEntries(tgz, tarReader())).rejects.toThrow(
+        /Unable to list tarball/,
+      );
+    });
+  });
+
+  test("error: loadBundledTar rejects a module without list()", async () => {
+    await withTempDir(async (dir) => {
+      const npmDir = join(dir, "npm");
+      const tarDir = join(npmDir, "node_modules", "tar");
+      mkdirSync(tarDir, { recursive: true });
+      writeFileSync(join(npmDir, "package.json"), '{"name":"npm"}');
+      writeFileSync(
+        join(tarDir, "package.json"),
+        '{"name":"tar","main":"index.js"}',
+      );
+      writeFileSync(join(tarDir, "index.js"), "module.exports = {};");
+
+      expect(() => loadBundledTar(dir)).toThrow(/does not expose list/);
     });
   });
 });

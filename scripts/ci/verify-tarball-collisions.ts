@@ -26,6 +26,7 @@ export interface EntryLister {
   /** Lists archive entries and invokes the callback for each one. */
   list(opts: {
     file: string;
+    strict: boolean;
     onReadEntry: (entry: TarEntry) => void;
   }): Promise<unknown>;
 }
@@ -58,6 +59,11 @@ export function loadBundledTar(npmRoot: string): EntryLister {
 /**
  * Folds an archive path as a case-insensitive Windows consumer would.
  *
+ * @remarks
+ * Rejects path segments that Windows cannot represent safely, including
+ * non-ASCII characters, 8.3 aliases, trailing dots or spaces, reserved device
+ * names, and characters rejected by Win32.
+ *
  * @param path - The path stored in the archive.
  * @returns The normalized, case-folded path.
  */
@@ -69,9 +75,38 @@ export function foldEntryPath(path: string): string {
     if (segment === "..") {
       throw new Error(`Entry path "${path}" escapes the archive root.`);
     }
+    if (!/^[\x20-\x7e]*$/.test(segment)) {
+      throw new Error(
+        `Entry path "${path}" contains a non-ASCII or control character.`,
+      );
+    }
+    if (segment.includes("~")) {
+      throw new Error(
+        `Entry path "${path}" can alias a Windows 8.3 short name.`,
+      );
+    }
+    if (/[. ]$/.test(segment)) {
+      throw new Error(
+        `Entry path "${path}" has a segment where Win32 trims trailing dots and spaces.`,
+      );
+    }
+    if (/[<>:"|?*]/.test(segment)) {
+      throw new Error(
+        `Entry path "${path}" contains a character Win32 rejects.`,
+      );
+    }
+    const basename = segment.split(".", 1)[0]?.toUpperCase();
+    if (
+      basename !== undefined &&
+      /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]|CONIN\$|CONOUT\$)$/.test(basename)
+    ) {
+      throw new Error(
+        `Entry path "${path}" contains the reserved Windows device name "${basename}".`,
+      );
+    }
     foldedSegments.push(segment);
   }
-  return foldedSegments.join("/").normalize("NFC").toLowerCase();
+  return foldedSegments.join("/").toLowerCase();
 }
 
 /**
@@ -120,6 +155,7 @@ export async function listTarballEntries(
   try {
     await lister.list({
       file: tgzPath,
+      strict: true,
       onReadEntry: (entry) => {
         entries.push({ path: entry.path, type: entry.type });
       },
