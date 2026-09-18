@@ -3,10 +3,8 @@
 "@morpho-org/wdk-protocol-lending-morpho-evm": patch
 ---
 
-Reuse the shared bundles permit converter for VaultExitBundlesV1 in-kind redemptions while
-preserving `VaultExitBundlesV1PermitMismatchError`. Deprecate
-`getVaultExitBundlesV1PermitStruct`, `GetVaultExitBundlesV1PermitStructParams`, and
-`VaultExitBundlesV1PermitStruct` in favor of `getBundlesSharesPermit` and `BundleSharesPermit`.
+Reuse the shared bundles permit converter for VaultExitBundlesV1 in-kind redemptions with strict
+permit validation.
 
 Use `computeVaultMaxShareAllowance` for VaultV1 in-kind redemption requirements. The cap rounds
 shares up, includes pending performance-fee dilution, and adds the default 0.03% loss buffer for

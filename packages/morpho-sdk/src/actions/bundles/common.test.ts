@@ -172,6 +172,25 @@ describe("getBundlesSharesPermit", () => {
       }),
     ).toThrow(BundlesPermitMismatchError);
   });
+  test("error: BundlesPermitMismatchError on amount disagreement", () => {
+    expect(() =>
+      getBundlesSharesPermit({
+        vault,
+        owner,
+        deadline: 13n,
+        requirementSignature: {
+          ...permit,
+          action: {
+            ...permit.action,
+            args: {
+              ...permit.action.args,
+              amount: permit.action.args.amount + 1n,
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
 
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {
     fc.assert(
