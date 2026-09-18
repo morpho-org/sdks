@@ -318,6 +318,24 @@ describe("verifyTarballEntries", () => {
   );
 
   test.each([true, false])(
+    "error: rejects a backslash gitignore with case-mismatched npmignore (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const ignoreEntries = fileFirst
+          ? ["package/config\\.gitignore", "package/config/.NPMIGNORE"]
+          : ["package/config/.NPMIGNORE", "package/config\\.gitignore"];
+        const tgz = buildTarball(dir, {
+          entries: ["package/", "package/package.json", ...ignoreEntries],
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/collide/);
+      });
+    },
+  );
+
+  test.each([true, false])(
     "error: rejects a backslash npmignore sibling (%s order)",
     async (fileFirst) => {
       await withTempDir(async (dir) => {
@@ -334,6 +352,40 @@ describe("verifyTarballEntries", () => {
       });
     },
   );
+
+  test.each([true, false])(
+    "error: rejects a backslash gitignore rename ancestor collision (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const tgz = buildFileAncestorTarball({
+          ancestor: "package/config\\.gitignore",
+          descendant: "package/config/.npmignore/child.js",
+          dir,
+          fileFirst,
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/ancestor/);
+      });
+    },
+  );
+
+  test("default: accepts a gitignore without an npmignore sibling", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: [
+          "package/",
+          "package/package.json",
+          "package/config/.gitignore",
+        ],
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).resolves.toBeUndefined();
+    });
+  });
 
   test.each([true, false])(
     "error: rejects a directory npmignore sibling (%s order)",
@@ -375,6 +427,18 @@ describe("verifyTarballEntries", () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
         entries: ["package/", "package/package.json", "zzz/package.json"],
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).rejects.toThrow(/outside package/);
+    });
+  });
+
+  test("error: rejects package-prefix entries outside package", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: ["package/", "package/package.json", "packagex/evil.js"],
       });
 
       await expect(

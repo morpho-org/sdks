@@ -139,10 +139,11 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
   const prefixes = new Set<string>();
   for (const { path, type, folded } of normalizedEntries) {
     const aliases = [folded];
-    const npmignoreSibling = path.replace(/\.gitignore$/, ".npmignore");
+    const normalized = path.replaceAll("\\", "/");
+    const npmignoreSibling = normalized.replace(/\.gitignore$/, ".npmignore");
     if (
       type === "File" &&
-      path.endsWith("/.gitignore") &&
+      normalized.endsWith("/.gitignore") &&
       !npmignoreFiles.has(npmignoreSibling)
     ) {
       aliases.push(foldEntryPath(npmignoreSibling));
