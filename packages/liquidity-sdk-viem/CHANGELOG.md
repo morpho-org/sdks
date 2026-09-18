@@ -1,5 +1,18 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 4.2.1-next.0
+
+### Patch Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Publish the final liquidity-sdk-viem release with `DEPRECATED.md`. The package remains on Vault V1
+  PublicAllocator and is tested against morpho-sdk v5.9.0; use Vault V2 BluePublicAllocator APIs for
+  new integrations.
+- Updated dependencies [[`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8), [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f), [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.3
+  - @morpho-org/morpho-ts@3.0.0-next.0
+  - @morpho-org/blue-sdk@7.0.0-next.1
+  - @morpho-org/blue-sdk-viem@6.0.0-next.0
+
 ## 4.2.0-next.0
 
 ### Minor Changes
