@@ -256,7 +256,26 @@ jobs:
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            entries="$(tar -tzf "$tgz")"
+            # npm's extractor (node-tar) does not extract the stored names the
+            # literal checks below inspect: it strips a leading `\` as a root
+            # indicator on every platform and treats `\` as a separator on
+            # Windows, and case-insensitive consumer file systems (Windows,
+            # macOS) collapse `Package.json` onto `package.json`. A later entry
+            # such as `package/\./package.json` or `package/Package.json` would
+            # overwrite the validated manifest at install time. Reject any
+            # entry that aliases another after consumer-side normalization.
+            # The gate parses the raw ustar headers itself with node-tar's
+            # rules (and rejects every header kind it does not model, e.g.
+            # global PAX headers, whose `path` record GNU tar honours but
+            # node-tar ignores while still applying their other records),
+            # so the GNU `tar -t` listing used by the literal checks below can
+            # only ever contain the same printable-ASCII names it approved.
+            # Logic + tests: scripts/ci/verify-tarball-entries.ts
+            node scripts/ci/verify-tarball-entries.ts "$tgz"
+            # `--quoting-style=escape` keeps one line per entry (a stored
+            # newline or control byte is rendered as `\n`/octal rather than
+            # raw); the gate above already guarantees none is present.
+            entries="$(tar -tzf "$tgz" --quoting-style=escape)"
             # Count-based checks (not `grep -q`) so behaviour is identical across
             # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
             #
