@@ -59,6 +59,15 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 - New workflows that publish — require explicit dry-run path and a maintainer-approval gate (`environment:` with required reviewers) before the publish step.
 - Provenance/SBOM toggles: any change that disables `--provenance` or removes a SLSA/SBOM emit step → **medium** finding minimum, **high** if the package is in the runtime/peer surface.
 
+### Artifact identity / path injection (HIGH → CRITICAL)
+
+Per AGENTS.md §10 — a privileged job validating an artifact from an unprivileged job must read the checked value through the consumer's own code path (for npm tarballs: bundled `pacote.manifest`, via `scripts/ci/read-tarball-identity.ts`). Flag any diff that:
+
+- Derives the published name/version from a literal `tar -x <path>` / `tar -t | grep` / `node -p require(...)` on an extracted file instead of the pacote read. **High**.
+- Adds or extends hand-rolled tar/PAX/ustar/path-normalization logic under `scripts/ci/` to predict node-tar behaviour. **High** — the fix is reusing the toolchain's reader, not more emulation.
+- Removes the pacote read or demotes it below a GNU-tar structural check as the identity source of truth. **Critical**.
+- Changes to `scripts/ci/verify-tarball-collisions.ts` that loosen a segment rule or drop `strict: true` — **high**; the script may model consumer filesystem folding and pacote's `.gitignore` → `.npmignore` extraction rename, but must not parse archive bytes itself.
+
 ### Release-commit signing & write-token hardening (HIGH → CRITICAL)
 
 Per AGENTS.md §10 — release commits and annotated tags MUST have a valid signed identity, and write-scoped tokens MUST be minted only after the workflow has hardened itself against state inherited from earlier steps. The boundary can be either same-job checksum/PATH hardening or a split-job fresh-checkout + validated data-artifact handoff. Flag any diff that:
