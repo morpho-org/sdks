@@ -1,4 +1,4 @@
-# tib-create
+# create-tib
 
 Scaffold and draft a TIB — **Technical Intent Brief**: the frozen, dated record of **what** we
 decided and **why**. Asks the author targeted questions only where the brief cannot be written
@@ -7,7 +7,7 @@ without the answer.
 ## Usage
 
 ```
-/tib-create "Route Blue actions through BlueBundlesV1"
+/create-tib "Route Blue actions through BlueBundlesV1"
 ```
 
 - `$ARGUMENTS` should contain `<decision-title>` — free-form, used verbatim in the doc heading.
