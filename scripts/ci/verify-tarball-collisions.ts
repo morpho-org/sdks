@@ -115,7 +115,8 @@ export function foldEntryPath(path: string): string {
  * @param entries - The entries exposed by node-tar.
  */
 export function verifyTarballEntries(entries: readonly TarEntry[]): void {
-  const originals = new Map<string, string>();
+  const originals = new Map<string, { path: string; type: string }>();
+  const prefixes = new Set<string>();
   for (const { path, type } of entries) {
     if (type !== "File" && type !== "Directory") {
       throw new Error(`Entry "${path}" has unsupported type "${type}".`);
@@ -129,10 +130,37 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
     const original = originals.get(folded);
     if (original !== undefined) {
       throw new Error(
-        `Entries "${original}" and "${path}" collide as "${folded}" on case-insensitive or Windows filesystems.`,
+        `Entries "${original.path}" and "${path}" collide as "${folded}" on case-insensitive or Windows filesystems.`,
       );
     }
-    originals.set(folded, path);
+
+    const foldedSegments = folded.split("/");
+    const ancestorFile = foldedSegments
+      .slice(1)
+      .map((_, index) => foldedSegments.slice(0, index + 1).join("/"))
+      .map((ancestor) => originals.get(ancestor))
+      .find((entry) => entry?.type === "File");
+    if (ancestorFile !== undefined) {
+      throw new Error(
+        `Entries "${ancestorFile.path}" and "${path}" collide: a file is an ancestor of another entry.`,
+      );
+    }
+
+    if (type === "File" && prefixes.has(folded)) {
+      const descendant = [...originals.entries()].find(([candidate]) =>
+        candidate.startsWith(`${folded}/`),
+      )?.[1];
+      if (descendant !== undefined) {
+        throw new Error(
+          `Entries "${path}" and "${descendant.path}" collide: a file is an ancestor of another entry.`,
+        );
+      }
+    }
+
+    originals.set(folded, { path, type });
+    for (let index = 1; index < foldedSegments.length; index += 1) {
+      prefixes.add(foldedSegments.slice(0, index).join("/"));
+    }
   }
 
   if (!originals.has("package/package.json")) {

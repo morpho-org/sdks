@@ -40,11 +40,12 @@ async function withTempDir<T>(fn: (dir: string) => T | Promise<T>): Promise<T> {
 
 interface TarballOptions {
   readonly entries: readonly string[];
+  readonly format?: "pax" | "ustar";
   readonly symlinks?: Readonly<Record<string, string>>;
 }
 
 function buildTarball(dir: string, options: TarballOptions): string {
-  const { entries, symlinks = {} } = options;
+  const { entries, format = "ustar", symlinks = {} } = options;
   for (const entry of entries) {
     const target = join(dir, entry);
     if (entry.endsWith("/")) {
@@ -66,11 +67,71 @@ function buildTarball(dir: string, options: TarballOptions): string {
     tgz,
     "-C",
     dir,
-    "--format=ustar",
+    `--format=${format}`,
     "--no-recursion",
     ...entries,
     ...Object.keys(symlinks),
   ]);
+  return tgz;
+}
+
+interface FileAncestorOptions {
+  readonly ancestor: string;
+  readonly descendant: string;
+  readonly dir: string;
+  readonly fileFirst: boolean;
+}
+
+function buildFileAncestorTarball({
+  ancestor,
+  descendant,
+  dir,
+  fileFirst,
+}: FileAncestorOptions): string {
+  const fileRoot = join(dir, "file");
+  const descendantRoot = join(dir, "descendant");
+  mkdirSync(dirname(join(fileRoot, ancestor)), { recursive: true });
+  writeFileSync(join(fileRoot, ancestor), "file");
+  if (ancestor !== "package/package.json") {
+    mkdirSync(join(fileRoot, "package"), { recursive: true });
+    writeFileSync(join(fileRoot, "package/package.json"), "{}");
+  }
+  mkdirSync(dirname(join(descendantRoot, descendant)), { recursive: true });
+  writeFileSync(join(descendantRoot, descendant), "child");
+
+  const archive = join(dir, "out.tar");
+  const archiveRoot = fileFirst ? fileRoot : descendantRoot;
+  const archiveEntry = fileFirst ? ancestor : descendant;
+  execFileSync("tar", [
+    "-cf",
+    archive,
+    "-C",
+    archiveRoot,
+    "--format=ustar",
+    "--no-recursion",
+    ...(fileFirst && ancestor !== "package/package.json"
+      ? ["package/package.json", archiveEntry]
+      : [archiveEntry]),
+  ]);
+
+  const appendRoot = fileFirst ? descendantRoot : fileRoot;
+  const appendEntries = fileFirst
+    ? [descendant]
+    : ancestor === "package/package.json"
+      ? [ancestor]
+      : ["package/package.json", ancestor];
+  execFileSync("tar", [
+    "--append",
+    "-f",
+    archive,
+    "-C",
+    appendRoot,
+    "--no-recursion",
+    ...appendEntries,
+  ]);
+
+  const tgz = join(dir, "out.tgz");
+  writeFileSync(tgz, execFileSync("gzip", ["-c", archive]));
   return tgz;
 }
 
@@ -169,6 +230,39 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test.each([true, false])(
+    "error: rejects file ancestor collisions (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const tgz = buildFileAncestorTarball({
+          ancestor: "package/lib",
+          descendant: "package/lib/x.js",
+          dir,
+          fileFirst,
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/ancestor/);
+      });
+    },
+  );
+
+  test("error: rejects a manifest file ancestor", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildFileAncestorTarball({
+        ancestor: "package/package.json",
+        descendant: "package/package.json/x",
+        dir,
+        fileFirst: true,
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).rejects.toThrow(/ancestor/);
+    });
+  });
+
   test("error: rejects entries outside package", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
@@ -217,6 +311,7 @@ describe("verifyTarballEntries", () => {
 
   test("error: rejects a trailing dot", () => {
     expect(() => foldEntryPath("package/package.json.")).toThrow(/trailing/);
+    expect(() => foldEntryPath("package/index.js ")).toThrow(/trailing/);
   });
 
   test("error: rejects a Windows 8.3 alias", () => {
@@ -294,6 +389,19 @@ describe("verifyTarballEntries", () => {
       await expect(listTarballEntries(tgz, tarReader())).rejects.toThrow(
         /Unable to list tarball/,
       );
+    });
+  });
+
+  test("error: rejects a case collision resolved from a PAX archive", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: ["package/", "package/package.json", "package/PACKAGE.json"],
+        format: "pax",
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).rejects.toThrow(/collide/);
     });
   });
 

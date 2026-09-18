@@ -168,6 +168,38 @@ describe("readTarballIdentity", () => {
     ).rejects.toThrow(/name must be a non-empty string/);
   });
 
+  test("error: rejects a name containing a newline", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package\nname", version: "1.0.0" }),
+      }),
+    ).rejects.toThrow(/name must be a non-empty string/);
+  });
+
+  test("error: rejects a version containing a tab", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package", version: "1.0\t0" }),
+      }),
+    ).rejects.toThrow(/version must be a non-empty string/);
+  });
+
+  test("error: rejects an empty name", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "", version: "1.0.0" }),
+      }),
+    ).rejects.toThrow(/name must be a non-empty string/);
+  });
+
+  test("error: rejects an empty version", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package", version: "" }),
+      }),
+    ).rejects.toThrow(/version must be a non-empty string/);
+  });
+
   test("error: rejects a version containing a newline", async () => {
     await expect(
       readTarballIdentity("ignored.tgz", {
