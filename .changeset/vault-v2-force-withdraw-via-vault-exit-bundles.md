@@ -34,8 +34,8 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
 - The vault's `receiveAssetsGate` must allow VaultExitBundlesV1 as an asset recipient.
 - Only one VaultExitBundlesV1 call can execute per transaction (its `initiator` guard is transient
   and never cleared).
-- The legacy in-kind adapter errors are removed. Use `VaultV2SingleAdapterRequiredError` and
-  `VaultV2UnsupportedExitAdapterError`.
+- `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` are removed. Use
+  `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`.
 
 **Additions**
 
