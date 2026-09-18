@@ -1,4 +1,4 @@
-import { type Address, type Hex, zeroAddress } from "viem";
+import { type Address, type Hex, isAddressEqual, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
@@ -310,9 +310,14 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * `maxRate`, and mints projected performance and management fee shares. A fee share amount is
    * zero when its recipient cannot receive vault shares.
    * Timestamps at or before this vault's `lastUpdate` return an unchanged copy and zero fee
-   * shares. Newer nested markets keep their snapshots; no timestamp is rewound.
+   * shares without accruing nested adapters. Forward accrual also accrues every adapter
+   * implementing `accrueInterest` to `timestamp`, so contributing nested markets and positions
+   * share the vault's `lastUpdate`; when registered among `accrualAdapters`, the liquidity adapter
+   * reuses that accrued instance, while an unregistered liquidity adapter remains unchanged.
+   * Adapters without `accrueInterest`, zero-allocation or zero-share Vault V1 adapters, and nested
+   * markets already ahead of `timestamp` keep their snapshots.
    *
-   * @param timestamp - Accrual timestamp in seconds. Past timestamps skip backward accrual.
+   * @param timestamp - Accrual timestamp in seconds.
    * @returns An object containing the accrued `AccrualVaultV2`, projected performance fee shares,
    *   and projected management fee shares.
    * @throws {UnknownMarketAllocationError} when a nested Vault V1 withdraw queue references a
@@ -340,21 +345,39 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * ```
    */
   public accrueInterest(timestamp: BigIntish) {
-    const vault = new AccrualVaultV2(
-      this,
-      this.accrualLiquidityAdapter,
-      this.accrualAdapters,
-      this.assetBalance,
-      this.forceDeallocatePenalties,
-    );
-
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
-    // Preserve the same-timestamp onchain no-op and never project backwards.
-    if (elapsed <= 0n)
+    if (elapsed <= 0n) {
+      const vault = new AccrualVaultV2(
+        this,
+        this.accrualLiquidityAdapter,
+        this.accrualAdapters,
+        this.assetBalance,
+        this.forceDeallocatePenalties,
+      );
       return { vault, performanceFeeShares: 0n, managementFeeShares: 0n };
+    }
+
+    const accrualAdapters = this.accrualAdapters.map(
+      (adapter) => adapter.accrueInterest?.(timestamp) ?? adapter,
+    );
+    const liquidityAdapter = this.accrualLiquidityAdapter;
+    const accrualLiquidityAdapter =
+      liquidityAdapter &&
+      (accrualAdapters.find((adapter) =>
+        isAddressEqual(adapter.address, liquidityAdapter.address),
+      ) ??
+        liquidityAdapter);
+
+    const vault = new AccrualVaultV2(
+      this,
+      accrualLiquidityAdapter,
+      accrualAdapters,
+      this.assetBalance,
+      this.forceDeallocatePenalties,
+    );
 
     const realAssets = vault.accrualAdapters.reduce(
       (curr, adapter) => curr + adapter.realAssets(timestamp),
@@ -395,7 +418,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;
-    vault.lastUpdate = BigInt(timestamp);
+    vault.lastUpdate = timestamp;
 
     return { vault, performanceFeeShares, managementFeeShares };
   }

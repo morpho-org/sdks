@@ -208,6 +208,62 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     );
   }
 
+  /**
+   * Returns a new adapter whose underlying positions (and their markets) have
+   * been accrued up to the given timestamp.
+   * Past timestamps and markets already ahead of `timestamp` keep their snapshots
+   * without throwing. Zero-share positions are left unchanged.
+   * @param timestamp The timestamp at which to accrue interest.
+   * @returns A new `AccrualVaultV2MorphoMarketV1Adapter` with contributing
+   * positions accrued to `timestamp`.
+   * @throws {UnsupportedMarketIrmError} when forward projection of a market with
+   * positive debt requires an unsupported IRM.
+   * @example
+   * ```ts
+   * import {
+   *   AccrualPosition,
+   *   AccrualVaultV2MorphoMarketV1Adapter,
+   *   MarketParams,
+   * } from "@morpho-org/blue-sdk";
+   * import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+   *
+   * const marketParams = MarketParams.idle(ZERO_ADDRESS);
+   * const position = new AccrualPosition(
+   *   { user: ZERO_ADDRESS, supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+   *   {
+   *     params: marketParams,
+   *     totalSupplyAssets: 0n,
+   *     totalBorrowAssets: 0n,
+   *     totalSupplyShares: 0n,
+   *     totalBorrowShares: 0n,
+   *     lastUpdate: 1_700_000_000n,
+   *     fee: 0n,
+   *   },
+   * );
+   * const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+   *   {
+   *     address: ZERO_ADDRESS,
+   *     parentVault: ZERO_ADDRESS,
+   *     skimRecipient: ZERO_ADDRESS,
+   *     marketParamsList: [marketParams],
+   *   },
+   *   [position],
+   * );
+   * const accrued = adapter.accrueInterest(position.market.lastUpdate);
+   * // accrued.positions[0]!.market.lastUpdate === position.market.lastUpdate
+   * ```
+   */
+  accrueInterest(timestamp: BigIntish) {
+    return new AccrualVaultV2MorphoMarketV1Adapter(
+      this,
+      this.positions.map((position) =>
+        position.supplyShares === 0n
+          ? position
+          : position.accrueInterest(timestamp),
+      ),
+    );
+  }
+
   maxDeposit(_data: Hex, assets: BigIntish) {
     return {
       value: BigInt(assets),
