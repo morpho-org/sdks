@@ -1319,6 +1319,14 @@ const _addressesRegistry = {
     registryList: "0xe785a2eFD384BA7B95BaEd3851BC76aeD67C676f",
     chainlinkOracleFactory: "0xB7c16F6F8cF531447Bf27Ca7220f981E79C9cdF2",
     preLiquidationFactory: "0x0B0cFa151c06d2342799267754b0a2c320C43D5B",
+    midnight: "0x6120765Ba5336150BbdDdD0Cd9108B5bFD369632",
+    midnightBundles: "0x71aa985ff80AbcE3b8b443845633674Ca9f7575C",
+    midnightBlueBuyCallbackFactory:
+      "0x53cbCd884CABA07762c72F43283D3fa72de42D4f",
+    midnightMempool: "0xcEF685D4796FA80F71a97e803D2c0b6719F1b4E2",
+    ecrecoverRatifier: "0x90B800999e4ACd1bD20283BD450bBd2e06D91F7C",
+    ecrecoverAuthorizer: "0x75FCdD113fe33a8bEd3CD3C35955DE094Bd2bdf8",
+    setterRatifier: "0x708d6Bf6F847202a0755bb5636bE663B174242ea",
     wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
   },
 } as const;
@@ -2249,6 +2257,13 @@ const _deployments = {
     registryList: 289n,
     chainlinkOracleFactory: 287n,
     preLiquidationFactory: 287n,
+    midnight: 65_366_296n,
+    midnightBundles: 65_387_381n,
+    midnightBlueBuyCallbackFactory: 65_391_242n,
+    midnightMempool: 65_366_296n,
+    ecrecoverRatifier: 65_366_296n,
+    ecrecoverAuthorizer: 65_366_296n,
+    setterRatifier: 65_366_296n,
     wNative: 2n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
