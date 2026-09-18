@@ -278,7 +278,8 @@ jobs:
             # Read name/version through the exact code path `npm publish` uses
             # (pacote.manifest → node-tar extraction), so the identity we check
             # against the source allowlist is the identity npm will publish.
-            IFS=$'\t' read -r name version < <(node scripts/ci/read-tarball-identity.ts "$tgz")
+            identity="$(node scripts/ci/read-tarball-identity.ts "$tgz")"
+            IFS=$'\t' read -r name version <<<"$identity"
 
             if [ -n "${received_version[$name]:-}" ]; then
               echo "::error::Duplicate tarball for ${name} in the artifact."

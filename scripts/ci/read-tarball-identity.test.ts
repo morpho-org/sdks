@@ -152,6 +152,41 @@ describe("readTarballIdentity", () => {
     });
   });
 
+  test("error: rejects a manifest missing version", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package" }),
+      }),
+    ).rejects.toThrow(/version must be a non-empty string/);
+  });
+
+  test("error: rejects a name containing a tab", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package\tname", version: "1.0.0" }),
+      }),
+    ).rejects.toThrow(/name must be a non-empty string/);
+  });
+
+  test("error: rejects a version containing a newline", async () => {
+    await expect(
+      readTarballIdentity("ignored.tgz", {
+        manifest: async () => ({ name: "package", version: "1.0.0\n" }),
+      }),
+    ).rejects.toThrow(/version must be a non-empty string/);
+  });
+
+  test("error: wraps pacote failures with their cause", async () => {
+    await withTempDir(async (dir) => {
+      await expect(
+        readTarballIdentity(join(dir, "missing.tgz"), pacoteReader()),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/Unable to read tarball manifest/),
+        cause: expect.anything(),
+      });
+    });
+  });
+
   test("error: missing tarball argument reports usage", async () => {
     await expect(main(undefined)).rejects.toThrow(/Usage/);
   });
