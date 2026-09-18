@@ -125,25 +125,24 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
     if (folded !== "package" && !folded.startsWith("package/")) {
       throw new Error(`Entry "${path}" is outside package/.`);
     }
-    return { path, rawPath: path.replaceAll("\\", "/"), type, folded };
+    return { path, type, folded };
   });
 
   const npmignoreFiles = new Set(
     normalizedEntries
       .filter(
-        ({ rawPath, type }) =>
-          type === "File" && rawPath.endsWith("/.npmignore"),
+        ({ path, type }) => type === "File" && path.endsWith("/.npmignore"),
       )
-      .map(({ rawPath }) => rawPath),
+      .map(({ path }) => path),
   );
   const originals = new Map<string, { path: string; type: string }>();
   const prefixes = new Set<string>();
-  for (const { path, rawPath, type, folded } of normalizedEntries) {
+  for (const { path, type, folded } of normalizedEntries) {
     const aliases = [folded];
-    const npmignoreSibling = rawPath.replace(/\.gitignore$/, ".npmignore");
+    const npmignoreSibling = path.replace(/\.gitignore$/, ".npmignore");
     if (
       type === "File" &&
-      rawPath.endsWith("/.gitignore") &&
+      path.endsWith("/.gitignore") &&
       !npmignoreFiles.has(npmignoreSibling)
     ) {
       aliases.push(foldEntryPath(npmignoreSibling));

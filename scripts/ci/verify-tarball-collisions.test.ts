@@ -318,6 +318,24 @@ describe("verifyTarballEntries", () => {
   );
 
   test.each([true, false])(
+    "error: rejects a backslash npmignore sibling (%s order)",
+    async (fileFirst) => {
+      await withTempDir(async (dir) => {
+        const ignoreEntries = fileFirst
+          ? ["package/config/.gitignore", "package/config\\.npmignore"]
+          : ["package/config\\.npmignore", "package/config/.gitignore"];
+        const tgz = buildTarball(dir, {
+          entries: ["package/", "package/package.json", ...ignoreEntries],
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/collide/);
+      });
+    },
+  );
+
+  test.each([true, false])(
     "error: rejects a directory npmignore sibling (%s order)",
     async (fileFirst) => {
       await withTempDir(async (dir) => {
