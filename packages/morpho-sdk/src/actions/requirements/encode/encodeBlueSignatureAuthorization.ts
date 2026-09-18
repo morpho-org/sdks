@@ -18,7 +18,7 @@ import {
 interface EncodeBlueSignatureAuthorizationParams {
   /** Account granting the authorization and signing it (the Morpho `authorizer`). */
   owner: Address;
-  /** Operator to authorize on Morpho, such as GeneralAdapter1 or BlueBundlesV1. */
+  /** BlueBundlesV1 operator to authorize on Morpho. */
   authorized: Address;
   /** Target chain id; must match `viemClient.chain.id`. */
   chainId: number;
@@ -31,9 +31,8 @@ interface EncodeBlueSignatureAuthorizationParams {
 }
 
 /**
- * Builds a Morpho authorization `Requirement` that, once signed, lets `authorized` operate on
- * Morpho on the signer's behalf. Bundler3 consumes the result through `setAuthorizationWithSig`;
- * BlueBundlesV1 embeds the same signed authorization in its direct-call struct.
+ * Builds a Morpho authorization `Requirement` that, once signed, lets BlueBundlesV1 operate on
+ * Morpho on the signer's behalf.
  *
  * The returned `Requirement.sign()` produces the EIP-712 signature over Morpho's `Authorization`
  * typed data, verifies it against the connected account, and returns a deep-frozen
@@ -44,7 +43,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Authorization encoding parameters.
  * @param params.owner - Account granting the authorization and signing it (the Morpho `authorizer`).
- * @param params.authorized - Operator to authorize, such as GeneralAdapter1 or BlueBundlesV1.
+ * @param params.authorized - BlueBundlesV1 operator to authorize.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The owner's current Morpho authorization nonce.
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
@@ -68,7 +67,7 @@ interface EncodeBlueSignatureAuthorizationParams {
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeBlueSignatureAuthorization(client, {
  *   owner,
- *   authorized: generalAdapter1,
+ *   authorized: blueBundlesV1,
  *   chainId: 1,
  *   nonce: 0n,
  * });

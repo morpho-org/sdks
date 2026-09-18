@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {IMorpho, Id, MarketParams} from "./interfaces/IMorpho.sol";
 import {IERC20Permit, Eip5267Domain} from "./interfaces/IERC20Permit.sol";
 import {IMetaMorpho, PendingUint192, PendingAddress} from "./interfaces/IMetaMorpho.sol";
-import {IPublicAllocator} from "./interfaces/IPublicAllocator.sol";
 import {IMetaMorphoFactory} from "./interfaces/IMetaMorphoFactory.sol";
 
 struct VaultConfig {
@@ -14,12 +13,6 @@ struct VaultConfig {
     uint256 decimals;
     uint256 decimalsOffset;
     Eip5267Domain eip5267Domain;
-}
-
-struct PublicAllocatorConfig {
-    address admin;
-    uint256 fee;
-    uint256 accruedFee;
 }
 
 struct VaultResponse {
@@ -41,14 +34,12 @@ struct VaultResponse {
     uint256 lostAssets;
     Id[] supplyQueue;
     Id[] withdrawQueue;
-    bool hasPublicAllocator;
-    PublicAllocatorConfig publicAllocatorConfig;
 }
 
 error UnknownOfFactory(address factory, address vault);
 
 contract GetVault {
-    function query(IMetaMorpho vault, IPublicAllocator publicAllocator, IMetaMorphoFactory metaMorphoFactory)
+    function query(IMetaMorpho vault, IMetaMorphoFactory metaMorphoFactory)
         external
         view
         returns (VaultResponse memory res)
@@ -105,15 +96,6 @@ contract GetVault {
         res.withdrawQueue = new Id[](withdrawQueueLength);
         for (uint256 i; i < withdrawQueueLength; ++i) {
             res.withdrawQueue[i] = vault.withdrawQueue(i);
-        }
-
-        if (address(publicAllocator) != address(0) && vault.isAllocator(address(publicAllocator))) {
-            res.hasPublicAllocator = true;
-            res.publicAllocatorConfig = PublicAllocatorConfig({
-                admin: publicAllocator.admin(address(vault)),
-                fee: publicAllocator.fee(address(vault)),
-                accruedFee: publicAllocator.accruedFee(address(vault))
-            });
         }
     }
 

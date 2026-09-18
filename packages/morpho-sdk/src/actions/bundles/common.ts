@@ -41,6 +41,7 @@ import {
   type TokenRequirementSignature,
   type Transaction,
   UnexpectedRequirementSignatureError,
+  UnsupportedRequirementSignatureError,
 } from "../../types/index.js";
 
 /** Numeric permit kinds consumed by `TokenLib.pullToken`. */
@@ -184,11 +185,12 @@ export const resolveBundlesFunding = (
  * @param params.amount - Exact pull amount in the token's smallest unit; must match both signed amount fields.
  * @param params.requirementSignature - Optional signed ERC-2612 or Permit2 SignatureTransfer requirement; omit for allowance funding.
  * @returns An empty, ERC-2612, or Permit2 SignatureTransfer token permit.
- * @throws {UnexpectedRequirementSignatureError} when Permit2 AllowanceTransfer is supplied.
  * @throws {DepositOwnerMismatchError} when the signature owner differs from `userAddress`.
  * @throws {DepositAssetMismatchError} when the signed token differs from `token`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
  * @throws {DepositSpenderMismatchError} when the signed spender differs from `spender`.
+ * @throws {UnsupportedRequirementSignatureError} when the signature's action type is neither
+ *   "permit" nor "permit2SignatureTransfer".
  * @throws {BundlesRequirementSignatureMismatchError} when signature metadata is malformed.
  * @example
  * ```ts
@@ -213,9 +215,9 @@ export const getBundlesTokenPermit = (params: {
 }): BundlesTokenPermit => {
   const { requirementSignature } = params;
   if (requirementSignature == null) return { ...EMPTY_TOKEN_PERMIT };
-  if (requirementSignature.action.type === "permit2") {
-    throw new UnexpectedRequirementSignatureError("permit");
-  }
+  const { type } = requirementSignature.action;
+  if (type !== "permit" && type !== "permit2SignatureTransfer")
+    throw new UnsupportedRequirementSignatureError(type);
   if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
     throw new DepositOwnerMismatchError(
       params.userAddress,

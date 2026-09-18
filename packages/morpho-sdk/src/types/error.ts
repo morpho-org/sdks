@@ -144,13 +144,6 @@ export class VaultV2SingleAdapterRequiredError extends Error {
   }
 }
 
-/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
-export const InKindRedeemRequiresSingleAdapterError =
-  VaultV2SingleAdapterRequiredError;
-/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
-export type InKindRedeemRequiresSingleAdapterError =
-  VaultV2SingleAdapterRequiredError;
-
 /** Thrown when a requested in-kind redemption adapter is not part of the Vault V2 snapshot. */
 export class AdapterNotPartOfVaultError extends Error {
   /**
@@ -195,11 +188,6 @@ export class VaultV2UnsupportedExitAdapterError extends Error {
     this.name = "VaultV2UnsupportedExitAdapterError";
   }
 }
-
-/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
-export const UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
-/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
-export type UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
 
 /**
  * Thrown when a Vault V2 exit cannot resolve the vault's configured liquidity adapter.
@@ -455,6 +443,50 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
 }
 
 /**
+ * Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor.
+ *
+ * An override below the floor derived at `MAX_SLIPPAGE_TOLERANCE` would weaken the on-chain
+ * share-price protection and let the required share allowance grow without bound, so the entity
+ * rejects it instead of encoding it.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawSharePriceBelowFloorError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets, vaultData, userAddress, minSharePriceE27 });
+ * } catch (error) {
+ *   if (error instanceof VaultV2ForceWithdrawSharePriceBelowFloorError) {
+ *     console.error(error.minSharePriceE27, error.floorE27);
+ *   }
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawSharePriceBelowFloorError extends Error {
+  /** Supplied force-withdraw share-price floor. */
+  public readonly minSharePriceE27: bigint;
+  /** Minimum share-price floor allowed at maximum SDK slippage tolerance. */
+  public readonly floorE27: bigint;
+
+  /**
+   * @param params - Supplied and minimum allowed share-price floors.
+   * @param params.minSharePriceE27 - Supplied force-withdraw share-price floor.
+   * @param params.floorE27 - Minimum floor derived at maximum SDK slippage tolerance.
+   */
+  public constructor(params: {
+    readonly minSharePriceE27: bigint;
+    readonly floorE27: bigint;
+  }) {
+    super(
+      `Force-withdraw share price floor "${params.minSharePriceE27}" is below the minimum allowed "${params.floorE27}" (max slippage tolerance). Raise minSharePriceE27 or use slippageTolerance.`,
+    );
+    this.minSharePriceE27 = params.minSharePriceE27;
+    this.floorE27 = params.floorE27;
+    this.name = "VaultV2ForceWithdrawSharePriceBelowFloorError";
+  }
+}
+
+/**
  * Thrown when fee shares projected to the accepted deadline reach the lower force-withdraw
  * burn bound at that time.
  *
@@ -680,32 +712,6 @@ export class BundlesPermitMismatchError extends Error {
   }
 }
 
-/**
- * Thrown by the deprecated VaultExitBundlesV1 permit compatibility helper.
- *
- * @deprecated Use {@link BundlesPermitMismatchError} with `getBundlesSharesPermit`.
- */
-export class VaultExitBundlesV1PermitMismatchError extends BundlesPermitMismatchError {
-  public constructor(params: {
-    readonly field:
-      | "type"
-      | "asset"
-      | "owner"
-      | "spender"
-      | "amount"
-      | "nonce"
-      | "deadline"
-      | "signature";
-    readonly expected: string;
-    readonly actual: string;
-    readonly cause?: unknown;
-  }) {
-    super(params);
-    this.message = `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`;
-    this.name = "VaultExitBundlesV1PermitMismatchError";
-  }
-}
-
 /** Thrown when a signed requirement cannot be safely encoded for a fixed bundles call. */
 export class BundlesRequirementSignatureMismatchError extends Error {
   /** Field whose signed value or encoding is invalid for the fixed bundles call. */
@@ -751,11 +757,6 @@ export class BundlesRequirementSignatureMismatchError extends Error {
   }
 }
 
-/** @deprecated Use {@link BundlesRequirementSignatureMismatchError}. */
-export {
-  BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
-};
-
 /** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
 export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
@@ -790,11 +791,6 @@ export class NoUnusedPermit2NonceError extends Error {
   }
 }
 
-/** @deprecated Use {@link Permit2SignatureTransferNonceAlreadyUsedError}. */
-export {
-  Permit2SignatureTransferNonceAlreadyUsedError as Permit2TransferFromNonceAlreadyUsedError,
-};
-
 /** Thrown when native funding does not exactly match the contract's gross token pull. */
 export class NativeFundingAmountMismatchError extends Error {
   /**
@@ -821,12 +817,6 @@ export class ReferralFeeRecipientMissingError extends Error {
     this.name = "ReferralFeeRecipientMissingError";
   }
 }
-
-/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
-export const MissingReferralFeeRecipientError =
-  ReferralFeeRecipientMissingError;
-/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
-export type MissingReferralFeeRecipientError = ReferralFeeRecipientMissingError;
 
 /**
  * Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range.
@@ -896,9 +886,7 @@ export class ReallocationLoanTokenMismatchError extends Error {
 }
 
 /**
- * Thrown when a Blue authorization operator is not one of the chain's registered Morpho operators
- * (GeneralAdapter1 or BlueBundlesV1). Guards the exported authorization builder so a misconfigured
- * `authorized` cannot grant an arbitrary address control over the user's Morpho positions.
+ * Thrown when a Blue authorization operator is not the chain's registered BlueBundlesV1 contract.
  */
 export class UnsupportedAuthorizationOperatorError extends Error {
   /**
@@ -910,7 +898,7 @@ export class UnsupportedAuthorizationOperatorError extends Error {
     public readonly chainId: number,
   ) {
     super(
-      `Authorization operator "${authorized}" is not a supported Morpho operator on chain ${chainId}. Pass the chain's registered GeneralAdapter1 or BlueBundlesV1 address, or omit \`authorized\` to default to GeneralAdapter1.`,
+      `Authorization operator "${authorized}" is not supported on chain ${chainId}. Pass the chain's registered BlueBundlesV1 address.`,
     );
     this.name = "UnsupportedAuthorizationOperatorError";
   }
@@ -940,213 +928,6 @@ export class MaxRepayAssetsBelowRepayAssetsError extends Error {
       `maxRepayAssets "${maxRepayAssets}" cannot cover required repay funding "${repayAssets}". Increase maxRepayAssets to include the repayment and referral fee.`,
     );
     this.name = "MaxRepayAssetsBelowRepayAssetsError";
-  }
-}
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveAssetAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveAssetAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveSharesAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveSharesAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveMaxSharePriceError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveMaxSharePriceError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const ZeroDepositAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type ZeroDepositAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveBorrowAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveBorrowAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const ZeroCollateralAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type ZeroCollateralAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveReallocationAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveReallocationAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveRepayAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveRepayAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const ZeroSupplyAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type ZeroSupplyAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NonPositiveInputError}. */
-export const NonPositiveWithdrawAmountError = NonPositiveInputError;
-/** @deprecated Use {@link NonPositiveInputError}. */
-export type NonPositiveWithdrawAmountError = NonPositiveInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeSlippageToleranceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeSlippageToleranceError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeNativeAmountError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeNativeAmountError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeReallocationFeeError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeReallocationFeeError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NonPositiveMinBorrowSharePriceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NonPositiveMinBorrowSharePriceError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeSupplyAmountError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeSupplyAmountError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeSupplyMaxSharePriceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeSupplyMaxSharePriceError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeWithdrawMinSharePriceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeWithdrawMinSharePriceError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeMinSharePriceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeMinSharePriceError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeBorrowSharesError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeBorrowSharesError = NegativeInputError;
-
-/** @deprecated Use {@link NegativeInputError}. */
-export const NegativeMaxRepaySharePriceError = NegativeInputError;
-/** @deprecated Use {@link NegativeInputError}. */
-export type NegativeMaxRepaySharePriceError = NegativeInputError;
-
-/**
- * Typed errors thrown while encoding supported Bundler3 actions.
- *
- * @remarks
- * Import these classes through `@morpho-org/morpho-sdk` when handling
- * failures from `BundlerAction`.
- */
-export namespace BundlerErrors {
-  /**
-   * Thrown when an action that requires an offchain signature is encoded before
-   * the signature has been attached.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.MissingSignature) {
-   *   // Attach the missing permit or Permit2 signature, then encode again.
-   * }
-   * ```
-   */
-  export class MissingSignature extends Error {
-    constructor() {
-      super("missing signature");
-    }
-  }
-
-  /**
-   * Thrown when an action is unsupported on the requested chain.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedAction) {
-   *   // Remove or replace the action for the selected chain.
-   * }
-   * ```
-   */
-  export class UnexpectedAction extends Error {
-    /**
-     * @param type - Unsupported Bundler3 action discriminator or name.
-     * @param chainId - Chain where the action was requested.
-     */
-    constructor(type: string, chainId: number) {
-      super(`unexpected action "${type}" on chain "${chainId}"`);
-    }
-  }
-
-  /**
-   * Thrown when a Morpho authorization signature names a forbidden `authorized` account
-   * (for example Bundler3 itself), which would grant operator rights to an unintended address.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedSignature) {
-   *   // Re-sign the authorization targeting GeneralAdapter1.
-   * }
-   * ```
-   */
-  export class UnexpectedSignature extends Error {
-    /**
-     * @param authorized - The forbidden `authorized` address carried by the signature.
-     */
-    constructor(authorized: Address) {
-      super(`unexpected signature authorizing "${authorized}"`);
-    }
-  }
-
-  /**
-   * Thrown when a skippable Blue Public Allocator call would leave a usable
-   * token allowance behind after the allocator call reverts.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.SkippableAllocatorPenalty) {
-   *   // Rebuild the allocator call with skipRevert set to false.
-   * }
-   * ```
-   */
-  export class SkippableAllocatorPenalty extends Error {
-    /**
-     * @param penaltyAssets - Exact token amount approved to the allocator.
-     */
-    public constructor(public readonly penaltyAssets: bigint) {
-      super(
-        `Blue Public Allocator calls with penalty assets cannot skip reverts. Rebuild with skipRevert false for penalty amount "${penaltyAssets}".`,
-      );
-      this.name = "SkippableAllocatorPenalty";
-    }
   }
 }
 
@@ -1208,6 +989,18 @@ export class UnexpectedRequirementSignatureError extends Error {
   }
 }
 
+/** Thrown when `buildTx` receives a requirement signature whose action type is not supported. */
+export class UnsupportedRequirementSignatureError extends Error {
+  /**
+   * @param type - The unsupported signature action type.
+   */
+  constructor(public readonly type: string) {
+    super(
+      `Received a requirement signature with unsupported action type "${type}". Re-run getRequirements() and sign the current requirements.`,
+    );
+  }
+}
+
 /** Thrown when a viem client's account address does not match the address required by the call. */
 export class AddressMismatchError extends Error {
   constructor(clientAddress: Address, argsAddress: Address) {
@@ -1252,7 +1045,6 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   constructor(params: {
     readonly spender: Address;
     readonly chainId: number;
-    readonly generalAdapter1: Address;
     readonly permit2?: Address;
     readonly midnight?: Address;
     readonly midnightBundles?: Address;
@@ -1260,7 +1052,6 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   }) {
     const supported = (
       params.supportedSpenders ?? [
-        params.generalAdapter1,
         params.permit2,
         params.midnight,
         params.midnightBundles,
@@ -1350,15 +1141,6 @@ export class DepositSpenderMismatchError extends Error {
   }
 }
 
-/** Thrown when a `permit2` requirement signature is missing the `expiration` field. */
-export class Permit2ExpirationMissingError extends Error {
-  constructor() {
-    super(
-      'Requirement signature with action.type === "permit2" must include args.expiration. Re-sign using the permit2 flow.',
-    );
-  }
-}
-
 /** Thrown when a vault deposit uses `nativeAmount` but the vault asset is not the chain's wNative. */
 export class NativeAmountOnNonWNativeVaultError extends Error {
   constructor(vaultAsset: Address, wNative: Address) {
@@ -1394,12 +1176,6 @@ export class NativeAmountOnNonWNativeAssetError extends Error {
     );
   }
 }
-
-/** @deprecated Use {@link NativeAmountOnNonWNativeAssetError}. */
-export const NativeAmountOnNonWNativeCollateralError =
-  NativeAmountOnNonWNativeAssetError;
-export type NativeAmountOnNonWNativeCollateralError =
-  NativeAmountOnNonWNativeAssetError;
 
 /** Thrown when a borrow exceeds the LLTV-buffered safe maximum for the position. */
 export class BorrowExceedsSafeLtvError extends Error {
@@ -1437,17 +1213,6 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
-/**
- * Thrown when a reallocation has no withdrawals.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
- */
-export class EmptyReallocationWithdrawalsError extends Error {
-  constructor(vault: string) {
-    super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
-  }
-}
-
 /** Thrown when a Public Allocator source references the target Blue market. */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
@@ -1464,38 +1229,17 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
  *
  * @example
  * ```ts
- * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
+ * import { InvalidVaultV2BlueReallocationShapeError } from "@morpho-org/morpho-sdk";
  *
- * const error = new InvalidReallocationShapeError();
+ * const error = new InvalidVaultV2BlueReallocationShapeError();
  * ```
  */
-export class InvalidReallocationShapeError extends Error {
+export class InvalidVaultV2BlueReallocationShapeError extends Error {
   public constructor() {
     super(
-      "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()); compose Vault V1 reallocations via low-level Bundler3 actions.",
+      "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()). Use morpho-sdk v5 if Vault V1 reallocations are required.",
     );
-    this.name = "InvalidReallocationShapeError";
-  }
-}
-
-/**
- * Thrown when one reallocation plan contains both Vault V1 and Vault V2 entries.
- *
- * @deprecated Vault V1/V2 mixed-plan support will be removed in the next major. Use Vault V2
- * reallocations.
- * @example
- * ```ts
- * import { MixedReallocationVersionsError } from "@morpho-org/morpho-sdk";
- *
- * const error = new MixedReallocationVersionsError();
- * ```
- */
-export class MixedReallocationVersionsError extends Error {
-  public constructor() {
-    super(
-      "Reallocation plans cannot mix Vault V1 and Vault V2 entries. Submit one version per transaction.",
-    );
-    this.name = "MixedReallocationVersionsError";
+    this.name = "InvalidVaultV2BlueReallocationShapeError";
   }
 }
 
@@ -1603,36 +1347,6 @@ export class InconsistentReallocationPenaltyError extends Error {
   }
 }
 
-/**
- * Thrown when reallocation withdrawals within a vault are not strictly sorted by market id.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
- */
-export class UnsortedReallocationWithdrawalsError extends Error {
-  constructor(vault: string, marketId: string) {
-    super(
-      `Reallocation withdrawals must be strictly sorted by market ID for vault ${vault}. Market ${marketId} is out of order.`,
-    );
-  }
-}
-
-/**
- * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
- * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
- * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
- */
-export class TransferAmountNotEqualToAssetsError extends Error {
-  constructor(params: {
-    transferAmount: bigint;
-    assets: bigint;
-    market: string;
-  }) {
-    super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
-    );
-  }
-}
-
 /** Thrown when a market repay specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveRepayAmountsError extends Error {
   constructor(market: string) {
@@ -1668,13 +1382,6 @@ export class WithdrawMakesPositionUnhealthyError extends Error {
   }
 }
 
-/** Thrown when a share-amount conversion would divide by zero (the market has no shares of the relevant kind). */
-export class ShareDivideByZeroError extends Error {
-  constructor(market: string) {
-    super(`Share divide by zero error for market: ${market}`);
-  }
-}
-
 /** Thrown when a repay amount in assets exceeds the borrower's outstanding debt. */
 export class RepayExceedsDebtError extends Error {
   constructor(params: { repayAmount: bigint; debt: bigint; market: string }) {
@@ -1707,36 +1414,7 @@ export class RepaySharesExceedDebtError extends Error {
 }
 
 /**
- * Thrown when a vault selected for reallocation has no configured `PublicAllocator`.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
- */
-export class MissingPublicAllocatorConfigError extends Error {
-  constructor(vault: string) {
-    super(
-      `Vault ${vault} has no public allocator configured but was selected for reallocation`,
-    );
-  }
-}
-
-/**
- * Thrown when a reallocation attempts to use a disabled vault market.
- *
- * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
- */
-export class DisabledReallocationMarketError extends Error {
-  constructor(
-    public readonly vault: Address,
-    public readonly marketId: MarketId,
-  ) {
-    super(
-      `Vault ${vault} has disabled market ${marketId}. Remove it from reallocations or re-enable the market before reallocating.`,
-    );
-  }
-}
-
-/**
- * Thrown when shared liquidity selected by a Vault V1 or Vault V2 reallocation planner cannot
+ * Thrown when shared liquidity selected by a Vault V2 reallocation planner cannot
  * cover the operation's absolute shortfall on the target market — the resulting
  * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
  *
@@ -1773,44 +1451,6 @@ export class UnknownReallocationVaultError extends UnknownDataError {
    */
   constructor(public readonly vault: Address) {
     super(`unknown reallocation vault "${vault}"`);
-  }
-}
-
-/**
- * Thrown when reallocation state does not contain a requested vault-market config.
- *
- * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
- */
-export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
-  /**
-   * @param vault - Vault address for the missing config.
-   * @param marketId - Market id for the missing config.
-   */
-  constructor(
-    public readonly vault: Address,
-    public readonly marketId: MarketId,
-  ) {
-    super(
-      `unknown reallocation config for vault "${vault}" on market "${marketId}"`,
-    );
-  }
-}
-
-/**
- * Thrown when reallocation state does not contain a requested market position.
- *
- * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
- */
-export class UnknownReallocationPositionError extends UnknownDataError {
-  /**
-   * @param user - Position owner address.
-   * @param marketId - Market id for the missing position.
-   */
-  constructor(
-    public readonly user: Address,
-    public readonly marketId: MarketId,
-  ) {
-    super(`unknown reallocation position of "${user}" on market "${marketId}"`);
   }
 }
 
@@ -2147,11 +1787,11 @@ export class WithdrawSharesExceedSupplyError extends Error {
 }
 
 /**
- * Thrown when a Vault V1 or Vault V2 reallocation planner receives a withdraw `amount` greater
+ * Thrown when a Vault V2 reallocation planner receives a withdraw `amount` greater
  * than the target market's current `totalSupplyAssets` — the post-withdraw
  * supply would be negative, making the on-chain `morphoWithdraw` revert
  * regardless of any reallocation. Caught here so callers do not pay
- * PublicAllocator fees on an unreachable operation.
+ * allocator penalties on an unreachable operation.
  */
 export class ReallocationWithdrawExceedsMarketSupplyError extends Error {
   constructor(
@@ -2190,114 +1830,6 @@ export class RefinanceTokenMismatchError extends Error {
   constructor(sourceMarket: string, targetMarket: string) {
     super(
       `Refinance source market ${sourceMarket} and target market ${targetMarket} must share the same loanToken and collateralToken.`,
-    );
-  }
-}
-
-/**
- * Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive).
- *
- * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
- *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
- *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
- */
-export class BorrowAmountAndSharesExclusiveError extends Error {
-  constructor(market: string) {
-    super(
-      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
-    );
-  }
-}
-
-/**
- * Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral.
- *
- * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
- *   partial collateral inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
- *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
- */
-export class RefinanceExceedsCollateralError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance collateral amount ${params.requested} exceeds available collateral ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/**
- * Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares.
- *
- * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
- *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
- *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
- */
-export class RefinanceExceedsBorrowSharesError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance borrow shares ${params.requested} exceed outstanding borrow shares ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/**
- * Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets.
- *
- * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
- *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
- *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
- */
-export class RefinanceExceedsBorrowAssetsError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance borrow assets ${params.requested} exceed outstanding debt assets ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/**
- * Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg.
- *
- * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
- *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
- *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
- */
-export class RefinanceSharesMissingBorrowAssetsError extends Error {
-  constructor(market: string) {
-    super(
-      `Refinance shares mode requires a positive borrowAssets overshoot for the target borrow leg (market: ${market}).`,
     );
   }
 }

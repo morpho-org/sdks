@@ -20,7 +20,8 @@
   "type": "module",
   "main": "src/index.ts",
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v5-to-v6.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -30,8 +31,8 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.8.0",
-    "@morpho-org/morpho-ts": "^2.10.0",
+    "@morpho-org/blue-sdk": "^7.0.0",
+    "@morpho-org/morpho-ts": "^3.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

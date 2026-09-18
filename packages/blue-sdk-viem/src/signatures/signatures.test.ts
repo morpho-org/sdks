@@ -7,7 +7,7 @@ import {
 import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
 import { getAuthorizationTypedData } from "./manager.js";
-import { getDaiPermitTypedData, getPermitTypedData } from "./permit.js";
+import { getPermitTypedData } from "./permit.js";
 import {
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
@@ -31,7 +31,7 @@ describe("getAuthorizationTypedData", () => {
     );
 
     expect(typedData.domain?.verifyingContract).toBe(
-      addressesRegistry[ChainId.EthMainnet].morpho,
+      addressesRegistry[ChainId.EthMainnet].blue,
     );
     expect(typedData.message).toEqual({
       authorizer: OWNER,
@@ -85,47 +85,6 @@ describe("getPermitTypedData", () => {
       chainId: ChainId.EthMainnet,
       verifyingContract: TOKEN,
     });
-  });
-});
-
-describe("getDaiPermitTypedData", () => {
-  test("sets allowed true when allowance is positive", () => {
-    const typedData = getDaiPermitTypedData(
-      {
-        owner: OWNER,
-        spender: SPENDER,
-        allowance: 1n,
-        nonce: 2n,
-        deadline: 3n,
-      },
-      ChainId.EthMainnet,
-    );
-
-    expect(typedData.domain?.verifyingContract).toBe(
-      addressesRegistry[ChainId.EthMainnet].dai,
-    );
-    expect(typedData.message).toEqual({
-      holder: OWNER,
-      spender: SPENDER,
-      allowed: true,
-      nonce: 2n,
-      expiry: 3n,
-    });
-  });
-
-  test("sets allowed false when allowance is zero", () => {
-    const typedData = getDaiPermitTypedData(
-      {
-        owner: OWNER,
-        spender: SPENDER,
-        allowance: 0n,
-        nonce: 2n,
-        deadline: 3n,
-      },
-      ChainId.EthMainnet,
-    );
-
-    expect(typedData.message.allowed).toBe(false);
   });
 });
 

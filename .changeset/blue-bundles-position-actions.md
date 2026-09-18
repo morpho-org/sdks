@@ -18,7 +18,3 @@ the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` and
 `GetBlueBundlesV1TokenRequirementsParams` prerequisite options, the `Erc2612RequirementSignature`
 and `Permit2AllowanceRequirementSignature` signed-requirement shapes, and the WDK Blue-write option
 types `readonly`.
-
-The `@morpho-org/liquidity-sdk-viem` dependent bump for this `morpho-sdk` major — a `minor` that
-widens its `morpho-sdk` peer range to `^5.4.0 || ^6.0.0` — is declared in the
-`blue-v2-only-reallocations` changeset that performs the widening.

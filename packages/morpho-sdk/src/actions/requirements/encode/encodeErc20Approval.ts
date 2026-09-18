@@ -17,12 +17,12 @@ interface EncodeErc20ApprovalParams {
  * Encodes a deep-frozen ERC-20 approval transaction for a supported SDK spender.
  *
  * Caps `amount` at the per-chain, per-token maximum from `MAX_TOKEN_APPROVALS` (defaults to
- * `maxUint256`). Used by {@link getRequirementsApproval} and {@link getGeneralAdapterRequirementsPermit2}.
+ * `maxUint256`). Used by {@link getRequirementsApproval}.
  *
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
- * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
- *   Midnight, MidnightBundles, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for the chain.
+ * @param params.spender - Address granted the allowance. Must be Permit2, Midnight,
+ *   MidnightBundles, VaultExitBundlesV1, VaultBundlesV1, or BlueBundlesV1 for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.
@@ -34,7 +34,7 @@ interface EncodeErc20ApprovalParams {
  *
  * const tx = encodeErc20Approval({
  *   token: USDC,
- *   spender: generalAdapter1,
+ *   spender: blueBundlesV1,
  *   amount: 1_000_000n,
  *   chainId: 1,
  * });
@@ -50,7 +50,6 @@ export const encodeErc20Approval = (
     chainId,
     spender,
     allowed: [
-      "generalAdapter1",
       "permit2",
       "midnight",
       "midnightBundles",

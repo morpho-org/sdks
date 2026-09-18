@@ -128,9 +128,6 @@ export type BundlesApprovalOrSignatureRequirement =
 export type VaultSharesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<Erc2612RequirementSignature>;
-/** @deprecated Use {@link BundlesApprovalOrSignatureRequirement}. */
-export type BlueApprovalOrSignatureRequirement =
-  BundlesApprovalOrSignatureRequirement;
 /** A Blue authorization transaction or authorization-signature request. */
 export type AuthorizationOrSignatureRequirement =
   | RequirementAuthorization
@@ -990,12 +987,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The submitted deposit hash and fee.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
    * @throws {InputExceedsMaxError} when funding exceeds uint256.
    * @throws {VaultAssetMismatchError} when the token differs from the configured vault asset.
+   * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
@@ -1028,12 +1025,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The deposit fee quote.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
    * @throws {InputExceedsMaxError} when funding exceeds uint256.
    * @throws {VaultAssetMismatchError} when the token differs from the configured vault asset.
+   * @throws {UnsupportedBlueMarketIrmError} when a positive-debt vault market uses an unsupported IRM.
    * @throws {ChainIdMismatchError} when the provider is connected to another chain.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
@@ -1069,7 +1066,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
    * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NonPositiveInputError} when neither funding amount is supplied or the selected amount is zero.
    * @throws {NegativeInputError} when the selected funding amount is negative.
@@ -1656,10 +1652,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getRepayRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay result, including the submitted transaction hash and fee data.
-   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1722,13 +1718,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
    *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
-   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
    * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
    *   funded amount.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
@@ -1748,7 +1744,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     token: market.loanToken,
    *     amount: 1_000_000n,
    *   });
-   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   // requirements satisfies readonly BundlesApprovalOrSignatureRequirement[]
    *   return requirements;
    * }
    * ```
@@ -1756,7 +1752,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
+  ): Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
   async getRepayRequirements(
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
@@ -1795,10 +1791,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.requirementSignature - Optional BlueBundlesV1 token-funding signature.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay fee quote without a transaction hash.
-   * @throws {ChainIdMismatchError} when the provider chain context changes or differs from the configured chain.
-   * @throws {UnsupportedBlueMarketIrmError} when required interest projection encounters an unsupported IRM.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
+   * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
+   * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts
@@ -1993,7 +1989,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *     token: market.collateralToken,
    *     amount: 10n ** 18n,
    *   });
-   *   // requirements satisfies readonly BlueApprovalOrSignatureRequirement[]
+   *   // requirements satisfies readonly BundlesApprovalOrSignatureRequirement[]
    *   return requirements;
    * }
    * ```
@@ -2001,7 +1997,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   getSupplyCollateralRequirements(
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
-  ): Promise<readonly BlueApprovalOrSignatureRequirement[]>;
+  ): Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
   async getSupplyCollateralRequirements(
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
@@ -2551,7 +2547,6 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     const client = await this._getViemClient(context);
     const market = await fetchMarket(target.marketId as MarketId, client, {
-      chainId: context.chainId,
       deployless: this._options.supportDeployless,
     });
     await this._revalidate(context);

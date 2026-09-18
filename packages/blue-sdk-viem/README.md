@@ -25,6 +25,8 @@
 
 Viem-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) viem-based fetch methods.
 
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md).
+
 ## Installation
 
 ```bash
@@ -54,8 +56,6 @@ import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultUser";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketAllocation";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketConfig";
-// Deprecated Vault V1 PublicAllocator fetcher; use fetchVaultV2BlueMarketPublicAllocatorConfig for Vault V2.
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketPublicAllocatorConfig";
 
 // Or full, opt-in class augmentation:
 import "@morpho-org/blue-sdk-viem/lib/augment";

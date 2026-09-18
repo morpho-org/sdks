@@ -29,6 +29,7 @@ import {
   computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
+  MAX_SLIPPAGE_TOLERANCE,
   resolveVaultV2ForceWithdrawEligibility,
 } from "../../helpers/index.js";
 import {
@@ -40,12 +41,14 @@ import {
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
-  MissingReferralFeeRecipientError,
   NegativeInputError,
   NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
   VaultAddressMismatchError,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   VaultV2SingleAdapterRequiredError,
   VaultV2UndecodableLiquidityDataError,
@@ -195,18 +198,140 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(build(MathLib.WAD / 100n)).toBeLessThan(build(0n));
   });
 
-  test("behavior: an explicit minSharePriceE27 overrides the derived bound", () => {
+  test("error: VaultV2ForceWithdrawSharePriceBelowFloorError", () => {
     const handle = createMockClient(mainnet);
+    expect(() =>
+      vaultFor(handle).forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: 1n,
+      }),
+    ).toThrow(VaultV2ForceWithdrawSharePriceBelowFloorError);
+
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    let caught: unknown;
+    try {
+      withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet)).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: floorE27 - 1n,
+        }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(
+      VaultV2ForceWithdrawSharePriceBelowFloorError,
+    );
+    if (!(caught instanceof VaultV2ForceWithdrawSharePriceBelowFloorError)) {
+      throw caught;
+    }
+    expect(caught.floorE27).toBe(floorE27);
+    expect(caught.minSharePriceE27).toBe(floorE27 - 1n);
+  });
+
+  test("behavior: override at or above the max-slippage floor is accepted and encoded", async () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now, () =>
+      vaultFor(handle, { supportSignature: false }).forceWithdraw({
+        exitAssets: 51n,
+        vaultData,
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: floorE27,
+      }),
+    );
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+
+    expect(exit.buildTx().action.args.minSharePriceE27).toBe(floorE27);
+    if (!approval || !isRequirementApproval(approval)) {
+      throw new Error("Expected an ERC-20 approval requirement");
+    }
+    expect(approval.action.args.amount).toBeLessThan(maxUint256);
+  });
+
+  test("behavior: override above the default floor tightens the bound", () => {
+    const handle = createMockClient(mainnet);
+    const defaultFloor = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+      })
+      .buildTx().action.args.minSharePriceE27;
+    const override = defaultFloor + 1n;
     const tx = vaultFor(handle)
       .forceWithdraw({
         exitAssets: 51n,
         vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
         userAddress: IN_KIND_USER,
-        minSharePriceE27: 123n,
+        minSharePriceE27: override,
       })
       .buildTx();
 
-    expect(tx.action.args.minSharePriceE27).toBe(123n);
+    expect(tx.action.args.minSharePriceE27).toBe(override);
+  });
+
+  test("behavior: a positive floor remains valid when the max-slippage threshold rounds to zero", () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 0n,
+      totalSupply: 950_000_000_000_000_000_000_000_000n,
+    });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 1n,
+      timestamp: now,
+    });
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      }),
+    ).toThrow(VaultV2ForceWithdrawZeroSharePriceError);
+    const build = (minSharePriceE27?: bigint) =>
+      vaultFor(createMockClient(mainnet))
+        .forceWithdraw({
+          exitAssets: 1n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27,
+        })
+        .buildTx();
+
+    expect(build().action.args.minSharePriceE27).toBe(1n);
+    expect(build(1n).action.args.minSharePriceE27).toBe(1n);
+    expect(() => build(0n)).toThrow(NonPositiveInputError);
   });
 
   // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
@@ -551,28 +676,35 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(InputExceedsMaxError);
     });
 
-    // The allowance is `mulDivUp(exitAssets, RAY, minSharePriceE27)`, so a floor of `1n` scales it
-    // past the ABI slot. The approval encoder clamps what it emits, so an uncapped requirement would
-    // sit permanently above any grantable allowance and `getRequirements()` would never converge.
+    // The fixture's 2:1 share-to-asset ratio makes the uncapped allowance exceed the uint256 ABI slot.
     test("behavior: saturates the derived share allowance at uint256", async () => {
       const handle = createMockClient(mainnet);
-      mockRequirements(handle, { allowance: maxUint256 });
-      // `mulDivUp(exitAssets, RAY, 1n)` overflows uint256 once `exitAssets > maxUint256 / RAY`, so
-      // give the vault enough idle to cover an exit that large penalty-free.
-      const exitAssets = (maxUint256 / MathLib.RAY) * 2n;
+      const exitAssets = maxUint256;
+      const vaultData = vaultV2ExitData({
+        assetBalance: exitAssets * 2n,
+        totalSupply: 2_000n,
+      });
+      mockRequirements(handle, { allowance: maxUint256 - 1n });
 
-      const requirements = await vaultFor(handle)
-        .forceWithdraw({
-          exitAssets,
-          vaultData: vaultV2ExitData({ assetBalance: exitAssets * 2n }),
-          userAddress: IN_KIND_USER,
-          minSharePriceE27: 1n,
-        })
+      const requirements = await vaultFor(handle, {
+        supportSignature: false,
+      })
+        .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
         .getRequirements();
 
-      // Uncapped this would demand ~2e77 shares, which no allowance can satisfy — so
-      // `getRequirements()` would keep emitting the same approval forever.
-      expect(requirements).toHaveLength(0);
+      expect(requirements).toHaveLength(1);
+      const [approval] = requirements;
+      if (!approval || !isRequirementApproval(approval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+      expect(approval.action.args.amount).toBe(maxUint256);
+
+      mockRequirements(handle, { allowance: maxUint256 });
+      expect(
+        await vaultFor(handle, { supportSignature: false })
+          .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+          .getRequirements(),
+      ).toHaveLength(0);
     });
 
     test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {
@@ -675,7 +807,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(NegativeInputError);
     });
 
-    test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
+    test("error: ReferralFeeRecipientMissingError for a fee without a recipient", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
@@ -685,10 +817,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           userAddress: IN_KIND_USER,
           referralFeePct: 1n,
         }),
-      ).toThrow(MissingReferralFeeRecipientError);
+      ).toThrow(ReferralFeeRecipientMissingError);
     });
 
-    test("error: MissingReferralFeeRecipientError for a zero-address recipient", () => {
+    test("error: ReferralFeeRecipientMissingError for a zero-address recipient", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
@@ -699,7 +831,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           referralFeePct: 1n,
           referralFeeRecipient: zeroAddress,
         }),
-      ).toThrow(MissingReferralFeeRecipientError);
+      ).toThrow(ReferralFeeRecipientMissingError);
     });
   });
 
@@ -846,6 +978,56 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         }),
       );
       expect(recipientFloor).toBeGreaterThan(nonRecipientFloor);
+    });
+
+    test("error: VaultV2ForceWithdrawSharePriceBelowFloorError for a fee-recipient override between the gross-burn and net-burn floors", () => {
+      const now = 1_800_000_000n;
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const { plan, sharesBurnt } = expectedSharesBurnt({
+        vaultData: recipientVaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const netFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: sharesBurnt - feeSharesNow,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+      const grossFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(grossFloor).toBeLessThan(netFloor);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet))
+            .forceWithdraw({
+              exitAssets: 51n,
+              minSharePriceE27: netFloor - 1n,
+              vaultData: recipientVaultData,
+              userAddress: IN_KIND_USER,
+            })
+            .buildTx(),
+        ),
+      ).toThrow(
+        new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          floorE27: netFloor,
+          minSharePriceE27: netFloor - 1n,
+        }),
+      );
     });
 
     test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {

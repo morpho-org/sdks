@@ -4,7 +4,6 @@ import { UnsupportedErc20ApprovalSpenderError } from "../types/index.js";
 
 /** Supported spender slots that can be validated against the chain address registry. */
 export type RequirementSpenderKey =
-  | "generalAdapter1"
   | "permit2"
   | "midnight"
   | "midnightBundles"
@@ -39,15 +38,10 @@ export const validateRequirementSpender = (params: {
   readonly spender: Address;
   readonly allowed: readonly RequirementSpenderKey[];
 }): void => {
-  const {
-    permit2,
-    midnight,
-    midnightBundles,
-    bundler3: { generalAdapter1 },
-    bundles,
-  } = getChainAddresses(params.chainId);
+  const { permit2, midnight, midnightBundles, bundles } = getChainAddresses(
+    params.chainId,
+  );
   const addresses = {
-    generalAdapter1,
     permit2,
     midnight,
     midnightBundles,
@@ -66,7 +60,6 @@ export const validateRequirementSpender = (params: {
     throw new UnsupportedErc20ApprovalSpenderError({
       spender: params.spender,
       chainId: params.chainId,
-      generalAdapter1,
       permit2,
       midnight,
       midnightBundles,

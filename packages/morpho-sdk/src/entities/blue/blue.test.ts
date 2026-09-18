@@ -28,9 +28,9 @@ import {
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
-  MissingReferralFeeRecipientError,
   NegativeInputError,
   ReferralFeePctExceededError,
+  ReferralFeeRecipientMissingError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   type VaultV2BlueReallocation,
@@ -329,7 +329,7 @@ describe("MorphoBlue write surface", () => {
       result: 0n,
     });
     mockRead(handle, {
-      address: getChainAddress(mainnet.id, "morpho"),
+      address: getChainAddress(mainnet.id, "blue"),
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,
@@ -539,7 +539,7 @@ describe("MorphoBlue common write validation", () => {
       deadline: maxUint256,
       referralFeePct: 1n,
     })) {
-      expect(call, method).toThrow(MissingReferralFeeRecipientError);
+      expect(call, method).toThrow(ReferralFeeRecipientMissingError);
     }
     for (const [method, call] of getCommonWriteCalls(entity, {
       deadline: maxUint256,

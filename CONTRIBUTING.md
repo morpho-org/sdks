@@ -117,17 +117,18 @@ Update `CHAIN_METADATA` in `packages/blue-sdk/src/chain.ts`:
 
 ### 3. Add Contract Addresses
 
-Update `_addressesRegistry` in `packages/blue-sdk/src/addresses.ts`:
+Update `_addressesRegistry` in `packages/morpho-ts/src/addresses.ts`:
 
 ```typescript
 [ChainId.YourNewChain]: {
-  morpho: "0x...",
-  bundler3: {
-    bundler3: "0x...",
-    generalAdapter1: "0x...",
+  blue: "0x...",
+  bundles: {
+    vaultExitBundlesV1: "0x...",
+    vaultBundlesV1: "0x...",
+    blueBundlesV1: "0x...",
   },
   adaptiveCurveIrm: "0x...",
-  publicAllocator: "0x...",
+  vaultV2BluePublicAllocator: "0x...",
   metaMorphoFactory: "0x...",
   chainlinkOracleFactory: "0x...",
   preLiquidationFactory: "0x...",
@@ -139,27 +140,28 @@ Register USDC only when it supports ERC-2612 permit version 2. Add Permit2 when 
 
 ### 4. Add Deployment Blocks
 
-Update `_deployments` in `packages/blue-sdk/src/addresses.ts`:
+Update `_deployments` in `packages/morpho-ts/src/addresses.ts`:
 
 ```typescript
 [ChainId.YourNewChain]: {
-  morpho: 12345678n,
-  bundler3: {
-    bundler3: 12345679n,
-    generalAdapter1: 12345680n,
+  blue: 12345678n,
+  bundles: {
+    vaultExitBundlesV1: 12345679n,
+    vaultBundlesV1: 12345680n,
+    blueBundlesV1: 12345681n,
   },
-  adaptiveCurveIrm: 12345681n,
-  publicAllocator: 12345682n,
-  metaMorphoFactory: 12345683n,
-  chainlinkOracleFactory: 12345684n,
-  preLiquidationFactory: 12345685n,
-  wNative: 12345686n,
+  adaptiveCurveIrm: 12345682n,
+  vaultV2BluePublicAllocator: 12345683n,
+  metaMorphoFactory: 12345684n,
+  chainlinkOracleFactory: 12345685n,
+  preLiquidationFactory: 12345686n,
+  wNative: 12345687n,
 },
 ```
 
 ### 5. Add Wrapped Native Token Mapping
 
-Update `_unwrappedTokensMapping` in `packages/blue-sdk/src/addresses.ts`:
+Update `_unwrappedTokensMapping` in `packages/morpho-ts/src/addresses.ts`:
 
 ```typescript
 [ChainId.YourNewChain]: {

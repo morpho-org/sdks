@@ -6,6 +6,7 @@
 | **Date**   | 2026-08-25                                 |
 | **Author** | @Rubilmax / Carapulse draft                |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
+| **Superseded by** | TIB-2026-08-28-retire-vault-v1-shared-liquidity (Vault V1 planning and composition retention); TIB-2026-09-17-remove-bundler3-primitives-without-deprecation (Bundler3-primitive retention) |
 
 ---
 

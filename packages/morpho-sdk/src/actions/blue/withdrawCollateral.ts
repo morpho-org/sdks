@@ -41,7 +41,7 @@ export interface BlueWithdrawCollateralParams {
  * Encodes a pure collateral withdrawal through BlueBundlesV1.
  *
  * Delegates to {@link blueRepayWithdrawCollateral} with a zero repay leg. BlueBundlesV1 enforces
- * the supplied post-operation LTV, and no standalone Morpho or Bundler3 call is encoded.
+ * the supplied post-operation LTV, and no standalone Morpho call is encoded.
  *
  * @param params - Collateral-withdrawal encoding parameters.
  * @param params.market.chainId - Chain containing BlueBundlesV1.
@@ -59,7 +59,7 @@ export interface BlueWithdrawCollateralParams {
  * @throws {NegativeInputError} when collateral, LTV, or fee is negative.
  * @throws {NonPositiveInputError} when collateral or deadline is not positive.
  * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
  * @throws {DepositOwnerMismatchError} when the signed authorization owner differs from `userAddress`.
  * @throws {BundlesRequirementSignatureMismatchError} when authorization cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.

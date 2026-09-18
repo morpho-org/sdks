@@ -18,7 +18,6 @@ import type { FetchParameters } from "../../types.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns Hydrated adapter-market config with max-in calculation.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -53,7 +52,7 @@ export async function fetchVaultV2BlueMarketPublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2BlueMarketPublicAllocatorConfig> {
-  const chainId = parameters.chainId ?? (await getChainId(client));
+  const chainId = await getChainId(client);
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {
