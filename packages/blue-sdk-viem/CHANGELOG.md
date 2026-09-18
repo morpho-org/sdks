@@ -1,5 +1,16 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.7.1
+
+### Patch Changes
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+- Updated dependencies [[`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/blue-sdk@6.12.0
+
 ## 5.7.0
 
 ### Minor Changes
