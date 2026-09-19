@@ -392,23 +392,27 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * The result is the **denominator of {@link computeMinForceWithdrawSharePrice}** — the largest share
  * burn the realized exit price is measured against. It takes the max over the two supplied snapshots
  * because interest lowers the burn while management fees raise it, so neither snapshot alone bounds
- * execution. The entity passes both accrued to `now` (execution time): the raw `lastUpdate` snapshot
- * underestimates the burn a stale fee-bearing vault realizes — the first withdrawal accrues pending
- * management fees before burning shares — which lifts the floor above the faithful price and trips
- * `SlippageExceeded`. Accruing to `now`, not the caller-chosen `deadline`, tracks execution without
- * letting a long deadline silently weaken the guard; `slippageTolerance` absorbs the residual drift
- * until inclusion. Pass distinct snapshots to bound the burn across an accrual window.
+ * execution. The entity passes the raw `lastUpdate` snapshot and the same vault accrued to `now`
+ * (execution time): the raw snapshot underestimates the burn a stale fee-bearing vault realizes —
+ * the first withdrawal accrues pending management fees before burning shares — while the `now`
+ * accrual underestimates it when it projects interest the chain has not realized (a wall clock
+ * running ahead of the chain, or a capped `maxRate`); either alone would lift the floor above the
+ * faithful price and trip `SlippageExceeded`. Accruing to `now`, not the caller-chosen `deadline`,
+ * tracks execution without letting a long deadline silently weaken the guard; `slippageTolerance`
+ * absorbs the residual drift until inclusion.
  *
  * This is **not** the share allowance to authorize. The price floor's denominator is this bound
  * minus `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`: the
  * contract measures the *net* burn, which fee mints to `owner` shrink. The allowance is
- * `min(mulDivUp(exitAssets, RAY, minSharePriceE27) + computeVaultV2ForceWithdrawFeeSharesMinted({
- * vaultData, owner, timestamp: deadline }), maxUint256)`: the permit pays for the *gross* burn.
+ * `min(mulDivUp(exitAssets, RAY, mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD)) +
+ * computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
+ * maxUint256)`: the permit pays for the *gross* burn, with one tolerance step of headroom past the
+ * floor so a below-floor price reverts on the contract's price check, not on the allowance.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
  * @param params.deadlineVaultData - The same vault accrued to a second timestamp; the max of the two
- *   share burns is returned. The entity passes the `now`-accrued snapshot for both.
+ *   share burns is returned. The entity passes the raw snapshot and its `now` accrual.
  * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example
@@ -421,7 +425,7 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *
  * const { vault: nowVaultData } = vaultData.accrueInterest(now);
  * const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
- *   vaultData: nowVaultData,
+ *   vaultData,
  *   deadlineVaultData: nowVaultData,
  *   plan,
  * });

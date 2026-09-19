@@ -181,9 +181,10 @@ export function previewVaultV2ForceWithdraw(
   // zero (`VaultV2ForceWithdrawZeroSharePriceError`) — a degenerate vault (e.g. `totalSupply`
   // dwarfing `totalAssets`) offers no price protection at all. Screen at the entity's default
   // `DEFAULT_SLIPPAGE_TOLERANCE`, not slippage-free, against the same burn upper bound the entity
-  // divides by (accrued to `timestamp` like the plan): a tolerance-free screen clears an exit whose
-  // realized price is a single RAY-unit, yet the default tolerance scales that below 1 and rounds it
-  // to zero — so the entity would reject with `VaultV2ForceWithdrawZeroSharePriceError` the very
+  // divides by (the larger of the raw snapshot burn and the burn accrued to `timestamp` like the
+  // plan): a tolerance-free screen clears an exit whose realized price is a single RAY-unit, yet
+  // the default tolerance scales that below 1 and rounds it to zero — so the entity would reject
+  // with `VaultV2ForceWithdrawZeroSharePriceError` the very
   // `exitAssets` this preview handed back. A caller passing a larger tolerance still relies on the
   // entity's own guard. The entity validates this derived value with
   // `validateUint256Field("minSharePriceE27")`, which throws `InputExceedsMaxError` when it
@@ -192,7 +193,7 @@ export function previewVaultV2ForceWithdraw(
     MathLib.max(timestamp, vaultData.lastUpdate),
   );
   const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
-    vaultData: accruedVaultData,
+    vaultData,
     deadlineVaultData: accruedVaultData,
     plan,
   });

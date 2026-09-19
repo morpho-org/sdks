@@ -108,20 +108,32 @@ const expectedSharesBurnt = (params: {
 
   return {
     plan,
-    // Mirror the entity's price-floor denominator: the `now`-accrued (execution-time) burn.
+    // Mirror the entity's price-floor denominator: the larger of the raw snapshot burn and the
+    // `now`-accrued (execution-time) burn.
     sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
-      vaultData: nowVaultData,
+      vaultData,
       deadlineVaultData: nowVaultData,
       plan,
     }),
   };
 };
 
-// The allowance the entity approves: the largest share burn the on-chain price check accepts for
-// `exitAssets` (`withdrawn <= exitAssets` and `withdrawn / burnt >= minSharePriceE27`), so a
-// within-tolerance price drop can never revert on allowance.
+// The allowance the entity approves: the share burn `exitAssets` costs at a price one
+// `slippageTolerance` step below the floor, so a below-floor price reverts on the contract's
+// `minSharePriceE27` check rather than on the allowance.
 const priceFloorCeiling = (exitAssets: bigint, minSharePriceE27: bigint) =>
-  MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27);
+  MathLib.mulDivUp(
+    exitAssets,
+    MathLib.RAY,
+    MathLib.max(
+      MathLib.mulDivDown(
+        minSharePriceE27,
+        MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+        MathLib.WAD,
+      ),
+      1n,
+    ),
+  );
 
 describe("MorphoVaultV2.forceWithdraw", () => {
   test("default", () => {
@@ -445,8 +457,8 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         exit.getRequirements(),
       );
 
-      // The allowance is the largest burn the on-chain price check accepts for `exitAssets`, not the
-      // snapshot plan — so a within-tolerance price drop can never revert on allowance.
+      // The allowance exceeds the largest burn the on-chain price check accepts for `exitAssets`,
+      // so a price drop reverts on the price check, never on allowance.
       expect(approval?.action).toEqual({
         type: "erc20Approval",
         args: {
@@ -926,6 +938,134 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       expect(faithfulPrice).toBeGreaterThanOrEqual(minSharePriceE27);
       // ...whereas the old snapshot-based floor would have rejected that same faithful price.
       expect(faithfulPrice).toBeLessThan(staleFloor);
+    });
+
+    // Regression: Galaxy USDC Enhanced Vault V2 (mainnet block 25_958_945), exited ~10 days after
+    // its `lastUpdate` pin. Accruing the snapshot to `now` projects the share price *up* (market
+    // interest outpaces the management-fee mint), yet the chain realized a price *below* the pin.
+    // A floor derived from the projection alone (1.01135e-12 vs a 1.01061e-12 pin) sat above the
+    // realized price, and an allowance coupled exactly to it underflowed `_spendAllowance`
+    // (panic 0x11) on the final `withdraw` leg instead of reverting on the price check.
+    describe("long-window management-fee vault", () => {
+      const totalAssets = 8_056_178_807_926n;
+      const totalSupply = 7_971_579_390_105_755_281_093_585n;
+      const exitAssets = 3_905_489_130_811n;
+      // Blue supply shares carry a 1e6 virtual-share scale; hold the whole market so the vault's
+      // real assets track the market's projected supply.
+      const marketTotalSupplyShares = totalAssets * 1_000_000n;
+      const galaxyVaultData = () =>
+        vaultV2ExitData({
+          totalAssets,
+          totalSupply,
+          marketTotalAssets: totalAssets,
+          marketTotalBorrowAssets: totalAssets / 2n,
+          marketTotalSupplyShares,
+          supplyShares: marketTotalSupplyShares,
+          // ~5% APR so ten days of interest (~0.14%) dwarfs the fee mint (~0.011%).
+          rateAtTarget: 1_585_489_599n,
+          maxRate: MathLib.WAD,
+          managementFee: 126_839_167n,
+          feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+        });
+      const sharePrice = (vaultData: ReturnType<typeof vaultV2ExitData>) =>
+        MathLib.mulDivDown(
+          vaultData._totalAssets,
+          MathLib.RAY,
+          vaultData.totalSupply,
+        );
+      // The snapshot's own conversion price for `withdrawnAssets` (aggregate `toShares(_, "Up")`,
+      // no per-leg dust), one tolerance step down: the ceiling a true floor must respect.
+      const tolerancePrice = (
+        vaultData: ReturnType<typeof vaultV2ExitData>,
+        withdrawnAssets: bigint,
+      ) =>
+        computeMinForceWithdrawSharePrice({
+          withdrawnAssets,
+          sharesBurnt: vaultData.toShares(withdrawnAssets, "Up"),
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        });
+
+      test("behavior: the floor never exceeds the un-projected price after tolerance", () => {
+        const vaultData = galaxyVaultData();
+        const now = vaultData.lastUpdate + Time.s.from.d(10n);
+        const { vault: nowVaultData } = vaultData.accrueInterest(now);
+        const minSharePriceE27 = withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet))
+            .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+            .buildTx(),
+        ).action.args.minSharePriceE27;
+        const { plan } = expectedSharesBurnt({
+          vaultData,
+          exitAssets,
+          timestamp: now,
+        });
+        const projectedOnlyFloor = computeMinForceWithdrawSharePrice({
+          withdrawnAssets: plan.withdrawnAssets,
+          sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
+            vaultData: nowVaultData,
+            deadlineVaultData: nowVaultData,
+            plan,
+          }),
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        });
+
+        const pinFloor = tolerancePrice(vaultData, plan.withdrawnAssets);
+        const projectedFloor = tolerancePrice(
+          nowVaultData,
+          plan.withdrawnAssets,
+        );
+
+        // Precondition: the `now` projection lifts the price above the pin.
+        expect(sharePrice(nowVaultData)).toBeGreaterThan(sharePrice(vaultData));
+        expect(projectedFloor).toBeGreaterThan(pinFloor);
+        // A projection-only floor would reject the pin price itself...
+        expect(projectedOnlyFloor).toBeGreaterThan(pinFloor);
+        // ...whereas the derived floor stays at or below both the pin and the projection.
+        expect(minSharePriceE27).toBeLessThanOrEqual(pinFloor);
+        expect(minSharePriceE27).toBeLessThanOrEqual(projectedFloor);
+        expect(minSharePriceE27).toBeGreaterThan(0n);
+      });
+
+      test("behavior: the allowance covers the burn at the floor with slippage headroom", async () => {
+        const vaultData = galaxyVaultData();
+        const now = vaultData.lastUpdate + Time.s.from.d(10n);
+        const handle = createMockClient(mainnet);
+        mockRequirements(handle);
+        const exit = withChainTimestamp(now, () =>
+          vaultFor(handle, { supportSignature: true }).forceWithdraw({
+            exitAssets,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        );
+        const [requirement] = await withChainTimestamp(now, () =>
+          exit.getRequirements(),
+        );
+        const { minSharePriceE27 } = exit.buildTx().action.args;
+        if (requirement?.action.type !== "permit") {
+          throw new Error("Expected a permit requirement");
+        }
+        const allowance = requirement.action.args.amount;
+        const sharesAtFloor = MathLib.mulDivUp(
+          exitAssets,
+          MathLib.RAY,
+          minSharePriceE27,
+        );
+
+        expect(allowance).toBe(priceFloorCeiling(exitAssets, minSharePriceE27));
+        expect(allowance).toBeGreaterThan(sharesAtFloor);
+        // Any price the contract's floor check accepts fits inside the allowance with a full
+        // tolerance step to spare, so a price just under the floor burns within the allowance and
+        // surfaces as the bundle's own price-check revert, not an `_spendAllowance` underflow.
+        expect(allowance).toBeGreaterThanOrEqual(
+          MathLib.mulDivUp(
+            sharesAtFloor,
+            MathLib.WAD,
+            MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+          ),
+        );
+        expect(allowance).toBeLessThan(maxUint256);
+      });
     });
 
     test("behavior: fee-recipient floors use the net burn after management fee mints", () => {
