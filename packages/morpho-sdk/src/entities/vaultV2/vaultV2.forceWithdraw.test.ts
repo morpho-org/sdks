@@ -363,6 +363,43 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(() => build(0n)).toThrow(NonPositiveInputError);
   });
 
+  test("behavior: the allowance denominator clamps to 1 when the headroom step rounds the floor to zero", async () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 0n,
+      totalSupply: 950_000_000_000_000_000_000_000_000n,
+    });
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now, () =>
+      vaultFor(handle, { supportSignature: false }).forceWithdraw({
+        exitAssets: 1n,
+        vaultData,
+        userAddress: IN_KIND_USER,
+      }),
+    );
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (approval?.action.type !== "erc20Approval") {
+      throw new Error("Expected an erc20Approval requirement");
+    }
+
+    expect(minSharePriceE27).toBe(1n);
+    expect(
+      MathLib.mulDivDown(
+        minSharePriceE27,
+        MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+        MathLib.WAD,
+      ),
+    ).toBe(0n);
+    expect(approval.action.args.amount).toBe(
+      MathLib.min(MathLib.mulDivUp(1n, MathLib.RAY, 1n), maxUint256),
+    );
+  });
+
   // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
   // must never be able to silently disable the guard this path exists to add.
   test.each([0n, -1n])(
