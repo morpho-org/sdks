@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import { zeroAddress } from "viem";
@@ -12,9 +12,13 @@ import {
 } from "../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../test/helpers/time.js";
 import { morphoViemExtension } from "../client/index.js";
-import { VaultV2ForceWithdrawFeeSharesExceedBurnError } from "../types/index.js";
+import {
+  VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawZeroSharePriceError,
+} from "../types/index.js";
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
 import {
+  computeVaultV2ForceWithdrawFeeSharesMinted,
   computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
@@ -519,6 +523,79 @@ describe("previewVaultV2ForceWithdraw", () => {
         feeProjectionTimestamp: now - 1n,
       }),
     ).toEqual(previewVaultV2ForceWithdraw(vaultData, params));
+  });
+
+  // Stale fee-bearing vault, exiting user is the fee recipient: the `now` accrual's net burn falls
+  // below the raw snapshot burn, so the floor's denominator is the raw burn. Screening the old way
+  // (`accruedBurn - feeShares`) would clear a unit price the raw denominator rounds to zero — and
+  // the entity rejects with `VaultV2ForceWithdrawZeroSharePriceError`.
+  test("behavior: fee-recipient screen mirrors the entity when the raw burn dominates the net accrued burn", () => {
+    const vaultData = vaultV2ExitData({
+      penalty: 0n,
+      assetBalance: 1_000_000n,
+      totalAssets: 1_000_000n,
+      totalSupply: 1_000_000n * MathLib.RAY,
+      managementFee: 1_000_000_000n,
+      feeRecipient: IN_KIND_USER,
+    });
+    const now = vaultData.lastUpdate + Time.s.from.d(365n);
+    const params = {
+      requestedExitAssets: 100_000n,
+      timestamp: now,
+      userAddress: IN_KIND_USER,
+    } as const;
+
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+    if (eligibility.type !== "eligible") {
+      throw new Error(
+        `Expected an eligible fixture, got "${eligibility.type}"`,
+      );
+    }
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: eligibility.adapter,
+      liquidityMarketId: eligibility.liquidityMarketId,
+      exitAssets: params.requestedExitAssets,
+      timestamp: now,
+    });
+    const { vault: accrued } = vaultData.accrueInterest(now);
+    const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData,
+      deadlineVaultData: vaultData,
+      plan,
+    });
+    const netSharesBurntAccrued =
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData: accrued,
+        deadlineVaultData: accrued,
+        plan,
+      }) -
+      computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+    const defaultFloor = (sharesBurnt: bigint) =>
+      MathLib.mulDivDown(
+        plan.withdrawnAssets,
+        MathLib.wToRay(MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE),
+        sharesBurnt,
+      );
+    // Guard the regime: the two denominators disagree on whether the floor is positive.
+    expect(netSharesBurntAccrued).toBeLessThan(sharesBurntRaw);
+    expect(defaultFloor(netSharesBurntAccrued)).toBeGreaterThan(0n);
+    expect(defaultFloor(sharesBurntRaw)).toBe(0n);
+
+    expect(previewVaultV2ForceWithdraw(vaultData, params)).toBeUndefined();
+    expect(() =>
+      withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet)).forceWithdraw({
+          exitAssets: params.requestedExitAssets,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ),
+    ).toThrow(VaultV2ForceWithdrawZeroSharePriceError);
   });
 
   test("behavior: non-recipient userAddress preserves the preview", () => {

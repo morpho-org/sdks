@@ -406,15 +406,16 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`; so the
  * entity nets each endpoint before taking the max (`max(burnRaw, burnNow - feeSharesNow)`) rather
  * than subtracting the `now` fee from a gross max. The allowance is
- * `min(mulDivUp(exitAssets, RAY, mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD)) +
- * computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
+ * `min(mulDivUp(exitAssets, RAY, max(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD), 1))
+ * + computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
  * maxUint256)`: the permit pays for the *gross* burn, with one tolerance step of headroom past the
  * floor so a below-floor price reverts on the contract's price check, not on the allowance.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
  * @param params.deadlineVaultData - The same vault accrued to a second timestamp; the max of the two
- *   share burns is returned. The entity passes the raw snapshot and its `now` accrual.
+ *   share burns is returned. The entity calls this twice — the raw snapshot for both parameters,
+ *   then the `now` accrual for both — and nets each result before taking the max.
  * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example

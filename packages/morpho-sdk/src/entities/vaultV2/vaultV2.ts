@@ -452,10 +452,11 @@ export interface VaultV2Actions {
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
-   * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
-   * and a guard against fee mints reaching the lower burn bound by the deadline. Its allowance
-   * includes the projected fee shares through that same deadline. Deadlines beyond one year after
-   * handle creation are rejected, so the guard and allowance cover the whole accepted window.
+   * A fee-recipient `userAddress` gets a floor from the larger of the raw snapshot burn and the
+   * `now` burn net of its own fee mints, and a guard against fee mints reaching the lower burn
+   * bound by the deadline. Its allowance includes the projected fee shares through that same
+   * deadline. Deadlines beyond one year after handle creation are rejected, so the guard and
+   * allowance cover the whole accepted window.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -1302,7 +1303,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
-    const netSharesBurntNow = MathLib.max(
+    const sharesBurntForFloor = MathLib.max(
       sharesBurntRaw,
       sharesBurntNow - feeSharesNow,
     );
@@ -1314,7 +1315,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           () =>
             computeMinForceWithdrawSharePrice({
               withdrawnAssets: plan.withdrawnAssets,
-              sharesBurnt: netSharesBurntNow,
+              sharesBurnt: sharesBurntForFloor,
               slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
             }),
           VaultV2ForceWithdrawZeroSharePriceError,
@@ -1330,7 +1331,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: netSharesBurntNow,
+        sharesBurnt: sharesBurntForFloor,
         slippageTolerance,
       });
     // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
