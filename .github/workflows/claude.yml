@@ -86,6 +86,17 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@codex review' || echo "::warning::Failed to request Codex re-review for PR #$PR_NUMBER"
 
+      # Centaur reviews via its own GitHub ingress webhook (docs: morpho-org/morpho-centaur
+      # docs/github-write-and-pr-ingress.md). Like Codex, re-request it on every push. This is a no-op
+      # until Centaur's GitHub ingress is enabled for this repo and the `@centaur` trigger is verified.
+      - name: Request Centaur re-review
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@centaur review' || echo "::warning::Failed to request Centaur re-review for PR #$PR_NUMBER"
+
       # Reruns on an unchanged head must not be satisfied by a review left behind by an earlier run.
       - name: Snapshot existing Claude reviews
         id: reviews_before
