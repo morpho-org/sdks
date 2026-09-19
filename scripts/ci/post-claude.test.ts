@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { main } from "./post-claude.ts";
-import { digestDirectory } from "./trusted-scripts.ts";
+import { digestDirectories } from "./trusted-scripts.ts";
 
 const HEAD = "a".repeat(40);
 const RUN_ID = "42";
@@ -26,10 +26,13 @@ function trustedFixture() {
   const dir = mkdtempSync(join(tmpdir(), "post-claude-"));
   tempDirs.push(dir);
   const trusted = join(dir, "trusted");
+  const agents = join(dir, "trusted-agents");
   mkdirSync(trusted);
+  mkdirSync(join(agents, "commands"), { recursive: true });
   writeFileSync(join(trusted, "a.ts"), "a");
+  writeFileSync(join(agents, "commands", "review-pr-ci.md"), "review");
 
-  return { dir, digest: digestDirectory(trusted), trusted };
+  return { agents, digest: digestDirectories([trusted, agents]), dir, trusted };
 }
 
 const okFetch = () =>
@@ -48,7 +51,11 @@ const okFetch = () =>
     ),
   );
 
-function gateEnv(trusted: string, digest: string): NodeJS.ProcessEnv {
+function gateEnv(fixture: {
+  readonly agents: string;
+  readonly digest: string;
+  readonly trusted: string;
+}): NodeJS.ProcessEnv {
   return {
     GH_TOKEN: "t",
     GITHUB_REPOSITORY: "morpho-org/sdks",
@@ -56,38 +63,58 @@ function gateEnv(trusted: string, digest: string): NodeJS.ProcessEnv {
     HEAD_SHA: HEAD,
     MAX_ID_BEFORE: "3",
     PR_NUMBER: "1",
-    SCRIPTS_DIGEST: digest,
-    TRUSTED_SCRIPTS_DIR: trusted,
+    SCRIPTS_DIGEST: fixture.digest,
+    TRUSTED_AGENTS_DIR: fixture.agents,
+    TRUSTED_SCRIPTS_DIR: fixture.trusted,
   };
 }
 
 describe("post-claude main", () => {
   test("default: verify-review checks the trusted copy, then runs the gate", async () => {
-    const { digest, trusted } = trustedFixture();
+    const { agents, digest, trusted } = trustedFixture();
     const out: string[] = [];
 
     await main({
       argv: ["verify-review"],
-      env: gateEnv(trusted, digest),
+      env: gateEnv({ agents, digest, trusted }),
       fetchImpl: okFetch,
       writeOutput: (m) => out.push(m),
     });
 
     expect(out).toEqual([
-      `Trusted scripts in ${trusted} match the snapshot.\n`,
+      `Trusted copies in ${trusted}, ${agents} match the snapshot.\n`,
       `Found 1 new Claude review(s) on ${HEAD}.\n`,
     ]);
   });
 
   test("error: a tampered trusted copy stops before the authenticated gate runs", async () => {
-    const { digest, trusted } = trustedFixture();
+    const { agents, digest, trusted } = trustedFixture();
     writeFileSync(join(trusted, "a.ts"), "tampered");
     let fetched = false;
 
     await expect(
       main({
         argv: ["verify-review"],
-        env: gateEnv(trusted, digest),
+        env: gateEnv({ agents, digest, trusted }),
+        fetchImpl: () => {
+          fetched = true;
+          return okFetch();
+        },
+        writeOutput: () => {},
+      }),
+    ).rejects.toThrow(/modified after the snapshot/);
+    expect(fetched).toBe(false);
+  });
+
+  test("error: rewritten review instructions stop the gate before it accepts the review", async () => {
+    const { agents, digest, trusted } = trustedFixture();
+    writeFileSync(join(agents, "commands", "review-pr-ci.md"), "injected");
+    let fetched = false;
+
+    await expect(
+      main({
+        argv: ["verify-review"],
+        env: gateEnv({ agents, digest, trusted }),
         fetchImpl: () => {
           fetched = true;
           return okFetch();
@@ -99,7 +126,7 @@ describe("post-claude main", () => {
   });
 
   test("default: scrub checks the trusted copy, then scrubs and records the output path", async () => {
-    const { digest, dir, trusted } = trustedFixture();
+    const { agents, digest, dir, trusted } = trustedFixture();
     const input = join(dir, "execution.json");
     writeFileSync(input, '{"token":"ghp_abcdefghijklmnopqrstuvwxyz0123"}');
     const output = join(dir, "scrubbed.json");
@@ -112,6 +139,7 @@ describe("post-claude main", () => {
         RUNNER_TEMP: dir,
         SCRIPTS_DIGEST: digest,
         SECRET_VALUES: "",
+        TRUSTED_AGENTS_DIR: agents,
         TRUSTED_SCRIPTS_DIR: trusted,
       },
       writeOutput: () => {},
@@ -122,7 +150,7 @@ describe("post-claude main", () => {
   });
 
   test("error: a tampered trusted copy stops before scrubbing", async () => {
-    const { digest, dir, trusted } = trustedFixture();
+    const { agents, digest, dir, trusted } = trustedFixture();
     writeFileSync(join(trusted, "a.ts"), "tampered");
     const input = join(dir, "execution.json");
     writeFileSync(input, '{"token":"ghp_abcdefghijklmnopqrstuvwxyz0123"}');
@@ -137,6 +165,7 @@ describe("post-claude main", () => {
           RUNNER_TEMP: dir,
           SCRIPTS_DIGEST: digest,
           SECRET_VALUES: "",
+          TRUSTED_AGENTS_DIR: agents,
           TRUSTED_SCRIPTS_DIR: trusted,
         },
         writeOutput: () => {},
@@ -146,8 +175,8 @@ describe("post-claude main", () => {
     expect(existsSync(githubOutput)).toBe(false);
   });
 
-  test("error: missing TRUSTED_SCRIPTS_DIR / unknown mode", async () => {
-    const { digest } = trustedFixture();
+  test("error: missing trusted directories / unknown mode", async () => {
+    const { digest, trusted } = trustedFixture();
     await expect(
       main({
         argv: ["verify-review"],
@@ -155,6 +184,14 @@ describe("post-claude main", () => {
         writeOutput: () => {},
       }),
     ).rejects.toThrow(/TRUSTED_SCRIPTS_DIR/);
+    // The instructions copy is not optional: dropping it would silently stop covering it.
+    await expect(
+      main({
+        argv: ["verify-review"],
+        env: { SCRIPTS_DIGEST: digest, TRUSTED_SCRIPTS_DIR: trusted },
+        writeOutput: () => {},
+      }),
+    ).rejects.toThrow(/TRUSTED_AGENTS_DIR/);
     await expect(
       main({ argv: ["nope"], env: {}, writeOutput: () => {} }),
     ).rejects.toThrow(/Unknown mode "nope"/);

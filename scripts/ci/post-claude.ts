@@ -6,8 +6,11 @@
  *   node post-claude.ts verify-review              # trusted-scripts verify, then claude-review-gate verify
  *   node post-claude.ts scrub <input> <output>     # trusted-scripts verify, then scrub-transcript
  *
- * Reads `TRUSTED_SCRIPTS_DIR` and `SCRIPTS_DIGEST` from the environment for the integrity check; the
- * remaining variables are those of the delegated command.
+ * Reads `TRUSTED_SCRIPTS_DIR`, `TRUSTED_AGENTS_DIR` and `SCRIPTS_DIGEST` from the environment for the
+ * integrity check; the remaining variables are those of the delegated command. Both directories are
+ * required and are checked in the order the snapshot step copied them: the review instructions sit in
+ * a directory Claude can read, so a review is only accepted when the instructions that produced it
+ * are byte-identical to the default-branch copy.
  */
 
 import { type FetchLike, main as gateMain } from "./claude-review-gate.ts";
@@ -43,9 +46,14 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
     );
   }
 
-  const trustedDir = readRequiredEnv(env, "TRUSTED_SCRIPTS_DIR");
-  verifyTrusted(trustedDir, readRequiredEnv(env, "SCRIPTS_DIGEST"));
-  writeOutput(`Trusted scripts in ${trustedDir} match the snapshot.\n`);
+  const trustedDirs = [
+    readRequiredEnv(env, "TRUSTED_SCRIPTS_DIR"),
+    readRequiredEnv(env, "TRUSTED_AGENTS_DIR"),
+  ];
+  verifyTrusted(trustedDirs, readRequiredEnv(env, "SCRIPTS_DIGEST"));
+  writeOutput(
+    `Trusted copies in ${trustedDirs.join(", ")} match the snapshot.\n`,
+  );
 
   if (mode === "verify-review") {
     await gateMain({ ...options, argv: ["verify"], env, writeOutput });

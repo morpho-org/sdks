@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -13,9 +15,11 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
+  digestDirectories,
   digestDirectory,
   listFiles,
   main,
+  makeReadOnly,
   parseCopyPairs,
   snapshot,
   verify,
@@ -91,6 +95,66 @@ describe("digestDirectory", () => {
   });
 });
 
+describe("digestDirectories", () => {
+  test("default: covers every directory in the list", () => {
+    const scripts = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "commands/review.md": "review" });
+    const base = digestDirectories([scripts, agents]);
+
+    writeFileSync(join(agents, "commands", "review.md"), "tampered");
+
+    expect(digestDirectories([scripts, agents])).not.toBe(base);
+  });
+
+  test("behavior: order matters, so a swapped pair is a different digest", () => {
+    const scripts = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "b.md": "b" });
+
+    expect(digestDirectories([scripts, agents])).not.toBe(
+      digestDirectories([agents, scripts]),
+    );
+  });
+
+  test("behavior: a file moving between copies changes the digest", () => {
+    const first = [makeTree({ "x.ts": "x" }), makeTree({})];
+    const second = [makeTree({}), makeTree({ "x.ts": "x" })];
+
+    expect(digestDirectories(first)).not.toBe(digestDirectories(second));
+  });
+});
+
+describe("makeReadOnly", () => {
+  test("default: strips the write bits from every file", () => {
+    const dir = makeTree({ "a.ts": "a", "ci/b.ts": "b" });
+    makeReadOnly(dir);
+
+    for (const file of ["a.ts", "ci/b.ts"]) {
+      expect(statSync(join(dir, file)).mode & 0o222).toBe(0);
+      expect(() => writeFileSync(join(dir, file), "tampered")).toThrow(
+        /EACCES|EPERM/,
+      );
+    }
+  });
+
+  test("behavior: directories stay writable so the tree remains removable", () => {
+    const dir = makeTree({ "ci/b.ts": "b" });
+    makeReadOnly(dir);
+
+    expect(statSync(join(dir, "ci")).mode & 0o200).not.toBe(0);
+    expect(() => rmSync(dir, { force: true, recursive: true })).not.toThrow();
+  });
+
+  test("behavior: skips symlinks so their target's mode is untouched", () => {
+    const outside = makeTree({ "target.ts": "t" });
+    const dir = makeTree({ "a.ts": "a" });
+    symlinkSync(join(outside, "target.ts"), join(dir, "link.ts"));
+
+    makeReadOnly(dir);
+
+    expect(statSync(join(outside, "target.ts")).mode & 0o222).not.toBe(0);
+  });
+});
+
 describe("snapshot", () => {
   test("default: copies the tree and node, writes node_bin= and digest= to the output file", () => {
     const src = makeTree({ "a.ts": "a", "ci/b.ts": "b" });
@@ -127,9 +191,35 @@ describe("snapshot", () => {
       { dest, src },
       { nodeBin: fakeNode, outputFile: "/dev/null" },
     );
-    writeFileSync(join(dest, "bin", "node"), "#!/bin/sh\nexit 1\n");
+    const copiedNode = join(dest, "bin", "node");
+    chmodSync(copiedNode, 0o755);
+    writeFileSync(copiedNode, "#!/bin/sh\nexit 1\n");
 
-    expect(() => verify(dest, digest)).toThrow(/modified after the snapshot/);
+    expect(() => verify([dest], digest)).toThrow(/modified after the snapshot/);
+  });
+
+  test("behavior: every copy is left read-only", () => {
+    const src = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "commands/review.md": "review" });
+    const dest = join(src, "..", `trusted-scripts-ro-dest-${process.pid}`);
+    const agentsDest = join(
+      src,
+      "..",
+      `trusted-scripts-ro-agents-${process.pid}`,
+    );
+    tempDirs.push(dest, agentsDest);
+
+    snapshot(
+      { dest, extraCopies: [{ dest: agentsDest, src: agents }], src },
+      { outputFile: "/dev/null" },
+    );
+
+    expect(() =>
+      writeFileSync(join(agentsDest, "commands", "review.md"), "tampered"),
+    ).toThrow(/EACCES|EPERM/);
+    expect(() => writeFileSync(join(dest, "a.ts"), "tampered")).toThrow(
+      /EACCES|EPERM/,
+    );
   });
 
   test("error: refuses an existing destination", () => {
@@ -154,7 +244,7 @@ describe("verify", () => {
   test("default", () => {
     const dir = makeTree({ "a.ts": "a" });
 
-    expect(() => verify(dir, digestDirectory(dir))).not.toThrow();
+    expect(() => verify([dir], digestDirectory(dir))).not.toThrow();
   });
 
   test("error: modified copy", () => {
@@ -162,14 +252,31 @@ describe("verify", () => {
     const expected = digestDirectory(dir);
     writeFileSync(join(dir, "a.ts"), "tampered");
 
-    expect(() => verify(dir, expected)).toThrow(/modified after the snapshot/);
+    expect(() => verify([dir], expected)).toThrow(
+      /modified after the snapshot/,
+    );
+  });
+
+  test("error: a modified instructions copy fails the check", () => {
+    const scripts = makeTree({ "a.ts": "a" });
+    const agents = makeTree({ "commands/review.md": "review" });
+    const expected = digestDirectories([scripts, agents]);
+    writeFileSync(join(agents, "commands", "review.md"), "injected");
+
+    expect(() => verify([scripts, agents], expected)).toThrow(
+      /modified after the snapshot/,
+    );
   });
 
   test("error: malformed expected digest", () => {
     const dir = makeTree({ "a.ts": "a" });
 
-    expect(() => verify(dir, "")).toThrow(/Invalid expected digest/);
-    expect(() => verify(dir, "abc")).toThrow(/Invalid expected digest/);
+    expect(() => verify([dir], "")).toThrow(/Invalid expected digest/);
+    expect(() => verify([dir], "abc")).toThrow(/Invalid expected digest/);
+  });
+
+  test("error: an empty directory list", () => {
+    expect(() => verify([], "a".repeat(64))).toThrow(/empty list/);
   });
 });
 
@@ -193,17 +300,17 @@ describe("main", () => {
     )?.[1];
     if (digest == null) throw new Error("digest output missing");
     main({
-      argv: ["verify", dest, digest],
+      argv: ["verify", digest, dest],
       writeOutput: (m) => output.push(m),
     });
 
     expect(output).toEqual([
       `Trusted scripts copied to ${dest} (digest ${digest}).\n`,
-      `Trusted scripts in ${dest} match the snapshot.\n`,
+      `Trusted copies in ${dest} match the snapshot.\n`,
     ]);
   });
 
-  test("behavior: extra <src> <dest> pairs are copied but not digested", () => {
+  test("behavior: extra <src> <dest> pairs are copied and digested", () => {
     const scripts = makeTree({ "a.ts": "a" });
     const agents = makeTree({ "commands/review.md": "review" });
     const outputFile = join(scripts, "..", `trusted-extra-out-${process.pid}`);
@@ -232,9 +339,14 @@ describe("main", () => {
       /^digest=(.*)$/m,
     )?.[1];
     if (digest == null) throw new Error("digest output missing");
-    // Editing the instructions copy does not invalidate the executable-scripts digest.
-    writeFileSync(join(agentsDest, "commands", "review.md"), "changed");
-    expect(() => verify(dest, digest)).not.toThrow();
+    expect(() => verify([dest, agentsDest], digest)).not.toThrow();
+
+    // Rewriting the instructions Claude is pointed at invalidates the digest the gate checks.
+    chmodSync(join(agentsDest, "commands", "review.md"), 0o644);
+    writeFileSync(join(agentsDest, "commands", "review.md"), "injected");
+    expect(() => verify([dest, agentsDest], digest)).toThrow(
+      /modified after the snapshot/,
+    );
   });
 
   test("error: an existing extra destination aborts before any copy", () => {
@@ -262,7 +374,10 @@ describe("main", () => {
       /Unknown mode "nope"/,
     );
     expect(() => main({ argv: ["verify"] })).toThrow(/Usage/);
-    expect(() => main({ argv: ["verify", dir] })).toThrow(/Usage/);
+    expect(() => main({ argv: ["verify", "a".repeat(64)] })).toThrow(/Usage/);
+    expect(() => main({ argv: ["verify", "a".repeat(64), ""] })).toThrow(
+      /Usage/,
+    );
     expect(() => main({ argv: ["snapshot", dir] })).toThrow(/Usage/);
   });
 });

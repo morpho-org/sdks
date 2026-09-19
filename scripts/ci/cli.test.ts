@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -118,11 +119,11 @@ describe("trusted-scripts CLI", () => {
     withTempDir((dir) => {
       writeFileSync(join(dir, "a.ts"), "a");
 
-      const result = run([TRUSTED, "verify", dir, "0".repeat(64)], {});
+      const result = run([TRUSTED, "verify", "0".repeat(64), dir], {});
 
       expect(result.status).toBe(1);
       expect(result.stderr).toMatch(
-        /^::error::Trusted scripts in .* were modified after the snapshot/,
+        /^::error::Trusted copies in .* were modified after the snapshot/,
       );
     });
   });
@@ -130,22 +131,34 @@ describe("trusted-scripts CLI", () => {
   test("default: snapshot then verify exits 0", () => {
     withTempDir((dir) => {
       const src = join(dir, "src");
+      const agentsSrc = join(dir, "agents");
       mkdirSync(src);
+      mkdirSync(agentsSrc);
       writeFileSync(join(src, "a.ts"), "a");
+      writeFileSync(join(agentsSrc, "review.md"), "review");
       const githubOutput = join(dir, "github-output");
       const dest = join(dir, "dest");
+      const agentsDest = join(dir, "agents-dest");
 
-      const snap = run([TRUSTED, "snapshot", src, dest], {
-        GITHUB_OUTPUT: githubOutput,
-      });
+      const snap = run(
+        [TRUSTED, "snapshot", src, dest, agentsSrc, agentsDest],
+        { GITHUB_OUTPUT: githubOutput },
+      );
       expect(snap.status, snap.stderr).toBe(0);
       const digest = readFileSync(githubOutput, "utf8").match(
         /^digest=(.*)$/m,
       )?.[1];
       if (digest == null) throw new Error("digest output missing");
 
-      const result = run([TRUSTED, "verify", dest, digest], {});
+      const result = run([TRUSTED, "verify", digest, dest, agentsDest], {});
       expect(result.status, result.stderr).toBe(0);
+
+      // The instructions copy is inside the digest: rewriting it fails the same check.
+      chmodSync(join(agentsDest, "review.md"), 0o644);
+      writeFileSync(join(agentsDest, "review.md"), "injected");
+      const tampered = run([TRUSTED, "verify", digest, dest, agentsDest], {});
+      expect(tampered.status).toBe(1);
+      expect(tampered.stderr).toMatch(/were modified after the snapshot/);
     });
   });
 });
@@ -161,13 +174,18 @@ describe("post-claude CLI", () => {
   test("default: scrub runs the trusted check then the scrubber, exits 0", () => {
     withTempDir((dir) => {
       const trusted = join(dir, "trusted");
+      const agentsSrc = join(dir, "agents");
       mkdirSync(trusted);
+      mkdirSync(agentsSrc);
       writeFileSync(join(trusted, "a.ts"), "a");
+      writeFileSync(join(agentsSrc, "review.md"), "review");
       const snapOutput = join(dir, "snap-output");
       const dest = join(dir, "dest");
-      const snap = run([TRUSTED, "snapshot", trusted, dest], {
-        GITHUB_OUTPUT: snapOutput,
-      });
+      const agentsDest = join(dir, "agents-dest");
+      const snap = run(
+        [TRUSTED, "snapshot", trusted, dest, agentsSrc, agentsDest],
+        { GITHUB_OUTPUT: snapOutput },
+      );
       expect(snap.status, snap.stderr).toBe(0);
       const digest = readFileSync(snapOutput, "utf8").match(
         /^digest=(.*)$/m,
@@ -183,6 +201,7 @@ describe("post-claude CLI", () => {
         RUNNER_TEMP: dir,
         SCRIPTS_DIGEST: digest,
         SECRET_VALUES: "",
+        TRUSTED_AGENTS_DIR: agentsDest,
         TRUSTED_SCRIPTS_DIR: dest,
       });
 

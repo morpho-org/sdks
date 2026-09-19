@@ -1,31 +1,40 @@
 /**
  * Trusted-copy integrity for the Claude review workflow.
  *
- * The workflow snapshots `scripts/` from the default-branch checkout into `$RUNNER_TEMP` before
- * Claude runs, then executes the post-Claude gate and scrubber from that copy. `snapshot` makes the
- * copy, adds the node binary running it as `<dest>/bin/node` (so the interpreter is covered by the
- * same digest as the scripts it runs), and records the digest plus that node path as step outputs
- * (runner-held state Claude's subprocesses cannot rewrite); `verify` recomputes the digest and
- * fails if any file was added, removed, or changed since. `verify` itself
- * runs from the trusted copy, so this is defense in depth against accidental or careless edits by
- * Claude's session, not a boundary against a process that already controls the runner user.
+ * The workflow snapshots `scripts/` and `.agents/` from the default-branch checkout into
+ * `$RUNNER_TEMP` before Claude runs, then executes the post-Claude gate and scrubber from the
+ * `scripts/` copy and points Claude at the `.agents/` copy for its review instructions. `snapshot`
+ * makes the copies, adds the node binary running it as `<dest>/bin/node` (so the interpreter is
+ * covered by the same digest as the scripts it runs), strips every write bit from the result, and
+ * records the digest plus that node path as step outputs (runner-held state Claude's subprocesses
+ * cannot rewrite); `verify` recomputes the digest and fails if any file was added, removed, or
+ * changed since. `verify` itself runs from the trusted copy, so this is defense in depth against
+ * accidental or careless edits by Claude's session, not a boundary against a process that already
+ * controls the runner user.
  *
- * The digest is a SHA-256 over `"<relative path>\0<sha256(content)>\n"` entries sorted by path, so
- * it is independent of directory-walk order and of the shell tools available on the runner.
+ * Every copy is digested, instructions included: the review the workflow accepts is only as trusted
+ * as the instructions that produced it, and Claude holds `Write`/`Edit` over a directory it is also
+ * told to read. {@link makeReadOnly} stops the accidental write, the digest detects the deliberate
+ * one, and the post-Claude gate refuses the review when either copy moved.
  *
- *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...]   # copies scripts + node, appends node_bin= and digest= to GITHUB_OUTPUT
- *   node scripts/ci/trusted-scripts.ts verify <dir> <expected>                    # exits 1 when the digest differs
+ * The digest is a SHA-256 over `"<copy index>\0<relative path>\0<sha256(content)>\n"` entries,
+ * sorted by path within each copy and taken in copy order, so it is independent of directory-walk
+ * order and of the shell tools available on the runner, and a file cannot migrate between copies
+ * unnoticed.
  *
- * Extra `<src> <dest>` pairs are plain trusted copies made in the same step (the `.agents/` review
- * instructions Claude is pointed at); they are not part of the digest, which only guards code the
- * post-Claude steps execute.
+ *   node scripts/ci/trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...]   # copies + node, appends node_bin= and digest= to GITHUB_OUTPUT
+ *   node scripts/ci/trusted-scripts.ts verify <expected> <dir> [<dir> ...]        # exits 1 when the digest differs
+ *
+ * `verify` must be passed the same destinations in the same order `snapshot` received them.
  */
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
+  chmodSync,
   copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -62,17 +71,54 @@ export function listFiles(dir: string): string[] {
     .sort();
 }
 
-/** Computes the order-independent content digest of every file under `dir`. */
-export function digestDirectory(dir: string): string {
+/**
+ * Computes the order-independent content digest of every file under each of `dirs`. Entries are
+ * prefixed with the index of the directory they came from, so moving a file from one copy to
+ * another changes the digest.
+ */
+export function digestDirectories(dirs: readonly string[]): string {
   const hash = createHash("sha256");
-  for (const file of listFiles(dir)) {
-    const content = createHash("sha256")
-      .update(readFileSync(join(dir, file)))
-      .digest("hex");
-    hash.update(`${file}\0${content}\n`);
-  }
+  dirs.forEach((dir, index) => {
+    for (const file of listFiles(dir)) {
+      const content = createHash("sha256")
+        .update(readFileSync(join(dir, file)))
+        .digest("hex");
+      hash.update(`${index}\0${file}\0${content}\n`);
+    }
+  });
 
   return hash.digest("hex");
+}
+
+/** Computes the order-independent content digest of every file under `dir`. */
+export function digestDirectory(dir: string): string {
+  return digestDirectories([dir]);
+}
+
+/**
+ * Strips every write bit from the regular files under `dir`.
+ *
+ * Claude's session runs as the runner user and owns these files, so a shell it controls can `chmod`
+ * them back — this closes the accidental path (`Write`, `Edit`, a stray `>` redirect), which opens
+ * the target for writing and now fails with `EACCES`. It is not a boundary against a process running
+ * arbitrary commands; detecting that case is {@link verify}'s job.
+ *
+ * Directories are left writable on purpose. Clearing their write bit would additionally block
+ * `unlink`-then-recreate, but that path already requires the shell access the digest covers, and a
+ * non-writable directory tree cannot be removed by an ordinary recursive delete — it would leave
+ * `$RUNNER_TEMP` undeletable for anything that reuses the workspace.
+ *
+ * Symlinks are skipped: `chmod` follows them and Linux has no `lchmod`, so chmod-ing a link would
+ * silently retarget the write bits of whatever it points at — either a path already covered by this
+ * walk, or one outside the snapshot's trust boundary that this function has no business touching.
+ */
+export function makeReadOnly(dir: string): void {
+  for (const file of listFiles(dir)) {
+    const path = join(dir, file);
+    const stats = lstatSync(path);
+    if (stats.isSymbolicLink()) continue;
+    chmodSync(path, stats.mode & ~0o222);
+  }
 }
 
 /** A directory copy made alongside the digested snapshot. */
@@ -83,7 +129,8 @@ export interface CopySpec {
 
 /**
  * Copies `src` to a fresh `dest`, copies the interpreter running this script to `<dest>/bin/node`,
- * then records that path as `node_bin` and the `digest` of the whole copy as step outputs.
+ * then records that path as `node_bin` and the `digest` over every copy as step outputs. All copies
+ * are left read-only.
  */
 export function snapshot(
   {
@@ -98,7 +145,8 @@ export function snapshot(
   options: RunOptions = {},
 ): string {
   const env = options.env ?? process.env;
-  for (const copy of [{ dest, src }, ...extraCopies]) {
+  const copies = [{ dest, src }, ...extraCopies];
+  for (const copy of copies) {
     if (existsSync(copy.dest)) {
       throw new Error(`Refusing to snapshot into existing path ${copy.dest}.`);
     }
@@ -110,7 +158,11 @@ export function snapshot(
   const nodeBin = join(dest, "bin", "node");
   mkdirSync(join(dest, "bin"));
   copyFileSync(options.nodeBin ?? process.execPath, nodeBin);
-  const digest = digestDirectory(dest);
+  const dests = copies.map((copy) => copy.dest);
+  const digest = digestDirectories(dests);
+  // After the digest: chmod changes no content, but hashing first keeps the recorded digest the
+  // value `verify` recomputes regardless of how the runner's umask left the copied modes.
+  for (const target of dests) makeReadOnly(target);
   appendFileSync(
     options.outputFile ?? readRequiredEnv(env, "GITHUB_OUTPUT"),
     `node_bin=${nodeBin}\ndigest=${digest}\n`,
@@ -119,23 +171,29 @@ export function snapshot(
   return digest;
 }
 
-/** Throws when the current digest of `dir` differs from the snapshot digest. */
-export function verify(dir: string, expected: string): void {
+/**
+ * Throws when the current digest of `dirs` differs from the snapshot digest. `dirs` must be the
+ * snapshot destinations in the order {@link snapshot} received them.
+ */
+export function verify(dirs: readonly string[], expected: string): void {
   if (!/^[0-9a-f]{64}$/.test(expected)) {
     throw new Error(
       `Invalid expected digest "${expected}". Expected a 64-character hex SHA-256.`,
     );
   }
-  const actual = digestDirectory(dir);
+  if (dirs.length === 0) {
+    throw new Error("Refusing to verify an empty list of trusted directories.");
+  }
+  const actual = digestDirectories(dirs);
   if (actual !== expected) {
     throw new Error(
-      `Trusted scripts in ${dir} were modified after the snapshot (expected ${expected}, got ${actual}).`,
+      `Trusted copies in ${dirs.join(", ")} were modified after the snapshot (expected ${expected}, got ${actual}).`,
     );
   }
 }
 
 const USAGE =
-  "Usage: trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...] | verify <dir> <expected>";
+  "Usage: trusted-scripts.ts snapshot <src> <dest> [<src> <dest> ...] | verify <expected> <dir> [<dir> ...]";
 
 /** Parses `<src> <dest>` pairs; an odd or empty argument list is a usage error. */
 export function parseCopyPairs(args: readonly string[]): CopySpec[] {
@@ -150,7 +208,10 @@ export function parseCopyPairs(args: readonly string[]): CopySpec[] {
   return pairs;
 }
 
-/** CLI dispatcher: `snapshot <src> <dest> [<src> <dest> ...]` or `verify <dir> <expected>`. */
+/**
+ * CLI dispatcher: `snapshot <src> <dest> [<src> <dest> ...]` or
+ * `verify <expected> <dir> [<dir> ...]`.
+ */
 export function main(options: RunOptions = {}): void {
   const argv = options.argv ?? process.argv.slice(2);
   const writeOutput = options.writeOutput ?? writeStdout;
@@ -170,10 +231,12 @@ export function main(options: RunOptions = {}): void {
       return;
     }
     case "verify": {
-      const [first, second] = rest;
-      if (!first || !second) throw new Error(USAGE);
-      verify(first, second);
-      writeOutput(`Trusted scripts in ${first} match the snapshot.\n`);
+      const [expected, ...dirs] = rest;
+      if (!expected || dirs.length === 0 || dirs.some((dir) => !dir)) {
+        throw new Error(USAGE);
+      }
+      verify(dirs, expected);
+      writeOutput(`Trusted copies in ${dirs.join(", ")} match the snapshot.\n`);
       return;
     }
     default:
