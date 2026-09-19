@@ -435,8 +435,16 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *   timestamp: now,
  * });
  * const sharesBurntForFloor = sharesBurnt - feeSharesNow;
+ * const allowanceSharePriceE27 = MathLib.max(
+ *   MathLib.mulDivDown(
+ *     minSharePriceE27,
+ *     MathLib.WAD - slippageTolerance,
+ *     MathLib.WAD,
+ *   ),
+ *   1n,
+ * );
  * const requiredShareAllowance = MathLib.min(
- *   MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
+ *   MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27) +
  *     computeVaultV2ForceWithdrawFeeSharesMinted({
  *       vaultData,
  *       owner,
