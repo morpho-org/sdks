@@ -181,8 +181,8 @@ export function previewVaultV2ForceWithdraw(
   // zero (`VaultV2ForceWithdrawZeroSharePriceError`) — a degenerate vault (e.g. `totalSupply`
   // dwarfing `totalAssets`) offers no price protection at all. Screen at the entity's default
   // `DEFAULT_SLIPPAGE_TOLERANCE`, not slippage-free, against the same burn upper bound the entity
-  // divides by (the larger of the raw snapshot burn and the burn accrued to `timestamp` like the
-  // plan): a tolerance-free screen clears an exit whose realized price is a single RAY-unit, yet
+  // divides by (the larger of the raw snapshot burn and the net burn accrued to `timestamp` like
+  // the plan): a tolerance-free screen clears an exit whose realized price is a single RAY-unit, yet
   // the default tolerance scales that below 1 and rounds it to zero — so the entity would reject
   // with `VaultV2ForceWithdrawZeroSharePriceError` the very
   // `exitAssets` this preview handed back. A caller passing a larger tolerance still relies on the
@@ -192,8 +192,13 @@ export function previewVaultV2ForceWithdraw(
   const { vault: accruedVaultData } = vaultData.accrueInterest(
     MathLib.max(timestamp, vaultData.lastUpdate),
   );
-  const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+  const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
     vaultData,
+    deadlineVaultData: vaultData,
+    plan,
+  });
+  const sharesBurntAccrued = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData: accruedVaultData,
     deadlineVaultData: accruedVaultData,
     plan,
   });
@@ -228,7 +233,10 @@ export function previewVaultV2ForceWithdraw(
       return undefined;
     }
   }
-  const sharesBurntForFloor = sharesBurnt - feeShares;
+  const sharesBurntForFloor = MathLib.max(
+    sharesBurntRaw,
+    sharesBurntAccrued - feeShares,
+  );
   const defaultMinSharePriceE27 =
     sharesBurntForFloor > 0n
       ? MathLib.mulDivDown(

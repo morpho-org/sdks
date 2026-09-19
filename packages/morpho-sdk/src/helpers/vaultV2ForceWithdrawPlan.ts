@@ -401,9 +401,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * tracks execution without letting a long deadline silently weaken the guard; `slippageTolerance`
  * absorbs the residual drift until inclusion.
  *
- * This is **not** the share allowance to authorize. The price floor's denominator is this bound
- * minus `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`: the
- * contract measures the *net* burn, which fee mints to `owner` shrink. The allowance is
+ * This is **not** the share allowance to authorize. The contract measures the *net* burn, which
+ * fee mints to `owner` shrink, and the raw snapshot mints none while the `now` accrual mints
+ * `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`; so the
+ * entity nets each endpoint before taking the max (`max(burnRaw, burnNow - feeSharesNow)`) rather
+ * than subtracting the `now` fee from a gross max. The allowance is
  * `min(mulDivUp(exitAssets, RAY, mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD)) +
  * computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
  * maxUint256)`: the permit pays for the *gross* burn, with one tolerance step of headroom past the
@@ -424,8 +426,13 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * } from "@morpho-org/morpho-sdk";
  *
  * const { vault: nowVaultData } = vaultData.accrueInterest(now);
- * const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+ * const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
  *   vaultData,
+ *   deadlineVaultData: vaultData,
+ *   plan,
+ * });
+ * const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+ *   vaultData: nowVaultData,
  *   deadlineVaultData: nowVaultData,
  *   plan,
  * });
@@ -434,7 +441,10 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *   owner,
  *   timestamp: now,
  * });
- * const sharesBurntForFloor = sharesBurnt - feeSharesNow;
+ * const sharesBurntForFloor = MathLib.max(
+ *   sharesBurntRaw,
+ *   sharesBurntNow - feeSharesNow,
+ * );
  * const allowanceSharePriceE27 = MathLib.max(
  *   MathLib.mulDivDown(
  *     minSharePriceE27,

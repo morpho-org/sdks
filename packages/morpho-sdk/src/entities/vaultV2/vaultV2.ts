@@ -1256,16 +1256,22 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // accrues the vault before burning. The realized price sits between the raw snapshot price
     // (pending fee mints not yet diluting it) and the `now` projection (interest the chain may not
     // have accrued yet, e.g. when the wall clock runs ahead of the chain). Price the floor off the
-    // larger burn of the two so it never exceeds either, and use the projected deadline accrual for
-    // the fee-mint guard.
+    // larger *net* burn of the two endpoints — the raw snapshot mints no fee shares, the `now`
+    // accrual mints `feeSharesNow` — so it never exceeds either, and use the projected deadline
+    // accrual for the fee-mint guard.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );
     const { vault: projectedVaultData } = vaultData.accrueInterest(
       MathLib.max(projectionTimestamp, vaultData.lastUpdate),
     );
-    const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+    const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
       vaultData,
+      deadlineVaultData: vaultData,
+      plan,
+    });
+    const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: nowVaultData,
       deadlineVaultData: nowVaultData,
       plan,
     });
@@ -1296,7 +1302,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
-    const netSharesBurntNow = sharesBurntNow - feeSharesNow;
+    const netSharesBurntNow = MathLib.max(
+      sharesBurntRaw,
+      sharesBurntNow - feeSharesNow,
+    );
     if (minSharePriceE27Override != null) {
       // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
       // may round to zero, in which case every positive override is acceptable.

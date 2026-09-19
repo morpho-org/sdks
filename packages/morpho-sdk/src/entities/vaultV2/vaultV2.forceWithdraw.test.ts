@@ -3,6 +3,7 @@ import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import {
+  type Address,
   erc20Abi,
   maxUint256,
   serializeSignature,
@@ -89,6 +90,7 @@ const expectedSharesBurnt = (params: {
   readonly vaultData: ReturnType<typeof vaultV2ExitData>;
   readonly exitAssets: bigint;
   readonly timestamp: bigint;
+  readonly owner?: Address;
 }) => {
   const { vaultData } = params;
   const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
@@ -105,16 +107,31 @@ const expectedSharesBurnt = (params: {
   const { vault: nowVaultData } = vaultData.accrueInterest(
     MathLib.max(params.timestamp, vaultData.lastUpdate),
   );
+  const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData,
+    deadlineVaultData: vaultData,
+    plan,
+  });
+  const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData: nowVaultData,
+    deadlineVaultData: nowVaultData,
+    plan,
+  });
+  const feeSharesNow = params.owner
+    ? computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: params.owner,
+        timestamp: params.timestamp,
+      })
+    : 0n;
 
   return {
     plan,
-    // Mirror the entity's price-floor denominator: the larger of the raw snapshot burn and the
-    // `now`-accrued (execution-time) burn.
-    sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
-      vaultData,
-      deadlineVaultData: nowVaultData,
-      plan,
-    }),
+    sharesBurntRaw,
+    sharesBurntNow,
+    // Mirror the entity's price-floor denominator: the larger of the raw snapshot burn (no fee
+    // mint) and the `now`-accrued (execution-time) burn net of the fee shares minted to `owner`.
+    sharesBurnt: MathLib.max(sharesBurntRaw, sharesBurntNow - feeSharesNow),
   };
 };
 
@@ -1085,11 +1102,13 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         owner: IN_KIND_USER,
         timestamp: now,
       });
-      const { plan, sharesBurnt } = expectedSharesBurnt({
-        vaultData: recipientVaultData,
-        exitAssets: 51n,
-        timestamp: now,
-      });
+      const { plan, sharesBurnt, sharesBurntRaw, sharesBurntNow } =
+        expectedSharesBurnt({
+          vaultData: recipientVaultData,
+          exitAssets: 51n,
+          timestamp: now,
+          owner: IN_KIND_USER,
+        });
       const recipientFloor = withChainTimestamp(now, () =>
         vaultFor(createMockClient(mainnet))
           .forceWithdraw({
@@ -1110,14 +1129,68 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).action.args.minSharePriceE27;
 
       expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(sharesBurnt).toBe(
+        MathLib.max(sharesBurntRaw, sharesBurntNow - feeSharesNow),
+      );
       expect(recipientFloor).toBe(
         computeMinForceWithdrawSharePrice({
           withdrawnAssets: plan.withdrawnAssets,
-          sharesBurnt: sharesBurnt - feeSharesNow,
+          sharesBurnt,
           slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
         }),
       );
-      expect(recipientFloor).toBeGreaterThan(nonRecipientFloor);
+      // Netting the fee credit can only raise the floor relative to a non-recipient's gross burn.
+      expect(recipientFloor).toBeGreaterThanOrEqual(nonRecipientFloor);
+    });
+
+    test("behavior: fee-recipient floor never exceeds the raw-snapshot floor when the fee credit outweighs the accrued burn growth", () => {
+      // A large management fee paid to the user over a long window: the `now` accrual's net burn
+      // (gross minus the user's own fee mint) falls below the raw snapshot burn, which the chain
+      // realizes if it accrues to an earlier timestamp than `now`. Netting each endpoint before the
+      // max keeps the floor at the raw burn instead of `grossMax - feeSharesNow`.
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const now = recipientVaultData.lastUpdate + Time.s.from.d(365n);
+      const { plan, sharesBurnt, sharesBurntRaw, sharesBurntNow } =
+        expectedSharesBurnt({
+          vaultData: recipientVaultData,
+          exitAssets: 51n,
+          timestamp: now,
+          owner: IN_KIND_USER,
+        });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const floor = withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet))
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: recipientVaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+      const rawFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: sharesBurntRaw,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      const grossMaxNetFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: MathLib.max(sharesBurntRaw, sharesBurntNow) - feeSharesNow,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(sharesBurntNow - feeSharesNow).toBeLessThan(sharesBurntRaw);
+      expect(sharesBurnt).toBe(sharesBurntRaw);
+      expect(floor).toBe(rawFloor);
+      expect(floor).toBeLessThan(grossMaxNetFloor);
     });
 
     test("error: VaultV2ForceWithdrawSharePriceBelowFloorError for a fee-recipient override between the gross-burn and net-burn floors", () => {
@@ -1136,15 +1209,21 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         vaultData: recipientVaultData,
         exitAssets: 51n,
         timestamp: now,
+        owner: IN_KIND_USER,
+      });
+      const { sharesBurnt: grossSharesBurnt } = expectedSharesBurnt({
+        vaultData: recipientVaultData,
+        exitAssets: 51n,
+        timestamp: now,
       });
       const netFloor = computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: sharesBurnt - feeSharesNow,
+        sharesBurnt,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
       const grossFloor = computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt,
+        sharesBurnt: grossSharesBurnt,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
 
