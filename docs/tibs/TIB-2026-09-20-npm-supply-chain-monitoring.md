@@ -61,8 +61,9 @@ The policy is an allowlist:
 - **Files.** Every regular file in the tarball must match a default entry
   (`package.json`, `README.md`, `LICENSE`, `CHANGELOG.md`, `lib/**`) or a per-package
   extra (today only `bare.js` for `wdk-protocol-lending-morpho-evm`). Entries outside
-  `package/` and non-canonical paths (`..`, `.` or empty segments, which npm would
-  resolve outside the directory they appear under) are rejected.
+  `package/` and non-canonical paths are rejected: `..` segments, which npm would
+  resolve outside the directory they appear under, and `.` or empty segments, which
+  alias onto other paths after normalization and would evade exact allowlist matching.
 - **Manifest.** No `preinstall`/`install`/`postinstall`/`prepare` family scripts
   (repo-only scripts such as `build`, `test`, legacy `prepublish` are inert for
   consumers and stay allowed), no `bin`, no `bundle(d)Dependencies`, `repository` URL
