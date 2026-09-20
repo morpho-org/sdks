@@ -1,0 +1,86 @@
+{
+  "$comment": "Publish gate for packed tarballs, enforced by scripts/release/verify-tarball-policy.mjs in the publish workflow. Every entry a tarball ships must match `files` (exact path or `<dir>/**`); the packed manifest must have no install lifecycle scripts (preinstall/install/postinstall/prepare), no `bin`, no bundled dependencies, an allowed `repository` URL, and may only declare dependencies, optionalDependencies and peerDependencies listed under `dependencies`. Extending this file is a reviewed change (see .github/CODEOWNERS).",
+  "defaults": {
+    "files": ["package.json", "README.md", "LICENSE", "CHANGELOG.md", "lib/**"],
+    "repositoryUrls": [
+      "git+https://github.com/morpho-org/sdks.git",
+      "github:morpho-org/sdks"
+    ]
+  },
+  "packages": {
+    "@morpho-org/blue-sdk": {
+      "dependencies": ["@morpho-org/morpho-ts", "@noble/hashes"]
+    },
+    "@morpho-org/blue-sdk-viem": {
+      "dependencies": ["@morpho-org/blue-sdk", "@morpho-org/morpho-ts", "viem"]
+    },
+    "@morpho-org/evm-simulation": {
+      "dependencies": [
+        "@morpho-org/blue-sdk",
+        "@morpho-org/morpho-ts",
+        "viem",
+        "zod"
+      ]
+    },
+    "@morpho-org/liquidity-sdk-viem": {
+      "dependencies": [
+        "@morpho-org/blue-sdk",
+        "@morpho-org/blue-sdk-viem",
+        "@morpho-org/morpho-sdk",
+        "@morpho-org/morpho-ts",
+        "dataloader",
+        "graphql",
+        "graphql-request",
+        "graphql-tag",
+        "viem"
+      ]
+    },
+    "@morpho-org/midnight-sdk": {
+      "dependencies": ["@morpho-org/morpho-ts", "viem"]
+    },
+    "@morpho-org/morpho-sdk": {
+      "dependencies": [
+        "@morpho-org/blue-sdk",
+        "@morpho-org/blue-sdk-viem",
+        "@morpho-org/midnight-sdk",
+        "@morpho-org/morpho-ts",
+        "viem",
+        "zod"
+      ]
+    },
+    "@morpho-org/morpho-test": {
+      "dependencies": [
+        "@morpho-org/blue-sdk",
+        "@morpho-org/morpho-ts",
+        "@morpho-org/test",
+        "viem"
+      ]
+    },
+    "@morpho-org/morpho-ts": {
+      "dependencies": []
+    },
+    "@morpho-org/test": {
+      "dependencies": [
+        "@playwright/test",
+        "lodash.kebabcase",
+        "viem",
+        "viem-deal",
+        "viem-tracer",
+        "vitest"
+      ]
+    },
+    "@morpho-org/wdk-protocol-lending-morpho-evm": {
+      "files": ["bare.js"],
+      "dependencies": [
+        "@morpho-org/blue-sdk",
+        "@morpho-org/blue-sdk-viem",
+        "@morpho-org/morpho-sdk",
+        "@tetherto/wdk-wallet",
+        "@tetherto/wdk-wallet-evm",
+        "@tetherto/wdk-wallet-evm-erc-4337",
+        "bare-node-runtime",
+        "viem"
+      ]
+    }
+  }
+}
