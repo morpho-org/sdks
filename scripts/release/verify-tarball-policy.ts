@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import {
-  isMain,
-  reportCliError,
-  sanitizeAnnotation,
-  writeStdout,
-} from "../ci/workflow.ts";
+// Deliberately self-contained: this file is part of the publish job's trusted
+// computing base and dual-code-owned, so it must not depend on helpers whose
+// ownership is narrower (a broken `isMain` import would make it fail open).
 
 const DEFAULT_POLICY_PATH = "scripts/release/release-policy.json";
 const TARBALL_ROOT = "package/";
@@ -337,7 +335,8 @@ export function main(
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const writeOutput = options.writeOutput ?? writeStdout;
+  const writeOutput =
+    options.writeOutput ?? ((message: string) => process.stdout.write(message));
   const { checked, violations } = verifyTarballs({
     cwd,
     policy: loadPolicy(resolve(cwd, policyPath)),
@@ -378,6 +377,14 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+/** Percent-encodes the characters GitHub Actions treats as annotation delimiters. */
+function sanitizeAnnotation(message: string): string {
+  return message
+    .replaceAll("%", "%25")
+    .replaceAll("\r", "%0D")
+    .replaceAll("\n", "%0A");
+}
+
 /** Replaces control characters (which could forge log lines or annotations) with `?`. */
 function sanitizeLogLine(value: string): string {
   let sanitized = "";
@@ -389,10 +396,22 @@ function sanitizeLogLine(value: string): string {
   return sanitized;
 }
 
-if (isMain(import.meta.url)) {
+function isMain(): boolean {
+  const entry = process.argv[1];
+  if (entry == null || entry === "") return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) {
   try {
     if (!main()) process.exitCode = 1;
   } catch (error: unknown) {
-    reportCliError(error);
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`::error::${sanitizeAnnotation(message)}\n`);
+    process.exitCode = 1;
   }
 }
