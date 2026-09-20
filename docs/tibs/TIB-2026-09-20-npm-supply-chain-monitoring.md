@@ -50,7 +50,7 @@ whole monitoring architecture; this brief records the first, in-repo decision.
 ## Decision
 
 `scripts/release/release-policy.json` is the single source of truth for what a
-published `@morpho-org/*` tarball may contain. `scripts/release/verify-tarball-policy.mjs`
+published `@morpho-org/*` tarball may contain. `scripts/release/verify-tarball-policy.ts`
 evaluates every packed tarball against it and is run twice in `publish.yml`: once in the
 unprivileged `pack` job (early, cheap signal) and once in the privileged `publish` job
 after the digest check and immediately before `npm publish` (the gate that matters).
@@ -60,7 +60,8 @@ The policy is an allowlist:
 - **Files.** Every regular file in the tarball must match a default entry
   (`package.json`, `README.md`, `LICENSE`, `CHANGELOG.md`, `lib/**`) or a per-package
   extra (today only `bare.js` for `wdk-protocol-lending-morpho-evm`). Entries outside
-  `package/` are rejected.
+  `package/` and non-canonical paths (`..`, `.` or empty segments, which npm would
+  resolve outside the directory they appear under) are rejected.
 - **Manifest.** No `preinstall`/`install`/`postinstall`/`prepare` family scripts
   (repo-only scripts such as `build`, `test`, legacy `prepublish` are inert for
   consumers and stay allowed), no `bin`, no `bundle(d)Dependencies`, `repository` URL
@@ -72,9 +73,11 @@ The policy is an allowlist:
   policy is reviewed.
 
 The policy is not derived from `package.json` at run time: it is a separate file a
-reviewer must change on purpose. `scripts/` is owned by `@morpho-org/sdk-engineers`
-and `.github/` by `@morpho-org/security`, so both the policy and the gate wiring are
-code-owned.
+reviewer must change on purpose. `release-policy.json` and `verify-tarball-policy.ts`
+have a dedicated `CODEOWNERS` entry requiring both `@morpho-org/sdk-engineers` and
+`@morpho-org/security` (the workflow wiring under `.github/` is already
+`@morpho-org/security`-owned), so widening the policy or weakening the verifier is a
+dual-code-owned diff.
 
 ## Invariants
 
@@ -102,7 +105,7 @@ code-owned.
 
 ## Acceptance Criteria
 
-- [ ] `publish.yml` runs `verify-tarball-policy.mjs` in both `pack` and `publish`, the
+- [ ] `publish.yml` runs `verify-tarball-policy.ts` in both `pack` and `publish`, the
       latter after digest verification and before `npm publish`.
 - [ ] `release-policy.json` lists every public workspace package; a unit test fails when
       a public package is added without a policy entry.

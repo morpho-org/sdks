@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
@@ -11,13 +11,17 @@ import {
   loadPolicy,
   main,
   matchesAllowlist,
+  type PackedManifest,
+  type ReleasePolicy,
   readTarballManifest,
   verifyTarballs,
-} from "./verify-tarball-policy.mjs";
+} from "./verify-tarball-policy.ts";
 
-const tempDirs = [];
+const SCRIPT_PATH = resolve("scripts/release/verify-tarball-policy.ts");
 
-const policy = {
+const tempDirs: string[] = [];
+
+const policy: ReleasePolicy = {
   defaults: {
     files: ["package.json", "README.md", "LICENSE", "CHANGELOG.md", "lib/**"],
     repositoryUrls: ["git+https://github.com/morpho-org/sdks.git"],
@@ -28,7 +32,7 @@ const policy = {
   },
 };
 
-const compliantManifest = {
+const compliantManifest: PackedManifest = {
   name: "@morpho-org/alpha",
   version: "1.0.0",
   repository: {
@@ -65,6 +69,13 @@ describe("matchesAllowlist", () => {
     expect(matchesAllowlist("library/a.js", ["lib/**"])).toBe(false);
     expect(matchesAllowlist("lib", ["lib/**"])).toBe(false);
     expect(matchesAllowlist("package.json.bak", ["package.json"])).toBe(false);
+  });
+
+  test("behavior: non-canonical paths never match, even under an allowed directory", () => {
+    expect(matchesAllowlist("lib/../postinstall.js", ["lib/**"])).toBe(false);
+    expect(matchesAllowlist("lib/./a.js", ["lib/**"])).toBe(false);
+    expect(matchesAllowlist("lib//a.js", ["lib/**"])).toBe(false);
+    expect(matchesAllowlist("lib/a.js/", ["lib/**"])).toBe(false);
   });
 });
 
@@ -125,6 +136,25 @@ describe("evaluateTarballPolicy", () => {
     ]);
   });
 
+  test("behavior: rejects path traversal and duplicate separators under an allowed directory", () => {
+    expect(
+      evaluateTarballPolicy({
+        entries: [
+          ...compliantEntries,
+          "package/lib/../postinstall.js",
+          "package/lib//x.js",
+          "package/lib/./y.js",
+        ],
+        manifest: compliantManifest,
+        policy,
+      }),
+    ).toEqual([
+      'file "lib/../postinstall.js" is not a canonical path',
+      'file "lib//x.js" is not a canonical path',
+      'file "lib/./y.js" is not a canonical path',
+    ]);
+  });
+
   test("behavior: rejects install lifecycle scripts only", () => {
     expect(
       evaluateTarballPolicy({
@@ -132,7 +162,7 @@ describe("evaluateTarballPolicy", () => {
         manifest: {
           ...compliantManifest,
           scripts: {
-            ...compliantManifest.scripts,
+            ...(compliantManifest.scripts as Record<string, string>),
             postinstall: "node lib/.cache/init.js",
             prepare: "husky",
           },
@@ -323,7 +353,7 @@ describe("main", () => {
       manifest: compliantManifest,
       files: ["lib/a.js"],
     });
-    const output = [];
+    const output: string[] = [];
 
     expect(
       main(["tarballs", "policy.json"], {
@@ -341,7 +371,7 @@ describe("main", () => {
       manifest: { ...compliantManifest, bin: "lib/cli.js" },
       files: ["lib/a.js", "evil.js"],
     });
-    const output = [];
+    const output: string[] = [];
 
     expect(
       main(["tarballs", "policy.json"], {
@@ -361,6 +391,62 @@ describe("main", () => {
   });
 });
 
+describe("cli", () => {
+  test("default: exits 0 with the default policy path", () => {
+    const root = createWorkspace(["@morpho-org/alpha"]);
+    writeDefaultPolicy(root);
+    createTarball(join(root, "tarballs/alpha.tgz"), {
+      manifest: compliantManifest,
+      files: ["lib/a.js"],
+    });
+
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, "tarballs"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("alpha.tgz: OK\n");
+  });
+
+  test("behavior: exits 1 on a policy violation", () => {
+    const root = createWorkspace(["@morpho-org/alpha"]);
+    writeDefaultPolicy(root);
+    createTarball(join(root, "tarballs/alpha.tgz"), {
+      manifest: compliantManifest,
+      files: ["lib/a.js", "evil.js"],
+    });
+
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, "tarballs"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe(
+      'alpha.tgz: FAIL (1)\n::error::alpha.tgz: file "evil.js" is not in the files allowlist\n',
+    );
+  });
+
+  test("error: exits 1 when the tarball directory is missing", () => {
+    const root = createWorkspace([]);
+    writeDefaultPolicy(root);
+
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, "tarballs"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("::error::ENOENT");
+  });
+});
+
+function writeDefaultPolicy(root: string) {
+  mkdirSync(join(root, "scripts/release"), { recursive: true });
+  writeFileSync(
+    join(root, "scripts/release/release-policy.json"),
+    JSON.stringify(policy),
+  );
+}
+
 function createTempDir() {
   const tempDir = mkdtempSync(join(tmpdir(), "verify-tarball-policy-"));
   tempDirs.push(tempDir);
@@ -368,7 +454,7 @@ function createTempDir() {
   return tempDir;
 }
 
-function createWorkspace(publicPackageNames) {
+function createWorkspace(publicPackageNames: readonly string[]) {
   const root = createTempDir();
   mkdirSync(join(root, "packages/private"), { recursive: true });
   writeFileSync(
@@ -386,7 +472,10 @@ function createWorkspace(publicPackageNames) {
   return root;
 }
 
-function createTarball(tarballPath, { manifest, files }) {
+function createTarball(
+  tarballPath: string,
+  { manifest, files }: { manifest: PackedManifest; files: readonly string[] },
+) {
   const stage = join(createTempDir(), "package");
   mkdirSync(stage, { recursive: true });
   writeFileSync(join(stage, "package.json"), JSON.stringify(manifest));

@@ -19,7 +19,7 @@ export default defineConfig({
       include: [
         "packages/**/src/**/*.{ts,tsx}",
         "scripts/ci/**/*.ts",
-        "scripts/release/**/*.{js,mjs}",
+        "scripts/release/**/*.{js,mjs,ts}",
       ],
       exclude: [
         "packages/test/**",

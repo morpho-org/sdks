@@ -1,5 +1,5 @@
 {
-  "$comment": "Publish gate for packed tarballs, enforced by scripts/release/verify-tarball-policy.mjs in the publish workflow. Every entry a tarball ships must match `files` (exact path or `<dir>/**`); the packed manifest must have no install lifecycle scripts (preinstall/install/postinstall/prepare), no `bin`, no bundled dependencies, an allowed `repository` URL, and may only declare dependencies, optionalDependencies and peerDependencies listed under `dependencies`. Extending this file is a reviewed change (see .github/CODEOWNERS).",
+  "$comment": "Publish gate for packed tarballs, enforced by scripts/release/verify-tarball-policy.ts in the publish workflow. Every entry a tarball ships must match `files` (exact path or `<dir>/**`); the packed manifest must have no install lifecycle scripts (preinstall/install/postinstall/prepare), no `bin`, no bundled dependencies, an allowed `repository` URL, and may only declare dependencies, optionalDependencies and peerDependencies listed under `dependencies`. Extending this file is a reviewed change (see .github/CODEOWNERS).",
   "defaults": {
     "files": ["package.json", "README.md", "LICENSE", "CHANGELOG.md", "lib/**"],
     "repositoryUrls": [

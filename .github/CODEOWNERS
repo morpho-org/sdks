@@ -10,3 +10,4 @@
 /.nvmrc @morpho-org/sdk-engineers
 /scripts/ @morpho-org/sdk-engineers
 /scripts/release/release-policy.json @morpho-org/sdk-engineers @morpho-org/security
+/scripts/release/verify-tarball-policy.ts @morpho-org/sdk-engineers @morpho-org/security

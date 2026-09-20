@@ -115,7 +115,7 @@ jobs:
         if: steps.pack.outputs.has_tarballs == 'true'
         # Early, unprivileged copy of the fail-closed check the publish job runs
         # so a policy violation surfaces before the prod environment is touched.
-        run: node scripts/release/verify-tarball-policy.mjs "${RUNNER_TEMP}/tarballs"
+        run: node scripts/release/verify-tarball-policy.ts "${RUNNER_TEMP}/tarballs"
 
       - name: Upload release tarballs
         if: steps.pack.outputs.has_tarballs == 'true'
@@ -221,7 +221,7 @@ jobs:
       # file, the packed manifest's scripts/bin/dependencies and repository URL
       # must match the reviewed scripts/release/release-policy.json.
       - name: Verify tarballs against the release policy
-        run: node scripts/release/verify-tarball-policy.mjs "${RUNNER_TEMP}/tarballs"
+        run: node scripts/release/verify-tarball-policy.ts "${RUNNER_TEMP}/tarballs"
 
       - name: Publish packages
         shell: bash
