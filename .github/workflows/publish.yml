@@ -90,7 +90,8 @@ jobs:
           # step above: no package defines a `prepack` or `prepare` hook (the
           # lifecycle scripts `pnpm pack` would actually run), and the legacy
           # `prepublish` hook is not run by `pnpm pack`, so nothing rebuilds here.
-          # `pnpm pack` strips lifecycle scripts from the packed manifest.
+          # `pnpm pack` keeps `scripts` in the packed manifest; the release policy
+          # check below rejects any install-time lifecycle hook.
           while IFS= read -r -d '' manifest; do
             dir="$(dirname "$manifest")"
             is_private="$(cd "$dir" && node -p "require('./package.json').private === true")"
@@ -109,6 +110,12 @@ jobs:
           else
             echo "has_tarballs=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify tarballs against the release policy
+        if: steps.pack.outputs.has_tarballs == 'true'
+        # Early, unprivileged copy of the fail-closed check the publish job runs
+        # so a policy violation surfaces before the prod environment is touched.
+        run: node scripts/release/verify-tarball-policy.ts "${RUNNER_TEMP}/tarballs"
 
       - name: Upload release tarballs
         if: steps.pack.outputs.has_tarballs == 'true'
@@ -209,6 +216,12 @@ jobs:
           cd "${RUNNER_TEMP}/tarballs"
           test -f SHA256SUMS
           sha256sum --check --strict SHA256SUMS
+
+      # Fail-closed gate on the exact bytes about to be published: every shipped
+      # file, the packed manifest's scripts/bin/dependencies and repository URL
+      # must match the reviewed scripts/release/release-policy.json.
+      - name: Verify tarballs against the release policy
+        run: node scripts/release/verify-tarball-policy.ts "${RUNNER_TEMP}/tarballs"
 
       - name: Publish packages
         shell: bash
