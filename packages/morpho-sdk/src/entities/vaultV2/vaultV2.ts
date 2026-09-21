@@ -790,9 +790,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {

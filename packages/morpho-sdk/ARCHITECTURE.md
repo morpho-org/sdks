@@ -177,7 +177,9 @@ rather than reused (VaultBundlesV1 skips a permit whose nonce was already consum
 holds on every withdrawal.
 
 **Redeem (V1 & V2)** also routes through VaultBundlesV1. The caller grants an exact share
-allowance or signs an embedded ERC-2612 permit. The fixed call redeems the specified shares and
+allowance or, when `supportSignature` is enabled and the current allowance is below the redeemed
+shares, signs an embedded ERC-2612 permit; a larger leftover allowance is always reset with an
+onchain approval. The fixed call redeems the specified shares and
 pays the proceeds, minus an optional referral fee, to the submitting account. It has no
 minimum-assets or source share-price bound.
 
