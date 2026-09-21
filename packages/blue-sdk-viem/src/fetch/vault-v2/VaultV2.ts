@@ -30,6 +30,7 @@ import {
   type ContractFunctionReturnType,
   erc20Abi,
   type Hash,
+  isAddressEqual,
   zeroAddress,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -545,10 +546,9 @@ function toMarket(
     params: new MarketParams(response.marketParams),
     ...response.market,
     price: response.hasPrice ? response.price : undefined,
-    rateAtTarget:
-      response.marketParams.irm === adaptiveCurveIrm
-        ? response.rateAtTarget
-        : undefined,
+    rateAtTarget: isAddressEqual(response.marketParams.irm, adaptiveCurveIrm)
+      ? response.rateAtTarget
+      : undefined,
   });
 }
 

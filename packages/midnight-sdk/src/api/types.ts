@@ -386,7 +386,7 @@ export interface MidnightApiBookMarket {
   readonly midnight: Address;
   /** Loan token address. */
   readonly loanToken: Address;
-  /** Collateral definitions for the market. */
+  /** Collateral definitions for the market, in canonical `collateralIndex` order. */
   readonly collaterals: readonly MidnightApiCollateral[];
   /** Market maturity timestamp in unix seconds. */
   readonly maturity: number;

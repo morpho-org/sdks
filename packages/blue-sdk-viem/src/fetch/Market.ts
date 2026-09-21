@@ -4,7 +4,7 @@ import {
   type MarketId,
   MarketParams,
 } from "@morpho-org/blue-sdk";
-import { type Client, zeroAddress } from "viem";
+import { type Client, isAddressEqual, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
@@ -84,8 +84,9 @@ export async function fetchMarket(
         lastUpdate,
         fee,
         price: hasPrice ? price : undefined,
-        rateAtTarget:
-          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+        rateAtTarget: isAddressEqual(marketParams.irm, adaptiveCurveIrm)
+          ? rateAtTarget
+          : undefined,
       });
     } catch (error) {
       if (deployless === "force") throw error;
@@ -119,7 +120,7 @@ export async function fetchMarket(
           functionName: "price",
         }).catch(() => undefined)
       : undefined,
-    params.irm === adaptiveCurveIrm
+    isAddressEqual(params.irm, adaptiveCurveIrm)
       ? readContract(client, {
           ...parameters,
           address: adaptiveCurveIrm,

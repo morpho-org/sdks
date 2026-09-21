@@ -754,6 +754,43 @@ describe("MidnightApi.fetchBook", () => {
     expect(call.init?.method).toBe("GET");
   });
 
+  test("behavior: returns collaterals in canonical collateralIndex order", async () => {
+    const secondApiCollateral = { ...apiCollateral, token: SECOND_LOAN_TOKEN };
+    const unsortedBook = {
+      ...apiBook,
+      collaterals: [apiCollateral, secondApiCollateral],
+    };
+    const book = {
+      ...unsortedBook,
+      market_id: MarketUtils.toId({
+        chainId: unsortedBook.chain_id,
+        midnight: unsortedBook.midnight,
+        loanToken: unsortedBook.loan_token,
+        collateralParams: unsortedBook.collaterals.map((collateral) => ({
+          token: collateral.token,
+          lltv: collateral.lltv,
+          liquidationCursor: collateral.liquidation_cursor,
+          oracle: collateral.oracle,
+        })),
+        maturity: unsortedBook.maturity,
+        rcfThreshold: unsortedBook.rcf_threshold,
+        enterGate: unsortedBook.enter_gate,
+        liquidatorGate: unsortedBook.liquidator_gate,
+      }),
+    };
+    const { fetch } = createJsonFetch({ data: book });
+
+    const result = await MidnightApi.fetchBook({
+      marketId: book.market_id,
+      fetch,
+    });
+
+    expect(result.data.collaterals.map(({ token }) => token)).toEqual([
+      SECOND_LOAN_TOKEN,
+      COLLATERAL_TOKEN,
+    ]);
+  });
+
   test("error: InvalidMidnightApiResponseError when the API returns a coherent foreign market", async () => {
     // SDKS-60: a hostile/compromised API must not substitute a coherent foreign
     // market for the requested id and have it flow downstream unbound. The book's

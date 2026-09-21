@@ -129,6 +129,8 @@ export function buildBookPath(params: {
  * its own market params. Recomputing the id with `MarketUtils.toId` (mirroring the
  * takeable-offers path) stops a hostile API from pairing a trusted id with foreign
  * metadata; every book flows through here, so both bound paths reject the same substitution.
+ * Collaterals are returned in the protocol's canonical order so their array index matches
+ * the onchain `collateralIndex`.
  */
 export function mapBookMarket(
   book: ApiBookMarketResponse,
@@ -170,7 +172,9 @@ export function mapBookMarket(
     chainId: book.chain_id,
     midnight: book.midnight,
     loanToken: book.loan_token,
-    collaterals: book.collaterals.map(mapCollateral),
+    collaterals: [...book.collaterals]
+      .sort((a, b) => (a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1))
+      .map(mapCollateral),
     maturity: book.maturity,
     rcfThreshold: book.rcf_threshold,
     enterGate: book.enter_gate,

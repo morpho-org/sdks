@@ -79,6 +79,7 @@ import { fetchVaultUser } from "./VaultUser.js";
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
 const META_MORPHO_WITHOUT_LEGACY_FALLBACK_CHAIN_ID = 9_101_001;
+const LOWERCASE_IRM_CHAIN_ID = 9_101_002;
 
 registerCustomAddresses({
   addresses: {
@@ -572,6 +573,39 @@ describe("fetchMarket", () => {
 
     expect(market.price).toBeUndefined();
     expect(market.rateAtTarget).toBeUndefined();
+  });
+
+  test("behavior: detects the adaptive IRM case-insensitively", async () => {
+    const lowercaseIrm = ADDRESSES.adaptiveCurveIrm.toLowerCase() as Address;
+    registerCustomAddresses({
+      addresses: {
+        [LOWERCASE_IRM_CHAIN_ID]: {
+          blue: ADDRESSES.blue,
+          adaptiveCurveIrm: lowercaseIrm,
+        } satisfies ChainAddresses,
+      },
+    });
+
+    const deploylessHandle = createMockClient(mainnet);
+    mockDeploylessRead(deploylessHandle, marketQueryAbi, "query", {
+      marketParams: marketParamsTuple(),
+      market: marketTuple,
+      hasPrice: true,
+      price: 123n,
+      rateAtTarget: 456n,
+    });
+    const deploylessMarket = await fetchMarket(ID, deploylessHandle.client, {
+      chainId: LOWERCASE_IRM_CHAIN_ID,
+    });
+    expect(deploylessMarket.rateAtTarget).toBe(456n);
+
+    const multicallHandle = createMockClient(mainnet);
+    mockMarketReads(multicallHandle);
+    const multicallMarket = await fetchMarket(ID, multicallHandle.client, {
+      chainId: LOWERCASE_IRM_CHAIN_ID,
+      deployless: false,
+    });
+    expect(multicallMarket.rateAtTarget).toBe(456n);
   });
 
   test("uses multicall when deployless is disabled", async () => {
