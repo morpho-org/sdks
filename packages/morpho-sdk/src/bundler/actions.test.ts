@@ -1169,6 +1169,90 @@ describe("BundlerAction", () => {
     });
   });
 
+  test("nativeTransfer encodes a GeneralAdapter1 refund to Bundler3", () => {
+    const call = onlyCall(
+      BundlerAction.nativeTransfer(
+        chainId,
+        generalAdapter1,
+        bundler3,
+        7n,
+        true,
+      ),
+    );
+    const decoded = decodeFunctionData({
+      abi: coreAdapterAbi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(generalAdapter1);
+    expect(call.value).toBe(0n);
+    expect(call.skipRevert).toBe(false);
+    expect(call.callbackHash).toBe(zeroHash);
+    expect(decoded.functionName).toBe("nativeTransfer");
+    expect(decoded.args).toEqual([bundler3, 7n]);
+  });
+
+  test("nativeTransfer still treats external-owner transfers to Bundler3 as pre-funding", () => {
+    expect(
+      BundlerAction.nativeTransfer(chainId, owner, bundler3, 7n),
+    ).toStrictEqual([]);
+    expect(
+      BundlerAction.nativeTransfer(chainId, bundler3, bundler3, 7n),
+    ).toStrictEqual([]);
+  });
+
+  test("encodeBundle encodes a GeneralAdapter1 to Bundler3 refund", () => {
+    const actions: Action[] = [
+      {
+        type: "nativeTransfer",
+        args: [owner, bundler3, 10n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [bundler3, generalAdapter1, 10n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [generalAdapter1, bundler3, 4n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [bundler3, owner, 4n, false],
+      },
+    ];
+
+    const tx = BundlerAction.encodeBundle(chainId, actions);
+
+    expect(tx.value).toBe(14n);
+    expect(tx.value).toBe(expectedBundleValue(actions));
+
+    const decoded = decodeFunctionData({
+      abi: bundler3Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.functionName).toBe("multicall");
+    const calls = decoded.args[0] ?? [];
+    expect(calls).toHaveLength(3);
+
+    expect(calls[0]?.to).toBe(generalAdapter1);
+    expect(calls[0]?.value).toBe(10n);
+    expect(calls[0]?.data).toBe("0x");
+
+    expect(calls[1]?.to).toBe(generalAdapter1);
+    expect(calls[1]?.value).toBe(0n);
+    const refundData = decodeFunctionData({
+      abi: coreAdapterAbi,
+      data: calls[1]?.data ?? "0x",
+    });
+    expect(refundData.functionName).toBe("nativeTransfer");
+    expect(refundData.args).toEqual([bundler3, 4n]);
+
+    expect(calls[2]?.to).toBe(owner);
+    expect(calls[2]?.value).toBe(4n);
+    expect(calls[2]?.data).toBe("0x");
+  });
+
   test("erc20Transfer", () => {
     const call = onlyCall(
       BundlerAction.erc20Transfer(asset, recipient, 1n, adapter, true),

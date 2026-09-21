@@ -435,11 +435,13 @@ export namespace BundlerAction {
    * Encodes a native-token transfer for Bundler3 execution.
    *
    * @remarks
-   * Transfers to Bundler3 are treated as bundle pre-funding and emit no inner
-   * call. Transfers whose `owner` is GeneralAdapter1 are encoded as
-   * `GeneralAdapter1.nativeTransfer(recipient, amount)` and always use
-   * `skipRevert: false`; the caller-supplied `skipRevert` argument applies
-   * only to direct native transfers from other owners.
+   * Transfers to Bundler3 from any owner other than GeneralAdapter1 are
+   * treated as bundle pre-funding and emit no inner call. Transfers whose
+   * `owner` is GeneralAdapter1 are always encoded as
+   * `GeneralAdapter1.nativeTransfer(recipient, amount)` (including when
+   * `recipient` is Bundler3) and always use `skipRevert: false`; the
+   * caller-supplied `skipRevert` argument applies only to direct native
+   * transfers from other owners.
    *
    * @param chainId - Chain where the action will execute.
    * @param owner - Current native-token owner in the bundle.
@@ -475,8 +477,6 @@ export namespace BundlerAction {
       bundler3: { bundler3, generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    if (isAddressEqual(recipient, bundler3)) return [];
-
     if (isAddressEqual(owner, generalAdapter1)) {
       return [
         {
@@ -492,6 +492,8 @@ export namespace BundlerAction {
         },
       ];
     }
+
+    if (isAddressEqual(recipient, bundler3)) return [];
 
     return [
       {
