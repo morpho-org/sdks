@@ -68,6 +68,10 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * the assumption is rechecked when onboarding a new chain (see
  * `evm-simulation/CLAUDE.md`).
  *
+ * **Hex casing.** JSON-RPC `DATA` is case-insensitive, so `topics` and `data`
+ * are lowercased before signature dispatch and pair matching; a backend that
+ * echoes mixed-case hex cannot drop a transfer from the parsed output.
+ *
  * **Failure mode:** on a per-log parse failure (malformed topic length,
  * non-hex data), the log is skipped and a `warn` is emitted via the logger.
  *
@@ -90,13 +94,14 @@ export function parseTransfers(
 ): Transfer[] {
   const transfers: Transfer[] = [];
   const { logger, wNative } = options;
-  const wnativeShapedTokens = collectWnativeShapedTokens(calls);
+  const normalizedCalls = calls.map((call) => call.logs.map(normalizeLogHex));
+  const wnativeShapedTokens = collectWnativeShapedTokens(normalizedCalls);
   const acceptsWnativeEvent = (address: Address): boolean =>
     wNative === undefined ||
     (wNative !== null && isAddressEqual(address, wNative));
 
-  for (let txIdx = 0; txIdx < calls.length; txIdx++) {
-    const logs = calls[txIdx]!.logs;
+  for (let txIdx = 0; txIdx < normalizedCalls.length; txIdx++) {
+    const logs = normalizedCalls[txIdx]!;
     for (const log of logs) {
       try {
         const topic0 = log.topics[0];
@@ -232,6 +237,15 @@ export function parseTransfers(
   return sortTransfers(transfers);
 }
 
+/** Lowercase `topics` and `data` so signature dispatch and pair matching are case-insensitive. */
+function normalizeLogHex(log: RawLog): RawLog {
+  return {
+    ...log,
+    topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
+    data: log.data.toLowerCase() as Hex,
+  };
+}
+
 function isTopicHex(value: Hex | undefined): value is Hex {
   return typeof value === "string" && value.length === TOPIC_HEX_LENGTH;
 }
@@ -254,10 +268,12 @@ function warnMalformed(
 }
 
 /** Collect contracts that emit WETH9-shaped events anywhere in the bundle. */
-function collectWnativeShapedTokens(calls: readonly RawCall[]): Set<string> {
+function collectWnativeShapedTokens(
+  calls: readonly (readonly RawLog[])[],
+): Set<string> {
   const tokens = new Set<string>();
-  for (const call of calls) {
-    for (const log of call.logs) {
+  for (const logs of calls) {
+    for (const log of logs) {
       const topic0 = log.topics[0];
       if (topic0 === WITHDRAWAL_TOPIC || topic0 === DEPOSIT_TOPIC) {
         tokens.add(log.address.toLowerCase());

@@ -646,6 +646,58 @@ describe.sequential("simulateTenderlyRpc — errors", () => {
     ).rejects.toThrow("Transaction simulation reverted");
   });
 
+  it("throws SimulationRevertedError when a reverted result omits gasUsed", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope({ status: false, errorMessage: "execution reverted" }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
+
+  it("throws SimulationRevertedError when a bundle result omits gasUsed on revert", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope([
+          successResult(),
+          { status: false, errorMessage: "execution reverted" },
+        ]),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1, TX2] }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
+
+  it("throws SimulationRevertedError when the JSON-RPC envelope carries an execution-revert error (code 3)", async () => {
+    const rpcError = {
+      code: 3,
+      message: "execution reverted",
+      data: "0x08c379a0",
+    };
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ jsonrpc: "2.0", id: 1, error: rpcError }),
+    });
+    installFetchMock(fetchMock);
+
+    const promise = simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+    });
+    await expect(promise).rejects.toThrow(SimulationRevertedError);
+    await expect(promise).rejects.toMatchObject({
+      reason: "execution reverted",
+      details: rpcError,
+    });
+  });
+
   it("surfaces the revert reason from trace[].errorReason", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
