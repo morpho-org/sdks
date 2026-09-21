@@ -159,6 +159,14 @@ describe("verifyManifestIdentity", () => {
     );
   });
 
+  test("behavior: accepts a name of exactly 214 chars", () => {
+    const name = "a".repeat(214);
+    expect(verifyManifestIdentity({ name, version: "1.0.0" })).toEqual({
+      name,
+      version: "1.0.0",
+    });
+  });
+
   test("error: rejects names with uppercase, whitespace, newlines, or over 214 chars", () => {
     for (const name of ["Morpho", "morpho ts", "morpho\nts", "a".repeat(215)]) {
       expect(() => verifyManifestIdentity({ name, version: "1.0.0" })).toThrow(
