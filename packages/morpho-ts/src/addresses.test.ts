@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   addresses,
   addressesRegistry,
+  blueDeployments,
   type ChainAddresses,
   type ChainDeployments,
   deployments,
@@ -904,22 +905,22 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = deployments[ChainId.PolygonMainnet];
+    const polygonDeployments = deployments[ChainId.PolygonMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
-      permit2: blueDeployments.permit2,
+      permit2: polygonDeployments.permit2,
     };
 
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          ...blueDeployments,
+          ...polygonDeployments,
           ...chainDeployments,
         },
       },
     });
 
-    expect(deployments[chainId]).toMatchObject(blueDeployments);
+    expect(deployments[chainId]).toMatchObject(polygonDeployments);
     expect(deployments[chainId]).toMatchObject(chainDeployments);
   });
 });
@@ -1256,6 +1257,8 @@ describe("registerCustomAddresses", () => {
       },
     });
 
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
     expect(() =>
       registerCustomAddresses({
         addresses: {
@@ -1275,6 +1278,7 @@ describe("registerCustomAddresses", () => {
     );
     expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
   });
 
   test("behavior: leaves addresses and deployments unchanged when an unwrappedTokens patch in the same call is rejected", () => {
@@ -1297,6 +1301,8 @@ describe("registerCustomAddresses", () => {
       },
     });
 
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
     expect(() =>
       registerCustomAddresses({
         addresses: {
@@ -1316,6 +1322,7 @@ describe("registerCustomAddresses", () => {
     );
     expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
     expect(deployments[chainId]?.wNative).toBeUndefined();
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
 });
