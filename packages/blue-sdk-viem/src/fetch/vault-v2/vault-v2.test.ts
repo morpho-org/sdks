@@ -1875,6 +1875,37 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     expect(marketAdapter.markets[0]?.id).toBe(ID);
   });
 
+  test("behavior: detects the adaptive IRM case-insensitively", async () => {
+    const lowercaseIrmChainId = 9_101_003;
+    registerCustomAddresses({
+      addresses: {
+        [lowercaseIrmChainId]: {
+          morpho: ADDRESSES.morpho,
+          bundler3: ADDRESSES.bundler3,
+          adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm.toLowerCase() as Address,
+          vaultV2Factory: ADDRESSES.vaultV2Factory,
+        } satisfies ChainAddresses,
+      },
+    });
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(
+      handle,
+      accrualVaultV2QueryAbi,
+      "query",
+      accrualVaultV2Result,
+    );
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: lowercaseIrmChainId,
+    });
+    const [adapter] = vault.accrualAdapters;
+
+    expect(
+      (adapter as AccrualVaultV2MorphoMarketV1AdapterV2).markets[0]
+        ?.rateAtTarget,
+    ).toBe(456n);
+  });
+
   test("ignores residual nested-vault shares under a zero parent allocation", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {

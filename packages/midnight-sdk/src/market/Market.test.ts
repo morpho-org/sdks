@@ -278,6 +278,22 @@ describe("Market", () => {
 });
 
 describe("MarketUtils", () => {
+  test("behavior: compareCollateralTokens orders case-insensitively", () => {
+    const lower = {
+      token: "0x000000000000000000000000000000000000000A" as Address,
+    };
+    const upper = {
+      token: "0x000000000000000000000000000000000000000b" as Address,
+    };
+    const first = {
+      token: "0x0000000000000000000000000000000000000001" as Address,
+    };
+
+    expect(
+      [upper, lower, first].sort(MarketUtils.compareCollateralTokens),
+    ).toEqual([first, lower, upper]);
+  });
+
   test("default", () => {
     expect(
       MarketUtils.toCollateralParams({

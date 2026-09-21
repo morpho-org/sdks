@@ -173,7 +173,7 @@ export function mapBookMarket(
     midnight: book.midnight,
     loanToken: book.loan_token,
     collaterals: [...book.collaterals]
-      .sort((a, b) => (a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1))
+      .sort(MarketUtils.compareCollateralTokens)
       .map(mapCollateral),
     maturity: book.maturity,
     rcfThreshold: book.rcf_threshold,
