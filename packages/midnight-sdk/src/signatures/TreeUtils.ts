@@ -97,6 +97,19 @@ function buildLayers(leaves: readonly Hash[]): readonly (readonly Hash[])[] {
   return layers;
 }
 
+function assertProvableLeaves(leaves: readonly Hash[]): number {
+  if (!isPowerOfTwo(leaves.length)) {
+    throw new InvalidTreeError(
+      `Tree leaf count "${leaves.length}" is not a power of two.`,
+    );
+  }
+  const height = Math.log2(leaves.length);
+  /* v8 ignore next: exercising this branch would require allocating more than 2^20 leaves. */
+  if (height > 20) throw new InvalidTreeHeightError(height);
+
+  return height;
+}
+
 /**
  * Fully materialized tree descriptor.
  *
@@ -799,6 +812,7 @@ export namespace TreeUtils {
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
    * @throws {InvalidTreeError} when leaf index is out of range or when the leaf count is not a power of two.
+   * @throws {InvalidTreeHeightError} when the leaf count exceeds height 20.
    * @example
    * ```ts
    * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -847,11 +861,8 @@ export namespace TreeUtils {
       );
     }
 
-    if (!isPowerOfTwo(params.tree.leaves.length)) {
-      throw new InvalidTreeError(
-        `Tree leaf count "${params.tree.leaves.length}" is not a power of two.`,
-      );
-    }
+    // Height is unused; the call only validates the leaf set is provable.
+    assertProvableLeaves(params.tree.leaves);
 
     const index = Number(leafIndex);
     const layers = buildLayers(params.tree.leaves);
@@ -874,6 +885,7 @@ export namespace TreeUtils {
    * @param params.count - Number of leading leaf indices to prove; defaults to `tree.leaves.length`.
    * @returns Frozen proofs for leaf indices `0` through `count - 1`.
    * @throws {InvalidTreeError} when `count` is negative, non-integer, or exceeds the leaf count, or when the leaf count is not a power of two.
+   * @throws {InvalidTreeHeightError} when the leaf count exceeds height 20.
    * @example
    * ```ts
    * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -923,11 +935,8 @@ export namespace TreeUtils {
     ) {
       throw new InvalidTreeError(`Proof count "${count}" is outside the tree.`);
     }
-    if (!isPowerOfTwo(params.tree.leaves.length)) {
-      throw new InvalidTreeError(
-        `Tree leaf count "${params.tree.leaves.length}" is not a power of two.`,
-      );
-    }
+    // Height is unused; the call only validates the leaf set is provable.
+    assertProvableLeaves(params.tree.leaves);
 
     const layers = buildLayers(params.tree.leaves);
 
