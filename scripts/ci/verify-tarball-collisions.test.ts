@@ -614,6 +614,21 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test("error: CLI exits nonzero with ::error:: on a colliding tarball", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: ["package/", "package/package.json", "package/Package.json"],
+      });
+      const result = spawnSync(process.execPath, [SCRIPT, tgz], {
+        encoding: "utf8",
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toMatch(/::error::.*collide/);
+    });
+  });
+
   test("behavior: CLI reports accepted entry count", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
