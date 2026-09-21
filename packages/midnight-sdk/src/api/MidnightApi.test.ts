@@ -179,6 +179,34 @@ const expectedBook = {
   bids: [],
 };
 
+const multiCollateralApiBook = (() => {
+  const params = {
+    ...apiBook,
+    collaterals: [
+      ...apiBook.collaterals,
+      { ...apiCollateral, token: SECOND_LOAN_TOKEN },
+    ],
+  };
+  return {
+    ...params,
+    market_id: MarketUtils.toId({
+      chainId: params.chain_id,
+      midnight: params.midnight,
+      loanToken: params.loan_token,
+      collateralParams: params.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcf_threshold,
+      enterGate: params.enter_gate,
+      liquidatorGate: params.liquidator_gate,
+    }) satisfies Hex,
+  };
+})();
+
 const apiOfferMarket = {
   chain_id: 8453,
   midnight: API_MIDNIGHT,
@@ -693,6 +721,47 @@ describe("MidnightApi.fetchBooks", () => {
     expect(url.searchParams.get("cursor")).toBe("previous");
     expect(call.init?.method).toBe("GET");
     expect(call.init?.body).toBeUndefined();
+  });
+
+  test("behavior: treats empty optional filters as unset", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    const result = await MidnightApi.fetchBooks({
+      chainIds: [],
+      loanTokens: [],
+      collateralTokens: [],
+      maturities: [],
+      marketIds: [],
+      fetch,
+    });
+
+    expect(result.data).toEqual([expectedBook]);
+  });
+
+  test("behavior: accepts a multi-collateral book when one collateral matches the collateralTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [multiCollateralApiBook],
+    });
+
+    const result = await MidnightApi.fetchBooks({
+      collateralTokens: [SECOND_LOAN_TOKEN],
+      fetch,
+    });
+
+    expect(result.data).toEqual([
+      {
+        ...expectedBook,
+        marketId: multiCollateralApiBook.market_id,
+        collaterals: [
+          ...expectedBook.collaterals,
+          { ...expectedCollateral, token: SECOND_LOAN_TOKEN },
+        ],
+      },
+    ]);
   });
 
   test("error: InvalidMidnightApiResponseError for a book outside the marketIds filter", async () => {
