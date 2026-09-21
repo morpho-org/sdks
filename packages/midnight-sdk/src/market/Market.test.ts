@@ -279,19 +279,18 @@ describe("Market", () => {
 
 describe("MarketUtils", () => {
   test("behavior: compareCollateralTokens orders case-insensitively", () => {
-    const lower = {
-      token: "0x000000000000000000000000000000000000000A" as Address,
-    };
-    const upper = {
-      token: "0x000000000000000000000000000000000000000b" as Address,
-    };
-    const first = {
-      token: "0x0000000000000000000000000000000000000001" as Address,
-    };
+    // ASCII order puts uppercase before lowercase, so a case-sensitive
+    // comparison would sort `B` before `a`.
+    const lowerA = { token: `0x${"a".padStart(40, "0")}` as Address };
+    const upperA = { token: `0x${"A".padStart(40, "0")}` as Address };
+    const upperB = { token: `0x${"B".padStart(40, "0")}` as Address };
 
-    expect(
-      [upper, lower, first].sort(MarketUtils.compareCollateralTokens),
-    ).toEqual([first, lower, upper]);
+    expect(upperB.token < lowerA.token).toBe(true);
+    expect([upperB, lowerA].sort(MarketUtils.compareCollateralTokens)).toEqual([
+      lowerA,
+      upperB,
+    ]);
+    expect(MarketUtils.compareCollateralTokens(lowerA, upperA)).toBe(0);
   });
 
   test("default", () => {

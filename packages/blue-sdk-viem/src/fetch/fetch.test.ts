@@ -79,7 +79,7 @@ import { fetchVaultUser } from "./VaultUser.js";
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
 const META_MORPHO_WITHOUT_LEGACY_FALLBACK_CHAIN_ID = 9_101_001;
-const LOWERCASE_IRM_CHAIN_ID = 9_101_002;
+const LOWERCASE_IRM_CHAIN_ID = 9_101_004;
 
 registerCustomAddresses({
   addresses: {

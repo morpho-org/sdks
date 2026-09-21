@@ -87,24 +87,21 @@ type CollateralParamsInput = ICollateralParams | CollateralParams;
  */
 export namespace MarketUtils {
   /**
-   * Orders collaterals by token address, case-insensitively, matching the protocol's canonical
-   * `collateralIndex` order used by `MarketParams` and `MarketUtils.hash`.
+   * @internal Orders collaterals by token address, case-insensitively, matching the protocol's
+   * canonical `collateralIndex` order used by `MarketParams` and `MarketUtils.hash`.
    *
    * @param a - First collateral.
    * @param b - Second collateral.
-   * @returns A negative number when `a` sorts before `b`, positive otherwise.
-   * @example
-   * ```ts
-   * import { MarketUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const sorted = [...collaterals].sort(MarketUtils.compareCollateralTokens);
-   * ```
+   * @returns Negative when `a` sorts before `b`, positive when after, `0` when tokens are equal.
    */
   export function compareCollateralTokens(
     a: { readonly token: Address },
     b: { readonly token: Address },
   ) {
-    return a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1;
+    const tokenA = a.token.toLowerCase();
+    const tokenB = b.token.toLowerCase();
+    if (tokenA === tokenB) return 0;
+    return tokenA < tokenB ? -1 : 1;
   }
 
   /**
