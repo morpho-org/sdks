@@ -378,7 +378,8 @@ export const normalizeBundlesSignature = (
  * @returns The signed share permit or the contract's empty-permit sentinel.
  * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
  * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
- * @throws {BundlesPermitMismatchError} when the requirement kind, token, or signature is invalid.
+ * @throws {BundlesPermitMismatchError} when the requirement kind, token, owner, spender, amount or
+ *   deadline, or signature is invalid.
  * @example
  * ```ts
  * import { getBundlesSharesPermit } from "@morpho-org/morpho-sdk";
@@ -459,6 +460,16 @@ export const getBundlesSharesPermit = (params: {
       field: "amount",
       expected: String(params.amount),
       actual: String(requirementSignature.args.amount),
+    });
+  }
+  if (
+    (params.owner != null || params.spender != null || params.amount != null) &&
+    requirementSignature.action.args.amount !== requirementSignature.args.amount
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "amount",
+      expected: String(requirementSignature.args.amount),
+      actual: String(requirementSignature.action.args.amount),
     });
   }
   if (

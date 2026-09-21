@@ -1003,7 +1003,7 @@ describe("MorphoBlue position validation", () => {
     );
   });
 
-  test("behavior: saturated share repay approval covers a later quote", async () => {
+  test("behavior: full repay approval equals the encoded maxRepayAssets", async () => {
     const now = 1_800_000_000n;
     const positionData = makePosition(marketParams, {
       lastUpdate: now,
@@ -1022,10 +1022,6 @@ describe("MorphoBlue position validation", () => {
       }),
     );
     const firstFundingCap = firstAction.buildTx().action.args.maxRepayAssets;
-    // The BlueBundlesV1 token resolver only requests an approval when the current allowance is below
-    // the pull amount (it compares against `amount`, not `approvalAmount`, to avoid a redundant
-    // zero-reset on approve-once tokens). Start from a zero allowance so the saturated repay emits
-    // its reusable max approval, which by construction also covers any later, larger funding cap.
     mockRead(handle, {
       address: marketParams.loanToken,
       abi: erc20Abi,
@@ -1035,26 +1031,45 @@ describe("MorphoBlue position validation", () => {
     const requirements = await withChainTimestamp(now, () =>
       firstAction.getRequirements(),
     );
-    const laterTransaction = withChainTimestamp(now + 1n, () =>
-      entity
-        .repay({
-          userAddress,
-          positionData,
-          repayShares: maxUint256,
-          deadline: now + 7_201n,
-        })
-        .buildTx(),
+
+    expect(requirements[0]?.action).toMatchObject({
+      type: "erc20Approval",
+      args: { amount: firstFundingCap },
+    });
+  });
+
+  test("behavior: full repay with explicit approvalAmount keeps the reusable cap", async () => {
+    const now = 1_800_000_000n;
+    const positionData = makePosition(marketParams, {
+      lastUpdate: now,
+      rateAtTarget: 3_170_979_198n,
+    });
+    const handle = createMockClient(mainnet);
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+    const action = withChainTimestamp(now, () =>
+      entity.repay({
+        userAddress,
+        positionData,
+        repayShares: maxUint256,
+        deadline: now + 7_200n,
+      }),
+    );
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+
+    const requirements = await withChainTimestamp(now, () =>
+      action.getRequirements({ approvalAmount: maxUint256 }),
     );
 
     expect(requirements[0]?.action).toMatchObject({
       type: "erc20Approval",
       args: { amount: maxUint256 },
     });
-    expect(laterTransaction.action.args.maxRepayAssets).toBeGreaterThan(
-      firstFundingCap,
-    );
-    expect(laterTransaction.action.args.maxRepayAssets).toBeLessThan(
-      maxUint256,
-    );
   });
 });

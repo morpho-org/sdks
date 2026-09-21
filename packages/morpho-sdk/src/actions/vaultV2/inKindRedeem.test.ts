@@ -11,6 +11,7 @@ import {
 import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
+  BundlesPermitMismatchError,
   InputExceedsMaxError,
   NonPositiveInputError,
   type PermitRequirementSignature,
@@ -179,6 +180,103 @@ describe("vaultV2InKindRedeem", () => {
         "functionName": "vaultExitBundlesV1InKindRedemptionVaultV2",
       }
     `);
+  });
+
+  test("error: BundlesPermitMismatchError on deadline disagreement", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                deadline: permit.action.args.deadline + 1n,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
+
+  test("error: BundlesPermitMismatchError on amount disagreement", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                amount: permit.action.args.amount + 1n,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
+
+  test("error: BundlesPermitMismatchError for a permit with another owner", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            args: {
+              ...permit.args,
+              owner: blue,
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
+
+  test("error: BundlesPermitMismatchError for a permit with another spender", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                spender: blue,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
   });
 
   test("behavior: calldata round-trips across valid primitive inputs", () => {

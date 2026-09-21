@@ -58,6 +58,8 @@ Protocol terms used across this package's docs and JSDoc:
   `bundles.vaultBundlesV1`; its canonical ABI export is `vaultBundlesV1Abi`.
 - **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; BlueBundlesV1 funds and executes these calls as part of the direct write. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions. Its `vaultExitBundlesV1ForceWithdrawVaultV2` entry point additionally force-withdraws into the underlying asset, computing its own deallocations, bounding the realized exit share price with `minSharePriceE27`, and optionally routing a referral fee.
+  In-kind redemptions require an exact vault-share allowance or embedded permit for the computed
+  cap; any different allowance, including an oversized one, is replaced before the exit.
 
 ### Constants and conventions
 

@@ -7,7 +7,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { _try, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
@@ -36,6 +36,7 @@ import {
   computeVaultV2ForceWithdrawMinSharesBurnt,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
+  MAX_SLIPPAGE_TOLERANCE,
   resolveVaultV2ForceWithdrawEligibility,
   validateChainId,
   validateSlippageTolerance,
@@ -67,7 +68,6 @@ import {
   type Permit2SignatureTransferAction,
   type PermitAction,
   type RequirementSignature,
-  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
@@ -75,6 +75,8 @@ import {
   type VaultV2ForceWithdrawAction,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
@@ -337,6 +339,10 @@ export interface VaultV2Actions {
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
+   * In-kind exits require an exact vault-share allowance for the computed cap. An ERC-2612 permit
+   * is emitted only to raise an insufficient allowance; an oversized allowance is always reset
+   * with an onchain approval before the exit.
+   *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
    * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets;
@@ -366,7 +372,9 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612, has
+   *   the wrong asset, owner, or signature encoding, or names another spender, amount, or deadline
+   *   than the prepared cap.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -421,10 +429,13 @@ export interface VaultV2Actions {
    * adapter or none at all. Call `getRequirements()` before `buildTx()` so the vault-share allowance
    * and permit nonce are read on-chain.
    *
-   * Unless `minSharePriceE27` is overridden, the SDK derives a conservative lower bound on the
-   * realized exit share price from the snapshot and `slippageTolerance`. The bound rejects a share
-   * price drop, a penalty increase, and liquidity shifting from the penalty-free leg to the
-   * penalised leg. It does **not** cover the referral fee, which the contract deducts afterwards.
+   * The SDK derives a conservative lower bound on the realized exit share price from the snapshot
+   * and `slippageTolerance`. A supplied `minSharePriceE27` replaces the tolerance-derived bound
+   * (it may be tighter or looser) but must be at least the floor derived at
+   * `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection.
+   * The bound rejects a share price drop, a penalty increase, and liquidity shifting from the
+   * penalty-free leg to the penalised leg. It does **not** cover the referral fee, which the
+   * contract deducts afterwards.
    *
    * Vault gates are enforced by the final transaction and are not preflighted: the receive-assets
    * gate must allow VaultExitBundlesV1 and may depend on its transient initiator, while a
@@ -451,8 +462,10 @@ export interface VaultV2Actions {
    *   Deadlines more than one year after handle creation are rejected.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
-   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. Must be
-   *   positive: the contract reads `0` as "no bound", so it cannot be used to opt out.
+   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. It replaces
+   *   the tolerance-derived bound and may be tighter or looser, but must be at least the floor
+   *   derived at `MAX_SLIPPAGE_TOLERANCE`. When that floor rounds down to zero (dust exits) it is
+   *   clamped to `1`, so any positive override is accepted.
    * @param params.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
    *   `referralFeeRecipient`. Defaults to `0n`.
    * @param params.referralFeeRecipient - Optional referral fee recipient, required when
@@ -481,6 +494,8 @@ export interface VaultV2Actions {
    *   which would overrun the contract's unbounded loop.
    * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
    *   to zero, which the contract would read as no bound at all.
+   * @throws {VaultV2ForceWithdrawSharePriceBelowFloorError} when a supplied `minSharePriceE27`
+   *   is below the floor derived at `MAX_SLIPPAGE_TOLERANCE`.
    * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares are minted to a
    *   fee-recipient `userAddress` and reach the lower-bound share burn at the deadline.
    * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
@@ -1056,8 +1071,15 @@ export class MorphoVaultV2 implements VaultV2Actions {
             required: peak,
           });
         }
-        if (allowance >= requiredShareAllowance) return [];
-        if (this.client.options.supportSignature) {
+        // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
+        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`.
+        if (allowance === requiredShareAllowance) return [];
+        // A lowering permit can be skipped after its nonce is consumed, so oversized allowances
+        // must be reset with an onchain approval.
+        if (
+          allowance < requiredShareAllowance &&
+          this.client.options.supportSignature
+        ) {
           return [
             encodeVaultSharesPermit({
               vault: vaultData,
@@ -1081,8 +1103,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
         });
         return vaultV2InKindRedeem({
           vault: { chainId: this.chainId, address: this.vault },
@@ -1266,6 +1290,26 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
     const netSharesBurntNow = sharesBurntNow - feeSharesNow;
+    if (minSharePriceE27Override != null) {
+      // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
+      // may round to zero, in which case every positive override is acceptable.
+      const minAllowedSharePriceE27 =
+        _try(
+          () =>
+            computeMinForceWithdrawSharePrice({
+              withdrawnAssets: plan.withdrawnAssets,
+              sharesBurnt: netSharesBurntNow,
+              slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+            }),
+          VaultV2ForceWithdrawZeroSharePriceError,
+        ) ?? 1n;
+      if (minSharePriceE27Override < minAllowedSharePriceE27) {
+        throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          minSharePriceE27: minSharePriceE27Override,
+          floorE27: minAllowedSharePriceE27,
+        });
+      }
+    }
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
@@ -1277,17 +1321,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
     // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
     // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
-    //
-    // It still has to fit the ABI slot though. Defense-in-depth rather than a reachable input error:
-    // with `exitAssets` bounded above, the derived floor only exceeds `uint256` on a vault whose
-    // share price passed ~1e50 assets/share, which no fixture here can construct.
     validateUint256Field("minSharePriceE27", minSharePriceE27);
     // VaultExitBundlesV1's burn bound includes fee shares minted by the first withdrawal. Add the
     // projected fee shares to the price-floor ceiling so the approval covers that mint.
-    // Saturated at `maxUint256`: a tiny accepted floor scales this above the ABI slot, and the
-    // approval encoder clamps what it emits — so an uncapped requirement would sit permanently above
-    // any allowance the user can actually grant and `getRequirements()` would return the same
-    // approval forever. No account can hold or burn more shares than that anyway.
+    // Saturated at `maxUint256` as an ABI-slot guard for an otherwise valid extreme share burn.
     const requiredShareAllowance = MathLib.min(
       MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
         feeSharesProjected,
