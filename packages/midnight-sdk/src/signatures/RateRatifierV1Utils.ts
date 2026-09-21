@@ -130,8 +130,7 @@ export interface RateRatifierV1LeafStruct {
  * Fully materialized RateRatifierV1 tree descriptor.
  *
  * Use this shape when a caller needs leaf structs, leaf hashes, root, and
- * height without keeping a descriptor, for example before custom signing or
- * proof generation.
+ * height, for example before custom signing or proof generation.
  *
  * @example
  * ```ts
@@ -165,14 +164,14 @@ export interface RateRatifierV1TreeDescriptor {
  * @example
  * ```ts
  * import { RateRatifierV1Utils, type DecodedRateRatifierV1Data } from "@morpho-org/midnight-sdk";
- * import { zeroHash } from "viem";
+ * import { zeroAddress, zeroHash } from "viem";
  *
  * const data = RateRatifierV1Utils.encodeRatifierData({
  *   root: zeroHash,
  *   leafIndex: 0n,
  *   proof: [],
  *   rate: 0n,
- *   allowedTaker: zeroHash,
+ *   allowedTaker: zeroAddress,
  * });
  * const decoded: DecodedRateRatifierV1Data =
  *   RateRatifierV1Utils.decodeRatifierData(data);
@@ -272,8 +271,9 @@ export namespace RateRatifierV1Utils {
    * Builds a RateRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. Every offer's `group` is normalized the same way
-   * `TreeUtils.buildDescriptor` normalizes standalone offers.
+   * highest leaf indices. An explicit `group` is committed as-is; only an
+   * omitted `group` defaults to the offer's content-addressed singleton group
+   * id derived by `Offer.from`.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
@@ -316,7 +316,7 @@ export namespace RateRatifierV1Utils {
         allowedTaker: zeroAddress,
       },
       hashLeaf,
-      ratifierOf: (entry) => entry.offer.ratifier,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
       label: "RateRatifierV1",
     });
 
@@ -335,7 +335,9 @@ export namespace RateRatifierV1Utils {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
-   * @throws {InvalidTreeError} when leaf index is out of range.
+   * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -355,6 +357,8 @@ export namespace RateRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "RateRatifierV1",
     });
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
@@ -509,7 +513,9 @@ export namespace RateRatifierV1Utils {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded RateRatifierV1 data.
-   * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -529,6 +535,8 @@ export namespace RateRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "RateRatifierV1",
     });
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
@@ -553,6 +561,8 @@ export namespace RateRatifierV1Utils {
    * @param params.tree - RateRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
+   * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -570,6 +580,8 @@ export namespace RateRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "RateRatifierV1",
     });
 
     return tree.offers.map((offer, leafIndex) => {

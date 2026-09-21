@@ -1,4 +1,5 @@
 import { type Address, type Hash, isAddressEqual, zeroAddress } from "viem";
+import { MAX_TREE_HEIGHT } from "../constants.js";
 import {
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -11,14 +12,7 @@ import {
   OfferUtils,
 } from "../offers/index.js";
 import { TreeUtils } from "./TreeUtils.js";
-
-function isPowerOfTwo(value: number): boolean {
-  return value > 0 && (value & (value - 1)) === 0;
-}
-
-function nextPowerOfTwo(value: number): number {
-  return 2 ** Math.ceil(Math.log2(value));
-}
+import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 
 /** @internal Padded V1 ratifier leaf descriptor shared by the V1 ratifier utils. */
 export interface RatifierV1Descriptor<TStruct> {
@@ -62,25 +56,27 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
     }
   }
 
+  const entryHashes = entries.map(hashLeaf);
   const seen = new Set<Hash>();
-  for (const entry of entries) {
-    const leafHash = hashLeaf(entry);
+  for (const leafHash of entryHashes) {
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate leaf hash "${leafHash}" in tree.`);
     }
     seen.add(leafHash);
   }
 
-  const paddedEntries = isPowerOfTwo(entries.length)
-    ? [...entries]
-    : [
-        ...entries,
-        ...Array.from(
-          { length: nextPowerOfTwo(entries.length) - entries.length },
-          () => padding,
-        ),
-      ];
-  const leaves = paddedEntries.map(hashLeaf);
+  const paddingCount = isPowerOfTwo(entries.length)
+    ? 0
+    : nextPowerOfTwo(entries.length) - entries.length;
+  const paddedEntries = [
+    ...entries,
+    ...Array.from({ length: paddingCount }, () => padding),
+  ];
+  const paddingHash = paddingCount === 0 ? undefined : hashLeaf(padding);
+  const leaves = [
+    ...entryHashes,
+    ...Array.from({ length: paddingCount }, () => paddingHash!),
+  ];
   const { root, height } = TreeUtils.buildRootFromLeaves(leaves);
 
   return { entries: paddedEntries, leaves, root, height };
@@ -105,18 +101,24 @@ export function resolveRatifierV1Tree<
     readonly buildDescriptor: (leaves: readonly TLeaf[]) => TDescriptor;
     readonly hashLeaf: (entry: TStruct) => Hash;
     readonly isPadding: (entry: TStruct) => boolean;
+    readonly ratifierOf: (entry: TStruct) => Address;
+    readonly label: string;
   },
 ): TDescriptor {
-  const { buildDescriptor, hashLeaf, isPadding } = helpers;
+  const { buildDescriptor, hashLeaf, isPadding, ratifierOf, label } = helpers;
   if (Array.isArray(tree)) return buildDescriptor(tree as readonly TLeaf[]);
 
   const descriptor = tree as TDescriptor;
   if (
     !Number.isInteger(descriptor.height) ||
     descriptor.height < 0 ||
-    descriptor.height > 20
+    descriptor.height > MAX_TREE_HEIGHT
   ) {
     throw new InvalidTreeHeightError(descriptor.height);
+  }
+
+  if (descriptor.offers.length === 0) {
+    throw new InvalidTreeError("Tree must not be empty.");
   }
 
   const expectedLength = 2 ** descriptor.height;
@@ -128,6 +130,17 @@ export function resolveRatifierV1Tree<
     throw new InvalidTreeError(
       "Tree entries, leaves, offers, and height describe different trees.",
     );
+  }
+
+  const visibleEntries = descriptor.entries.slice(0, descriptor.offers.length);
+  const ratifier = ratifierOf(visibleEntries[0]!);
+  for (const entry of visibleEntries.slice(1)) {
+    const other = ratifierOf(entry);
+    if (!isAddressEqual(other, ratifier)) {
+      throw new InvalidTreeError(
+        `All offers in a ${label} tree must use one ratifier; expected "${ratifier}", got "${other}". Build separate trees per ratifier.`,
+      );
+    }
   }
 
   const computedLeaves = descriptor.entries.map((entry) => hashLeaf(entry));

@@ -15,6 +15,7 @@ import type {
   MidnightApiFetch,
   MidnightApiRequestOptions,
 } from "../api/types.js";
+import { MAX_TREE_HEIGHT } from "../constants.js";
 import {
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -39,14 +40,7 @@ import {
 import { Payload } from "./Payload.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import type { Tree } from "./Tree.js";
-
-function isPowerOfTwo(value: number): boolean {
-  return value > 0 && (value & (value - 1)) === 0;
-}
-
-function nextPowerOfTwo(value: number): number {
-  return 2 ** Math.ceil(Math.log2(value));
-}
+import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   if (isPowerOfTwo(offers.length)) return [...offers];
@@ -104,7 +98,7 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
     );
   }
   const height = Math.log2(leaves.length);
-  if (height > 20) throw new InvalidTreeHeightError(height);
+  if (height > MAX_TREE_HEIGHT) throw new InvalidTreeHeightError(height);
 
   return height;
 }

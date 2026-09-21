@@ -39,11 +39,7 @@ export {
   /** @deprecated Use InvalidMidnightPositionLossFactorError or the raw protocol subpath. */
   InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
-  /** @deprecated Use InvalidMidnightRateRatifierV1RateError or the raw protocol subpath. */
-  InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
-  /** @deprecated Use InvalidMidnightRateRatifierV1TimeError or the raw protocol subpath. */
-  InvalidRateRatifierV1TimeError,
   InvalidTickSpacingError as InvalidMidnightTickSpacingError,
   InvalidTreeError as InvalidMidnightTreeError,
   InvalidTreeHeightError as InvalidMidnightTreeHeightError,
@@ -55,8 +51,6 @@ export {
   /** @deprecated Use MidnightPriceGreaterThanOneError or the raw protocol subpath. */
   PriceGreaterThanOneError,
   RatifierV1TakerNotAllowedError as MidnightRatifierV1TakerNotAllowedError,
-  /** @deprecated Use MidnightRatifierV1TakerNotAllowedError or the raw protocol subpath. */
-  RatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError as MidnightSettlementFeeExceedsPriceError,
   TickOutOfRangeError as MidnightTickOutOfRangeError,
   UnknownCollateralIndexError as UnknownMidnightCollateralIndexError,
