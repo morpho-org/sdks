@@ -321,7 +321,8 @@ export function mapBoundTakeableOffers(
     }
     if (
       take.offer.buy &&
-      !isAddressEqual(take.offer.receiverIfMakerIsSeller, zeroAddress)
+      (!isAddress(take.offer.receiverIfMakerIsSeller) ||
+        !isAddressEqual(take.offer.receiverIfMakerIsSeller, zeroAddress))
     ) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API buy takeable offer receiverIfMakerIsSeller "${take.offer.receiverIfMakerIsSeller}" must be the zero address.`,
