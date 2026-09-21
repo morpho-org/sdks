@@ -153,7 +153,7 @@ export class MidnightApi {
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds`, `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filters.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -187,7 +187,13 @@ export class MidnightApi {
 
     return {
       cursor: response.cursor,
-      data: mapBoundBooks(response.data, input.marketIds),
+      data: mapBoundBooks(response.data, {
+        marketIds: input.marketIds,
+        chainIds: input.chainIds,
+        loanTokens: input.loanTokens,
+        collateralTokens: input.collateralTokens,
+        maturities: input.maturities,
+      }),
     };
   }
 
@@ -674,7 +680,7 @@ export class MidnightApi {
    * @param params.cursor - Optional opaque pagination cursor from a previous response.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds`, `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filters.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";

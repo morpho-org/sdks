@@ -706,6 +706,53 @@ describe("MidnightApi.fetchBooks", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
+  test("error: InvalidMidnightApiResponseError for a book outside the chainIds filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ chainIds: [1], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the loanTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [coherentForeignApiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ loanTokens: [LOAN_TOKEN], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the collateralTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ collateralTokens: [SECOND_LOAN_TOKEN], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the maturities filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({
+        maturities: [apiBook.maturity + 1],
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: InvalidMidnightApiResponseError for a book whose market_id does not match its params", async () => {
     // SDKS-60: foreign market params relabeled with an allowed id must not pass
     // the filter check on the label alone.
