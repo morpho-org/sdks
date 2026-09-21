@@ -1,6 +1,8 @@
 import {
   blueMarketParamsAbi,
   midnightEcrecoverRatifierAbi,
+  midnightPriceRatifierV1Abi,
+  midnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
 import { addresses } from "@morpho-org/morpho-sdk/addresses";
 import { marketParamsAbi as rawBlueMarketParamsAbi } from "@morpho-org/morpho-sdk/blue/abis";
@@ -54,6 +56,9 @@ import {
   BLUE_LIQUIDATION_CURSOR,
   ERC20_ALLOWANCE_RECIPIENTS,
   MIDNIGHT_CBP,
+  MIDNIGHT_MAX_TREE_HEIGHT,
+  MIDNIGHT_PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+  MIDNIGHT_RATE_RATIFIER_V1_OFFER_TYPEHASH,
 } from "@morpho-org/morpho-sdk/constants";
 import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
@@ -63,9 +68,13 @@ import {
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
   InvalidNumberError,
+  InvalidMidnightRateRatifierV1RateError,
+  InvalidMidnightRateRatifierV1TimeError,
+  InvalidMidnightRatifierV1AddressError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isBlueUnknownOfFactoryError,
+  MidnightRatifierV1TakerNotAllowedError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   UnknownBlueDataError,
@@ -83,16 +92,36 @@ import {
   fetchBluePosition,
   fetchMidnightPosition,
 } from "@morpho-org/morpho-sdk/fetch";
-import { ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi } from "@morpho-org/morpho-sdk/midnight/abis";
-import { CBP as rawMidnightCbp } from "@morpho-org/morpho-sdk/midnight/constants";
+import {
+  ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi,
+  priceRatifierV1Abi as rawMidnightPriceRatifierV1Abi,
+  rateRatifierV1Abi as rawMidnightRateRatifierV1Abi,
+} from "@morpho-org/morpho-sdk/midnight/abis";
+import {
+  CBP as rawMidnightCbp,
+  MAX_TREE_HEIGHT as rawMidnightMaxTreeHeight,
+  PRICE_RATIFIER_V1_OFFER_TYPEHASH as rawMidnightPriceRatifierV1OfferTypehash,
+  RATE_RATIFIER_V1_OFFER_TYPEHASH as rawMidnightRateRatifierV1OfferTypehash,
+} from "@morpho-org/morpho-sdk/midnight/constants";
 import { Market as RawMidnightMarket } from "@morpho-org/morpho-sdk/midnight/entities";
-import { InvalidOfferGroupError as RawMidnightInvalidOfferGroupError } from "@morpho-org/morpho-sdk/midnight/errors";
+import {
+  InvalidOfferGroupError as RawMidnightInvalidOfferGroupError,
+  InvalidRateRatifierV1RateError as RawMidnightInvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TimeError as RawMidnightInvalidRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError as RawMidnightInvalidRatifierV1AddressError,
+  RatifierV1TakerNotAllowedError as RawMidnightRatifierV1TakerNotAllowedError,
+} from "@morpho-org/morpho-sdk/midnight/errors";
 import { fetchPosition as rawFetchMidnightPosition } from "@morpho-org/morpho-sdk/midnight/fetch";
 import type {
   DeploylessFetchParameters as RawMidnightDeploylessFetchParameters,
+  RateRatifierV1Leaf as RawMidnightRateRatifierV1Leaf,
   RatifierInfo as RawMidnightRatifierInfo,
 } from "@morpho-org/morpho-sdk/midnight/types";
-import { MarketUtils as RawMidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
+import {
+  MarketUtils as RawMidnightMarketUtils,
+  PriceRatifierV1Utils as RawMidnightPriceRatifierV1Utils,
+  RateRatifierV1Utils as RawMidnightRateRatifierV1Utils,
+} from "@morpho-org/morpho-sdk/midnight/utils";
 import type {
   BlueAuthorizationTypedDataArgs,
   BlueDeploylessFetchParameters,
@@ -101,6 +130,7 @@ import type {
   BlueMarketId,
   BlueMetaMorphoCall,
   MidnightDeploylessFetchParameters,
+  MidnightRateRatifierV1Leaf,
   MidnightRatifierInfo,
   Permit2PermitArgs,
   Permit2TransferFromArgs,
@@ -113,6 +143,8 @@ import {
   getBlueDefaultPreLiquidationParams,
   getPermit2PermitTypedData,
   MidnightMarketUtils,
+  MidnightPriceRatifierV1Utils,
+  MidnightRateRatifierV1Utils,
 } from "@morpho-org/morpho-sdk/utils";
 import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
@@ -170,11 +202,40 @@ describe("protocol facades", () => {
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
+    [midnightPriceRatifierV1Abi, rawMidnightPriceRatifierV1Abi],
+    [midnightRateRatifierV1Abi, rawMidnightRateRatifierV1Abi],
     [MIDNIGHT_CBP, rawMidnightCbp],
+    [MIDNIGHT_MAX_TREE_HEIGHT, rawMidnightMaxTreeHeight],
+    [
+      MIDNIGHT_PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+      rawMidnightPriceRatifierV1OfferTypehash,
+    ],
+    [
+      MIDNIGHT_RATE_RATIFIER_V1_OFFER_TYPEHASH,
+      rawMidnightRateRatifierV1OfferTypehash,
+    ],
     [MidnightMarket, RawMidnightMarket],
     [InvalidMidnightOfferGroupError, RawMidnightInvalidOfferGroupError],
+    [
+      InvalidMidnightRateRatifierV1RateError,
+      RawMidnightInvalidRateRatifierV1RateError,
+    ],
+    [
+      InvalidMidnightRateRatifierV1TimeError,
+      RawMidnightInvalidRateRatifierV1TimeError,
+    ],
+    [
+      InvalidMidnightRatifierV1AddressError,
+      RawMidnightInvalidRatifierV1AddressError,
+    ],
+    [
+      MidnightRatifierV1TakerNotAllowedError,
+      RawMidnightRatifierV1TakerNotAllowedError,
+    ],
     [fetchMidnightPosition, rawFetchMidnightPosition],
     [MidnightMarketUtils, RawMidnightMarketUtils],
+    [MidnightPriceRatifierV1Utils, RawMidnightPriceRatifierV1Utils],
+    [MidnightRateRatifierV1Utils, RawMidnightRateRatifierV1Utils],
   ])("preserves runtime identity", (facade, raw) => {
     expect(facade).toBe(raw);
   });
@@ -182,6 +243,10 @@ describe("protocol facades", () => {
   test("preserves type identities", () => {
     const blue: Equal<BlueMarketId, RawBlueMarketId> = true;
     const midnight: Equal<MidnightRatifierInfo, RawMidnightRatifierInfo> = true;
+    const midnightRateLeaf: Equal<
+      MidnightRateRatifierV1Leaf,
+      RawMidnightRateRatifierV1Leaf
+    > = true;
     const blueFetch: Equal<BlueFetchParameters, RawBlueFetchParameters> = true;
     const blueDeployless: Equal<
       BlueDeploylessFetchParameters,
@@ -211,6 +276,7 @@ describe("protocol facades", () => {
     expect({
       blue,
       midnight,
+      midnightRateLeaf,
       blueFetch,
       blueDeployless,
       midnightDeployless,
@@ -223,6 +289,7 @@ describe("protocol facades", () => {
     }).toEqual({
       blue: true,
       midnight: true,
+      midnightRateLeaf: true,
       blueFetch: true,
       blueDeployless: true,
       midnightDeployless: true,
