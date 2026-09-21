@@ -300,15 +300,16 @@ export function mapBoundTakeableOffers(
   context: TakeableOfferContext,
 ): MidnightApiTake[] {
   const mapped = takeableOffers.map((takeableOffer) => {
-    const take = mapTakeableOffer(takeableOffer);
+    let take: MidnightApiTake;
     let matchesAdvertisedId: boolean;
     let embeddedMarketId: Hash;
     try {
+      take = mapTakeableOffer(takeableOffer);
       embeddedMarketId = MarketUtils.toId(take.offer.market);
       matchesAdvertisedId = isHexEqual(embeddedMarketId, take.marketId);
     } catch (cause) {
       throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer market_id "${take.marketId}" could not be validated against its embedded offer market.`,
+        `Midnight API takeable offer market_id "${takeableOffer.market_id}" could not be mapped or validated against its embedded offer market.`,
         { cause },
       );
     }

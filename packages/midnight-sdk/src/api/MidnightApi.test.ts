@@ -1293,6 +1293,19 @@ describe("MidnightApi.fetchBookQuote", () => {
     },
   );
 
+  test("error: InvalidMidnightApiResponseError for takeable offer with non-numeric units", async () => {
+    const { fetch } = createQuoteFetch([{ ...apiTakeableOffer, units: "abc" }]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: InvalidMidnightApiResponseError for takeable offer with non-hex market_id", async () => {
     const { fetch } = createQuoteFetch([
       { ...apiTakeableOffer, market_id: 12345 as unknown as Hex },
