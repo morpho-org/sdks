@@ -47,6 +47,30 @@ describe("SetterRatifierUtils.ratify", () => {
     ).toBe(true);
   });
 
+  test("behavior: ratifies a padded multi-offer tree", () => {
+    const tree = Tree.create(
+      [1n, 2n, 3n].map((maxUnits) =>
+        baseOffer({ maxAssets: 0n, ratifier: setterRatifier, maxUnits }),
+      ),
+    );
+
+    const items = SetterRatifierUtils.ratify({ tree });
+
+    expect(items).toHaveLength(3);
+    for (const [index, item] of items.entries()) {
+      const decoded = SetterRatifierUtils.decodeRatifierData(item.ratifierData);
+      expect(decoded.leafIndex).toBe(BigInt(index));
+      expect(
+        TreeUtils.verifyProof({
+          offer: item.offer,
+          root: decoded.root,
+          leafIndex: decoded.leafIndex,
+          proof: decoded.proof,
+        }),
+      ).toBe(true);
+    }
+  });
+
   test("behavior: accepts plain tree input", () => {
     const offer = baseOffer({
       maxAssets: 0n,

@@ -935,17 +935,16 @@ export namespace TreeUtils {
     assertProvableLeaves(params.tree.leaves);
 
     const layers = buildLayers(params.tree.leaves);
+    const siblingLayers = layers.slice(0, -1);
 
     return deepFreeze(
-      Array.from({ length: count }, (_, index) =>
-        deepFreeze({
-          root: params.tree.root,
-          leafIndex: BigInt(index),
-          proof: layers
-            .slice(0, -1)
-            .map((level, layerIndex) => level[(index >> layerIndex) ^ 1]!),
-        }),
-      ),
+      Array.from({ length: count }, (_, index) => ({
+        root: params.tree.root,
+        leafIndex: BigInt(index),
+        proof: siblingLayers.map(
+          (level, layerIndex) => level[(index >> layerIndex) ^ 1]!,
+        ),
+      })),
     );
   }
 
