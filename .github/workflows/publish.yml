@@ -340,7 +340,12 @@ jobs:
             version="${received_version[$name]}"
             tgz="${received_tarball[$name]}"
 
+            # Same transport pins as `npm publish` below, so a config-level
+            # proxy cannot answer the probe and turn a real publish into a skip.
             if npm view "${name}@${version}" version \
+              --proxy false \
+              --https-proxy null \
+              --strict-ssl true \
               --registry https://registry.npmjs.org >/dev/null 2>&1; then
               echo "Already on registry: ${name}@${version} — skipping."
               continue
