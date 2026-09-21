@@ -754,6 +754,28 @@ describe("MidnightApi.fetchBook", () => {
     expect(call.init?.method).toBe("GET");
   });
 
+  test("behavior: sorts book price levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: {
+        ...apiBook,
+        asks: [4000, 2000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+        bids: [2000, 4000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+      },
+    });
+
+    const result = await MidnightApi.fetchBook({
+      marketId: MARKET_ID,
+      fetch,
+    });
+
+    expect(result.data.asks.map((level) => level.tick)).toEqual([
+      2000, 3000, 4000,
+    ]);
+    expect(result.data.bids.map((level) => level.tick)).toEqual([
+      4000, 3000, 2000,
+    ]);
+  });
+
   test("error: InvalidMidnightApiResponseError when the API returns a coherent foreign market", async () => {
     // SDKS-60: a hostile/compromised API must not substitute a coherent foreign
     // market for the requested id and have it flow downstream unbound. The book's
@@ -828,6 +850,34 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks`);
     expect(url.searchParams.get("depth")).toBe("50");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: sorts ask levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: [4000, 2000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+    });
+
+    const result = await MidnightApi.fetchBookPriceLevels({
+      marketId: MARKET_ID,
+      side: "asks",
+      fetch,
+    });
+
+    expect(result.data.map((level) => level.tick)).toEqual([2000, 3000, 4000]);
+  });
+
+  test("behavior: sorts bid levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: [2000, 4000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+    });
+
+    const result = await MidnightApi.fetchBookPriceLevels({
+      marketId: MARKET_ID,
+      side: "bids",
+      fetch,
+    });
+
+    expect(result.data.map((level) => level.tick)).toEqual([4000, 3000, 2000]);
   });
 });
 
