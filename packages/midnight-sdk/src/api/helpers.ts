@@ -7,12 +7,13 @@ import {
   maxUint256,
   zeroAddress,
 } from "viem";
-import { MAX_OFFER_CAP } from "../constants.js";
 import {
   InvalidMidnightApiResponseError,
+  InvalidOfferParameterError,
   MidnightApiError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
+import { OfferUtils } from "../offers/index.js";
 import {
   type ApiBookMarketResponse,
   type ApiCollateralResponse,
@@ -301,22 +302,28 @@ export function mapBoundTakeableOffers(
 ): MidnightApiTake[] {
   const mapped = takeableOffers.map((takeableOffer) => {
     const take = mapTakeableOffer(takeableOffer);
-    const embeddedMarketId = MarketUtils.toId(take.offer.market);
+    let embeddedMarketId: Hash;
+    try {
+      embeddedMarketId = MarketUtils.toId(take.offer.market);
+    } catch (cause) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer market_id "${take.marketId}" could not be validated against its embedded offer market.`,
+        { cause },
+      );
+    }
     if (!isHexEqual(embeddedMarketId, take.marketId)) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
       );
     }
     const { maxUnits, maxAssets } = take.offer;
-    if (
-      maxUnits < 0n ||
-      maxUnits > MAX_OFFER_CAP ||
-      maxAssets < 0n ||
-      maxAssets > MAX_OFFER_CAP ||
-      (maxAssets === 0n) === (maxUnits === 0n)
-    ) {
+    try {
+      OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
+    } catch (cause) {
+      if (!(cause instanceof InvalidOfferParameterError)) throw cause;
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer caps "maxUnits=${maxUnits}, maxAssets=${maxAssets}" must set exactly one non-zero uint128 cap.`,
+        { cause },
       );
     }
     if (

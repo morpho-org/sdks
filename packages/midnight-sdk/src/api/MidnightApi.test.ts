@@ -7,7 +7,7 @@ import {
   MathLib,
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
-import { type Hex, maxUint256 } from "viem";
+import { type Address, type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
@@ -1224,6 +1224,7 @@ describe("MidnightApi.fetchBookQuote", () => {
   test.each([
     ["both caps zero", { max_units: "0", max_assets: "0" }],
     ["both caps non-zero", { max_units: "1", max_assets: "1" }],
+    ["negative cap", { max_units: "-1", max_assets: "0" }],
     [
       "cap above uint128",
       { max_units: (MAX_OFFER_CAP + 1n).toString(), max_assets: "0" },
@@ -1246,26 +1247,32 @@ describe("MidnightApi.fetchBookQuote", () => {
     },
   );
 
-  test("error: InvalidMidnightApiResponseError for buy takeable offer with non-zero receiverIfMakerIsSeller", async () => {
-    const { fetch } = createQuoteFetch([
-      {
-        ...apiBidTakeableOffer,
-        offer: {
-          ...apiBidTakeableOffer.offer,
-          receiver_if_maker_is_seller: MAKER,
+  test.each([
+    ["non-zero", MAKER],
+    ["malformed", "invalid"],
+  ])(
+    "error: InvalidMidnightApiResponseError for buy takeable offer with %s receiverIfMakerIsSeller",
+    async (_, receiver) => {
+      const { fetch } = createQuoteFetch([
+        {
+          ...apiBidTakeableOffer,
+          offer: {
+            ...apiBidTakeableOffer.offer,
+            receiver_if_maker_is_seller: receiver as Address,
+          },
         },
-      },
-    ]);
+      ]);
 
-    await expect(
-      MidnightApi.fetchBookQuote({
-        marketId: MARKET_ID,
-        side: "bids",
-        units: MathLib.WAD,
-        fetch,
-      }),
-    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
-  });
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "bids",
+          units: MathLib.WAD,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
 
   test("error: SettlementFeeExceedsPriceError", async () => {
     const price = TickLib.tickToPrice(apiBidTakeableOffer.offer.tick);
