@@ -297,6 +297,15 @@ export namespace PriceRatifierV1Utils {
     });
   }
 
+  const treeHelpers = {
+    buildDescriptor,
+    hashLeaf,
+    isPadding: isPaddingEntry,
+    ratifierOf: (leafStruct: PriceRatifierV1LeafStruct) =>
+      leafStruct.offer.ratifier,
+    label: "PriceRatifierV1",
+  } as const;
+
   /**
    * Builds a Merkle proof for one PriceRatifierV1 leaf.
    *
@@ -320,13 +329,7 @@ export namespace PriceRatifierV1Utils {
     readonly tree: PriceRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): TreeProof {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "PriceRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
   }
@@ -484,13 +487,7 @@ export namespace PriceRatifierV1Utils {
     readonly tree: PriceRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): Hex {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "PriceRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
 
@@ -527,13 +524,7 @@ export namespace PriceRatifierV1Utils {
   export function ratify(params: {
     readonly tree: PriceRatifierV1TreeInput;
   }): readonly Payload.Item[] {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "PriceRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
 
     return tree.offers.map((offer, leafIndex) => {
       const entry = tree.entries[leafIndex]!;
