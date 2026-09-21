@@ -2,7 +2,7 @@ import type { Address } from "viem";
 import { ORACLE_PRICE_SCALE } from "../constants.js";
 import { type IMarket, Market } from "../market/index.js";
 import { MathLib, SharesMath } from "../math/index.js";
-import type { BigIntish } from "../types.js";
+import type { BigIntish, MarketId } from "../types.js";
 import { AccrualPosition, type IAccrualPosition } from "./Position.js";
 
 /** Plain input shape for PreLiquidation contract parameters. */
@@ -81,6 +81,11 @@ export class PreLiquidationPosition
 
   protected readonly _baseMarket: Market;
 
+  /**
+   * Id of the base market on which this position is held (not the synthetic pre-liquidation market).
+   */
+  public override readonly marketId: MarketId;
+
   constructor(
     {
       preLiquidationParams,
@@ -109,6 +114,7 @@ export class PreLiquidationPosition
       this.preLiquidationOraclePrice = BigInt(preLiquidationOraclePrice);
 
     this._baseMarket = new Market(market);
+    this.marketId = this._baseMarket.id;
   }
 
   get market() {

@@ -6,6 +6,7 @@ import { ChainId } from "../chain.js";
 import { ORACLE_PRICE_SCALE } from "../constants.js";
 import { Market } from "../market/Market.js";
 import { MarketParams } from "../market/MarketParams.js";
+import { MarketUtils } from "../market/MarketUtils.js";
 import { MathLib } from "../math/MathLib.js";
 import { CapacityLimitReason } from "../utils.js";
 import {
@@ -135,11 +136,17 @@ describe("PreLiquidationParams", () => {
 describe("PreLiquidationPosition", () => {
   test("constructor preserves pre-liquidation metadata and exposes the base market", () => {
     const position = preLiquidationPosition();
+    const syntheticMarketId = MarketUtils.getMarketId({
+      ...market().params,
+      lltv: preLiquidationParams.preLltv,
+    });
 
     expect(position.preLiquidationParams).toStrictEqual(preLiquidationParams);
     expect(position.preLiquidation).toBe(RECIPIENT);
     expect(position.preLiquidationOraclePrice).toBe(market().price);
     expect(position.market.params.lltv).toBe(market().params.lltv);
+    expect(position.marketId).toBe(position.market.id);
+    expect(position.marketId).not.toBe(syntheticMarketId);
   });
 
   test("price-dependent states are undefined when the pre-liquidation oracle price is missing", () => {
@@ -235,5 +242,6 @@ describe("PreLiquidationPosition", () => {
       position.preLiquidationOraclePrice,
     );
     expect(accrued.market.lastUpdate).toBe(200n);
+    expect(accrued.marketId).toBe(position.marketId);
   });
 });
