@@ -1228,11 +1228,16 @@ export namespace EcrecoverRatifierUtils {
       );
     }
 
+    const proofs = TreeUtils.buildProofs({
+      tree,
+      count: tree.offers.length,
+    });
+
     return tree.offers.map((offer, leafIndex) => ({
       offer,
       ratifierData: encodeRatifierData({
         signature,
-        ...TreeUtils.buildProof({ tree, leafIndex }),
+        ...proofs[leafIndex]!,
       }),
     }));
   }
