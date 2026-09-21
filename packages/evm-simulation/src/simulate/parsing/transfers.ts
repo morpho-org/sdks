@@ -94,7 +94,16 @@ export function parseTransfers(
 ): Transfer[] {
   const transfers: Transfer[] = [];
   const { logger, wNative } = options;
-  const normalizedCalls = calls.map((call) => call.logs.map(normalizeLogHex));
+  // Lowercase `topics`/`data` so signature dispatch and pair matching are case-insensitive.
+  const normalizedCalls = calls.map((call) =>
+    call.logs.map(
+      (log): RawLog => ({
+        ...log,
+        topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
+        data: log.data.toLowerCase() as Hex,
+      }),
+    ),
+  );
   const wnativeShapedTokens = collectWnativeShapedTokens(normalizedCalls);
   const acceptsWnativeEvent = (address: Address): boolean =>
     wNative === undefined ||
@@ -235,15 +244,6 @@ export function parseTransfers(
   }
 
   return sortTransfers(transfers);
-}
-
-/** Lowercase `topics` and `data` so signature dispatch and pair matching are case-insensitive. */
-function normalizeLogHex(log: RawLog): RawLog {
-  return {
-    ...log,
-    topics: log.topics.map((topic) => topic.toLowerCase() as Hex),
-    data: log.data.toLowerCase() as Hex,
-  };
 }
 
 function isTopicHex(value: Hex | undefined): value is Hex {
