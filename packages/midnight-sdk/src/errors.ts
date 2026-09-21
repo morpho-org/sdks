@@ -363,6 +363,31 @@ export class InvalidRateRatifierV1TimeError extends Error {
 }
 
 /**
+ * Thrown when a V1 ratifier address is the zero address.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRatifierV1AddressError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRatifierV1AddressError(
+ *   "0x0000000000000000000000000000000000000000",
+ * );
+ * ```
+ */
+export class InvalidRatifierV1AddressError extends Error {
+  /** Zero ratifier address that was rejected. */
+  public readonly ratifier: Address;
+
+  public constructor(ratifier: Address) {
+    super(
+      `Ratifier address "${ratifier}" is the zero address. Use a deployed PriceRatifierV1 or RateRatifierV1 address.`,
+    );
+    this.name = "InvalidRatifierV1AddressError";
+    this.ratifier = ratifier;
+  }
+}
+
+/**
  * Thrown when a taker is not the allowed taker of a V1 ratifier leaf.
  *
  * @example
