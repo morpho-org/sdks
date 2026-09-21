@@ -1240,4 +1240,82 @@ describe("registerCustomAddresses", () => {
 
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
+
+  test("behavior: leaves addresses unchanged when a deployment patch in the same call is rejected", () => {
+    const chainId = 31_337_300;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: {
+            ...chainDeployments,
+            midnight: chainDeployments.midnight + 1n,
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
+    );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+  });
+
+  test("behavior: leaves addresses and deployments unchanged when an unwrappedTokens patch in the same call is rejected", () => {
+    const chainId = 31_337_301;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+    const wrappedToken = randomAddress();
+    const unwrappedToken = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+      unwrappedTokens: {
+        [chainId]: { [wrappedToken]: unwrappedToken },
+      },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: { ...chainDeployments, wNative: 1n },
+        },
+        unwrappedTokens: {
+          [chainId]: { [wrappedToken]: randomAddress() },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
+    );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.wNative).toBeUndefined();
+    expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
+  });
 });
