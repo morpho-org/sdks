@@ -78,34 +78,19 @@ const assetChangeSchema = z
   })
   .passthrough();
 
-const simResultFields = {
-  logs: z.array(logSchema).optional(),
-  trace: z.array(traceFrameSchema).optional(),
-  assetChanges: z.array(assetChangeSchema).optional(),
-  error: z.string().optional(),
-  errorMessage: z.string().optional(),
-};
-
-// A reverted result only needs `status: false` to be classified as a
-// `SimulationRevertedError`; requiring success-only fields there would turn a
-// revert into a schema failure and make it eligible for backend fallback.
-const simResultSchema = z.discriminatedUnion("status", [
-  z
-    .object({ status: z.literal(true), gasUsed: hexSchema, ...simResultFields })
-    .passthrough(),
-  z
-    .object({
-      status: z.literal(false),
-      gasUsed: hexSchema.optional(),
-      ...simResultFields,
-    })
-    .passthrough(),
-]);
+const simResultSchema = z
+  .object({
+    status: z.boolean(),
+    gasUsed: hexSchema,
+    logs: z.array(logSchema).optional(),
+    trace: z.array(traceFrameSchema).optional(),
+    assetChanges: z.array(assetChangeSchema).optional(),
+    error: z.string().optional(),
+    errorMessage: z.string().optional(),
+  })
+  .passthrough();
 
 type SimResult = z.infer<typeof simResultSchema>;
-
-/** JSON-RPC error code for an EVM execution revert (EIP-1474 / geth). */
-const EXECUTION_REVERTED_CODE = 3;
 
 const rpcErrorSchema = z
   .object({
@@ -219,12 +204,9 @@ async function rpcRequest(params: {
 
 function unwrapResult<T>(envelope: {
   result?: T;
-  error?: { code?: number; message: string; data?: unknown };
+  error?: { message: string };
 }): T {
   if (envelope.error) {
-    // A node-level "execution reverted" is a property of the bundle, not the backend.
-    if (envelope.error.code === EXECUTION_REVERTED_CODE)
-      throw new SimulationRevertedError(envelope.error.message, envelope.error);
     throw new ExternalServiceError(
       `Tenderly RPC error: ${envelope.error.message}`,
     );
@@ -263,7 +245,7 @@ function encodeBlock(blockNumber?: bigint | BlockTag): string {
 }
 
 function toRawCall(data: SimResult): RawCall {
-  if (!data.status) {
+  if (data.status !== true) {
     // Tenderly RPC surfaces the revert reason on the trace frame; the
     // top-level fields are checked as a defensive fallback.
     const traceError = data.trace?.find((f) => f.errorReason || f.error);
