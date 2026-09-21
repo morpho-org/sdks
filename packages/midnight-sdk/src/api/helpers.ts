@@ -241,11 +241,12 @@ export function mapBoundBooks(
         `Midnight API book market_id "${market.marketId}" is outside the requested loan_tokens filter.`,
       );
     }
+    const { collateralTokens } = context;
     if (
-      context.collateralTokens != null &&
-      context.collateralTokens.length > 0 &&
+      collateralTokens != null &&
+      collateralTokens.length > 0 &&
       !market.collaterals.some((collateral) =>
-        context.collateralTokens?.some((token) =>
+        collateralTokens.some((token) =>
           isAddressEqual(token, collateral.token),
         ),
       )
