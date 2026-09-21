@@ -112,6 +112,8 @@ export function foldEntryPath(path: string): string {
 /**
  * Verifies that tarball entries are safe on case-insensitive or Windows filesystems.
  * It also models pacote's `.gitignore` to `.npmignore` rename during extraction.
+ * Rename suppression is archive-order sensitive, like pacote: only a literal
+ * `.npmignore` file that precedes the `.gitignore` suppresses it.
  *
  * @param entries - The entries exposed by node-tar.
  */
@@ -121,6 +123,10 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
       throw new Error(`Entry "${path}" has unsupported type "${type}".`);
     }
 
+    if (path.split("/")[0] !== "package") {
+      throw new Error(`Entry "${path}" is outside package/.`);
+    }
+
     const folded = foldEntryPath(path);
     if (folded !== "package" && !folded.startsWith("package/")) {
       throw new Error(`Entry "${path}" is outside package/.`);
@@ -128,13 +134,7 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
     return { path, type, folded };
   });
 
-  const npmignoreFiles = new Set(
-    normalizedEntries
-      .filter(
-        ({ path, type }) => type === "File" && path.endsWith("/.npmignore"),
-      )
-      .map(({ path }) => path),
-  );
+  const npmignoreFiles = new Set<string>();
   const originals = new Map<string, { path: string; type: string }>();
   const prefixes = new Set<string>();
   for (const { path, type, folded } of normalizedEntries) {
@@ -147,6 +147,9 @@ export function verifyTarballEntries(entries: readonly TarEntry[]): void {
       !npmignoreFiles.has(npmignoreSibling)
     ) {
       aliases.push(foldEntryPath(npmignoreSibling));
+    }
+    if (type === "File" && path.endsWith("/.npmignore")) {
+      npmignoreFiles.add(path);
     }
 
     for (const alias of aliases) {

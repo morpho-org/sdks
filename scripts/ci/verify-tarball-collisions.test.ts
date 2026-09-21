@@ -281,23 +281,39 @@ describe("verifyTarballEntries", () => {
     },
   );
 
-  test.each([true, false])(
-    "default: tolerates a literal npmignore sibling (%s order)",
-    async (fileFirst) => {
-      await withTempDir(async (dir) => {
-        const ignoreEntries = fileFirst
-          ? ["package/config/.gitignore", "package/config/.npmignore"]
-          : ["package/config/.npmignore", "package/config/.gitignore"];
-        const tgz = buildTarball(dir, {
-          entries: ["package/", "package/package.json", ...ignoreEntries],
-        });
-
-        await expect(
-          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
-        ).resolves.toBeUndefined();
+  test("default: tolerates a literal npmignore sibling when npmignore comes first", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: [
+          "package/",
+          "package/package.json",
+          "package/config/.npmignore",
+          "package/config/.gitignore",
+        ],
       });
-    },
-  );
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  test("error: rejects a literal npmignore sibling when gitignore comes first", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: [
+          "package/",
+          "package/package.json",
+          "package/config/.gitignore",
+          "package/config/.npmignore",
+        ],
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).rejects.toThrow(/collide/);
+    });
+  });
 
   test.each([true, false])(
     "error: rejects a case-mismatched npmignore sibling (%s order)",
@@ -370,6 +386,40 @@ describe("verifyTarballEntries", () => {
       });
     },
   );
+
+  test("default: tolerates a backslash gitignore when npmignore comes first", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: [
+          "package/",
+          "package/package.json",
+          "package/config/.npmignore",
+          "package/config\\.gitignore",
+        ],
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  test("error: rejects a backslash gitignore when gitignore comes first", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: [
+          "package/",
+          "package/package.json",
+          "package/config\\.gitignore",
+          "package/config/.npmignore",
+        ],
+      });
+
+      await expect(
+        listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+      ).rejects.toThrow(/collide/);
+    });
+  });
 
   test("default: accepts a gitignore without an npmignore sibling", async () => {
     await withTempDir(async (dir) => {
@@ -447,6 +497,24 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test.each([true, false])(
+    "error: rejects a backslash root package entry (%s order)",
+    async (backslashFirst) => {
+      await withTempDir(async (dir) => {
+        const packageEntries = backslashFirst
+          ? ["package\\zz/index.js", "package/index.js"]
+          : ["package/index.js", "package\\zz/index.js"];
+        const tgz = buildTarball(dir, {
+          entries: ["package/", "package/package.json", ...packageEntries],
+        });
+
+        await expect(
+          listTarballEntries(tgz, tarReader()).then(verifyTarballEntries),
+        ).rejects.toThrow(/outside package/);
+      });
+    },
+  );
+
   test("error: rejects symlink entries", async () => {
     await withTempDir(async (dir) => {
       const tgz = buildTarball(dir, {
@@ -493,6 +561,15 @@ describe("verifyTarballEntries", () => {
   test("error: rejects non-ASCII path segments", () => {
     expect(() => foldEntryPath("package/ſcript.js")).toThrow(/non-ASCII/);
     expect(() => foldEntryPath("package/café.js")).toThrow(/non-ASCII/);
+  });
+
+  test("error: rejects control characters in path segments", () => {
+    expect(() => foldEntryPath("package/a\nb.js")).toThrow(
+      /non-ASCII or control/,
+    );
+    expect(() => foldEntryPath("package/a\tb.js")).toThrow(
+      /non-ASCII or control/,
+    );
   });
 
   test("error: rejects reserved Windows device names", () => {
