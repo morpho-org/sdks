@@ -1,4 +1,5 @@
 import type { Address, Hex } from "viem";
+import { MAX_TREE_HEIGHT } from "../constants.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
@@ -20,7 +21,11 @@ function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
 
 function normalizeTree(tree: RatifierTreeInput): TreeLike {
   if (isTreeLike(tree)) {
-    if (!Number.isInteger(tree.height) || tree.height < 0 || tree.height > 20) {
+    if (
+      !Number.isInteger(tree.height) ||
+      tree.height < 0 ||
+      tree.height > MAX_TREE_HEIGHT
+    ) {
       throw new InvalidTreeHeightError(tree.height);
     }
 

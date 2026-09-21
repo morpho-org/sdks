@@ -17,6 +17,7 @@ import {
   InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError,
   InvalidTreeError,
+  InvalidTreeHeightError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
@@ -28,7 +29,7 @@ const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
 const otherRatifier = "0x000000000000000000000000000000000000A222" as const;
 const allowedTaker = "0x000000000000000000000000000000000000A000" as const;
 const midnight = "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A" as const;
-const { baseOffer } = createFixtures({
+const { baseMarket, baseOffer } = createFixtures({
   midnight,
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000",
 });
@@ -277,7 +278,7 @@ describe("RateRatifierV1Utils ratifier data", () => {
         (...args) => {
           const [rootBytes, leafIndex, rate, taker] = args;
           const data = RateRatifierV1Utils.encodeRatifierData({
-            root: `0x${Buffer.from(rootBytes).toString("hex")}` as Hex,
+            root: bytesToHex(rootBytes),
             leafIndex,
             proof: [zeroHash],
             rate,
@@ -360,6 +361,161 @@ describe("RateRatifierV1Utils ratifier data", () => {
       RateRatifierV1Utils.verifyRatifierData({
         offer: item!.offer,
         ratifierData: tampered,
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("RateRatifierV1Utils.buildProof", () => {
+  test("default", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf({}, 5n),
+      leaf({ maxUnits: 7n }, 6n),
+    ]);
+    const proof = RateRatifierV1Utils.buildProof({
+      tree: descriptor,
+      leafIndex: 1n,
+    });
+    const data = RateRatifierV1Utils.encodeRatifierData({
+      root: proof.root,
+      leafIndex: proof.leafIndex,
+      proof: proof.proof,
+      rate: descriptor.entries[1]!.rate,
+      allowedTaker: descriptor.entries[1]!.allowedTaker,
+    });
+
+    expect(
+      RateRatifierV1Utils.verifyRatifierData({
+        offer: descriptor.offers[1]!,
+        ratifierData: data,
+      }).rate,
+    ).toBe(6n);
+  });
+
+  test("error: InvalidTreeError for an out-of-range leaf index", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 2n }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("RateRatifierV1Utils.ratifierData", () => {
+  test("default", () => {
+    const tree = [
+      leaf({}, 5n),
+      { offer: leaf({ maxUnits: 7n }).offer, rate: 6n, allowedTaker },
+    ];
+    const data = RateRatifierV1Utils.ratifierData({ tree, leafIndex: 1n });
+
+    const decoded = RateRatifierV1Utils.verifyRatifierData({
+      offer: tree[1]!.offer,
+      ratifierData: data,
+      taker: allowedTaker,
+    });
+    expect(decoded.rate).toBe(6n);
+    expect(decoded.allowedTaker.toLowerCase()).toBe(allowedTaker.toLowerCase());
+  });
+
+  test("error: InvalidTreeError for an out-of-range leaf index", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratifierData({ tree: descriptor, leafIndex: 2n }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError for an unsupported descriptor height", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({ tree: { ...descriptor, height: 21 } }),
+    ).toThrow(InvalidTreeHeightError);
+  });
+
+  test("error: InvalidTreeError for truncated descriptor leaves", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: { ...descriptor, leaves: descriptor.leaves.slice(0, 1) },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for swapped descriptor entries", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          entries: [descriptor.entries[1]!, descriptor.entries[0]!],
+        },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a non-padding entry hidden in padding", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+      leaf({ maxUnits: 8n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          entries: [...descriptor.entries.slice(0, 3), descriptor.entries[0]!],
+        },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for an empty descriptor offer list", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([leaf()]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({ tree: { ...descriptor, offers: [] } }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for mixed descriptor ratifiers", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+    const entry = descriptor.entries[1]!;
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          entries: [
+            descriptor.entries[0]!,
+            {
+              ...entry,
+              offer: { ...entry.offer, ratifier: otherRatifier },
+            },
+          ],
+        },
       }),
     ).toThrow(InvalidTreeError);
   });
@@ -467,6 +623,19 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
     });
 
     expect(acceptable).toBe(TickLib.tickToPrice(sellOffer.tick) >= bound);
+  });
+
+  test("behavior: matches the plain-market result for a hydrated Market entity", () => {
+    const market = baseMarket();
+    const entityOffer = leaf({ market }).offer;
+    const plainOffer = leaf({ market: market.params }).offer;
+    const params = { rate: MathLib.WAD, timestamp: 1n } as const;
+
+    expect(
+      RateRatifierV1Utils.isPriceAcceptable({ offer: entityOffer, ...params }),
+    ).toBe(
+      RateRatifierV1Utils.isPriceAcceptable({ offer: plainOffer, ...params }),
+    );
   });
 
   test("error: InvalidRateRatifierV1RateError on negative rate", () => {

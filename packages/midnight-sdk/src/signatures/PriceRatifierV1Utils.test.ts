@@ -254,6 +254,103 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 });
 
+describe("PriceRatifierV1Utils.buildProof", () => {
+  test("default", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }), allowedTaker },
+    ]);
+    const proof = PriceRatifierV1Utils.buildProof({
+      tree: descriptor,
+      leafIndex: 1n,
+    });
+    const data = PriceRatifierV1Utils.encodeRatifierData({
+      root: proof.root,
+      leafIndex: proof.leafIndex,
+      proof: proof.proof,
+      allowedTaker: descriptor.entries[1]!.allowedTaker,
+    });
+
+    expect(
+      PriceRatifierV1Utils.verifyRatifierData({
+        offer: descriptor.offers[1]!,
+        ratifierData: data,
+        taker: allowedTaker,
+      }).allowedTaker.toLowerCase(),
+    ).toBe(allowedTaker.toLowerCase());
+  });
+
+  test("error: InvalidTreeError for an out-of-range leaf index", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+
+    expect(() =>
+      PriceRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 2n }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("PriceRatifierV1Utils.ratifierData", () => {
+  test("default", () => {
+    const tree = [
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }), allowedTaker },
+    ];
+    const data = PriceRatifierV1Utils.ratifierData({ tree, leafIndex: 1n });
+
+    expect(
+      PriceRatifierV1Utils.verifyRatifierData({
+        offer: tree[1]!.offer,
+        ratifierData: data,
+        taker: allowedTaker,
+      }).allowedTaker.toLowerCase(),
+    ).toBe(allowedTaker.toLowerCase());
+  });
+
+  test("error: InvalidTreeError for an out-of-range leaf index", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+
+    expect(() =>
+      PriceRatifierV1Utils.ratifierData({ tree: descriptor, leafIndex: 2n }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("PriceRatifierV1Utils ratifier data encoding", () => {
+  test("default: encode/decode round-trip", () => {
+    fc.assert(
+      fc.property(
+        fc.uint8Array({ minLength: 32, maxLength: 32 }),
+        fc.bigInt({ min: 0n, max: 3n }),
+        fc.constantFrom(
+          "0x0000000000000000000000000000000000000000" as Address,
+          allowedTaker,
+        ),
+        (...args) => {
+          const [rootBytes, leafIndex, taker] = args;
+          const data = PriceRatifierV1Utils.encodeRatifierData({
+            root: bytesToHex(rootBytes),
+            leafIndex,
+            proof: [zeroHash],
+            allowedTaker: taker,
+          });
+          const decoded = PriceRatifierV1Utils.decodeRatifierData(data);
+
+          expect(decoded.root).toBe(bytesToHex(rootBytes));
+          expect(decoded.leafIndex).toBe(leafIndex);
+          expect(decoded.allowedTaker.toLowerCase()).toBe(taker.toLowerCase());
+          expect(decoded.proof).toEqual([zeroHash]);
+        },
+      ),
+    );
+  });
+});
+
 describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
   test("default", () => {
     const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
