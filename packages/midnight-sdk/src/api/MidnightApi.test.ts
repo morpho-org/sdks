@@ -11,6 +11,7 @@ import { type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
+import { MAX_OFFER_CAP } from "../constants.js";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -1199,6 +1200,52 @@ describe("MidnightApi.fetchBookQuote", () => {
       }),
     ).rejects.toBeInstanceOf(NegativeValueError);
     expect(calls).toHaveLength(0);
+  });
+
+  test.each([
+    ["both caps zero", { max_units: "0", max_assets: "0" }],
+    ["both caps non-zero", { max_units: "1", max_assets: "1" }],
+    [
+      "cap above uint128",
+      { max_units: (MAX_OFFER_CAP + 1n).toString(), max_assets: "0" },
+    ],
+  ])(
+    "error: InvalidMidnightApiResponseError for takeable offer with %s",
+    async (_, caps) => {
+      const { fetch } = createQuoteFetch([
+        { ...apiTakeableOffer, offer: { ...apiOffer, ...caps } },
+      ]);
+
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          units: MathLib.WAD,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test("error: InvalidMidnightApiResponseError for buy takeable offer with non-zero receiverIfMakerIsSeller", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiBidTakeableOffer,
+        offer: {
+          ...apiBidTakeableOffer.offer,
+          receiver_if_maker_is_seller: MAKER,
+        },
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "bids",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
   test("error: SettlementFeeExceedsPriceError", async () => {

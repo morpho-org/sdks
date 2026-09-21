@@ -5,7 +5,9 @@ import {
   isAddress,
   isAddressEqual,
   maxUint256,
+  zeroAddress,
 } from "viem";
+import { MAX_OFFER_CAP } from "../constants.js";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -303,6 +305,26 @@ export function mapBoundTakeableOffers(
     if (!isHexEqual(embeddedMarketId, take.marketId)) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
+      );
+    }
+    const { maxUnits, maxAssets } = take.offer;
+    if (
+      maxUnits < 0n ||
+      maxUnits > MAX_OFFER_CAP ||
+      maxAssets < 0n ||
+      maxAssets > MAX_OFFER_CAP ||
+      (maxAssets === 0n) === (maxUnits === 0n)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer caps "maxUnits=${maxUnits}, maxAssets=${maxAssets}" must set exactly one non-zero uint128 cap.`,
+      );
+    }
+    if (
+      take.offer.buy &&
+      !isAddressEqual(take.offer.receiverIfMakerIsSeller, zeroAddress)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API buy takeable offer receiverIfMakerIsSeller "${take.offer.receiverIfMakerIsSeller}" must be the zero address.`,
       );
     }
     if (
