@@ -65,6 +65,23 @@ describe("safeParseUnits", () => {
     expect(() => safeParseUnits("")).toThrow(/invalid number/);
   });
 
+  test("throws on malformed multi-decimal and non-numeric strings", () => {
+    expect(() => safeParseUnits("100.00.999")).toThrow(/invalid number/);
+    expect(() => safeParseUnits("1.2.3")).toThrow(/invalid number/);
+    expect(() => safeParseUnits("1e5")).toThrow(/invalid number/);
+    expect(() => safeParseUnits("abc1")).toThrow(/invalid number/);
+  });
+
+  test("parses leading-dot, negative, and signed-positive values", () => {
+    expect(safeParseUnits(".5")).toBe(parseUnits("0.5", 18));
+    expect(safeParseUnits("-1.5")).toBe(-1500000000000000000n);
+    expect(safeParseUnits("+2")).toBe(2n * 10n ** 18n);
+  });
+
+  test("truncates extra fractional digits at decimals", () => {
+    expect(safeParseUnits("100.123456789", 6)).toBe(100123456n);
+  });
+
   test("handles negative numbers", () => {
     expect(safeParseUnits("-1.5", 18)).toBe(-parseUnits("1.5", 18));
   });

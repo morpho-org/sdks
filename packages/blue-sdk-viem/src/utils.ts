@@ -55,17 +55,22 @@ export const safeParseNumber = (value: number, decimals = 18) =>
  * ```
  */
 export const safeParseUnits = (strValue: string, decimals = 18) => {
-  if (!/[-+]?[0-9]*\.?[0-9]+/.test(strValue))
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(strValue))
     throw Error(`invalid number: ${strValue}`);
 
-  let [whole, dec = ""] = strValue.split(".");
+  const negative = strValue.startsWith("-");
+  const unsigned = strValue.replace(/^[-+]/, "");
+
+  let [whole, dec = ""] = unsigned.split(".");
 
   dec = dec.slice(0, decimals);
 
-  return parseUnits(
+  const parsed = parseUnits(
     [whole || "0", dec].filter((v) => v.length > 0).join("."),
     decimals,
   );
+
+  return negative ? -parsed : parsed;
 };
 
 /**
