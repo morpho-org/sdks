@@ -1,6 +1,7 @@
 import { type Address, type Hash, isAddressEqual, zeroAddress } from "viem";
 import { MAX_TREE_HEIGHT } from "../constants.js";
 import {
+  InvalidRatifierV1AddressError,
   InvalidTreeError,
   InvalidTreeHeightError,
   RatifierV1TakerNotAllowedError,
@@ -11,6 +12,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { isZeroAddress } from "./offerStructInternal.js";
 import { TreeUtils } from "./TreeUtils.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 
@@ -195,6 +197,15 @@ export function resolveRatifierV1Tree<
   }
 
   return descriptor;
+}
+
+/**
+ * @internal Asserts a V1 ratifier address is deployed (non-zero).
+ */
+export function assertRatifierV1Address(ratifier: Address): void {
+  if (isZeroAddress(ratifier)) {
+    throw new InvalidRatifierV1AddressError(ratifier);
+  }
 }
 
 /**
