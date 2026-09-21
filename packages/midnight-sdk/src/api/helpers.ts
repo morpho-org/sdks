@@ -194,7 +194,7 @@ export function mapBoundBookMarket(
   return market;
 }
 
-/** Requested `fetchBooks` filters that every returned book must satisfy. */
+/** @internal Requested `fetchBooks` filters that every returned book must satisfy. */
 export interface BookFilterContext {
   readonly marketIds?: readonly Hash[];
   readonly chainIds?: readonly number[];
