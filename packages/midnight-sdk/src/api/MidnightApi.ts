@@ -1,5 +1,8 @@
 import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
-import { InvalidMidnightApiResponseError } from "../errors.js";
+import {
+  InvalidMidnightApiQuoteTargetError,
+  InvalidMidnightApiResponseError,
+} from "../errors.js";
 import { TakeAmountsLib } from "../math/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
@@ -337,6 +340,7 @@ export class MidnightApi {
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
@@ -358,6 +362,8 @@ export class MidnightApi {
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
     const input = params;
+    if ((input.units == null) === (input.assets == null))
+      throw new InvalidMidnightApiQuoteTargetError();
     const settlementFee = BigInt(input.settlementFee ?? 0n);
     assertNonNegative("settlementFee", settlementFee);
     const response = await requestMidnightApi<ApiQuoteResponse>({
@@ -799,6 +805,7 @@ export class MidnightApi {
    * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
    * @param params.settlementFee - Optional current WAD-scaled settlement fee used for local guard validation. Defaults to zero.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
+   * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns a malformed success response or the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.

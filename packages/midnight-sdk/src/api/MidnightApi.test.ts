@@ -13,6 +13,7 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { MAX_OFFER_CAP } from "../constants.js";
 import {
+  InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
   MidnightApiError,
   SettlementFeeExceedsPriceError,
@@ -22,6 +23,7 @@ import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
+  type FetchBookQuoteParams,
   MempoolPayloadValidationRule,
   MidnightApi,
   type MidnightApiFetch,
@@ -1185,6 +1187,23 @@ describe("MidnightApi.fetchBookQuote", () => {
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test.each([
+    ["both units and assets", { units: 1n, assets: 1n }],
+    ["neither units nor assets", {}],
+  ])("error: InvalidMidnightApiQuoteTargetError for %s", async (_, target) => {
+    const { calls, fetch } = createQuoteFetch([]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        ...target,
+        fetch,
+      } as unknown as FetchBookQuoteParams),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiQuoteTargetError);
+    expect(calls).toHaveLength(0);
   });
 
   test("error: NegativeValueError", async () => {
