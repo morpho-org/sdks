@@ -518,6 +518,23 @@ describe("RateRatifierV1Utils.ratifierData", () => {
     ).toThrow(InvalidTreeError);
   });
 
+  test("error: InvalidTreeError for padding in the visible offer slots", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+      leaf({ maxUnits: 8n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          offers: [...descriptor.offers, descriptor.offers[0]!],
+        },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
   test("error: InvalidTreeError for mixed descriptor ratifiers", () => {
     const descriptor = RateRatifierV1Utils.buildDescriptor([
       leaf(),

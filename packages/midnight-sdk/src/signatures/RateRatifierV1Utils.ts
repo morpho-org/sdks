@@ -331,6 +331,15 @@ export namespace RateRatifierV1Utils {
     });
   }
 
+  const treeHelpers = {
+    buildDescriptor,
+    hashLeaf,
+    isPadding: isPaddingEntry,
+    ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
+      leafStruct.offer.ratifier,
+    label: "RateRatifierV1",
+  } as const;
+
   /**
    * Builds a Merkle proof for one RateRatifierV1 leaf.
    *
@@ -355,13 +364,7 @@ export namespace RateRatifierV1Utils {
     readonly tree: RateRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): TreeProof {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "RateRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
   }
@@ -533,13 +536,7 @@ export namespace RateRatifierV1Utils {
     readonly tree: RateRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): Hex {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "RateRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
 
@@ -578,13 +575,7 @@ export namespace RateRatifierV1Utils {
   export function ratify(params: {
     readonly tree: RateRatifierV1TreeInput;
   }): readonly Payload.Item[] {
-    const tree = resolveRatifierV1Tree(params.tree, {
-      buildDescriptor,
-      hashLeaf,
-      isPadding: isPaddingEntry,
-      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
-      label: "RateRatifierV1",
-    });
+    const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
 
     return tree.offers.map((offer, leafIndex) => {
       const entry = tree.entries[leafIndex]!;
@@ -607,8 +598,9 @@ export namespace RateRatifierV1Utils {
    * Converts a WAD-scaled per-second rate into the price bound used by
    * `RateRatifierV1.isRatified`.
    *
-   * The bound is `WAD / (WAD + rate * timeToMaturity)`, rounded down for buy
-   * offers and up for sell offers, matching the onchain comparison direction.
+   * The bound is `WAD * WAD / (WAD + rate * timeToMaturity)`, rounded down
+   * for buy offers and up for sell offers, matching the onchain comparison
+   * direction.
    *
    * @param params.rate - WAD-scaled per-second rate.
    * @param params.timeToMaturity - Seconds remaining until market maturity.
