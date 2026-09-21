@@ -1105,6 +1105,15 @@ describe("TreeUtils.verifyProof", () => {
     expect(result.root).toBe(TreeUtils.hashNode(left, right));
   });
 
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+
+    expect(() => TreeUtils.buildRootFromLeaves([leaf, leaf, leaf])).toThrow(
+      InvalidTreeError,
+    );
+  });
+
   test("behavior: verifies a proof from a leaf hash", () => {
     const leaf =
       "0x1111111111111111111111111111111111111111111111111111111111111111" as const;

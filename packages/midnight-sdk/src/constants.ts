@@ -140,6 +140,18 @@ export const MAX_CONTINUOUS_FEE = 317097919n;
 export const MAX_OFFER_CAP = maxUint128;
 
 /**
+ * Maximum Merkle tree height supported by the V1 ratifier typehash table.
+ *
+ * @example
+ * ```ts
+ * import { MAX_TREE_HEIGHT } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_TREE_HEIGHT);
+ * ```
+ */
+export const MAX_TREE_HEIGHT = 20;
+
+/**
  * Seconds after maturity over which post-maturity LIF reaches the computed
  * maximum liquidation incentive factor.
  *

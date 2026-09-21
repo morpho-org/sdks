@@ -111,8 +111,7 @@ export interface PriceRatifierV1LeafStruct {
  * Fully materialized PriceRatifierV1 tree descriptor.
  *
  * Use this shape when a caller needs leaf structs, leaf hashes, root, and
- * height without keeping a descriptor, for example before custom signing or
- * proof generation.
+ * height, for example before custom signing or proof generation.
  *
  * @example
  * ```ts
@@ -250,8 +249,9 @@ export namespace PriceRatifierV1Utils {
    * Builds a PriceRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. Every offer's `group` is normalized the same way
-   * `TreeUtils.buildDescriptor` normalizes standalone offers.
+   * highest leaf indices. An explicit `group` is committed as-is; only an
+   * omitted `group` defaults to the offer's content-addressed singleton group
+   * id derived by `Offer.from`.
    *
    * @param leaves - Price-bounded offer leaves in leaf order.
    * @returns PriceRatifierV1 tree descriptor.
@@ -283,7 +283,7 @@ export namespace PriceRatifierV1Utils {
       entries: structs,
       padding: { offer: EMPTY_OFFER_STRUCT, allowedTaker: zeroAddress },
       hashLeaf,
-      ratifierOf: (entry) => entry.offer.ratifier,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
       label: "PriceRatifierV1",
     });
 
@@ -302,7 +302,8 @@ export namespace PriceRatifierV1Utils {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
-   * @throws {InvalidTreeError} when leaf index is out of range.
+   * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
    * import { PriceRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -322,6 +323,8 @@ export namespace PriceRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "PriceRatifierV1",
     });
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
@@ -463,7 +466,8 @@ export namespace PriceRatifierV1Utils {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded PriceRatifierV1 data.
-   * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
    * import { PriceRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -483,6 +487,8 @@ export namespace PriceRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "PriceRatifierV1",
     });
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
@@ -506,6 +512,7 @@ export namespace PriceRatifierV1Utils {
    * @param params.tree - PriceRatifierV1 tree descriptor or raw leaf input whose root has already been ratified onchain.
    * @returns Items containing each non-padding offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
    * import { PriceRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -523,6 +530,8 @@ export namespace PriceRatifierV1Utils {
       buildDescriptor,
       hashLeaf,
       isPadding: isPaddingEntry,
+      ratifierOf: (leafStruct) => leafStruct.offer.ratifier,
+      label: "PriceRatifierV1",
     });
 
     return tree.offers.map((offer, leafIndex) => {
