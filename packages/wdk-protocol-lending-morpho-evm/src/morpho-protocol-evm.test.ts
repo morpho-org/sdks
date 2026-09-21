@@ -5,6 +5,7 @@ import {
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
+  MAX_TOKEN_APPROVALS,
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
@@ -46,6 +47,9 @@ const MARKET_PARAMS = {
 const NOW_MS = 1_800_000_000_000;
 const BLUE_BUNDLES_V1_DEADLINE = 1_800_007_200n;
 const SIGNATURE_DEADLINE = 1_800_003_600n;
+const UNI =
+  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984".toLowerCase() as viem.Address;
+const UNI_MAX_APPROVAL = MAX_TOKEN_APPROVALS[1]?.[viem.getAddress(UNI)];
 
 vi.spyOn(Date, "now").mockReturnValue(NOW_MS);
 
@@ -120,15 +124,29 @@ const borrowAction = {
   buildTx: vi.fn().mockReturnValue(BORROW_TX),
 };
 const repayAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
+  getRequirements: vi.fn((options?: RequirementOptions) =>
+    Promise.resolve([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { amount: options?.approvalAmount ?? 100_000n },
+        },
+      },
+    ]),
+  ),
   buildTx: vi.fn().mockReturnValue(REPAY_TX),
 };
 const supplyCollateralAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
+  getRequirements: vi.fn((options?: RequirementOptions) =>
+    Promise.resolve([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { amount: options?.approvalAmount ?? 100_000n },
+        },
+      },
+    ]),
+  ),
   buildTx: vi.fn().mockReturnValue(SUPPLY_COLLATERAL_TX),
 };
 const withdrawCollateralAction = {
@@ -472,6 +490,23 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
       expect(supplyAction.getRequirements).toHaveBeenCalledWith({
         useSimplePermit: true,
+      });
+    });
+
+    test("behavior: vault deposit requirements ignore approvalAmount", async () => {
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      await prepared.getRequirements({
+        useSimplePermit: true,
+        approvalAmount: viem.maxUint256,
+      });
+
+      expect(supplyAction.getRequirements).toHaveBeenCalledWith({
+        useSimplePermit: true,
+        permit2Nonce: undefined,
       });
     });
 
@@ -1352,10 +1387,85 @@ describe.sequential("MorphoProtocolEvm", () => {
       >();
       const requirements = await promise;
 
-      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(requirements).toEqual([
+        { action: { type: "erc20Approval", args: { amount: 100_000n } } },
+      ]);
       expect(repayAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );
+    });
+
+    test("behavior: max repay without signature defaults to the reusable approval cap", async () => {
+      const requirements = await protocol.getRepayRequirements({
+        token: TOKEN,
+        amount: "max",
+      });
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: viem.maxUint256 },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount: viem.maxUint256,
+      });
+    });
+
+    test("behavior: max repay preserves requirement options when adding the approval cap", async () => {
+      await protocol.getRepayRequirements(
+        { token: TOKEN, amount: "max" },
+        { useSimplePermit: true, permit2Nonce: 7n },
+      );
+
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        useSimplePermit: true,
+        permit2Nonce: 7n,
+        approvalAmount: viem.maxUint256,
+      });
+    });
+
+    test("behavior: exact-asset repay approves the exact amount", async () => {
+      const requirements = await protocol.getRepayRequirements({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: 100_000n },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith(undefined);
+    });
+
+    test("behavior: explicit approvalAmount overrides the default", async () => {
+      const approvalAmount = 123_456n;
+      const requirements = await protocol.getRepayRequirements(
+        { token: TOKEN, amount: "max" },
+        { approvalAmount },
+      );
+
+      expect(requirements[0]?.action).toMatchObject({
+        args: { amount: approvalAmount },
+      });
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount,
+      });
+    });
+
+    test("behavior: max repay defaults to the per-token MAX_TOKEN_APPROVALS cap", async () => {
+      expect(UNI_MAX_APPROVAL).toBeDefined();
+      // biome-ignore lint/suspicious/noShadow: test-local protocol with a MAX_TOKEN_APPROVALS token
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: {
+          ...MARKET_PARAMS,
+          loanToken: UNI,
+        },
+      });
+
+      await protocol.getRepayRequirements({ token: UNI, amount: "max" });
+
+      expect(repayAction.getRequirements).toHaveBeenCalledWith({
+        approvalAmount: UNI_MAX_APPROVAL,
+      });
     });
 
     test("should fold a token signature and its deadline into max repay", async () => {
@@ -1492,6 +1602,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       const requirementOptions = {
         useSimplePermit: true,
         permit2Nonce: 11n,
+        approvalAmount: 1_000_000n,
       } satisfies RequirementOptions;
       const promise = protocol.getSupplyCollateralRequirements(
         { token: COLLATERAL, amount: 100_000n },
@@ -1502,7 +1613,9 @@ describe.sequential("MorphoProtocolEvm", () => {
       >();
       const requirements = await promise;
 
-      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(requirements).toEqual([
+        { action: { type: "erc20Approval", args: { amount: 1_000_000n } } },
+      ]);
       expect(supplyCollateralAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );

@@ -11,7 +11,7 @@ import {
   fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, getAddress, isAddressEqual, maxUint256 } from "viem";
+import { type Address, isAddressEqual, maxUint256 } from "viem";
 import {
   getBlueBundlesV1PenaltyAssets,
   getBlueBundlesV1PublicAllocations,
@@ -34,7 +34,6 @@ import {
 } from "../../actions/index.js";
 import {
   DEFAULT_LLTV_BUFFER,
-  MAX_TOKEN_APPROVALS,
   validateAccrualPosition,
   validateChainId,
   validatePositionHealth,
@@ -452,6 +451,8 @@ export interface BlueActions {
    * @throws {RepayExceedsDebtError} when an exact asset repay exceeds current debt.
    * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
    * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
+   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
+   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
@@ -593,8 +594,8 @@ export interface BlueActions {
    * saturated full close; the entity derives `maxRepayAssets` from debt projected through the
    * requested deadline plus the referral fee, and the contract refunds unused funding. A
    * previously signed share-mode cap remains valid when it still covers the fresh derived minimum.
-   * Saturated full-repay requirements use the token's reusable maximum allowance when signatures
-   * are disabled, while the transaction itself remains bounded by the derived cap.
+   * Full-repay requirements fund exactly the derived `maxRepayAssets`; pass `approvalAmount` to
+   * request a reusable allowance instead. The transaction remains bounded by the derived cap.
    * Share-mode deadlines cannot exceed the two-hour quote horizon. Blue authorization is required
    * only for collateral withdrawal. Pure repay uses `maxLtv = maxUint256`; withdrawals use buffered
    * LLTV. No share-price or `slippageTolerance` input exists.
@@ -624,6 +625,8 @@ export interface BlueActions {
    * @throws {WithdrawMakesPositionUnhealthyError} when the post-repay withdrawal exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
    * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
+   * @throws {ApprovalAmountLessThanSpendAmountError} from `getRequirements()` when a classic
+   *   `approvalAmount` is below the derived `maxRepayAssets`.
    * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
    * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
@@ -1563,17 +1566,7 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.loanToken,
                   amount: maxRepayAssets,
-                  // A caller-requested reusable approval wins; a full repay otherwise defaults to
-                  // the token's reusable cap. Checksum the key so a differently-cased loan token
-                  // (common from subgraphs/APIs) resolves that cap instead of falling back to
-                  // maxUint256, which UNI/ONDO/COMP/FLUID reject.
-                  approvalAmount:
-                    requirementsParams?.approvalAmount ??
-                    (saturatedRepay
-                      ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
-                          getAddress(this.marketParams.loanToken)
-                        ] ?? maxUint256)
-                      : undefined),
+                  approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
                   useSimplePermit: requirementsParams?.useSimplePermit,

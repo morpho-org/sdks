@@ -12,7 +12,10 @@ import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { morphoViemExtension } from "../../client/index.js";
-import type { VaultV2BlueReallocation } from "../../types/index.js";
+import {
+  InputExceedsMaxError,
+  type VaultV2BlueReallocation,
+} from "../../types/index.js";
 
 const userAddress: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const marketParams = new MarketParams({
@@ -116,5 +119,44 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
         },
       },
     });
+  });
+
+  test("error: InputExceedsMaxError when allocator penalty exceeds share withdrawal assets", () => {
+    const lowValuePositionData = new AccrualPosition(
+      {
+        user: userAddress,
+        supplyShares: 10n,
+        borrowShares: 0n,
+        collateral: 10n ** 24n,
+      },
+      new Market({
+        params: marketParams,
+        totalSupplyAssets: 1n,
+        totalBorrowAssets: 0n,
+        totalSupplyShares: 10n,
+        totalBorrowShares: 1n,
+        lastUpdate: 1_700_000_000n,
+        fee: 0n,
+        price: ORACLE_PRICE_SCALE,
+      }),
+    );
+    const market = createMockClient(mainnet)
+      .client.extend(morphoViemExtension())
+      .morpho.blue(marketParams, mainnet.id);
+
+    let thrown: unknown;
+    try {
+      market.withdraw({
+        userAddress,
+        positionData: lowValuePositionData,
+        shares: 1n,
+        reallocations,
+        deadline: maxUint256,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(InputExceedsMaxError);
+    expect(thrown).toMatchObject({ field: "reallocationPenaltyAssets" });
   });
 });

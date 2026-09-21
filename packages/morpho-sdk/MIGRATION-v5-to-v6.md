@@ -240,9 +240,9 @@ The destinations are different:
   BlueBundlesV1 as spender. The SDK resolves the lowest unused Permit2 nonce by default — see the
   subsection below.
 - Morpho authorization now grants BlueBundlesV1 operator rights instead of GeneralAdapter1.
-- Without signature support, saturated full-repay requirements use the token's reusable maximum
-  allowance so a later bounded debt quote remains covered; BlueBundlesV1 still refunds unused
-  transaction funding.
+- Without signature support, full-repay requirements approve exactly the derived `maxRepayAssets`
+  funding cap; pass `approvalAmount` to `getRequirements()` to keep a reusable allowance.
+  BlueBundlesV1 still refunds unused transaction funding.
 - The built transaction's `to` is BlueBundlesV1, not Bundler3, and calldata contains one fixed
   BlueBundlesV1 entrypoint rather than a `BundlerAction[]` multicall.
 

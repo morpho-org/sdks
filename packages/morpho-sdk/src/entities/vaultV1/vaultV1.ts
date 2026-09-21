@@ -21,6 +21,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
+  selectBundlesSharesPermitSignature,
   selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "../../actions/bundles/common.js";
@@ -63,7 +64,6 @@ import {
   type PermitAction,
   type RequirementSignature,
   SameVaultMigrationError,
-  selectRequirementSignatures,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
   VaultIsBlueFeeRecipientError,
@@ -332,6 +332,10 @@ export interface VaultV1Actions {
    * Snapshot state can drift before inclusion, so a later reallocation may still make the on-chain
    * loop under-cover even after pre-flight succeeds.
    *
+   * In-kind exits require an exact vault-share allowance for the computed cap. An ERC-2612 permit
+   * is emitted only to raise an insufficient allowance; an oversized allowance is always reset
+   * with an onchain approval before the exit.
+   *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Asset-denominated amount to exit.
    * @param params.marketParamsList - Ordered vault markets consumed greedily by the contract;
@@ -358,7 +362,9 @@ export interface VaultV1Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612, has
+   *   the wrong asset, owner, or signature encoding, or names another spender, amount, or deadline
+   *   than the prepared cap.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -949,8 +955,15 @@ export class MorphoVaultV1 implements VaultV1Actions {
             required: amount,
           });
         }
-        if (allowance >= requiredShareAllowance) return [];
-        if (this.client.options.supportSignature) {
+        // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
+        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`.
+        if (allowance === requiredShareAllowance) return [];
+        // A lowering permit can be skipped after its nonce is consumed, so oversized allowances
+        // must be reset with an onchain approval.
+        if (
+          allowance < requiredShareAllowance &&
+          this.client.options.supportSignature
+        ) {
           return [
             encodeVaultSharesPermit({
               vault: vaultData,
@@ -974,8 +987,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
         });
         return vaultV1InKindRedeem({
           vault: { chainId: this.chainId, address: this.vault },
