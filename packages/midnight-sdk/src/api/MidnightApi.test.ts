@@ -1247,6 +1247,27 @@ describe("MidnightApi.fetchBookQuote", () => {
     },
   );
 
+  test("error: InvalidMidnightApiResponseError for takeable offer with malformed embedded market", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        offer: {
+          ...apiOffer,
+          market: { ...apiOfferMarket, midnight: "not-an-address" as Address },
+        },
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test.each([
     ["non-zero", MAKER],
     ["malformed", "invalid"],

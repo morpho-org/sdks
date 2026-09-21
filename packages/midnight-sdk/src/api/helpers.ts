@@ -5,7 +5,6 @@ import {
   isAddress,
   isAddressEqual,
   maxUint256,
-  zeroAddress,
 } from "viem";
 import {
   InvalidMidnightApiResponseError,
@@ -302,37 +301,37 @@ export function mapBoundTakeableOffers(
 ): MidnightApiTake[] {
   const mapped = takeableOffers.map((takeableOffer) => {
     const take = mapTakeableOffer(takeableOffer);
+    let matchesAdvertisedId: boolean;
     let embeddedMarketId: Hash;
     try {
       embeddedMarketId = MarketUtils.toId(take.offer.market);
+      matchesAdvertisedId = isHexEqual(embeddedMarketId, take.marketId);
     } catch (cause) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer market_id "${take.marketId}" could not be validated against its embedded offer market.`,
         { cause },
       );
     }
-    if (!isHexEqual(embeddedMarketId, take.marketId)) {
+    if (!matchesAdvertisedId) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
       );
     }
-    const { maxUnits, maxAssets } = take.offer;
+    const { maxUnits, maxAssets, buy, maker, receiverIfMakerIsSeller } =
+      take.offer;
     try {
+      // Return values unused: called only to enforce the cap-shape and buy-receiver invariants.
       OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
+      OfferUtils.resolveReceiverIfMakerIsSeller({
+        buy,
+        maker,
+        receiverIfMakerIsSeller,
+      });
     } catch (cause) {
       if (!(cause instanceof InvalidOfferParameterError)) throw cause;
       throw new InvalidMidnightApiResponseError(
-        `Midnight API takeable offer caps "maxUnits=${maxUnits}, maxAssets=${maxAssets}" must set exactly one non-zero uint128 cap.`,
+        `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
         { cause },
-      );
-    }
-    if (
-      take.offer.buy &&
-      (!isAddress(take.offer.receiverIfMakerIsSeller) ||
-        !isAddressEqual(take.offer.receiverIfMakerIsSeller, zeroAddress))
-    ) {
-      throw new InvalidMidnightApiResponseError(
-        `Midnight API buy takeable offer receiverIfMakerIsSeller "${take.offer.receiverIfMakerIsSeller}" must be the zero address.`,
       );
     }
     if (
