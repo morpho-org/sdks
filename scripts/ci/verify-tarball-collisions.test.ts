@@ -606,13 +606,29 @@ describe("verifyTarballEntries", () => {
     );
   });
 
-  test("error: rejects reserved Windows device names", () => {
-    expect(() => foldEntryPath("package/nul.js")).toThrow(/reserved/);
+  test.each([
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM9",
+    "LPT1",
+    "LPT9",
+    "CONIN$",
+    "CONOUT$",
+    "nul",
+  ])("error: rejects reserved Windows device name %s", (name) => {
+    expect(() => foldEntryPath(`package/${name}`)).toThrow(/reserved/);
+    expect(() => foldEntryPath(`package/${name}.js`)).toThrow(/reserved/);
   });
 
-  test("error: rejects characters Win32 rejects", () => {
-    expect(() => foldEntryPath("package/a:b")).toThrow(/rejects/);
-  });
+  test.each(["<", ">", ":", '"', "|", "?", "*"])(
+    "error: rejects character Win32 rejects: %s",
+    (char) => {
+      expect(() => foldEntryPath(`package/a${char}b.js`)).toThrow(/rejects/);
+    },
+  );
 
   test("error: missing tarball argument reports usage", async () => {
     await expect(main("")).rejects.toThrow(/Usage/);
