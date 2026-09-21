@@ -808,7 +808,7 @@ export namespace TreeUtils {
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
    * @throws {InvalidTreeError} when leaf index is out of range or when the leaf count is not a power of two.
-   * @throws {InvalidTreeHeightError} when the leaf count exceeds height 20.
+   * @throws {InvalidTreeHeightError} when the tree height (log2 of the leaf count) exceeds 20.
    * @example
    * ```ts
    * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -881,7 +881,7 @@ export namespace TreeUtils {
    * @param params.count - Number of leading leaf indices to prove; defaults to `tree.leaves.length`.
    * @returns Frozen proofs for leaf indices `0` through `count - 1`.
    * @throws {InvalidTreeError} when `count` is negative, non-integer, or exceeds the leaf count, or when the leaf count is not a power of two.
-   * @throws {InvalidTreeHeightError} when the leaf count exceeds height 20.
+   * @throws {InvalidTreeHeightError} when the tree height (log2 of the leaf count) exceeds 20.
    * @example
    * ```ts
    * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
