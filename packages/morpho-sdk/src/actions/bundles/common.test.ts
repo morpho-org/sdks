@@ -191,6 +191,24 @@ describe("getBundlesSharesPermit", () => {
       }),
     ).toThrow(BundlesPermitMismatchError);
   });
+  test("error: BundlesPermitMismatchError on nonce disagreement", () => {
+    expect(() =>
+      getBundlesSharesPermit({
+        vault,
+        deadline: 13n,
+        requirementSignature: {
+          ...permit,
+          action: {
+            ...permit.action,
+            args: {
+              ...permit.action.args,
+              nonce: permit.action.args.nonce + 1n,
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
 
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {
     fc.assert(
