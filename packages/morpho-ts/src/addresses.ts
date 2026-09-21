@@ -91,9 +91,9 @@ export interface ChainAddresses {
   ecrecoverAuthorizer?: `0x${string}`;
   /** SetterRatifier contract that validates Midnight offer Merkle roots ratified onchain by the maker or delegate. */
   setterRatifier?: `0x${string}`;
-  /** PriceRatifierV1 contract that validates Merkle roots of price-bounded Midnight offers ratified onchain by the maker. Not yet deployed: the key stays absent until deployment. */
+  /** PriceRatifierV1 contract that validates Merkle roots of price-bounded Midnight offers ratified onchain by the maker or delegate. Not yet deployed: the key stays absent until deployment. */
   priceRatifierV1?: `0x${string}`;
-  /** RateRatifierV1 contract that validates Merkle roots of rate-bounded Midnight offers ratified onchain by the maker. Not yet deployed: the key stays absent until deployment. */
+  /** RateRatifierV1 contract that validates Merkle roots of rate-bounded Midnight offers ratified onchain by the maker or delegate. Not yet deployed: the key stays absent until deployment. */
   rateRatifierV1?: `0x${string}`;
 }
 
