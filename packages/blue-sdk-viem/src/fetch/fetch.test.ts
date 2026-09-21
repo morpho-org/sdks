@@ -586,7 +586,8 @@ describe("fetchMarket", () => {
       },
     });
 
-    const deploylessHandle = createMockClient(mainnet);
+    const lowercaseIrmChain = { ...mainnet, id: LOWERCASE_IRM_CHAIN_ID };
+    const deploylessHandle = createMockClient(lowercaseIrmChain);
     mockDeploylessRead(deploylessHandle, marketQueryAbi, "query", {
       marketParams: marketParamsTuple(),
       market: marketTuple,
@@ -594,15 +595,12 @@ describe("fetchMarket", () => {
       price: 123n,
       rateAtTarget: 456n,
     });
-    const deploylessMarket = await fetchMarket(ID, deploylessHandle.client, {
-      chainId: LOWERCASE_IRM_CHAIN_ID,
-    });
+    const deploylessMarket = await fetchMarket(ID, deploylessHandle.client);
     expect(deploylessMarket.rateAtTarget).toBe(456n);
 
-    const multicallHandle = createMockClient(mainnet);
+    const multicallHandle = createMockClient(lowercaseIrmChain);
     mockMarketReads(multicallHandle);
     const multicallMarket = await fetchMarket(ID, multicallHandle.client, {
-      chainId: LOWERCASE_IRM_CHAIN_ID,
       deployless: false,
     });
     expect(multicallMarket.rateAtTarget).toBe(456n);

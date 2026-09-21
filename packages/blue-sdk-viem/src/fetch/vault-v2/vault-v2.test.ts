@@ -1880,14 +1880,13 @@ describe("fetchAccrualVaultV2 deployless path", () => {
     registerCustomAddresses({
       addresses: {
         [lowercaseIrmChainId]: {
-          morpho: ADDRESSES.morpho,
-          bundler3: ADDRESSES.bundler3,
+          blue: ADDRESSES.blue,
           adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm.toLowerCase() as Address,
           vaultV2Factory: ADDRESSES.vaultV2Factory,
         } satisfies ChainAddresses,
       },
     });
-    const handle = createMockClient(mainnet);
+    const handle = createMockClient({ ...mainnet, id: lowercaseIrmChainId });
     mockDeploylessRead(
       handle,
       accrualVaultV2QueryAbi,
@@ -1895,9 +1894,7 @@ describe("fetchAccrualVaultV2 deployless path", () => {
       accrualVaultV2Result,
     );
 
-    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
-      chainId: lowercaseIrmChainId,
-    });
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client);
     const [adapter] = vault.accrualAdapters;
 
     expect(
