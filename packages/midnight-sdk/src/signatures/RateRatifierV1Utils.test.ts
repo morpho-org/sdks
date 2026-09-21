@@ -312,6 +312,27 @@ describe("RateRatifierV1Utils ratifier data", () => {
     }
   });
 
+  test("behavior: ratifies a padded descriptor", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf({ maxUnits: 1n }, 5n),
+      leaf({ maxUnits: 2n }, 6n),
+      { ...leaf({ maxUnits: 3n }, 7n), allowedTaker },
+    ]);
+
+    const items = RateRatifierV1Utils.ratify({ tree: descriptor });
+
+    expect(items).toHaveLength(3);
+    for (const [index, item] of items.entries()) {
+      const decoded = RateRatifierV1Utils.verifyRatifierData({
+        offer: item.offer,
+        ratifierData: item.ratifierData,
+      });
+      const entry = descriptor.entries[index]!;
+      expect(decoded.rate).toBe(entry.rate);
+      expect(decoded.allowedTaker).toBe(entry.allowedTaker);
+    }
+  });
+
   test("behavior: accepts any taker when allowedTaker is zero", () => {
     const [item] = RateRatifierV1Utils.ratify({ tree: [leaf({}, 0n)] });
 

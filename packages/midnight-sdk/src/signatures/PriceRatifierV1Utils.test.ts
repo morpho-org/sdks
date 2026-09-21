@@ -225,6 +225,27 @@ describe("PriceRatifierV1Utils ratifier data", () => {
     expect(isAddressEqual(decoded.allowedTaker, allowedTaker)).toBe(true);
   });
 
+  test("behavior: ratifies a padded descriptor", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer({ maxUnits: 1n }) },
+      { offer: offer({ maxUnits: 2n }), allowedTaker },
+      { offer: offer({ maxUnits: 3n }) },
+    ]);
+
+    const items = PriceRatifierV1Utils.ratify({ tree: descriptor });
+
+    expect(items).toHaveLength(3);
+    for (const [index, item] of items.entries()) {
+      const decoded = PriceRatifierV1Utils.verifyRatifierData({
+        offer: item.offer,
+        ratifierData: item.ratifierData,
+      });
+      expect(decoded.allowedTaker).toBe(
+        descriptor.entries[index]!.allowedTaker,
+      );
+    }
+  });
+
   test("behavior: zero taker restriction accepts any taker", () => {
     const [item] = PriceRatifierV1Utils.ratify({ tree: [{ offer: offer() }] });
     expect(
