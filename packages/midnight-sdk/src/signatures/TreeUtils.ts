@@ -82,6 +82,21 @@ function assertLeafOffers(
   }
 }
 
+function buildLayers(leaves: readonly Hash[]): readonly (readonly Hash[])[] {
+  const layers: Hash[][] = [[...leaves]];
+  let level = layers[0]!;
+  while (level.length > 1) {
+    const next: Hash[] = [];
+    for (let i = 0; i < level.length; i += 2) {
+      next.push(TreeUtils.hashNode(level[i]!, level[i + 1]!));
+    }
+    layers.push(next);
+    level = next;
+  }
+
+  return layers;
+}
+
 /**
  * Fully materialized tree descriptor.
  *
@@ -714,20 +729,12 @@ export namespace TreeUtils {
     /* v8 ignore next: exercising this branch would require allocating more than 2^20 offer structs. */
     if (height > 20) throw new InvalidTreeHeightError(height);
 
-    let level = [...leaves];
-
-    while (level.length > 1) {
-      const next: Hash[] = [];
-      for (let i = 0; i < level.length; i += 2) {
-        next.push(hashNode(level[i]!, level[i + 1]!));
-      }
-      level = next;
-    }
+    const layers = buildLayers(leaves);
 
     return deepFreeze({
       offers: offerStructs,
       leaves,
-      root: level[0]!,
+      root: layers[height]![0]!,
       height,
     });
   }
@@ -784,14 +791,14 @@ export namespace TreeUtils {
   /**
    * Builds a Merkle proof for one offer.
    *
-   * Use after tree construction when a custom ratifier needs one proof. The
-   * built-in Ecrecover and Setter helpers call this while generating
-   * `ratifierData`.
+   * Use after tree construction when a custom ratifier needs one proof; the
+   * built-in ratify helpers use {@link TreeUtils.buildProofs} to generate
+   * `ratifierData` in bulk.
    *
    * @param params.tree - Tree-like data with the root and leaves that contain the leaf.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
-   * @throws {InvalidTreeError} when leaf index is out of range.
+   * @throws {InvalidTreeError} when leaf index is out of range or when the leaf count is not a power of two.
    * @example
    * ```ts
    * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -840,20 +847,101 @@ export namespace TreeUtils {
       );
     }
 
-    let index = Number(leafIndex);
-    let level = [...params.tree.leaves];
-    const proof: Hash[] = [];
-    while (level.length > 1) {
-      proof.push(level[index ^ 1]!);
-      const next: Hash[] = [];
-      for (let i = 0; i < level.length; i += 2) {
-        next.push(hashNode(level[i]!, level[i + 1]!));
-      }
-      index = Math.floor(index / 2);
-      level = next;
+    if (!isPowerOfTwo(params.tree.leaves.length)) {
+      throw new InvalidTreeError(
+        `Tree leaf count "${params.tree.leaves.length}" is not a power of two.`,
+      );
     }
 
+    const index = Number(leafIndex);
+    const layers = buildLayers(params.tree.leaves);
+    const proof = layers
+      .slice(0, -1)
+      .map((level, layerIndex) => level[(index >> layerIndex) ^ 1]!);
+
     return deepFreeze({ root: params.tree.root, leafIndex, proof });
+  }
+
+  /**
+   * Builds Merkle proofs for a range of leaves from one tree-layer pass.
+   *
+   * Use instead of calling {@link TreeUtils.buildProof} per leaf when many
+   * proofs are needed at once, for example inside `ratify` helpers: the
+   * parent layers are computed once instead of once per leaf. Each returned
+   * proof is byte-identical to `buildProof` on the same tree and leaf index.
+   *
+   * @param params.tree - Tree leaves and root to prove against.
+   * @param params.count - Number of leading leaf indices to prove; defaults to `tree.leaves.length`.
+   * @returns Frozen proofs for leaf indices `0` through `count - 1`.
+   * @throws {InvalidTreeError} when `count` is negative, non-integer, or exceeds the leaf count, or when the leaf count is not a power of two.
+   * @example
+   * ```ts
+   * import { Offer, Tree, TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const proofs = TreeUtils.buildProofs({
+   *   tree: Tree.create([offer]),
+   *   count: 1,
+   * });
+   * console.log(proofs[0]!.proof.length);
+   * ```
+   */
+  export function buildProofs(params: {
+    readonly tree: Pick<TreeLike, "leaves" | "root">;
+    readonly count?: number;
+  }): readonly TreeProof[] {
+    const count = params.count ?? params.tree.leaves.length;
+    if (
+      !Number.isInteger(count) ||
+      count < 0 ||
+      count > params.tree.leaves.length
+    ) {
+      throw new InvalidTreeError(`Proof count "${count}" is outside the tree.`);
+    }
+    if (!isPowerOfTwo(params.tree.leaves.length)) {
+      throw new InvalidTreeError(
+        `Tree leaf count "${params.tree.leaves.length}" is not a power of two.`,
+      );
+    }
+
+    const layers = buildLayers(params.tree.leaves);
+
+    return deepFreeze(
+      Array.from({ length: count }, (_, index) =>
+        deepFreeze({
+          root: params.tree.root,
+          leafIndex: BigInt(index),
+          proof: layers
+            .slice(0, -1)
+            .map((level, layerIndex) => level[(index >> layerIndex) ^ 1]!),
+        }),
+      ),
+    );
   }
 
   /**
