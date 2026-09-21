@@ -329,9 +329,13 @@ export class InvalidTreeError extends Error {
  * ```
  */
 export class InvalidRateRatifierV1RateError extends Error {
+  /** Negative rate that was rejected. */
+  public readonly rate: bigint;
+
   public constructor(rate: bigint) {
     super(`Rate "${rate}" is negative. Use a non-negative WAD-scaled rate.`);
     this.name = "InvalidRateRatifierV1RateError";
+    this.rate = rate;
   }
 }
 

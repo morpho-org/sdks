@@ -233,11 +233,12 @@ export namespace RateRatifierV1Utils {
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
    * const leaf = RateRatifierV1Utils.hashLeaf({
    *   offer,
    *   rate: 0n,
-   *   allowedTaker: "0x0000000000000000000000000000000000000000",
+   *   allowedTaker: zeroAddress,
    * });
    * console.log(leaf);
    * ```
@@ -662,6 +663,8 @@ export namespace RateRatifierV1Utils {
    * @returns Whether the offer's tick price satisfies the rate bound.
    * @throws {InvalidRateRatifierV1RateError} when `rate` is negative.
    * @throws {InvalidRateRatifierV1TimeError} when `timestamp` is negative.
+   * @throws {NegativeValueError} when `offer.tick` is negative.
+   * @throws {TickOutOfRangeError} when `offer.tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";

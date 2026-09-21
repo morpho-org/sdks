@@ -294,12 +294,15 @@ describe("PriceRatifierV1Utils.buildProof", () => {
     });
 
     expect(
-      PriceRatifierV1Utils.verifyRatifierData({
-        offer: descriptor.offers[1]!,
-        ratifierData: data,
-        taker: allowedTaker,
-      }).allowedTaker.toLowerCase(),
-    ).toBe(allowedTaker.toLowerCase());
+      isAddressEqual(
+        PriceRatifierV1Utils.verifyRatifierData({
+          offer: descriptor.offers[1]!,
+          ratifierData: data,
+          taker: allowedTaker,
+        }).allowedTaker,
+        allowedTaker,
+      ),
+    ).toBe(true);
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
@@ -323,12 +326,15 @@ describe("PriceRatifierV1Utils.ratifierData", () => {
     const data = PriceRatifierV1Utils.ratifierData({ tree, leafIndex: 1n });
 
     expect(
-      PriceRatifierV1Utils.verifyRatifierData({
-        offer: tree[1]!.offer,
-        ratifierData: data,
-        taker: allowedTaker,
-      }).allowedTaker.toLowerCase(),
-    ).toBe(allowedTaker.toLowerCase());
+      isAddressEqual(
+        PriceRatifierV1Utils.verifyRatifierData({
+          offer: tree[1]!.offer,
+          ratifierData: data,
+          taker: allowedTaker,
+        }).allowedTaker,
+        allowedTaker,
+      ),
+    ).toBe(true);
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
