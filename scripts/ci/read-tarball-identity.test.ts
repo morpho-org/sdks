@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
@@ -150,6 +150,25 @@ describe("readTarballIdentity", () => {
         /manifest name must be a non-empty string/,
       );
     });
+  });
+
+  test("behavior: asks pacote with npm publish's manifest options", async () => {
+    const calls: [string, { fullMetadata: boolean; fullReadJson: boolean }][] =
+      [];
+
+    await readTarballIdentity("some/dir/out.tgz", {
+      manifest: async (spec, opts) => {
+        calls.push([spec, opts]);
+        return { name: "package", version: "1.0.0" };
+      },
+    });
+
+    expect(calls).toStrictEqual([
+      [
+        `file:${resolve("some/dir/out.tgz")}`,
+        { fullMetadata: true, fullReadJson: true },
+      ],
+    ]);
   });
 
   test("error: rejects a manifest missing version", async () => {
