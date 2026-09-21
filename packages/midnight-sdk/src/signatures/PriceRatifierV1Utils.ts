@@ -526,9 +526,14 @@ export namespace PriceRatifierV1Utils {
   }): readonly Payload.Item[] {
     const tree = resolveRatifierV1Tree(params.tree, treeHelpers);
 
+    const proofs = TreeUtils.buildProofs({
+      tree,
+      count: tree.offers.length,
+    });
+
     return tree.offers.map((offer, leafIndex) => {
       const entry = tree.entries[leafIndex]!;
-      const proof = TreeUtils.buildProof({ tree, leafIndex });
+      const proof = proofs[leafIndex]!;
 
       return {
         offer,
