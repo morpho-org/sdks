@@ -11,7 +11,11 @@ import {
 } from "viem";
 import { rateRatifierV1Abi } from "../abis.js";
 import { RATE_RATIFIER_V1_OFFER_TYPEHASH } from "../constants.js";
-import { InvalidRateRatifierV1RateError, InvalidTreeError } from "../errors.js";
+import {
+  InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TimeError,
+  InvalidTreeError,
+} from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import {
@@ -20,7 +24,11 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
+import {
+  EMPTY_OFFER_STRUCT,
+  isEmptyOfferStruct,
+  isZeroAddress,
+} from "./offerStructInternal.js";
 import type { Payload } from "./Payload.js";
 import {
   assertRatifierV1Taker,
@@ -56,6 +64,15 @@ const rateRatifierV1LeafHashParams = [
   { name: "maxAssets", type: "uint128" },
   { name: "continuousFeeCap", type: "uint256" },
 ] as const;
+
+const isPaddingEntry = (entry: {
+  readonly offer: OfferStruct;
+  readonly rate: bigint;
+  readonly allowedTaker: Address;
+}) =>
+  isEmptyOfferStruct(entry.offer) &&
+  entry.rate === 0n &&
+  isZeroAddress(entry.allowedTaker);
 
 /**
  * One RateRatifierV1 offer leaf.
@@ -303,7 +320,13 @@ export namespace RateRatifierV1Utils {
       label: "RateRatifierV1",
     });
 
-    return deepFreeze({ ...descriptor, offers });
+    return Object.freeze({
+      entries: deepFreeze(descriptor.entries),
+      leaves: deepFreeze(descriptor.leaves),
+      root: descriptor.root,
+      height: descriptor.height,
+      offers: Object.freeze([...offers]),
+    });
   }
 
   /**
@@ -328,7 +351,11 @@ export namespace RateRatifierV1Utils {
     readonly tree: RateRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): TreeProof {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
   }
@@ -498,7 +525,11 @@ export namespace RateRatifierV1Utils {
     readonly tree: RateRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): Hex {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
 
@@ -535,7 +566,11 @@ export namespace RateRatifierV1Utils {
   export function ratify(params: {
     readonly tree: RateRatifierV1TreeInput;
   }): readonly Payload.Item[] {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
 
     return tree.offers.map((offer, leafIndex) => {
       const entry = tree.entries[leafIndex]!;
@@ -565,6 +600,8 @@ export namespace RateRatifierV1Utils {
    * @param params.timeToMaturity - Seconds remaining until market maturity.
    * @param params.buy - Whether the maker buys units.
    * @returns WAD-scaled price bound.
+   * @throws {InvalidRateRatifierV1RateError} when `rate` is negative.
+   * @throws {InvalidRateRatifierV1TimeError} when `timeToMaturity` is negative.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -582,8 +619,17 @@ export namespace RateRatifierV1Utils {
     readonly timeToMaturity: BigIntish;
     readonly buy: boolean;
   }): bigint {
-    const denominator =
-      MathLib.WAD + BigInt(params.rate) * BigInt(params.timeToMaturity);
+    const rate = BigInt(params.rate);
+    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+    const timeToMaturity = BigInt(params.timeToMaturity);
+    if (timeToMaturity < 0n) {
+      throw new InvalidRateRatifierV1TimeError(
+        timeToMaturity,
+        "timeToMaturity",
+      );
+    }
+
+    const denominator = MathLib.WAD + rate * timeToMaturity;
 
     return params.buy
       ? MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, denominator)
@@ -601,6 +647,8 @@ export namespace RateRatifierV1Utils {
    * @param params.rate - WAD-scaled per-second rate bound proven by the leaf.
    * @param params.timestamp - Timestamp at which acceptance is evaluated.
    * @returns Whether the offer's tick price satisfies the rate bound.
+   * @throws {InvalidRateRatifierV1RateError} when `rate` is negative.
+   * @throws {InvalidRateRatifierV1TimeError} when `timestamp` is negative.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
@@ -618,12 +666,16 @@ export namespace RateRatifierV1Utils {
     readonly rate: BigIntish;
     readonly timestamp: BigIntish;
   }): boolean {
+    const timestamp = BigInt(params.timestamp);
+    if (timestamp < 0n) {
+      throw new InvalidRateRatifierV1TimeError(timestamp, "timestamp");
+    }
     const maturity = BigInt(
       "params" in params.offer.market
         ? params.offer.market.params.maturity
         : params.offer.market.maturity,
     );
-    const timeToMaturity = maturity - BigInt(params.timestamp);
+    const timeToMaturity = maturity - timestamp;
     const bound = priceBound({
       rate: params.rate,
       timeToMaturity: timeToMaturity > 0n ? timeToMaturity : 0n,

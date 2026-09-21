@@ -1,5 +1,15 @@
 import { type Address, type Hash, isAddressEqual, zeroAddress } from "viem";
-import { InvalidTreeError, RatifierV1TakerNotAllowedError } from "../errors.js";
+import {
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  RatifierV1TakerNotAllowedError,
+} from "../errors.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  OfferUtils,
+} from "../offers/index.js";
 import { TreeUtils } from "./TreeUtils.js";
 
 function isPowerOfTwo(value: number): boolean {
@@ -78,17 +88,100 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
 
 /**
  * @internal Resolves a V1 ratifier tree input into a materialized descriptor.
+ *
+ * Caller-provided descriptors are fully re-validated: height, lengths, leaf
+ * hashes, visible-offer correspondence, padding placement, and the Merkle
+ * root must all agree, mirroring `RatifierUtils.normalizeTree`.
  */
 export function resolveRatifierV1Tree<
+  TStruct extends { readonly offer: OfferStruct },
   TLeaf,
-  TDescriptor extends { readonly entries: readonly unknown[] },
+  TDescriptor extends RatifierV1Descriptor<TStruct> & {
+    readonly offers: readonly IOffer[];
+  },
 >(
   tree: TDescriptor | readonly TLeaf[],
-  buildDescriptor: (leaves: readonly TLeaf[]) => TDescriptor,
+  helpers: {
+    readonly buildDescriptor: (leaves: readonly TLeaf[]) => TDescriptor;
+    readonly hashLeaf: (entry: TStruct) => Hash;
+    readonly isPadding: (entry: TStruct) => boolean;
+  },
 ): TDescriptor {
-  return Array.isArray(tree)
-    ? buildDescriptor(tree as readonly TLeaf[])
-    : (tree as TDescriptor);
+  const { buildDescriptor, hashLeaf, isPadding } = helpers;
+  if (Array.isArray(tree)) return buildDescriptor(tree as readonly TLeaf[]);
+
+  const descriptor = tree as TDescriptor;
+  if (
+    !Number.isInteger(descriptor.height) ||
+    descriptor.height < 0 ||
+    descriptor.height > 20
+  ) {
+    throw new InvalidTreeHeightError(descriptor.height);
+  }
+
+  const expectedLength = 2 ** descriptor.height;
+  if (
+    descriptor.entries.length !== expectedLength ||
+    descriptor.leaves.length !== expectedLength ||
+    descriptor.offers.length > expectedLength
+  ) {
+    throw new InvalidTreeError(
+      "Tree entries, leaves, offers, and height describe different trees.",
+    );
+  }
+
+  const computedLeaves = descriptor.entries.map((entry) => hashLeaf(entry));
+  const seen = new Set<string>();
+  for (const [index, offer] of descriptor.offers.entries()) {
+    const entry = descriptor.entries[index]!;
+    if (isPadding(entry)) {
+      throw new InvalidTreeError(
+        "Visible offers must not contain tree padding.",
+      );
+    }
+    if (
+      OfferUtils.hashStruct(
+        OfferUtils.toStruct({ offer: Offer.from(offer) }),
+      ).toLowerCase() !== OfferUtils.hashStruct(entry.offer).toLowerCase()
+    ) {
+      throw new InvalidTreeError(
+        "Visible offers do not match the tree entries.",
+      );
+    }
+    const leafHash = computedLeaves[index]!.toLowerCase();
+    if (seen.has(leafHash)) {
+      throw new InvalidTreeError(`Duplicate leaf hash "${leafHash}" in tree.`);
+    }
+    seen.add(leafHash);
+  }
+
+  if (
+    descriptor.entries
+      .slice(descriptor.offers.length)
+      .some((entry) => !isPadding(entry))
+  ) {
+    throw new InvalidTreeError(
+      "Tree padding contains entries hidden from the visible offer list.",
+    );
+  }
+
+  if (
+    computedLeaves.some(
+      (leaf, index) =>
+        leaf.toLowerCase() !== descriptor.leaves[index]!.toLowerCase(),
+    )
+  ) {
+    throw new InvalidTreeError("Tree leaves do not match its entries.");
+  }
+
+  if (
+    TreeUtils.buildRootFromLeaves(descriptor.leaves).root.toLowerCase() !==
+    descriptor.root.toLowerCase()
+  ) {
+    throw new InvalidTreeError("Tree root does not match its leaves.");
+  }
+
+  return descriptor;
 }
 
 /**

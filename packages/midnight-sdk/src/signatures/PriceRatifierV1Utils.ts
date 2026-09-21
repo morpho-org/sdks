@@ -19,7 +19,11 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
+import {
+  EMPTY_OFFER_STRUCT,
+  isEmptyOfferStruct,
+  isZeroAddress,
+} from "./offerStructInternal.js";
 import type { Payload } from "./Payload.js";
 import {
   assertRatifierV1Taker,
@@ -54,6 +58,11 @@ const priceRatifierV1LeafHashParams = [
   { name: "maxAssets", type: "uint128" },
   { name: "continuousFeeCap", type: "uint256" },
 ] as const;
+
+const isPaddingEntry = (entry: {
+  readonly offer: OfferStruct;
+  readonly allowedTaker: Address;
+}) => isEmptyOfferStruct(entry.offer) && isZeroAddress(entry.allowedTaker);
 
 /**
  * One PriceRatifierV1 offer leaf.
@@ -278,7 +287,13 @@ export namespace PriceRatifierV1Utils {
       label: "PriceRatifierV1",
     });
 
-    return deepFreeze({ ...descriptor, offers });
+    return Object.freeze({
+      entries: deepFreeze(descriptor.entries),
+      leaves: deepFreeze(descriptor.leaves),
+      root: descriptor.root,
+      height: descriptor.height,
+      offers: Object.freeze([...offers]),
+    });
   }
 
   /**
@@ -303,7 +318,11 @@ export namespace PriceRatifierV1Utils {
     readonly tree: PriceRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): TreeProof {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
 
     return TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
   }
@@ -460,7 +479,11 @@ export namespace PriceRatifierV1Utils {
     readonly tree: PriceRatifierV1TreeInput;
     readonly leafIndex: BigIntish;
   }): Hex {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
     const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
     const entry = tree.entries[Number(proof.leafIndex)]!;
 
@@ -496,7 +519,11 @@ export namespace PriceRatifierV1Utils {
   export function ratify(params: {
     readonly tree: PriceRatifierV1TreeInput;
   }): readonly Payload.Item[] {
-    const tree = resolveRatifierV1Tree(params.tree, buildDescriptor);
+    const tree = resolveRatifierV1Tree(params.tree, {
+      buildDescriptor,
+      hashLeaf,
+      isPadding: isPaddingEntry,
+    });
 
     return tree.offers.map((offer, leafIndex) => {
       const entry = tree.entries[leafIndex]!;
