@@ -835,6 +835,25 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 });
 
 describe("MidnightApi.fetchBookTakeableOffers", () => {
+  test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          offer: { ...apiOffer, max_units: "0", max_assets: "0" },
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchBookTakeableOffers({
+        marketId: MARKET_ID,
+        side: "asks",
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: [apiTakeableOffer],
@@ -1247,6 +1266,21 @@ describe("MidnightApi.fetchBookQuote", () => {
     },
   );
 
+  test("error: InvalidMidnightApiResponseError for takeable offer with non-hex market_id", async () => {
+    const { fetch } = createQuoteFetch([
+      { ...apiTakeableOffer, market_id: 12345 as unknown as Hex },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: InvalidMidnightApiResponseError for takeable offer with malformed embedded market", async () => {
     const { fetch } = createQuoteFetch([
       {
@@ -1271,6 +1305,7 @@ describe("MidnightApi.fetchBookQuote", () => {
   test.each([
     ["non-zero", MAKER],
     ["malformed", "invalid"],
+    ["nullish", null],
   ])(
     "error: InvalidMidnightApiResponseError for buy takeable offer with %s receiverIfMakerIsSeller",
     async (_, receiver) => {
@@ -1279,7 +1314,7 @@ describe("MidnightApi.fetchBookQuote", () => {
           ...apiBidTakeableOffer,
           offer: {
             ...apiBidTakeableOffer.offer,
-            receiver_if_maker_is_seller: receiver as Address,
+            receiver_if_maker_is_seller: receiver as unknown as Address,
           },
         },
       ]);
@@ -1313,6 +1348,21 @@ describe("MidnightApi.fetchBookQuote", () => {
 });
 
 describe("MidnightApi.fetchTakeableOffers", () => {
+  test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          offer: { ...apiOffer, max_units: "0", max_assets: "0" },
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       cursor: "next",

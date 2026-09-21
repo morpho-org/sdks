@@ -319,6 +319,11 @@ export function mapBoundTakeableOffers(
     }
     const { maxUnits, maxAssets, buy, maker, receiverIfMakerIsSeller } =
       take.offer;
+    if (!isAddress(receiverIfMakerIsSeller)) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer receiverIfMakerIsSeller "${receiverIfMakerIsSeller}" is not an address.`,
+      );
+    }
     try {
       // Return values unused: called only to enforce the cap-shape and buy-receiver invariants.
       OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
