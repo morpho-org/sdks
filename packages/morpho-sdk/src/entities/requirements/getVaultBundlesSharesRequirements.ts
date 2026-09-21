@@ -19,14 +19,17 @@ import {
  *
  * The exit burns however many shares the vault prices at execution time, so the share allowance is
  * the only cap on that burn. A leftover allowance above `requiredShareAllowance` therefore does not
- * satisfy the requirement: it is replaced by an approval or permit for exactly the computed cap.
+ * satisfy the requirement: it is replaced by an onchain approval for exactly the computed cap. Only
+ * an insufficient allowance may be raised through an ERC-2612 permit, because VaultBundlesV1 skips a
+ * permit whose nonce was already consumed and the leftover allowance would then stay in force.
  *
  * @internal
  *
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, exact allowance, and deadline values.
  * @returns No requirement when the allowance already equals `requiredShareAllowance`, otherwise one
- *   permit or approval that sets it to exactly that cap.
+ *   approval that sets it to exactly that cap, or one permit when the allowance is below the cap
+ *   and signatures are supported.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
  * @throws {viem.BaseError} when an allowance or nonce read fails.
  */
@@ -58,7 +61,9 @@ export const getVaultBundlesSharesRequirements = async (
   // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`,
   // so only an exact match skips the approval or permit that resets it to the computed cap.
   if (allowance === params.requiredShareAllowance) return [];
-  if (params.supportSignature) {
+  // An oversized allowance is only ever lowered onchain: `TokenLib.submitPermit` skips a permit
+  // whose nonce was already consumed, which would silently leave the stale cap in force.
+  if (allowance < params.requiredShareAllowance && params.supportSignature) {
     const nonce = await readContract(viemClient, {
       address: params.vaultData.address,
       abi: erc2612Abi,
