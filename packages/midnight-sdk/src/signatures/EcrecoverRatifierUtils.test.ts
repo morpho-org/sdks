@@ -18,6 +18,8 @@ import {
   EIP712_DOMAIN_TYPEHASH,
   MARKET_TYPEHASH,
   OFFER_TYPEHASH,
+  PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+  RATE_RATIFIER_V1_OFFER_TYPEHASH,
 } from "../constants.js";
 import {
   ChainIdMismatchError,
@@ -58,6 +60,10 @@ const offerType =
   "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 const eip712DomainType =
   "EIP712Domain(uint256 chainId,address verifyingContract)";
+const rateRatifierV1OfferType =
+  "RateRatifierV1Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 rate,address allowedTaker,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
+const priceRatifierV1OfferType =
+  "PriceRatifierV1Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,address allowedTaker,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 
 const typeHash = (type: string) => keccak256(stringToHex(type));
 const offerTreeType = (height: number) =>
@@ -641,6 +647,16 @@ describe("EcrecoverRatifierUtils typehash constants", () => {
       typeHash(`${offerType}${collateralParamsType}${marketType}`),
     );
     expect(EIP712_DOMAIN_TYPEHASH).toBe(typeHash(eip712DomainType));
+    expect(RATE_RATIFIER_V1_OFFER_TYPEHASH).toBe(
+      typeHash(
+        `${rateRatifierV1OfferType}${collateralParamsType}${marketType}`,
+      ),
+    );
+    expect(PRICE_RATIFIER_V1_OFFER_TYPEHASH).toBe(
+      typeHash(
+        `${priceRatifierV1OfferType}${collateralParamsType}${marketType}`,
+      ),
+    );
   });
 });
 

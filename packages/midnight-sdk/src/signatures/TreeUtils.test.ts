@@ -1094,6 +1094,34 @@ describe("TreeUtils.verifyProof", () => {
     ).toBe(false);
   });
 
+  test("behavior: builds a root from leaf hashes", () => {
+    const left =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const right =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const result = TreeUtils.buildRoot([left, right]);
+
+    expect(result.height).toBe(1);
+    expect(result.root).toBe(TreeUtils.hashNode(left, right));
+  });
+
+  test("behavior: verifies a proof from a leaf hash", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const sibling =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const proofRoot = TreeUtils.hashNode(leaf, sibling);
+
+    expect(
+      TreeUtils.verifyLeafProof({
+        leaf,
+        root: proofRoot,
+        leafIndex: 0n,
+        proof: [sibling],
+      }),
+    ).toBe(true);
+  });
+
   test("behavior: verifies proofs for plain offer objects", () => {
     const offer = baseOfferInput({ maxAssets: 0n });
     const group = Group.create([offer]);

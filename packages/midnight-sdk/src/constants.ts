@@ -192,6 +192,32 @@ export const OFFER_TYPEHASH =
   "0x9905214264a9fb7b6cc1b0e33db7a04687c6e4185a84755d29914314aa9d8906";
 
 /**
+ * HashLib PriceRatifierV1 offer typehash.
+ *
+ * @example
+ * ```ts
+ * import { PRICE_RATIFIER_V1_OFFER_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(PRICE_RATIFIER_V1_OFFER_TYPEHASH);
+ * ```
+ */
+export const PRICE_RATIFIER_V1_OFFER_TYPEHASH =
+  "0x62a94097fbcb9b56e3cf7b4f7bb075b49540b1364815434ff4b16bc4decb303d";
+
+/**
+ * HashLib RateRatifierV1 offer typehash.
+ *
+ * @example
+ * ```ts
+ * import { RATE_RATIFIER_V1_OFFER_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(RATE_RATIFIER_V1_OFFER_TYPEHASH);
+ * ```
+ */
+export const RATE_RATIFIER_V1_OFFER_TYPEHASH =
+  "0x8e0f9c17bf7e919b5f22e8c6c4e787905f45864a4be441067bbd2e65b35c3de1";
+
+/**
  * EcrecoverRatifier EIP-712 domain typehash.
  *
  * @example

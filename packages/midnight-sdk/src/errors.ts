@@ -319,6 +319,56 @@ export class InvalidTreeError extends Error {
 }
 
 /**
+ * Thrown when a RateRatifierV1 leaf receives a negative rate.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1RateError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1RateError(-1n);
+ * ```
+ */
+export class InvalidRateRatifierV1RateError extends Error {
+  public constructor(rate: bigint) {
+    super(`Rate "${rate}" is negative. Use a non-negative WAD-scaled rate.`);
+    this.name = "InvalidRateRatifierV1RateError";
+  }
+}
+
+/**
+ * Thrown when a taker is not the allowed taker of a V1 ratifier leaf.
+ *
+ * @example
+ * ```ts
+ * import { RatifierV1TakerNotAllowedError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new RatifierV1TakerNotAllowedError({
+ *   taker: "0x0000000000000000000000000000000000000001",
+ *   allowedTaker: "0x0000000000000000000000000000000000000002",
+ * });
+ * ```
+ */
+export class RatifierV1TakerNotAllowedError extends Error {
+  /** Taker that attempted to take the offer. */
+  public readonly taker: Address;
+
+  /** Taker allowed by the ratified leaf. */
+  public readonly allowedTaker: Address;
+
+  public constructor(params: {
+    readonly taker: Address;
+    readonly allowedTaker: Address;
+  }) {
+    super(
+      `Taker "${params.taker}" is not the allowed taker "${params.allowedTaker}". Use the allowed taker or an offer without a taker restriction.`,
+    );
+    this.name = "RatifierV1TakerNotAllowedError";
+    this.taker = params.taker;
+    this.allowedTaker = params.allowedTaker;
+  }
+}
+
+/**
  * Thrown when a viem client's chain id does not match the chain id required by a signing flow.
  *
  * @example
