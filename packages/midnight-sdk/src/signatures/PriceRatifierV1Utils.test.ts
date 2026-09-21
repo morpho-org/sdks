@@ -9,6 +9,7 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { priceRatifierV1Abi } from "../abis.js";
 import { InvalidTreeError, RatifierV1TakerNotAllowedError } from "../errors.js";
+import type { IOffer } from "../offers/index.js";
 import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
 
 const priceRatifier = "0x000000000000000000000000000000000000a111" as Address;
@@ -17,10 +18,63 @@ const { baseOffer } = createFixtures({
   midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000",
 });
+
+const deterministicOffer: IOffer = {
+  market: {
+    chainId: 8453,
+    midnight: "0x0000000000000000000000000000000000001000",
+    loanToken: "0x0000000000000000000000000000000000006000",
+    collateralParams: [
+      {
+        token: "0x0000000000000000000000000000000000007000",
+        lltv: 770000000000000000n,
+        liquidationCursor: 250000000000000000n,
+        oracle: "0x0000000000000000000000000000000000008000",
+      },
+    ],
+    maturity: 54000n,
+    rcfThreshold: 0n,
+    enterGate: zeroAddress,
+    liquidatorGate: zeroAddress,
+  },
+  buy: false,
+  maker: "0x0000000000000000000000000000000000009000",
+  start: 0n,
+  expiry: 3600n,
+  tick: 5000n,
+  group: "0x1111111111111111111111111111111111111111111111111111111111111111",
+  callback: zeroAddress,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: zeroAddress,
+  ratifier: "0x0000000000000000000000000000000000004000",
+  reduceOnly: false,
+  maxUnits: 100n,
+  maxAssets: 0n,
+  continuousFeeCap: 0n,
+};
+
 const offer = (overrides: Parameters<typeof baseOffer>[0] = {}) =>
   baseOffer({ maxAssets: 0n, ratifier: priceRatifier, ...overrides });
 
 describe("PriceRatifierV1Utils.hashLeaf", () => {
+  // HashLib vectors generated from Midnight commit 11f3d984b53286fd9137eb89e5d1385e23fe1b30.
+  test("behavior: matches HashLib vector", () => {
+    const allowed = "0x0000000000000000000000000000000000009999" as const;
+    const restricted = PriceRatifierV1Utils.buildDescriptor([
+      { offer: deterministicOffer, allowedTaker: allowed },
+    ]).entries[0]!;
+    const unrestricted = PriceRatifierV1Utils.buildDescriptor([
+      { offer: deterministicOffer },
+    ]).entries[0]!;
+
+    expect(PriceRatifierV1Utils.hashLeaf(restricted)).toBe(
+      "0x3b9d550f526f27f2aa1ab2d2bd01141c673c3c23fedce0b845fc599e7cc3d9d9",
+    );
+    expect(PriceRatifierV1Utils.hashLeaf(unrestricted)).toBe(
+      "0x3ace6c15bfbde4463a1f571522e63e7d3138e2cf6d4b1cb80c8c93d247df7d30",
+    );
+  });
+
   test("default", () => {
     const input = { offer: offer(), allowedTaker };
     const descriptor = PriceRatifierV1Utils.buildDescriptor([input]);

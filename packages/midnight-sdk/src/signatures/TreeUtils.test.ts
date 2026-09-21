@@ -1099,7 +1099,7 @@ describe("TreeUtils.verifyProof", () => {
       "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
     const right =
       "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
-    const result = TreeUtils.buildRoot([left, right]);
+    const result = TreeUtils.buildRootFromLeaves([left, right]);
 
     expect(result.height).toBe(1);
     expect(result.root).toBe(TreeUtils.hashNode(left, right));

@@ -17,6 +17,7 @@ import {
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
+import type { IOffer } from "../offers/index.js";
 import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
 import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
 
@@ -28,6 +29,40 @@ const { baseOffer } = createFixtures({
   midnight,
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000",
 });
+
+const deterministicOffer: IOffer = {
+  market: {
+    chainId: 8453,
+    midnight: "0x0000000000000000000000000000000000001000",
+    loanToken: "0x0000000000000000000000000000000000006000",
+    collateralParams: [
+      {
+        token: "0x0000000000000000000000000000000000007000",
+        lltv: 770000000000000000n,
+        liquidationCursor: 250000000000000000n,
+        oracle: "0x0000000000000000000000000000000000008000",
+      },
+    ],
+    maturity: 54000n,
+    rcfThreshold: 0n,
+    enterGate: zeroAddress,
+    liquidatorGate: zeroAddress,
+  },
+  buy: false,
+  maker: "0x0000000000000000000000000000000000009000",
+  start: 0n,
+  expiry: 3600n,
+  tick: 5000n,
+  group: "0x1111111111111111111111111111111111111111111111111111111111111111",
+  callback: zeroAddress,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: zeroAddress,
+  ratifier: "0x0000000000000000000000000000000000004000",
+  reduceOnly: false,
+  maxUnits: 100n,
+  maxAssets: 0n,
+  continuousFeeCap: 0n,
+};
 
 const leaf = (overrides: Parameters<typeof baseOffer>[0] = {}, rate = 0n) => ({
   offer: baseOffer({ maxAssets: 0n, ratifier: rateRatifier, ...overrides }),
@@ -88,6 +123,25 @@ describe("RateRatifierV1Utils.hashLeaf", () => {
         primaryType: "RateRatifierV1Offer",
         types: eip712Types,
       }),
+    );
+  });
+
+  // HashLib vectors generated from Midnight commit 11f3d984b53286fd9137eb89e5d1385e23fe1b30.
+  test("behavior: matches HashLib vector", () => {
+    const rate = 920000000000000000n;
+    const allowed = "0x0000000000000000000000000000000000009999" as const;
+    const restricted = RateRatifierV1Utils.buildDescriptor([
+      { offer: deterministicOffer, rate, allowedTaker: allowed },
+    ]).entries[0]!;
+    const unrestricted = RateRatifierV1Utils.buildDescriptor([
+      { offer: deterministicOffer, rate },
+    ]).entries[0]!;
+
+    expect(RateRatifierV1Utils.hashLeaf(restricted)).toBe(
+      "0xff5284f177648bada55149e7bf5ea4d1adaa541f3cb2f25cc43781eabec436ee",
+    );
+    expect(RateRatifierV1Utils.hashLeaf(unrestricted)).toBe(
+      "0x503acc925a83b77fa5fba0433af49dc25e077fe8b1d68dee5c13cc03cccfe281",
     );
   });
 
