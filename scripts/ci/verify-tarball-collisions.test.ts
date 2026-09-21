@@ -497,6 +497,20 @@ describe("verifyTarballEntries", () => {
     });
   });
 
+  test("error: rejects a dot-prefixed root entry", async () => {
+    await withTempDir(async (dir) => {
+      const tgz = buildTarball(dir, {
+        entries: ["package/", "./package/package.json"],
+      });
+      const entries = await listTarballEntries(tgz, tarReader());
+
+      expect(entries.map(({ path }) => path)).toContain(
+        "./package/package.json",
+      );
+      expect(() => verifyTarballEntries(entries)).toThrow(/outside package/);
+    });
+  });
+
   test.each([true, false])(
     "error: rejects a backslash root package entry (%s order)",
     async (backslashFirst) => {
