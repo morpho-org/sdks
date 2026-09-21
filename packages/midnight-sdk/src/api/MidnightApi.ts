@@ -290,7 +290,7 @@ export class MidnightApi {
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -343,7 +343,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, when its caps or buy-side receiver are not executable, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, when its caps or buy-side receiver are not executable, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -501,7 +501,7 @@ export class MidnightApi {
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -770,7 +770,7 @@ export class MidnightApi {
    * @param params.side - Book side to query.
    * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -808,7 +808,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiQuoteTargetError} when the runtime input does not set exactly one of `units` or `assets`.
    * @throws {NegativeValueError} when `settlementFee` is negative.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, when its caps or buy-side receiver are not executable, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, when its caps or buy-side receiver are not executable, or when the returned offers imply a rounded aggregate settlement price outside the effective average-worst-price guard.
    * @throws {SettlementFeeExceedsPriceError} when a bid's settlement fee exceeds its offer price.
    * @example
    * ```ts
@@ -844,7 +844,7 @@ export class MidnightApi {
    * @param params.cursor - Optional opaque pagination cursor from a previous response.
    * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer's `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned offer cannot be mapped (malformed numeric or hex fields), when its `market_id` does not match, or cannot be derived from, its embedded market, when it falls outside the requested filters, when its `receiverIfMakerIsSeller` is not a well-formed address, or when its caps or buy-side receiver are not executable.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
