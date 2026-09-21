@@ -336,6 +336,33 @@ export class InvalidRateRatifierV1RateError extends Error {
 }
 
 /**
+ * Thrown when a RateRatifierV1 time parameter is negative.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1TimeError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1TimeError(-1n, "timestamp");
+ * ```
+ */
+export class InvalidRateRatifierV1TimeError extends Error {
+  /** Negative time value that was rejected. */
+  public readonly value: bigint;
+
+  /** Parameter that carried the negative value. */
+  public readonly field: "timeToMaturity" | "timestamp";
+
+  public constructor(value: bigint, field: "timeToMaturity" | "timestamp") {
+    super(
+      `${field} "${value}" is negative. Use a non-negative number of seconds.`,
+    );
+    this.name = "InvalidRateRatifierV1TimeError";
+    this.value = value;
+    this.field = field;
+  }
+}
+
+/**
  * Thrown when a taker is not the allowed taker of a V1 ratifier leaf.
  *
  * @example

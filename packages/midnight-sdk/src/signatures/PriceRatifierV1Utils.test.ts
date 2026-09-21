@@ -1,6 +1,10 @@
+import * as fc from "fast-check";
 import {
   type Address,
+  bytesToHex,
   decodeFunctionData,
+  getAddress,
+  type Hex,
   hashStruct,
   zeroAddress,
   zeroHash,
@@ -9,7 +13,7 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { priceRatifierV1Abi } from "../abis.js";
 import { InvalidTreeError, RatifierV1TakerNotAllowedError } from "../errors.js";
-import type { IOffer } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
 
 const priceRatifier = "0x000000000000000000000000000000000000a111" as Address;
@@ -163,6 +167,43 @@ describe("PriceRatifierV1Utils.buildDescriptor", () => {
       ]),
     ).toThrow(InvalidTreeError);
   });
+
+  test("behavior: does not deep-freeze offer instances", () => {
+    const input = offer();
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([{ offer: input }]);
+
+    expect(input.hash).toBe(OfferUtils.hash(input));
+    expect(descriptor.offers[0]!.hash).toBe(input.hash);
+  });
+
+  test("error: InvalidTreeError for a tampered descriptor root", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+
+    expect(() =>
+      PriceRatifierV1Utils.ratify({
+        tree: { ...descriptor, root: zeroHash },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a tampered descriptor leaf", () => {
+    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+      { offer: offer() },
+      { offer: offer({ maxUnits: 7n }) },
+    ]);
+
+    expect(() =>
+      PriceRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          leaves: [zeroHash, ...descriptor.leaves.slice(1)],
+        },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
 });
 
 describe("PriceRatifierV1Utils ratifier data", () => {
@@ -227,5 +268,34 @@ describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
       functionName: "setIsRootRatified",
       args: [offer().maker, zeroHash, true],
     });
+  });
+
+  test("behavior: encodes arbitrary arguments that decode identically", () => {
+    const fcAddress = fc
+      .uint8Array({ minLength: 20, maxLength: 20 })
+      .map((bytes) => bytesToHex(bytes) as Address);
+    const fcBytes32 = fc
+      .uint8Array({ minLength: 32, maxLength: 32 })
+      .map((bytes) => bytesToHex(bytes) as Hex);
+
+    fc.assert(
+      fc.property(fcAddress, fcAddress, fcBytes32, fc.boolean(), (...args) => {
+        const [ratifier, maker, root, isRatified] = args;
+        const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
+          ratifier,
+          maker,
+          root,
+          isRatified,
+        });
+
+        expect(call.to).toBe(ratifier);
+        expect(
+          decodeFunctionData({ abi: priceRatifierV1Abi, data: call.data }),
+        ).toEqual({
+          functionName: "setIsRootRatified",
+          args: [getAddress(maker), root, isRatified],
+        });
+      }),
+    );
   });
 });
