@@ -19,6 +19,7 @@ import type { MidnightApiFetch } from "../api/index.js";
 import {
   InvalidMarketParameterError,
   InvalidTreeError,
+  InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
@@ -850,6 +851,17 @@ describe("TreeUtils.buildProof", () => {
       }),
     ).toThrow(InvalidTreeError);
   });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProof({
+        tree: { leaves, root: zeroHash },
+        leafIndex: 0n,
+      }),
+    ).toThrow(InvalidTreeHeightError);
+  });
 });
 
 describe("TreeUtils.buildProofs", () => {
@@ -879,6 +891,22 @@ describe("TreeUtils.buildProofs", () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
 
     expect(TreeUtils.buildProofs({ tree, count: 0 })).toEqual([]);
+  });
+
+  test("behavior: count below leaves.length returns only leading proofs", () => {
+    const tree = Tree.create(
+      Array.from({ length: 5 }, (_, i) =>
+        baseOffer({ maxAssets: 0n, maxUnits: BigInt(i + 1) }),
+      ),
+    );
+
+    const proofs = TreeUtils.buildProofs({ tree, count: tree.offers.length });
+    expect(proofs).toHaveLength(5);
+    for (let i = 0; i < 5; i++) {
+      expect(proofs[i]).toEqual(
+        TreeUtils.buildProof({ tree, leafIndex: BigInt(i) }),
+      );
+    }
   });
 
   test("behavior: height-0 tree returns one empty proof", () => {
@@ -925,6 +953,17 @@ describe("TreeUtils.buildProofs", () => {
     expect(() =>
       TreeUtils.buildProofs({ tree: { leaves, root: zeroHash } }),
     ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProofs({
+        tree: { leaves, root: zeroHash },
+        count: 1,
+      }),
+    ).toThrow(InvalidTreeHeightError);
   });
 
   test("behavior: random leaf lists produce proofs identical to buildProof", () => {

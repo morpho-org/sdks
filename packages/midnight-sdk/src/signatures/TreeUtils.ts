@@ -104,7 +104,6 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
     );
   }
   const height = Math.log2(leaves.length);
-  /* v8 ignore next: exercising this branch would require allocating more than 2^20 leaves. */
   if (height > 20) throw new InvalidTreeHeightError(height);
 
   return height;
@@ -738,10 +737,7 @@ export namespace TreeUtils {
     const leaves = offerStructs.map(OfferUtils.hashStruct);
     assertLeafOffers(offerStructs, leaves);
 
-    const height = Math.log2(offerStructs.length);
-    /* v8 ignore next: exercising this branch would require allocating more than 2^20 offer structs. */
-    if (height > 20) throw new InvalidTreeHeightError(height);
-
+    const height = assertProvableLeaves(leaves);
     const layers = buildLayers(leaves);
 
     return deepFreeze({
