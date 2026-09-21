@@ -747,7 +747,7 @@ export namespace TreeUtils {
     const leaves = offerStructs.map(OfferUtils.hashStruct);
     assertLeafOffers(offerStructs, leaves);
 
-    const { root, height } = buildRootFromLeaves(leaves);
+    const { root, height } = computeRootFromLeaves(leaves);
 
     return deepFreeze({
       offers: offerStructs,
@@ -802,7 +802,10 @@ export namespace TreeUtils {
    * console.log(root);
    * ```
    */
-  export function buildRoot(entries: TreeCreateParams): Hash;
+  export function buildRoot(entries: TreeCreateParams): Hash {
+    return buildDescriptor(entries).root;
+  }
+
   /**
    * Builds a Merkle root from already-hashed leaves.
    *
@@ -819,22 +822,15 @@ export namespace TreeUtils {
    * import { TreeUtils } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const { root, height } = TreeUtils.buildRoot([zeroHash]);
+   * const { root, height } = TreeUtils.buildRootFromLeaves([zeroHash]);
    * console.log(height);
    * ```
    */
-  export function buildRoot(leaves: readonly Hash[]): {
+  export function buildRootFromLeaves(leaves: readonly Hash[]): {
     readonly root: Hash;
     readonly height: number;
-  };
-  export function buildRoot(
-    input: TreeCreateParams | readonly Hash[],
-  ): Hash | { readonly root: Hash; readonly height: number } {
-    if (typeof input[0] === "string") {
-      return buildRootFromLeaves(input as readonly Hash[]);
-    }
-
-    return buildDescriptor(input as TreeCreateParams).root;
+  } {
+    return computeRootFromLeaves(leaves);
   }
 
   /**

@@ -71,7 +71,7 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
         ),
       ];
   const leaves = paddedEntries.map(hashLeaf);
-  const { root, height } = TreeUtils.buildRoot(leaves);
+  const { root, height } = TreeUtils.buildRootFromLeaves(leaves);
 
   return { entries: paddedEntries, leaves, root, height };
 }
