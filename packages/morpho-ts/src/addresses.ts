@@ -1951,6 +1951,8 @@ const refreshDeploymentViews = () => {
 /**
  * Registers custom addresses, deployment blocks, and unwrapped token mappings.
  *
+ * Validation runs over every requested patch before any registry is committed; a thrown error leaves all registries unchanged.
+ *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
@@ -1964,8 +1966,6 @@ const refreshDeploymentViews = () => {
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.
- *
- * Validation runs over every requested patch before any registry is committed; a thrown error leaves all registries unchanged.
  *
  * @example
  * ```ts
