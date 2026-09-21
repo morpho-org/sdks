@@ -109,6 +109,16 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
   return height;
 }
 
+function buildRootFromLeaves(leaves: readonly Hash[]): {
+  readonly root: Hash;
+  readonly height: number;
+} {
+  const height = assertProvableLeaves(leaves);
+  const layers = buildLayers(leaves);
+
+  return { root: layers[height]![0]!, height };
+}
+
 /**
  * Fully materialized tree descriptor.
  *
@@ -737,13 +747,12 @@ export namespace TreeUtils {
     const leaves = offerStructs.map(OfferUtils.hashStruct);
     assertLeafOffers(offerStructs, leaves);
 
-    const height = assertProvableLeaves(leaves);
-    const layers = buildLayers(leaves);
+    const { root, height } = buildRootFromLeaves(leaves);
 
     return deepFreeze({
       offers: offerStructs,
       leaves,
-      root: layers[height]![0]!,
+      root,
       height,
     });
   }
@@ -793,8 +802,39 @@ export namespace TreeUtils {
    * console.log(root);
    * ```
    */
-  export function buildRoot(entries: TreeCreateParams) {
-    return buildDescriptor(entries).root;
+  export function buildRoot(entries: TreeCreateParams): Hash;
+  /**
+   * Builds a Merkle root from already-hashed leaves.
+   *
+   * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
+   * offer hashes, for example `RateRatifierV1Utils.hashLeaf` outputs. The leaf
+   * count must be a power of two; pad non-power-of-two lists beforehand.
+   *
+   * @param leaves - Leaf hashes in leaf order; length must be a power of two.
+   * @returns Merkle root and tree height.
+   * @throws {InvalidTreeError} when the leaf count is not a power of two.
+   * @throws {InvalidTreeHeightError} when the tree exceeds supported ratifier typehashes.
+   * @example
+   * ```ts
+   * import { TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
+   *
+   * const { root, height } = TreeUtils.buildRoot([zeroHash]);
+   * console.log(height);
+   * ```
+   */
+  export function buildRoot(leaves: readonly Hash[]): {
+    readonly root: Hash;
+    readonly height: number;
+  };
+  export function buildRoot(
+    input: TreeCreateParams | readonly Hash[],
+  ): Hash | { readonly root: Hash; readonly height: number } {
+    if (typeof input[0] === "string") {
+      return buildRootFromLeaves(input as readonly Hash[]);
+    }
+
+    return buildDescriptor(input as TreeCreateParams).root;
   }
 
   /**
@@ -1007,8 +1047,48 @@ export namespace TreeUtils {
     readonly leafIndex: BigIntish;
     readonly proof: readonly Hash[];
   }) {
-    const offer = Offer.from(params.offer);
-    let node = OfferUtils.hash(offer);
+    return verifyLeafProof({
+      leaf: OfferUtils.hash(Offer.from(params.offer)),
+      root: params.root,
+      leafIndex: params.leafIndex,
+      proof: params.proof,
+    });
+  }
+
+  /**
+   * Verifies a local Merkle proof for an already-hashed leaf against a root.
+   *
+   * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
+   * offer hashes, for example `RateRatifierV1Utils.hashLeaf` outputs. The leaf
+   * index determines each sibling's left/right position, matching
+   * `HashLib.isLeaf` onchain.
+   *
+   * @param params.leaf - Leaf hash that starts proof reconstruction.
+   * @param params.root - Expected Merkle root.
+   * @param params.leafIndex - Leaf index proven by `params.proof`.
+   * @param params.proof - Merkle proof siblings for the leaf.
+   * @returns Whether the proof reconstructs the supplied root.
+   * @example
+   * ```ts
+   * import { TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
+   *
+   * const valid = TreeUtils.verifyLeafProof({
+   *   leaf: zeroHash,
+   *   root: zeroHash,
+   *   leafIndex: 0n,
+   *   proof: [],
+   * });
+   * console.log(valid);
+   * ```
+   */
+  export function verifyLeafProof(params: {
+    readonly leaf: Hash;
+    readonly root: Hash;
+    readonly leafIndex: BigIntish;
+    readonly proof: readonly Hash[];
+  }) {
+    let node = params.leaf;
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
       return false;

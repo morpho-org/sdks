@@ -37,6 +37,12 @@ export {
   OfferUtils as MidnightOfferUtils,
   Payload as MidnightPayload,
   PositionUtils as MidnightPositionUtils,
+  PriceRatifierV1Utils as MidnightPriceRatifierV1Utils,
+  /** @deprecated Use MidnightPriceRatifierV1Utils or the raw protocol subpath. */
+  PriceRatifierV1Utils,
+  RateRatifierV1Utils as MidnightRateRatifierV1Utils,
+  /** @deprecated Use MidnightRateRatifierV1Utils or the raw protocol subpath. */
+  RateRatifierV1Utils,
   RatifierUtils as MidnightRatifierUtils,
   SetterRatifierUtils as MidnightSetterRatifierUtils,
   TakeAmountsLib as MidnightTakeAmountsLib,

@@ -7,6 +7,8 @@ export {
   OfferUtils,
   Payload,
   PositionUtils,
+  PriceRatifierV1Utils,
+  RateRatifierV1Utils,
   RatifierUtils,
   SetterRatifierUtils,
   TakeAmountsLib,
