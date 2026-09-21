@@ -379,7 +379,7 @@ export const normalizeBundlesSignature = (
  * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
  * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
  * @throws {BundlesPermitMismatchError} when the requirement kind, token, owner, spender, amount,
- *   deadline or nonce, or signature is invalid.
+ *   deadline or a supplied action nonce, or signature is invalid.
  * @example
  * ```ts
  * import { getBundlesSharesPermit } from "@morpho-org/morpho-sdk";
@@ -484,6 +484,7 @@ export const getBundlesSharesPermit = (params: {
     });
   }
   if (
+    requirementSignature.action.args.nonce != null &&
     requirementSignature.action.args.nonce !== requirementSignature.args.nonce
   ) {
     throw new BundlesPermitMismatchError({

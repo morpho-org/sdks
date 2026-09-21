@@ -209,6 +209,19 @@ describe("getBundlesSharesPermit", () => {
       }),
     ).toThrow(BundlesPermitMismatchError);
   });
+  test("behavior: omitted action nonce falls back to the signed nonce", () => {
+    const { nonce: _omitted, ...actionArgs } = permit.action.args;
+    expect(
+      getBundlesSharesPermit({
+        vault,
+        deadline: 13n,
+        requirementSignature: {
+          ...permit,
+          action: { ...permit.action, args: actionArgs },
+        },
+      }),
+    ).toMatchObject({ nonce: permit.args.nonce });
+  });
 
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {
     fc.assert(
