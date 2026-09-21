@@ -103,7 +103,7 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
   return height;
 }
 
-function buildRootFromLeaves(leaves: readonly Hash[]): {
+function computeRootFromLeaves(leaves: readonly Hash[]): {
   readonly root: Hash;
   readonly height: number;
 } {
