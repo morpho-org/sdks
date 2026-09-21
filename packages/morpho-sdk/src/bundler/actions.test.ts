@@ -471,6 +471,17 @@ describe("BundlerAction", () => {
         consumeCall(call);
       }
 
+      if (action.type === "nativeTransfer") {
+        const [transferOwner, transferRecipient, amount] = action.args;
+
+        if (
+          isAddressEqual(transferOwner, generalAdapter1) &&
+          isAddressEqual(transferRecipient, bundler3)
+        ) {
+          availableBundlerValue += amount;
+        }
+      }
+
       if (action.type === "morphoSupplyCollateral") {
         const [, , , callbackActions] = action.args;
         for (const callbackAction of callbackActions)
@@ -1223,7 +1234,7 @@ describe("BundlerAction", () => {
 
     const tx = BundlerAction.encodeBundle(chainId, actions);
 
-    expect(tx.value).toBe(14n);
+    expect(tx.value).toBe(10n);
     expect(tx.value).toBe(expectedBundleValue(actions));
 
     const decoded = decodeFunctionData({
@@ -1251,6 +1262,65 @@ describe("BundlerAction", () => {
     expect(calls[2]?.to).toBe(owner);
     expect(calls[2]?.value).toBe(4n);
     expect(calls[2]?.data).toBe("0x");
+  });
+
+  test("encodeBundle spends a callback GeneralAdapter1 refund on later calls", () => {
+    const actions: Action[] = [
+      {
+        type: "nativeTransfer",
+        args: [owner, bundler3, 10n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [bundler3, generalAdapter1, 10n, false],
+      },
+      {
+        type: "morphoSupplyCollateral",
+        args: [
+          market,
+          1n,
+          owner,
+          [
+            {
+              type: "nativeTransfer",
+              args: [generalAdapter1, bundler3, 4n, false],
+            },
+          ],
+          false,
+        ],
+      },
+      {
+        type: "nativeTransfer",
+        args: [bundler3, owner, 4n, false],
+      },
+    ];
+
+    const tx = BundlerAction.encodeBundle(chainId, actions);
+
+    expect(tx.value).toBe(10n);
+    expect(tx.value).toBe(expectedBundleValue(actions));
+  });
+
+  test("encodeBundle keeps an unconsumed GeneralAdapter1 refund out of the outer value", () => {
+    const actions: Action[] = [
+      {
+        type: "nativeTransfer",
+        args: [owner, bundler3, 10n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [bundler3, generalAdapter1, 10n, false],
+      },
+      {
+        type: "nativeTransfer",
+        args: [generalAdapter1, bundler3, 4n, false],
+      },
+    ];
+
+    const tx = BundlerAction.encodeBundle(chainId, actions);
+
+    expect(tx.value).toBe(10n);
+    expect(tx.value).toBe(expectedBundleValue(actions));
   });
 
   test("erc20Transfer", () => {

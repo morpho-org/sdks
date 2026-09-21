@@ -378,6 +378,8 @@ export namespace BundlerAction {
 
       // A transfer into Bundler3 emits no inner call; it pre-funds later
       // value-carrying calls in the same multicall or callback reentry.
+      // A GeneralAdapter1 refund into Bundler3 does emit a call but likewise
+      // becomes available bundler value without adding to the outer `value`.
       if (
         !isAddressEqual(owner, bundler3) &&
         !isAddressEqual(owner, generalAdapter1) &&
@@ -390,6 +392,19 @@ export namespace BundlerAction {
     const calls = BundlerAction.encode(chainId, action);
     for (const call of calls) {
       nextValueState = consumeCallValue(nextValueState, call);
+    }
+
+    if (action.type === "nativeTransfer") {
+      const [owner, recipient, amount] = action.args;
+      if (
+        isAddressEqual(owner, generalAdapter1) &&
+        isAddressEqual(recipient, bundler3)
+      ) {
+        nextValueState = {
+          value: nextValueState.value,
+          availableBundlerValue: nextValueState.availableBundlerValue + amount,
+        };
+      }
     }
 
     if (action.type === "morphoSupplyCollateral") {
