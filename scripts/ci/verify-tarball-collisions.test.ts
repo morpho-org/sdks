@@ -333,6 +333,26 @@ describe("verifyTarballEntries", () => {
     },
   );
 
+  test("error: rejects a case-mismatched npmignore directory sibling", () => {
+    expect(() =>
+      verifyTarballEntries([
+        { path: "package/package.json", type: "File" },
+        { path: "package/config/.npmignore", type: "File" },
+        { path: "package/Config/.gitignore", type: "File" },
+      ]),
+    ).toThrow(/collide/);
+  });
+
+  test("error: rejects a backslash npmignore directory sibling", () => {
+    expect(() =>
+      verifyTarballEntries([
+        { path: "package/package.json", type: "File" },
+        { path: "package/a\\b/.npmignore", type: "File" },
+        { path: "package/a/b/.gitignore", type: "File" },
+      ]),
+    ).toThrow(/collide/);
+  });
+
   test.each([true, false])(
     "error: rejects a backslash gitignore with case-mismatched npmignore (%s order)",
     async (fileFirst) => {
