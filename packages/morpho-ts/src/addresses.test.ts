@@ -38,6 +38,8 @@ const createMidnightAddresses = () => ({
   ecrecoverRatifier: randomAddress(),
   ecrecoverAuthorizer: randomAddress(),
   setterRatifier: randomAddress(),
+  priceRatifierV1: randomAddress(),
+  rateRatifierV1: randomAddress(),
   permit2: randomAddress(),
 });
 

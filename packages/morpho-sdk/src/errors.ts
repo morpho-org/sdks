@@ -36,6 +36,11 @@ export {
   InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
+  /** @deprecated Use InvalidMidnightPositionLossFactorError or the raw protocol subpath. */
+  InvalidPositionLossFactorError,
+  InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
+  /** @deprecated Use InvalidMidnightRateRatifierV1RateError or the raw protocol subpath. */
+  InvalidRateRatifierV1RateError,
   InvalidTickSpacingError as InvalidMidnightTickSpacingError,
   InvalidTreeError as InvalidMidnightTreeError,
   InvalidTreeHeightError as InvalidMidnightTreeHeightError,
@@ -44,6 +49,11 @@ export {
   MidnightMempoolValidationError,
   PayloadDecodeError as MidnightPayloadDecodeError,
   PriceGreaterThanOneError as MidnightPriceGreaterThanOneError,
+  /** @deprecated Use MidnightPriceGreaterThanOneError or the raw protocol subpath. */
+  PriceGreaterThanOneError,
+  RatifierV1TakerNotAllowedError as MidnightRatifierV1TakerNotAllowedError,
+  /** @deprecated Use MidnightRatifierV1TakerNotAllowedError or the raw protocol subpath. */
+  RatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError as MidnightSettlementFeeExceedsPriceError,
   TickOutOfRangeError as MidnightTickOutOfRangeError,
   UnknownCollateralIndexError as UnknownMidnightCollateralIndexError,

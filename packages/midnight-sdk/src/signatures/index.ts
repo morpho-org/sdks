@@ -3,6 +3,8 @@ export * from "./eip712.js";
 export * from "./Group.js";
 export * from "./GroupUtils.js";
 export { Payload } from "./Payload.js";
+export * from "./PriceRatifierV1Utils.js";
+export * from "./RateRatifierV1Utils.js";
 export * from "./RatifierUtils.js";
 export * from "./SetterRatifierUtils.js";
 export * from "./Tree.js";

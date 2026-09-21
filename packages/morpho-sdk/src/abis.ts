@@ -30,6 +30,12 @@ export {
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,
   midnightAbi,
   midnightBundlesAbi,
+  priceRatifierV1Abi as midnightPriceRatifierV1Abi,
+  /** @deprecated Use `midnightPriceRatifierV1Abi` or the raw `/midnight/abis` subpath. */
+  priceRatifierV1Abi,
+  rateRatifierV1Abi as midnightRateRatifierV1Abi,
+  /** @deprecated Use `midnightRateRatifierV1Abi` or the raw `/midnight/abis` subpath. */
+  rateRatifierV1Abi,
   setterRatifierAbi as midnightSetterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
 
