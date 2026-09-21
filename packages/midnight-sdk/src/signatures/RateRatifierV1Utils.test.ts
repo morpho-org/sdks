@@ -2,7 +2,9 @@ import { MathLib } from "@morpho-org/morpho-ts";
 import * as fc from "fast-check";
 import {
   type Address,
+  bytesToHex,
   decodeFunctionData,
+  getAddress,
   type Hex,
   hashStruct,
   zeroAddress,
@@ -13,11 +15,12 @@ import { createFixtures } from "../__test__/fixtures.js";
 import { rateRatifierV1Abi } from "../abis.js";
 import {
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TimeError,
   InvalidTreeError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
-import type { IOffer } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
 import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
 
@@ -219,6 +222,45 @@ describe("RateRatifierV1Utils.buildDescriptor", () => {
       InvalidRateRatifierV1RateError,
     );
   });
+
+  test("behavior: does not deep-freeze offer instances", () => {
+    const offer = leaf().offer;
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      { offer, rate: 0n },
+    ]);
+
+    expect(offer.hash).toBe(OfferUtils.hash(offer));
+    expect(descriptor.offers[0]!.hash).toBe(offer.hash);
+  });
+
+  test("error: InvalidTreeError for a tampered descriptor root", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: { ...descriptor, root: zeroHash },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a tampered descriptor leaf", () => {
+    const descriptor = RateRatifierV1Utils.buildDescriptor([
+      leaf(),
+      leaf({ maxUnits: 7n }),
+    ]);
+
+    expect(() =>
+      RateRatifierV1Utils.ratify({
+        tree: {
+          ...descriptor,
+          leaves: [zeroHash, ...descriptor.leaves.slice(1)],
+        },
+      }),
+    ).toThrow(InvalidTreeError);
+  });
 });
 
 describe("RateRatifierV1Utils ratifier data", () => {
@@ -360,6 +402,26 @@ describe("RateRatifierV1Utils.priceBound", () => {
       }),
     ).toBe(MathLib.mulDivUp(MathLib.WAD, MathLib.WAD, denominator));
   });
+
+  test("error: InvalidRateRatifierV1RateError on negative rate", () => {
+    expect(() =>
+      RateRatifierV1Utils.priceBound({
+        rate: -1n,
+        timeToMaturity: 0n,
+        buy: true,
+      }),
+    ).toThrow(InvalidRateRatifierV1RateError);
+  });
+
+  test("error: InvalidRateRatifierV1TimeError on negative time to maturity", () => {
+    expect(() =>
+      RateRatifierV1Utils.priceBound({
+        rate: 0n,
+        timeToMaturity: -1n,
+        buy: true,
+      }),
+    ).toThrow(InvalidRateRatifierV1TimeError);
+  });
 });
 
 describe("RateRatifierV1Utils.isPriceAcceptable", () => {
@@ -406,6 +468,26 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
 
     expect(acceptable).toBe(TickLib.tickToPrice(sellOffer.tick) >= bound);
   });
+
+  test("error: InvalidRateRatifierV1RateError on negative rate", () => {
+    expect(() =>
+      RateRatifierV1Utils.isPriceAcceptable({
+        offer,
+        rate: -1n,
+        timestamp: 0n,
+      }),
+    ).toThrow(InvalidRateRatifierV1RateError);
+  });
+
+  test("error: InvalidRateRatifierV1TimeError on negative timestamp", () => {
+    expect(() =>
+      RateRatifierV1Utils.isPriceAcceptable({
+        offer,
+        rate: 0n,
+        timestamp: -1n,
+      }),
+    ).toThrow(InvalidRateRatifierV1TimeError);
+  });
 });
 
 describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
@@ -424,5 +506,34 @@ describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
       functionName: "setIsRootRatified",
       args: ["0x0000000000000000000000000000000000009000", zeroHash, true],
     });
+  });
+
+  test("behavior: encodes arbitrary arguments that decode identically", () => {
+    const fcAddress = fc
+      .uint8Array({ minLength: 20, maxLength: 20 })
+      .map((bytes) => bytesToHex(bytes) as Address);
+    const fcBytes32 = fc
+      .uint8Array({ minLength: 32, maxLength: 32 })
+      .map((bytes) => bytesToHex(bytes) as Hex);
+
+    fc.assert(
+      fc.property(fcAddress, fcAddress, fcBytes32, fc.boolean(), (...args) => {
+        const [ratifier, maker, root, isRatified] = args;
+        const call = RateRatifierV1Utils.encodeSetIsRootRatified({
+          ratifier,
+          maker,
+          root,
+          isRatified,
+        });
+
+        expect(call.to).toBe(ratifier);
+        expect(
+          decodeFunctionData({ abi: rateRatifierV1Abi, data: call.data }),
+        ).toEqual({
+          functionName: "setIsRootRatified",
+          args: [getAddress(maker), root, isRatified],
+        });
+      }),
+    );
   });
 });
