@@ -6,14 +6,20 @@ import {
   getAddress,
   type Hex,
   hashStruct,
+  isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { priceRatifierV1Abi } from "../abis.js";
-import { InvalidTreeError, RatifierV1TakerNotAllowedError } from "../errors.js";
+import {
+  InvalidRatifierV1AddressError,
+  InvalidTreeError,
+  RatifierV1TakerNotAllowedError,
+} from "../errors.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
+import { isZeroAddress } from "./offerStructInternal.js";
 import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
 
 const priceRatifier = "0x000000000000000000000000000000000000a111" as Address;
@@ -216,7 +222,7 @@ describe("PriceRatifierV1Utils ratifier data", () => {
       ratifierData: item!.ratifierData,
       taker: allowedTaker,
     });
-    expect(decoded.allowedTaker.toLowerCase()).toBe(allowedTaker.toLowerCase());
+    expect(isAddressEqual(decoded.allowedTaker, allowedTaker)).toBe(true);
   });
 
   test("behavior: zero taker restriction accepts any taker", () => {
@@ -241,6 +247,22 @@ describe("PriceRatifierV1Utils ratifier data", () => {
         taker: "0x000000000000000000000000000000000000b000",
       }),
     ).toThrow(RatifierV1TakerNotAllowedError);
+  });
+
+  test("behavior: skips taker check when taker is omitted", () => {
+    const [item] = PriceRatifierV1Utils.ratify({
+      tree: [{ offer: offer(), allowedTaker }],
+    });
+
+    expect(
+      isAddressEqual(
+        PriceRatifierV1Utils.verifyRatifierData({
+          offer: item!.offer,
+          ratifierData: item!.ratifierData,
+        }).allowedTaker,
+        allowedTaker,
+      ),
+    ).toBe(true);
   });
 
   test("error: InvalidTreeError for wrong offer", () => {
@@ -343,7 +365,7 @@ describe("PriceRatifierV1Utils ratifier data encoding", () => {
 
           expect(decoded.root).toBe(bytesToHex(rootBytes));
           expect(decoded.leafIndex).toBe(leafIndex);
-          expect(decoded.allowedTaker.toLowerCase()).toBe(taker.toLowerCase());
+          expect(isAddressEqual(decoded.allowedTaker, taker)).toBe(true);
           expect(decoded.proof).toEqual([zeroHash]);
         },
       ),
@@ -371,28 +393,48 @@ describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
     const fcAddress = fc
       .uint8Array({ minLength: 20, maxLength: 20 })
       .map((bytes) => bytesToHex(bytes) as Address);
+    const fcNonZeroAddress = fcAddress.filter(
+      (address) => !isZeroAddress(address),
+    );
     const fcBytes32 = fc
       .uint8Array({ minLength: 32, maxLength: 32 })
       .map((bytes) => bytesToHex(bytes) as Hex);
 
     fc.assert(
-      fc.property(fcAddress, fcAddress, fcBytes32, fc.boolean(), (...args) => {
-        const [ratifier, maker, root, isRatified] = args;
-        const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
-          ratifier,
-          maker,
-          root,
-          isRatified,
-        });
+      fc.property(
+        fcNonZeroAddress,
+        fcAddress,
+        fcBytes32,
+        fc.boolean(),
+        (...args) => {
+          const [ratifier, maker, root, isRatified] = args;
+          const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
+            ratifier,
+            maker,
+            root,
+            isRatified,
+          });
 
-        expect(call.to).toBe(ratifier);
-        expect(
-          decodeFunctionData({ abi: priceRatifierV1Abi, data: call.data }),
-        ).toEqual({
-          functionName: "setIsRootRatified",
-          args: [getAddress(maker), root, isRatified],
-        });
-      }),
+          expect(call.to).toBe(ratifier);
+          expect(
+            decodeFunctionData({ abi: priceRatifierV1Abi, data: call.data }),
+          ).toEqual({
+            functionName: "setIsRootRatified",
+            args: [getAddress(maker), root, isRatified],
+          });
+        },
+      ),
     );
+  });
+
+  test("error: InvalidRatifierV1AddressError for a zero ratifier address", () => {
+    expect(() =>
+      PriceRatifierV1Utils.encodeSetIsRootRatified({
+        ratifier: zeroAddress,
+        maker: offer().maker,
+        root: zeroHash,
+        isRatified: true,
+      }),
+    ).toThrow(InvalidRatifierV1AddressError);
   });
 });

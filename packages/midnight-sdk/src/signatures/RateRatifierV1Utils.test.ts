@@ -7,6 +7,7 @@ import {
   getAddress,
   type Hex,
   hashStruct,
+  isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -16,13 +17,14 @@ import { rateRatifierV1Abi } from "../abis.js";
 import {
   InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError,
   InvalidTreeError,
   InvalidTreeHeightError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
-import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
+import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
 
 const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
@@ -288,7 +290,7 @@ describe("RateRatifierV1Utils ratifier data", () => {
 
           expect(decoded.leafIndex).toBe(leafIndex);
           expect(decoded.rate).toBe(rate);
-          expect(decoded.allowedTaker.toLowerCase()).toBe(taker.toLowerCase());
+          expect(isAddressEqual(decoded.allowedTaker, taker)).toBe(true);
           expect(decoded.proof).toEqual([zeroHash]);
         },
       ),
@@ -342,12 +344,31 @@ describe("RateRatifierV1Utils ratifier data", () => {
     });
 
     expect(
-      RateRatifierV1Utils.verifyRatifierData({
-        offer: item!.offer,
-        ratifierData: item!.ratifierData,
-        taker: allowedTaker,
-      }).allowedTaker.toLowerCase(),
-    ).toBe(allowedTaker.toLowerCase());
+      isAddressEqual(
+        RateRatifierV1Utils.verifyRatifierData({
+          offer: item!.offer,
+          ratifierData: item!.ratifierData,
+          taker: allowedTaker,
+        }).allowedTaker,
+        allowedTaker,
+      ),
+    ).toBe(true);
+  });
+
+  test("behavior: skips taker check when taker is omitted", () => {
+    const [item] = RateRatifierV1Utils.ratify({
+      tree: [{ offer: leaf().offer, rate: 0n, allowedTaker }],
+    });
+
+    expect(
+      isAddressEqual(
+        RateRatifierV1Utils.verifyRatifierData({
+          offer: item!.offer,
+          ratifierData: item!.ratifierData,
+        }).allowedTaker,
+        allowedTaker,
+      ),
+    ).toBe(true);
   });
 
   test("error: InvalidTreeError when the rate does not match the leaf", () => {
@@ -418,7 +439,7 @@ describe("RateRatifierV1Utils.ratifierData", () => {
       taker: allowedTaker,
     });
     expect(decoded.rate).toBe(6n);
-    expect(decoded.allowedTaker.toLowerCase()).toBe(allowedTaker.toLowerCase());
+    expect(isAddressEqual(decoded.allowedTaker, allowedTaker)).toBe(true);
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
@@ -681,28 +702,48 @@ describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
     const fcAddress = fc
       .uint8Array({ minLength: 20, maxLength: 20 })
       .map((bytes) => bytesToHex(bytes) as Address);
+    const fcNonZeroAddress = fcAddress.filter(
+      (address) => !isZeroAddress(address),
+    );
     const fcBytes32 = fc
       .uint8Array({ minLength: 32, maxLength: 32 })
       .map((bytes) => bytesToHex(bytes) as Hex);
 
     fc.assert(
-      fc.property(fcAddress, fcAddress, fcBytes32, fc.boolean(), (...args) => {
-        const [ratifier, maker, root, isRatified] = args;
-        const call = RateRatifierV1Utils.encodeSetIsRootRatified({
-          ratifier,
-          maker,
-          root,
-          isRatified,
-        });
+      fc.property(
+        fcNonZeroAddress,
+        fcAddress,
+        fcBytes32,
+        fc.boolean(),
+        (...args) => {
+          const [ratifier, maker, root, isRatified] = args;
+          const call = RateRatifierV1Utils.encodeSetIsRootRatified({
+            ratifier,
+            maker,
+            root,
+            isRatified,
+          });
 
-        expect(call.to).toBe(ratifier);
-        expect(
-          decodeFunctionData({ abi: rateRatifierV1Abi, data: call.data }),
-        ).toEqual({
-          functionName: "setIsRootRatified",
-          args: [getAddress(maker), root, isRatified],
-        });
-      }),
+          expect(call.to).toBe(ratifier);
+          expect(
+            decodeFunctionData({ abi: rateRatifierV1Abi, data: call.data }),
+          ).toEqual({
+            functionName: "setIsRootRatified",
+            args: [getAddress(maker), root, isRatified],
+          });
+        },
+      ),
     );
+  });
+
+  test("error: InvalidRatifierV1AddressError for a zero ratifier address", () => {
+    expect(() =>
+      RateRatifierV1Utils.encodeSetIsRootRatified({
+        ratifier: zeroAddress,
+        maker: "0x0000000000000000000000000000000000009000",
+        root: zeroHash,
+        isRatified: true,
+      }),
+    ).toThrow(InvalidRatifierV1AddressError);
   });
 });

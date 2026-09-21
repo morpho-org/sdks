@@ -31,6 +31,7 @@ import {
 } from "./offerStructInternal.js";
 import type { Payload } from "./Payload.js";
 import {
+  assertRatifierV1Address,
   assertRatifierV1Taker,
   buildRatifierV1Descriptor,
   resolveRatifierV1Tree,
@@ -188,9 +189,9 @@ export interface DecodedRateRatifierV1Data extends TreeProof {
 /**
  * Tree-like input accepted by RateRatifierV1 helpers.
  *
- * Pass a {@link RateRatifierV1TreeDescriptor} to reuse cached hashes, or raw
- * leaf input when convenience matters more than avoiding a one-time
- * materialization.
+ * Both a {@link RateRatifierV1TreeDescriptor} and raw leaf input are
+ * accepted; caller-provided descriptors are fully re-validated (leaf hashes
+ * and root recomputed) before use.
  *
  * @example
  * ```ts
@@ -710,13 +711,14 @@ export namespace RateRatifierV1Utils {
    * @param params.root - Merkle root to ratify or unratify.
    * @param params.isRatified - New ratification flag for the root.
    * @returns Neutral call descriptor.
+   * @throws {InvalidRatifierV1AddressError} when the ratifier address is the zero address.
    * @example
    * ```ts
    * import { RateRatifierV1Utils } from "@morpho-org/midnight-sdk";
    * import { zeroAddress, zeroHash } from "viem";
    *
    * const call = RateRatifierV1Utils.encodeSetIsRootRatified({
-   *   ratifier: zeroAddress,
+   *   ratifier: "0x0000000000000000000000000000000000000001",
    *   maker: zeroAddress,
    *   root: zeroHash,
    *   isRatified: true,
@@ -730,6 +732,7 @@ export namespace RateRatifierV1Utils {
     readonly root: Hash;
     readonly isRatified: boolean;
   }) {
+    assertRatifierV1Address(params.ratifier);
     return deepFreeze({
       to: params.ratifier,
       data: encodeFunctionData({

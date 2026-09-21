@@ -40,6 +40,7 @@ export {
   InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError as InvalidMidnightRatifierV1AddressError,
   InvalidTickSpacingError as InvalidMidnightTickSpacingError,
   InvalidTreeError as InvalidMidnightTreeError,
   InvalidTreeHeightError as InvalidMidnightTreeHeightError,

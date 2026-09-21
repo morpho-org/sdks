@@ -11,6 +11,7 @@ export {
   InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError,
   InvalidTickSpacingError,
   InvalidTreeError,
   InvalidTreeHeightError,

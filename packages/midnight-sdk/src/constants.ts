@@ -140,7 +140,8 @@ export const MAX_CONTINUOUS_FEE = 317097919n;
 export const MAX_OFFER_CAP = maxUint128;
 
 /**
- * Maximum Merkle tree height supported by the V1 ratifier typehash table.
+ * Maximum Merkle tree height supported by the Midnight offer-tree typehash
+ * tables, enforced by every ratifier tree helper (Ecrecover, Setter, and V1).
  *
  * @example
  * ```ts
