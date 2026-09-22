@@ -41,6 +41,10 @@ describe("safeParseNumber", () => {
   test("handles negatives", () => {
     expect(safeParseNumber(-1)).toBe(-parseUnits("1", 18));
   });
+
+  test("error: throws InvalidNumberError on NaN", () => {
+    expect(() => safeParseNumber(Number.NaN)).toThrow(InvalidNumberError);
+  });
 });
 
 describe("safeParseUnits", () => {

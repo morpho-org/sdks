@@ -33,6 +33,7 @@ const toFixed = (x: number, decimals: number) =>
  * @param value - Decimal number to parse.
  * @param decimals - Optional token decimals; defaults to 18.
  * @returns The parsed bigint scaled by `decimals`.
+ * @throws {InvalidNumberError} When the formatted value is not a plain decimal string (e.g. `NaN`, `Infinity`).
  * @example
  * ```ts
  * import { safeParseNumber } from "@morpho-org/blue-sdk-viem";

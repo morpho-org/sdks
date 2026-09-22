@@ -3,6 +3,7 @@ import { BaseError, ContractFunctionRevertedError } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   getUnsupportedVaultV2Adapter,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError,
@@ -182,6 +183,20 @@ describe("getUnsupportedVaultV2Adapter", () => {
     });
     const outer = new BaseError("wrapper", { cause: inner });
     expect(getUnsupportedVaultV2Adapter(outer)).toBe(ADAPTER);
+  });
+});
+
+describe("InvalidNumberError", () => {
+  test("is an Error preserving value as a readonly field", () => {
+    const err = new InvalidNumberError("1e5");
+    expect(err).toBeInstanceOf(Error);
+    expect(err.value).toBe("1e5");
+  });
+
+  test("message quotes the offending value", () => {
+    const err = new InvalidNumberError("1e5");
+    expect(err.message).toContain('"1e5"');
+    expect(err.message).toContain("expected a decimal string");
   });
 });
 
