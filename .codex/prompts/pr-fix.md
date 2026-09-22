@@ -1,1 +1,0 @@
-../../.agents/commands/pr-fix.md

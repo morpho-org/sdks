@@ -1,17 +1,17 @@
-# pr-review-local
+# review-pr-local
 
 Pre-PR local code review. Output to terminal only — no GitHub interaction. Optionally apply fixes once with `--fix`, or loop review→fix→re-review with `--goal` until the review passes cleanly.
 
 ## Usage
 
 ```
-/pr-review-local                       # review current branch vs default base
-/pr-review-local <BASE_BRANCH>         # review against an explicit base branch
-/pr-review-local --fix                 # review and apply fixes once (unstaged; refuses on dirty tree)
-/pr-review-local --goal                # loop review->fix->re-review, commit each iteration, until clean
-/pr-review-local --goal --max-iters 8  # raise the loop ceiling (default 5)
-/pr-review-local --fast                # skip the documentation agent (cheapest meaningful cut)
-/pr-review-local <BASE_BRANCH> --fix   # flags combine freely
+/review-pr-local                       # review current branch vs default base
+/review-pr-local <BASE_BRANCH>         # review against an explicit base branch
+/review-pr-local --fix                 # review and apply fixes once (unstaged; refuses on dirty tree)
+/review-pr-local --goal                # loop review->fix->re-review, commit each iteration, until clean
+/review-pr-local --goal --max-iters 8  # raise the loop ceiling (default 5)
+/review-pr-local --fast                # skip the documentation agent (cheapest meaningful cut)
+/review-pr-local <BASE_BRANCH> --fix   # flags combine freely
 ```
 
 `<BASE_BRANCH>` is positional and must NOT begin with `--`. Flag order is otherwise free.
@@ -47,7 +47,7 @@ Idempotency: re-running with an unchanged input (same merge-base + head SHA + wo
 
 ```bash
 if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
-  echo "pr-review-local is for pre-PR local review. In CI use /pr-review-ci." >&2
+  echo "review-pr-local is for pre-PR local review. In CI use /review-pr-ci." >&2
   exit 1
 fi
 ```
@@ -98,7 +98,7 @@ if [ -z "$BASE_BRANCH" ]; then
   done
 fi
 if [ -z "$BASE_BRANCH" ]; then
-  echo "Could not resolve base branch. Pass one explicitly: /pr-review-local <BASE_BRANCH>" >&2
+  echo "Could not resolve base branch. Pass one explicitly: /review-pr-local <BASE_BRANCH>" >&2
   exit 1
 fi
 ```
@@ -160,7 +160,7 @@ Steps 3–6 produce: `<FINDINGS>`, `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>`, `<CO
 
 ## Step 6b: Findings ledger (stateful re-runs)
 
-Re-running on an evolving branch shouldn't re-surface findings you've already seen or deliberately deferred. Merge this run's findings into the persisted, branch-keyed ledger. This runs in the **single-shot path only** — goal mode tracks progress across its own iterations via `prev_findings_hash` and stamps the ledger once at convergence (see Goal mode). Write the Step 6 `<FINDINGS>` array to `/tmp/pr-review-local-findings.json`, then:
+Re-running on an evolving branch shouldn't re-surface findings you've already seen or deliberately deferred. Merge this run's findings into the persisted, branch-keyed ledger. This runs in the **single-shot path only** — goal mode tracks progress across its own iterations via `prev_findings_hash` and stamps the ledger once at convergence (see Goal mode). Write the Step 6 `<FINDINGS>` array to `/tmp/review-pr-local-findings.json`, then:
 
 ```bash
 # --write persists the updated ledger. Pass --run-hash (the Step 2c input
@@ -174,7 +174,7 @@ Re-running on an evolving branch shouldn't re-surface findings you've already se
 RUN_HASH_ARG=""
 [ "<FAILED_AGENTS>" = "0" ] && RUN_HASH_ARG="--run-hash $RUN_HASH"
 node .agents/pr-review-engine/scripts/findings-ledger.ts \
-  --ledger "$LEDGER" --findings /tmp/pr-review-local-findings.json --head-sha "$HEAD_SHA" $RUN_HASH_ARG --write \
+  --ledger "$LEDGER" --findings /tmp/review-pr-local-findings.json --head-sha "$HEAD_SHA" $RUN_HASH_ARG --write \
   || echo "findings-ledger failed; continuing with the plain (stateless) Step 7 output." >&2
 ```
 
@@ -225,10 +225,10 @@ Group findings by file (already sorted by Step 6). Within each file, list highes
 If `<DROPPED_FINDINGS>` is non-empty, after the per-file sections print a one-line summary:
 
 ```
-Audit: dropped <N> finding(s) by scope filter (<out_of_scope> file-level, <pre_existing> line-level, <doc_example> doc-example). Full list: /tmp/pr-review-local-dropped.json
+Audit: dropped <N> finding(s) by scope filter (<out_of_scope> file-level, <pre_existing> line-level, <doc_example> doc-example). Full list: /tmp/review-pr-local-dropped.json
 ```
 
-Write the `<DROPPED_FINDINGS>` array to `/tmp/pr-review-local-dropped.json` (each entry tagged with `drop_reason` and, for line-level drops, `distance_to_nearest_changed_line`) so the user can `cat` it and re-introduce a finding if the filter was wrong. Skip the line entirely when zero findings were dropped.
+Write the `<DROPPED_FINDINGS>` array to `/tmp/review-pr-local-dropped.json` (each entry tagged with `drop_reason` and, for line-level drops, `distance_to_nearest_changed_line`) so the user can `cat` it and re-introduce a finding if the filter was wrong. Skip the line entirely when zero findings were dropped.
 
 ### Sentinel lines
 
@@ -244,7 +244,7 @@ If `FIX=1`, proceed to **Step 7b**. Otherwise the skill is complete here.
 
 ### Pre-condition: refuse on dirty tree
 
-The previous version of this skill stashed any uncommitted user work, applied fixes, then popped the stash. That dance handled a 3-condition edge case (uncommitted work + crashed prior run + lint rejection) and added ~80 lines of stash plumbing. We mirror `/pr-fix`'s cleaner stance: refuse to run on a dirty tree.
+The previous version of this skill stashed any uncommitted user work, applied fixes, then popped the stash. That dance handled a 3-condition edge case (uncommitted work + crashed prior run + lint rejection) and added ~80 lines of stash plumbing. We mirror `/fix-pr`'s cleaner stance: refuse to run on a dirty tree.
 
 ```bash
 DIRTY=$(git status --porcelain)
@@ -357,7 +357,7 @@ Safe because pre-flight gate 1 guaranteed a clean tree, so the only changes pres
 
 ### Post-convergence ledger stamp (single write)
 
-So a later **single-shot** `/pr-review-local` run inherits what `--goal` resolved (rather than re-surfacing it as net-new), stamp the branch-keyed ledger **once, here at convergence** — not per iteration. Write the converged `low` findings (the triage list — or `[]` when there are none) to `/tmp/pr-review-local-findings.json`, then merge with the converged HEAD's run-hash (same `LEDGER` key as Step 6b):
+So a later **single-shot** `/review-pr-local` run inherits what `--goal` resolved (rather than re-surfacing it as net-new), stamp the branch-keyed ledger **once, here at convergence** — not per iteration. Write the converged `low` findings (the triage list — or `[]` when there are none) to `/tmp/review-pr-local-findings.json`, then merge with the converged HEAD's run-hash (same `LEDGER` key as Step 6b):
 
 ```bash
 slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
@@ -367,7 +367,7 @@ MERGE_BASE=$(git merge-base "origin/<BASE_BRANCH>" HEAD)
 FINAL_HEAD=$(git rev-parse HEAD)   # the last fix(review) commit; tree is clean here
 RUN_HASH=$(node .agents/pr-review-engine/scripts/review-scope.ts --run-hash --base "$MERGE_BASE")
 node .agents/pr-review-engine/scripts/findings-ledger.ts \
-  --ledger "$LEDGER" --findings /tmp/pr-review-local-findings.json --head-sha "$FINAL_HEAD" --run-hash "$RUN_HASH" --write \
+  --ledger "$LEDGER" --findings /tmp/review-pr-local-findings.json --head-sha "$FINAL_HEAD" --run-hash "$RUN_HASH" --write \
   || echo "goal-mode ledger stamp failed (non-fatal); the converge result still stands." >&2
 ```
 
@@ -378,7 +378,7 @@ Best-effort — a failed stamp is non-fatal. Skip the stamp when no commits were
 On a clean converge, print a summary and the terminal sentinel:
 
 ```
-## Goal-mode Review (pr-review-local --goal)
+## Goal-mode Review (review-pr-local --goal)
 
 Branch:        <HEAD_BRANCH> -> <BASE_BRANCH>
 Iterations:    <i> (clean on iteration <i>)

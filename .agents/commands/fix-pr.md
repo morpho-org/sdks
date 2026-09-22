@@ -1,19 +1,19 @@
-# pr-fix
+# fix-pr
 
 Apply fixes for unresolved PR review comments, resolve merge conflicts with the base branch, commit, push, resolve threads, and monitor CI. Optionally watches for new review comments and re-applies fixes automatically.
 
 ## Usage
 
 ```
-/pr-fix <PR_NUMBER>
-/pr-fix <PR_NUMBER> --watch
+/fix-pr <PR_NUMBER>
+/fix-pr <PR_NUMBER> --watch
 ```
 
 ## Examples
 
 ```
-/pr-fix 123
-/pr-fix 456 --watch
+/fix-pr 123
+/fix-pr 456 --watch
 ```
 
 > **TWO-PHASE SKILL**: Phase 1 (Steps 1-11, including the reconciliation pass; if Step 4 finds zero unresolved comments, the flow short-circuits Steps 5-9 and jumps straight to the reconciliation step + Step 11) does the initial fix pass. Phase 2 (Step 12) creates a continuous watcher via CronCreate if `--watch` was passed. If `--watch` is used, the skill is NOT complete until Step 12's CronCreate call succeeds and you report the job ID to the user.
@@ -68,7 +68,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 if [ -n "$STATUS_OUT" ]; then
-  echo "Working tree is not clean. Please commit or stash your changes before running /pr-fix." >&2
+  echo "Working tree is not clean. Please commit or stash your changes before running /fix-pr." >&2
   exit 1
 fi
 ```
@@ -115,7 +115,7 @@ if [ "$ACTUAL_HEAD" != "<HEAD_SHA>" ]; then
   echo "gh pr checkout did not land on expected commit." >&2
   echo "Expected: <HEAD_SHA>" >&2
   echo "Got:      $ACTUAL_HEAD" >&2
-  echo "Aborting before any fix is applied. Re-run /pr-fix after investigating." >&2
+  echo "Aborting before any fix is applied. Re-run /fix-pr after investigating." >&2
   exit 1
 fi
 ```
@@ -228,7 +228,7 @@ gh api graphql -f query='
 ```
 PR #<PR_NUMBER> has more than 100 review threads (pagination not implemented in this skill).
 Threads beyond the first 100 would be silently dropped from the actionable set.
-Please run /pr-fix manually on a smaller batch, or implement the pagination cursor here.
+Please run /fix-pr manually on a smaller batch, or implement the pagination cursor here.
 ```
 
 Do NOT proceed with truncated data — better to fail loud than to apply some fixes and silently leave threads unaddressed.
@@ -370,7 +370,7 @@ The watcher (Step 12 Step 7f) follows this same table, substituting `${CYCLE_HEA
 
 ## Step 6: Apply Fixes
 
-> **Drift reminder**: `/pr-review-local --fix` (Step 7b in `.agents/commands/pr-review-local.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review-local`'s `--fix` flow in the same PR.
+> **Drift reminder**: `/review-pr-local --fix` (Step 7b in `.agents/commands/review-pr-local.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/review-pr-local`'s `--fix` flow in the same PR.
 
 **Never apply a fix you don't fully understand. A skipped finding is always better than a wrong fix.**
 
@@ -580,7 +580,7 @@ gh pr checks <PR_NUMBER> --repo <OWNER>/<REPO>
 
 ### 10c: If CI is still running
 
-Poll up to 5 times with 30-second intervals using the `gh pr checks --watch` subcommand flag (NOT to be confused with `/pr-fix --watch` from Step 12 — these are unrelated; the former is a `gh` CLI flag that polls until checks settle, the latter is the user-facing skill flag that schedules a recurring CronCreate job):
+Poll up to 5 times with 30-second intervals using the `gh pr checks --watch` subcommand flag (NOT to be confused with `/fix-pr --watch` from Step 12 — these are unrelated; the former is a `gh` CLI flag that polls until checks settle, the latter is the user-facing skill flag that schedules a recurring CronCreate job):
 
 ```bash
 gh pr checks <PR_NUMBER> --repo <OWNER>/<REPO> --watch --fail-fast
@@ -665,7 +665,7 @@ Sentinel: FIX_DONE_PR — PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>,
 
 On the empty-list early-exit path (Step 4 → Step 9.5 → Step 11), Step 10 is skipped and no fix commit is made: emit `fixed=0, skipped=0, resolved=0, ci=NA, commit=<the PR's existing head SHA from Step 2b>`. If Step 2b's SHA capture is somehow unset, fall back to `commit=unknown` rather than letting an unrendered placeholder leak into the sentinel. The sentinel is still grep-able and clearly distinguishable from a "real" run.
 
-The Step 9.5 reconciliation pass already emitted its own `Sentinel: RECONCILE_OK` line on success; this Step 11 sentinel is the terminal grep target for the whole `/pr-fix <PR>` (no `--watch`) run. The pair `Sentinel: RECONCILE_OK` + `Sentinel: FIX_DONE_PR` together attest a clean run.
+The Step 9.5 reconciliation pass already emitted its own `Sentinel: RECONCILE_OK` line on success; this Step 11 sentinel is the terminal grep target for the whole `/fix-pr <PR>` (no `--watch`) run. The pair `Sentinel: RECONCILE_OK` + `Sentinel: FIX_DONE_PR` together attest a clean run.
 
 If conflicts were resolved, list each file and the resolution strategy.
 If conflicts could not be resolved, list the files and why.
@@ -739,9 +739,9 @@ CYCLE START:
 
    Pre-condition B — no orphan watcher stash from a crashed prior cycle. Capture `git stash list` and its exit code separately (do NOT pipe with `|| true` — that would mask a `git stash list` failure as "no orphans"):
    set CYCLE_STASH_LIST = `cd <REPO_PATH> && git stash list --format='%gs'` — abort cycle (WATCH_TRANSIENT_ERROR) if `git stash list` exits non-zero (corrupted stash store, missing .git/refs/stash, lock contention).
-   set CYCLE_ORPHAN_STASHES = `printf '%s' "${CYCLE_STASH_LIST}" | grep -E 'pr-fix watcher: lint-aborted cycle' || true`
+   set CYCLE_ORPHAN_STASHES = `printf '%s' "${CYCLE_STASH_LIST}" | grep -E '(fix-pr|pr-fix) watcher: lint-aborted cycle' || true`
    set CYCLE_ORPHAN_COUNT = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | grep -c '.' || true`
-   If ${CYCLE_ORPHAN_COUNT:-0} > 0: capture a single-line summary for the sentinel (the orphan list is multi-line — emit only the count + first match's subject in the sentinel itself, full list to stderr): set CYCLE_ORPHAN_FIRST = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | head -n1`. Print the full list with `printf '%s\n' "${CYCLE_ORPHAN_STASHES}" >&2`. Then say (single grep-able line): "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (${CYCLE_ORPHAN_COUNT} orphan watcher stash(es) detected; first: ${CYCLE_ORPHAN_FIRST}). A prior cycle crashed between stash-push and stash-drop. Resolve manually: list current orphan refs with \`git stash list --format='%gd %gs' | grep -F 'pr-fix watcher: lint-aborted cycle'\`, then drop each one HIGHEST-INDEX-FIRST (e.g. \`git stash drop stash@{2}\` then \`stash@{1}\` then \`stash@{0}\`) so positional refs of remaining stashes don't shift mid-loop. \`git stash drop\` accepts only stash refs, NOT commit SHAs." and end.
+   If ${CYCLE_ORPHAN_COUNT:-0} > 0: capture a single-line summary for the sentinel (the orphan list is multi-line — emit only the count + first match's subject in the sentinel itself, full list to stderr): set CYCLE_ORPHAN_FIRST = `printf '%s' "${CYCLE_ORPHAN_STASHES}" | head -n1`. Print the full list with `printf '%s\n' "${CYCLE_ORPHAN_STASHES}" >&2`. Then say (single grep-able line): "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (${CYCLE_ORPHAN_COUNT} orphan watcher stash(es) detected; first: ${CYCLE_ORPHAN_FIRST}). A prior cycle crashed between stash-push and stash-drop. Resolve manually: list current orphan refs with \`git stash list --format='%gd %gs' | grep -E '(fix-pr|pr-fix) watcher: lint-aborted cycle'\`, then drop each one HIGHEST-INDEX-FIRST (e.g. \`git stash drop stash@{2}\` then \`stash@{1}\` then \`stash@{0}\`) so positional refs of remaining stashes don't shift mid-loop. \`git stash drop\` accepts only stash refs, NOT commit SHAs." and end.
 
    Then run: cd <REPO_PATH> && git fetch origin && gh pr checkout <PR_NUMBER> — abort cycle on any non-zero exit.
    (`gh pr checkout` is cross-fork-safe — it handles fork PRs and existing local branches.)
@@ -799,7 +799,7 @@ MERGEEOF
    a. Group actionable + Confidence:HIGH/MEDIUM comments by file. For each file: apply fix with Edit tool per the comment suggestion (using the context already gathered above).
    b. Run `pnpm exec biome check` on modified files (or `pnpm lint` for the project-wide check). On lint failure, REVERT the just-applied edits before ending the cycle (otherwise the next cycle's clean-tree gate at Step 2 will refuse, looking like a transient error). Use `git stash push -u` (NOT raw `git checkout --`): `git checkout --` is destructive and would also discard any orphaned modifications that pre-existed this cycle's Edit calls — the stash form preserves them in the reflog so a human can recover if needed:
 
-   - Run: `git stash push -u -m "pr-fix watcher: lint-aborted cycle ${CYCLE_HEAD_SHA:-pre-push}"` — capture exit code; if stash itself fails, fall through to a hard abort (`Sentinel: WATCH_TRANSIENT_ERROR — step 7b (git stash failed: <stderr>)`).
+   - Run: `git stash push -u -m "fix-pr watcher: lint-aborted cycle ${CYCLE_HEAD_SHA:-pre-push}"` — capture exit code; if stash itself fails, fall through to a hard abort (`Sentinel: WATCH_TRANSIENT_ERROR — step 7b (git stash failed: <stderr>)`).
    - Capture the stash COMMIT SHA BEFORE attempting to drop (positional refs like `stash@{0}` shift whenever any new stash is pushed; the commit SHA is stable):
      `set CYCLE_LINT_STASH_SHA = \`git rev-parse stash@{0}\`` — abort cycle on non-zero exit.
    - Run: `git stash drop stash@{0}` and capture its exit code.
@@ -813,7 +813,7 @@ MERGEEOF
    ```bash
    # 1. Find unreachable stash commits.
    git fsck --unreachable --no-reflogs 2>/dev/null | grep '^unreachable commit' | awk '{print $3}' | while read sha; do
-     git log -1 --format='%H %s' "$sha" | grep -q 'pr-fix watcher: lint-aborted cycle' && echo "$sha"
+     git log -1 --format='%H %s' "$sha" | grep -qE '(fix-pr|pr-fix) watcher: lint-aborted cycle' && echo "$sha"
    done
 
    # 2. Apply (or just inspect) the SHA you want.
@@ -860,7 +860,7 @@ Every terminal step ends with a single grep-able `Sentinel: NAME — <human pros
 |---|---|---|---|
 | `RECONCILE_OK` | Step 9.5 | Reconciliation pass succeeded (every thread in a Step 5a terminal state) | `— <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` |
 | `RECONCILE_FAILED` | Step 9.5 | At least one thread in unknown terminal state | `— <N> threads in unknown state: <id1> <id2> <id3>.` (single line, space-separated IDs — shell-friendly for `for id in` loops) |
-| `FIX_DONE_PR` | Step 11 | Terminal sentinel for the `/pr-fix <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
+| `FIX_DONE_PR` | Step 11 | Terminal sentinel for the `/fix-pr <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
 | `WATCH_REJECTED` | Step 12 pre-flight | Empty/whitespace-only prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
 | `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit; OR dirty tree at cycle start; OR orphan watcher stash detected. **Permanent failures (branch-protection rejection on push, expired auth) flow through this same sentinel and recur every cycle until the watcher expires (3 days) or `CronDelete` runs.** | `— step <N> (<command>): <stderr>` |
 | `WATCH_PR_CLOSED` | Step 12 watcher Step 1 | PR is no longer OPEN | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
@@ -889,7 +889,7 @@ The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (
 - **Conflict-aware**: Detects merge conflicts with the base branch before applying review fixes. Resolves conflicts intelligently by reading both sides and merging logically. Conflicts that can't be safely resolved are reported for human intervention.
 - **Quality gates**: Runs `pnpm exec biome check` after each file fix and `pnpm lint && pnpm -r --if-present build` after all fixes. Ensures fixes don't introduce new issues.
 - **Self-contained watcher**: The cron watcher does actual work inline (resolves conflicts, applies fixes, replies to threads, resolves threads) rather than re-invoking the skill. The reason is operational: cron-fired agents start with no conversation history, so the watcher prompt must be standalone. The watcher also performs relevance assessment on every cycle — it never blindly fixes.
-- **Pairs with the `/pr-review-*` skills**: `/pr-review-local` for pre-PR feedback (terminal-only, no GitHub), `/pr-review-gh <PR>` for inline GitHub review after opening, `/pr-fix <PR>` to apply posted comments. With `/pr-review-gh <PR> --watch` plus `/pr-fix <PR> --watch`, the review-fix loop is fully autonomous (the two crons are independent — both fire every 2 minutes; no cross-cron coordination today).
+- **Pairs with the `/review-pr-*` skills**: `/review-pr-local` for pre-PR feedback (terminal-only, no GitHub), `/review-pr-gh <PR>` for inline GitHub review after opening, `/fix-pr <PR>` to apply posted comments. With `/review-pr-gh <PR> --watch` plus `/fix-pr <PR> --watch`, the review-fix loop is fully autonomous (the two crons are independent — both fire every 2 minutes; no cross-cron coordination today).
 - Fixes are applied to the PR branch, not main/dev
 - One commit for all fixes — keeps the PR history clean
 - Each reply includes the commit SHA for traceability
