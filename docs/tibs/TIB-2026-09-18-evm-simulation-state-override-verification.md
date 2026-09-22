@@ -1,4 +1,4 @@
-# TIB-2026-09-18: EVM simulation — calldata-derived checks with state-override authorizations
+# TIB-2026-09-18: EVM simulation — calldata-derived checks with explicit approval preparation
 
 | Field             | Value                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -14,8 +14,8 @@ effect and position checks, and the frontend must be able to match API output to
 Today `evm-simulation` runs ordered transactions and reports calls, transfers and asset changes. A
 configured Tenderly backend runs first and `eth_simulateV1` only handles service failures. Pending
 authorizations are modeled by **prepending a synthetic `approve(spender, max)` transaction**: that
-changes the bundle under test, shifts every `txIdx`, cannot express Permit2, vault-share permits or
-Morpho authorization, and grants far more authority than the wallet will. Audit
+mixes preparation with user transactions, shifts every `txIdx`, does not validate typed permit
+requests or model Morpho authorization, and can grant more authority than the wallet will. Audit
 (`morpho-apps@8a0afba`, SDK `5.5.0`, simulation `4.1.3`, 2026-09-14): asset reporting exists,
 expected-change comparisons do not, and the frontend bypasses every error except retention.
 
@@ -31,8 +31,9 @@ address any value and therefore could not be validated against the operation it 
 
 - Infer operations from calldata and verify assets, permissions, position end states and diffs, and
   market safety for every supported route, identically for both consumers.
-- Model every pending authorization as an explicit `eth_simulateV1` state override derived from the
-  exact wallet request, proven by a read-back at the same block, never as a prepended transaction.
+- Model pending token allowances with explicit simulated `approve` calls derived from the exact wallet
+  request, without requiring token storage layouts. Use proven state overrides for Morpho authorization
+  only; distinguish preparation from user transactions and verify both at the same pinned block.
 - Let consumers tighten checks only through typed, operation-specific limits with fixed units.
 - Preserve `simulate(config, params)`, the `SimulationResult` fields and the existing error classes.
 
@@ -58,9 +59,11 @@ to `maxUint256 / 2`, which hides insufficient native funding. Retention is enfor
 ## Decision
 
 Use `eth_simulateV1` only and remove Tenderly. Every authorization the wallet will be asked to sign
-or send is passed as a typed request; the SDK turns each request into a `stateDiff` override on the
-contract that stores the granted authority, proves the override by reading it back at the same block,
-and never prepends a transaction, so `simulationTxs` is exactly the caller's `transactions`.
+or send is passed as a typed request. For token allowances, the SDK executes `approve(spender, amount)`
+as the owner before the user transactions in the same stateful simulation. The token executes its own
+storage writes; no token slot discovery or allowance storage override is used. Morpho authorization
+uses a `stateDiff` override derived from its pinned layout. Both mechanisms require read-back evidence.
+Preparation calls are reported separately, so `simulationTxs` remains exactly the caller's `transactions`.
 
 The SDK decodes supported routes from calldata, verifies asset, permission, position and market
 effects against SDK rules intersected with per-operation typed consumer limits, and blocks on every
@@ -76,9 +79,9 @@ added and `authorizations` is retyped.
 | Input | Contents | Why |
 | --- | --- | --- |
 | `chainId`, `transactions` | Ordered `{ from, to, data, value? }`; protected user = common `from`. No intent input | Another sender protects the wrong account; reordering changes available balances and permissions |
-| `authorizations?` (retyped) | `readonly SimulationAuthorization[]`, one entry per wallet request the user has not yet completed; `preview` only | The override must model exactly the authority the wallet grants, not a widened substitute |
+| `authorizations?` (retyped) | `readonly SimulationAuthorization[]`, one entry per wallet request the user has not yet completed; `preview` only | Preparation must model exactly the authority the wallet grants, not a widened substitute |
 | `blockNumber?` | `bigint` or block tag; resolved once, `latest` by default | Mixed blocks produce inconsistent balances, interest and deadlines |
-| `mode?` (new) | `"final"` (default) or `"preview"` | An omitted option must not silently enable overrides |
+| `mode?` (new) | `"final"` (default) or `"preview"` | An omitted option must not silently enable authorization preparation |
 | `limits?` (new) | `SimulationLimits` below; omitted values use SDK defaults | Missing consumer settings must not remove baseline protections |
 
 ### `SimulationAuthorization`
@@ -158,10 +161,16 @@ Vault operations (subject: `vault`, or `sourceVault` + `targetVault` for migrati
 `VerifiedSimulationResult extends SimulationResult` preserves `simulationTxs`, `calls`, `transfers`,
 `assetChanges` and their indices, and adds `verification` with: `mode`, `chainId`, `blockNumber`,
 `blockTimestamp`, the effective `limits`, the decoded `operations`, one record per authorization
-request (the request, the override written as `{ address, storageVariable, slot, value }`, the
-read-back proof and the request checks), and **before / after / diff / actionDiff** records for wallet
-balances, permissions, positions, vaults and markets, plus conversions and fees. Only `actionDiff`
+request (the request, a discriminated preparation record: `type: "approvalCalls"` with ordered
+`{ from, to, data, value }` calls and their results/logs, or `type: "stateOverride"` with
+`{ address, storageVariable, slot, value }`; plus read-back evidence and request checks), and
+**before / after / diff / actionDiff** records for wallet balances, permissions, positions, vaults and
+markets, plus conversions and fees. Only `actionDiff`
 excludes modeled accrual. Unchanged values are reported so an omission can never read as proof.
+Preparation records carry `authorizationIndex` into `authorizations`. The executor maps each raw
+response to preparation, a probe, or a user `transactionIndex`; user `calls`, `transfers`, `assetChanges`
+and `txIdx` retain indices into `simulationTxs`, with preparation results kept in `verification`.
+Preparation failures identify their authorization and stage, never a fabricated user `txIdx`.
 
 ### Errors
 
@@ -173,11 +182,11 @@ preserved. The first five classes exist today; additions extend the base directl
 | `SimulationValidationError` / `VALIDATION_ERROR` | Invalid config, input, calldata or limit; mixed senders; request owner differs from sender; `authorizations` in `final`; `preview` transaction containing a signature-consuming call |
 | `UnsupportedChainError` / `UNSUPPORTED_CHAIN` | Missing chain configuration or `simulateV1Url` |
 | `ExternalServiceError` / `EXTERNAL_SERVICE_ERROR` | RPC transport, timeout, authentication, rate limit, availability or unclassified rejection |
-| `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user execution, including panic, gas, signature, nonce or deadline rejection |
+| `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user or preparation execution, including a reverted approval or an approval returning `false`, panic, gas, signature, nonce or deadline rejection |
 | `BlacklistViolationError` / `BLACKLIST_ERROR` | Bundle or adapter retention exceeds dust |
 | `UnsupportedOperationError` / `UNSUPPORTED_OPERATION` | Unrecognized target or selector, unsupported call recipe or top-level callback |
 | `ProtocolBindingMismatchError` / `PROTOCOL_BINDING_MISMATCH` | Known route with wrong owner, recipient, underlying, market, adapter, operator or deployment binding |
-| `UnsupportedVerificationFeatureError` / `UNSUPPORTED_VERIFICATION_FEATURE` | Recognized route lacks registry or model coverage (token storage layout, vault, oracle, IRM, signature kind) or a required RPC capability; an override whose read-back disagrees with the written value |
+| `UnsupportedVerificationFeatureError` / `UNSUPPORTED_VERIFICATION_FEATURE` | Recognized route lacks registry or model coverage (token approval behavior, vault, oracle, IRM, signature kind) or a required RPC capability; an override whose read-back disagrees with the written value |
 | `InvalidSimulationResponseError` / `INVALID_SIMULATION_RESPONSE` | Malformed response, call status, count, index or required logs |
 | `MissingVerificationEvidenceError` / `MISSING_VERIFICATION_EVIDENCE` | Missing state, events, prices or rates; a probe that failed to execute; inconsistent snapshot reference |
 | `AuthorizationRequestMismatchError` / `AUTHORIZATION_REQUEST_MISMATCH` | A request disagrees with the decoded operation or real state: owner, domain, token, spender, amount, nonce, expiration or deadline |
@@ -199,43 +208,64 @@ credentials or raw causes.
 
 ## Behavior
 
-### Authorizations become state overrides
+### Authorization preparation
 
 Requests are accepted only in `preview`. The `preview` transaction is the transaction `morpho-sdk`
 builds **without requirement signatures**: token pulls consume the ERC-20 allowance of the decoded
 spender, `VaultExitBundlesV1` receives the empty-permit sentinel, and no `permit`, `approve2` or
 `setAuthorizationWithSig` call is present. A `preview` transaction that contains any of those calls, or
 a non-sentinel permit struct, is rejected with `SimulationValidationError`. Each request is turned into
-the override that grants that form exactly the authority the wallet will grant the `final` form, keyed
+the preparation that grants that form exactly the authority the wallet will grant the `final` form, keyed
 by `(owner, token or protocol contract, spender or operator, amount or flag)`.
 
-| Request | Contract overridden | Storage written (`stateDiff`) | Value | Checked against real state and decoded operation | Read-back proof under the override |
+| Request | Target contract | Preparation mechanism | Value | Checked against real state and decoded operation | Read-back evidence after preparation |
 | --- | --- | --- | --- | --- | --- |
-| `erc20Approval` | `token` | `allowance[owner][spender]` | `amount` | `owner` = sender; `spender` is a registered spender for the decoded route; `amount` equals the decoded pull exactly, or is the accepted persistent cap (`MAX_UINT_160` to Permit2; balance-MAX aToken to GeneralAdapter1 ≤ `MAX_UINT_256`); for reset-then-approve tokens both requests are applied in order and the last value wins | `allowance(owner, spender)` returns `amount` |
-| `erc2612Permit` | `domain.verifyingContract` (ERC-20, Vault V1 or Vault V2 share token) | `allowance[owner][spender]` | `message.value` | `nonces(owner)` equals `message.nonce`; `domain.chainId` equals `chainId`; Vault V2 uses the two-field domain, Vault V1 its EIP-5267 domain, ERC-20s their token domain; `owner` = sender; `spender` = decoded spender; `value` equals the decoded pull or in-kind-redemption grant exactly; `deadline` within the lifetime bound | `allowance(owner, spender)` returns `value` |
-| `permit2Allowance` | `message.details.token` | `allowance[owner][spender]` | `message.details.amount` | `Permit2.allowance(owner, token, spender).nonce` equals `details.nonce`; `details.expiration` equals `MAX_UINT_48`; `sigDeadline` within the lifetime bound; `spender` = decoded spender; `amount` equals the decoded pull exactly; `domain.verifyingContract` is the registered Permit2; the token's real allowance to Permit2 covers `amount` or a companion `erc20Approval` to Permit2 is present | `allowance(owner, spender)` returns `amount` |
-| `blueAuthorization` | Morpho | `isAuthorized[authorizer][authorized]` | `isAuthorized` | `authorizer` = sender; `authorized` is a registered operator for the decoded route, or a pre-liquidation contract for the decoded market (below) | `Morpho.isAuthorized(authorizer, authorized)` returns `isAuthorized` |
-| `blueAuthorizationSignature` | Morpho | `isAuthorized[authorizer][authorized]` | `message.isAuthorized` | As above, plus `Morpho.nonce(authorizer)` equals `message.nonce`, `deadline` within the lifetime bound, `domain.verifyingContract` is the registered Morpho | As above |
+| `erc20Approval` | `token` | Owner calls `approve(spender, amount)` | `amount` | `owner` = sender; `spender` is a registered spender for the decoded route; `amount` equals the decoded pull exactly, or is the accepted persistent cap (`MAX_UINT_160` to Permit2; balance-MAX aToken to GeneralAdapter1 ≤ `MAX_UINT_256`); an explicit reset request with `amount = 0` is accepted only before its matching validated nonzero approval; execute both in order and verify each result | `allowance(owner, spender)` returns `amount` |
+| `erc2612Permit` | `domain.verifyingContract` (ERC-20, Vault V1 or Vault V2 share token) | Owner calls `approve(spender, message.value)` | `message.value` | `nonces(owner)` equals `message.nonce`; `domain.chainId` equals `chainId`; Vault V2 uses the two-field domain, Vault V1 its EIP-5267 domain, ERC-20s their token domain; `owner` = sender; `spender` = decoded spender; `value` equals the decoded pull or in-kind-redemption grant exactly; `deadline` within the lifetime bound | `allowance(owner, spender)` returns `value` |
+| `permit2Allowance` | `message.details.token` | Owner calls `approve(spender, message.details.amount)` | `message.details.amount` | `Permit2.allowance(owner, token, spender).nonce` equals `details.nonce`; `details.expiration` equals `MAX_UINT_48`; `sigDeadline` within the lifetime bound; `spender` = decoded spender; `amount` equals the decoded pull exactly; `domain.verifyingContract` is the registered Permit2; the token's real allowance to Permit2 covers `amount` or a companion `erc20Approval` to Permit2 is present | `allowance(owner, spender)` returns `amount` |
+| `blueAuthorization` | Morpho | `stateDiff`: `isAuthorized[authorizer][authorized]` | `isAuthorized` | `authorizer` = sender; `authorized` is a registered operator for the decoded route, or a pre-liquidation contract for the decoded market (below) | `Morpho.isAuthorized(authorizer, authorized)` returns `isAuthorized` |
+| `blueAuthorizationSignature` | Morpho | `stateDiff`: `isAuthorized[authorizer][authorized]` | `message.isAuthorized` | As above, plus `Morpho.nonce(authorizer)` equals `message.nonce`, `deadline` within the lifetime bound, `domain.verifyingContract` is the registered Morpho | As above |
 
 - **Permit2 storage is not overridden.** The no-signature build never routes through Permit2, so the
   Permit2 tuple, nonce advance and expiration are verified on the request in `preview` and on real
-  execution in `final`. The token-allowance override is the same authority
+  execution in `final`. The token approval prepares the same authority
   `(owner, token, spender, amount)` expressed where the `preview` form reads it.
-- **Storage keys are derived, then proven.** Morpho's storage layout is pinned in-package like its ABI.
-  Token allowance keys are discovered per token at verification time from candidate layouts and
-  confirmed by the read-back; a key that cannot be uniquely identified fails with
-  `UnsupportedVerificationFeatureError`. Every read-back runs against the same block and override set
-  as the user transactions, is read-only, and never appears in `simulationTxs` or `calls`.
+- **Token allowances use contract execution, not storage discovery.** Each preparation call has
+  `from = owner`, `to = token` and `value = 0`. Run the ordered preparation calls, read-back probes and
+  unchanged user transactions in one stateful `eth_simulateV1` request at the pinned block; each call
+  observes prior writes. These calls are simulated only and are never broadcast or added to a signing
+  request. A proxy or namespaced/custom storage layout needs no special slot handling. The SDK validates
+  preparation results before accepting any later user result, even if the RPC executes subsequent calls
+  after a failed preparation call.
+- **Approval success is checked.** A reverted call or a decoded `false` return fails with
+  `SimulationRevertedError` at the preparation stage. Accept an empty return for supported legacy
+  tokens only when the subsequent `allowance(owner, spender)` read equals the intended value; malformed
+  return data fails with `InvalidSimulationResponseError`. A successful read that disagrees with the
+  intended allowance fails with `PermissionChangeMismatchError`. Never proceed on logs alone.
+- **Reset requirements are explicit.** Direct `erc20Approval` requests execute in their supplied order;
+  the SDK does not silently insert a wallet approval absent from those requests. For a supported token
+  requiring a zero reset, permit-derived preparation may use simulated `approve(spender, 0)` followed by
+  the exact grant, recording both calls as modeling steps for that request. This models allowance only,
+  not permit execution. Unsupported approval behavior fails typed; there is no storage-probing retry.
+- **Preparation cannot hide side effects.** Capture real state without overrides or preparation, prepared state before
+  user execution, and final state. Check preparation logs and state changes: only the declared permissions
+  may change (gas excluded); reject unexpected asset, position or unrelated permission changes. User
+  action checks use prepared permissions as their starting allowance; wallet limits and verification
+  retain the real pre-preparation baseline so preparation cannot conceal a debit.
+- **Only Morpho storage keys are derived.** Morpho's storage layout is pinned in-package like its ABI.
+  Prove its authorization override with a read-back under the same override set before preparation
+  calls execute. All probes use the same pinned block and execution state appropriate to their stage,
+  are read-only, and never appear in `simulationTxs` or user `calls`.
 - **Nonces are never overridden.** Request nonces are compared with the real chain nonce at the pinned
   block; a stale nonce fails with `AuthorizationRequestMismatchError`.
 - **`final` accepts no `authorizations`.** Signatures live in the calldata and approvals must be mined
-  before `final` runs; any request is a `SimulationValidationError`. `final` applies no permission or
-  signature override, so it exposes failures `preview` grants can mask.
+  before `final` runs; any request is a `SimulationValidationError`. `final` runs no synthetic approval
+  preparation and applies no permission or signature override, so it exposes failures `preview` can mask.
 - **No native-balance override may inform a funding conclusion.** Native funding (`value`) is verified
   against the sender's real balance at the pinned block, minus a gas reserve, whatever balance the
   simulation itself runs with.
 - Both modes apply identical decode, effect, position, market and limit checks. Unsupported
-  mechanisms fail; nothing falls back to a prepended transaction.
+  mechanisms fail; no provider fallback or bypass is allowed.
 
 ### Decode supported operations
 
@@ -359,26 +389,30 @@ Require zero residual positions only for decoded full closes.
 
 ### Classification and enforcement
 
-Validate → bind → apply overrides and prove them → execute → establish evidence → check effects and
-limits. Throw once, in stable transaction and rule order; classify structured data, never message
+Validate → bind → apply and prove Morpho overrides → execute and verify approval preparation →
+execute user transactions → establish evidence → check effects and limits. Throw once, in stable transaction and rule order; classify structured data, never message
 text. Missing or malformed evidence is never zero or an effect mismatch. A probe that fails to execute
-is missing evidence; a probe that executes but disagrees with its override is an unsupported feature.
+is missing evidence; a probe that executes but disagrees with its Morpho override is an unsupported
+feature. An approval allowance mismatch is a permission error; reverted or false-return approvals
+are preparation execution failures.
 Wrong fee → fee error; valid fee above a caller bound → limit error; retention → existing blacklist
 error. Every error blocks API output and submission; nothing is bypassable or falls back.
 
 ## Invariants
 
-- `simulationTxs` equals `params.transactions` element for element; the SDK never adds, removes or
-  reorders a transaction it simulates.
-- The only state the SDK writes before execution is the authority a supplied request grants, on the
-  contract that stores it, plus any balance headroom that no check depends on. No override touches
-  code, precompiles, nonces or unrelated storage.
-- Every override is proven by a read-back at the same block under the same override set before any
-  conclusion is drawn; an unprovable override fails typed.
+- `simulationTxs` equals `params.transactions` element for element. The raw simulation may prepend
+  recorded approval preparation and insert read-only probes; it never rewrites or reorders user
+  transactions. Preparation and probe indices never shift public user transaction indices.
+- Token allowances are prepared exclusively through explicit owner `approve` calls with validated
+  amounts, including recorded zero resets where required. Preparation cannot change unrelated state.
+  State overrides are limited to requested Morpho authority and any balance headroom that no check
+  depends on; no override touches token storage, code, precompiles, nonces or unrelated storage.
+- Every permission override and approval preparation is verified by read-back in the corresponding
+  simulated state at the pinned block before user execution; missing or mismatched evidence fails typed.
 - A request whose owner is not the protected user, whose nonce is not the current chain nonce, or whose
   grant is not exactly the decoded authority, fails before any signature exists.
-- `final` runs with real signatures and no permission override; `preview` may never be the last check
-  before submission.
+- `final` runs with real signatures, no synthetic approval preparation and no permission override;
+  `preview` may never be the last check before submission.
 - Native funding is judged against the real balance at the pinned block, never a simulated one.
 - Consumer limits only tighten; unknown, ambiguous or inapplicable limits fail rather than being
   ignored; every limit field has one fixed unit encoded in its name and type.
@@ -394,9 +428,13 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
   `movePrecompileToAddress`, forcing a raw RPC path; it relaxes every signature check inside the bundle;
   it still needs placeholder signatures in the calldata under test; and it cannot model direct
   `setAuthorization` or approval transactions at all.
-- **Prepended synthetic approvals (current).** Rejected: changes the bundle and its indices, grants
-  `maxUint256` authority the wallet never grants, and cannot express Permit2, vault-share permits or
-  Morpho authorization.
+- **Generic token storage-layout discovery.** Rejected: ERC-20 does not standardize storage layouts;
+  candidate probing cannot guarantee coverage of arbitrary mappings, namespaces or custom logic and
+  adds discovery RPC work. Execute the token's own `approve` instead, without a slot-discovery fast path.
+- **Unbounded, untracked synthetic approvals (current).** Rejected: defaulting to `maxUint256` can
+  widen the requested authority and mixing preparation with user results shifts indices. Explicit
+  approval preparation uses validated amounts, records every call separately, and keeps user indices
+  stable. Typed permit checks and final signature execution remain necessary.
 - **Overriding Permit2 and Morpho storage under a final-shaped `preview` transaction.** Rejected: the
   `approve2`, `permit` and `setAuthorizationWithSig` calls cannot succeed without a valid signature, so
   they would have to be stripped, and the verifier would then be testing a transaction it authored.
@@ -419,8 +457,8 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
   new error classes; `simulationTxs` no longer contains authorization transactions, so `txIdx` indexes
   `params.transactions` directly; stricter checks block flows that succeed today. The migration guide
   maps `{ type: "signature", token, spender, amount }` to a typed request, removes prepended-index
-  arithmetic, lists the new codes, and removes every consumer bypass except retries of
-  `EXTERNAL_SERVICE_ERROR` re-runs.
+  arithmetic in favor of separate authorization preparation records, lists the new codes, and removes
+  every consumer bypass except retries of `EXTERNAL_SERVICE_ERROR` re-runs.
 - **Rule change to codify first.** `packages/evm-simulation/AGENTS.md` currently instructs a
   Tenderly-first pipeline and prepended `approve` authorizations. The implementation PR must rewrite
   those bullets to this decision (and the `morpho-protocol` / `web3-security` persona backlinks if they
@@ -430,17 +468,23 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
 
 ## Acceptance Criteria
 
-- [ ] `simulationTxs` is element-for-element equal to `params.transactions` in both modes; a test fails
-      if any transaction is prepended.
-- [ ] Each request variant produces exactly the override in the table, and a read-back proof runs at the
-      same block; a test fails if the proof is removed or if an override is applied without a request.
-- [ ] A request with a foreign owner, stale nonce, wrong spender or token, non-exact amount, expiration
+- [ ] `simulationTxs` is element-for-element equal to `params.transactions` in both modes; preparation
+      and probe results map separately without shifting user indices, including preparation failures.
+- [ ] Each request variant produces exactly the preparation in the table, with read-back at the same
+      pinned block; tests fail if proof is removed, preparation lacks a request, or token storage is overridden.
+- [ ] Fork tests cover ordinary, proxy and namespaced token layouts without slot discovery, vault-share
+      approvals, reset-then-approve sequencing, legacy empty returns, false returns and reverts; local
+      contract fixtures cover custom storage and unexpected approval side effects. No mocked transport
+      substitutes for contract round-trips. Preparation and user execution share one stateful request.
+- [ ] A request with a foreign owner, stale nonce, wrong spender or token, an amount outside the exact grant, accepted cap or
+      paired zero-reset rules, expiration
       other than `MAX_UINT_48`, or deadline beyond `maxSignatureLifetimeSeconds` fails typed before any
       signature exists.
 - [ ] `final` rejects any `authorizations`; `preview` rejects transactions containing `permit`,
       `approve2`, `setAuthorizationWithSig` or a non-sentinel permit struct.
-- [ ] Unknown token storage layout, unrecognized target or selector, and top-level callbacks fail typed;
-      no partial verification is returned.
+- [ ] Unknown token storage layout alone does not reject a supported token; unsupported approval
+      behavior, unrecognized targets or selectors, and top-level callbacks fail typed with no partial
+      verification. `final` never inserts synthetic approval calls.
 - [ ] Every `OperationLimit` field in the two tables is enforced by a test that fails when the bound is
       removed; unknown `type`, unmatched or ambiguous subject, and widened bounds are rejected.
 - [ ] Each of the six shared invariants, the `chainId` and domain binding, native funding against real
@@ -454,11 +498,14 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
 
 ## Consequences
 
-- `preview` never exercises Permit2 or `setAuthorizationWithSig` code paths; those failures surface in
+- `preview` exercises token `approve`, but not ERC-2612 permit, Permit2 or `setAuthorizationWithSig`
+  execution. Approval preparation does not prove a permit can execute; those failures surface in
   `final`. Reassess a `morpho-sdk` "authority-assumed" preview build if `final`-only failures in these
   paths become frequent.
-- Token storage-layout discovery adds RPC reads per token in `preview`; results may be cached per
-  `(chain, token)` only when keyed to a proof, never assumed.
+- Token storage-layout discovery and its RPC probes are eliminated. Explicit approvals and read-back
+  probes add execution work within the simulation request and count against provider call/gas limits.
+  Layout independence does not guarantee support for arbitrary token behavior: a token whose approval
+  semantics cannot model the required allowance still fails typed.
 - Removing the sender balance inflation may surface native-funding failures that were previously hidden;
   this is intended.
 - Midnight routes, standalone mint or revoke, native unwrap, swaps, multiply and repay-with-collateral
