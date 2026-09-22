@@ -179,8 +179,8 @@ export function mapBookMarket(
     rcfThreshold: book.rcf_threshold,
     enterGate: book.enter_gate,
     liquidatorGate: book.liquidator_gate,
-    asks: book.asks.map(mapPriceLevel),
-    bids: book.bids.map(mapPriceLevel),
+    asks: mapPriceLevels(book.asks, "asks"),
+    bids: mapPriceLevels(book.bids, "bids"),
   };
 }
 
@@ -198,20 +198,74 @@ export function mapBoundBookMarket(
   return market;
 }
 
-/** @internal Maps listed book markets, binding each verified id to the requested market_ids filter when present. */
+/** @internal Requested `fetchBooks` filters that every returned book must satisfy. */
+export interface BookFilterContext {
+  readonly marketIds?: readonly Hash[];
+  readonly chainIds?: readonly number[];
+  readonly loanTokens?: readonly Address[];
+  readonly collateralTokens?: readonly Address[];
+  readonly maturities?: readonly number[];
+}
+
+/** @internal Maps listed book markets, binding each verified id to requested filters when present. */
 export function mapBoundBooks(
   books: readonly ApiBookMarketResponse[],
-  marketIds?: readonly Hash[],
+  context: BookFilterContext = {},
 ): MidnightApiBookMarket[] {
   return books.map((book) => {
     const market = mapBookMarket(book);
     if (
-      marketIds != null &&
-      marketIds.length > 0 &&
-      !marketIds.some((marketId) => isHexEqual(marketId, market.marketId))
+      context.marketIds != null &&
+      context.marketIds.length > 0 &&
+      !context.marketIds.some((marketId) =>
+        isHexEqual(marketId, market.marketId),
+      )
     ) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API book market_id "${market.marketId}" is outside the requested market_ids filter.`,
+      );
+    }
+    if (
+      context.chainIds != null &&
+      context.chainIds.length > 0 &&
+      !context.chainIds.includes(market.chainId)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${market.marketId}" is outside the requested chain_ids filter.`,
+      );
+    }
+    if (
+      context.loanTokens != null &&
+      context.loanTokens.length > 0 &&
+      !context.loanTokens.some((token) =>
+        isAddressEqual(token, market.loanToken),
+      )
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${market.marketId}" is outside the requested loan_tokens filter.`,
+      );
+    }
+    const { collateralTokens } = context;
+    if (
+      collateralTokens != null &&
+      collateralTokens.length > 0 &&
+      !market.collaterals.some((collateral) =>
+        collateralTokens.some((token) =>
+          isAddressEqual(token, collateral.token),
+        ),
+      )
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${market.marketId}" is outside the requested collateral_tokens filter.`,
+      );
+    }
+    if (
+      context.maturities != null &&
+      context.maturities.length > 0 &&
+      !context.maturities.includes(market.maturity)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API book market_id "${market.marketId}" is outside the requested maturities filter.`,
       );
     }
     return market;
@@ -241,6 +295,16 @@ export function mapPriceLevel(
     assets: level.assets,
     count: level.count,
   };
+}
+
+/** @internal Maps API price levels and sorts them best first: asks by ascending tick, bids by descending tick. */
+export function mapPriceLevels(
+  levels: readonly ApiPriceLevelResponse[],
+  side: MidnightApiBookSide,
+): MidnightApiPriceLevel[] {
+  return levels
+    .map(mapPriceLevel)
+    .sort((a, b) => (side === "asks" ? a.tick - b.tick : b.tick - a.tick));
 }
 
 /** @internal Maps a takeable-offer API payload to the SDK response shape. */

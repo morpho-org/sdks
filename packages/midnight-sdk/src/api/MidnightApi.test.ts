@@ -179,6 +179,34 @@ const expectedBook = {
   bids: [],
 };
 
+const multiCollateralApiBook = (() => {
+  const params = {
+    ...apiBook,
+    collaterals: [
+      ...apiBook.collaterals,
+      { ...apiCollateral, token: SECOND_LOAN_TOKEN },
+    ],
+  };
+  return {
+    ...params,
+    market_id: MarketUtils.toId({
+      chainId: params.chain_id,
+      midnight: params.midnight,
+      loanToken: params.loan_token,
+      collateralParams: params.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcf_threshold,
+      enterGate: params.enter_gate,
+      liquidatorGate: params.liquidator_gate,
+    }) satisfies Hex,
+  };
+})();
+
 const apiOfferMarket = {
   chain_id: 8453,
   midnight: API_MIDNIGHT,
@@ -695,6 +723,50 @@ describe("MidnightApi.fetchBooks", () => {
     expect(call.init?.body).toBeUndefined();
   });
 
+  test("behavior: treats empty optional filters as unset", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    const result = await MidnightApi.fetchBooks({
+      chainIds: [],
+      loanTokens: [],
+      collateralTokens: [],
+      maturities: [],
+      marketIds: [],
+      fetch,
+    });
+
+    expect(result.data).toEqual([expectedBook]);
+  });
+
+  test("behavior: accepts a multi-collateral book when one collateral matches the collateralTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [multiCollateralApiBook],
+    });
+
+    const result = await MidnightApi.fetchBooks({
+      collateralTokens: [SECOND_LOAN_TOKEN],
+      fetch,
+    });
+
+    expect(result.data).toEqual([
+      {
+        ...expectedBook,
+        marketId: multiCollateralApiBook.market_id,
+        // Collaterals are returned in canonical (token-sorted) order so their
+        // array index matches the onchain collateralIndex. SECOND_LOAN_TOKEN
+        // (0x1111…) sorts before COLLATERAL_TOKEN (0x34Cf…).
+        collaterals: [
+          { ...expectedCollateral, token: SECOND_LOAN_TOKEN },
+          ...expectedBook.collaterals,
+        ],
+      },
+    ]);
+  });
+
   test("error: InvalidMidnightApiResponseError for a book outside the marketIds filter", async () => {
     const { fetch } = createJsonFetch({
       cursor: "next",
@@ -703,6 +775,53 @@ describe("MidnightApi.fetchBooks", () => {
 
     await expect(
       MidnightApi.fetchBooks({ marketIds: [MARKET_ID], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the chainIds filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ chainIds: [1], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the loanTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [coherentForeignApiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ loanTokens: [LOAN_TOKEN], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the collateralTokens filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({ collateralTokens: [SECOND_LOAN_TOKEN], fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for a book outside the maturities filter", async () => {
+    const { fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiBook],
+    });
+
+    await expect(
+      MidnightApi.fetchBooks({
+        maturities: [apiBook.maturity + 1],
+        fetch,
+      }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
@@ -791,6 +910,28 @@ describe("MidnightApi.fetchBook", () => {
     ]);
   });
 
+  test("behavior: sorts book price levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: {
+        ...apiBook,
+        asks: [4000, 2000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+        bids: [2000, 4000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+      },
+    });
+
+    const result = await MidnightApi.fetchBook({
+      marketId: MARKET_ID,
+      fetch,
+    });
+
+    expect(result.data.asks.map((level) => level.tick)).toEqual([
+      2000, 3000, 4000,
+    ]);
+    expect(result.data.bids.map((level) => level.tick)).toEqual([
+      4000, 3000, 2000,
+    ]);
+  });
+
   test("error: InvalidMidnightApiResponseError when the API returns a coherent foreign market", async () => {
     // SDKS-60: a hostile/compromised API must not substitute a coherent foreign
     // market for the requested id and have it flow downstream unbound. The book's
@@ -865,6 +1006,34 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks`);
     expect(url.searchParams.get("depth")).toBe("50");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: sorts ask levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: [4000, 2000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+    });
+
+    const result = await MidnightApi.fetchBookPriceLevels({
+      marketId: MARKET_ID,
+      side: "asks",
+      fetch,
+    });
+
+    expect(result.data.map((level) => level.tick)).toEqual([2000, 3000, 4000]);
+  });
+
+  test("behavior: sorts bid levels best first", async () => {
+    const { fetch } = createJsonFetch({
+      data: [2000, 4000, 3000].map((tick) => ({ ...apiPriceLevel, tick })),
+    });
+
+    const result = await MidnightApi.fetchBookPriceLevels({
+      marketId: MARKET_ID,
+      side: "bids",
+      fetch,
+    });
+
+    expect(result.data.map((level) => level.tick)).toEqual([4000, 3000, 2000]);
   });
 });
 
