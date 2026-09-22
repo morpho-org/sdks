@@ -1,5 +1,30 @@
 # @morpho-org/midnight-sdk
 
+## 1.7.0-next.0
+
+### Minor Changes
+
+- [#1116](https://github.com/morpho-org/sdks/pull/1116) [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `MidnightApi` takeable-offer mappers (`fetchBookQuote`, `fetchBookTakeableOffers`, `fetchTakeableOffers`) now reject offers that cannot be executed by the Midnight contract: caps must set exactly one non-zero `uint128` cap, `receiverIfMakerIsSeller` must be a well-formed address, and buy offers must carry a zero `receiverIfMakerIsSeller`. Such responses throw `InvalidMidnightApiResponseError` instead of being quoted and skipped onchain, which could otherwise fall through to worse-priced liquidity.
+
+  `MidnightApi.fetchBookQuote` now throws the new `InvalidMidnightApiQuoteTargetError` when the runtime input does not set exactly one of `units` or `assets`, instead of sending both query parameters and silently evaluating the `units` branch. The error is re-exported from `@morpho-org/morpho-sdk/errors` and `@morpho-org/morpho-sdk/midnight/errors`.
+
+### Patch Changes
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#1125](https://github.com/morpho-org/sdks/pull/1125) [`047e86c`](https://github.com/morpho-org/sdks/commit/047e86cf02c2a4bdd2ef11d47510b8762b4f5447) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Correct `Offer.create` JSDoc for `continuousFeeCap`: the actual default is `0n` (fail-closed — no market continuous fee is accepted unless set explicitly), not `MAX_CONTINUOUS_FEE` as previously documented. No behavior change.
+
+  Refs SDK-1009
+
+- [#1122](https://github.com/morpho-org/sdks/pull/1122) [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject `MidnightApi.fetchBooks` results outside the requested filters. `fetchBooks` now throws `InvalidMidnightApiResponseError` when a returned book falls outside any supplied `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filter, extending the existing `marketIds` binding so a hostile or compromised API cannot return a coherent foreign market for a filtered listing. `morpho-sdk` re-exports this API via its `/midnight-api` facade and takes a matching patch.
+
+- [#1121](https://github.com/morpho-org/sdks/pull/1121) [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Sort Midnight API book price levels best first (asks ascending tick, bids descending tick) instead of trusting API order.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+
 ## 1.6.0
 
 ### Minor Changes

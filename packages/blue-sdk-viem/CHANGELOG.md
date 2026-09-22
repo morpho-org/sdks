@@ -1,5 +1,38 @@
 # @morpho-org/blue-sdk-viem
 
+## 6.0.0-next.1
+
+### Minor Changes
+
+- [#1132](https://github.com/morpho-org/sdks/pull/1132) [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deprecate all pre-liquidation logic. Every pre-liquidation export is now marked `@deprecated` and will be removed in the next major; there is no successor.
+
+  - `blue-sdk`: `PreLiquidationParams`, `IPreLiquidationParams`, `PreLiquidationPosition`, `IPreLiquidationPosition`, `defaultPreLiquidationParamsRegistry`, `getDefaultPreLiquidationParams`, and `UnsupportedPreLiquidationParamsError`.
+  - `blue-sdk-viem`: `fetchPreLiquidationParams`, `fetchPreLiquidationPosition`, `AccrualPosition.fetchPreLiquidation`, `preLiquidationAbi`, and `preLiquidationFactoryAbi`.
+  - `morpho-sdk`: the matching `/blue/*` raw re-exports and the `Blue`-qualified facade aliases (`BluePreLiquidationParams`, `IBluePreLiquidationParams`, `BluePreLiquidationPosition`, `IBluePreLiquidationPosition`, `fetchBluePreLiquidationParams`, `fetchBluePreLiquidationPosition`, `UnsupportedBluePreLiquidationParamsError`, `bluePreLiquidationAbi`, `bluePreLiquidationFactoryAbi`, `blueDefaultPreLiquidationParamsRegistry`, `getBlueDefaultPreLiquidationParams`, and `BlueAccrualPosition.fetchPreLiquidation`).
+  - `morpho-ts`: the `preLiquidationFactory` chain-address field.
+
+  Runtime behavior is unchanged; this only adds `@deprecated` JSDoc.
+
+- [#1125](https://github.com/morpho-org/sdks/pull/1125) [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `safeParseUnits` now validates the whole input against an anchored decimal grammar (`/^[-+]?(\d+\.?\d*|\.\d+)$/`) before parsing, so malformed strings such as `"100.00.999"`, `"1e5"`, or `"abc1"` throw `InvalidNumberError` (exported from `@morpho-org/blue-sdk-viem` and the `morpho-sdk` errors facades) instead of being silently truncated to a different amount. Sign handling is normalized before calling `parseUnits`, and fractional truncation to `decimals` is unchanged.
+
+### Patch Changes
+
+- [#1125](https://github.com/morpho-org/sdks/pull/1125) [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Expose the documented augmentation subpaths: `package.json` now exports `./augment` and `./augment/*` (dev exports map to `src/augment`, `publishConfig.exports` and `publishConfig.typesVersions` to `lib/{esm,cjs}/augment`), so `import "@morpho-org/blue-sdk-viem/augment/Market"` and friends resolve instead of throwing `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `sideEffects` manifest field now protects the augmentation modules from tree-shaking, and the README uses the new subpaths (dropping the non-existent `augment/AccrualPosition` entry — `augment/Position` augments `Position` and `AccrualPosition` — and adding the missing `augment/User`).
+
+  Refs SDK-1100
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
 ## 6.0.0-next.0
 
 ### Major Changes

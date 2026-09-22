@@ -1,5 +1,22 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0-next.4
+
+### Patch Changes
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+- Updated dependencies [[`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8), [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac), [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47), [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec), [`7991d97`](https://github.com/morpho-org/sdks/commit/7991d979c98d77d306338eeae7342f3abb3fbbfa), [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8), [`ab2bc02`](https://github.com/morpho-org/sdks/commit/ab2bc0254a56f8c9084c2a5bccdc5d50d2e1743d), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e), [`e2a5a40`](https://github.com/morpho-org/sdks/commit/e2a5a409f1aecf05a5ebe992f6ecaf6dfd65bbbf)]:
+  - @morpho-org/blue-sdk-viem@6.0.0-next.1
+  - @morpho-org/morpho-sdk@6.0.0-next.4
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
 ## 2.0.0-next.3
 
 ### Major Changes
