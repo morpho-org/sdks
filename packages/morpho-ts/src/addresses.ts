@@ -1951,6 +1951,8 @@ const refreshDeploymentViews = () => {
 /**
  * Registers custom addresses, deployment blocks, and unwrapped token mappings.
  *
+ * Validation runs over every requested patch before any registry is committed; a thrown error leaves all registries unchanged.
+ *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
@@ -2013,6 +2015,10 @@ export function registerCustomAddresses<
     ChainDeployments
   >;
 } = {}) {
+  let nextAddresses: AddressRegistry | undefined;
+  let nextDeployments: DeploymentRegistry | undefined;
+  let nextUnwrappedTokens: typeof unwrappedTokensMapping | undefined;
+
   if (customAddresses) {
     const nextRegistry: Record<number, ChainAddresses> = {
       ...addressesRegistry,
@@ -2044,8 +2050,7 @@ export function registerCustomAddresses<
             });
     }
 
-    addressesRegistry = deepFreeze(nextRegistry) as AddressRegistry;
-    refreshAddressViews();
+    nextAddresses = deepFreeze(nextRegistry) as AddressRegistry;
   }
 
   if (customDeployments) {
@@ -2079,8 +2084,7 @@ export function registerCustomAddresses<
             });
     }
 
-    deployments = deepFreeze(nextRegistry) as DeploymentRegistry;
-    refreshDeploymentViews();
+    nextDeployments = deepFreeze(nextRegistry) as DeploymentRegistry;
   }
 
   if (unwrappedTokens) {
@@ -2116,7 +2120,7 @@ export function registerCustomAddresses<
       }),
     );
 
-    unwrappedTokensMapping = deepFreeze(
+    nextUnwrappedTokens = deepFreeze(
       mergeRegistry({
         base: unwrappedTokensMapping,
         patch: alignedUnwrappedTokens,
@@ -2125,4 +2129,16 @@ export function registerCustomAddresses<
       }),
     );
   }
+
+  if (nextAddresses) {
+    addressesRegistry = nextAddresses;
+    refreshAddressViews();
+  }
+
+  if (nextDeployments) {
+    deployments = nextDeployments;
+    refreshDeploymentViews();
+  }
+
+  if (nextUnwrappedTokens) unwrappedTokensMapping = nextUnwrappedTokens;
 }
