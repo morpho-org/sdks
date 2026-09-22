@@ -1,6 +1,6 @@
 export {
   EcrecoverRatifier,
-  /** @deprecated Use EcrecoverRatifier. */
+  /** @deprecated Use EcrecoverRatifier with a tagged tree. */
   EcrecoverRatifierUtils,
   eip712Digest,
   GroupUtils,
@@ -19,7 +19,7 @@ export {
   /** @deprecated Use Ratifier. */
   RatifierUtils,
   SetterRatifier,
-  /** @deprecated Use SetterRatifier. */
+  /** @deprecated Use SetterRatifier with a tagged tree. */
   SetterRatifierUtils,
   TakeAmountsLib,
   TickLib,
