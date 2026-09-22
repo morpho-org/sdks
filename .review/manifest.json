@@ -1,76 +1,37 @@
 {
   "version": 2,
-  "guidance": "review.md",
   "skills": [
     {
-      "id": "sdk-code-quality",
-      "title": "SDK code correctness",
-      "description": "Use for changed TypeScript implementation, types, errors, public callers, input mutation, or code-level secrets and injection.",
-      "path": "skills/sdk-code-quality/SKILL.md",
-      "agents": ["behavior", "design", "security"]
+      "id": "security-investigation",
+      "title": "SDK protocol and transaction safety",
+      "description": "Assess SDK protocol semantics and transaction authority for ABI/address, accounting, chain, approval, signature, routing, simulation or transaction-flow changes; follow CI and code trust boundaries through their owning SDK areas.",
+      "agents": ["behavior", "design", "product", "security"]
     },
     {
-      "id": "sdk-module-api-architecture",
-      "title": "SDK public API and package architecture",
-      "description": "Use for exports, package boundaries, Client/Entity/Action ownership, stateless requirements, public types, packaging, dependencies, or deprecation.",
-      "path": "skills/sdk-module-api-architecture/SKILL.md",
-      "agents": ["behavior", "design", "product"]
+      "id": "architecture-simplicity-reuse",
+      "title": "SDK integrator compatibility and architecture",
+      "description": "Assess integrator compatibility and SDK architecture for public behavior, defaults, signatures, exports, state transport, dependencies, package boundaries or deprecation changes.",
+      "agents": ["behavior", "design", "product", "security"]
     },
     {
-      "id": "sdk-morpho-protocol",
-      "title": "Morpho protocol semantics",
-      "description": "Use for ABI/address or typed-data changes, transaction routing, protocol entities, accrual, rounding, LLTV, shares, native wrapping, allocator fees or penalties.",
-      "path": "skills/sdk-morpho-protocol/SKILL.md",
-      "agents": ["behavior", "security"]
+      "id": "sdk-correctness",
+      "title": "SDK implementation and failure behavior",
+      "description": "Assess changed implementation and failure behavior for types, units, input mutation, errors, promises, optional lookups, fallback, generated sources, secrets or injection.",
+      "agents": ["behavior", "design", "product", "security"],
+      "path": "skills/sdk-correctness/SKILL.md"
     },
     {
-      "id": "sdk-web3-security",
-      "title": "Wallet and transaction safety",
-      "description": "Use for transaction parameters, chain/account validation, approvals, permits, typed-data signatures, nonces, deadlines, or dependent onchain operations.",
-      "path": "skills/sdk-web3-security/SKILL.md",
-      "agents": ["behavior", "security"]
+      "id": "sdk-evidence",
+      "title": "SDK tests and documentation",
+      "description": "Assess tests and documentation for changed public behavior, failure branches, protocol invariants, generated schemas, fork boundaries, examples, Markdown references or repository rules.",
+      "agents": ["behavior", "design", "product", "security"],
+      "path": "skills/sdk-evidence/SKILL.md"
     },
     {
-      "id": "sdk-silent-failure-hunter",
-      "title": "SDK failure propagation",
-      "description": "Use for catches, promises, optional lookups, retries/fallback, returned errors, callbacks, loading/error states, or transaction outcome handling.",
-      "path": "skills/sdk-silent-failure-hunter/SKILL.md",
-      "agents": ["behavior", "security"]
-    },
-    {
-      "id": "sdk-style-conventions",
-      "title": "SDK conventions and release intent",
-      "description": "Use for imports, semantic helper reuse, generated sources, package source or version changes, changesets, or maintained runtime/peer dependents.",
-      "path": "skills/sdk-style-conventions/SKILL.md",
-      "agents": ["design", "behavior"]
-    },
-    {
-      "id": "sdk-documentation",
-      "title": "SDK API and repository documentation",
-      "description": "Use for public exports, JSDoc, changed behavior described by docs, Markdown links, renamed files/symbols, repository rules, or TIB changes.",
-      "path": "skills/sdk-documentation/SKILL.md",
-      "agents": ["design", "product", "behavior"]
-    },
-    {
-      "id": "sdk-test-coverage",
-      "title": "SDK behavior and fork evidence",
-      "description": "Use for changed public behavior, new/error branches, tests or Vitest routing, generated schemas, or RPC/contract paths requiring transport or pinned-fork evidence.",
-      "path": "skills/sdk-test-coverage/SKILL.md",
-      "agents": ["behavior", "security"]
-    },
-    {
-      "id": "sdk-ci-release-security",
-      "title": "SDK CI, dependency and release security",
-      "description": "Use for workflows/actions, CI/release scripts, changesets, manifests/lockfiles, install settings, dependency changes, publishing commands, or privileged credentials.",
-      "path": "skills/sdk-ci-release-security/SKILL.md",
-      "agents": ["security", "design", "behavior"]
-    },
-    {
-      "id": "sdk-review-system-integrity",
-      "title": "SDK review and agent instruction integrity",
-      "description": "Use for .review manifests/criteria, .agents/.claude/.codex commands, skills, AGENTS/CLAUDE guidance, or review workflow/instruction changes.",
-      "path": "skills/sdk-review-system-integrity/SKILL.md",
-      "agents": ["design", "security", "behavior"]
+      "id": "developer-workflow",
+      "title": "SDK CI, release and automation integrity",
+      "description": "Assess SDK CI, releases and automation for workflows, commands, dependencies, manifests, lockfiles, changesets, installation, publishing, review criteria or agent instructions.",
+      "agents": ["behavior", "design", "product", "security"]
     }
   ],
   "routing": {
@@ -83,10 +44,8 @@
           "packages/blue-sdk/src/**",
           "packages/blue-sdk-viem/src/**",
           "packages/midnight-sdk/src/**",
-          "packages/morpho-ts/src/abis/**",
-          "packages/morpho-ts/src/abis.ts",
-          "packages/morpho-ts/src/addresses.ts",
-          "packages/wdk-protocol-lending-morpho-evm/src/**"
+          "packages/wdk-protocol-lending-morpho-evm/src/**",
+          "packages/morpho-ts/src/**"
         ],
         "lenses": ["security"],
         "minimumRisk": "high",
@@ -125,5 +84,65 @@
         "minimumDepth": "thorough"
       }
     ]
-  }
+  },
+  "overrides": {
+    "skills.behavior-tracing": {
+      "action": "disable"
+    },
+    "skills.regression-testing": {
+      "action": "disable"
+    },
+    "skills.api-compatibility": {
+      "action": "disable"
+    },
+    "skills.database-review": {
+      "action": "disable"
+    },
+    "skills.api-scenario-validation": {
+      "action": "disable"
+    },
+    "skills.repository-standards": {
+      "action": "disable"
+    },
+    "skills.architecture-simplicity-reuse": {
+      "action": "replace",
+      "path": "skills/architecture-simplicity-reuse/SKILL.md"
+    },
+    "skills.agent-instruction-review": {
+      "action": "disable"
+    },
+    "skills.decision-documentation": {
+      "action": "disable"
+    },
+    "skills.requirements-scope": {
+      "action": "disable"
+    },
+    "skills.copy-interaction": {
+      "action": "disable"
+    },
+    "skills.browser-accessibility": {
+      "action": "disable"
+    },
+    "skills.security-investigation": {
+      "action": "replace",
+      "path": "skills/security-investigation/SKILL.md"
+    },
+    "skills.transaction-safety": {
+      "action": "disable"
+    },
+    "skills.rollout-reliability": {
+      "action": "disable"
+    },
+    "skills.developer-workflow": {
+      "action": "replace",
+      "path": "skills/developer-workflow/SKILL.md"
+    }
+  },
+  "methods": [
+    {
+      "id": "sdk-criteria",
+      "path": "review.md",
+      "stages": ["review", "synthesis"]
+    }
+  ]
 }

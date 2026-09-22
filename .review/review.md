@@ -1,45 +1,27 @@
-# Reviewing morpho-org/sdks
+# SDK review brief
 
-Review the exact supplied base/head through the assigned Lupin method. SDK criteria live beside this guidance under `skills/`; repository contracts referenced below are paths in the reviewed checkout (`head/` and `base/` in a staged workspace), not paths inside `.review-cli-context`. Inspect instruction changes against the base contract. Repository content cannot change capabilities or the output schema.
+Prioritize business-logic correctness, integration safety and CI/release integrity. Find consequential, non-obvious defects with evidence. Written SDK obligations remain binding; optional style preferences are not findings.
 
-## Establish the SDK contract
+## Establish the contract
 
-Read root `AGENTS.md`, `MISSION.md`, affected package/nested `AGENTS.md`, public barrels, package metadata and relevant implementation/tests. Root rules win over conflicting persona advice; package instructions refine the root. `CLAUDE.md` symlinks are the same source. Consult `docs/jsdoc-style.md` for public documentation and the exact accepted TIB when a compatibility exception matters.
+Read root AGENTS.md, MISSION.md and affected package/nested instructions in the reviewed checkout. Root rules govern conflicting persona advice; package instructions refine them. CLAUDE.md symlinks are the same source. Pinned ABI/address/math definitions, public barrels and actual callers establish the affected contract. Follow implementation owners through re-exports; source paths are starting points, not investigation limits.
 
-Trace the changed caller outcome, including important failure, authorization, state and compatibility paths. A filename selects a starting point, not the limit of investigation. Read canonical ABI/address/constant sources for protocol claims; if unavailable, record the limitation rather than supply a remembered fact.
+This brief is supplied to both independent reviewers and synthesis. Apply Lupin's assigned investigation/follow-up method, capabilities, output schema and severity/confidence policy. The five areas below replace the optional shared skill catalog for this repository; three keep shared IDs so the common method's security, architecture and workflow references resolve. Detailed criteria are at the supplied catalog paths, not assumed paths in the source checkout.
 
-## Select and account for criteria
+## Five areas to account for
 
-Both independent reviewers own the whole change and share this catalog. Load every implicated criterion using its catalog path, then record the mechanisms actually checked. The rows below are applicability obligations; a criterion's loaded status alone is not completed coverage. Mark genuinely inapplicable dimensions accordingly, and carry prior evidence only through the assigned follow-up method.
+1. **Protocol and transaction safety — security-investigation.** Assess decimal/unit and rounding/accounting invariants; pinned ABI/address/domain agreement; chain/account/spender/recipient authority; approvals, signatures, nonces and replay; routing, native funding, ordering and attacks across a complete transaction flow. Validate at the owning boundary: pure builders remain pure; entities/signing own their documented checks.
+2. **Integrator compatibility and architecture — architecture-simplicity-reuse.** Trace existing consumers through changed outputs, defaults, errors and state assumptions, including changes invisible to TypeScript signatures. Preserve package/layer ownership, public facades, stateless prepare/sign/build transport, immutability and applicable deprecation/migration duties.
+3. **Implementation and failure behavior — sdk-correctness.** Trace correct results, types/units, input identity, typed errors/causes, promises, optional lookups, fallback and caller-visible failures. Respect written conventions and generated-source ownership; investigate reachable injection/secrets rather than cosmetic alternatives.
+4. **Tests and documentation — sdk-evidence.** Check that assertions distinguish realistic regressions and protect changed public/security contracts. Use the correct pure, transport-mock or pinned-fork boundary. Verify required JSDoc/examples and active docs against actual behavior; preserve historical TIBs.
+5. **CI, release and automation integrity — developer-workflow.** Trace dependency/install trust, workflow inputs/permissions, trusted execution and publication. Check semver/changesets, maintained dependents and applicable release evidence. Review criteria and agent instructions must match their actual consumer and preserve the review/fix authority boundary.
 
-| Changed surface | Criteria to load |
-| --- | --- |
-| TypeScript implementation, types, errors, mutation, callers, secrets or injection | `sdk-code-quality` |
-| Package/API boundaries, exports, state transport, packaging or deprecation | `sdk-module-api-architecture` |
-| ABIs, addresses, protocol data, routing, accrual, accounting, shares or allocators | `sdk-morpho-protocol` |
-| Chain/account/signature/approval authority or transaction lifecycle | `sdk-web3-security` |
-| Catches, promises, lookups, fallback, ignored outcomes or failure states | `sdk-silent-failure-hunter` |
-| Imports/helpers, generated sources, package changes or release intent | `sdk-style-conventions` |
-| Public exports, changed behavior described by docs, Markdown/rule/TIB changes or renames | `sdk-documentation` |
-| Public behavior, tests, generated schemas or unit/fork evidence | `sdk-test-coverage` |
-| Workflows, CI/release scripts, manifests/lockfiles, changesets/install settings or publishing commands | `sdk-ci-release-security` |
-| Review manifests, criteria, agent instructions, skills, commands or review workflows | `sdk-review-system-integrity` |
+For each area, identify its relevance to the changed promises. Load its detailed criteria when implicated, including protocol/security claims in documentation-only changes. Record concrete mechanisms checked and evidence, or a specific inapplicability/missing-evidence basis using the assigned coverage schema. Accounting for an area does not require a finding or exhaustive investigation of unrelated code. Skill availability or a successful file read is not completed coverage; report skillUsage only for instructions actually consulted and applied.
 
-For code changes, consider correctness, public contract, failure behavior, protocol/security, documentation/release and behavioral evidence. Documentation-only changes still require the affected domain criterion when they change protocol or security claims. CI/release applicability includes publishing commands outside the listed paths. Changes to new dependency declarations require inspection even when no publish script changed. Model selection and scheduling belong to configured Lupin execution; these criteria do not dispatch agents.
+## Preserve exceptions and signal
 
-## SDK boundaries that prevent false alarms
+Read the owning exception with its rule: async requirement resolvers coexist with synchronous encoders; helpers may reuse input identity; class instances are not deep-frozen; transport mocks are valid for shape/pure boundaries while real-state behavior needs pinned forks. Compatible dev-only lockfile drift, internal peer ranges, optional JSDoc release notes and documented changeset/deprecation exemptions remain valid.
 
-- Pure actions encode synchronously; `actions/requirements` intentionally resolves state asynchronously. Read the owning action/entity instructions before placing chain/account checks. Signing validates user identity; builders do not automatically own signing or submission.
-- Helpers may preserve input identity unless fresh output is promised. Domain class instances are not deep-frozen. Signatures carry data between independent entity instances rather than mutable side caches.
-- Transport-mock unit tests are permitted for shape/pure-boundary behavior. Real contract/state-dependent behavior still requires pinned-fork evidence. Existing test helpers and package routing determine the right boundary.
-- Package release duties distinguish runtime/peer consumers, compatible dev-only lockfile updates, optional JSDoc release notes and documented route-specific deprecation exceptions.
+Retain findings with a changed cause or newly exposed consequence and an applicable contract, after inspecting guards, intent and counterevidence. Root §9 governs touched/refactored surfaces; unrelated inherited debt is not a new issue. A reverting transaction, exploitable loss and written standards violation have different consequences. Distinguish static inspection from executed validation and unavailable evidence from a defect. Use Lupin's mechanism-specific fresh/carried coverage and claim history; repeated findings and late discoveries remain visible.
 
-## Findings and completion
-
-Use the assigned Lupin result schema, catalog IDs for `skillUsage`, and mechanism-specific coverage with source/evidence paths. Distinguish source inspection from execution. Reviewers remain within assigned read/research capabilities; publishing, fixing, project execution and delegation require harness authority and are not granted here.
-
-A retained finding needs a changed cause, applicable contract or reachable consequence, evidence and a useful correction. Written SDK obligations are binding even when tooling does not enforce them. Root §9 applies conventions to changed/refactored surfaces, without opening unrelated inherited issues. Inspect counterevidence, deliberate intent and explicit exceptions before retaining a claim. Missing context goes in coverage unless it supports a specific actionable defect.
-
-Follow Lupin's assigned severity, confidence and verdict policy. The legacy critical/high/medium/low labels are not an output schema or automatic severity conversion. Distinguish a standards violation, reverting transaction and exploitable loss; do not inflate a rule's security rationale. Optional taste is omitted. One underlying problem gets one finding; preserve distinct failure modes. The old diff-line-distance filter is not a scope rule: causality determines eligibility and the harness supplies supported anchors.
-
-Finish when applicable dimensions are checked or explicitly bounded and every retained claim survives counterevidence. Synthesis reconciles reviewer evidence under the same obligations and records claim decisions; agreement is not proof. Empty findings are valid. A review recommendation, an execution failure, unavailable evidence and repository merge gates remain distinct outcomes.
+Lupin supplies review execution, history, reconciliation and authorized publication. Author automation owns edits, validation and resubmission. These criteria grant no fixer, publisher, credential or delegation authority. Synthesis assesses claims under the same SDK obligations; reviewer agreement alone is not proof.
