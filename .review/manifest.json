@@ -79,10 +79,13 @@
       {
         "id": "sdk-protocol-authority",
         "paths": [
-          "packages/morpho-sdk/src/actions/**",
-          "packages/morpho-sdk/src/entities/**",
+          "packages/morpho-sdk/src/**",
           "packages/blue-sdk/src/**",
-          "packages/midnight-sdk/src/**"
+          "packages/blue-sdk-viem/src/**",
+          "packages/midnight-sdk/src/**",
+          "packages/morpho-ts/src/abis/**",
+          "packages/morpho-ts/src/addresses.ts",
+          "packages/wdk-protocol-lending-morpho-evm/src/**"
         ],
         "lenses": ["security"],
         "minimumRisk": "high",

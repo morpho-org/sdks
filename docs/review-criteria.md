@@ -23,6 +23,8 @@ The ten criterion identities preserve the specialist knowledge from the existing
 | ci-release-security | [sdk-ci-release-security](../.review/skills/sdk-ci-release-security/SKILL.md) | Workflow trust, tested scripts, signing/hardening, publication and dependencies |
 | skill-authoring | [sdk-review-system-integrity](../.review/skills/sdk-review-system-integrity/SKILL.md) | Current manifest/discovery contracts, criteria references and review authority |
 
+The `sdk-protocol-authority` path rule requires the security lens, high minimum risk and thorough depth across `morpho-sdk`, `blue-sdk`, `blue-sdk-viem`, `midnight-sdk` and `wdk-protocol-lending-morpho-evm` source, plus the canonical `morpho-ts` ABI and address definitions. Whole-package source coverage keeps validation/signing helpers, bundler encoders and facade exports inside the same deterministic floor as actions and entities. Other paths still receive applicable criteria through reviewer judgment.
+
 Keep the owning rule and affected criteria consistent when behavior changes. During staging, the existing personas remain active too. After cutover, update the active criterion references rather than preserving obsolete engine inventories.
 
 ## Adaptation from the existing engine
