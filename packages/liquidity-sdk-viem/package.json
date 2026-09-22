@@ -3,9 +3,6 @@
   "description": "Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator.",
   "version": "4.2.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb (https://x.com/FoulkPlb)"
-  ],
   "license": "MIT",
   "repository": {
     "type": "git",

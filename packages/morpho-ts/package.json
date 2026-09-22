@@ -3,9 +3,6 @@
   "description": "TypeScript package to handle all things time & format-related.",
   "version": "2.15.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb (https://x.com/FoulkPlb)"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",

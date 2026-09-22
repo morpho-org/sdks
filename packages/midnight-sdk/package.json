@@ -3,9 +3,6 @@
   "description": "Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated API subpath.",
   "version": "1.6.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb (https://x.com/FoulkPlb)"
-  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {

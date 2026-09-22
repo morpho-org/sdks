@@ -3,9 +3,6 @@
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks.",
   "version": "4.0.3",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb (https://x.com/FoulkPlb)"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",

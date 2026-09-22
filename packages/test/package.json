@@ -3,9 +3,6 @@
   "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
   "version": "2.10.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb (https://x.com/FoulkPlb)"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",
