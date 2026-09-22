@@ -234,6 +234,21 @@ describe("selectRunTrackingComments", () => {
       ),
     ).toEqual([]);
   });
+
+  test("behavior: a finalized comment with the same run link is retained", () => {
+    expect(
+      selectRunTrackingComments(
+        [
+          {
+            body: `**PR Review complete** ✅\n\nPosted the formal review.\n\n[View job](https://github.com/morpho-org/sdks/actions/runs/${RUN_ID})`,
+            id: 1,
+            user: { login: REVIEW_AUTHOR },
+          },
+        ],
+        RUN_ID,
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe("cleanup", () => {
