@@ -28,7 +28,7 @@ export {
 } from "@morpho-org/blue-sdk-viem";
 export {
   EcrecoverRatifier as MidnightEcrecoverRatifier,
-  /** @deprecated Use MidnightEcrecoverRatifier. */
+  /** @deprecated Use MidnightEcrecoverRatifier with a tagged tree. */
   EcrecoverRatifierUtils as MidnightEcrecoverRatifierUtils,
   /** @deprecated Use MidnightEcrecoverRatifier or the raw protocol subpath. */
   EcrecoverRatifierUtils,
@@ -51,7 +51,7 @@ export {
   /** @deprecated Use MidnightRatifier or the raw protocol subpath. */
   RatifierUtils,
   SetterRatifier as MidnightSetterRatifier,
-  /** @deprecated Use MidnightSetterRatifier. */
+  /** @deprecated Use MidnightSetterRatifier with a tagged tree. */
   SetterRatifierUtils as MidnightSetterRatifierUtils,
   /** @deprecated Use MidnightSetterRatifier or the raw protocol subpath. */
   SetterRatifierUtils,

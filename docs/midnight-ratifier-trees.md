@@ -75,28 +75,52 @@ leaves. They preserve more information than `Tree<RatifierKind>`.
 `TreeUtils.buildDescriptor({ type, entries })` offers the same construction as
 plain data for integrations that do not need a class instance.
 
-## Existing integrations
+## New and deprecated construction interfaces
 
-`Tree.create(entries)` remains supported, but is deprecated. It returns an
-untagged `Tree<undefined>` accepted by both Ecrecover and Setter. Replace it with
-`Tree.create({ type: "ecrecover", entries })` or the Setter equivalent when the
-route is known. There is no silent default to either route.
+Ecrecover and Setter each have a named creation request in the new API:
+
+```ts
+import {
+  Tree,
+  type EcrecoverTreeCreateRequest,
+  type SetterTreeCreateRequest,
+  type GroupInput,
+} from "@morpho-org/midnight-sdk";
+
+function prepare(entries: readonly GroupInput[]) {
+  const ecrecover: EcrecoverTreeCreateRequest = { type: "ecrecover", entries };
+  const setter: SetterTreeCreateRequest = { type: "setter", entries };
+  return {
+    ecrecover: Tree.create(ecrecover), // Tree<"ecrecover">
+    setter: Tree.create(setter),       // Tree<"setter">
+  };
+}
+```
+
+`TreeCreateRequest` is the explicit union of these two interfaces plus
+`PriceRatifierV1TreeCreateRequest` and `RateRatifierV1TreeCreateRequest`. The new
+interfaces own their entry shapes; none depends on the deprecated
+`TreeCreateParams` type. `Tree.from(request)` and
+`TreeUtils.buildDescriptor(request)` accept the same new interface.
+
+The old array-based `TreeCreateParams`, `Tree.create(entries)`,
+`Tree.from(legacyInput)`, and `TreeUtils.buildDescriptor(entries)` are deprecated
+but remain available. Existing Ecrecover and Setter integrations can keep using
+them without changing their roots, proofs, or payloads. Their removal requires a
+future major release after the deprecation period; they are not removed in this PR.
+
+An untagged `Tree<undefined>` is still accepted by both deprecated `*Utils` APIs.
+The original `TreeLike`, `TreeInput`, and `RatifierTreeInput` types retain their
+untagged shapes, so existing wrapper functions continue to compile.
+`TypedRatifierTreeInput<K>` is retained as a deprecated compatibility type.
+The new ratifier requests require a tagged `TreeSnapshot<K>` (also satisfied by
+`Tree<K>`), so erasing the route to a legacy annotation cannot bypass their static
+checks. Both APIs continue to check route tags at runtime.
 
 Existing Price/Rate descriptors, `buildDescriptor` methods, and raw ratifier
-inputs remain supported. New descriptor types are available through
+inputs remain supported. New request types are available through
 `@morpho-org/morpho-sdk/midnight/entities`; the `/entities` facade exports them with
-`Midnight`-qualified names, including `MidnightAnyTree` and `MidnightTreeSnapshot`.
-
-The original `TreeLike`, `TreeInput`, and `RatifierTreeInput` types remain untagged.
-Existing wrappers accepting these types can still call either standard ratifier.
-`TypedRatifierTreeInput<K>` adds the matching tagged-tree alternative while keeping
-legacy inputs valid. Price/Rate descriptor interfaces also retain their original
-untagged shapes; their input unions accept the corresponding tagged snapshots.
-
-An explicit annotation with a legacy type erases compile-time route information.
-For new route-aware wrappers, retain `Tree<"setter">` or
-`TypedRatifierTreeInput<"setter">` (and the Ecrecover equivalent). Ratifier utilities
-check runtime tags even when a legacy annotation has erased their static type.
+`Midnight`-qualified names, such as `MidnightEcrecoverTreeCreateRequest`.
 
 ## Ratifier names
 
@@ -105,6 +129,38 @@ Use `EcrecoverRatifier`, `SetterRatifier`, `PriceRatifierV1`, `RateRatifierV1`, 
 `@morpho-org/morpho-sdk/midnight/utils`. The general `/utils` facade exposes the
 corresponding `Midnight`-prefixed names, such as `MidnightRateRatifierV1`.
 
-The previous `*Utils` exports remain available as deprecated aliases to the same
-namespace objects. Existing imports and calls continue to work; changing the
-import name is optional. Implementation filenames now match the canonical names.
+`PriceRatifierV1Utils`, `RateRatifierV1Utils`, and `RatifierUtils` remain deprecated
+aliases to their canonical namespaces.
+
+Ecrecover and Setter maintain two APIs side by side:
+
+| API | Accepted tree input | Status |
+| --- | --- | --- |
+| `EcrecoverRatifierUtils` / `SetterRatifierUtils` | Legacy offers, groups, untagged trees and descriptors | Deprecated, preserved |
+| `EcrecoverRatifier` / `SetterRatifier` | Matching tagged tree or `TreeSnapshot` | New API |
+
+The tree-consuming methods (`typedData`, `digest`, `sign`, `ratifierData`, and
+`ratify`, as applicable) have independent `*Request` types in the new API. The
+original `*Params` types remain available for legacy integrations. Stateless
+codecs and proof-verification methods that do not consume a tree are shared.
+The APIs share their signing and encoding implementation, so migration does not
+change signature or payload bytes.
+
+```ts
+import {
+  Tree, SetterRatifier, SetterRatifierUtils, type GroupInput,
+} from "@morpho-org/midnight-sdk";
+
+function publish(entries: readonly GroupInput[]) {
+  // Legacy path remains valid after its root is approved onchain.
+  const legacyItems = SetterRatifierUtils.ratify({ tree: Tree.create(entries) });
+  // New path requires an explicitly tagged tree, with the same approved root.
+  const tree = Tree.create({ type: "setter", entries });
+  const items = SetterRatifier.ratify({ tree });
+  return { legacyItems, items };
+}
+```
+
+Changing an Ecrecover or Setter import also requires moving to a matching tagged
+tree. Their new request types are exported through the `/midnight/types` facade
+and with `Midnight` prefixes through `/types`.

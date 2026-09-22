@@ -24,12 +24,12 @@ import {
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
-import { EcrecoverRatifier } from "./EcrecoverRatifier.js";
+import { EcrecoverRatifierUtils } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
 import { Ratifier } from "./Ratifier.js";
-import { SetterRatifier } from "./SetterRatifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -231,7 +231,7 @@ describe("Tree.mempoolValidate", () => {
       }),
     ]);
     const signature = await account.signTypedData(
-      EcrecoverRatifier.typedData({ tree, chainId: 8453n }),
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
     );
 
     await tree.mempoolValidate({
@@ -248,13 +248,13 @@ describe("Tree.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = EcrecoverRatifier.decodeRatifierData(
+    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
     expect(ratifierData.signature).toEqual(
-      EcrecoverRatifier.toSignature(signature),
+      EcrecoverRatifierUtils.toSignature(signature),
     );
     expect(
       TreeUtils.verifyProof({
@@ -365,7 +365,7 @@ describe("TreeUtils.mempoolValidate", () => {
       }),
     ]);
     const signature = await account.signTypedData(
-      EcrecoverRatifier.typedData({ tree, chainId: 8453n }),
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
     );
 
     await TreeUtils.mempoolValidate({
@@ -383,13 +383,13 @@ describe("TreeUtils.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = EcrecoverRatifier.decodeRatifierData(
+    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
     expect(ratifierData.signature).toEqual(
-      EcrecoverRatifier.toSignature(signature),
+      EcrecoverRatifierUtils.toSignature(signature),
     );
     expect(ratifierData.root).toBe(tree.root);
   });
@@ -477,7 +477,7 @@ describe("TreeUtils.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = SetterRatifier.decodeRatifierData(
+    const ratifierData = SetterRatifierUtils.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 

@@ -172,6 +172,19 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
   public static from<T extends AnyTree | TreeCreateRequest>(
     tree: T,
   ): Extract<AnyTree, { readonly type: T["type"] }>;
+  /**
+   * Resolves an untagged standard tree or legacy creation input.
+   * @deprecated Pass a tagged TreeCreateRequest or a route-typed Tree instead.
+   * @param tree - Legacy tree, offer, group, or array of entries.
+   * @returns Untagged standard tree.
+   * @throws {InvalidTreeError} When entries are empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} When the tree height is unsupported.
+   * @example
+   * ```ts
+   * import { Tree, type TreeInput } from "@morpho-org/midnight-sdk";
+   * function legacyTree(input: TreeInput) { return Tree.from(input); }
+   * ```
+   */
   public static from(tree: TreeInput): Tree;
   public static from(
     tree: AnyTree | TreeCreateRequest | TreeInput,

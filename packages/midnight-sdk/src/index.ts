@@ -30,6 +30,14 @@ export {
   RateRatifierV1Utils,
 } from "./signatures/RateRatifierV1.js";
 export { Ratifier, RatifierUtils } from "./signatures/Ratifier.js";
+export type {
+  EcrecoverRatifierDataRequest,
+  EcrecoverRatifierRatifyRequest,
+  EcrecoverRatifierSignRequest,
+  EcrecoverRatifierTypedDataRequest,
+  SetterRatifierDataRequest,
+  SetterRatifierRatifyRequest,
+} from "./signatures/ratifierRequests.js";
 export {
   SetterRatifier,
   SetterRatifierUtils,
@@ -37,8 +45,12 @@ export {
 export type {
   AnyTree,
   AnyTreeSnapshot,
+  EcrecoverTreeCreateRequest,
+  PriceRatifierV1TreeCreateRequest,
+  RateRatifierV1TreeCreateRequest,
   RatifierKind,
   RatifierTypes,
+  SetterTreeCreateRequest,
   TreeCreateRequest,
   TreeData,
   TreeEntry,

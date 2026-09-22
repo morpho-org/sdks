@@ -13,17 +13,21 @@ import {
 } from "../index.js";
 
 describe("ratifier namespace compatibility", () => {
-  test("behavior: EcrecoverRatifierUtils remains an alias", () => {
-    expect(EcrecoverRatifierUtils).toBe(EcrecoverRatifier);
-    expectTypeOf<typeof EcrecoverRatifierUtils>().toEqualTypeOf<
-      typeof EcrecoverRatifier
-    >();
+  test("behavior: EcrecoverRatifier shares codecs with its legacy API", () => {
+    expect(EcrecoverRatifierUtils.encodeRatifierData).toBe(
+      EcrecoverRatifier.encodeRatifierData,
+    );
+    expect(EcrecoverRatifierUtils.decodeRatifierData).toBe(
+      EcrecoverRatifier.decodeRatifierData,
+    );
   });
-  test("behavior: SetterRatifierUtils remains an alias", () => {
-    expect(SetterRatifierUtils).toBe(SetterRatifier);
-    expectTypeOf<typeof SetterRatifierUtils>().toEqualTypeOf<
-      typeof SetterRatifier
-    >();
+  test("behavior: SetterRatifier shares codecs with its legacy API", () => {
+    expect(SetterRatifierUtils.encodeRatifierData).toBe(
+      SetterRatifier.encodeRatifierData,
+    );
+    expect(SetterRatifierUtils.decodeRatifierData).toBe(
+      SetterRatifier.decodeRatifierData,
+    );
   });
   test("behavior: PriceRatifierV1Utils remains an alias", () => {
     expect(PriceRatifierV1Utils).toBe(PriceRatifierV1);
