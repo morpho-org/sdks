@@ -130,7 +130,7 @@ jobs:
       # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/post-claude.ts
       # (trusted-copy integrity check, then claude-review-gate.ts).
       #
-      # Claude's subprocesses can append to $GITHUB_ENV, so both post-Claude steps start from an empty
+      # Claude's subprocesses can append to $GITHUB_ENV, so the post-Claude steps start from an empty
       # environment (`env -i`) and pass only the variables listed: nothing injected (BASH_ENV, NODE_OPTIONS,
       # LD_*, HTTPS_PROXY/NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS, ...) reaches the node process that
       # holds the token. The step's own bash starts before `env -i` runs, so the variables that would
