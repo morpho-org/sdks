@@ -410,8 +410,9 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * minSharePriceE27 - 1), 1))
  * + computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
  * maxUint256)`: the permit pays for the *gross* burn, with at least one price unit and up to one
- * tolerance step of headroom past the floor so a below-floor price reverts on the contract's price
- * check, not on the allowance.
+ * tolerance step of headroom past the floor whenever the floor exceeds 1 — a floor of exactly 1 is
+ * already the smallest representable price and has no headroom — so a below-floor price reverts on
+ * the contract's price check, not on the allowance.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.

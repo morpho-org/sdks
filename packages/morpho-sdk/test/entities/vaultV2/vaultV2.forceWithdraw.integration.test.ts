@@ -7,6 +7,7 @@ import {
   BaseError,
   decodeErrorResult,
   erc20Abi,
+  isAddressEqual,
   isHex,
   parseEventLogs,
   parseUnits,
@@ -388,22 +389,22 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     const transfers = parseEventLogs({
       abi: erc20Abi,
       eventName: "Transfer",
-      logs: receipt.logs.filter(
-        (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
+      logs: receipt.logs.filter((log) =>
+        isAddressEqual(log.address, vaultAddress),
       ),
     });
     const minted = transfers
       .filter(
         ({ args }) =>
-          args.from === zeroAddress &&
-          args.to.toLowerCase() === client.account.address.toLowerCase(),
+          isAddressEqual(args.from, zeroAddress) &&
+          isAddressEqual(args.to, client.account.address),
       )
       .reduce((total, { args }) => total + args.value, 0n);
     const grossBurnt = transfers
       .filter(
         ({ args }) =>
-          args.from.toLowerCase() === client.account.address.toLowerCase() &&
-          args.to === zeroAddress,
+          isAddressEqual(args.from, client.account.address) &&
+          isAddressEqual(args.to, zeroAddress),
       )
       .reduce((total, { args }) => total + args.value, 0n);
 
@@ -650,22 +651,22 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     const transfers = parseEventLogs({
       abi: erc20Abi,
       eventName: "Transfer",
-      logs: receipt.logs.filter(
-        (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
+      logs: receipt.logs.filter((log) =>
+        isAddressEqual(log.address, vaultAddress),
       ),
     });
     const minted = transfers
       .filter(
         ({ args }) =>
-          args.from === zeroAddress &&
-          args.to.toLowerCase() === client.account.address.toLowerCase(),
+          isAddressEqual(args.from, zeroAddress) &&
+          isAddressEqual(args.to, client.account.address),
       )
       .reduce((total, { args }) => total + args.value, 0n);
     const grossBurnt = transfers
       .filter(
         ({ args }) =>
-          args.from.toLowerCase() === client.account.address.toLowerCase() &&
-          args.to === zeroAddress,
+          isAddressEqual(args.from, client.account.address) &&
+          isAddressEqual(args.to, zeroAddress),
       )
       .reduce((total, { args }) => total + args.value, 0n);
 

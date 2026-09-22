@@ -446,9 +446,11 @@ export interface VaultV2Actions {
    * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
    * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
    * full-balance exit does not revert for insufficient shares. The approved share allowance this
-   * handle returns covers a burn one `slippageTolerance` step (at minimum one RAY price unit, so
-   * `slippageTolerance: 0n` still has headroom) below the price floor, so a below-floor price
-   * reverts on the contract's `minSharePriceE27` check rather than on the allowance.
+   * handle returns covers a burn one `slippageTolerance` step below the price floor — at minimum
+   * one RAY price unit whenever the floor exceeds 1 (a floor of exactly 1 is already the smallest
+   * representable price and has no headroom), so `slippageTolerance: 0n` still has headroom —
+   * so a below-floor price reverts on the contract's `minSharePriceE27` check rather than on the
+   * allowance.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
