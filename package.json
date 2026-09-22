@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "description": "Collection of SDKs to ease interactions with the Morpho protocol and Morpho Vaults",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Rubilmax <rmilon@gmail.com>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git"

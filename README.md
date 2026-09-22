@@ -88,7 +88,6 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 
 ## Authors
 
-- [@rubilmax](https://github.com/rubilmax) (rubilmax.eth, [Twitter](https://x.com/rubilmax))
 - [@Foulks-Plb](https://github.com/Foulks-Plb) ([Twitter](https://x.com/FoulkPlb))
 - [@0xbulma](https://github.com/0xbulma)
 - [@oumar-fall](https://github.com/oumar-fall)
