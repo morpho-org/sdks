@@ -42,8 +42,14 @@ describe("safeParseNumber", () => {
     expect(safeParseNumber(-1)).toBe(-parseUnits("1", 18));
   });
 
-  test("error: throws InvalidNumberError on NaN", () => {
+  test("error: throws InvalidNumberError on NaN and Infinity", () => {
     expect(() => safeParseNumber(Number.NaN)).toThrow(InvalidNumberError);
+    expect(() => safeParseNumber(Number.POSITIVE_INFINITY)).toThrow(
+      InvalidNumberError,
+    );
+    expect(() => safeParseNumber(Number.NEGATIVE_INFINITY)).toThrow(
+      InvalidNumberError,
+    );
   });
 });
 
