@@ -54,9 +54,17 @@ address any value and therefore could not be validated against the operation it 
 and prepended). `simulationTxs` therefore contains transactions the user never submits. The
 `eth_simulateV1` backend already applies one state override: it inflates the sender's native balance
 to `maxUint256 / 2`, which hides insufficient native funding. Retention is enforced per
-`(restricted address, token)` across the `bundler3` and `bundles` registries since `4.1.6`.
+`(restricted address, token)`. Version `4.1.6` covered both the legacy `bundler3` and `bundles`
+registries; the migrated SDK narrows retention coverage to the standalone `bundles` deployments.
 
 ## Decision
+
+The implementation baseline is the migrated `morpho-sdk` 6.0.0 surface: `BlueBundlesV1`,
+`VaultBundlesV1`, and `VaultExitBundlesV1`, plus the explicit direct operations listed below.
+The v5 audit above is historical context, not the supported-route contract. Bundler3,
+GeneralAdapter1, arbitrary bundle composition, Aave migration and legacy MORPHO wrapping are
+out of scope; legacy transactions fail with `UnsupportedOperationError`. There is no legacy-route
+fallback. Vault protocol adapters used for allocations and exits remain part of verification.
 
 Use `eth_simulateV1` only and remove Tenderly. Every authorization the wallet will be asked to sign
 or send is passed as a typed request. For token allowances, the SDK executes `approve(spender, amount)`
@@ -95,9 +103,13 @@ signed, not a summary of it.
 | --- | --- | --- |
 | `"erc20Approval"` | Sends `approve(spender, amount)` on `token` | `token`, `owner`, `spender`, `amount` |
 | `"erc2612Permit"` | Signs `Permit` typed data on an ERC-20 or a Vault V1/V2 share token | `typedData` with `primaryType: "Permit"`; `domain.verifyingContract` is the token |
-| `"permit2Allowance"` | Signs Permit2 `PermitSingle` typed data | `typedData` with `primaryType: "PermitSingle"`; `domain.verifyingContract` is the chain's Permit2 |
+| `"permit2SignatureTransfer"` | Signs a one-time Permit2 transfer | `owner`, `typedData` with `primaryType: "PermitTransferFrom"`; `domain.verifyingContract` is the chain's Permit2 |
 | `"blueAuthorization"` | Sends `Morpho.setAuthorization(authorized, isAuthorized)` | `authorizer`, `authorized`, `isAuthorized` |
 | `"blueAuthorizationSignature"` | Signs Morpho `Authorization` typed data consumed by `setAuthorizationWithSig` | `typedData` with `primaryType: "Authorization"`; `domain.verifyingContract` is the chain's Morpho |
+
+Permit2 SignatureTransfer does not include the owner in its signed message; its explicit `owner`
+field binds the request to the protected sender. Permit2 AllowanceTransfer (`PermitSingle`) is not
+supported by the migrated routes.
 
 The legacy `approval` and `signature` variants are removed in the major (see Breaking Changes).
 
@@ -119,8 +131,8 @@ Bounds are inclusive. There is no free-form metric, subject or time-basis field.
 
 A discriminated union keyed by the decoded operation `type`. The discriminators reuse the
 `morpho-sdk` `TransactionAction` names where one exists. Each variant carries **subject** fields that
-bind it to exactly one decoded operation, optional **`expected*` pins** compared byte-for-byte to the
-decoded calldata parameter, and optional **outcome bounds** on verified before/after state. Field
+bind it to exactly one decoded operation, optional **`expected*` pins** compared to the
+decoded calldata parameter or the entrypoint-defined sender binding, and optional **outcome bounds** on verified before/after state. Field
 suffixes fix the unit: `*Assets` and `*Shares` are raw amounts, `*Wad` is a WAD ratio,
 `*ApyWad` is a WAD per-year rate. An optional `transactionIndex` (index into `transactions`)
 disambiguates when a bundle contains two operations with the same subject.
@@ -138,23 +150,20 @@ Blue operations (subject: `marketId`, or `sourceMarketId` + `targetMarketId` for
 | `blueRepay` | `expectedOnBehalf`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets` | Gross loan-token debit including wrapped native; debt shares burned; debt shares remaining; refund credited to `receiver` |
 | `blueWithdrawCollateral` | `expectedAssets`, `expectedReceiver` | `maxLtvAfterWad`, `minHealthFactorAfterWad` | LTV and health factor after |
 | `blueRepayWithdrawCollateral` | `expectedWithdrawAssets`, `expectedOnBehalf`, `expectedReceiver`, `expectedFullClose` | Union of `blueRepay` and `blueWithdrawCollateral` bounds | As listed |
-| `blueRefinance` | `expectedCollateralAssets`, `expectedSourceFullClose` | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` | Target debt created; source debt left; target risk after; loan-token dust left in the user's wallet or adapters; penalty paid |
+| `blueRefinance` | `expectedSourceFullClose` | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` | Target debt created; source debt left; target risk after; loan-token dust left in the user's wallet or standalone bundles; penalty paid |
 | `blueAuthorization` | `expectedIsAuthorized` | none | `Morpho.isAuthorized(user, authorized)` after |
 
-Vault operations (subject: `vault`, or `sourceVault` + `targetVault` for migration, `aToken` +
-`targetVault` for Aave):
+Vault operations (subject: `vault`, or `sourceVault` + `targetVault` for migration):
 
 | `type` | `expected*` pins | Outcome bounds | Verified quantity each bound constrains |
 | --- | --- | --- | --- |
-| `vaultV1Deposit`, `vaultV2Deposit` | `expectedAssets` (ERC-20 plus native), `expectedReceiver` | `minSharesMinted` | Vault shares credited to `receiver` |
+| `vaultV1Deposit`, `vaultV2Deposit` | `expectedAssets` (ERC-20 or native, exclusively), `expectedReceiver` | `minSharesMinted` | Vault shares credited to `receiver` |
 | `vaultV1Withdraw`, `vaultV2Withdraw` | `expectedAssets`, `expectedReceiver` | `maxSharesBurned` | Vault shares burned from the user |
 | `vaultV1Redeem`, `vaultV2Redeem` | `expectedShares`, `expectedReceiver` | `minAssetsReceived` | Underlying credited to `receiver` |
-| `vaultV2ForceWithdraw` | `expectedAssets`, `expectedDeallocations` (`{ adapter, marketId?, amount }[]`, ordered) | `maxSharesBurned`, `maxPenaltyAssets` | Shares burned for withdrawal plus penalty; penalty in underlying |
-| `vaultV2ForceRedeem` | `expectedShares`, `expectedDeallocations` | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` | Underlying credited; penalty shares; penalty in underlying |
+| `vaultV2ForceWithdraw` | `expectedExitAssets` (penalty-inclusive), `expectedAdapter` | `maxSharesBurned`, `minAssetsReceived`, `maxPenaltyAssets` | Shares burned for the gross exit; net underlying received; penalty in underlying |
+| `vaultV2ForceRedeem` | `expectedShares`, `expectedDeallocations` (`{ adapter, marketId?, amount }[]`, ordered) | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` | Underlying credited; penalty shares; penalty in underlying |
 | `vaultV1InKindRedeem`, `vaultV2InKindRedeem` | `expectedAssets`, `expectedMarketIds` (ordered) | `maxSharesBurned`, `minIdleAssetsReceived`, `minSupplyAssetsByMarket` (`{ marketId, minAssets }[]`), `maxPenaltyAssets`, `maxResidualShareAllowance` | Shares burned; idle underlying credited; Blue supply credited per market; penalty; share allowance left to `VaultExitBundlesV1` |
-| `vaultV1MigrateToV2` | `expectedSharesBurned`, `expectedReceiver` | `minTargetSharesMinted` | Vault V2 shares credited |
-| `aaveV3MigrateToVaultV2` | `expectedAssets` or `expectedFullBalance: true` | `minTargetSharesMinted`, `maxSourceResidualAssets` | Vault V2 shares credited; aToken balance left |
-| `legacyMorphoWrap` | `expectedAmount` | none | Legacy MORPHO debited equals new MORPHO credited |
+| `vaultV1MigrateToV2` | `expectedAssets` or `expectedShares`, `expectedReceiver` | `minTargetSharesMinted` | Vault V2 shares credited |
 
 ### Output
 
@@ -183,17 +192,17 @@ preserved. The first five classes exist today; additions extend the base directl
 | `UnsupportedChainError` / `UNSUPPORTED_CHAIN` | Missing chain configuration or `simulateV1Url` |
 | `ExternalServiceError` / `EXTERNAL_SERVICE_ERROR` | RPC transport, timeout, authentication, rate limit, availability or unclassified rejection |
 | `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user or preparation execution, including a reverted approval or an approval returning `false`, panic, gas, signature, nonce or deadline rejection |
-| `BlacklistViolationError` / `BLACKLIST_ERROR` | Bundle or adapter retention exceeds dust |
+| `BlacklistViolationError` / `BLACKLIST_ERROR` | Standalone bundle retention exceeds dust |
 | `UnsupportedOperationError` / `UNSUPPORTED_OPERATION` | Unrecognized target or selector, unsupported call recipe or top-level callback |
 | `ProtocolBindingMismatchError` / `PROTOCOL_BINDING_MISMATCH` | Known route with wrong owner, recipient, underlying, market, adapter, operator or deployment binding |
 | `UnsupportedVerificationFeatureError` / `UNSUPPORTED_VERIFICATION_FEATURE` | Recognized route lacks registry or model coverage (token approval behavior, vault, oracle, IRM, signature kind) or a required RPC capability; an override whose read-back disagrees with the written value |
 | `InvalidSimulationResponseError` / `INVALID_SIMULATION_RESPONSE` | Malformed response, call status, count, index or required logs |
 | `MissingVerificationEvidenceError` / `MISSING_VERIFICATION_EVIDENCE` | Missing state, events, prices or rates; a probe that failed to execute; inconsistent snapshot reference |
-| `AuthorizationRequestMismatchError` / `AUTHORIZATION_REQUEST_MISMATCH` | A request disagrees with the decoded operation or real state: owner, domain, token, spender, amount, nonce, expiration or deadline |
+| `AuthorizationRequestMismatchError` / `AUTHORIZATION_REQUEST_MISMATCH` | A request disagrees with the decoded operation or real state: owner, domain, token, spender, amount, nonce or deadline |
 | `AssetChangeMismatchError` / `ASSET_CHANGE_MISMATCH` | Wrong debit, receipt or refund; double funding; native funding not covered by the real balance; unexplained balance change |
 | `PermissionChangeMismatchError` / `PERMISSION_CHANGE_MISMATCH` | Any ERC-20, Permit2, in-kind-redemption, lasting or temporary approval, or Morpho operator invariant fails |
-| `StateChangeMismatchError` / `STATE_CHANGE_MISMATCH` | Position, market, vault or Aave accounting, accrual, full-close or configuration mismatch |
-| `MarketConstraintViolationError` / `MARKET_CONSTRAINT_VIOLATION` | Verified state violates health or buffer, rescue, pre-liquidation, no-Aave-debt or liquidity and capacity policy |
+| `StateChangeMismatchError` / `STATE_CHANGE_MISMATCH` | Position, market or vault accounting, accrual, full-close or configuration mismatch |
+| `MarketConstraintViolationError` / `MARKET_CONSTRAINT_VIOLATION` | Verified state violates health or buffer, rescue, pre-liquidation or liquidity and capacity policy |
 | `SlippageLimitExceededError` / `SLIPPAGE_LIMIT_EXCEEDED` | Conversion violates quote, calldata or SDK slippage bound |
 | `FeeMismatchError` / `FEE_MISMATCH` | Wrong fee or penalty amount, recipient or schedule; forbidden discretionary fee |
 | `ConsumerLimitViolationError` / `CONSUMER_LIMIT_VIOLATION` | A decoded parameter differs from an `expected*` pin, or a verified value violates an outcome bound or wallet limit |
@@ -212,23 +221,25 @@ credentials or raw causes.
 
 Requests are accepted only in `preview`. The `preview` transaction is the transaction `morpho-sdk`
 builds **without requirement signatures**: token pulls consume the ERC-20 allowance of the decoded
-spender, `VaultExitBundlesV1` receives the empty-permit sentinel, and no `permit`, `approve2` or
-`setAuthorizationWithSig` call is present. A `preview` transaction that contains any of those calls, or
-a non-sentinel permit struct, is rejected with `SimulationValidationError`. Each request is turned into
+spender, and each standalone bundle receives its no-signature permit and authorization sentinels.
+No ERC-2612 permit, Permit2 SignatureTransfer or Morpho authorization signature is consumed.
+A `preview` transaction that contains a signature-consuming call or a non-sentinel signed payload
+is rejected with `SimulationValidationError`. Each request is turned into
 the preparation that grants that form exactly the authority the wallet will grant the `final` form, keyed
 by `(owner, token or protocol contract, spender or operator, amount or flag)`.
 
 | Request | Target contract | Preparation mechanism | Value | Checked against real state and decoded operation | Read-back evidence after preparation |
 | --- | --- | --- | --- | --- | --- |
-| `erc20Approval` | `token` | Owner calls `approve(spender, amount)` | `amount` | `owner` = sender; `spender` is a registered spender for the decoded route; `amount` equals the decoded pull exactly, or is the accepted persistent cap (`MAX_UINT_160` to Permit2; balance-MAX aToken to GeneralAdapter1 ≤ `MAX_UINT_256`); an explicit reset request with `amount = 0` is accepted only before its matching validated nonzero approval; execute both in order and verify each result | `allowance(owner, spender)` returns `amount` |
-| `erc2612Permit` | `domain.verifyingContract` (ERC-20, Vault V1 or Vault V2 share token) | Owner calls `approve(spender, message.value)` | `message.value` | `nonces(owner)` equals `message.nonce`; `domain.chainId` equals `chainId`; Vault V2 uses the two-field domain, Vault V1 its EIP-5267 domain, ERC-20s their token domain; `owner` = sender; `spender` = decoded spender; `value` equals the decoded pull or in-kind-redemption grant exactly; `deadline` within the lifetime bound | `allowance(owner, spender)` returns `value` |
-| `permit2Allowance` | `message.details.token` | Owner calls `approve(spender, message.details.amount)` | `message.details.amount` | `Permit2.allowance(owner, token, spender).nonce` equals `details.nonce`; `details.expiration` equals `MAX_UINT_48`; `sigDeadline` within the lifetime bound; `spender` = decoded spender; `amount` equals the decoded pull exactly; `domain.verifyingContract` is the registered Permit2; the token's real allowance to Permit2 covers `amount` or a companion `erc20Approval` to Permit2 is present | `allowance(owner, spender)` returns `amount` |
+| `erc20Approval` | `token` | Owner calls `approve(spender, amount)` | `amount` | `owner` = sender; `spender` is a registered spender for the decoded route; `amount` equals the decoded pull exactly, is the route-derived vault-share cap, or is the accepted persistent cap (`MAX_UINT_256` to canonical Permit2, bounded by `MAX_TOKEN_APPROVALS`); an explicit reset request with `amount = 0` is accepted only before its matching validated nonzero approval; execute both in order and verify each result | `allowance(owner, spender)` returns `amount` |
+| `erc2612Permit` | `domain.verifyingContract` (ERC-20, Vault V1 or Vault V2 share token) | Owner calls `approve(spender, message.value)` | `message.value` | `nonces(owner)` equals `message.nonce`; `domain.chainId` equals `chainId`; Vault V2 uses the two-field domain, Vault V1 its EIP-5267 domain, ERC-20s their token domain; `owner` = sender; `spender` = decoded spender; `value` equals the decoded pull or route-derived vault-share grant exactly; `deadline` within the lifetime bound | `allowance(owner, spender)` returns `value` |
+| `permit2SignatureTransfer` | `message.permitted.token` | Owner calls `approve(message.spender, message.permitted.amount)` | `message.permitted.amount` | `owner` = sender; chain and domain bind canonical Permit2; `spender` is the registered BlueBundlesV1 or VaultBundlesV1 for the decoded pull; permitted token and uint256 amount match the gross pull exactly; the bit for `message.nonce` in `nonceBitmap(owner, nonce >> 8)` is unused; `deadline` within the lifetime bound; real token allowance to Permit2 covers the amount or a companion `erc20Approval` supplies it | `allowance(owner, spender)` returns the exact amount |
 | `blueAuthorization` | Morpho | `stateDiff`: `isAuthorized[authorizer][authorized]` | `isAuthorized` | `authorizer` = sender; `authorized` is a registered operator for the decoded route, or a pre-liquidation contract for the decoded market (below) | `Morpho.isAuthorized(authorizer, authorized)` returns `isAuthorized` |
 | `blueAuthorizationSignature` | Morpho | `stateDiff`: `isAuthorized[authorizer][authorized]` | `message.isAuthorized` | As above, plus `Morpho.nonce(authorizer)` equals `message.nonce`, `deadline` within the lifetime bound, `domain.verifyingContract` is the registered Morpho | As above |
 
 - **Permit2 storage is not overridden.** The no-signature build never routes through Permit2, so the
-  Permit2 tuple, nonce advance and expiration are verified on the request in `preview` and on real
-  execution in `final`. The token approval prepares the same authority
+  one-time transfer payload and unused nonce bit are checked in `preview`; actual transfer and nonce-bit
+  consumption are checked in `final`. There is no managed Permit2 allowance or expiration field.
+  The token approval prepares the same authority
   `(owner, token, spender, amount)` expressed where the `preview` form reads it.
 - **Token allowances use contract execution, not storage discovery.** Each preparation call has
   `from = owner`, `to = token` and `value = 0`. Run the ordered preparation calls, read-back probes and
@@ -256,8 +267,8 @@ by `(owner, token or protocol contract, spender or operator, amount or flag)`.
   Prove its authorization override with a read-back under the same override set before preparation
   calls execute. All probes use the same pinned block and execution state appropriate to their stage,
   are read-only, and never appear in `simulationTxs` or user `calls`.
-- **Nonces are never overridden.** Request nonces are compared with the real chain nonce at the pinned
-  block; a stale nonce fails with `AuthorizationRequestMismatchError`.
+- **Nonces are never overridden.** Sequential permit and Morpho nonces must match real state at the pinned
+  block; Permit2 requires an unused unordered nonce bit. A stale or already-used nonce fails with `AuthorizationRequestMismatchError`.
 - **`final` accepts no `authorizations`.** Signatures live in the calldata and approvals must be mined
   before `final` runs; any request is a `SimulationValidationError`. `final` runs no synthetic approval
   preparation and applies no permission or signature override, so it exposes failures `preview` can mask.
@@ -269,21 +280,32 @@ by `(owner, token or protocol contract, spender or operator, amount or flag)`.
 
 ### Decode supported operations
 
-Use the Bundles V1 registries (`BlueBundlesV1`, `VaultBundlesV1`, `VaultExitBundlesV1`), the Bundler3
-and GeneralAdapter1 action vocabulary, and explicit direct withdrawal, authorization, wrapper and read
-rules.
+Decode against the migrated SDK's pinned ABIs and `bundles` registry:
+
+| Route | Supported operations |
+| --- | --- |
+| `bundles.blueBundlesV1` | Blue supply, withdrawal, collateral supply, borrow, repay, collateral withdrawal, combined flows and full-position refinance |
+| `bundles.vaultBundlesV1` | Vault V1/V2 deposit, withdrawal and redemption; Vault V1 → V2 migration |
+| `bundles.vaultExitBundlesV1` | Vault V1/V2 in-kind redemption and Vault V2 force withdrawal |
+| Direct protocol calls | Morpho authorization (including supported pre-liquidation operators), Vault V2 force redemption via the SDK's vault multicall recipe, and read-only probes |
+
+Decode fixed entrypoints and their permit, authorization, reallocation and fee arguments; do not
+accept arbitrary executor calls. Recipient and position-owner checks use `msg.sender` wherever the
+entrypoint fixes them rather than taking a recipient or `onBehalf` argument. Enforce each contract's
+single-call/transient-initiator restrictions. A missing standalone deployment never enables a legacy
+Bundler3 or direct ERC-4626 fallback.
 
 | Check | Threat / why it matters |
 | --- | --- |
 | Match chain, registered address and function | Familiar calldata at another deployment or entrypoint can move funds or grant authority differently |
 | Decode parameters; independently verify protocol relationships | ABI-valid arguments can mismatch a vault's underlying, adapter or market; misbound owners or recipients redirect the claim |
-| Recognize every Bundler3 / GeneralAdapter1 inner call and callback | A trusted outer contract can carry hidden transfers or permissions unrelated to the visible action |
+| Recognize every fixed entrypoint and the complete supported Vault V2 force-redemption multicall recipe | A recognized outer target must not admit arbitrary inner calls or effects |
 | Reject top-level callbacks | Callbacks rely on surrounding execution context; accepting them as entrypoints applies the wrong rules |
 | Reject unknown payloads or effects | Unmodeled behavior must not receive a successful verification based on partial coverage |
 | Only contract-defined sentinels imply MAX | Treating a literal as MAX can hide an incomplete close or reject an intentional partial action |
 | Recognize only the `morpho-sdk` transaction-metadata suffix appended to `data`; reject any other trailing bytes | The SDK appends an origin/timestamp suffix after the ABI payload, so a decoder must know exactly where calldata ends; unknown trailing bytes can change how a contract reads its arguments or carry an unmodeled payload |
 
-Registered operators are `bundler3.generalAdapter1` and `bundles.blueBundlesV1`. A pre-liquidation
+The registered Blue route operator is `bundles.blueBundlesV1`. A pre-liquidation
 ("AutoDeleverage") operator is valid only when the chain's registered `preLiquidationFactory` reports
 `isPreLiquidation(operator)` and the operator's `preLiquidationParams` bind the decoded market; its
 `preLltv` is the active protection threshold.
@@ -295,9 +317,10 @@ Registered operators are `bundler3.generalAdapter1` and `bundles.blueBundlesV1`.
 - Each `OperationLimit` must bind to exactly one decoded operation. A limit whose subject matches no
   operation, matches more than one after `transactionIndex`, or names a `type` the bundle does not
   contain is a `SimulationValidationError`; a limit is never silently ignored.
-- `expected*` pins compare with the decoded calldata parameter, not with simulated outcomes, and fail
+- `expected*` pins compare with decoded calldata or entrypoint-defined sender bindings, not simulated outcomes, and fail
   with `ConsumerLimitViolationError`. `expectedFullClose` / `expectedSourceFullClose` require the
-  decoded amount mode to be a full close by shares.
+  decoded amount mode to be a full close by shares or the fixed full-position refinance entrypoint.
+  Refinance always moves the whole source position; partial and collateral-only refinance are unsupported.
 - Outcome bounds compare with verified state: `*After*` fields with end state, received, minted,
   burned, paid, refund and penalty fields with the action diff. Health and utilization metrics are
   reported for every affected position and market even when no bound is supplied.
@@ -317,12 +340,11 @@ flows.
 | --- | --- | --- |
 | Blue positions | Collateral, supply and borrow assets and shares match decoded legs. Supply never repays debt | Wallet transfers cannot prove collateral or supply credits or debt reduction; wrong shares can leave excess debt or credit another position |
 | Vault positions | Reconcile user and fee-recipient shares and claims, mints and burns, idle assets, allocations, totals, fees, penalties and losses by vault version | Missing credits or excess burns lose claims; untracked allocations hide depleted backing; fees dilute claims; losses change redeemable value |
-| Aave migration source | Reconcile nominal and scaled aToken balances, income index, withdrawal and destination credit; require no existing Aave debt | Index accrual can disguise overspending or overstate migrated value; removing collateral under an existing loan is refused by policy |
 | Market accounting | Reconcile supply and borrow asset and share totals, fee shares and accrual time. Check liquidity, utilization, rates, and borrow, withdraw, flash-loan and reallocation capacity | Inconsistent totals distort claims and debt; insufficient capacity makes the route impossible; utilization and rates expose liquidity pressure and cost |
 | LTV and health | Compute collateral value, debt, LTV, health factor, liquidatability, liquidation price and borrow or withdraw headroom. Separate protocol LLTV from active `preLltv`; supply rounds down, debt up | Valuation or rounding errors understate liquidation exposure; separate protection metrics avoid confusing early deleveraging with protocol liquidation |
 | Risk limits | Borrow and collateral removal end ≤ applicable LLTV or active `preLltv` minus the buffer (floor zero). Pure repayments and top-ups may remain unhealthy if risk does not worsen. Check markets and refinance legs separately; enabling pre-liquidation requires LTV < its `preLltv` | Limit new risk near thresholds; improvement elsewhere cannot excuse an unsafe market; allow rescue actions; avoid enabling protection already eligible to trigger |
 | Slippage and share price | Check asset, share and debt conversions against independent quotes, calldata limits and the SDK tolerance; retain the two-hour accrual allowance and onchain inflation guards | Permissive calldata can overcharge or under-credit; inflation can destroy deposit value; interest headroom avoids false slippage failures without allowing unlimited spend |
-| Fees and reallocations | Match charges and recipients to the route's pinned schedule. Separate Vault V1 native fees, V2 loan-token penalties and refunds; reject discretionary or referral fees unless SDK policy permits | Hidden or redirected fees take value despite correct main legs; calldata alone does not establish fee consent |
+| Fees and reallocations | Match charges and recipients to the route's pinned schedule. Reconcile Vault V2 loan-token reallocation penalties, exit penalties, referral fees and refunds; reject discretionary or referral fees unless SDK policy permits | Hidden or redirected fees take value despite correct main legs; calldata alone does not establish fee consent |
 | Configuration and completeness | Verify protocol identities, oracle and IRM availability and operation-specific vault or adapter caps; reject missing reads, unsupported accounting or unexplained configuration changes | Wrong identities or missing prices can fabricate healthy positions; unexpected configuration changes later rights or risk |
 
 Debt-free means no liquidation risk; debt with zero collateral value means infinite LTV and zero
@@ -334,17 +356,22 @@ only SDK rules and consumer limits do.
 
 Match decoded inputs and outputs to catch excess debits, lost receipts and redirects. Keep unrelated
 raw balances, shares and permissions unchanged, except modeled accrual and fees; recompute derived
-claims and metrics to avoid false failures. Fund ERC-20 first, then native, preventing double funding
-while reserving native balance for gas.
+claims and metrics to avoid false failures. Follow each entrypoint's funding mode and gross amount,
+prevent double funding, and reserve native balance for gas. Vault deposits accept ERC-20 or native
+funding exclusively; do not apply the former additive ETH + WETH deposit recipe.
 
 | Invariant | SDK rule | Threat / why it matters |
 | --- | --- | --- |
-| Bundle retention dust limit | Per bundle or adapter and asset, net retention ≤ SDK dust threshold | Successful execution can strand funds in temporary contracts; per-asset bounds prevent offsetting |
-| In-kind-redemption headroom below residual cap | Derive grant and residual caps from the rounded burn and deadline; final `VaultExitBundlesV1` share allowance ≤ cap; reset existing excess | Rounded burns need headroom; surviving allowance enables later withdrawals |
-| Lasting approval below accepted cap | Fresh exact funding ends at zero; reused allowance ≤ start; persistent token → Permit2 ≤ `MAX_UINT_160`; balance-MAX Aave aToken → GeneralAdapter1 ≤ `MAX_UINT_256` | Avoid unintended authority while retaining supported persistent routes |
+| Bundle retention dust limit | Per registered standalone bundle and asset, net retention ≤ SDK dust threshold; no legacy Bundler3 or adapter-address guard | Successful execution can strand funds in temporary contracts; per-asset bounds prevent offsetting |
+| Vault-share headroom below residual cap | Derive grant and residual caps from the route, rounded burn and deadline; bound final share allowance to VaultBundlesV1 or VaultExitBundlesV1; reset existing excess | Rounded burns need headroom; surviving allowance enables later withdrawals |
+| Lasting approval below accepted cap | Fresh exact funding ends at zero; reused allowance ≤ start; persistent token → canonical Permit2 ≤ the token-specific approval maximum; bounded exit-share headroom follows its route cap | Avoid unintended authority while retaining supported persistent routes |
 | Unchanged unrelated permission | Reject unexpected grants, including temporary ones; unrelated permissions unchanged | A balance-neutral transaction can grant a future drain or revoke a permission another workflow needs |
 | Expected Morpho operator authorization or unchanged | Required route operator authorized; a pre-liquidation operator gets the decoded boolean; otherwise unchanged | A wrong operator gains position control; a missing or revoked intended authority breaks the route or disables protection |
-| Permit2 invariants | Correct owner, token and spender; exact gross grant; managed amount ends at zero; nonce advances once; expiration `MAX_UINT_48`; bounded signing deadline | Identity and gross amount prevent redirected or oversized grants; zero remainder prevents continued spending; nonce consumption prevents replay |
+| Permit2 invariants | Correct owner, token and fixed-bundle spender; exact gross one-time transfer; unused unordered nonce bit consumed once in `final`; unrelated bits unchanged; bounded signing deadline | Identity and gross amount prevent redirected or oversized grants; one-time transfer authority and nonce consumption prevent replay |
+
+VaultBundlesV1 exit-share allowance must equal the computed burn cap before execution; an oversized
+existing allowance must be reduced by an explicit approval, not a permit that the contract can skip.
+Check residual share authority against the route-specific cap after execution.
 
 Events **and** endpoints are checked: approve 100 then spend 40 leaves 60 without another event;
 approve then revoke hides temporary authority behind equal endpoints; an approval event may also
@@ -358,15 +385,13 @@ permissions follow the shared invariants; **operator** = registered operator.
 
 | Decoded flow / amount mode | Wallet and position checks | Permission rule | Threat / why it matters |
 | --- | --- | --- | --- |
-| V1/V2 deposit: ERC-20, native or mixed | Underlying `−D`, native `−N`; vault credit from `A = D + N`; native-only preserves the wrapped-native balance | Funding | Catch uncredited or redirected deposits and double funding |
-| V1/V2 withdrawal: exact assets, liquidity-limited MAX | Underlying `+A`; share burn ≤ cap | Unchanged | Prevent excessive burns or underpayment; liquidity-limited MAX must not demand a full exit |
-| V1/V2 redemption: full or exact shares | Vault shares `−S`; underlying ≥ floor | Unchanged | Ensure selected shares produce sufficient underlying without burning extra |
-| V2 force withdrawal | Exact net receipt; cap combined withdrawal and penalty burns | Unchanged | Catch omitted or double penalties and hidden extra burns |
+| V1/V2 deposit: ERC-20 or native | Exactly one funding source; shares for net assets after fees credited to sender; native-only preserves the wrapped-native balance | Funding to VaultBundlesV1 | Catch uncredited or redirected deposits and double funding |
+| V1/V2 withdrawal: exact assets, liquidity-limited MAX | Underlying `+A`; share burn ≤ cap; payout to sender | Vault-share approval or permit to VaultBundlesV1 | Prevent excessive burns or underpayment; liquidity-limited MAX must not demand a full exit |
+| V1/V2 redemption: full or exact shares | Vault shares `−S`; underlying ≥ floor; payout to sender | Vault-share approval or permit to VaultBundlesV1 | Ensure selected shares produce sufficient underlying without burning extra |
+| V2 force withdrawal | Penalty-inclusive exit assets reconcile to net receipt and penalty; cap combined burns; verify contract-derived deallocations | Vault-share approval or permit to VaultExitBundlesV1 with bounded headroom | Catch omitted or double penalties and hidden extra burns |
 | V2 force redemption | Burn redeem plus penalty shares; underlying ≥ floor; allowed headroom may remain | Unchanged | Include penalty shares in lost claims; allow intentional headroom |
 | V2 in-kind redemption: assets or MAX | Share burn → idle receipt + penalty + actual Morpho supply credits; source allocations decrease | In-kind cap | Wallet-only checks miss missing or redirected credits or wrong backing depletion |
-| V1 → V2 migration: full | All V1 shares `−S`; V2 shares ≥ floor; wallet underlying unchanged | Funding | A closed source must fund the correct destination |
-| Aave V3 → V2: partial or liquidity-limited MAX | Nominal and scaled debit → V2 credit; wallet underlying unchanged | Funding | Prevent index rounding masking excess depletion or missing credit |
-| Aave V3 → V2: balance-limited MAX | Drain the accrued scaled balance; V2 credit ≥ floor; underlying unchanged | Fixed lasting cap | A stale literal can leave accrued interest behind |
+| V1 → V2 migration: assets or shares | Reconcile source share burn, fees and destination shares ≥ floor; wallet underlying unchanged; full share amount closes source | Vault-share approval or permit to VaultBundlesV1 | Source claims must fund the correct destination for the sender |
 | Supply loan assets | Loan `−D`, native `−N`; supply shares minted | Funding | Loan-token spending must create the decoded supply claim |
 | Withdraw supplied assets: exact assets | Loan `+A`; corresponding supply-share burn | Operator | Prevent burning more claim than the cash received justifies |
 | Withdraw supplied assets: MAX or exact shares | Burn decoded shares; loan ≥ floor; full close leaves zero supply shares except fee credits | Operator | Catch underpaid or incomplete closes |
@@ -375,16 +400,17 @@ permissions follow the shared invariants; **operator** = registered operator.
 | Supply collateral + borrow | Combined collateral credit, loan receipt and debt increase | Funding + operator | Either linked leg can be missing despite plausible net changes |
 | Repay: exact assets | Loan `−D`, native `−N`; corresponding debt-share burn | Funding | A debit must reduce the correct debt |
 | Repay: MAX or exact shares | Burn decoded debt shares; full close leaves zero debt; reconcile gross pull, refund, native `−N` and wrapped-native refunds | Gross funding | Catch residual debt and missing refunds |
-| Withdraw collateral | Wallet collateral `+A`, position collateral `−A` | Unchanged (direct Morpho) | Catch redirected collateral and unsafe removal |
+| Withdraw collateral | Wallet collateral `+A`, position collateral `−A` | Operator | Catch redirected collateral and unsafe removal |
 | Repay + withdraw collateral: exact or MAX | Repayment plus collateral wallet `+A` / position `−A` | Funding + operator | Repayment must not conceal extraction or unsafe remaining debt |
-| Refinance: collateral-only or partial debt | Move collateral and debt source → target; wallet unchanged except fees and penalties | Operator | Prevent lost collateral, excess target debt or unintended source changes |
-| Refinance: full debt or exact shares | Burn source debt shares; bound target debt; conserve collateral; full close leaves zero source debt; bounded loan dust | Operator | Catch stranded source debt or excess target borrowing |
-| Wrap legacy MORPHO: bundler or direct route | Legacy token `−A`, new token `+A` | Legacy token funding to GeneralAdapter1 / approval to wrapper | Prevent legacy tokens disappearing without replacement |
+| Refinance: full position | Burn all source debt shares and move all source collateral; bound combined target debt and risk; source position closes; bounded loan dust | Operator | Catch stranded source debt or excess target borrowing |
 | Pre-liquidation ("AutoDeleverage"): enable or disable | Wallet and raw positions unchanged; verify resulting risk and protection | Pre-liquidation operator true / false | Ensure the selected protection changes without asset movement or authority elsewhere |
 | V1 in-kind redemption: SDK-supported, app-unwired | Source vault burn → actual supply credits in each market | In-kind cap | Checking one destination can hide missing credits elsewhere |
 
-Validate exit method and deallocation order. Two-hour repayment funding covers accrual; reconcile
-gross pulls and refunds. Apply route fees and penalties throughout, including wallet-neutral flows: Vault V2 reallocation penalties may require loan-token funding (and its approval or permit) on loan withdrawals, borrows, refinances and their combinations, so "Operator" rows also accept that exact penalty funding.
+Validate exit method and the contract-derived deallocations for force withdrawal; validate caller-supplied
+deallocation order only for the supported force-redemption multicall. Two-hour repayment funding covers accrual; reconcile
+gross pulls and refunds. Apply route fees and penalties throughout, including wallet-neutral flows.
+Derive penalty funding from the fixed entrypoint: require an approval or permit only for a decoded
+wallet pull; account for full-position refinance fees and penalties in destination debt.
 Require zero residual positions only for decoded full closes.
 
 ### Classification and enforcement
@@ -409,7 +435,7 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
   depends on; no override touches token storage, code, precompiles, nonces or unrelated storage.
 - Every permission override and approval preparation is verified by read-back in the corresponding
   simulated state at the pinned block before user execution; missing or mismatched evidence fails typed.
-- A request whose owner is not the protected user, whose nonce is not the current chain nonce, or whose
+- A request whose owner is not the protected user, whose sequential nonce mismatches or whose Permit2 nonce bit is already used, or whose
   grant is not exactly the decoded authority, fails before any signature exists.
 - `final` runs with real signatures, no synthetic approval preparation and no permission override;
   `preview` may never be the last check before submission.
@@ -436,7 +462,7 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
   approval preparation uses validated amounts, records every call separately, and keeps user indices
   stable. Typed permit checks and final signature execution remain necessary.
 - **Overriding Permit2 and Morpho storage under a final-shaped `preview` transaction.** Rejected: the
-  `approve2`, `permit` and `setAuthorizationWithSig` calls cannot succeed without a valid signature, so
+  ERC-2612, Permit2 SignatureTransfer and Morpho authorization paths cannot succeed without a valid signature, so
   they would have to be stripped, and the verifier would then be testing a transaction it authored.
 - **Generic `ranges` limit.** Rejected: a string metric with optional subject and time basis can bind to
   the wrong position, unit or basis and cannot be validated against the operation it claims to bound.
@@ -468,6 +494,13 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
 
 ## Acceptance Criteria
 
+- [ ] Route fixtures use the migrated SDK's three standalone bundles and supported direct recipes.
+      Bundler3, GeneralAdapter1, legacy wrapping, Aave migration and partial refinance fail typed.
+      Retention guards cover only the standalone bundles; vault protocol adapters remain covered by
+      allocation and exit accounting checks.
+- [ ] Permit2 tests cover SignatureTransfer payload binding, unused/consumed nonce bitmap bits and
+      persistent ERC-20 approval to canonical Permit2; no AllowanceTransfer assumptions remain.
+
 - [ ] `simulationTxs` is element-for-element equal to `params.transactions` in both modes; preparation
       and probe results map separately without shifting user indices, including preparation failures.
 - [ ] Each request variant produces exactly the preparation in the table, with read-back at the same
@@ -477,11 +510,11 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
       contract fixtures cover custom storage and unexpected approval side effects. No mocked transport
       substitutes for contract round-trips. Preparation and user execution share one stateful request.
 - [ ] A request with a foreign owner, stale nonce, wrong spender or token, an amount outside the exact grant, accepted cap or
-      paired zero-reset rules, expiration
-      other than `MAX_UINT_48`, or deadline beyond `maxSignatureLifetimeSeconds` fails typed before any
+      paired zero-reset rules, an already-used Permit2 nonce bit, or deadline beyond
+      `maxSignatureLifetimeSeconds` fails typed before any
       signature exists.
-- [ ] `final` rejects any `authorizations`; `preview` rejects transactions containing `permit`,
-      `approve2`, `setAuthorizationWithSig` or a non-sentinel permit struct.
+- [ ] `final` rejects any `authorizations`; `preview` rejects signature-consuming calls
+      or non-sentinel signed permit/authorization payloads.
 - [ ] Unknown token storage layout alone does not reject a supported token; unsupported approval
       behavior, unrecognized targets or selectors, and top-level callbacks fail typed with no partial
       verification. `final` never inserts synthetic approval calls.
@@ -517,13 +550,16 @@ error. Every error blocks API output and submission; nothing is bypassable or fa
 - [EVM simulation safety priorities](https://app.notion.com/p/morpho-labs/EVM-simulation-safety-priorities-3d6d69939e6d8145bc9deb1b0be31ae8)
 - [Audited Vaults app](https://github.com/morpho-org/morpho-apps/tree/8a0afba42cb24a2eb472e9368809ac880db90a91/apps/vvrm-app)
 - [`eth_simulateV1`](https://ethereum.github.io/execution-apis/api/methods/eth_simulateV1/) · viem `StateOverride` (`balance`, `nonce`, `code`, `state`, `stateDiff`)
-- [Permit2 allowance, nonce and deadline enforcement](https://github.com/Uniswap/permit2/blob/main/src/AllowanceTransfer.sol)
+- Migrated SDK baseline inspected at `9e0aedeabe9e6b7e9925d21a2c8a5d05dd2690e1` (`origin/next`):
+  [v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/9e0aedeabe9e6b7e9925d21a2c8a5d05dd2690e1/packages/morpho-sdk/MIGRATION-v5-to-v6.md),
+  [Bundler3 removal decision](https://github.com/morpho-org/sdks/blob/9e0aedeabe9e6b7e9925d21a2c8a5d05dd2690e1/docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
+- [Permit2 one-time transfer and unordered nonce enforcement](https://github.com/Uniswap/permit2/blob/main/src/SignatureTransfer.sol)
 - [Morpho accounting, authorization and health](https://github.com/morpho-org/morpho-blue/blob/main/src/Morpho.sol)
 - `morpho-sdk` requirement encoders: `encodeErc20Approval`, `encodeErc20Permit`,
-  `encodeErc20Permit2Approve`, `encodeVaultSharesPermit`, `encodeBlueSignatureAuthorization`;
+  `encodeErc20Permit2SignatureTransfer`, `encodeVaultSharesPermit`, `encodeBlueSignatureAuthorization`;
   policy constants `DEFAULT_SLIPPAGE_TOLERANCE`, `DEFAULT_LLTV_BUFFER`, `MAX_TOKEN_APPROVALS`,
   `APPROVE_ONLY_ONCE_TOKENS`
-- `blue-sdk-viem` typed data: `getPermitTypedData`, `getPermit2PermitTypedData`,
+- `blue-sdk-viem` typed data: `getPermitTypedData`, `getPermit2TransferFromTypedData`,
   `getAuthorizationTypedData`; pre-liquidation ABIs `preLiquidationFactoryAbi`, `preLiquidationAbi`
 - [TIB-2026-08-25: Route Blue actions through BlueBundlesV1](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
 - [TIB-2026-07-27: Vault exit in-kind redemption](./TIB-2026-07-27-vault-exit-in-kind-redemption.md)
