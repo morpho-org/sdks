@@ -43,13 +43,13 @@ Pass a typed tree to its matching namespace:
 
 ```ts
 import {
-  RateRatifierV1Utils,
+  RateRatifierV1,
   type Tree,
 } from "@morpho-org/midnight-sdk";
 
 function publishItems(tree: Tree<"rateV1">) {
   // Call after the maker's root approval has completed onchain.
-  return RateRatifierV1Utils.ratify({ tree });
+  return RateRatifierV1.ratify({ tree });
 }
 ```
 
@@ -97,3 +97,14 @@ An explicit annotation with a legacy type erases compile-time route information.
 For new route-aware wrappers, retain `Tree<"setter">` or
 `TypedRatifierTreeInput<"setter">` (and the Ecrecover equivalent). Ratifier utilities
 check runtime tags even when a legacy annotation has erased their static type.
+
+## Ratifier names
+
+Use `EcrecoverRatifier`, `SetterRatifier`, `PriceRatifierV1`, `RateRatifierV1`, and
+`Ratifier` from `@morpho-org/midnight-sdk` or
+`@morpho-org/morpho-sdk/midnight/utils`. The general `/utils` facade exposes the
+corresponding `Midnight`-prefixed names, such as `MidnightRateRatifierV1`.
+
+The previous `*Utils` exports remain available as deprecated aliases to the same
+namespace objects. Existing imports and calls continue to work; changing the
+import name is optional. Implementation filenames now match the canonical names.

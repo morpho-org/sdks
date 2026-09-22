@@ -28,9 +28,9 @@ import {
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
 } from "../errors.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifier } from "./EcrecoverRatifier.js";
 import { GroupUtils } from "./GroupUtils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -81,30 +81,28 @@ const signTree = async (
   account = privateKeyToAccount(privateKey),
 ) =>
   account.signTypedData(
-    EcrecoverRatifierUtils.typedData({ tree, chainId: BigInt(base.id) }),
+    EcrecoverRatifier.typedData({ tree, chainId: BigInt(base.id) }),
   );
 
-describe("EcrecoverRatifierUtils.ratify", () => {
+describe("EcrecoverRatifier.ratify", () => {
   test("default", async () => {
     const account = privateKeyToAccount(privateKey);
     const offer = baseOffer({ maker: account.address, maxAssets: 0n });
     const tree = Tree.create([offer]);
     const signature = await signTree(tree, account);
 
-    const items = await EcrecoverRatifierUtils.ratify({
+    const items = await EcrecoverRatifier.ratify({
       tree,
       account,
       signature,
     });
-    const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+    const decoded = EcrecoverRatifier.decodeRatifierData(
       items[0]!.ratifierData,
     );
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).toBe(tree.offers[0]);
-    expect(decoded.signature).toEqual(
-      EcrecoverRatifierUtils.toSignature(signature),
-    );
+    expect(decoded.signature).toEqual(EcrecoverRatifier.toSignature(signature));
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -124,7 +122,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     );
     const signature = await signTree(tree, account);
 
-    const items = await EcrecoverRatifierUtils.ratify({
+    const items = await EcrecoverRatifier.ratify({
       tree,
       account,
       signature,
@@ -132,9 +130,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
 
     expect(items).toHaveLength(3);
     for (const [index, item] of items.entries()) {
-      const decoded = EcrecoverRatifierUtils.decodeRatifierData(
-        item.ratifierData,
-      );
+      const decoded = EcrecoverRatifier.decodeRatifierData(item.ratifierData);
       expect(decoded.leafIndex).toBe(BigInt(index));
       expect(
         TreeUtils.verifyProof({
@@ -153,21 +149,19 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     const tree = Tree.create([offer]);
     const signature = await signTree(tree, account);
 
-    const items = await EcrecoverRatifierUtils.ratify({
+    const items = await EcrecoverRatifier.ratify({
       tree: [offer],
       account,
       signature,
     });
-    const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+    const decoded = EcrecoverRatifier.decodeRatifierData(
       items[0]!.ratifierData,
     );
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).not.toBe(offer);
     expect(items[0]!.offer.group).toBe(GroupUtils.hash([offer]));
-    expect(decoded.signature).toEqual(
-      EcrecoverRatifierUtils.toSignature(signature),
-    );
+    expect(decoded.signature).toEqual(EcrecoverRatifier.toSignature(signature));
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -182,10 +176,10 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     const account = privateKeyToAccount(privateKey);
     const tree = ecrecoverTree(3);
     const signature = await signTree(tree, account);
-    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+    const normalize = vi.spyOn(Ratifier, "normalizeRatifierTree");
 
     try {
-      await EcrecoverRatifierUtils.ratify({ tree, account, signature });
+      await EcrecoverRatifier.ratify({ tree, account, signature });
 
       const calls = normalize.mock.calls.filter(
         ([params]) => params.tree === tree,
@@ -206,12 +200,12 @@ describe("EcrecoverRatifierUtils.ratify", () => {
       transport: custom({ request: async () => null }),
     });
 
-    const items = await EcrecoverRatifierUtils.ratify({
+    const items = await EcrecoverRatifier.ratify({
       tree,
       client,
       account,
     });
-    const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+    const decoded = EcrecoverRatifier.decodeRatifierData(
       items[0]!.ratifierData,
     );
 
@@ -239,7 +233,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
       transport: custom({ request: async () => null }),
     });
 
-    const items = await EcrecoverRatifierUtils.ratify({
+    const items = await EcrecoverRatifier.ratify({
       tree,
       client,
       account,
@@ -266,7 +260,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ]);
 
     await expect(
-      EcrecoverRatifierUtils.ratify({
+      EcrecoverRatifier.ratify({
         tree,
         account,
         signature: {
@@ -285,7 +279,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ]);
 
     await expect(
-      EcrecoverRatifierUtils.ratify({
+      EcrecoverRatifier.ratify({
         tree,
         account,
         signature: {
@@ -308,7 +302,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     });
 
     await expect(
-      EcrecoverRatifierUtils.ratify({
+      EcrecoverRatifier.ratify({
         tree,
         client,
         account: account.address,
@@ -322,7 +316,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     const tree = Tree.create([
       baseOffer({ maker: account.address, maxAssets: 0n }),
     ]);
-    const typedData = EcrecoverRatifierUtils.typedData({
+    const typedData = EcrecoverRatifier.typedData({
       tree,
       chainId: BigInt(base.id),
     });
@@ -334,7 +328,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     });
 
     await expect(
-      EcrecoverRatifierUtils.ratify({
+      EcrecoverRatifier.ratify({
         tree,
         client,
         account: account.address,
@@ -343,10 +337,10 @@ describe("EcrecoverRatifierUtils.ratify", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.typedData", () => {
+describe("EcrecoverRatifier.typedData", () => {
   test("default", () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
-    const typedData = EcrecoverRatifierUtils.typedData({
+    const typedData = EcrecoverRatifier.typedData({
       tree,
       chainId: 8453n,
     });
@@ -372,9 +366,9 @@ describe("EcrecoverRatifierUtils.typedData", () => {
       }),
     ]);
 
-    expect(() =>
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
-    ).toThrow(InvalidTreeError);
+    expect(() => EcrecoverRatifier.typedData({ tree, chainId: 8453n })).toThrow(
+      InvalidTreeError,
+    );
   });
 
   test("behavior: accepts mixed makers", () => {
@@ -384,7 +378,7 @@ describe("EcrecoverRatifierUtils.typedData", () => {
     ]);
 
     expect(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }).primaryType,
+      EcrecoverRatifier.typedData({ tree, chainId: 8453n }).primaryType,
     ).toBe("OfferTree");
   });
 
@@ -401,13 +395,13 @@ describe("EcrecoverRatifierUtils.typedData", () => {
       height: tree.height,
     } as const;
 
-    expect(
-      EcrecoverRatifierUtils.digest({ tree: treeLike, chainId: 8453n }),
-    ).toBe(EcrecoverRatifierUtils.digest({ tree, chainId: 8453n }));
+    expect(EcrecoverRatifier.digest({ tree: treeLike, chainId: 8453n })).toBe(
+      EcrecoverRatifier.digest({ tree, chainId: 8453n }),
+    );
   });
 });
 
-describe("EcrecoverRatifierUtils.digest", () => {
+describe("EcrecoverRatifier.digest", () => {
   test.each([
     { name: "height 0", offerCount: 1, height: 0 },
     { name: "height 1", offerCount: 2, height: 1 },
@@ -420,14 +414,14 @@ describe("EcrecoverRatifierUtils.digest", () => {
     };
 
     expect(tree.height).toBe(height);
-    expect(EcrecoverRatifierUtils.digest(params)).toBe(
-      hashTypedData(EcrecoverRatifierUtils.typedData(params)),
+    expect(EcrecoverRatifier.digest(params)).toBe(
+      hashTypedData(EcrecoverRatifier.typedData(params)),
     );
   });
 
   test("behavior: pinned EcrecoverRatifier digest fixture", () => {
     const tree = ecrecoverTree(4);
-    const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
+    const digest = EcrecoverRatifier.digest({ tree, chainId: 8453n });
 
     // Captured from the Solidity EcrecoverRatifier digest formula at
     // morpho-org/midnight@336b924a2bb378d810ef6d35b6dd3486759af8bd.
@@ -437,7 +431,7 @@ describe("EcrecoverRatifierUtils.digest", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.digestRatifierData", () => {
+describe("EcrecoverRatifier.digestRatifierData", () => {
   test("behavior: matches tree digest for decoded ratifier data", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
@@ -445,23 +439,23 @@ describe("EcrecoverRatifierUtils.digestRatifierData", () => {
       baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
     ]);
     const signature = await signTree(tree, account);
-    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+    const ratifierData = EcrecoverRatifier.ratifierData({
       tree,
       leafIndex: 1n,
       signature,
     });
 
     expect(
-      EcrecoverRatifierUtils.digestRatifierData({
+      EcrecoverRatifier.digestRatifierData({
         chainId: base.id,
         offer: tree.offers[1]!,
         ratifierData,
       }),
-    ).toBe(EcrecoverRatifierUtils.digest({ tree, chainId: BigInt(base.id) }));
+    ).toBe(EcrecoverRatifier.digest({ tree, chainId: BigInt(base.id) }));
   });
 });
 
-describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
+describe("EcrecoverRatifier.verifyRatifierData", () => {
   test("behavior: verifies proof and returns recovered signer", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
@@ -469,13 +463,13 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
       baseOffer({ maker: addresses.taker, maxAssets: 0n, maxUnits: 2n }),
     ]);
     const signature = await signTree(tree, account);
-    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+    const ratifierData = EcrecoverRatifier.ratifierData({
       tree,
       leafIndex: 1n,
       signature,
     });
 
-    const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+    const verified = await EcrecoverRatifier.verifyRatifierData({
       chainId: base.id,
       offer: tree.offers[1]!,
       ratifierData,
@@ -493,14 +487,14 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
       baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
     ]);
     const signature = await signTree(tree, account);
-    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+    const ratifierData = EcrecoverRatifier.ratifierData({
       tree,
       leafIndex: 0n,
       signature,
     });
 
     await expect(
-      EcrecoverRatifierUtils.verifyRatifierData({
+      EcrecoverRatifier.verifyRatifierData({
         chainId: base.id,
         offer: tree.offers[1]!,
         ratifierData,
@@ -514,14 +508,14 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
       baseOffer({ maker: account.address, maxAssets: 0n }),
     ]);
     const signature = await signTree(tree, account);
-    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+    const ratifierData = EcrecoverRatifier.ratifierData({
       tree,
       leafIndex: 0n,
       signature,
     });
 
     await expect(
-      EcrecoverRatifierUtils.verifyRatifierData({
+      EcrecoverRatifier.verifyRatifierData({
         chainId: mainnet.id,
         offer: tree.offers[0]!,
         ratifierData,
@@ -532,7 +526,7 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
   test("error: InvalidEcrecoverSignatureVError when ratifier data uses non-canonical v", async () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
     const proof = tree.proof(0n);
-    const ratifierData = EcrecoverRatifierUtils.encodeRatifierData({
+    const ratifierData = EcrecoverRatifier.encodeRatifierData({
       signature: {
         v: 29,
         r: "0x1111111111111111111111111111111111111111111111111111111111111111",
@@ -544,7 +538,7 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
     });
 
     await expect(
-      EcrecoverRatifierUtils.verifyRatifierData({
+      EcrecoverRatifier.verifyRatifierData({
         chainId: base.id,
         offer: tree.offers[0]!,
         ratifierData,
@@ -553,7 +547,7 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.sign", () => {
+describe("EcrecoverRatifier.sign", () => {
   test("default", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
@@ -564,7 +558,7 @@ describe("EcrecoverRatifierUtils.sign", () => {
       transport: custom({ request: async () => null }),
     });
 
-    const signature = await EcrecoverRatifierUtils.sign({
+    const signature = await EcrecoverRatifier.sign({
       tree,
       client,
       account,
@@ -590,7 +584,7 @@ describe("EcrecoverRatifierUtils.sign", () => {
     });
 
     await expect(
-      EcrecoverRatifierUtils.sign({
+      EcrecoverRatifier.sign({
         tree,
         client,
         account,
@@ -611,7 +605,7 @@ describe("EcrecoverRatifierUtils.sign", () => {
     });
 
     await expect(
-      EcrecoverRatifierUtils.sign({
+      EcrecoverRatifier.sign({
         tree,
         client,
         account,
@@ -621,23 +615,23 @@ describe("EcrecoverRatifierUtils.sign", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.treeTypeHash", () => {
+describe("EcrecoverRatifier.treeTypeHash", () => {
   test("default", () => {
     for (let height = 0; height <= 20; height++) {
-      expect(EcrecoverRatifierUtils.treeTypeHash(height)).toBe(
+      expect(EcrecoverRatifier.treeTypeHash(height)).toBe(
         typeHash(offerTreeType(height)),
       );
     }
   });
 
   test("error: InvalidTreeHeightError", () => {
-    expect(() => EcrecoverRatifierUtils.treeTypeHash(21)).toThrow(
+    expect(() => EcrecoverRatifier.treeTypeHash(21)).toThrow(
       InvalidTreeHeightError,
     );
   });
 });
 
-describe("EcrecoverRatifierUtils typehash constants", () => {
+describe("EcrecoverRatifier typehash constants", () => {
   test("default", () => {
     expect(COLLATERAL_PARAMS_TYPEHASH).toBe(typeHash(collateralParamsType));
     expect(MARKET_TYPEHASH).toBe(
@@ -660,7 +654,7 @@ describe("EcrecoverRatifierUtils typehash constants", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.toSignature", () => {
+describe("EcrecoverRatifier.toSignature", () => {
   test("default", () => {
     const signature = {
       yParity: 1,
@@ -668,7 +662,7 @@ describe("EcrecoverRatifierUtils.toSignature", () => {
       s: "0x2222222222222222222222222222222222222222222222222222222222222222",
     } satisfies Signature;
 
-    expect(EcrecoverRatifierUtils.toSignature(signature)).toEqual({
+    expect(EcrecoverRatifier.toSignature(signature)).toEqual({
       v: 28,
       r: signature.r,
       s: signature.s,
@@ -676,7 +670,7 @@ describe("EcrecoverRatifierUtils.toSignature", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.ratifierData", () => {
+describe("EcrecoverRatifier.ratifierData", () => {
   test("behavior: accepts mixed makers", () => {
     const tree = Tree.create([
       baseOffer({ maxAssets: 0n, maker: addresses.maker }),
@@ -684,7 +678,7 @@ describe("EcrecoverRatifierUtils.ratifierData", () => {
     ]);
 
     expect(
-      EcrecoverRatifierUtils.ratifierData({
+      EcrecoverRatifier.ratifierData({
         tree,
         leafIndex: 0n,
         signature: {
@@ -697,9 +691,9 @@ describe("EcrecoverRatifierUtils.ratifierData", () => {
   });
 });
 
-describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
+describe("EcrecoverRatifier.encodeRatifierData", () => {
   test("default", () => {
-    const data = EcrecoverRatifierUtils.encodeRatifierData({
+    const data = EcrecoverRatifier.encodeRatifierData({
       signature: {
         v: 27,
         r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -719,14 +713,14 @@ describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
       r: "0x1111111111111111111111111111111111111111111111111111111111111111",
       s: "0x2222222222222222222222222222222222222222222222222222222222222222",
     } as const;
-    const data = EcrecoverRatifierUtils.encodeRatifierData({
+    const data = EcrecoverRatifier.encodeRatifierData({
       signature,
       root,
       leafIndex: 2n,
       proof: [proofNode],
     });
 
-    expect(EcrecoverRatifierUtils.decodeRatifierData(data)).toEqual({
+    expect(EcrecoverRatifier.decodeRatifierData(data)).toEqual({
       signature,
       root,
       leafIndex: 2n,
@@ -740,14 +734,14 @@ describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
       r: "0x1111111111111111111111111111111111111111111111111111111111111111",
       s: "0x2222222222222222222222222222222222222222222222222222222222222222",
     } satisfies Signature;
-    const data = EcrecoverRatifierUtils.encodeRatifierData({
+    const data = EcrecoverRatifier.encodeRatifierData({
       signature,
       root,
       leafIndex: 2n,
       proof: [proofNode],
     });
 
-    expect(EcrecoverRatifierUtils.decodeRatifierData(data).signature).toEqual({
+    expect(EcrecoverRatifier.decodeRatifierData(data).signature).toEqual({
       v: 28,
       r: signature.r,
       s: signature.s,

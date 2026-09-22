@@ -20,7 +20,7 @@ import {
 } from "../errors.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
 import { isZeroAddress } from "./offerStructInternal.js";
-import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
+import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 
 const priceRatifier = "0x000000000000000000000000000000000000a111" as Address;
 const allowedTaker = "0x000000000000000000000000000000000000A000" as Address;
@@ -66,30 +66,30 @@ const deterministicOffer: IOffer = {
 const offer = (overrides: Parameters<typeof baseOffer>[0] = {}) =>
   baseOffer({ maxAssets: 0n, ratifier: priceRatifier, ...overrides });
 
-describe("PriceRatifierV1Utils.hashLeaf", () => {
+describe("PriceRatifierV1.hashLeaf", () => {
   // HashLib vectors generated from Midnight commit 11f3d984b53286fd9137eb89e5d1385e23fe1b30.
   test("behavior: matches HashLib vector", () => {
     const allowed = "0x0000000000000000000000000000000000009999" as const;
-    const restricted = PriceRatifierV1Utils.buildDescriptor([
+    const restricted = PriceRatifierV1.buildDescriptor([
       { offer: deterministicOffer, allowedTaker: allowed },
     ]).entries[0]!;
-    const unrestricted = PriceRatifierV1Utils.buildDescriptor([
+    const unrestricted = PriceRatifierV1.buildDescriptor([
       { offer: deterministicOffer },
     ]).entries[0]!;
 
-    expect(PriceRatifierV1Utils.hashLeaf(restricted)).toBe(
+    expect(PriceRatifierV1.hashLeaf(restricted)).toBe(
       "0x3b9d550f526f27f2aa1ab2d2bd01141c673c3c23fedce0b845fc599e7cc3d9d9",
     );
-    expect(PriceRatifierV1Utils.hashLeaf(unrestricted)).toBe(
+    expect(PriceRatifierV1.hashLeaf(unrestricted)).toBe(
       "0x3ace6c15bfbde4463a1f571522e63e7d3138e2cf6d4b1cb80c8c93d247df7d30",
     );
   });
 
   test("default", () => {
     const input = { offer: offer(), allowedTaker };
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([input]);
+    const descriptor = PriceRatifierV1.buildDescriptor([input]);
     const struct = descriptor.entries[0]!;
-    expect(PriceRatifierV1Utils.hashLeaf(struct)).toBe(
+    expect(PriceRatifierV1.hashLeaf(struct)).toBe(
       hashStruct({
         primaryType: "PriceRatifierV1Offer",
         types: {
@@ -137,17 +137,15 @@ describe("PriceRatifierV1Utils.hashLeaf", () => {
   });
 });
 
-describe("PriceRatifierV1Utils.buildDescriptor", () => {
+describe("PriceRatifierV1.buildDescriptor", () => {
   test("default", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
-      { offer: offer() },
-    ]);
+    const descriptor = PriceRatifierV1.buildDescriptor([{ offer: offer() }]);
     expect(descriptor.height).toBe(0);
     expect(descriptor.root).toBe(descriptor.leaves[0]);
   });
 
   test("behavior: pads three leaves", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer({ maxUnits: 1n }) },
       { offer: offer({ maxUnits: 2n }) },
       { offer: offer({ maxUnits: 3n }) },
@@ -158,11 +156,9 @@ describe("PriceRatifierV1Utils.buildDescriptor", () => {
   });
 
   test("error: InvalidTreeError for empty or mixed ratifiers", () => {
-    expect(() => PriceRatifierV1Utils.buildDescriptor([])).toThrow(
-      InvalidTreeError,
-    );
+    expect(() => PriceRatifierV1.buildDescriptor([])).toThrow(InvalidTreeError);
     expect(() =>
-      PriceRatifierV1Utils.buildDescriptor([
+      PriceRatifierV1.buildDescriptor([
         { offer: offer() },
         {
           offer: baseOffer({
@@ -176,33 +172,33 @@ describe("PriceRatifierV1Utils.buildDescriptor", () => {
 
   test("behavior: does not deep-freeze offer instances", () => {
     const input = offer();
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([{ offer: input }]);
+    const descriptor = PriceRatifierV1.buildDescriptor([{ offer: input }]);
 
     expect(input.hash).toBe(OfferUtils.hash(input));
     expect(descriptor.offers[0]!.hash).toBe(input.hash);
   });
 
   test("error: InvalidTreeError for a tampered descriptor root", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }) },
     ]);
 
     expect(() =>
-      PriceRatifierV1Utils.ratify({
+      PriceRatifierV1.ratify({
         tree: { ...descriptor, root: zeroHash },
       }),
     ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError for a tampered descriptor leaf", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }) },
     ]);
 
     expect(() =>
-      PriceRatifierV1Utils.ratify({
+      PriceRatifierV1.ratify({
         tree: {
           ...descriptor,
           leaves: [zeroHash, ...descriptor.leaves.slice(1)],
@@ -212,12 +208,12 @@ describe("PriceRatifierV1Utils.buildDescriptor", () => {
   });
 });
 
-describe("PriceRatifierV1Utils ratifier data", () => {
+describe("PriceRatifierV1 ratifier data", () => {
   test("default: ratify and verify", () => {
-    const [item] = PriceRatifierV1Utils.ratify({
+    const [item] = PriceRatifierV1.ratify({
       tree: [{ offer: offer(), allowedTaker }],
     });
-    const decoded = PriceRatifierV1Utils.verifyRatifierData({
+    const decoded = PriceRatifierV1.verifyRatifierData({
       offer: item!.offer,
       ratifierData: item!.ratifierData,
       taker: allowedTaker,
@@ -226,17 +222,17 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: ratifies a padded descriptor", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer({ maxUnits: 1n }) },
       { offer: offer({ maxUnits: 2n }), allowedTaker },
       { offer: offer({ maxUnits: 3n }) },
     ]);
 
-    const items = PriceRatifierV1Utils.ratify({ tree: descriptor });
+    const items = PriceRatifierV1.ratify({ tree: descriptor });
 
     expect(items).toHaveLength(3);
     for (const [index, item] of items.entries()) {
-      const decoded = PriceRatifierV1Utils.verifyRatifierData({
+      const decoded = PriceRatifierV1.verifyRatifierData({
         offer: item.offer,
         ratifierData: item.ratifierData,
       });
@@ -247,9 +243,9 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: zero taker restriction accepts any taker", () => {
-    const [item] = PriceRatifierV1Utils.ratify({ tree: [{ offer: offer() }] });
+    const [item] = PriceRatifierV1.ratify({ tree: [{ offer: offer() }] });
     expect(
-      PriceRatifierV1Utils.verifyRatifierData({
+      PriceRatifierV1.verifyRatifierData({
         offer: item!.offer,
         ratifierData: item!.ratifierData,
         taker: allowedTaker,
@@ -258,11 +254,11 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 
   test("error: RatifierV1TakerNotAllowedError", () => {
-    const [item] = PriceRatifierV1Utils.ratify({
+    const [item] = PriceRatifierV1.ratify({
       tree: [{ offer: offer(), allowedTaker }],
     });
     expect(() =>
-      PriceRatifierV1Utils.verifyRatifierData({
+      PriceRatifierV1.verifyRatifierData({
         offer: item!.offer,
         ratifierData: item!.ratifierData,
         taker: "0x000000000000000000000000000000000000b000",
@@ -271,13 +267,13 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: skips taker check when taker is omitted", () => {
-    const [item] = PriceRatifierV1Utils.ratify({
+    const [item] = PriceRatifierV1.ratify({
       tree: [{ offer: offer(), allowedTaker }],
     });
 
     expect(
       isAddressEqual(
-        PriceRatifierV1Utils.verifyRatifierData({
+        PriceRatifierV1.verifyRatifierData({
           offer: item!.offer,
           ratifierData: item!.ratifierData,
         }).allowedTaker,
@@ -287,9 +283,9 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 
   test("error: InvalidTreeError for wrong offer", () => {
-    const [item] = PriceRatifierV1Utils.ratify({ tree: [{ offer: offer() }] });
+    const [item] = PriceRatifierV1.ratify({ tree: [{ offer: offer() }] });
     expect(() =>
-      PriceRatifierV1Utils.verifyRatifierData({
+      PriceRatifierV1.verifyRatifierData({
         offer: offer({ maxUnits: 99n }),
         ratifierData: item!.ratifierData,
       }),
@@ -297,17 +293,17 @@ describe("PriceRatifierV1Utils ratifier data", () => {
   });
 });
 
-describe("PriceRatifierV1Utils.buildProof", () => {
+describe("PriceRatifierV1.buildProof", () => {
   test("default", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }), allowedTaker },
     ]);
-    const proof = PriceRatifierV1Utils.buildProof({
+    const proof = PriceRatifierV1.buildProof({
       tree: descriptor,
       leafIndex: 1n,
     });
-    const data = PriceRatifierV1Utils.encodeRatifierData({
+    const data = PriceRatifierV1.encodeRatifierData({
       root: proof.root,
       leafIndex: proof.leafIndex,
       proof: proof.proof,
@@ -316,7 +312,7 @@ describe("PriceRatifierV1Utils.buildProof", () => {
 
     expect(
       isAddressEqual(
-        PriceRatifierV1Utils.verifyRatifierData({
+        PriceRatifierV1.verifyRatifierData({
           offer: descriptor.offers[1]!,
           ratifierData: data,
           taker: allowedTaker,
@@ -327,28 +323,28 @@ describe("PriceRatifierV1Utils.buildProof", () => {
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }) },
     ]);
 
     expect(() =>
-      PriceRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 2n }),
+      PriceRatifierV1.buildProof({ tree: descriptor, leafIndex: 2n }),
     ).toThrow(InvalidTreeError);
   });
 });
 
-describe("PriceRatifierV1Utils.ratifierData", () => {
+describe("PriceRatifierV1.ratifierData", () => {
   test("default", () => {
     const tree = [
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }), allowedTaker },
     ];
-    const data = PriceRatifierV1Utils.ratifierData({ tree, leafIndex: 1n });
+    const data = PriceRatifierV1.ratifierData({ tree, leafIndex: 1n });
 
     expect(
       isAddressEqual(
-        PriceRatifierV1Utils.verifyRatifierData({
+        PriceRatifierV1.verifyRatifierData({
           offer: tree[1]!.offer,
           ratifierData: data,
           taker: allowedTaker,
@@ -359,18 +355,18 @@ describe("PriceRatifierV1Utils.ratifierData", () => {
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
-    const descriptor = PriceRatifierV1Utils.buildDescriptor([
+    const descriptor = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }) },
     ]);
 
     expect(() =>
-      PriceRatifierV1Utils.ratifierData({ tree: descriptor, leafIndex: 2n }),
+      PriceRatifierV1.ratifierData({ tree: descriptor, leafIndex: 2n }),
     ).toThrow(InvalidTreeError);
   });
 });
 
-describe("PriceRatifierV1Utils ratifier data encoding", () => {
+describe("PriceRatifierV1 ratifier data encoding", () => {
   test("default: encode/decode round-trip", () => {
     fc.assert(
       fc.property(
@@ -382,13 +378,13 @@ describe("PriceRatifierV1Utils ratifier data encoding", () => {
         ),
         (...args) => {
           const [rootBytes, leafIndex, taker] = args;
-          const data = PriceRatifierV1Utils.encodeRatifierData({
+          const data = PriceRatifierV1.encodeRatifierData({
             root: bytesToHex(rootBytes),
             leafIndex,
             proof: [zeroHash],
             allowedTaker: taker,
           });
-          const decoded = PriceRatifierV1Utils.decodeRatifierData(data);
+          const decoded = PriceRatifierV1.decodeRatifierData(data);
 
           expect(decoded.root).toBe(bytesToHex(rootBytes));
           expect(decoded.leafIndex).toBe(leafIndex);
@@ -400,9 +396,9 @@ describe("PriceRatifierV1Utils ratifier data encoding", () => {
   });
 });
 
-describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
+describe("PriceRatifierV1.encodeSetIsRootRatified", () => {
   test("default", () => {
-    const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
+    const call = PriceRatifierV1.encodeSetIsRootRatified({
       ratifier: priceRatifier,
       maker: offer().maker,
       root: zeroHash,
@@ -435,7 +431,7 @@ describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
         fc.boolean(),
         (...args) => {
           const [ratifier, maker, root, isRatified] = args;
-          const call = PriceRatifierV1Utils.encodeSetIsRootRatified({
+          const call = PriceRatifierV1.encodeSetIsRootRatified({
             ratifier,
             maker,
             root,
@@ -456,7 +452,7 @@ describe("PriceRatifierV1Utils.encodeSetIsRootRatified", () => {
 
   test("error: InvalidRatifierV1AddressError for a zero ratifier address", () => {
     expect(() =>
-      PriceRatifierV1Utils.encodeSetIsRootRatified({
+      PriceRatifierV1.encodeSetIsRootRatified({
         ratifier: zeroAddress,
         maker: offer().maker,
         root: zeroHash,

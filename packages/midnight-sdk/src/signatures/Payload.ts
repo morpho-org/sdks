@@ -29,12 +29,12 @@ export namespace Payload {
    * `ratifierData` blob a taker hands to `Midnight.take(..., ratifierData)`.
    *
    * `ratifierData` is owned by the ratifier scheme the maker used (e.g.
-   * `EcrecoverRatifierUtils.ratifierData`). The payload codec treats it as
+   * `EcrecoverRatifier.ratifierData`). The payload codec treats it as
    * opaque bytes — simulators that only need to forward `ratifierData` can
    * stay completely ratifier-agnostic.
    *
-   * Build items with `EcrecoverRatifierUtils.ratify` or
-   * `SetterRatifierUtils.ratify` after the tree is signed or approved, then pass
+   * Build items with `EcrecoverRatifier.ratify` or
+   * `SetterRatifier.ratify` after the tree is signed or approved, then pass
    * the items to `Payload.encode` for publication.
    *
    * @example

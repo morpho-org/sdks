@@ -4,12 +4,12 @@ import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { Offer, type OfferStruct } from "../offers/index.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifier } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { Payload } from "./Payload.js";
-import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
-import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { PriceRatifierV1 } from "./PriceRatifierV1.js";
+import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { SetterRatifier } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import {
   type RatifierTreeInput,
@@ -66,10 +66,10 @@ describe("Tree.create", () => {
       TypedRatifierTreeInput<"ecrecover">
     >();
     expectTypeOf<typeof price>().not.toExtend<
-      Parameters<typeof RateRatifierV1Utils.ratify>[0]["tree"]
+      Parameters<typeof RateRatifierV1.ratify>[0]["tree"]
     >();
     expectTypeOf<typeof rate>().not.toExtend<
-      Parameters<typeof PriceRatifierV1Utils.ratify>[0]["tree"]
+      Parameters<typeof PriceRatifierV1.ratify>[0]["tree"]
     >();
     expectTypeOf<{
       type: "rateV1";
@@ -93,31 +93,29 @@ describe("Tree.create", () => {
     expect(setter.root).toBe(legacy.root);
     expect(setter.entries).toEqual(legacy.paddedOffers);
     expect(setter.proof(2n)).toEqual(legacy.proof(2n));
-    expect(SetterRatifierUtils.ratify({ tree: setter })).toEqual(
-      SetterRatifierUtils.ratify({ tree: legacy }),
+    expect(SetterRatifier.ratify({ tree: setter })).toEqual(
+      SetterRatifier.ratify({ tree: legacy }),
     );
     expect(
-      EcrecoverRatifierUtils.typedData({ tree: ecrecover, chainId: 8453 }),
-    ).toEqual(
-      EcrecoverRatifierUtils.typedData({ tree: legacy, chainId: 8453 }),
-    );
+      EcrecoverRatifier.typedData({ tree: ecrecover, chainId: 8453 }),
+    ).toEqual(EcrecoverRatifier.typedData({ tree: legacy, chainId: 8453 }));
     const account = privateKeyToAccount(
       "0x0000000000000000000000000000000000000000000000000000000000000001",
     );
     const signature = await account.sign({
-      hash: EcrecoverRatifierUtils.digest({ tree: ecrecover, chainId: 8453 }),
+      hash: EcrecoverRatifier.digest({ tree: ecrecover, chainId: 8453 }),
     });
     expect(
-      await EcrecoverRatifierUtils.ratify({
+      await EcrecoverRatifier.ratify({
         tree: ecrecover,
         account,
         signature,
       }),
     ).toEqual(
-      await EcrecoverRatifierUtils.ratify({ tree: legacy, account, signature }),
+      await EcrecoverRatifier.ratify({ tree: legacy, account, signature }),
     );
-    const oldPrice = PriceRatifierV1Utils.buildDescriptor(priceLeaves);
-    const oldRate = RateRatifierV1Utils.buildDescriptor(rateLeaves);
+    const oldPrice = PriceRatifierV1.buildDescriptor(priceLeaves);
+    const oldRate = RateRatifierV1.buildDescriptor(rateLeaves);
     expect(price.root).toBe(oldPrice.root);
     expect(rate.root).toBe(oldRate.root);
     expect(
@@ -126,16 +124,16 @@ describe("Tree.create", () => {
     expect(price.entries).toEqual(oldPrice.entries);
     expect(rate.entries).toEqual(oldRate.entries);
     expect(price.proof(2n)).toEqual(
-      PriceRatifierV1Utils.buildProof({ tree: oldPrice, leafIndex: 2n }),
+      PriceRatifierV1.buildProof({ tree: oldPrice, leafIndex: 2n }),
     );
     expect(rate.proof(2n)).toEqual(
-      RateRatifierV1Utils.buildProof({ tree: oldRate, leafIndex: 2n }),
+      RateRatifierV1.buildProof({ tree: oldRate, leafIndex: 2n }),
     );
-    expect(PriceRatifierV1Utils.ratify({ tree: price })).toEqual(
-      PriceRatifierV1Utils.ratify({ tree: oldPrice }),
+    expect(PriceRatifierV1.ratify({ tree: price })).toEqual(
+      PriceRatifierV1.ratify({ tree: oldPrice }),
     );
-    expect(RateRatifierV1Utils.ratify({ tree: rate })).toEqual(
-      RateRatifierV1Utils.ratify({ tree: oldRate }),
+    expect(RateRatifierV1.ratify({ tree: rate })).toEqual(
+      RateRatifierV1.ratify({ tree: oldRate }),
     );
   });
 
@@ -237,8 +235,8 @@ describe("Tree.fromDescriptor", () => {
     const resumed = Tree.fromDescriptor({ ...snapshot, entries });
     expect(resumed.toDescriptor()).toEqual(snapshot);
     expect(Object.isFrozen(entries[0])).toBe(false);
-    expect(SetterRatifierUtils.ratify({ tree: resumed })).toEqual(
-      SetterRatifierUtils.ratify({ tree: trees()[1] }),
+    expect(SetterRatifier.ratify({ tree: resumed })).toEqual(
+      SetterRatifier.ratify({ tree: trees()[1] }),
     );
   });
 
@@ -280,12 +278,12 @@ describe("Tree.fromDescriptor", () => {
     const [ecrecover, , , rate] = trees();
     // Test adapters model callers bypassing TypeScript (JavaScript or untrusted transport).
     expect(() =>
-      SetterRatifierUtils.ratify({
+      SetterRatifier.ratify({
         tree: ecrecover as unknown as Tree<"setter">,
       }),
     ).toThrow(InvalidTreeError);
     expect(() =>
-      PriceRatifierV1Utils.ratify({ tree: rate as unknown as Tree<"priceV1"> }),
+      PriceRatifierV1.ratify({ tree: rate as unknown as Tree<"priceV1"> }),
     ).toThrow(InvalidTreeError);
   });
 });
@@ -315,8 +313,8 @@ describe("Tree.mempoolValidate", () => {
       expect(fetch).toHaveBeenCalledOnce();
       const expected =
         tree.type === "rateV1"
-          ? RateRatifierV1Utils.ratify({ tree })
-          : PriceRatifierV1Utils.ratify({ tree });
+          ? RateRatifierV1.ratify({ tree })
+          : PriceRatifierV1.ratify({ tree });
       expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toEqual({
         chain_id: 8453,
         payload: await Payload.encode(expected),
@@ -342,15 +340,15 @@ describe("Tree.mempoolValidate", () => {
 describe("legacy tree type compatibility", () => {
   test("behavior: existing wrappers accept untagged public types", () => {
     const ratify = (input: RatifierTreeInput) =>
-      SetterRatifierUtils.ratify({ tree: input });
+      SetterRatifier.ratify({ tree: input });
     const typedData = (input: TreeLike) =>
-      EcrecoverRatifierUtils.typedData({ tree: input, chainId: 8453 });
+      EcrecoverRatifier.typedData({ tree: input, chainId: 8453 });
     const legacyInput = (input: TreeInput) =>
-      SetterRatifierUtils.ratify({ tree: input });
+      SetterRatifier.ratify({ tree: input });
     const tree = Tree.create(offers);
     expect(ratify(tree)).toEqual(legacyInput(offers));
     expect(typedData(tree)).toEqual(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453 }),
+      EcrecoverRatifier.typedData({ tree, chainId: 8453 }),
     );
     expectTypeOf<"type">().not.toExtend<keyof TreeLike>();
     expectTypeOf<RatifierTreeInput>().toExtend<
@@ -365,7 +363,7 @@ describe("legacy tree type compatibility", () => {
 
   test("error: InvalidTreeError when a legacy annotation erases a conflicting route", () => {
     const erased: RatifierTreeInput = trees()[0];
-    expect(() => SetterRatifierUtils.ratify({ tree: erased })).toThrow(
+    expect(() => SetterRatifier.ratify({ tree: erased })).toThrow(
       InvalidTreeError,
     );
   });

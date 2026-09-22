@@ -118,9 +118,14 @@ import type {
   RatifierInfo as RawMidnightRatifierInfo,
 } from "@morpho-org/morpho-sdk/midnight/types";
 import {
+  EcrecoverRatifier as RawMidnightEcrecoverRatifier,
   MarketUtils as RawMidnightMarketUtils,
+  PriceRatifierV1 as RawMidnightPriceRatifierV1,
   PriceRatifierV1Utils as RawMidnightPriceRatifierV1Utils,
+  RateRatifierV1 as RawMidnightRateRatifierV1,
   RateRatifierV1Utils as RawMidnightRateRatifierV1Utils,
+  Ratifier as RawMidnightRatifier,
+  SetterRatifier as RawMidnightSetterRatifier,
 } from "@morpho-org/morpho-sdk/midnight/utils";
 import type {
   BlueAuthorizationTypedDataArgs,
@@ -142,9 +147,14 @@ import {
   blueDefaultPreLiquidationParamsRegistry,
   getBlueDefaultPreLiquidationParams,
   getPermit2PermitTypedData,
+  MidnightEcrecoverRatifier,
   MidnightMarketUtils,
+  MidnightPriceRatifierV1,
   MidnightPriceRatifierV1Utils,
+  MidnightRateRatifierV1,
   MidnightRateRatifierV1Utils,
+  MidnightRatifier,
+  MidnightSetterRatifier,
 } from "@morpho-org/morpho-sdk/utils";
 import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
@@ -234,6 +244,13 @@ describe("protocol facades", () => {
     ],
     [fetchMidnightPosition, rawFetchMidnightPosition],
     [MidnightMarketUtils, RawMidnightMarketUtils],
+    [MidnightEcrecoverRatifier, RawMidnightEcrecoverRatifier],
+    [MidnightSetterRatifier, RawMidnightSetterRatifier],
+    [MidnightPriceRatifierV1, RawMidnightPriceRatifierV1],
+    [MidnightRateRatifierV1, RawMidnightRateRatifierV1],
+    [MidnightRatifier, RawMidnightRatifier],
+    [MidnightPriceRatifierV1, MidnightPriceRatifierV1Utils],
+    [MidnightRateRatifierV1, MidnightRateRatifierV1Utils],
     [MidnightPriceRatifierV1Utils, RawMidnightPriceRatifierV1Utils],
     [MidnightRateRatifierV1Utils, RawMidnightRateRatifierV1Utils],
   ])("preserves runtime identity", (facade, raw) => {

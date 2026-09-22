@@ -25,7 +25,7 @@ import {
 import { TickLib } from "../math/index.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
-import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
+import { RateRatifierV1 } from "./RateRatifierV1.js";
 
 const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
 const otherRatifier = "0x000000000000000000000000000000000000A222" as const;
@@ -112,14 +112,14 @@ const eip712Types = {
   ],
 } as const;
 
-describe("RateRatifierV1Utils.hashLeaf", () => {
+describe("RateRatifierV1.hashLeaf", () => {
   test("default", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       { offer: leaf().offer, rate: 123456789012345n, allowedTaker },
     ]);
     const struct = descriptor.entries[0]!;
 
-    expect(RateRatifierV1Utils.hashLeaf(struct)).toBe(
+    expect(RateRatifierV1.hashLeaf(struct)).toBe(
       hashStruct({
         data: {
           ...struct.offer,
@@ -136,29 +136,29 @@ describe("RateRatifierV1Utils.hashLeaf", () => {
   test("behavior: matches HashLib vector", () => {
     const rate = 920000000000000000n;
     const allowed = "0x0000000000000000000000000000000000009999" as const;
-    const restricted = RateRatifierV1Utils.buildDescriptor([
+    const restricted = RateRatifierV1.buildDescriptor([
       { offer: deterministicOffer, rate, allowedTaker: allowed },
     ]).entries[0]!;
-    const unrestricted = RateRatifierV1Utils.buildDescriptor([
+    const unrestricted = RateRatifierV1.buildDescriptor([
       { offer: deterministicOffer, rate },
     ]).entries[0]!;
 
-    expect(RateRatifierV1Utils.hashLeaf(restricted)).toBe(
+    expect(RateRatifierV1.hashLeaf(restricted)).toBe(
       "0xff5284f177648bada55149e7bf5ea4d1adaa541f3cb2f25cc43781eabec436ee",
     );
-    expect(RateRatifierV1Utils.hashLeaf(unrestricted)).toBe(
+    expect(RateRatifierV1.hashLeaf(unrestricted)).toBe(
       "0x503acc925a83b77fa5fba0433af49dc25e077fe8b1d68dee5c13cc03cccfe281",
     );
   });
 
   test("behavior: rate changes the leaf hash", () => {
     const offer = leaf().offer;
-    const zero = RateRatifierV1Utils.hashLeaf({
+    const zero = RateRatifierV1.hashLeaf({
       offer: { ...offer, group: offer.group },
       rate: 0n,
       allowedTaker: zeroAddress,
     });
-    const nonZero = RateRatifierV1Utils.hashLeaf({
+    const nonZero = RateRatifierV1.hashLeaf({
       offer: { ...offer, group: offer.group },
       rate: 1n,
       allowedTaker: zeroAddress,
@@ -168,9 +168,9 @@ describe("RateRatifierV1Utils.hashLeaf", () => {
   });
 });
 
-describe("RateRatifierV1Utils.buildDescriptor", () => {
+describe("RateRatifierV1.buildDescriptor", () => {
   test("default", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([leaf()]);
+    const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
 
     expect(descriptor.height).toBe(0);
     expect(descriptor.entries).toHaveLength(1);
@@ -179,7 +179,7 @@ describe("RateRatifierV1Utils.buildDescriptor", () => {
   });
 
   test("behavior: pads to the next power of two", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf({ maxUnits: 1n }),
       leaf({ maxUnits: 2n }),
       leaf({ maxUnits: 3n }),
@@ -196,14 +196,12 @@ describe("RateRatifierV1Utils.buildDescriptor", () => {
   });
 
   test("error: InvalidTreeError when empty", () => {
-    expect(() => RateRatifierV1Utils.buildDescriptor([])).toThrow(
-      InvalidTreeError,
-    );
+    expect(() => RateRatifierV1.buildDescriptor([])).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError on multiple ratifiers", () => {
     expect(() =>
-      RateRatifierV1Utils.buildDescriptor([
+      RateRatifierV1.buildDescriptor([
         leaf(),
         {
           offer: baseOffer({ maxAssets: 0n, ratifier: otherRatifier }),
@@ -215,48 +213,46 @@ describe("RateRatifierV1Utils.buildDescriptor", () => {
 
   test("error: InvalidTreeError on duplicate leaves", () => {
     const l = leaf();
-    expect(() => RateRatifierV1Utils.buildDescriptor([l, { ...l }])).toThrow(
+    expect(() => RateRatifierV1.buildDescriptor([l, { ...l }])).toThrow(
       InvalidTreeError,
     );
   });
 
   test("error: InvalidRateRatifierV1RateError on negative rate", () => {
-    expect(() => RateRatifierV1Utils.buildDescriptor([leaf({}, -1n)])).toThrow(
+    expect(() => RateRatifierV1.buildDescriptor([leaf({}, -1n)])).toThrow(
       InvalidRateRatifierV1RateError,
     );
   });
 
   test("behavior: does not deep-freeze offer instances", () => {
     const offer = leaf().offer;
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
-      { offer, rate: 0n },
-    ]);
+    const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
 
     expect(offer.hash).toBe(OfferUtils.hash(offer));
     expect(descriptor.offers[0]!.hash).toBe(offer.hash);
   });
 
   test("error: InvalidTreeError for a tampered descriptor root", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: { ...descriptor, root: zeroHash },
       }),
     ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError for a tampered descriptor leaf", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: {
           ...descriptor,
           leaves: [zeroHash, ...descriptor.leaves.slice(1)],
@@ -266,7 +262,7 @@ describe("RateRatifierV1Utils.buildDescriptor", () => {
   });
 });
 
-describe("RateRatifierV1Utils ratifier data", () => {
+describe("RateRatifierV1 ratifier data", () => {
   test("default: encode/decode round-trip", () => {
     fc.assert(
       fc.property(
@@ -279,14 +275,14 @@ describe("RateRatifierV1Utils ratifier data", () => {
         ),
         (...args) => {
           const [rootBytes, leafIndex, rate, taker] = args;
-          const data = RateRatifierV1Utils.encodeRatifierData({
+          const data = RateRatifierV1.encodeRatifierData({
             root: bytesToHex(rootBytes),
             leafIndex,
             proof: [zeroHash],
             rate,
             allowedTaker: taker,
           });
-          const decoded = RateRatifierV1Utils.decodeRatifierData(data);
+          const decoded = RateRatifierV1.decodeRatifierData(data);
 
           expect(decoded.leafIndex).toBe(leafIndex);
           expect(decoded.rate).toBe(rate);
@@ -298,13 +294,13 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("default: ratify items verify against the tree root", () => {
-    const items = RateRatifierV1Utils.ratify({
+    const items = RateRatifierV1.ratify({
       tree: [leaf({}, 5n), leaf({ maxUnits: 7n }, 6n)],
     });
 
     expect(items).toHaveLength(2);
     for (const item of items) {
-      const decoded = RateRatifierV1Utils.verifyRatifierData({
+      const decoded = RateRatifierV1.verifyRatifierData({
         offer: item.offer,
         ratifierData: item.ratifierData,
       });
@@ -313,17 +309,17 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: ratifies a padded descriptor", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf({ maxUnits: 1n }, 5n),
       leaf({ maxUnits: 2n }, 6n),
       { ...leaf({ maxUnits: 3n }, 7n), allowedTaker },
     ]);
 
-    const items = RateRatifierV1Utils.ratify({ tree: descriptor });
+    const items = RateRatifierV1.ratify({ tree: descriptor });
 
     expect(items).toHaveLength(3);
     for (const [index, item] of items.entries()) {
-      const decoded = RateRatifierV1Utils.verifyRatifierData({
+      const decoded = RateRatifierV1.verifyRatifierData({
         offer: item.offer,
         ratifierData: item.ratifierData,
       });
@@ -334,10 +330,10 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: accepts any taker when allowedTaker is zero", () => {
-    const [item] = RateRatifierV1Utils.ratify({ tree: [leaf({}, 0n)] });
+    const [item] = RateRatifierV1.ratify({ tree: [leaf({}, 0n)] });
 
     expect(
-      RateRatifierV1Utils.verifyRatifierData({
+      RateRatifierV1.verifyRatifierData({
         offer: item!.offer,
         ratifierData: item!.ratifierData,
         taker: allowedTaker,
@@ -346,12 +342,12 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("error: RatifierV1TakerNotAllowedError for wrong taker", () => {
-    const [item] = RateRatifierV1Utils.ratify({
+    const [item] = RateRatifierV1.ratify({
       tree: [{ offer: leaf().offer, rate: 0n, allowedTaker }],
     });
 
     expect(() =>
-      RateRatifierV1Utils.verifyRatifierData({
+      RateRatifierV1.verifyRatifierData({
         offer: item!.offer,
         ratifierData: item!.ratifierData,
         taker: "0x000000000000000000000000000000000000b000",
@@ -360,13 +356,13 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: allowed taker verifies", () => {
-    const [item] = RateRatifierV1Utils.ratify({
+    const [item] = RateRatifierV1.ratify({
       tree: [{ offer: leaf().offer, rate: 0n, allowedTaker }],
     });
 
     expect(
       isAddressEqual(
-        RateRatifierV1Utils.verifyRatifierData({
+        RateRatifierV1.verifyRatifierData({
           offer: item!.offer,
           ratifierData: item!.ratifierData,
           taker: allowedTaker,
@@ -377,13 +373,13 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("behavior: skips taker check when taker is omitted", () => {
-    const [item] = RateRatifierV1Utils.ratify({
+    const [item] = RateRatifierV1.ratify({
       tree: [{ offer: leaf().offer, rate: 0n, allowedTaker }],
     });
 
     expect(
       isAddressEqual(
-        RateRatifierV1Utils.verifyRatifierData({
+        RateRatifierV1.verifyRatifierData({
           offer: item!.offer,
           ratifierData: item!.ratifierData,
         }).allowedTaker,
@@ -393,14 +389,14 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 
   test("error: InvalidTreeError when the rate does not match the leaf", () => {
-    const [item] = RateRatifierV1Utils.ratify({ tree: [leaf({}, 0n)] });
-    const tampered = RateRatifierV1Utils.encodeRatifierData({
-      ...RateRatifierV1Utils.decodeRatifierData(item!.ratifierData),
+    const [item] = RateRatifierV1.ratify({ tree: [leaf({}, 0n)] });
+    const tampered = RateRatifierV1.encodeRatifierData({
+      ...RateRatifierV1.decodeRatifierData(item!.ratifierData),
       rate: 1n,
     });
 
     expect(() =>
-      RateRatifierV1Utils.verifyRatifierData({
+      RateRatifierV1.verifyRatifierData({
         offer: item!.offer,
         ratifierData: tampered,
       }),
@@ -408,17 +404,17 @@ describe("RateRatifierV1Utils ratifier data", () => {
   });
 });
 
-describe("RateRatifierV1Utils.buildProof", () => {
+describe("RateRatifierV1.buildProof", () => {
   test("default", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf({}, 5n),
       leaf({ maxUnits: 7n }, 6n),
     ]);
-    const proof = RateRatifierV1Utils.buildProof({
+    const proof = RateRatifierV1.buildProof({
       tree: descriptor,
       leafIndex: 1n,
     });
-    const data = RateRatifierV1Utils.encodeRatifierData({
+    const data = RateRatifierV1.encodeRatifierData({
       root: proof.root,
       leafIndex: proof.leafIndex,
       proof: proof.proof,
@@ -427,7 +423,7 @@ describe("RateRatifierV1Utils.buildProof", () => {
     });
 
     expect(
-      RateRatifierV1Utils.verifyRatifierData({
+      RateRatifierV1.verifyRatifierData({
         offer: descriptor.offers[1]!,
         ratifierData: data,
       }).rate,
@@ -435,26 +431,26 @@ describe("RateRatifierV1Utils.buildProof", () => {
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 2n }),
+      RateRatifierV1.buildProof({ tree: descriptor, leafIndex: 2n }),
     ).toThrow(InvalidTreeError);
   });
 });
 
-describe("RateRatifierV1Utils.ratifierData", () => {
+describe("RateRatifierV1.ratifierData", () => {
   test("default", () => {
     const tree = [
       leaf({}, 5n),
       { offer: leaf({ maxUnits: 7n }).offer, rate: 6n, allowedTaker },
     ];
-    const data = RateRatifierV1Utils.ratifierData({ tree, leafIndex: 1n });
+    const data = RateRatifierV1.ratifierData({ tree, leafIndex: 1n });
 
-    const decoded = RateRatifierV1Utils.verifyRatifierData({
+    const decoded = RateRatifierV1.verifyRatifierData({
       offer: tree[1]!.offer,
       ratifierData: data,
       taker: allowedTaker,
@@ -464,48 +460,48 @@ describe("RateRatifierV1Utils.ratifierData", () => {
   });
 
   test("error: InvalidTreeError for an out-of-range leaf index", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratifierData({ tree: descriptor, leafIndex: 2n }),
+      RateRatifierV1.ratifierData({ tree: descriptor, leafIndex: 2n }),
     ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeHeightError for an unsupported descriptor height", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({ tree: { ...descriptor, height: 21 } }),
+      RateRatifierV1.ratify({ tree: { ...descriptor, height: 21 } }),
     ).toThrow(InvalidTreeHeightError);
   });
 
   test("error: InvalidTreeError for truncated descriptor leaves", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: { ...descriptor, leaves: descriptor.leaves.slice(0, 1) },
       }),
     ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError for swapped descriptor entries", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: {
           ...descriptor,
           entries: [descriptor.entries[1]!, descriptor.entries[0]!],
@@ -515,14 +511,14 @@ describe("RateRatifierV1Utils.ratifierData", () => {
   });
 
   test("error: InvalidTreeError for a non-padding entry hidden in padding", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
       leaf({ maxUnits: 8n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: {
           ...descriptor,
           entries: [...descriptor.entries.slice(0, 3), descriptor.entries[0]!],
@@ -532,22 +528,22 @@ describe("RateRatifierV1Utils.ratifierData", () => {
   });
 
   test("error: InvalidTreeError for an empty descriptor offer list", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([leaf()]);
+    const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({ tree: { ...descriptor, offers: [] } }),
+      RateRatifierV1.ratify({ tree: { ...descriptor, offers: [] } }),
     ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError for padding in the visible offer slots", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
       leaf({ maxUnits: 8n }),
     ]);
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: {
           ...descriptor,
           offers: [...descriptor.offers, descriptor.offers[0]!],
@@ -557,14 +553,14 @@ describe("RateRatifierV1Utils.ratifierData", () => {
   });
 
   test("error: InvalidTreeError for mixed descriptor ratifiers", () => {
-    const descriptor = RateRatifierV1Utils.buildDescriptor([
+    const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),
       leaf({ maxUnits: 7n }),
     ]);
     const entry = descriptor.entries[1]!;
 
     expect(() =>
-      RateRatifierV1Utils.ratify({
+      RateRatifierV1.ratify({
         tree: {
           ...descriptor,
           entries: [
@@ -580,17 +576,17 @@ describe("RateRatifierV1Utils.ratifierData", () => {
   });
 });
 
-describe("RateRatifierV1Utils.priceBound", () => {
+describe("RateRatifierV1.priceBound", () => {
   test("default: zero rate or zero time returns WAD", () => {
     expect(
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: 0n,
         timeToMaturity: 100n,
         buy: true,
       }),
     ).toBe(MathLib.WAD);
     expect(
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: 10n,
         timeToMaturity: 0n,
         buy: false,
@@ -603,14 +599,14 @@ describe("RateRatifierV1Utils.priceBound", () => {
     const denominator = MathLib.WAD + 1n;
 
     expect(
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: 1n,
         timeToMaturity: 1n,
         buy: true,
       }),
     ).toBe(MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, denominator));
     expect(
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: 1n,
         timeToMaturity: 1n,
         buy: false,
@@ -620,7 +616,7 @@ describe("RateRatifierV1Utils.priceBound", () => {
 
   test("error: InvalidRateRatifierV1RateError on negative rate", () => {
     expect(() =>
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: -1n,
         timeToMaturity: 0n,
         buy: true,
@@ -630,7 +626,7 @@ describe("RateRatifierV1Utils.priceBound", () => {
 
   test("error: InvalidRateRatifierV1TimeError on negative time to maturity", () => {
     expect(() =>
-      RateRatifierV1Utils.priceBound({
+      RateRatifierV1.priceBound({
         rate: 0n,
         timeToMaturity: -1n,
         buy: true,
@@ -639,13 +635,13 @@ describe("RateRatifierV1Utils.priceBound", () => {
   });
 });
 
-describe("RateRatifierV1Utils.isPriceAcceptable", () => {
+describe("RateRatifierV1.isPriceAcceptable", () => {
   const input = leaf();
   const offer = input.offer;
 
   test("default: buy offer at or below the bound is acceptable", () => {
     expect(
-      RateRatifierV1Utils.isPriceAcceptable({
+      RateRatifierV1.isPriceAcceptable({
         offer,
         rate: 0n,
         timestamp: 0n,
@@ -660,7 +656,7 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
     const price = TickLib.tickToPrice(maturedOffer.tick);
 
     expect(
-      RateRatifierV1Utils.isPriceAcceptable({
+      RateRatifierV1.isPriceAcceptable({
         offer: maturedOffer,
         rate: MathLib.WAD,
         timestamp: 1n,
@@ -675,7 +671,7 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
       MathLib.WAD,
       MathLib.WAD + MathLib.WAD * 1n,
     );
-    const acceptable = RateRatifierV1Utils.isPriceAcceptable({
+    const acceptable = RateRatifierV1.isPriceAcceptable({
       offer: sellOffer,
       rate: MathLib.WAD,
       timestamp: 1n,
@@ -691,15 +687,13 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
     const params = { rate: MathLib.WAD, timestamp: 1n } as const;
 
     expect(
-      RateRatifierV1Utils.isPriceAcceptable({ offer: entityOffer, ...params }),
-    ).toBe(
-      RateRatifierV1Utils.isPriceAcceptable({ offer: plainOffer, ...params }),
-    );
+      RateRatifierV1.isPriceAcceptable({ offer: entityOffer, ...params }),
+    ).toBe(RateRatifierV1.isPriceAcceptable({ offer: plainOffer, ...params }));
   });
 
   test("error: InvalidRateRatifierV1RateError on negative rate", () => {
     expect(() =>
-      RateRatifierV1Utils.isPriceAcceptable({
+      RateRatifierV1.isPriceAcceptable({
         offer,
         rate: -1n,
         timestamp: 0n,
@@ -709,7 +703,7 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
 
   test("error: InvalidRateRatifierV1TimeError on negative timestamp", () => {
     expect(() =>
-      RateRatifierV1Utils.isPriceAcceptable({
+      RateRatifierV1.isPriceAcceptable({
         offer,
         rate: 0n,
         timestamp: -1n,
@@ -718,9 +712,9 @@ describe("RateRatifierV1Utils.isPriceAcceptable", () => {
   });
 });
 
-describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
+describe("RateRatifierV1.encodeSetIsRootRatified", () => {
   test("default", () => {
-    const call = RateRatifierV1Utils.encodeSetIsRootRatified({
+    const call = RateRatifierV1.encodeSetIsRootRatified({
       ratifier: rateRatifier,
       maker: "0x0000000000000000000000000000000000009000",
       root: zeroHash,
@@ -755,7 +749,7 @@ describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
         fc.boolean(),
         (...args) => {
           const [ratifier, maker, root, isRatified] = args;
-          const call = RateRatifierV1Utils.encodeSetIsRootRatified({
+          const call = RateRatifierV1.encodeSetIsRootRatified({
             ratifier,
             maker,
             root,
@@ -776,7 +770,7 @@ describe("RateRatifierV1Utils.encodeSetIsRootRatified", () => {
 
   test("error: InvalidRatifierV1AddressError for a zero ratifier address", () => {
     expect(() =>
-      RateRatifierV1Utils.encodeSetIsRootRatified({
+      RateRatifierV1.encodeSetIsRootRatified({
         ratifier: zeroAddress,
         maker: "0x0000000000000000000000000000000000009000",
         root: zeroHash,

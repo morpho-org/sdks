@@ -143,7 +143,7 @@ function assertRatifierTree(params: {
 }
 
 /**
- * Parameters for {@link RatifierUtils.getRatifierInfo}.
+ * Parameters for {@link Ratifier.getRatifierInfo}.
  *
  * Pass the maker account bytecode read at the same block context used to build
  * the offer. The bytecode is used only to choose the ratifier address to put on
@@ -204,12 +204,12 @@ export interface RatifierInfo {
  *
  * @example
  * ```ts
- * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+ * import { Ratifier } from "@morpho-org/midnight-sdk";
  *
- * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
+ * console.log(Ratifier.isEip7702Designator("0xef0100"));
  * ```
  */
-export namespace RatifierUtils {
+export namespace Ratifier {
   /**
    * Normalizes a ratifier tree input and asserts it uses one ratifier address.
    *
@@ -224,7 +224,7 @@ export namespace RatifierUtils {
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
-   * import { Offer, RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, Ratifier } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
    * const offer = Offer.create({
@@ -252,7 +252,7 @@ export namespace RatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
+   * const { tree, ratifier } = Ratifier.normalizeRatifierTree({
    *   tree: [offer],
    *   label: "Ecrecover",
    * });
@@ -288,9 +288,9 @@ export namespace RatifierUtils {
    * @returns Whether the bytecode starts with `0xef0100`.
    * @example
    * ```ts
-   * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Ratifier } from "@morpho-org/midnight-sdk";
    *
-   * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
+   * console.log(Ratifier.isEip7702Designator("0xef0100"));
    * ```
    */
   export function isEip7702Designator(bytecode: Hex) {
@@ -302,8 +302,8 @@ export namespace RatifierUtils {
    * accounts.
    *
    * Use the returned `ratifier` address in `Offer.create`. Later, use
-   * `EcrecoverRatifierUtils.ratify` when `type` is `ecrecover`, or approve the
-   * root and call `SetterRatifierUtils.ratify` when `type` is `setter`.
+   * `EcrecoverRatifier.ratify` when `type` is `ecrecover`, or approve the
+   * root and call `SetterRatifier.ratify` when `type` is `setter`.
    *
    * @param params.bytecode - Maker bytecode returned by `eth_getCode`.
    * @param params.ecrecoverRatifier - Ratifier address used for EOAs and EIP-7702 accounts.
@@ -311,9 +311,9 @@ export namespace RatifierUtils {
    * @returns Ratifier information for the maker.
    * @example
    * ```ts
-   * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Ratifier } from "@morpho-org/midnight-sdk";
    *
-   * const info = RatifierUtils.getRatifierInfo({
+   * const info = Ratifier.getRatifierInfo({
    *   bytecode: "0x",
    *   ecrecoverRatifier: "0x0000000000000000000000000000000000000001",
    *   setterRatifier: "0x0000000000000000000000000000000000000002",
@@ -336,3 +336,6 @@ export namespace RatifierUtils {
     return { type: "setter", ratifier: setterRatifier };
   }
 }
+
+/** @deprecated Use {@link Ratifier}. Retained for compatibility. */
+export { Ratifier as RatifierUtils };
