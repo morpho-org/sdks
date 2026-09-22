@@ -406,10 +406,12 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`; so the
  * entity nets each endpoint before taking the max (`max(burnRaw, burnNow - feeSharesNow)`) rather
  * than subtracting the `now` fee from a gross max. The allowance is
- * `min(mulDivUp(exitAssets, RAY, max(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD), 1))
+ * `min(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
+ * minSharePriceE27 - 1), 1))
  * + computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
- * maxUint256)`: the permit pays for the *gross* burn, with one tolerance step of headroom past the
- * floor so a below-floor price reverts on the contract's price check, not on the allowance.
+ * maxUint256)`: the permit pays for the *gross* burn, with at least one price unit and up to one
+ * tolerance step of headroom past the floor so a below-floor price reverts on the contract's price
+ * check, not on the allowance.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
@@ -447,10 +449,13 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *   sharesBurntNow - feeSharesNow,
  * );
  * const allowanceSharePriceE27 = MathLib.max(
- *   MathLib.mulDivDown(
- *     minSharePriceE27,
- *     MathLib.WAD - slippageTolerance,
- *     MathLib.WAD,
+ *   MathLib.min(
+ *     MathLib.mulDivDown(
+ *       minSharePriceE27,
+ *       MathLib.WAD - slippageTolerance,
+ *       MathLib.WAD,
+ *     ),
+ *     minSharePriceE27 - 1n,
  *   ),
  *   1n,
  * );

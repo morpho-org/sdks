@@ -446,9 +446,9 @@ export interface VaultV2Actions {
    * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
    * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
    * full-balance exit does not revert for insufficient shares. The approved share allowance this
-   * handle returns covers a burn one `slippageTolerance` step below the price floor, so a
-   * below-floor price reverts on the contract's `minSharePriceE27` check rather than on the
-   * allowance.
+   * handle returns covers a burn one `slippageTolerance` step (at minimum one RAY price unit, so
+   * `slippageTolerance: 0n` still has headroom) below the price floor, so a below-floor price
+   * reverts on the contract's `minSharePriceE27` check rather than on the allowance.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
@@ -1344,12 +1344,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // underflows `_spendAllowance` (panic 0x11) on a below-floor price before that check runs. Size
     // it for a price one tolerance step below the floor so the miss surfaces as the bundle's own
     // revert instead, and add the fee shares the first withdrawal mints since the burn measured
-    // on-chain includes them. Saturated at `maxUint256` as an ABI-slot guard.
+    // on-chain includes them. The `minSharePriceE27 - 1` branch keeps the denominator strictly
+    // below the floor whenever the floor exceeds 1, so even `slippageTolerance: 0n` leaves
+    // headroom; only a floor of exactly 1 — already the smallest representable price — has none.
+    // Saturated at `maxUint256` as an ABI-slot guard.
     const allowanceSharePriceE27 = MathLib.max(
-      MathLib.mulDivDown(
-        minSharePriceE27,
-        MathLib.WAD - slippageTolerance,
-        MathLib.WAD,
+      MathLib.min(
+        MathLib.mulDivDown(
+          minSharePriceE27,
+          MathLib.WAD - slippageTolerance,
+          MathLib.WAD,
+        ),
+        minSharePriceE27 - 1n,
       ),
       1n,
     );

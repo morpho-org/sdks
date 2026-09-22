@@ -136,21 +136,32 @@ const expectedSharesBurnt = (params: {
 };
 
 // The allowance the entity approves: the share burn `exitAssets` costs at a price one
-// `slippageTolerance` step below the floor, so a below-floor price reverts on the contract's
-// `minSharePriceE27` check rather than on the allowance.
-const priceFloorCeiling = (exitAssets: bigint, minSharePriceE27: bigint) =>
-  MathLib.mulDivUp(
-    exitAssets,
+// `slippageTolerance` step (at minimum one RAY price unit) below the floor, so a below-floor
+// price reverts on the contract's `minSharePriceE27` check rather than on the allowance.
+const priceFloorCeiling = (params: {
+  exitAssets: bigint;
+  minSharePriceE27: bigint;
+  slippageTolerance?: bigint;
+}) => {
+  const slippageTolerance =
+    params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
+
+  return MathLib.mulDivUp(
+    params.exitAssets,
     MathLib.RAY,
     MathLib.max(
-      MathLib.mulDivDown(
-        minSharePriceE27,
-        MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
-        MathLib.WAD,
+      MathLib.min(
+        MathLib.mulDivDown(
+          params.minSharePriceE27,
+          MathLib.WAD - slippageTolerance,
+          MathLib.WAD,
+        ),
+        params.minSharePriceE27 - 1n,
       ),
       1n,
     ),
   );
+};
 
 describe("MorphoVaultV2.forceWithdraw", () => {
   test("default", () => {
@@ -225,6 +236,47 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         .buildTx().action.args.minSharePriceE27;
 
     expect(build(MathLib.WAD / 100n)).toBeLessThan(build(0n));
+  });
+
+  test("behavior: a zero slippage tolerance still leaves allowance headroom above the floor", async () => {
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = vaultFor(handle, { supportSignature: true }).forceWithdraw({
+      exitAssets: 51n,
+      // A dust-priced vault (share price far below 1 asset) keeps the E27 floor small enough that
+      // the one-price-unit headroom survives share rounding: at ~1e27-scale prices
+      // `ceil(exitAssets·RAY / (floor - 1))` collides with `ceil(exitAssets·RAY / floor)`.
+      vaultData: vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        assetBalance: 1_000n,
+        totalAssets: 1_000n,
+        totalSupply: 100_000_000_000_000_000n,
+      }),
+      userAddress: IN_KIND_USER,
+      slippageTolerance: 0n,
+    });
+    const [requirement] = await exit.getRequirements();
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (requirement?.action.type !== "permit") {
+      throw new Error("Expected a permit requirement");
+    }
+    const allowance = requirement.action.args.amount;
+    const sharesAtFloor = MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27);
+
+    // At zero tolerance the `minSharePriceE27 - 1` branch binds: the denominator sits exactly one
+    // RAY price unit below the floor, so the allowance still covers a below-floor burn and the
+    // miss surfaces as the bundle's `SlippageExceeded`, not an `_spendAllowance` underflow.
+    expect(allowance).toBe(
+      priceFloorCeiling({
+        exitAssets: 51n,
+        minSharePriceE27,
+        slippageTolerance: 0n,
+      }),
+    );
+    expect(allowance).toBeGreaterThan(sharesAtFloor);
+    expect(allowance).toBe(
+      MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27 - 1n),
+    );
   });
 
   test("error: VaultV2ForceWithdrawSharePriceBelowFloorError", () => {
@@ -517,10 +569,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         type: "erc20Approval",
         args: {
           spender: IN_KIND_BUNDLER,
-          amount: priceFloorCeiling(
-            51n,
-            exit.buildTx().action.args.minSharePriceE27,
-          ),
+          amount: priceFloorCeiling({
+            exitAssets: 51n,
+            minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+          }),
         },
       });
     });
@@ -545,10 +597,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         type: "permit",
         args: {
           spender: IN_KIND_BUNDLER,
-          amount: priceFloorCeiling(
-            51n,
-            exit.buildTx().action.args.minSharePriceE27,
-          ),
+          amount: priceFloorCeiling({
+            exitAssets: 51n,
+            minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+          }),
         },
       });
     });
@@ -593,10 +645,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         exitAssets: 1_400n,
         timestamp: now,
       });
-      const ceiling = priceFloorCeiling(
-        1_400n,
-        exit.buildTx().action.args.minSharePriceE27,
-      );
+      const ceiling = priceFloorCeiling({
+        exitAssets: 1_400n,
+        minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+      });
 
       expect(plan.penaltyLegs).toBe(2);
       expect(approval?.action.args).toMatchObject({ amount: ceiling });
@@ -1106,7 +1158,9 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           minSharePriceE27,
         );
 
-        expect(allowance).toBe(priceFloorCeiling(exitAssets, minSharePriceE27));
+        expect(allowance).toBe(
+          priceFloorCeiling({ exitAssets, minSharePriceE27 }),
+        );
         expect(allowance).toBeGreaterThan(sharesAtFloor);
         // Any price the contract's floor check accepts fits inside the allowance with a full
         // tolerance step to spare, so a price just under the floor burns within the allowance and
@@ -1344,8 +1398,10 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       }
       const recipientAllowance = approval.action.args.amount;
       expect(recipientAllowance).toBe(
-        priceFloorCeiling(51n, exit.buildTx().action.args.minSharePriceE27) +
-          feeSharesDeadline,
+        priceFloorCeiling({
+          exitAssets: 51n,
+          minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+        }) + feeSharesDeadline,
       );
 
       const nonRecipientHandle = createMockClient(mainnet);
