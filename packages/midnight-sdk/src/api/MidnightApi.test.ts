@@ -756,9 +756,12 @@ describe("MidnightApi.fetchBooks", () => {
       {
         ...expectedBook,
         marketId: multiCollateralApiBook.market_id,
+        // Collaterals are returned in canonical (token-sorted) order so their
+        // array index matches the onchain collateralIndex. SECOND_LOAN_TOKEN
+        // (0x1111…) sorts before COLLATERAL_TOKEN (0x34Cf…).
         collaterals: [
-          ...expectedBook.collaterals,
           { ...expectedCollateral, token: SECOND_LOAN_TOKEN },
+          ...expectedBook.collaterals,
         ],
       },
     ]);
@@ -868,6 +871,43 @@ describe("MidnightApi.fetchBook", () => {
     expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}`);
     expect(url.searchParams.get("depth")).toBe("100");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: returns collaterals in canonical collateralIndex order", async () => {
+    const secondApiCollateral = { ...apiCollateral, token: SECOND_LOAN_TOKEN };
+    const unsortedBook = {
+      ...apiBook,
+      collaterals: [apiCollateral, secondApiCollateral],
+    };
+    const book = {
+      ...unsortedBook,
+      market_id: MarketUtils.toId({
+        chainId: unsortedBook.chain_id,
+        midnight: unsortedBook.midnight,
+        loanToken: unsortedBook.loan_token,
+        collateralParams: unsortedBook.collaterals.map((collateral) => ({
+          token: collateral.token,
+          lltv: collateral.lltv,
+          liquidationCursor: collateral.liquidation_cursor,
+          oracle: collateral.oracle,
+        })),
+        maturity: unsortedBook.maturity,
+        rcfThreshold: unsortedBook.rcf_threshold,
+        enterGate: unsortedBook.enter_gate,
+        liquidatorGate: unsortedBook.liquidator_gate,
+      }),
+    };
+    const { fetch } = createJsonFetch({ data: book });
+
+    const result = await MidnightApi.fetchBook({
+      marketId: book.market_id,
+      fetch,
+    });
+
+    expect(result.data.collaterals.map(({ token }) => token)).toEqual([
+      SECOND_LOAN_TOKEN,
+      COLLATERAL_TOKEN,
+    ]);
   });
 
   test("behavior: sorts book price levels best first", async () => {
