@@ -447,9 +447,10 @@ export interface VaultV2Actions {
    * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
    * full-balance exit does not revert for insufficient shares. The approved share allowance this
    * handle returns covers a burn at least one `slippageTolerance` step below the price floor
-   * and, in any case, at least one share above the burn at the floor, so a price within that
-   * headroom below the floor reverts on the contract's `minSharePriceE27` check rather than on
-   * the allowance; a deeper drop can still surface as an ERC-20 allowance underflow.
+   * whenever the floor exceeds one RAY unit and, in any case, at least one share above the burn
+   * at the floor, so a price within that headroom below the floor reverts on the contract's
+   * `minSharePriceE27` check rather than on the allowance; a deeper drop can still surface as an
+   * ERC-20 allowance underflow.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.

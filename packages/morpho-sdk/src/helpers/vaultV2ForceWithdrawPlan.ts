@@ -410,9 +410,10 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * WAD), minSharePriceE27 - 1), 1)), mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)
  * + computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
  * maxUint256)`: the permit pays for the *gross* burn, covering a burn at least one tolerance step
- * below the floor and, in any case, at least one share above the burn at the floor, so a price
- * within that headroom below the floor reverts on the contract's `minSharePriceE27` check rather
- * than on the allowance; a deeper drop can still surface as an ERC-20 allowance underflow.
+ * below the floor whenever the floor exceeds one RAY unit and, in any case, at least one share
+ * above the burn at the floor, so a price within that headroom below the floor reverts on the
+ * contract's `minSharePriceE27` check rather than on the allowance; a deeper drop can still
+ * surface as an ERC-20 allowance underflow.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.

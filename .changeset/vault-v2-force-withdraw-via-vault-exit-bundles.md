@@ -99,10 +99,10 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   `max(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
   minSharePriceE27 - 1), 1)), mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)` plus the fee shares
   projected through `deadline`, saturated at `maxUint256`. It is a spend cap, not the price
-  protection: it covers a burn at least one `slippageTolerance` step below the floor and, in any
-  case, at least one share above the burn at the floor, so a price within that headroom below the
-  floor reverts on the bundle's own `SlippageExceeded` check rather than on the allowance; a deeper
-  drop can still surface as an ERC-20 allowance underflow. This is a bound on a **newly required**
+  protection: it covers a burn at least one `slippageTolerance` step below the floor whenever the
+  floor exceeds one RAY unit and, in any case, at least one share above the burn at the floor, so a
+  price within that headroom below the floor reverts on the bundle's own `SlippageExceeded` check
+  rather than on the allowance; a deeper drop can still surface as an ERC-20 allowance underflow. This is a bound on a **newly required**
   approval, not a replacement for one: the multicall path needed no approval at all, because the
   vault burned `msg.sender`'s own shares.
 
