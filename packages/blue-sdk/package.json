@@ -3,9 +3,6 @@
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
   "version": "7.0.0-next.1",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Rubilmax <rmilon@gmail.com>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",

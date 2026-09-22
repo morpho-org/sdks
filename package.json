@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "description": "Collection of SDKs to ease interactions with the Morpho protocol and Morpho Vaults",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Rubilmax <rmilon@gmail.com>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git"
@@ -49,8 +46,8 @@
     "@commitlint/cli": "21.2.1",
     "@commitlint/config-conventional": "21.2.0",
     "@types/node": "^26.1.2",
-    "@vitest/coverage-v8": "^4.1.10",
-    "@vitest/ui": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "dotenv-cli": "^11.0.0",
     "happy-dom": "^20.11.1",
     "husky": "^9.1.7",

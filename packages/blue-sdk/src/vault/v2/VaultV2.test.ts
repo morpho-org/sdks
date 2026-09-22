@@ -8,14 +8,19 @@ import {
   market,
   marketParams,
   RECIPIENT,
+  vaultInput,
   vaultV2AdapterInput,
   vaultV2Input,
 } from "../../__test__/fixtures.js";
-import { VaultV2Errors } from "../../errors.js";
+import {
+  UnknownMarketAllocationError,
+  UnsupportedMarketIrmError,
+  VaultV2Errors,
+} from "../../errors.js";
 import { MarketParams, marketParamsAbi } from "../../market/MarketParams.js";
 import { MathLib } from "../../math/MathLib.js";
 import { CapacityLimitReason } from "../../utils.js";
-import type { AccrualVault } from "../Vault.js";
+import { AccrualVault } from "../Vault.js";
 import { AccrualVaultV2, VaultV2 } from "./VaultV2.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -49,9 +54,10 @@ function adapterBaseInput(): Omit<IVaultV2Adapter, "adapterId" | "type"> {
 function accrualAdapter(
   overrides: Partial<IAccrualVaultV2Adapter> = {},
 ): IAccrualVaultV2Adapter {
-  return {
+  const adapter: IAccrualVaultV2Adapter = {
     ...vaultV2AdapterInput({ type: "AccrualAdapter" }),
     realAssets: () => 1_100n,
+    accrueInterest: () => adapter,
     maxDeposit: (_data, assets) => ({
       value: BigInt(assets),
       limiter: CapacityLimitReason.balance,
@@ -62,6 +68,7 @@ function accrualAdapter(
     }),
     ...overrides,
   };
+  return adapter;
 }
 
 function accrualVaultV2(
@@ -247,6 +254,49 @@ describe("AccrualVaultV2.accrueInterest", () => {
     },
   );
 
+  test.each([99n, 100n])(
+    "behavior: timestamp at or before lastUpdate returns an unchanged copy without accruing nested adapters",
+    (timestamp) => {
+      const position = accrualPosition(
+        { supplyShares: 100n },
+        { lastUpdate: 105n },
+      );
+      const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+        {
+          ...adapterBaseInput(),
+          marketParamsList: [position.market.params],
+        },
+        [position],
+      );
+      const liquidityPosition = accrualPosition(
+        { supplyShares: 100n },
+        { lastUpdate: 105n },
+      );
+      const liquidityAdapter = new AccrualVaultV2MorphoMarketV1Adapter(
+        {
+          ...adapterBaseInput(),
+          marketParamsList: [liquidityPosition.market.params],
+        },
+        [liquidityPosition],
+      );
+      const vault = new AccrualVaultV2(
+        vaultV2Input(),
+        liquidityAdapter,
+        [adapter],
+        100n,
+        {},
+      );
+
+      const { vault: accrued } = vault.accrueInterest(timestamp);
+
+      expect(accrued).not.toBe(vault);
+      expect(accrued.accrualAdapters[0]).toBe(adapter);
+      expect(accrued.accrualLiquidityAdapter).toBe(liquidityAdapter);
+      expect(adapter.positions[0]?.market.lastUpdate).toBe(105n);
+      expect(liquidityAdapter.positions[0]?.market.lastUpdate).toBe(105n);
+    },
+  );
+
   test.each([0n, 100n])(
     "behavior: preserves a newer nested market with %s supply shares",
     (supplyShares) => {
@@ -353,6 +403,173 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(result.managementFeeShares).toBe(0n);
     expect(result.vault.totalSupply).toBe(1_000n + result.performanceFeeShares);
   });
+
+  test("behavior: accrues nested adapters and the liquidity adapter to the same timestamp", () => {
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      {
+        ...adapterBaseInput(),
+        marketParamsList: [new MarketParams(marketParams())],
+      },
+      [accrualPosition({ supplyShares: 100n })],
+    );
+    const vault = accrualVaultV2(adapter);
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+
+    const accruedAdapter = accrued
+      .accrualAdapters[0] as AccrualVaultV2MorphoMarketV1Adapter;
+    const accruedLiquidity =
+      accrued.accrualLiquidityAdapter as AccrualVaultV2MorphoMarketV1Adapter;
+    expect(accruedAdapter).not.toBe(adapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(
+      accrued.accrualAdapters.find(
+        (candidate) => candidate.address === accruedAdapter.address,
+      ),
+    );
+    expect(accruedAdapter.positions[0]?.market.lastUpdate).toBe(101n);
+    expect(accruedLiquidity.positions[0]?.market.lastUpdate).toBe(101n);
+    const baseline = accrualVaultV2(
+      accrualAdapter({ realAssets: () => adapter.realAssets(101n) }),
+    ).accrueInterest(101n);
+    expect(accrued._totalAssets).toBe(baseline.vault._totalAssets);
+    expect(accrued.totalSupply).toBe(baseline.vault.totalSupply);
+    expect(accrued.lastUpdate).toBe(baseline.vault.lastUpdate);
+
+    // Accrual is non-mutating: the source adapter keeps its original state.
+    expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
+  });
+
+  test("behavior: matches the liquidity adapter case-insensitively by address", () => {
+    const adapterAddress =
+      "0xAbCdef0123456789012345678901234567890123" as typeof ADAPTER;
+    const adapter = accrualAdapter({ address: adapterAddress });
+    const liquidityAdapter = accrualAdapter({
+      address: adapterAddress.toLowerCase() as typeof ADAPTER,
+    });
+    const vault = new AccrualVaultV2(
+      vaultV2Input(),
+      liquidityAdapter,
+      [adapter],
+      100n,
+      {},
+    );
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBe(
+      accrued.accrualAdapters.find(
+        (candidate) => candidate.address === adapterAddress,
+      ),
+    );
+  });
+
+  test("behavior: accrues adapters without a liquidity adapter", () => {
+    const adapter = accrualAdapter({ realAssets: () => 1_100n });
+    const vault = new AccrualVaultV2(
+      vaultV2Input({ liquidityAdapter: zeroAddress }),
+      undefined,
+      [adapter],
+      100n,
+      {},
+    );
+
+    const {
+      vault: accrued,
+      performanceFeeShares,
+      managementFeeShares,
+    } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBeUndefined();
+    expect(accrued.accrualAdapters[0]).toBe(adapter);
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued._totalAssets).toBeGreaterThanOrEqual(vault._totalAssets);
+    expect(performanceFeeShares).toBe(0n);
+    expect(managementFeeShares).toBe(0n);
+  });
+
+  test("behavior: leaves adapters without accrueInterest at their pre-accrual state", () => {
+    // An adapter built before the optional `accrueInterest` method existed.
+    const legacyAdapter: IAccrualVaultV2Adapter = {
+      ...vaultV2AdapterInput({ type: "LegacyAdapter" }),
+      realAssets: () => 1_100n,
+      maxDeposit: (_data, assets) => ({
+        value: BigInt(assets),
+        limiter: CapacityLimitReason.balance,
+      }),
+      maxWithdraw: () => ({
+        value: 500n,
+        limiter: CapacityLimitReason.balance,
+      }),
+    };
+    const vault = accrualVaultV2(legacyAdapter);
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued.accrualAdapters[0]).toBe(legacyAdapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(legacyAdapter);
+  });
+
+  test("behavior: leaves an adapter already ahead of the timestamp at its pre-accrual state", () => {
+    // A nested market was poked more recently than the vault (lastUpdate 105 >
+    // the vault's 100), so it cannot be accrued back to the vault's `lastUpdate`.
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      {
+        ...adapterBaseInput(),
+        marketParamsList: [new MarketParams(marketParams())],
+      },
+      [accrualPosition({ supplyShares: 100n }, { lastUpdate: 105n })],
+    );
+    const vault = accrualVaultV2(adapter);
+
+    // Accruing to the vault's own `lastUpdate` (elapsed 0) must not throw — it
+    // stayed valid before nested accrual existed — and leaves the ahead adapter
+    // untouched rather than accruing it backwards.
+    const { vault: accrued } = vault.accrueInterest(100n);
+
+    expect(accrued.lastUpdate).toBe(100n);
+    expect(accrued.accrualAdapters[0]).toBe(adapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(adapter);
+    expect(
+      (accrued.accrualAdapters[0] as AccrualVaultV2MorphoMarketV1Adapter)
+        .positions[0]?.market.lastUpdate,
+    ).toBe(105n);
+  });
+
+  test("error: UnknownMarketAllocationError when advancing with a stale nested queue", () => {
+    const staleAdapter = accrualAdapter({
+      accrueInterest: () => {
+        throw new UnknownMarketAllocationError(
+          new MarketParams(marketParams()).id,
+        );
+      },
+    });
+    const vault = accrualVaultV2(staleAdapter);
+
+    expect(() => vault.accrueInterest(101n)).toThrow(
+      UnknownMarketAllocationError,
+    );
+  });
+
+  test("behavior: leaves an unregistered liquidity adapter unchanged", () => {
+    const registeredAdapter = accrualAdapter();
+    const staleLiquidityAdapter = accrualAdapter({
+      address: LIQUIDITY_ADAPTER,
+      accrueInterest: () => {
+        throw new UnknownMarketAllocationError(
+          new MarketParams(marketParams()).id,
+        );
+      },
+    });
+    const vault = accrualVaultV2(registeredAdapter);
+    vault.accrualLiquidityAdapter = staleLiquidityAdapter;
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.accrualLiquidityAdapter).toBe(staleLiquidityAdapter);
+  });
 });
 
 describe("VaultV2Adapter", () => {
@@ -439,6 +656,57 @@ describe("AccrualVaultV2MorphoMarketV1Adapter", () => {
       value: 0n,
       limiter: CapacityLimitReason.position,
     });
+  });
+
+  test("accrueInterest accrues underlying positions and preserves realAssets", () => {
+    const position = accrualPosition({ supplyShares: 100n });
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+
+    const accrued = adapter.accrueInterest(101n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.positions[0]?.market.lastUpdate).toBe(101n);
+    expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
+    expect(accrued.realAssets(101n)).toBe(adapter.realAssets(101n));
+  });
+
+  test("error: UnsupportedMarketIrmError", () => {
+    const position = accrualPosition(
+      { supplyShares: 100n },
+      {
+        params: marketParams({ irm: RECIPIENT }),
+        rateAtTarget: undefined,
+        totalBorrowAssets: 1n,
+        totalBorrowShares: 1n,
+      },
+    );
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+
+    expect(() =>
+      adapter.accrueInterest(position.market.lastUpdate + 1n),
+    ).toThrow(UnsupportedMarketIrmError);
+  });
+
+  test("accrueInterest keeps zero-share positions unchanged", () => {
+    const position = accrualPosition(
+      { supplyShares: 0n },
+      { params: marketParams({ irm: RECIPIENT }), rateAtTarget: undefined },
+    );
+    const adapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      { ...adapterBaseInput(), marketParamsList: [position.market.params] },
+      [position],
+    );
+
+    const accrued = adapter.accrueInterest(position.market.lastUpdate + 1n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.positions[0]).toBe(position);
   });
 });
 
@@ -565,6 +833,47 @@ describe("AccrualVaultV2MorphoMarketV1AdapterV2", () => {
       limiter: CapacityLimitReason.position,
     });
   });
+
+  test("accrueInterest accrues underlying markets and preserves realAssets", () => {
+    const m = market();
+    const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        ...adapterBaseInput(),
+        marketIds: [m.id],
+        adaptiveCurveIrm: ADAPTER,
+        supplyShares: { [m.id]: 100n },
+      },
+      [m],
+    );
+
+    const accrued = adapter.accrueInterest(101n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.markets[0]?.lastUpdate).toBe(101n);
+    expect(adapter.markets[0]?.lastUpdate).toBe(100n);
+    expect(accrued.realAssets(101n)).toBe(adapter.realAssets(101n));
+  });
+
+  test("accrueInterest keeps zero-share markets unchanged", () => {
+    const m = market({
+      params: marketParams({ irm: RECIPIENT }),
+      rateAtTarget: undefined,
+    });
+    const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        ...adapterBaseInput(),
+        marketIds: [m.id],
+        adaptiveCurveIrm: ADAPTER,
+        supplyShares: { [m.id]: 0n },
+      },
+      [m],
+    );
+
+    const accrued = adapter.accrueInterest(m.lastUpdate + 1n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accrued.markets[0]).toBe(m);
+  });
 });
 
 describe("VaultV2MorphoVaultV1Adapter", () => {
@@ -620,6 +929,83 @@ describe("AccrualVaultV2MorphoVaultV1Adapter", () => {
       value: 8n,
       limiter: CapacityLimitReason.liquidity,
     });
+  });
+
+  test("accrueInterest delegates to the underlying V1 vault's accrueInterest", () => {
+    const accruedVaultV1 = {
+      toAssets: (shares: bigint) => shares,
+    } as AccrualVault;
+    let accruedAt: bigint | undefined;
+    const accrualVaultV1 = {
+      accrueInterest: (timestamp?: bigint) => {
+        accruedAt = timestamp;
+        return accruedVaultV1;
+      },
+    } as AccrualVault;
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT },
+      accrualVaultV1,
+      10n,
+    );
+
+    const accrued = adapter.accrueInterest(5n);
+
+    expect(accrued).not.toBe(adapter);
+    expect(accruedAt).toBe(5n);
+    expect(accrued.accrualVaultV1).toBe(accruedVaultV1);
+    expect(accrued.shares).toBe(10n);
+  });
+
+  test("error: UnknownMarketAllocationError", () => {
+    const position = accrualPosition({ supplyShares: 100n });
+    const accrualVaultV1 = new AccrualVault(vaultInput(), []);
+    accrualVaultV1.withdrawQueue = [position.marketId];
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      {
+        ...adapterBaseInput(),
+        morphoVaultV1: RECIPIENT,
+        parentAllocation: 1n,
+      },
+      accrualVaultV1,
+      100n,
+    );
+
+    expect(() =>
+      adapter.accrueInterest(position.market.lastUpdate + 1n),
+    ).toThrow(UnknownMarketAllocationError);
+  });
+
+  test("accrueInterest leaves a zero-allocation adapter untouched", () => {
+    // A zero-allocation adapter contributes no assets, so accrueInterest must
+    // not inspect its nested vault — matching `realAssets`, which short-circuits
+    // to 0n — and must never throw for its economically inactive markets.
+    const accrualVaultV1 = {
+      accrueInterest: () => {
+        throw new Error("nested vault must not be accrued");
+      },
+    } as unknown as AccrualVault;
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT, parentAllocation: 0n },
+      accrualVaultV1,
+      10n,
+    );
+
+    expect(adapter.accrueInterest(5n)).toBe(adapter);
+  });
+
+  test("accrueInterest leaves a zero-share adapter untouched", () => {
+    const accrualVaultV1 = {
+      accrueInterest: () => {
+        throw new Error("nested vault must not be accrued");
+      },
+    } as unknown as AccrualVault;
+    const adapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      { ...adapterBaseInput(), morphoVaultV1: RECIPIENT, parentAllocation: 1n },
+      accrualVaultV1,
+      0n,
+    );
+
+    expect(adapter.accrueInterest(5n)).toBe(adapter);
   });
 
   test("ignores residual shares when the parent allocation is zero", () => {

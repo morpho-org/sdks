@@ -73,6 +73,21 @@
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
 
+## 4.1.10
+
+### Patch Changes
+
+- [#1102](https://github.com/morpho-org/sdks/pull/1102) [`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the Robinhood Chain (chain 4663) Midnight deployments from morpho-org/deployments
+  address-book.json: `midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, each with its deployment block in the
+  registry. `getChainAddress(ChainId.RobinhoodMainnet, ...)` now resolves these labels, so the Midnight
+  SDK works on Robinhood Chain. Addresses are sourced byte-for-byte from the canonical deployment
+  registry; deployment blocks were derived from the deployer contract creation receipts on Robinhood
+  Chain.
+- Updated dependencies [[`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e)]:
+  - @morpho-org/morpho-ts@2.15.0
+  - @morpho-org/blue-sdk@6.11.0
+
 ## 4.1.9
 
 ### Patch Changes
