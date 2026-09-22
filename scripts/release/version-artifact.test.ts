@@ -11,14 +11,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { applyVersionArtifact, main } from "./apply-version-artifact.mjs";
+import { applyVersionArtifact, main } from "./apply-version-artifact.ts";
 import {
   MIDNIGHT_VERSION_SOURCE_PATH,
   renderMidnightPackageVersionSource,
-} from "./generate-midnight-package-version.mjs";
-import { writeVersionArtifact } from "./write-version-artifact.mjs";
+} from "./generate-midnight-package-version.ts";
+import { writeVersionArtifact } from "./write-version-artifact.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -322,7 +322,10 @@ describe("applyVersionArtifact", () => {
 });
 
 function createGitRepo(
-  manifest = { name: "@morpho-org/morpho-sdk", version: "1.0.0" },
+  manifest: Record<string, unknown> = {
+    name: "@morpho-org/morpho-sdk",
+    version: "1.0.0",
+  },
 ) {
   const root = mkTempDir("version-artifact-");
   mkdirSync(join(root, "packages/morpho-sdk"), { recursive: true });
@@ -341,7 +344,7 @@ function createGitRepo(
   return root;
 }
 
-function addMidnightPackage(root, version) {
+function addMidnightPackage(root: string, version: string) {
   mkdirSync(join(root, "packages/midnight-sdk/src/api"), { recursive: true });
   writeFileSync(
     join(root, "packages/midnight-sdk/package.json"),
@@ -356,22 +359,22 @@ function addMidnightPackage(root, version) {
   );
 }
 
-function commitAll(root, message) {
+function commitAll(root: string, message: string) {
   runGit(["add", "."], root);
   runGit(["commit", "-m", message], root);
 }
 
-function serializeArtifact(artifact) {
+function serializeArtifact(artifact: unknown) {
   return `${JSON.stringify(artifact, null, 2)}\n`;
 }
 
-function mkTempDir(prefix) {
+function mkTempDir(prefix: string) {
   const tempDir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(tempDir);
 
   return tempDir;
 }
 
-function runGit(args, cwd) {
+function runGit(args: string[], cwd: string) {
   return execFileSync("git", args, { cwd, stdio: "ignore" });
 }
