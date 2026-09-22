@@ -10,7 +10,7 @@ import {
   mapBoundBookMarket,
   mapBoundBooks,
   mapBoundTakeableOffers,
-  mapPriceLevel,
+  mapPriceLevels,
   parseValidationResponse,
   requestMidnightApi,
 } from "./helpers.js";
@@ -154,9 +154,9 @@ export class MidnightApi {
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
-   * @returns Paginated books mapped to SDK camelCase fields.
+   * @returns Paginated books mapped to SDK camelCase fields, with each book's price levels sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds`, `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filters.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -190,7 +190,13 @@ export class MidnightApi {
 
     return {
       cursor: response.cursor,
-      data: mapBoundBooks(response.data, input.marketIds),
+      data: mapBoundBooks(response.data, {
+        marketIds: input.marketIds,
+        chainIds: input.chainIds,
+        loanTokens: input.loanTokens,
+        collateralTokens: input.collateralTokens,
+        maturities: input.maturities,
+      }),
     };
   }
 
@@ -204,7 +210,7 @@ export class MidnightApi {
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
-   * @returns Book snapshot mapped to SDK camelCase fields.
+   * @returns Book snapshot mapped to SDK camelCase fields, with price levels sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when the returned book's `market_id` does not match, or cannot be derived from, its own market params, or when it differs from the requested `marketId`.
    * @example
@@ -246,7 +252,7 @@ export class MidnightApi {
    * @param params.baseUrl - Optional Midnight API base URL override.
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
-   * @returns Price levels mapped to SDK camelCase fields.
+   * @returns Price levels mapped to SDK camelCase fields, sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -274,7 +280,7 @@ export class MidnightApi {
     });
 
     return {
-      data: response.data.map(mapPriceLevel),
+      data: mapPriceLevels(response.data, input.side),
     };
   }
 
@@ -678,9 +684,9 @@ export class MidnightApi {
    * @param params.marketIds - Optional market id filters.
    * @param params.limit - Optional maximum number of books to return.
    * @param params.cursor - Optional opaque pagination cursor from a previous response.
-   * @returns Paginated books mapped to SDK camelCase fields.
+   * @returns Paginated books mapped to SDK camelCase fields, with each book's price levels sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds` filter.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when a returned book's `market_id` does not match, or cannot be derived from, its own market params, or when a returned book falls outside the supplied `marketIds`, `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filters.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
@@ -706,7 +712,7 @@ export class MidnightApi {
    *
    * @param params.marketId - Market id whose book to read.
    * @param params.depth - Optional maximum levels returned per side.
-   * @returns Book snapshot mapped to SDK camelCase fields.
+   * @returns Book snapshot mapped to SDK camelCase fields, with price levels sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON, when the returned book's `market_id` does not match, or cannot be derived from, its own market params, or when it differs from the requested `marketId`.
    * @example
@@ -737,7 +743,7 @@ export class MidnightApi {
    * @param params.marketId - Market id whose book side to read.
    * @param params.side - Book side to query.
    * @param params.depth - Optional maximum levels returned.
-   * @returns Price levels mapped to SDK camelCase fields.
+   * @returns Price levels mapped to SDK camelCase fields, sorted best first (asks ascending tick, bids descending tick).
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
