@@ -16,6 +16,7 @@ export {
   UnknownVaultConfigError,
   UnsupportedChainIdError,
   UnsupportedMarketIrmError,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   UnsupportedPreLiquidationParamsError,
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,

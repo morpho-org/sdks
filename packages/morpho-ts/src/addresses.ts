@@ -47,7 +47,11 @@ export interface ChainAddresses {
   registryList?: `0x${string}`;
   /** MorphoChainlinkOracleV2 factory that creates and indexes Morpho Blue Chainlink/ERC4626 price oracles. */
   chainlinkOracleFactory?: `0x${string}`;
-  /** PreLiquidation factory that creates and indexes linear LIF/LCF pre-liquidation contracts for Morpho markets. */
+  /**
+   * PreLiquidation factory that creates and indexes linear LIF/LCF pre-liquidation contracts for Morpho markets.
+   *
+   * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+   */
   preLiquidationFactory?: `0x${string}`;
   /** Canonical wrapped native token used by adapters and unwrapped-token mappings on this chain. */
   wNative?: `0x${string}`;
