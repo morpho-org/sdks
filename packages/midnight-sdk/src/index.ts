@@ -18,3 +18,16 @@ export * from "./signatures/index.js";
  * mempool submission calldata.
  */
 export { Payload } from "./signatures/Payload.js";
+
+export type {
+  AnyTree,
+  AnyTreeSnapshot,
+  RatifierKind,
+  RatifierTypes,
+  TreeCreateRequest,
+  TreeData,
+  TreeEntry,
+  TreeSnapshot,
+  TypedRatifierTreeInput,
+  TypedTreeMempoolValidateParams,
+} from "./signatures/treeTypes.js";

@@ -263,6 +263,15 @@ export namespace RatifierUtils {
     readonly tree: RatifierTreeInput;
     readonly label: "Ecrecover" | "Setter";
   }): { readonly tree: TreeLike; readonly ratifier: Address } {
+    if (
+      "type" in params.tree &&
+      params.tree.type != null &&
+      params.tree.type !== params.label.toLowerCase()
+    ) {
+      throw new InvalidTreeError(
+        "Ratifier route does not match the tree route.",
+      );
+    }
     const tree = normalizeTree(params.tree);
     const ratifier = assertRatifierTree({ tree, label: params.label });
 

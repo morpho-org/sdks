@@ -71,6 +71,8 @@ export {
   WrappedToken,
 } from "@morpho-org/blue-sdk";
 export type {
+  AnyTree as MidnightAnyTree,
+  AnyTreeSnapshot as MidnightAnyTreeSnapshot,
   BuildOfferParams as MidnightBuildOfferParams,
   CollateralParams as MidnightCollateralParams,
   GroupInput as MidnightGroupInput,
@@ -83,15 +85,23 @@ export type {
   IPosition as IMidnightPosition,
   MarketInput as MidnightMarketInput,
   OfferStruct as MidnightOfferStruct,
+  RatifierKind as MidnightRatifierKind,
   RatifierTreeInput as MidnightRatifierTreeInput,
+  RatifierTypes as MidnightRatifierTypes,
   SettlementFeeCbps as MidnightSettlementFeeCbps,
   TreeCreateParams as MidnightTreeCreateParams,
+  TreeCreateRequest as MidnightTreeCreateRequest,
+  TreeData as MidnightTreeData,
   TreeDescriptor as MidnightTreeDescriptor,
+  TreeEntry as MidnightTreeEntry,
   TreeInput as MidnightTreeInput,
   TreeLike as MidnightTreeLike,
   TreeMempoolValidateParams as MidnightTreeMempoolValidateParams,
   TreeMempoolValidateRatification as MidnightTreeMempoolValidateRatification,
   TreeProof as MidnightTreeProof,
+  TreeSnapshot as MidnightTreeSnapshot,
+  TypedRatifierTreeInput as MidnightTypedRatifierTreeInput,
+  TypedTreeMempoolValidateParams as MidnightTypedTreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 export {
   AccrualPosition as MidnightAccrualPosition,

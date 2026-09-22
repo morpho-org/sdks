@@ -38,9 +38,13 @@ import {
   isEmptyOfferStruct,
 } from "./offerStructInternal.js";
 import { Payload } from "./Payload.js";
+import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
+import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
+import { RatifierUtils } from "./RatifierUtils.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import type { Tree } from "./Tree.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import type { AnyTreeSnapshot, TreeCreateRequest } from "./treeTypes.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   if (isPowerOfTwo(offers.length)) return [...offers];
@@ -684,7 +688,7 @@ export namespace TreeUtils {
    * `Tree.create` calls this internally and is the simpler API for most
    * make-side code.
    *
-   * @param entries - Groups or standalone offers in leaf order.
+   * @param entries - Tagged route and leaf inputs, or legacy standard groups/offers in leaf order.
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
@@ -722,7 +726,58 @@ export namespace TreeUtils {
    * console.log(tree.root);
    * ```
    */
-  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
+  export function buildDescriptor<R extends TreeCreateRequest>(
+    entries: R,
+  ): Extract<AnyTreeSnapshot, { readonly type: R["type"] }>;
+  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor;
+  export function buildDescriptor(
+    entries: TreeCreateParams | TreeCreateRequest,
+  ): TreeDescriptor | AnyTreeSnapshot {
+    if ("type" in entries) {
+      switch (entries.type) {
+        case "priceV1": {
+          const descriptor = PriceRatifierV1Utils.buildDescriptor(
+            entries.entries,
+          );
+          return deepFreeze({
+            ...descriptor,
+            type: "priceV1",
+            offers: descriptor.entries
+              .slice(0, descriptor.offers.length)
+              .map((entry) => entry.offer),
+          });
+        }
+        case "rateV1": {
+          const descriptor = RateRatifierV1Utils.buildDescriptor(
+            entries.entries,
+          );
+          return deepFreeze({
+            ...descriptor,
+            type: "rateV1",
+            offers: descriptor.entries
+              .slice(0, descriptor.offers.length)
+              .map((entry) => entry.offer),
+          });
+        }
+        case "ecrecover":
+        case "setter": {
+          const { tree } = RatifierUtils.normalizeRatifierTree({
+            tree: entries.entries,
+            label: entries.type === "ecrecover" ? "Ecrecover" : "Setter",
+          });
+          return deepFreeze({
+            type: entries.type,
+            entries: tree.paddedOffers,
+            offers: tree.paddedOffers.slice(0, tree.offers.length),
+            leaves: tree.leaves,
+            root: tree.root,
+            height: tree.height,
+          });
+        }
+        default:
+          throw new InvalidTreeError("Unsupported tree ratifier route.");
+      }
+    }
     const structs = entries.flatMap((entry) =>
       GroupUtils.isGroupInput(entry)
         ? GroupUtils.toStructs(entry)
