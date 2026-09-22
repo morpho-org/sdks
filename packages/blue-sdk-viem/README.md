@@ -48,7 +48,7 @@ Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue 
 import "@morpho-org/blue-sdk-viem/augment/Holding";
 import "@morpho-org/blue-sdk-viem/augment/Market";
 import "@morpho-org/blue-sdk-viem/augment/MarketParams";
-// Also augments `AccrualPosition` and `PreLiquidationPosition`.
+// Also augments `AccrualPosition` (whose `fetchPreLiquidation` returns a `PreLiquidationPosition`).
 import "@morpho-org/blue-sdk-viem/augment/Position";
 import "@morpho-org/blue-sdk-viem/augment/Token";
 import "@morpho-org/blue-sdk-viem/augment/User";
@@ -68,7 +68,7 @@ Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to fetch infor
 
 ```typescript
 import { MarketId } from "@morpho-org/blue-sdk";
-// /!\ Import AccrualPosition from the augmentation file (or simply import the file)
+// /!\ Import MarketParams from the augmentation file (or simply import the file)
 import { MarketParams } from "@morpho-org/blue-sdk-viem/augment/MarketParams";
 
 const config = await MarketParams.fetch(
@@ -86,7 +86,7 @@ Leverage the [`Market`](./src/market/Market.ts) class to fetch information on a 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
 import { MarketId } from "@morpho-org/blue-sdk";
-// /!\ Import AccrualPosition from the augmentation file (or simply import the file)
+// /!\ Import Market from the augmentation file (or simply import the file)
 import { Market } from "@morpho-org/blue-sdk-viem/augment/Market";
 
 const market = await Market.fetch(

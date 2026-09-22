@@ -2,6 +2,7 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { InvalidNumberError } from "./error.js";
 import {
   readContractRestructured,
   restructure,
@@ -61,21 +62,27 @@ describe("safeParseUnits", () => {
   });
 
   test("throws on completely invalid strings", () => {
-    expect(() => safeParseUnits("abc")).toThrow(/invalid number/);
-    expect(() => safeParseUnits("")).toThrow(/invalid number/);
+    expect(() => safeParseUnits("abc")).toThrow(InvalidNumberError);
+    expect(() => safeParseUnits("")).toThrow(InvalidNumberError);
   });
 
   test("throws on malformed multi-decimal and non-numeric strings", () => {
-    expect(() => safeParseUnits("100.00.999")).toThrow(/invalid number/);
-    expect(() => safeParseUnits("1.2.3")).toThrow(/invalid number/);
-    expect(() => safeParseUnits("1e5")).toThrow(/invalid number/);
-    expect(() => safeParseUnits("abc1")).toThrow(/invalid number/);
+    expect(() => safeParseUnits("100.00.999")).toThrow(InvalidNumberError);
+    expect(() => safeParseUnits("1.2.3")).toThrow(InvalidNumberError);
+    expect(() => safeParseUnits("1e5")).toThrow(InvalidNumberError);
+    expect(() => safeParseUnits("abc1")).toThrow(InvalidNumberError);
   });
 
   test("parses leading-dot, negative, and signed-positive values", () => {
     expect(safeParseUnits(".5")).toBe(parseUnits("0.5", 18));
     expect(safeParseUnits("-1.5")).toBe(-1500000000000000000n);
     expect(safeParseUnits("+2")).toBe(2n * 10n ** 18n);
+  });
+
+  test("behavior: trailing dot, signed leading dot, and zero decimals", () => {
+    expect(safeParseUnits("1.")).toBe(parseUnits("1", 18));
+    expect(safeParseUnits("-.5")).toBe(-parseUnits("0.5", 18));
+    expect(safeParseUnits("1.9", 0)).toBe(1n);
   });
 
   test("truncates extra fractional digits at decimals", () => {

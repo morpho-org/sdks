@@ -19,6 +19,7 @@ export {
 } from "@morpho-org/blue-sdk";
 export {
   getUnsupportedVaultV2Adapter as getBlueUnsupportedVaultV2Adapter,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,

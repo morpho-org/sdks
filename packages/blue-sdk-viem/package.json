@@ -82,6 +82,16 @@
         "import": "./lib/esm/augment/*.js",
         "require": "./lib/cjs/augment/*.js"
       }
+    },
+    "typesVersions": {
+      "*": {
+        "augment": [
+          "lib/esm/augment/index.d.ts"
+        ],
+        "augment/*": [
+          "lib/esm/augment/*.d.ts"
+        ]
+      }
     }
   }
 }
