@@ -255,7 +255,7 @@ surface, including non-throwing `validateMempoolPayload` results for already enc
 ## Development
 
 Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks,
-and package workflow.
+and package workflow. Benchmarks: `pnpm --filter @morpho-org/midnight-sdk bench`.
 
 ## License
 
