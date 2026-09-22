@@ -1459,6 +1459,27 @@ describe("MidnightApi.fetchBookQuote", () => {
     },
   );
 
+  test("error: InvalidMidnightApiResponseError for takeable offer whose market_id does not match its embedded market", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        offer: {
+          ...apiOffer,
+          market: { ...apiOfferMarket, loan_token: SECOND_LOAN_TOKEN },
+        },
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("error: InvalidMidnightApiResponseError for takeable offer with non-numeric units", async () => {
     const { fetch } = createQuoteFetch([{ ...apiTakeableOffer, units: "abc" }]);
 
