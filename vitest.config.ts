@@ -35,7 +35,7 @@ export default defineConfig({
         "packages/**/src/**/abis.ts",
         "packages/**/src/api/sdk.ts",
         "packages/**/src/api/types.ts",
-        "scripts/**/*.test.{js,ts}",
+        "scripts/**/*.test.ts",
       ],
     },
     sequence: {
@@ -55,7 +55,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "scripts",
-          include: ["scripts/**/*.test.{js,ts}"],
+          include: ["scripts/**/*.test.ts"],
           environment: "node",
         },
       },
