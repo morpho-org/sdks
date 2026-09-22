@@ -112,6 +112,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xD1B8E2dee25c2b89DCD2f98448a7ce87d6F63394",
     registryList: "0x3696c5eAe4a7Ffd04Ea163564571E9CD8Ed9364e",
     chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -205,6 +206,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xF42D9c36b34c9c2CF3Bc30eD2a52a90eEB604642",
     registryList: "0x5C2531Cbd2cf112Cf687da3Cd536708aDd7DB10a",
     chainlinkOracleFactory: "0x2DC205F24BCb6B311E5cdf0745B0741648Aebd3d",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
 
     wNative: "0x4200000000000000000000000000000000000006",
@@ -244,6 +246,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xEb174FEA51Da241eB3B516959B216e013de2888a",
     registryList: "0xb70a43821d2707fA9d0EDd9511CC499F468Ba564",
     chainlinkOracleFactory: "0x1ff7895Eb842794c5d07C4c547b6730e61295215",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xeDadDe37D76c72b98725614d0b41C20Fe612d304",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
@@ -268,6 +271,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xD8Fc8a85779551e78B516da9f74061cb3b086793",
     registryList: "0xc00eb3c7aD1aE986A7f05F5A9d71aCa39c763C65",
     chainlinkOracleFactory: "0x98Ce5D183DC0c176f54D37162F87e7eD7f2E41b5",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x635c31B5DF1F7EFbCbC07E302335Ef4230758e3d",
 
     wNative: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
@@ -292,6 +296,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xEe9F7C64dD827ED7b5CAA2272936366FAca00CF3",
     registryList: "0xD1346be260cd22Eab9E6163010b0D5CbfAAAD32b",
     chainlinkOracleFactory: "0x1ec408D4131686f727F3Fd6245CF85Bc5c9DAD70",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x3d05C01EE8e97361b9E19D172128255eaE5F98B9",
 
     wNative: "0x4200000000000000000000000000000000000006",
@@ -315,6 +320,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xbF7DEa3756668C7E396C655D646C039826ba8416",
     registryList: "0x06A47994B4890dcA28C076969cedE1151d86EFCF",
     chainlinkOracleFactory: "0xd706690BA1Fe26b70c4AD89e60ff62cEB3A2eD02",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0x4200000000000000000000000000000000000006",
@@ -328,6 +334,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xA0D4D77b5D9933073572E19C172BFE866312673b",
     metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
     chainlinkOracleFactory: "0x39d8622C607A691D7705E8842fbB12E3c38dCD41",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x373ccddcd3F09D2e1430B3F2b290B9bF56Ae7336",
     vaultV2Factory: "0x711bCE12269a3a496eFaABB8B9AD5A4485E08A24",
     morphoMarketV1AdapterV2Factory:
@@ -341,6 +348,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xa5EA7500A27C0079961D93366A6e93aafF18CB90",
     metaMorphoFactory: "0x56b65742ade55015e6480959808229Ad6dbc9295",
     chainlinkOracleFactory: "0xb5961902E60b188b1c665B7b72Ef616656A9e24E",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xeD960178e4aDA0296786Fa79D84e8FDF7bd44B25",
     vaultV2Factory: "0x474cdCF6B3be2eb770065b88d2F7c57A9BC609E0",
     morphoMarketV1AdapterV2Factory:
@@ -356,6 +364,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x9515407b1512F53388ffE699524100e7270Ee57B",
     metaMorphoFactory: "0xd3f39505d0c48AFED3549D625982FdC38Ea9904b",
     chainlinkOracleFactory: "0x3FFFE273ee348b9E1ef89533025C7f165B17B439",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x30607fEa77168d2c0401B6f60F0B40E32F9339E3",
     vaultV2Factory: "0x35587F8d98eA305FB762934a63F3c1564037F9C7",
     morphoMarketV1AdapterV2Factory:
@@ -384,6 +393,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xf1Ab9e885C0faa0cbCEd407498BBA895537aD754",
     registryList: "0xB9130D2A87d7c60ED7E7e4b25bdA6e3E6841becB",
     chainlinkOracleFactory: "0x43269546e1D586a1f7200a0AC07e26f9631f7539",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xb04e4D3D59Ee47Ca9BA192707AF13A7D02969911",
 
     wNative: "0x4200000000000000000000000000000000000006",
@@ -395,6 +405,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xDEfCf242226425f93d8DD0e314735C28517C473F",
     metaMorphoFactory: "0x0cE9e3512CB4df8ae7e265e62Fb9258dc14f12e8",
     chainlinkOracleFactory: "0x7DA59Fa482F1F49fADc486d8e47BADc506fEb86d",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xc72129DA4CC808e955699111b8c22B22Ca8A10b8",
     vaultV2Factory: "0xc8BE2FD6f65FB3ce25Dd6a50F21A9245B9E399d7",
     morphoMarketV1AdapterV2Factory:
@@ -409,6 +420,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xdEbdEa31624552DF904A065221cD14088ABDeD70",
     metaMorphoFactory: "0x8e52179BeB18E882040b01632440d8Ca0f01da82",
     chainlinkOracleFactory: "0xB3cb32E6185446a6Bc7A047E4FfA138fA939e133",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x40F2896C551194e364F7C846046C34d8a9FE97e4",
     vaultV2Factory: "0x3c75C433e7902193497617EaFCc8385A3D031836",
     morphoMarketV1AdapterV2Factory:
@@ -424,6 +436,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xE3d46Ae190Cb39ccA3655E966DcEF96b4eAe1d1c",
     metaMorphoFactory: "0xae5b0884bfff430493D6C844B9fd052Af7d79278",
     chainlinkOracleFactory: "0xf9380f7898423Bd7FDe3C9fDD1b2671A2471f39D",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x249E4808264c545861e43728186a731dE7c7D745",
     vaultV2Factory: "0x68DCEA6df0f07385946AA0cDA2648c27a050e26e",
     morphoMarketV1AdapterV2Factory:
@@ -437,6 +450,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x58a42117d753a0e69694545DfA19d64c2fB759fB",
     metaMorphoFactory: "0xe430821595602eA5DD0cD350f86987437c7362fA",
     chainlinkOracleFactory: "0x16278156D366fC91536b6b81482ffaC47EEa06D6",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xb9065AC18d3EBdb3263B77B587f9c5CD570545D1",
 
     wNative: "0xda5dDd7270381A7C2717aD10D1c0ecB19e3CDFb2",
@@ -454,6 +468,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x5935fFcD1C5D269840ae7c685bC957A73E04AEDB",
     registryList: "0x60d3184BDD31BAE7De973894B3bA0b3B6900B79a",
     chainlinkOracleFactory: "0x133F742c0D36864F37e15C33a18bA6fdc950ED0f",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xF184156Cf6Ad4D3dA7F6449D40755A0f9de97ef3",
 
     usdc: "0xc98E8c6cB80AC48E4bbD3B56f5895DD64dA7d10a",
@@ -464,6 +479,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xd5661D965cc60ed1954d4f6725b766051De3ef97",
     metaMorphoFactory: "0x3F4b9246b7Cd3F7671c70BeBd5AAFC08e5bb5f16",
     chainlinkOracleFactory: "0x391A3fd481743FE48409e2e31eDac8a5f4C7653A",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xD55fA5DF6F1A21C2B93009A702aad3a0891C1B48",
 
     wNative: "0x3bd5C81a8Adf3355078Dc5F73c41d3194B316690",
@@ -487,6 +503,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xc8D22B1adD3D176600E9952e7876e9249254cAAF",
     registryList: "0xA9132a09838fD20304dF2B2892679d06A4cc6371",
     chainlinkOracleFactory: "0x7D047fB910Bc187C18C81a69E30Fa164f8c536eC",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x678EB53A3bB79111263f47B84989d16D81c36D85",
 
     wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
@@ -496,6 +513,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xC1523BE776e66ba07b609b1914D0925278f21FE5",
     metaMorphoFactory: "0x997a79c3C04c5B9eb27d343ae126bcCFb5D74781",
     chainlinkOracleFactory: "0x12FA40f687a35611720E1DcB59976B6e51247298",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xd1c37fDd941256FC184eF3A07Be540a90b81Ec21",
     vaultV2Factory: "0xDa4C5e0f8830002750f788eA729891B4B38EC1c2",
     morphoMarketV1AdapterV2Factory:
@@ -510,6 +528,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x7E82b16496fA8CC04935528dA7F5A2C684A3C7A3",
     metaMorphoFactory: "0xcDA78f4979d17Ec93052A84A12001fe0088AD734",
     chainlinkOracleFactory: "0xbf10eD52dD60C60E901BF022c3675303ad4a56b1",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x5851C1e423A2F93aFb821834a63cA052D19ae4Ef",
     vaultV2Factory: "0x0437C5B0CF1edFb8309613E4fEBE2a512D9a735d",
     morphoMarketV1AdapterV2Factory:
@@ -524,6 +543,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x5576629f21D528A8c3e06C338dDa907B94563902",
     metaMorphoFactory: "0x01dD876130690469F685a65C2B295A90a81BaD91",
     chainlinkOracleFactory: "0x2eb4D17C2AAf1EA62Bf83Fb49Dd1128b14AF4D93",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xF2c325F26691b6556e6f66451bb38bDa37FEbaa7",
     vaultV2Factory: "0x8DB1483C64384FA8581D6e6e82C6F44812090c2d",
     morphoMarketV1AdapterV2Factory:
@@ -551,6 +571,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0xdf5202e29654e02011611A086f15477880580CAc",
     registryList: "0x857B55cEb57dA0C2A83EE08a8dB529B931089aee",
     chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
 
     wNative: "0x5555555555555555555555555555555555555555",
@@ -563,6 +584,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x6eFA8e3Aa8279eB2fd46b6083A9E52dA72EA56c4",
     metaMorphoFactory: "0x8Dea49ec5bd5AeAc8bcf96B3E187F59354118291",
     chainlinkOracleFactory: "0x4bD68c2FF3274207EC07ED281C915758b6F23F07",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
     vaultV2Factory: "0x30f5b078C80bD06fEdc3B40b4a4441a96Dd9cf22",
     morphoMarketV1AdapterV2Factory:
@@ -577,6 +599,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xf52e20C42FEc624819D4184226C4777D7cbd767e",
     metaMorphoFactory: "0x41528AadC7314658b07Ca6e7213B9b77289B477f",
     chainlinkOracleFactory: "0x5115c1a74ABf096150593EecF3e20F016fc9dB43",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x534858821653467c2ae231dc027aa1F2c8D91802",
     vaultV2Factory: "0x9c7E1f6fc953aED9C273D8D7B17A654e70721E80",
     morphoMarketV1AdapterFactory: "0xb76A46cC0c4E8B25Df7Df278371b3D78d95D0b2b",
@@ -596,6 +619,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x6FaF26DD640e22457cA4fd5DA702BA3E169eEd87",
     registryList: "0x122Ea8ff8888C29F8736665d576e3fAEF15D27D5",
     chainlinkOracleFactory: "0x3FFF726062B03BfD5BC485eeEEcc92CF1d8F0105",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x05a0Ff4E564ED1ba6B42247E19edFf83545C3C40",
     morphoMarketV1AdapterV2Factory:
       "0xcAB7C66F7191Ad3Ef1e7fEeb67F3137BC975F8cE",
@@ -621,6 +645,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x9f3c0999425656fD189C69a8aD68cB64986D644A",
     registryList: "0x6a42f8b46224baA4DbBBc2F860F4675eeA7bd52B",
     chainlinkOracleFactory: "0xC8659Bcd5279DB664Be973aEFd752a5326653739",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xB5b3e541abD19799E0c65905a5a42BD37d6c94c0",
     wNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
     usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
@@ -643,6 +668,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x4EF83ACD552598a1196c1aBDD0bA2EdE6f2237B4",
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
 
     // There is no wrapped native token because the native token USDT0 is already an ERC20.
@@ -658,6 +684,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x8840F99Bb2D4f69fb02b2d019384C5c98a11746c",
     registryList: "0x295e0aB80f8234398cd0E51C85D873ee69E5F0DD",
     chainlinkOracleFactory: "0x44b2c8e4474751EF2BBC57B92928aFB99DA785De",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x8bedC738f5F0D54dF7E003297AAc6692b870F3Ed",
 
     wNative: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
@@ -668,6 +695,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x683CAAADdfA2F42e24880E202676526d501a5dED",
     metaMorphoFactory: "0x6870aA9f66C1e5Efe8Dbe8730e86E9e91f688275",
     chainlinkOracleFactory: "0x3a4849b5174Dc6828c6Dc9BBD87e61Ed1ebE9fFA",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x717a3eF7D366F5ce4636011924D0Bd65ea5eCE2f",
     // No wrapped native is provided as the native asset CELO is already an ERC20.
     usdc: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
@@ -682,6 +710,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xd334eb112CfD1EB4a50FB871b7D9895EBB955C43",
     metaMorphoFactory: "0x83A7f60c9fc57cEf1e8001bda98783AA1A53E4b1",
     chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
     vaultV2Factory: "0xecCd168c7d8e40f7166Fe226B4cf2cA3Db7A9754",
     morphoMarketV1AdapterV2Factory:
@@ -697,6 +726,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xefB565442B9Eb740B50Cf928C14d21c0111254F9",
     metaMorphoFactory: "0xb95De4a9C81Ba6240378F383f88592d30937d048",
     chainlinkOracleFactory: "0xfDc69d06De855701731D142F28bD401802DA4daF",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x4E28CAE07A008FF2D7D345992C969118eb253CD6",
     vaultV2Factory: "0x20d7eAd4830b53fB29bb4C4e8a80FD5F1f7d7F2c",
     morphoMarketV1AdapterV2Factory:
@@ -713,6 +743,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x7112D95cB5f6b13bF5F5B94a373bB3b2B381F979",
     metaMorphoFactory: "0x92983687e672cA6d96530f9Dbe11a196cE905d72",
     chainlinkOracleFactory: "0xDf2035fC15919588526dBb5560863C812F135236",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xEB8871F0FA8aB787AbCD28d1095f7B486d241D42",
     vaultV2Factory: "0x29955201601630f686beAF47b0B03be7b86d160F",
     morphoMarketV1AdapterV2Factory:
@@ -727,6 +758,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x68F9b666b984527A7c145Db4103Cc6d3171C797F",
     metaMorphoFactory: "0x7026b436f294e560b3C26E731f5cac5992cA2B33",
     chainlinkOracleFactory: "0x669F1A4cE3127740eCdB3E36adFC5Df6Db1EA74b",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xcBD0710425613d666C5Ffb4dE2eE73554F21c34B",
     vaultV2Factory: "0x783b4853Da42DBA4A86eFa4b94ABd48100c6D982",
     morphoMarketV1AdapterV2Factory:
@@ -753,6 +785,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x669771F03ab55CebF753E90C3c9D80ad9391cf25",
     registryList: "0xB118227C728b5ce52445a5aAee48C8a281C429E0",
     chainlinkOracleFactory: "0xc2c167BC5cBD833ce58239e85073258F10aD4DF6",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xB83d2D5CAE5Fc64a408cA82447445442Fe249fe3",
   },
   [ChainId.EdenMainnet]: {
@@ -764,6 +797,7 @@ const _addressesRegistry = {
       "0x59e8C53D383F22b6371b5833504dfAa4136aE6f7",
     registryList: "0xB78BA19a8Bf3202DA7036ec1830222FDC5e0297e",
     chainlinkOracleFactory: "0xD6202eFF2e869dc473EB13c38Cc787835Bf8B6df",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x83346d9fc31a239Ae1739672AD84A567C7beF529",
     wNative: "0x00000000000000000000000000000000ce1E571a",
   },
@@ -776,6 +810,7 @@ const _addressesRegistry = {
       "0xe510e1fcC429943cA3455A7bfBD79f0307Cd8403",
     registryList: "0xbe858d729548eB49BbFA05Acd3674ca8cdaAdD4b",
     chainlinkOracleFactory: "0xb8118256d8Aa950ec0B26a0b8Be7C6c1a858f6a3",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x37511F85B0Eff260d429f693247339dC91C76f90",
     wNative: "0x52C48d4213107b20bC583832b0d951FB9CA8F0B0",
   },
@@ -788,6 +823,7 @@ const _addressesRegistry = {
       "0x155134544AE2Ec3AB23034BF620538482C5E3c40",
     registryList: "0xdaE77f687883D656Aa4dc7fF89c0c891510C61A5",
     chainlinkOracleFactory: "0xf9b22d1652ce918CfC5d102269801AFbfEFa85F9",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x57C88ACAbd4Fa19257104ECCF64ccA34e5eB8961",
     wNative: "0x4200000000000000000000000000000000000006",
   },
@@ -800,6 +836,7 @@ const _addressesRegistry = {
       "0xd8237ea1b5974c83C6b0c8942dc2a16F42f789dd",
     registryList: "0x9730d0B30d9145B66a8e09D26295e36cb84F64a9",
     chainlinkOracleFactory: "0x95cB3625598F9abf6cb8B874AA1EfEEbE7822642",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xf215D05a04b97f98Bb1bF4E0E5Cb97Ef38fa8895",
     wNative: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d",
   },
@@ -812,6 +849,7 @@ const _addressesRegistry = {
       "0x5C00c99F2235439725417E9f037B7D38FfF35d31",
     registryList: "0x79A8C4e9E502C1867cAf2E7202f0C6b89aaCd5c1",
     chainlinkOracleFactory: "0x6Ad93a3aA829514473D3DF67382894A76c7283B4",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xe3845262d726a827817C7196143CDa9a4404218d",
     wNative: "0x951857744785E80e2De051c32EE7b25f9c458C42",
   },
@@ -825,6 +863,7 @@ const _addressesRegistry = {
       "0x4d04C39ca604b560c50F4045c558378FD9AEBCF4",
     registryList: "0xfCA12228DA5fba6E9c0B57a8e8322d0eBaCa03Bc",
     chainlinkOracleFactory: "0x3e89C1071814b2c4170c90260Fcb60B903AD4602",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xe8eCe452F04117e5Fe1Ea4403097215443225440",
     wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
   },
@@ -844,6 +883,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x77788033B22CEaB8D51Ec8F9dFD4a40E54F380B0",
     registryList: "0xdEBC92370Cd74d55DA144116138681dbbb528765",
     chainlinkOracleFactory: "0xbFc8D6167a02889D5EB08a023d9aB712B44f7dE8",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
     midnight: "0x208786922BE56fDE2D1Fa60e6b9eC5D723e8d7b0",
     midnightBundles: "0x3609525024c88f794CBE09e4832810E2bd737beC",
@@ -864,6 +904,7 @@ const _addressesRegistry = {
       "0xa01D7c41cf419405d4DF2e5750d26438DCAC28a6",
     registryList: "0x553c013d1978CF82EF6b316f5c247B73718ba481",
     chainlinkOracleFactory: "0xE91032cE5B8D86bA4Be146c186984F49Af37fbf1",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x41581344ba49B07EFA758a0F2a199b90f05Cc866",
     wNative: "0x5300000000000000000000000000000000000011",
   },
@@ -877,6 +918,7 @@ const _addressesRegistry = {
       "0x00a58b7a9B3E86CB21f5F11f29F4A12346457012",
     registryList: "0x3aE18af9717C734820137726967bef4fBc5Ec95c",
     chainlinkOracleFactory: "0x02522D475E7064E1d1E966e3197db050b19b2FC2",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0xF6035B231028E61cd2283651f22ecA45f8e3ADc8",
     wNative: "0x4200000000000000000000000000000000000006",
   },
@@ -896,6 +938,7 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x7a91222F3f7B927bB8fb624593Ca86e111C2F85e",
     registryList: "0xe785a2eFD384BA7B95BaEd3851BC76aeD67C676f",
     chainlinkOracleFactory: "0xB7c16F6F8cF531447Bf27Ca7220f981E79C9cdF2",
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: "0x0B0cFa151c06d2342799267754b0a2c320C43D5B",
     wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
   },
@@ -922,6 +965,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 23375073n,
     registryList: 23375119n,
     chainlinkOracleFactory: 19375066n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 21414664n,
 
     midnight: 25_798_183n,
@@ -945,6 +989,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 35615206n,
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 23779056n,
 
     midnight: 48286884n,
@@ -968,6 +1013,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 77371907n,
     registryList: 77372020n,
     chainlinkOracleFactory: 66931042n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 68074185n,
   },
   [ChainId.ArbitrumMainnet]: {
@@ -983,6 +1029,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 387016724n,
     registryList: 387017701n,
     chainlinkOracleFactory: 296447195n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 307326238n,
   },
   [ChainId.OptimismMainnet]: {
@@ -998,6 +1045,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 142122059n,
     registryList: 142122170n,
     chainlinkOracleFactory: 130770189n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 132139369n,
   },
   [ChainId.WorldChainMainnet]: {
@@ -1012,6 +1060,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 20253005n,
     registryList: 20253132n,
     chainlinkOracleFactory: 9025733n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 10273494n,
   },
   [ChainId.FraxtalMainnet]: {
@@ -1019,6 +1068,7 @@ const _deployments = {
     adaptiveCurveIrm: 15317931n,
     metaMorphoFactory: 15318007n,
     chainlinkOracleFactory: 15318007n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 16536231n,
 
     vaultV2Factory: 31_182_482n,
@@ -1030,6 +1080,7 @@ const _deployments = {
     adaptiveCurveIrm: 12842868n,
     metaMorphoFactory: 12842903n,
     chainlinkOracleFactory: 12842903n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 13504587n,
 
     vaultV2Factory: 28_647_107n,
@@ -1041,6 +1092,7 @@ const _deployments = {
     adaptiveCurveIrm: 4078776n,
     metaMorphoFactory: 4078830n,
     chainlinkOracleFactory: 4078830n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 6385077n,
 
     vaultV2Factory: 35_682_429n,
@@ -1060,6 +1112,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 29092109n,
     registryList: 29092328n,
     chainlinkOracleFactory: 9316789n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 9381237n,
   },
   [ChainId.SonicMainnet]: {
@@ -1067,6 +1120,7 @@ const _deployments = {
     adaptiveCurveIrm: 9100931n,
     metaMorphoFactory: 9101319n,
     chainlinkOracleFactory: 9101319n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 9102286n,
 
     vaultV2Factory: 60_993_716n,
@@ -1078,6 +1132,7 @@ const _deployments = {
     adaptiveCurveIrm: 1188872n,
     metaMorphoFactory: 1188885n,
     chainlinkOracleFactory: 1188885n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 1188907n,
 
     vaultV2Factory: 3_609_553n,
@@ -1089,6 +1144,7 @@ const _deployments = {
     adaptiveCurveIrm: 19983370n,
     metaMorphoFactory: 19983443n,
     chainlinkOracleFactory: 19983443n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 19983599n,
 
     vaultV2Factory: 34_507_011n,
@@ -1100,6 +1156,7 @@ const _deployments = {
     adaptiveCurveIrm: 251401n,
     metaMorphoFactory: 253027n,
     chainlinkOracleFactory: 253027n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 253107n,
   },
   [ChainId.PlumeMainnet]: {
@@ -1112,6 +1169,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 32235414n,
     registryList: 32235782n,
     chainlinkOracleFactory: 766078n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 789925n,
   },
   [ChainId.CampMainnet]: {
@@ -1119,6 +1177,7 @@ const _deployments = {
     adaptiveCurveIrm: 2410315n,
     metaMorphoFactory: 2410440n,
     chainlinkOracleFactory: 2410440n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 2471517n,
   },
   [ChainId.KatanaMainnet]: {
@@ -1133,6 +1192,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 13096629n,
     registryList: 13096853n,
     chainlinkOracleFactory: 2741420n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 2741993n,
   },
   [ChainId.EtherlinkMainnet]: {
@@ -1140,6 +1200,7 @@ const _deployments = {
     adaptiveCurveIrm: 21047448n,
     metaMorphoFactory: 21050315n,
     chainlinkOracleFactory: 21050315n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 21050766n,
 
     vaultV2Factory: 37_474_154n,
@@ -1152,6 +1213,7 @@ const _deployments = {
     adaptiveCurveIrm: 853025n,
     metaMorphoFactory: 978654n,
     chainlinkOracleFactory: 978654n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 978967n,
 
     vaultV2Factory: 13_304_185n,
@@ -1163,6 +1225,7 @@ const _deployments = {
     adaptiveCurveIrm: 15731231n,
     metaMorphoFactory: 15731333n,
     chainlinkOracleFactory: 15731333n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 15731595n,
 
     vaultV2Factory: 27_226_961n,
@@ -1181,6 +1244,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 14188393n,
     registryList: 14188698n,
     chainlinkOracleFactory: 1988677n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 1988956n,
   },
   [ChainId.SeiMainnet]: {
@@ -1189,6 +1253,7 @@ const _deployments = {
     adaptiveCurveIrm: 166036723n,
     metaMorphoFactory: 168896078n,
     chainlinkOracleFactory: 168896078n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 168897284n,
     usdc: 154131168n,
 
@@ -1201,6 +1266,7 @@ const _deployments = {
     adaptiveCurveIrm: 7526486n,
     metaMorphoFactory: 7526768n,
     chainlinkOracleFactory: 7526768n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 7527649n,
 
     vaultV2Factory: 7_527_933n,
@@ -1218,6 +1284,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 25072951n,
     registryList: 25073088n,
     chainlinkOracleFactory: 25072665n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 25072853n,
 
     morphoMarketV1AdapterV2Factory: 26_530_057n,
@@ -1235,6 +1302,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 32321811n,
     registryList: 32322465n,
     chainlinkOracleFactory: 32320327n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 32321504n,
     usdc: 22909616n,
   },
@@ -1251,6 +1319,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 5110812n,
     registryList: 1506877n,
     chainlinkOracleFactory: 1504774n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 1741861n,
   },
   [ChainId.CronosMainnet]: {
@@ -1263,6 +1332,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 38461643n,
     registryList: 38461812n,
     chainlinkOracleFactory: 38459727n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 38460388n,
   },
   [ChainId.CeloMainnet]: {
@@ -1270,6 +1340,7 @@ const _deployments = {
     adaptiveCurveIrm: 40249329n,
     metaMorphoFactory: 40259931n,
     chainlinkOracleFactory: 40259931n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 41808392n,
     usdc: 23412006n,
 
@@ -1282,6 +1353,7 @@ const _deployments = {
     adaptiveCurveIrm: 13947713n,
     metaMorphoFactory: 13949369n,
     chainlinkOracleFactory: 13949369n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 13949482n,
     usdc: 53247n,
 
@@ -1294,6 +1366,7 @@ const _deployments = {
     adaptiveCurveIrm: 13516997n,
     metaMorphoFactory: 13638155n,
     chainlinkOracleFactory: 13638155n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 13638316n,
     usdc: 4041175n,
 
@@ -1307,6 +1380,7 @@ const _deployments = {
     adaptiveCurveIrm: 54344680n,
     metaMorphoFactory: 54344985n,
     chainlinkOracleFactory: 54344985n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 54346080n,
 
     vaultV2Factory: 76_966_373n,
@@ -1318,6 +1392,7 @@ const _deployments = {
     adaptiveCurveIrm: 6440817n,
     metaMorphoFactory: 6440899n,
     chainlinkOracleFactory: 6440899n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 6443359n,
 
     vaultV2Factory: 18_023_802n,
@@ -1334,6 +1409,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 16475630n,
     registryList: 2375601n,
     chainlinkOracleFactory: 2375626n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 2375010n,
   },
   [ChainId.EdenMainnet]: {
@@ -1344,6 +1420,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 53367797n,
     registryList: 53367797n,
     chainlinkOracleFactory: 53364880n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 53364880n,
     wNative: 0n,
   },
@@ -1355,6 +1432,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 4240521n,
     registryList: 4240521n,
     chainlinkOracleFactory: 4202252n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 4202252n,
     wNative: 1617294n,
   },
@@ -1366,6 +1444,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 7520701n,
     registryList: 7520701n,
     chainlinkOracleFactory: 7520548n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 7520548n,
     wNative: 0n,
   },
@@ -1377,6 +1456,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 52383110n,
     registryList: 52383110n,
     chainlinkOracleFactory: 52378931n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 52378931n,
     wNative: 39n,
   },
@@ -1388,6 +1468,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 101757823n,
     registryList: 101757823n,
     chainlinkOracleFactory: 101757578n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 101757578n,
     wNative: 42776215n,
   },
@@ -1400,6 +1481,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 213463079n,
     registryList: 213463079n,
     chainlinkOracleFactory: 213462907n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 213462907n,
     wNative: 104802159n,
   },
@@ -1414,6 +1496,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 5_314_109n,
     registryList: 1208978n,
     chainlinkOracleFactory: 1208882n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 1208882n,
     midnight: 20_320_779n,
     midnightBundles: 20_321_988n,
@@ -1432,6 +1515,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 23180228n,
     registryList: 23180228n,
     chainlinkOracleFactory: 23180111n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 23180111n,
     wNative: 0n,
   },
@@ -1444,6 +1528,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 16409115n,
     registryList: 16409115n,
     chainlinkOracleFactory: 16409024n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 16409024n,
     wNative: 0n,
   },
@@ -1458,6 +1543,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 58_781n,
     registryList: 289n,
     chainlinkOracleFactory: 287n,
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     preLiquidationFactory: 287n,
     wNative: 2n,
   },
