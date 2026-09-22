@@ -7,11 +7,13 @@ import {
   MathLib,
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
-import { type Hex, maxUint256 } from "viem";
+import { type Address, type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
+import { MAX_OFFER_CAP } from "../constants.js";
 import {
+  InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
   MidnightApiError,
   SettlementFeeExceedsPriceError,
@@ -21,6 +23,7 @@ import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
+  type FetchBookQuoteParams,
   MempoolPayloadValidationRule,
   MidnightApi,
   type MidnightApiFetch,
@@ -1038,6 +1041,25 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 });
 
 describe("MidnightApi.fetchBookTakeableOffers", () => {
+  test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          offer: { ...apiOffer, max_units: "0", max_assets: "0" },
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchBookTakeableOffers({
+        marketId: MARKET_ID,
+        side: "asks",
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: [apiTakeableOffer],
@@ -1392,6 +1414,23 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
+  test.each([
+    ["both units and assets", { units: 1n, assets: 1n }],
+    ["neither units nor assets", {}],
+  ])("error: InvalidMidnightApiQuoteTargetError for %s", async (_, target) => {
+    const { calls, fetch } = createQuoteFetch([]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        ...target,
+        fetch,
+      } as unknown as FetchBookQuoteParams),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiQuoteTargetError);
+    expect(calls).toHaveLength(0);
+  });
+
   test("error: NegativeValueError", async () => {
     const { calls, fetch } = createQuoteFetch([]);
 
@@ -1406,6 +1445,157 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).rejects.toBeInstanceOf(NegativeValueError);
     expect(calls).toHaveLength(0);
   });
+
+  test.each([
+    ["both caps zero", { max_units: "0", max_assets: "0" }],
+    ["both caps non-zero", { max_units: "1", max_assets: "1" }],
+    ["negative cap", { max_units: "-1", max_assets: "0" }],
+    [
+      "cap above uint128",
+      { max_units: (MAX_OFFER_CAP + 1n).toString(), max_assets: "0" },
+    ],
+  ])(
+    "error: InvalidMidnightApiResponseError for takeable offer with %s",
+    async (_, caps) => {
+      const { fetch } = createQuoteFetch([
+        { ...apiTakeableOffer, offer: { ...apiOffer, ...caps } },
+      ]);
+
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          units: MathLib.WAD,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test.each([
+    ["malformed", "invalid"],
+    ["nullish", null],
+  ])(
+    "error: InvalidMidnightApiResponseError for sell takeable offer with %s receiverIfMakerIsSeller",
+    async (_, receiver) => {
+      const { fetch } = createQuoteFetch([
+        {
+          ...apiTakeableOffer,
+          offer: {
+            ...apiOffer,
+            receiver_if_maker_is_seller: receiver as unknown as Address,
+          },
+        },
+      ]);
+
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          units: MathLib.WAD,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
+
+  test("error: InvalidMidnightApiResponseError for takeable offer whose market_id does not match its embedded market", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        offer: {
+          ...apiOffer,
+          market: { ...apiOfferMarket, loan_token: SECOND_LOAN_TOKEN },
+        },
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for takeable offer with non-numeric units", async () => {
+    const { fetch } = createQuoteFetch([{ ...apiTakeableOffer, units: "abc" }]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for takeable offer with non-hex market_id", async () => {
+    const { fetch } = createQuoteFetch([
+      { ...apiTakeableOffer, market_id: 12345 as unknown as Hex },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError for takeable offer with malformed embedded market", async () => {
+    const { fetch } = createQuoteFetch([
+      {
+        ...apiTakeableOffer,
+        offer: {
+          ...apiOffer,
+          market: { ...apiOfferMarket, midnight: "not-an-address" as Address },
+        },
+      },
+    ]);
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: MathLib.WAD,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test.each([
+    ["non-zero", MAKER],
+    ["malformed", "invalid"],
+    ["nullish", null],
+  ])(
+    "error: InvalidMidnightApiResponseError for buy takeable offer with %s receiverIfMakerIsSeller",
+    async (_, receiver) => {
+      const { fetch } = createQuoteFetch([
+        {
+          ...apiBidTakeableOffer,
+          offer: {
+            ...apiBidTakeableOffer.offer,
+            receiver_if_maker_is_seller: receiver as unknown as Address,
+          },
+        },
+      ]);
+
+      await expect(
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "bids",
+          units: MathLib.WAD,
+          fetch,
+        }),
+      ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+    },
+  );
 
   test("error: SettlementFeeExceedsPriceError", async () => {
     const price = TickLib.tickToPrice(apiBidTakeableOffer.offer.tick);
@@ -1425,6 +1615,21 @@ describe("MidnightApi.fetchBookQuote", () => {
 });
 
 describe("MidnightApi.fetchTakeableOffers", () => {
+  test("error: InvalidMidnightApiResponseError for takeable offer with both caps zero", async () => {
+    const { fetch } = createJsonFetch({
+      data: [
+        {
+          ...apiTakeableOffer,
+          offer: { ...apiOffer, max_units: "0", max_assets: "0" },
+        },
+      ],
+    });
+
+    await expect(
+      MidnightApi.fetchTakeableOffers({ maker: MAKER, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       cursor: "next",

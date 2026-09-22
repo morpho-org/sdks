@@ -8,9 +8,11 @@ import {
 } from "viem";
 import {
   InvalidMidnightApiResponseError,
+  InvalidOfferParameterError,
   MidnightApiError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
+import { OfferUtils } from "../offers/index.js";
 import {
   type ApiBookMarketResponse,
   type ApiCollateralResponse,
@@ -366,11 +368,44 @@ export function mapBoundTakeableOffers(
   context: TakeableOfferContext,
 ): MidnightApiTake[] {
   const mapped = takeableOffers.map((takeableOffer) => {
-    const take = mapTakeableOffer(takeableOffer);
-    const embeddedMarketId = MarketUtils.toId(take.offer.market);
-    if (!isHexEqual(embeddedMarketId, take.marketId)) {
+    let take: MidnightApiTake;
+    let matchesAdvertisedId: boolean;
+    let embeddedMarketId: Hash;
+    try {
+      take = mapTakeableOffer(takeableOffer);
+      embeddedMarketId = MarketUtils.toId(take.offer.market);
+      matchesAdvertisedId = isHexEqual(embeddedMarketId, take.marketId);
+    } catch (cause) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer market_id "${takeableOffer.market_id}" could not be mapped or validated against its embedded offer market.`,
+        { cause },
+      );
+    }
+    if (!matchesAdvertisedId) {
       throw new InvalidMidnightApiResponseError(
         `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
+      );
+    }
+    const { maxUnits, maxAssets, buy, maker, receiverIfMakerIsSeller } =
+      take.offer;
+    if (!isAddress(receiverIfMakerIsSeller)) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer receiverIfMakerIsSeller "${receiverIfMakerIsSeller}" is not an address.`,
+      );
+    }
+    try {
+      // Return values unused: called only to enforce the cap-shape and buy-receiver invariants.
+      OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
+      OfferUtils.resolveReceiverIfMakerIsSeller({
+        buy,
+        maker,
+        receiverIfMakerIsSeller,
+      });
+    } catch (cause) {
+      if (!(cause instanceof InvalidOfferParameterError)) throw cause;
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer for market_id "${take.marketId}" is not executable: ${cause.message}`,
+        { cause },
       );
     }
     if (
