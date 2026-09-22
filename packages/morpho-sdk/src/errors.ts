@@ -36,8 +36,6 @@ export {
   InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
-  /** @deprecated Use InvalidMidnightPositionLossFactorError or the raw protocol subpath. */
-  InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
   InvalidRatifierV1AddressError as InvalidMidnightRatifierV1AddressError,
@@ -49,8 +47,6 @@ export {
   MidnightMempoolValidationError,
   PayloadDecodeError as MidnightPayloadDecodeError,
   PriceGreaterThanOneError as MidnightPriceGreaterThanOneError,
-  /** @deprecated Use MidnightPriceGreaterThanOneError or the raw protocol subpath. */
-  PriceGreaterThanOneError,
   RatifierV1TakerNotAllowedError as MidnightRatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError as MidnightSettlementFeeExceedsPriceError,
   TickOutOfRangeError as MidnightTickOutOfRangeError,

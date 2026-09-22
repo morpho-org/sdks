@@ -30,8 +30,6 @@ export {
   EcrecoverRatifier as MidnightEcrecoverRatifier,
   /** @deprecated Use MidnightEcrecoverRatifier with a tagged tree. */
   EcrecoverRatifierUtils as MidnightEcrecoverRatifierUtils,
-  /** @deprecated Use MidnightEcrecoverRatifier or the raw protocol subpath. */
-  EcrecoverRatifierUtils,
   eip712Digest,
   GroupUtils as MidnightGroupUtils,
   MarketUtils as MidnightMarketUtils,
@@ -48,13 +46,9 @@ export {
   Ratifier as MidnightRatifier,
   /** @deprecated Use MidnightRatifier. */
   RatifierUtils as MidnightRatifierUtils,
-  /** @deprecated Use MidnightRatifier or the raw protocol subpath. */
-  RatifierUtils,
   SetterRatifier as MidnightSetterRatifier,
   /** @deprecated Use MidnightSetterRatifier with a tagged tree. */
   SetterRatifierUtils as MidnightSetterRatifierUtils,
-  /** @deprecated Use MidnightSetterRatifier or the raw protocol subpath. */
-  SetterRatifierUtils,
   TakeAmountsLib as MidnightTakeAmountsLib,
   TickLib as MidnightTickLib,
   TreeUtils as MidnightTreeUtils,
