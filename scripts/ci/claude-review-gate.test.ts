@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   cleanup,
   countNewReviews,
+  deleteIssueComment,
   type FetchLike,
   getMaxReviewId,
   type IssueComment,
@@ -299,6 +300,22 @@ describe("cleanup", () => {
     );
   });
 
+  test("behavior: a failed DELETE does not skip the remaining comments", async () => {
+    const { fetchImpl, requests } = createFetch([
+      { body: [trackingComment(1), trackingComment(3)] },
+      { body: null, status: 403 },
+      { body: null, status: 204 },
+    ]);
+
+    await expect(
+      cleanup({ env, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(/Failed to delete 1 of 2 .*comments\/1 failed with 403/);
+    expect(requests.map((r) => r.url.pathname).slice(1)).toEqual([
+      "/repos/morpho-org/sdks/issues/comments/1",
+      "/repos/morpho-org/sdks/issues/comments/3",
+    ]);
+  });
+
   test("behavior: nothing to delete", async () => {
     const { fetchImpl, requests } = createFetch([{ body: [] }]);
 
@@ -341,6 +358,31 @@ describe("listIssueComments", () => {
         token: "ghs_test",
       }),
     ).rejects.toThrow(/malformed comment entry/);
+  });
+});
+
+describe("deleteIssueComment", () => {
+  test("default", async () => {
+    const { fetchImpl, requests } = createFetch([{ body: null, status: 204 }]);
+
+    await deleteIssueComment(
+      {
+        fetchImpl,
+        prNumber: "1076",
+        repository: "morpho-org/sdks",
+        token: "ghs_test",
+      },
+      9,
+    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.init.method).toBe("DELETE");
+    expect(requests[0]?.url.pathname).toBe(
+      "/repos/morpho-org/sdks/issues/comments/9",
+    );
+    expect(requests[0]?.init.headers.Authorization).toBe("Bearer ghs_test");
+    expect(requests[0]?.init.headers["X-GitHub-Api-Version"]).toBe(
+      "2022-11-28",
+    );
   });
 });
 

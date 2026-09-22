@@ -383,9 +383,10 @@ export async function verify(options: RunOptions = {}): Promise<number> {
 }
 
 /**
- * `cleanup` mode: deletes the tracking comments this run posted. Runs when the job is cancelled
- * (a new push superseded the in-flight review), so a stale "PR Review in progress" comment does
- * not sit next to the superseding run's one.
+ * `cleanup` mode: deletes the in-progress tracking comments this run posted (a finalized summary is
+ * retained, see {@link selectRunTrackingComments}). Runs when the job is cancelled (a new push
+ * superseded the in-flight review), so a stale "PR Review in progress" comment does not sit next to
+ * the superseding run's one. Every selected comment is attempted; failures are reported together.
  */
 export async function cleanup(options: RunOptions = {}): Promise<number> {
   const env = options.env ?? process.env;
@@ -403,8 +404,19 @@ export async function cleanup(options: RunOptions = {}): Promise<number> {
     runId,
   );
 
+  const failures: Error[] = [];
   for (const comment of comments) {
-    await deleteIssueComment(listOptions, comment.id);
+    try {
+      await deleteIssueComment(listOptions, comment.id);
+    } catch (error) {
+      failures.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `Failed to delete ${failures.length} of ${comments.length} tracking comment(s) of run ${runId}: ${failures.map((e) => e.message).join(" ")}`,
+    );
   }
   writeOutput(
     `Deleted ${comments.length} tracking comment(s) of run ${runId}.\n`,
