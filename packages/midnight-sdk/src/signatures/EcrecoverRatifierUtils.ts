@@ -30,11 +30,8 @@ import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { eip712Digest } from "./eip712.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
-import {
-  type RatifierTreeInput,
-  type TreeProof,
-  TreeUtils,
-} from "./TreeUtils.js";
+import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import type { TypedRatifierTreeInput } from "./treeTypes.js";
 
 const treeTypeHashes = [
   "0x270da1ebafc0f24637af3612fb8c3a1d828fcb56d3637c24e86dd006b12ca7f9",
@@ -294,7 +291,7 @@ export type EcrecoverSignatureInput =
  */
 export interface EcrecoverRatifierTypedDataParams {
   /** Tree-like input being ratified. Existing `Tree` instances reuse cached hashes and proofs. */
-  readonly tree: RatifierTreeInput;
+  readonly tree: TypedRatifierTreeInput<"ecrecover">;
   /** Chain id used by the EIP-712 domain. */
   readonly chainId: BigIntish;
 }
@@ -346,7 +343,7 @@ export interface EcrecoverRatifierTypedDataParams {
 export type EcrecoverRatifierRatifyParams =
   | {
       /** Tree-like input being ratified. */
-      readonly tree: RatifierTreeInput;
+      readonly tree: TypedRatifierTreeInput<"ecrecover">;
       /** Viem client whose transport signs the typed data built from `tree`. */
       readonly client: Client<Transport, Chain, Account | undefined>;
       /** Account that signs the tree root. It may be the maker or an address authorized by each maker. */
@@ -356,7 +353,7 @@ export type EcrecoverRatifierRatifyParams =
     }
   | {
       /** Tree-like input being ratified. */
-      readonly tree: RatifierTreeInput;
+      readonly tree: TypedRatifierTreeInput<"ecrecover">;
       /** Precomputed signature for this tree root. */
       readonly signature: EcrecoverSignatureInput;
       /** Account that produced the signature. It may be the maker or an address authorized by each maker. */
@@ -410,7 +407,7 @@ export type EcrecoverRatifierRatifyParams =
  */
 export interface EcrecoverRatifierDataParams {
   /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
-  readonly tree: RatifierTreeInput;
+  readonly tree: TypedRatifierTreeInput<"ecrecover">;
   /** Leaf index to prove. */
   readonly leafIndex: BigIntish;
   /** Ecrecover signature for the tree root. */
@@ -863,7 +860,7 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export async function sign(params: {
-    readonly tree: RatifierTreeInput;
+    readonly tree: TypedRatifierTreeInput<"ecrecover">;
     readonly client: Client<Transport, Chain, Account | undefined>;
     readonly account: Account | Address;
   }): Promise<Hex> {

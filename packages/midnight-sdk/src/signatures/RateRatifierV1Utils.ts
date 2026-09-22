@@ -37,6 +37,7 @@ import {
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import type { TreeData, TreeSnapshot } from "./treeTypes.js";
 
 const rateRatifierV1DataAbi = [
   { name: "root", type: "bytes32" },
@@ -142,18 +143,8 @@ export interface RateRatifierV1LeafStruct {
  * console.log(descriptor.root);
  * ```
  */
-export interface RateRatifierV1TreeDescriptor {
-  /** Leaf structs in leaf order, including trailing padding. */
-  readonly entries: readonly RateRatifierV1LeafStruct[];
-  /** Non-padding offers in leaf order. */
-  readonly offers: readonly IOffer[];
-  /** Leaf hashes for the padded tree. */
-  readonly leaves: readonly Hash[];
-  /** Merkle root. */
-  readonly root: Hash;
-  /** Tree height. */
-  readonly height: number;
-}
+export interface RateRatifierV1TreeDescriptor
+  extends TreeData<RateRatifierV1LeafStruct> {}
 
 /**
  * Decoded RateRatifierV1 ratifier data.
@@ -202,7 +193,8 @@ export interface DecodedRateRatifierV1Data extends TreeProof {
  * ```
  */
 export type RateRatifierV1TreeInput =
-  | RateRatifierV1TreeDescriptor
+  | (RateRatifierV1TreeDescriptor & { readonly type?: undefined })
+  | TreeSnapshot<"rateV1">
   | readonly RateRatifierV1Leaf[];
 
 /**
@@ -338,6 +330,7 @@ export namespace RateRatifierV1Utils {
     ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
       leafStruct.offer.ratifier,
     label: "RateRatifierV1",
+    type: "rateV1",
   } as const;
 
   /**
