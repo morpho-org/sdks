@@ -183,6 +183,52 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   }
 
   /**
+   * Returns a new adapter whose underlying MetaMorpho V1 vault (and its market
+   * positions) has been accrued up to the given timestamp.
+   * An adapter with zero parent allocation or zero shares contributes no assets —
+   * `realAssets` short-circuits to `0n` without inspecting the nested vault — so
+   * it is returned unchanged and never accrues (nor throws for) its economically
+   * inactive markets.
+   * Past timestamps and markets already ahead of `timestamp` keep their snapshots
+   * without throwing.
+   * @param timestamp The timestamp at which to accrue interest.
+   * @returns A new `AccrualVaultV2MorphoVaultV1Adapter` wrapping the V1 vault
+   * accrued to `timestamp`, or this adapter unchanged when its parent allocation
+   * or shares are zero.
+   * @throws {UnknownMarketAllocationError} when the underlying V1 vault's withdraw
+   * queue references a market without an allocation and both the parent allocation
+   * and shares are non-zero.
+   * @throws {UnsupportedMarketIrmError} when forward projection of an allocated
+   * nested market with positive debt requires an unsupported IRM and both the
+   * parent allocation and shares are non-zero.
+   * @example
+   * ```ts
+   * import { fetchAccrualVaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const adapter = await fetchAccrualVaultV2MorphoVaultV1Adapter(
+   *   "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
+   *   client,
+   * );
+   * const timestamp = (await client.getBlock()).timestamp;
+   * const accrued = adapter.accrueInterest(timestamp);
+   * // accrued.realAssets(timestamp) reflects the V1 vault's assets at `timestamp`
+   * ```
+   */
+  accrueInterest(timestamp: BigIntish) {
+    // Mirror `realAssets`: an adapter with no parent allocation or shares never
+    // inspects its nested vault, so leave it untouched.
+    if (this.parentAllocation === 0n || this.shares === 0n) return this;
+    return new AccrualVaultV2MorphoVaultV1Adapter(
+      this,
+      this.accrualVaultV1.accrueInterest(timestamp),
+      this.shares,
+    );
+  }
+
+  /**
    * Returns this adapter's capacity to deposit into its Vault V1 vault.
    *
    * Delegates to the nested vault's supply-queue caps. Adapter routing data and
