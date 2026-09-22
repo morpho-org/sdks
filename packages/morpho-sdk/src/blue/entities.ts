@@ -12,7 +12,9 @@ export type {
   IMarket,
   IMarketParams,
   IPosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   IPreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   IPreLiquidationPosition,
   IToken,
   IVault,
@@ -47,7 +49,9 @@ export {
   Market,
   MarketParams,
   Position,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   PreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   PreLiquidationPosition,
   Token,
   User,

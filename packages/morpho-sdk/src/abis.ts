@@ -17,7 +17,9 @@ export {
   morphoVaultV1AdapterFactoryAbi,
   permissionedErc20WrapperAbi,
   permit2Abi,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   preLiquidationAbi as bluePreLiquidationAbi,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   preLiquidationFactoryAbi as bluePreLiquidationFactoryAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,

@@ -10,7 +10,9 @@ export {
   fetchMarket as fetchBlueMarket,
   fetchMarketParams as fetchBlueMarketParams,
   fetchPosition as fetchBluePosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationParams as fetchBluePreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationPosition as fetchBluePreLiquidationPosition,
   fetchToken,
   fetchUser as fetchBlueUser,
