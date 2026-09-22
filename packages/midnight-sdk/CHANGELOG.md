@@ -1,5 +1,22 @@
 # @morpho-org/midnight-sdk
 
+## 1.6.0
+
+### Minor Changes
+
+- [#1102](https://github.com/morpho-org/sdks/pull/1102) [`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the Robinhood Chain (chain 4663) Midnight deployments from morpho-org/deployments
+  address-book.json: `midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, each with its deployment block in the
+  registry. `getChainAddress(ChainId.RobinhoodMainnet, ...)` now resolves these labels, so the Midnight
+  SDK works on Robinhood Chain. Addresses are sourced byte-for-byte from the canonical deployment
+  registry; deployment blocks were derived from the deployer contract creation receipts on Robinhood
+  Chain.
+
+### Patch Changes
+
+- Updated dependencies [[`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e)]:
+  - @morpho-org/morpho-ts@2.15.0
+
 ## 1.5.1-next.0
 
 ### Patch Changes
@@ -46,23 +63,6 @@
 
 - Updated dependencies [[`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e)]:
   - @morpho-org/morpho-ts@3.0.0-next.0
-
-## 1.6.0
-
-### Minor Changes
-
-- [#1102](https://github.com/morpho-org/sdks/pull/1102) [`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the Robinhood Chain (chain 4663) Midnight deployments from morpho-org/deployments
-  address-book.json: `midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
-  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, each with its deployment block in the
-  registry. `getChainAddress(ChainId.RobinhoodMainnet, ...)` now resolves these labels, so the Midnight
-  SDK works on Robinhood Chain. Addresses are sourced byte-for-byte from the canonical deployment
-  registry; deployment blocks were derived from the deployer contract creation receipts on Robinhood
-  Chain.
-
-### Patch Changes
-
-- Updated dependencies [[`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e)]:
-  - @morpho-org/morpho-ts@2.15.0
 
 ## 1.5.0
 
