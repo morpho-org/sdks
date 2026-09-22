@@ -410,6 +410,71 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       first.filter(isRequirementApproval).map(({ action }) => action.args),
     );
   });
+
+  test("behavior: drops a signed permit once the allowance becomes oversized", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+    const withdraw = vault.withdraw({
+      amount,
+      userAddress: IN_KIND_USER,
+      deadline: Time.timestamp() + 7_200n,
+    });
+    const permit = (await withdraw.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (permit?.action.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const signature = {
+      action: permit.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_VAULT,
+        amount: permit.action.args.amount,
+        nonce: 0n,
+        deadline: permit.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies BundlesTokenRequirementSignature;
+    expect(() => withdraw.buildTx([signature])).not.toThrow();
+
+    // An oversized allowance is reset onchain; the earlier permit must no longer be accepted,
+    // since VaultBundlesV1 would skip it once its nonce is consumed and burn under the old cap.
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: permit.action.args.amount + 1n,
+    });
+    const requirements = await withdraw.getRequirements();
+    expect(requirements.find(isRequirementSignature)).toBeUndefined();
+    expect(
+      requirements
+        .filter(isRequirementApproval)
+        .map(({ action }) => action.args),
+    ).toEqual([expect.objectContaining({ amount: permit.action.args.amount })]);
+    expect(() => withdraw.buildTx([signature])).toThrow(
+      BundlesPermitMismatchError,
+    );
+  });
 });
 
 describe("MorphoVaultV1 redeem getRequirements", () => {

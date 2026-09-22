@@ -213,9 +213,10 @@ export interface VaultV2Actions {
    *   defaults to two hours from handle creation.
    * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
    *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
-   *   when the allowance equals the cap; otherwise they contain an exact approval or, with
-   *   signature support, an ERC-2612 request. The cap stays pinned to the first resolution while
-   *   each call re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   *   when the allowance equals the cap; an oversized allowance is always reset with an exact
+   *   onchain approval, and an insufficient one is raised by an approval or, with signature
+   *   support, an ERC-2612 request. The cap stays pinned to the first resolution while each call
+   *   re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
@@ -789,9 +790,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
