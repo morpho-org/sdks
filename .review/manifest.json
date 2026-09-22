@@ -84,6 +84,7 @@
           "packages/blue-sdk-viem/src/**",
           "packages/midnight-sdk/src/**",
           "packages/morpho-ts/src/abis/**",
+          "packages/morpho-ts/src/abis.ts",
           "packages/morpho-ts/src/addresses.ts",
           "packages/wdk-protocol-lending-morpho-evm/src/**"
         ],
