@@ -10,6 +10,8 @@ Every PR is measured against the rules below. A change that violates an architec
 
 > **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked by the `/review-pr-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
 
+> **Lupin criteria (staged).** [`.review/manifest.json`](./.review/manifest.json) and [review guidance](./.review/review.md) provide the SDK criteria for the planned Lupin replacement. They do not enable a workflow or replace the current commands above. [SDK review criteria](./docs/review-criteria.md) records criterion ownership, the required Claude/Codex selection and the remaining cutover obligations. Keep applicable Lupin criteria aligned when changing these engineering rules.
+
 ---
 
 ## 1. Architecture
