@@ -175,8 +175,8 @@ export function mapBookMarket(
     rcfThreshold: book.rcf_threshold,
     enterGate: book.enter_gate,
     liquidatorGate: book.liquidator_gate,
-    asks: book.asks.map(mapPriceLevel),
-    bids: book.bids.map(mapPriceLevel),
+    asks: mapPriceLevels(book.asks, "asks"),
+    bids: mapPriceLevels(book.bids, "bids"),
   };
 }
 
@@ -291,6 +291,16 @@ export function mapPriceLevel(
     assets: level.assets,
     count: level.count,
   };
+}
+
+/** @internal Maps API price levels and sorts them best first: asks by ascending tick, bids by descending tick. */
+export function mapPriceLevels(
+  levels: readonly ApiPriceLevelResponse[],
+  side: MidnightApiBookSide,
+): MidnightApiPriceLevel[] {
+  return levels
+    .map(mapPriceLevel)
+    .sort((a, b) => (side === "asks" ? a.tick - b.tick : b.tick - a.tick));
 }
 
 /** @internal Maps a takeable-offer API payload to the SDK response shape. */
