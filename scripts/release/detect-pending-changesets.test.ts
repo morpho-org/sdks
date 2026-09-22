@@ -14,9 +14,9 @@ import {
   listPendingChangesets,
   main,
   reportPendingChangesets,
-} from "./detect-pending-changesets.mjs";
+} from "./detect-pending-changesets.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();

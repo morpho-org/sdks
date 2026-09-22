@@ -41,7 +41,7 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        run: node scripts/release/detect-pending-changesets.mjs
+        run: node scripts/release/detect-pending-changesets.ts
 
       - name: Stop if there is nothing to version
         if: steps.pending-changesets.outputs.has_changesets == 'false'
@@ -80,7 +80,7 @@ jobs:
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         run: |
           set -euo pipefail
-          node scripts/release/write-version-artifact.mjs "${RUNNER_TEMP}/version-artifact/version-changes.json"
+          node scripts/release/write-version-artifact.ts "${RUNNER_TEMP}/version-artifact/version-changes.json"
 
       - name: Upload version artifact
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -122,7 +122,7 @@ jobs:
       - name: Apply version artifact
         run: |
           set -euo pipefail
-          node scripts/release/apply-version-artifact.mjs < "${RUNNER_TEMP}/version-artifact/version-changes.json"
+          node scripts/release/apply-version-artifact.ts < "${RUNNER_TEMP}/version-artifact/version-changes.json"
 
       - name: Verify write-token preconditions
         shell: bash
@@ -166,7 +166,7 @@ jobs:
             exit 1
           fi
 
-          node scripts/release/create-version-commit.mjs
+          node scripts/release/create-version-commit.ts
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'

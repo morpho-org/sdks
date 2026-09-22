@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
-import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { execFileSync, type StdioOptions } from "node:child_process";
+import {
+  appendFileSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  type Stats,
+} from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -9,8 +15,8 @@ import {
   getMidnightPackageVersionSource,
   MIDNIGHT_PACKAGE_MANIFEST_PATH,
   MIDNIGHT_VERSION_SOURCE_PATH,
-} from "./generate-midnight-package-version.mjs";
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
+} from "./generate-midnight-package-version.ts";
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
@@ -28,13 +34,110 @@ const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
 const TEMP_BRANCH_RE = /^changeset-release\/(?:main|next)-api-commit-[^/]+$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
 
+/** A file to create or overwrite in the version commit. */
+export interface VersionFileAddition {
+  readonly contents: string;
+  readonly path: string;
+}
+
+/** A file to delete in the version commit. */
+export interface VersionFileDeletion {
+  readonly path: string;
+}
+
+/** File additions and deletions staged for the version commit. */
+export interface VersionFileChanges {
+  readonly additions: readonly VersionFileAddition[];
+  readonly deletions: readonly VersionFileDeletion[];
+}
+
+/** File changes plus the validated path list and any rejected paths. */
+export interface VersionChanges extends VersionFileChanges {
+  readonly disallowedPaths: readonly string[];
+  readonly paths: readonly string[];
+}
+
+/** Inputs for pushing the signed version commit onto the release branch. */
+export interface PushReleaseBranchOptions {
+  readonly commitOid: string;
+  readonly cwd: string;
+  readonly releaseBranch: string;
+  readonly remoteUrl?: string;
+  readonly repository: string;
+  readonly tempBranch: string;
+  readonly token: string;
+}
+
+/** Injectable push implementation (overridden in tests). */
+export type PushReleaseBranch = (options: PushReleaseBranchOptions) => void;
+
+interface RunGitOptions {
+  cwd: string;
+  stdio?: StdioOptions;
+}
+
+type RunGit = (args: string[], options: RunGitOptions) => Buffer;
+
+interface GitHubRequestOptions {
+  allowNotFound?: boolean;
+  apiBaseUrl: string;
+  body?: unknown;
+  fetchImpl: typeof fetch;
+  method: string;
+  path: string;
+  token: string;
+}
+
+interface CreateSignedVersionCommitOptions {
+  apiBaseUrl?: string;
+  baseSha: string;
+  commitMessage?: string;
+  cwd?: string;
+  fetchImpl?: typeof fetch;
+  fileChanges: VersionFileChanges;
+  gitRemoteUrl?: string;
+  pushReleaseBranch?: PushReleaseBranch;
+  releaseBranch: string;
+  repository: string;
+  runAttempt?: string;
+  runId?: string;
+  tempBranch?: string;
+  token: string;
+  writeWarning?: (message: string) => void;
+}
+
+interface CreateVersionCommitMainOptions {
+  apiBaseUrl?: string;
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  outputFile?: string;
+  pushReleaseBranch?: PushReleaseBranch;
+  writeError?: (message: string) => void;
+  writeOutput?: (message: string) => void;
+  writeWarning?: (message: string) => void;
+}
+
+interface GraphqlResponse {
+  data?: unknown;
+  errors?: unknown;
+}
+
+interface CreateCommitOnBranchResponse {
+  createCommitOnBranch?: {
+    commit?: {
+      oid?: string;
+    } | null;
+  } | null;
+}
+
 /**
  * Returns whether a file is allowed to be changed by the release version commit.
  *
- * @param {string} path The repository-relative path to check.
- * @returns {boolean} Whether the path is part of the release allowlist.
+ * @param path The repository-relative path to check.
+ * @returns Whether the path is part of the release allowlist.
  */
-export function isAllowedVersionPath(path) {
+export function isAllowedVersionPath(path: string): boolean {
   return (
     PACKAGE_MANIFEST_PATH_RE.test(path) ||
     PACKAGE_CHANGELOG_PATH_RE.test(path) ||
@@ -47,10 +150,13 @@ export function isAllowedVersionPath(path) {
 /**
  * Formats the GitHub Actions outputs produced by the release commit step.
  *
- * @param {{ commitOid?: string, hasVersionChanges: boolean }} result The commit result.
- * @returns {string} GitHub Actions output lines.
+ * @param result The commit result.
+ * @returns GitHub Actions output lines.
  */
-export function getGitHubOutput(result) {
+export function getGitHubOutput(result: {
+  commitOid?: string;
+  hasVersionChanges: boolean;
+}): string {
   const output = [
     `has_version_changes=${result.hasVersionChanges ? "true" : "false"}`,
   ];
@@ -65,10 +171,12 @@ export function getGitHubOutput(result) {
 /**
  * Collects local version changes and converts them into GitHub GraphQL file changes.
  *
- * @param {{ cwd?: string, runGitImpl?: typeof runGit }} options Options for reading the git worktree.
- * @returns {{ additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }>, disallowedPaths: string[], paths: string[] }} The planned file changes.
+ * @param options Options for reading the git worktree.
+ * @returns The planned file changes.
  */
-export function collectVersionChanges(options = {}) {
+export function collectVersionChanges(
+  options: { cwd?: string; runGitImpl?: RunGit } = {},
+): VersionChanges {
   const cwd = options.cwd ?? process.cwd();
   const runGitImpl = options.runGitImpl ?? runGit;
   const trackedPaths = readNullSeparatedGitOutput(
@@ -84,12 +192,12 @@ export function collectVersionChanges(options = {}) {
     return { additions: [], deletions: [], disallowedPaths, paths };
   }
 
-  const additions = [];
-  const deletions = [];
+  const additions: VersionFileAddition[] = [];
+  const deletions: VersionFileDeletion[] = [];
 
   for (const path of paths) {
     const { absolutePath, basePath } = resolveWorktreePath(cwd, path);
-    let stats;
+    let stats: Stats;
 
     try {
       stats = lstatSync(absolutePath);
@@ -145,12 +253,12 @@ export function collectVersionChanges(options = {}) {
   return { additions, deletions, disallowedPaths, paths };
 }
 
-function assertMidnightPackageVersionSource(options) {
+function assertMidnightPackageVersionSource(options: { cwd: string }): void {
   const { absolutePath, basePath } = resolveWorktreePath(
     options.cwd,
     MIDNIGHT_VERSION_SOURCE_PATH,
   );
-  let stats;
+  let stats: Stats;
 
   try {
     stats = lstatSync(absolutePath);
@@ -189,10 +297,12 @@ function assertMidnightPackageVersionSource(options) {
 /**
  * Creates a GitHub-signed release commit through the GitHub App token.
  *
- * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, runAttempt?: string, runId?: string, tempBranch?: string, token: string, writeWarning?: (message: string) => void }} options Commit options.
- * @returns {Promise<{ commitOid: string, tempBranch: string }>} The created commit metadata.
+ * @param options Commit options.
+ * @returns The created commit metadata.
  */
-export async function createSignedVersionCommit(options) {
+export async function createSignedVersionCommit(
+  options: CreateSignedVersionCommitOptions,
+): Promise<{ commitOid: string; tempBranch: string }> {
   const [owner, repo] = options.repository.split("/");
   if (owner == null || owner === "" || repo == null || repo === "") {
     throw new Error(`Invalid GitHub repository "${options.repository}".`);
@@ -230,7 +340,7 @@ export async function createSignedVersionCommit(options) {
   });
 
   try {
-    const data = await graphqlRequest({
+    const data = (await graphqlRequest({
       apiBaseUrl,
       fetchImpl,
       query: `mutation CreateVersionCommit($input: CreateCommitOnBranchInput!) {
@@ -254,7 +364,7 @@ export async function createSignedVersionCommit(options) {
           },
         },
       },
-    });
+    })) as CreateCommitOnBranchResponse | null;
     const commitOid = data?.createCommitOnBranch?.commit?.oid;
     if (typeof commitOid !== "string" || commitOid === "") {
       throw new Error(
@@ -294,10 +404,11 @@ export async function createSignedVersionCommit(options) {
 /**
  * Pushes the signed temporary-branch commit to the release branch with lease protection.
  *
- * @param {{ commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }} options Push options.
- * @returns {void}
+ * @param options Push options.
  */
-export function pushReleaseBranchWithLease(options) {
+export function pushReleaseBranchWithLease(
+  options: PushReleaseBranchOptions,
+): void {
   const originalOriginUrl = runGit(["remote", "get-url", "origin"], {
     cwd: options.cwd,
   })
@@ -356,10 +467,12 @@ export function pushReleaseBranchWithLease(options) {
 /**
  * Runs the release commit workflow step.
  *
- * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeOutput?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
- * @returns {Promise<null | { commitOid: string, tempBranch: string }>} The commit result when changes exist.
+ * @param options Runtime options.
+ * @returns The commit result when changes exist.
  */
-export async function main(options = {}) {
+export async function main(
+  options: CreateVersionCommitMainOptions = {},
+): Promise<{ commitOid: string; tempBranch: string } | null> {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const outputFile = options.outputFile ?? env.GITHUB_OUTPUT;
@@ -419,7 +532,15 @@ export async function main(options = {}) {
   return result;
 }
 
-async function createOrUpdateBranchRef(options) {
+async function createOrUpdateBranchRef(options: {
+  apiBaseUrl: string;
+  branch: string;
+  fetchImpl: typeof fetch;
+  owner: string;
+  repo: string;
+  sha: string;
+  token: string;
+}): Promise<void> {
   const existingRef = await githubRequest({
     allowNotFound: true,
     apiBaseUrl: options.apiBaseUrl,
@@ -463,7 +584,14 @@ async function createOrUpdateBranchRef(options) {
   });
 }
 
-async function deleteBranchRef(options) {
+async function deleteBranchRef(options: {
+  apiBaseUrl: string;
+  branch: string;
+  fetchImpl: typeof fetch;
+  owner: string;
+  repo: string;
+  token: string;
+}): Promise<void> {
   await githubRequest({
     allowNotFound: true,
     apiBaseUrl: options.apiBaseUrl,
@@ -476,7 +604,7 @@ async function deleteBranchRef(options) {
   });
 }
 
-async function githubRequest(options) {
+async function githubRequest(options: GitHubRequestOptions): Promise<unknown> {
   const response = await options.fetchImpl(
     new URL(options.path, options.apiBaseUrl),
     {
@@ -508,8 +636,14 @@ async function githubRequest(options) {
   return responseBody;
 }
 
-async function graphqlRequest(options) {
-  const response = await githubRequest({
+async function graphqlRequest(options: {
+  apiBaseUrl: string;
+  fetchImpl: typeof fetch;
+  query: string;
+  token: string;
+  variables: unknown;
+}): Promise<unknown> {
+  const response = (await githubRequest({
     apiBaseUrl: options.apiBaseUrl,
     body: {
       query: options.query,
@@ -519,7 +653,7 @@ async function graphqlRequest(options) {
     method: "POST",
     path: "/graphql",
     token: options.token,
-  });
+  })) as GraphqlResponse;
 
   if (Array.isArray(response.errors) && response.errors.length > 0) {
     throw new Error(
@@ -530,7 +664,7 @@ async function graphqlRequest(options) {
   return response.data;
 }
 
-async function readResponseBody(response) {
+async function readResponseBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (text === "") return null;
 
@@ -541,25 +675,27 @@ async function readResponseBody(response) {
   }
 }
 
-function summarizeResponseBody(body) {
+function summarizeResponseBody(body: unknown): string {
   if (body == null) return "empty response body";
   if (typeof body === "string") return body.slice(0, 1_000);
-  if (typeof body.message === "string") return body.message;
+  if (typeof (body as { message?: unknown }).message === "string") {
+    return (body as { message: string }).message;
+  }
 
   return JSON.stringify(body).slice(0, 1_000);
 }
 
-function encodeGitRefPath(ref) {
+function encodeGitRefPath(ref: string): string {
   return ref.split("/").map(encodeURIComponent).join("/");
 }
 
-function appendOutput(outputFile, output) {
+function appendOutput(outputFile: string | undefined, output: string): void {
   if (outputFile != null && outputFile !== "") {
     appendFileSync(outputFile, output);
   }
 }
 
-function readRequiredEnv(env, name) {
+function readRequiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
   if (value == null || value === "") {
     throw new Error(`Missing required environment variable ${name}.`);
@@ -568,7 +704,7 @@ function readRequiredEnv(env, name) {
   return value;
 }
 
-function readReleaseBranch(env) {
+function readReleaseBranch(env: NodeJS.ProcessEnv): string {
   const releaseBranch = readRequiredEnv(env, "RELEASE_BRANCH");
   if (!RELEASE_BRANCH_RE.test(releaseBranch)) {
     throw new Error(
@@ -579,7 +715,11 @@ function readReleaseBranch(env) {
   return releaseBranch;
 }
 
-function buildTempBranchName(options) {
+function buildTempBranchName(options: {
+  releaseBranch: string;
+  runAttempt?: string;
+  runId?: string;
+}): string {
   return [
     options.releaseBranch,
     "api-commit",
@@ -588,7 +728,7 @@ function buildTempBranchName(options) {
   ].join("-");
 }
 
-function assertTempBranch(tempBranch) {
+function assertTempBranch(tempBranch: string): void {
   if (!TEMP_BRANCH_RE.test(tempBranch)) {
     throw new Error(
       `Invalid temporary branch "${tempBranch}". Expected "changeset-release/main-api-commit-*" or "changeset-release/next-api-commit-*".`,
@@ -596,7 +736,7 @@ function assertTempBranch(tempBranch) {
   }
 }
 
-function readNullSeparatedGitOutput(output) {
+function readNullSeparatedGitOutput(output: Buffer): string[] {
   return output
     .toString("utf8")
     .split("\0")
@@ -604,7 +744,7 @@ function readNullSeparatedGitOutput(output) {
     .map(validateGitPath);
 }
 
-function validateGitPath(path) {
+function validateGitPath(path: string): string {
   if (hasControlCharacter(path) || path.split("/").includes("..")) {
     throw new Error(`Invalid git path "${sanitizeLogLine(path)}".`);
   }
@@ -612,7 +752,11 @@ function validateGitPath(path) {
   return path;
 }
 
-function readBaseVersionFile(options) {
+function readBaseVersionFile(options: {
+  cwd: string;
+  path: string;
+  runGitImpl: RunGit;
+}): string {
   try {
     return options
       .runGitImpl(["show", `HEAD:${options.path}`], {
@@ -629,7 +773,11 @@ function readBaseVersionFile(options) {
   }
 }
 
-function assertSafePackageJsonChange(options) {
+function assertSafePackageJsonChange(options: {
+  afterSource: string;
+  beforeSource: string;
+  path: string;
+}): void {
   const before = parsePackageJson(options.beforeSource, options.path);
   const after = parsePackageJson(options.afterSource, options.path);
   const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
@@ -655,9 +803,12 @@ function assertSafePackageJsonChange(options) {
   }
 }
 
-function parsePackageJson(source, path) {
+function parsePackageJson(
+  source: string,
+  path: string,
+): Record<string, unknown> {
   try {
-    return JSON.parse(source);
+    return JSON.parse(source) as Record<string, unknown>;
   } catch (error) {
     throw new Error(`Invalid package manifest JSON in "${path}".`, {
       cause: error,
@@ -665,7 +816,10 @@ function parsePackageJson(source, path) {
   }
 }
 
-function resolveWorktreePath(cwd, path) {
+function resolveWorktreePath(
+  cwd: string,
+  path: string,
+): { absolutePath: string; basePath: string } {
   const basePath = realpathSync(cwd);
   const absolutePath = resolve(basePath, path);
   assertPathInsideBase({ absolutePath, basePath, path });
@@ -673,13 +827,17 @@ function resolveWorktreePath(cwd, path) {
   return { absolutePath, basePath };
 }
 
-function assertPathInsideBase(options) {
+function assertPathInsideBase(options: {
+  absolutePath: string;
+  basePath: string;
+  path: string;
+}): void {
   if (!isPathInside(options.basePath, options.absolutePath)) {
     throw new Error(`Invalid path "${options.path}".`);
   }
 }
 
-function isNotFoundError(error) {
+function isNotFoundError(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error != null &&
@@ -688,7 +846,7 @@ function isNotFoundError(error) {
   );
 }
 
-function hasRemoteBranch(options) {
+function hasRemoteBranch(options: { branch: string; cwd: string }): boolean {
   try {
     runGit(["ls-remote", "--exit-code", "--heads", "origin", options.branch], {
       cwd: options.cwd,
@@ -701,7 +859,7 @@ function hasRemoteBranch(options) {
   }
 }
 
-function hasExitStatus(error, status) {
+function hasExitStatus(error: unknown, status: number): boolean {
   return (
     typeof error === "object" &&
     error != null &&
@@ -710,7 +868,7 @@ function hasExitStatus(error, status) {
   );
 }
 
-function hasControlCharacter(value) {
+function hasControlCharacter(value: string): boolean {
   for (const character of value) {
     const codePoint = character.codePointAt(0);
     if (codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)) {
@@ -721,14 +879,15 @@ function hasControlCharacter(value) {
   return false;
 }
 
-function runGit(args, options) {
+function runGit(args: string[], options: RunGitOptions): Buffer {
   return execFileSync("git", args, {
     cwd: options.cwd,
+    encoding: "buffer",
     stdio: options.stdio,
   });
 }
 
-function formatIndentedList(paths) {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 
@@ -744,7 +903,7 @@ if (
   });
 }
 
-function sanitizeAnnotation(message) {
+function sanitizeAnnotation(message: string): string {
   return message
     .replaceAll("%", "%25")
     .replaceAll("\r", "%0D")

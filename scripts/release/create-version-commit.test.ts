@@ -18,13 +18,19 @@ import {
   isAllowedVersionPath,
   main,
   pushReleaseBranchWithLease,
-} from "./create-version-commit.mjs";
+} from "./create-version-commit.ts";
 import {
   MIDNIGHT_VERSION_SOURCE_PATH,
   renderMidnightPackageVersionSource,
-} from "./generate-midnight-package-version.mjs";
+} from "./generate-midnight-package-version.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
+
+interface RecordedRequest {
+  body: unknown;
+  method?: string;
+  url: string;
+}
 
 afterAll(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -320,7 +326,7 @@ describe("collectVersionChanges", () => {
 
   test("error: control-character git path", () => {
     const root = createGitRepo();
-    const runGitImpl = vi.fn((args) =>
+    const runGitImpl = vi.fn((args: string[]) =>
       Buffer.from(args[0] === "diff" ? "packages/a/package.json\x01\0" : ""),
     );
 
@@ -331,7 +337,7 @@ describe("collectVersionChanges", () => {
 
   test("error: lexical traversal git path", () => {
     const root = createGitRepo();
-    const runGitImpl = vi.fn((args) =>
+    const runGitImpl = vi.fn((args: string[]) =>
       Buffer.from(args[0] === "diff" ? "packages/../etc/passwd\0" : ""),
     );
 
@@ -345,7 +351,7 @@ describe("main", () => {
   test("default", async () => {
     const root = createGitRepo();
     const outputFile = join(root, "github-output.txt");
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const pushReleaseBranch = vi.fn();
     const writeOutput = vi.fn();
     writeFileSync(
@@ -378,7 +384,9 @@ describe("main", () => {
     expect(readFileSync(outputFile, "utf8")).toBe(
       "has_version_changes=true\ncommit_sha=signed-commit\n",
     );
-    expect(requests[2].body.variables.input).toMatchObject({
+    expect(
+      (requests[2]!.body as { variables: { input: unknown } }).variables.input,
+    ).toMatchObject({
       branch: {
         branchName: "changeset-release/main-api-commit-100-2",
         repositoryNameWithOwner: "morpho-org/sdks",
@@ -488,12 +496,12 @@ describe("main", () => {
 
 describe("createSignedVersionCommit", () => {
   test("default", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const pushReleaseBranch = vi.fn();
-    const fetchImpl = vi.fn(async (url, init) => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
       requests.push({
-        body: init.body == null ? null : JSON.parse(init.body),
-        method: init.method,
+        body: init?.body == null ? null : JSON.parse(init.body as string),
+        method: init?.method,
         url: url.toString(),
       });
 
@@ -598,12 +606,10 @@ describe("createSignedVersionCommit", () => {
         url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/changeset-release/main-api-commit-100-2",
       },
     ]);
-    expect(JSON.stringify(requests[2].body.variables.input)).not.toContain(
-      "author",
-    );
-    expect(JSON.stringify(requests[2].body.variables.input)).not.toContain(
-      "committer",
-    );
+    const commitInput = (requests[2]!.body as { variables: { input: unknown } })
+      .variables.input;
+    expect(JSON.stringify(commitInput)).not.toContain("author");
+    expect(JSON.stringify(commitInput)).not.toContain("committer");
     expect(pushReleaseBranch).toHaveBeenCalledWith({
       commitOid: "signed-commit",
       cwd: process.cwd(),
@@ -682,7 +688,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("error: GraphQL errors", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const fetchImpl = createSignedCommitFetch({
       graphqlBody: { errors: [{ message: "bad mutation" }] },
       requests,
@@ -711,7 +717,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("error: missing commit oid in GraphQL response", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const pushReleaseBranch = vi.fn();
     const fetchImpl = createSignedCommitFetch({
       graphqlBody: { data: { createCommitOnBranch: null } },
@@ -743,7 +749,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("error: create ref lookup failure", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const fetchImpl = createSignedCommitFetch({
       getRefResponse: jsonResponse(
         { message: "server unavailable" },
@@ -770,7 +776,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("error: create temporary ref failure", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const fetchImpl = createSignedCommitFetch({
       createRefResponse: new Response("server unavailable", { status: 503 }),
       requests,
@@ -794,7 +800,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("behavior: updates an existing temporary ref", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const pushReleaseBranch = vi.fn();
     const fetchImpl = createSignedCommitFetch({
       getRefResponse: jsonResponse({
@@ -826,14 +832,17 @@ describe("createSignedVersionCommit", () => {
       "POST",
       "DELETE",
     ]);
-    expect(requests[1].body).toEqual({ force: true, sha: "base-sha" });
-    expect(requests[2].body.variables.input.message).toEqual({
+    expect(requests[1]?.body).toEqual({ force: true, sha: "base-sha" });
+    expect(
+      (requests[2]!.body as { variables: { input: { message: unknown } } })
+        .variables.input.message,
+    ).toEqual({
       headline: "chore: custom version packages",
     });
   });
 
   test("error: update existing ref failure", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const fetchImpl = createSignedCommitFetch({
       getRefResponse: jsonResponse({
         ref: "refs/heads/changeset-release/main-api-commit-test",
@@ -863,7 +872,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("error: push failure deletes temporary branch", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const fetchImpl = createSignedCommitFetch({ requests });
     const pushReleaseBranch = vi.fn(() => {
       throw new Error("push failed");
@@ -889,7 +898,7 @@ describe("createSignedVersionCommit", () => {
   });
 
   test("behavior: delete failure warns without failing", async () => {
-    const requests = [];
+    const requests: RecordedRequest[] = [];
     const writeWarning = vi.fn();
     const fetchImpl = createSignedCommitFetch({
       deleteRefResponse: jsonResponse(
@@ -964,7 +973,10 @@ describe("pushReleaseBranchWithLease", () => {
 });
 
 function createGitRepo(
-  manifest = { name: "@morpho-org/morpho-sdk", version: "1.0.0" },
+  manifest: Record<string, unknown> = {
+    name: "@morpho-org/morpho-sdk",
+    version: "1.0.0",
+  },
 ) {
   const root = mkdtempSync(join(tmpdir(), "version-commit-"));
   tempDirs.push(root);
@@ -995,7 +1007,7 @@ function createGitRepo(
   return root;
 }
 
-function addMidnightPackage(root, version) {
+function addMidnightPackage(root: string, version: string) {
   mkdirSync(join(root, "packages/midnight-sdk/src/api"), { recursive: true });
   writeFileSync(
     join(root, "packages/midnight-sdk/package.json"),
@@ -1010,7 +1022,9 @@ function addMidnightPackage(root, version) {
   );
 }
 
-function createReleaseRemoteFixture(options = {}) {
+function createReleaseRemoteFixture(
+  options: { createReleaseBranch?: boolean } = {},
+) {
   const root = createGitRepo();
   const remote = mkdtempSync(join(tmpdir(), "version-remote-"));
   const originalOriginUrl = "https://github.com/morpho-org/sdks.git";
@@ -1043,7 +1057,7 @@ function createReleaseRemoteFixture(options = {}) {
   return { originalOriginUrl, remote, root, tempCommit };
 }
 
-function commitAll(root, message) {
+function commitAll(root: string, message: string) {
   runGit(["add", "."], root);
   runGit(
     [
@@ -1061,27 +1075,36 @@ function commitAll(root, message) {
   );
 }
 
-function readRemoteBranchSha(remote, branch) {
+function readRemoteBranchSha(remote: string, branch: string) {
   return runGit(["--git-dir", remote, "rev-parse", `refs/heads/${branch}`])
     .toString()
     .trim();
 }
 
-function runGit(args, cwd) {
+function runGit(args: string[], cwd?: string) {
   return execFileSync("git", args, { cwd });
 }
 
-function createSignedCommitFetch(options = {}) {
+function createSignedCommitFetch(
+  options: {
+    createRefResponse?: Response;
+    deleteRefResponse?: Response;
+    getRefResponse?: Response;
+    graphqlBody?: unknown;
+    patchRefResponse?: Response;
+    requests?: RecordedRequest[];
+  } = {},
+) {
   const requests = options.requests ?? [];
 
-  return vi.fn(async (url, init) => {
+  return vi.fn<typeof fetch>(async (url, init) => {
     requests.push({
-      body: init.body == null ? null : JSON.parse(init.body),
-      method: init.method,
+      body: init?.body == null ? null : JSON.parse(init.body as string),
+      method: init?.method,
       url: url.toString(),
     });
 
-    const request = requests.at(-1);
+    const request = requests.at(-1)!;
 
     if (request.method === "GET") {
       return (
@@ -1131,7 +1154,7 @@ function createSignedCommitFetch(options = {}) {
   });
 }
 
-function jsonResponse(body, init = {}) {
+function jsonResponse(body: unknown, init: { status?: number } = {}) {
   return new Response(body == null ? undefined : JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
     status: init.status ?? 200,
