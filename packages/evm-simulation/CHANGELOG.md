@@ -1,5 +1,17 @@
 # @morpho-org/evm-simulation
 
+## 4.2.0-next.2
+
+### Patch Changes
+
+- [#1128](https://github.com/morpho-org/sdks/pull/1128) [`1d32278`](https://github.com/morpho-org/sdks/commit/1d322787b8ca26d7012835e69e0730ec78e7a97d) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Guard `MidnightBundlesV1` with the simulation retention check so bundles that leave token value on the transient router fail closed with `BlacklistViolationError`.
+
+- [#1123](https://github.com/morpho-org/sdks/pull/1123) [`35f6ea6`](https://github.com/morpho-org/sdks/commit/35f6ea603c7aecff3d4d962c098bddaa80cb1985) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `parseTransfers` now lowercases log `topics` and `data` before signature dispatch and WETH9 pair matching, so mixed-case hex from a backend can no longer drop a transfer from the parsed output or the retention check.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
 ## 4.2.0-next.1
 
 ### Minor Changes

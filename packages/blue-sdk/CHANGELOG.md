@@ -1,5 +1,27 @@
 # @morpho-org/blue-sdk
 
+## 7.0.0-next.2
+
+### Minor Changes
+
+- [#1132](https://github.com/morpho-org/sdks/pull/1132) [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deprecate all pre-liquidation logic. Every pre-liquidation export is now marked `@deprecated` and will be removed in the next major; there is no successor.
+
+  - `blue-sdk`: `PreLiquidationParams`, `IPreLiquidationParams`, `PreLiquidationPosition`, `IPreLiquidationPosition`, `defaultPreLiquidationParamsRegistry`, `getDefaultPreLiquidationParams`, and `UnsupportedPreLiquidationParamsError`.
+  - `blue-sdk-viem`: `fetchPreLiquidationParams`, `fetchPreLiquidationPosition`, `AccrualPosition.fetchPreLiquidation`, `preLiquidationAbi`, and `preLiquidationFactoryAbi`.
+  - `morpho-sdk`: the matching `/blue/*` raw re-exports and the `Blue`-qualified facade aliases (`BluePreLiquidationParams`, `IBluePreLiquidationParams`, `BluePreLiquidationPosition`, `IBluePreLiquidationPosition`, `fetchBluePreLiquidationParams`, `fetchBluePreLiquidationPosition`, `UnsupportedBluePreLiquidationParamsError`, `bluePreLiquidationAbi`, `bluePreLiquidationFactoryAbi`, `blueDefaultPreLiquidationParamsRegistry`, `getBlueDefaultPreLiquidationParams`, and `BlueAccrualPosition.fetchPreLiquidation`).
+  - `morpho-ts`: the `preLiquidationFactory` chain-address field.
+
+  Runtime behavior is unchanged; this only adds `@deprecated` JSDoc.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+### Patch Changes
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+
 ## 7.0.0-next.1
 
 ### Major Changes
