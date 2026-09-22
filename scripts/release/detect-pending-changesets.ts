@@ -10,12 +10,23 @@ import {
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
 
 const DEFAULT_CHANGESET_DIR = ".changeset";
 const PRE_STATE_FILE = "pre.json";
 
-export function listPendingChangesets(options = {}) {
+interface ListPendingChangesetsOptions {
+  changesetDir?: string;
+}
+
+interface ChangesetsPreState {
+  changesets?: unknown;
+  mode?: string;
+}
+
+export function listPendingChangesets(
+  options: ListPendingChangesetsOptions = {},
+): string[] {
   const changesetDir = options.changesetDir ?? DEFAULT_CHANGESET_DIR;
   if (!existsSync(changesetDir)) return [];
 
@@ -28,16 +39,18 @@ export function listPendingChangesets(options = {}) {
   // `has_changesets == false`, would never fire on `next`. In "exit" mode the
   // recorded changesets still drive the final stable version, so they stay
   // pending.
-  const prereleasedIds = new Set();
+  const prereleasedIds = new Set<unknown>();
   const changesetRoot = realpathSync(changesetDir);
   const preStatePath = resolve(changesetRoot, PRE_STATE_FILE);
   // `pre.json` is a fixed filename; confirm the resolved path stays inside the
   // changeset directory before reading it, matching the repo's file-read guard
-  // convention (see apply-version-artifact.mjs).
+  // convention (see apply-version-artifact.ts).
   if (isPathInside(changesetRoot, preStatePath) && existsSync(preStatePath)) {
-    let preState;
+    let preState: ChangesetsPreState | null;
     try {
-      preState = JSON.parse(readFileSync(preStatePath, "utf8"));
+      preState = JSON.parse(
+        readFileSync(preStatePath, "utf8"),
+      ) as ChangesetsPreState | null;
     } catch (error) {
       throw new Error(
         `Invalid Changesets pre state "${preStatePath}": ${getErrorMessage(error)}`,
@@ -49,7 +62,7 @@ export function listPendingChangesets(options = {}) {
     }
   }
 
-  const pendingChangesets = [];
+  const pendingChangesets: string[] = [];
   for (const entry of readdirSync(changesetDir, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     if (entry.name === "README.md") continue;
@@ -62,12 +75,19 @@ export function listPendingChangesets(options = {}) {
   return pendingChangesets.sort();
 }
 
-export function getGitHubOutput(pendingChangesets) {
+export function getGitHubOutput(pendingChangesets: string[]): string {
   const hasChangesets = pendingChangesets.length > 0 ? "true" : "false";
   return `has_changesets=${hasChangesets}\n`;
 }
 
-export function reportPendingChangesets(options = {}) {
+interface ReportPendingChangesetsOptions extends ListPendingChangesetsOptions {
+  outputFile?: string;
+  writeOutput?: (message: string) => void;
+}
+
+export function reportPendingChangesets(
+  options: ReportPendingChangesetsOptions = {},
+): string[] {
   const pendingChangesets = listPendingChangesets(options);
   const outputFile = options.outputFile ?? process.env.GITHUB_OUTPUT;
   const writeOutput =
@@ -85,7 +105,7 @@ export function reportPendingChangesets(options = {}) {
   return pendingChangesets;
 }
 
-export function main(options = {}) {
+export function main(options: ReportPendingChangesetsOptions = {}): string[] {
   return reportPendingChangesets(options);
 }
 

@@ -4,12 +4,24 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { collectVersionChanges } from "./create-version-commit.mjs";
-import { getErrorMessage, sanitizeLogLine } from "./helpers.mjs";
+import {
+  collectVersionChanges,
+  type VersionChanges,
+} from "./create-version-commit.ts";
+import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
 
-export function writeVersionArtifact(options = {}) {
+/** Serialized version-change artifact passed between the version PR and publish workflows. */
+export interface VersionArtifact {
+  readonly additions: VersionChanges["additions"];
+  readonly deletions: VersionChanges["deletions"];
+  readonly schemaVersion: number;
+}
+
+export function writeVersionArtifact(
+  options: { artifactPath?: string; cwd?: string } = {},
+): VersionArtifact {
   const artifactPath = options.artifactPath;
   if (artifactPath == null || artifactPath === "") {
     throw new Error("Version artifact path is required.");
@@ -35,7 +47,10 @@ export function writeVersionArtifact(options = {}) {
   return artifact;
 }
 
-export function main(args = process.argv.slice(2), options = {}) {
+export function main(
+  args: string[] = process.argv.slice(2),
+  options: { cwd?: string } = {},
+): VersionArtifact {
   const artifactPath = args[0];
   return writeVersionArtifact({
     artifactPath,
@@ -43,7 +58,7 @@ export function main(args = process.argv.slice(2), options = {}) {
   });
 }
 
-function formatIndentedList(paths) {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 
@@ -61,7 +76,7 @@ if (
   }
 }
 
-function sanitizeAnnotation(message) {
+function sanitizeAnnotation(message: string): string {
   return message
     .replaceAll("%", "%25")
     .replaceAll("\r", "%0D")
