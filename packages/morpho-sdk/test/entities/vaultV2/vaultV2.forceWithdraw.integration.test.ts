@@ -7,6 +7,7 @@ import {
   BaseError,
   decodeErrorResult,
   erc20Abi,
+  isAddressEqual,
   isHex,
   parseEventLogs,
   parseUnits,
@@ -16,12 +17,17 @@ import {
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../../src/abis.js";
+import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../../src/constants.js";
 import {
+  computeMinForceWithdrawSharePrice,
   computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
   previewVaultV2ForceWithdraw,
+  resolveVaultV2ForceWithdrawEligibility,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawFeeSharesExceedBurnError,
   vaultV2ForceWithdraw,
@@ -383,22 +389,22 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     const transfers = parseEventLogs({
       abi: erc20Abi,
       eventName: "Transfer",
-      logs: receipt.logs.filter(
-        (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
+      logs: receipt.logs.filter((log) =>
+        isAddressEqual(log.address, vaultAddress),
       ),
     });
     const minted = transfers
       .filter(
         ({ args }) =>
-          args.from === zeroAddress &&
-          args.to.toLowerCase() === client.account.address.toLowerCase(),
+          isAddressEqual(args.from, zeroAddress) &&
+          isAddressEqual(args.to, client.account.address),
       )
       .reduce((total, { args }) => total + args.value, 0n);
     const grossBurnt = transfers
       .filter(
         ({ args }) =>
-          args.from.toLowerCase() === client.account.address.toLowerCase() &&
-          args.to === zeroAddress,
+          isAddressEqual(args.from, client.account.address) &&
+          isAddressEqual(args.to, zeroAddress),
       )
       .reduce((total, { args }) => total + args.value, 0n);
 
@@ -511,62 +517,112 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     await expect(client.sendTransaction(tx)).resolves.toBeDefined();
   });
 
-  test("error: SlippageExceeded when minSharePriceE27 is set above the realized price", async ({
+  test("behavior: a stale fee-bearing vault with the wall clock ahead of the chain exits at the true floor (SDK-1263)", async ({
     client,
   }) => {
-    const {
-      vault: vaultAddress,
-      adapter,
-      depositAndAllocate,
-    } = await setUpSingleAdapterVaultV2(client, {
-      asset: USDC,
-      markets: setupMarkets,
-      forceDeallocatePenalty: ONE_PERCENT,
-    });
-    const deposit = parseUnits("500", 6);
+    const { vault: vaultAddress, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: USDC,
+        markets: setupMarkets,
+        forceDeallocatePenalty: ONE_PERCENT,
+        managementFee: parseUnits("1", 16) / Time.s.from.y(1n),
+        maxRate: parseUnits("2", 18) / Time.s.from.y(1n),
+      });
     await depositAndAllocate({
-      assets: deposit,
-      perMarket: [{ market: CbbtcUsdcBlue, assets: deposit }],
+      assets: parseUnits("1000", 6),
+      perMarket: [
+        { market: CbbtcUsdcBlue, assets: parseUnits("600", 6) },
+        { market: WbtcUsdcSourceMarket, assets: parseUnits("400", 6) },
+      ],
     });
+
+    // The vault is now stale: the chain holds 30 days of unaccrued interest and fees.
+    await client.setNextBlockTimestamp({
+      timestamp: (await client.timestamp()) + Time.s.from.d(30n),
+    });
+    await client.mine({ blocks: 1 });
 
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(vaultAddress, mainnet.id);
     const vaultData = await vault.getData();
-    const exitAssets = parseUnits("400", 6);
-    const exit = withChainTimestamp(await client.timestamp(), () =>
+    const chainNow = await client.timestamp();
+    // SDK-1263: the integrator's wall clock runs 60 days ahead of the chain, so a floor priced
+    // off the `now` accrual alone projects interest and fee shares the chain has not realized.
+    const now = chainNow + Time.s.from.d(60n);
+    const deadline = now + 3_600n;
+    const exitAssets = parseUnits("900", 6);
+    const exit = withChainTimestamp(now, () =>
       vault.forceWithdraw({
         exitAssets,
         vaultData,
         userAddress: client.account.address,
+        deadline,
       }),
     );
-    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+    const derivedFloor = exit.buildTx().action.args.minSharePriceE27;
+
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(
+      vaultData,
+      undefined,
+    );
+    if (eligibility.type !== "eligible") {
+      throw new Error("Expected an exitable vault");
+    }
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: eligibility.adapter,
+      liquidityMarketId: eligibility.liquidityMarketId,
+      exitAssets,
+      timestamp: now,
+    });
+    const { vault: nowVaultData } = vaultData.accrueInterest(now);
+    const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: nowVaultData,
+      deadlineVaultData: nowVaultData,
+      plan,
+    });
+    const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: client.account.address,
+      timestamp: now,
+    });
+    // The floor the SDK derived before the fix, priced off the `now` projection only.
+    const projectedFloor = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt: sharesBurntNow - feeSharesNow,
+      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+    expect(derivedFloor).toBeLessThan(projectedFloor);
+
+    const [approval] = await withChainTimestamp(now, () =>
       exit.getRequirements(),
     );
     if (!isRequirementApproval(approval)) {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
     await client.sendTransaction(approval);
+    const initial = await balances(client, vaultAddress);
 
-    // Doubling the bound is unreachable: the realized price cannot exceed the vault share price.
-    const derived = exit.buildTx().action.args.minSharePriceE27;
-    const tx = vaultV2ForceWithdraw({
+    // With the SDK's allowance in place, the projection-only floor still false-reverts on the
+    // contract's own price check (`SlippageExceeded`) — not on an `_spendAllowance` underflow
+    // (panic 0x11), which is what an allowance sized exactly to the floor would have produced.
+    const staleTx = vaultV2ForceWithdraw({
       vault: { chainId: mainnet.id, address: vaultAddress },
       args: {
-        adapter,
+        adapter: eligibility.adapter.address,
         exitAssets,
-        minSharePriceE27: derived * 2n,
+        minSharePriceE27: projectedFloor,
         userAddress: client.account.address,
-        deadline: (await client.timestamp()) + 3_600n,
+        deadline,
       },
     });
     const thrown = await client
       .call({
         account: client.account,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value,
+        to: staleTx.to,
+        data: staleTx.data,
+        value: staleTx.value,
       })
       .then(
         () => undefined,
@@ -586,6 +642,46 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       decodeErrorResult({ abi: vaultExitBundlesV1Abi, data: revert.data })
         .errorName,
     ).toBe("SlippageExceeded");
+
+    // The faithful exit — same snapshot, same wall clock — settles at the realized price: chain
+    // time stays near `chainNow`, far inside `deadline`, so no projection is ever realized.
+    const receipt = await client.waitForTransactionReceipt({
+      hash: await client.sendTransaction(exit.buildTx()),
+    });
+    const transfers = parseEventLogs({
+      abi: erc20Abi,
+      eventName: "Transfer",
+      logs: receipt.logs.filter((log) =>
+        isAddressEqual(log.address, vaultAddress),
+      ),
+    });
+    const minted = transfers
+      .filter(
+        ({ args }) =>
+          isAddressEqual(args.from, zeroAddress) &&
+          isAddressEqual(args.to, client.account.address),
+      )
+      .reduce((total, { args }) => total + args.value, 0n);
+    const grossBurnt = transfers
+      .filter(
+        ({ args }) =>
+          isAddressEqual(args.from, client.account.address) &&
+          isAddressEqual(args.to, zeroAddress),
+      )
+      .reduce((total, { args }) => total + args.value, 0n);
+
+    const final = await balances(client, vaultAddress);
+    const measured = initial.shares - final.shares;
+    expect(measured).toBe(grossBurnt - minted);
+    expect(measured).toBeGreaterThan(0n);
+    const realizedPrice =
+      ((final.assets - initial.assets) * 10n ** 27n) / measured;
+    // The realized exit clears the fixed floor…
+    expect(realizedPrice).toBeGreaterThanOrEqual(derivedFloor);
+    // …yet sits below the projection-only floor: this is exactly the SDK-1263 regime, where the
+    // wall-clock projection prices shares the chain never realizes.
+    expect(realizedPrice).toBeLessThan(projectedFloor);
+    expect(grossBurnt).toBeLessThanOrEqual(approval.action.args.amount);
   });
 
   test("error: VaultV2ForceWithdrawCoverageError when the markets cannot cover the exit", async ({

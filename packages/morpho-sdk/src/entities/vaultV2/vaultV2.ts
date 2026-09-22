@@ -213,9 +213,10 @@ export interface VaultV2Actions {
    *   defaults to two hours from handle creation.
    * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
    *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
-   *   when the allowance equals the cap; otherwise they contain an exact approval or, with
-   *   signature support, an ERC-2612 request. The cap stays pinned to the first resolution while
-   *   each call re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   *   when the allowance equals the cap; an oversized allowance is always reset with an exact
+   *   onchain approval, and an insufficient one is raised by an approval or, with signature
+   *   support, an ERC-2612 request. The cap stays pinned to the first resolution while each call
+   *   re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
@@ -430,9 +431,11 @@ export interface VaultV2Actions {
    * and permit nonce are read on-chain.
    *
    * The SDK derives a conservative lower bound on the realized exit share price from the snapshot
-   * and `slippageTolerance`. A supplied `minSharePriceE27` replaces the tolerance-derived bound
-   * (it may be tighter or looser) but must be at least the floor derived at
-   * `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection.
+   * and `slippageTolerance`: the floor is priced off whichever of the raw snapshot or its accrual
+   * to `now` burns more shares, so neither pending fee mints nor interest the chain has not yet
+   * accrued can lift it above the realized price. A supplied `minSharePriceE27` replaces the
+   * tolerance-derived bound (it may be tighter or looser) but must be at least the floor derived
+   * at `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection.
    * The bound rejects a share price drop, a penalty increase, and liquidity shifting from the
    * penalty-free leg to the penalised leg. It does **not** cover the referral fee, which the
    * contract deducts afterwards.
@@ -442,16 +445,21 @@ export interface VaultV2Actions {
    * send-shares gate is arbitrary code re-evaluated after each penalty burn. The SDK also does not
    * validate the user's share balance. Per-market penalties and each vault withdrawal round the
    * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
-   * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` — the approved
-   * share allowance this handle returns is the exact upper bound on the burn — so a full-balance
-   * exit does not revert for insufficient shares.
+   * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
+   * full-balance exit does not revert for insufficient shares. The approved share allowance this
+   * handle returns covers a burn at least one `slippageTolerance` step below the price floor
+   * whenever the floor exceeds one RAY unit and, in any case, at least one share above the burn
+   * at the floor, so a price within that headroom below the floor reverts on the contract's
+   * `minSharePriceE27` check rather than on the allowance; a deeper drop can still surface as an
+   * ERC-20 allowance underflow.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
-   * A fee-recipient `userAddress` gets a floor from the net share burn after fee mints at `now`,
-   * and a guard against fee mints reaching the lower burn bound by the deadline. Its allowance
-   * includes the projected fee shares through that same deadline. Deadlines beyond one year after
-   * handle creation are rejected, so the guard and allowance cover the whole accepted window.
+   * A fee-recipient `userAddress` gets a floor from the larger of the raw snapshot burn and the
+   * `now` burn net of its own fee mints, and a guard against fee mints reaching the lower burn
+   * bound by the deadline. Its allowance includes the projected fee shares through that same
+   * deadline. Deadlines beyond one year after handle creation are rejected, so the guard and
+   * allowance cover the whole accepted window.
    *
    * @param params - Force withdrawal parameters.
    * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
@@ -789,9 +797,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         );
         const signatureRequirement = requirements.find(isRequirementSignature);
-        if (signatureRequirement?.action.type === "permit") {
-          expectedRequirement = signatureRequirement.action;
-        }
+        expectedRequirement =
+          signatureRequirement?.action.type === "permit"
+            ? signatureRequirement.action
+            : undefined;
         return requirements;
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1249,14 +1258,23 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const projectionTimestamp = deadline;
     // VaultExitBundlesV1 measures shares as `sharesBefore - balanceAfter`; its first withdrawal
-    // accrues the vault before burning. Use the `now` accrual for the floor and the projected
-    // deadline accrual for the fee-mint guard.
+    // accrues the vault before burning. The realized price sits between the raw snapshot price
+    // (pending fee mints not yet diluting it) and the `now` projection (interest the chain may not
+    // have accrued yet, e.g. when the wall clock runs ahead of the chain). Price the floor off the
+    // larger *net* burn of the two endpoints — the raw snapshot mints no fee shares, the `now`
+    // accrual mints `feeSharesNow` — so it never exceeds either, and use the projected deadline
+    // accrual for the fee-mint guard.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );
     const { vault: projectedVaultData } = vaultData.accrueInterest(
       MathLib.max(projectionTimestamp, vaultData.lastUpdate),
     );
+    const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData,
+      deadlineVaultData: vaultData,
+      plan,
+    });
     const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
       vaultData: nowVaultData,
       deadlineVaultData: nowVaultData,
@@ -1289,7 +1307,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
     // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
-    const netSharesBurntNow = sharesBurntNow - feeSharesNow;
+    const sharesBurntForFloor = MathLib.max(
+      sharesBurntRaw,
+      sharesBurntNow - feeSharesNow,
+    );
     if (minSharePriceE27Override != null) {
       // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
       // may round to zero, in which case every positive override is acceptable.
@@ -1298,7 +1319,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           () =>
             computeMinForceWithdrawSharePrice({
               withdrawnAssets: plan.withdrawnAssets,
-              sharesBurnt: netSharesBurntNow,
+              sharesBurnt: sharesBurntForFloor,
               slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
             }),
           VaultV2ForceWithdrawZeroSharePriceError,
@@ -1314,7 +1335,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: netSharesBurntNow,
+        sharesBurnt: sharesBurntForFloor,
         slippageTolerance,
       });
     // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
@@ -1322,12 +1343,33 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
     // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
     validateUint256Field("minSharePriceE27", minSharePriceE27);
-    // VaultExitBundlesV1's burn bound includes fee shares minted by the first withdrawal. Add the
-    // projected fee shares to the price-floor ceiling so the approval covers that mint.
-    // Saturated at `maxUint256` as an ABI-slot guard for an otherwise valid extreme share burn.
+    // The allowance is only a spend cap, never the price protection: the bundle checks
+    // `minSharePriceE27` after its last withdrawal, so an allowance sized exactly to the floor
+    // underflows `_spendAllowance` (panic 0x11) on a below-floor price before that check runs. Size
+    // it for a price at least one tolerance step below the floor so the miss surfaces as the
+    // bundle's own revert instead, and, in any case, for at least one share above the at-floor
+    // burn — a burn of `atFloor + 1` shares prices strictly below the floor since
+    // `atFloor >= exitAssets * RAY / floor`. The `minSharePriceE27 - 1` branch keeps the
+    // denominator strictly below the floor whenever the floor exceeds 1, so even
+    // `slippageTolerance: 0n` leaves price-space headroom; a deeper drop still exhausts the
+    // allowance first. Add the fee shares the first withdrawal mints since the burn measured
+    // on-chain includes them. Saturated at `maxUint256` as an ABI-slot guard.
+    const allowanceSharePriceE27 = MathLib.max(
+      MathLib.min(
+        MathLib.mulDivDown(
+          minSharePriceE27,
+          MathLib.WAD - slippageTolerance,
+          MathLib.WAD,
+        ),
+        minSharePriceE27 - 1n,
+      ),
+      1n,
+    );
     const requiredShareAllowance = MathLib.min(
-      MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) +
-        feeSharesProjected,
+      MathLib.max(
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+      ) + feeSharesProjected,
       maxUint256,
     );
 

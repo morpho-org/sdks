@@ -170,13 +170,16 @@ contract rather than the vault directly. VaultBundlesV1
 burns `msg.sender`'s vault shares and pays out the requested `assets`, minus an optional referral
 fee. Because asset-mode calldata carries no maximum-shares argument, the vault-share allowance
 _is_ the only cap on that burn: `getRequirements()` derives the exact allowance from the vault
-snapshot, deadline, and slippage tolerance, and returns an approval — or an ERC-2612 shares permit
-folded into the call when `supportSignature` is enabled — for exactly that amount. An allowance
-that does not equal the derived cap, including a larger leftover approval, is replaced rather than
-reused, so the cap holds on every withdrawal.
+snapshot, deadline, and slippage tolerance, and returns an approval for exactly that amount — or,
+when `supportSignature` is enabled and the current allowance is below the cap, an ERC-2612 shares
+permit folded into the call. A larger leftover approval is always reset with an onchain approval
+rather than reused (VaultBundlesV1 skips a permit whose nonce was already consumed), so the cap
+holds on every withdrawal.
 
 **Redeem (V1 & V2)** also routes through VaultBundlesV1. The caller grants an exact share
-allowance or signs an embedded ERC-2612 permit. The fixed call redeems the specified shares and
+allowance or, when `supportSignature` is enabled and the current allowance is below the redeemed
+shares, signs an embedded ERC-2612 permit; a larger leftover allowance is always reset with an
+onchain approval. The fixed call redeems the specified shares and
 pays the proceeds, minus an optional referral fee, to the submitting account. It has no
 minimum-assets or source share-price bound.
 

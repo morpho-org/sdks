@@ -38,13 +38,23 @@ const bundles = getChainAddresses(1).bundles!;
 const BUNDLES_TARGET = getAddress(bundles.vaultBundlesV1!) as Address;
 const BLUE_BUNDLES = getAddress(bundles.blueBundlesV1!) as Address;
 const VAULT_EXIT_BUNDLES = getAddress(bundles.vaultExitBundlesV1) as Address;
+const MIDNIGHT_BUNDLES = getAddress(
+  getChainAddresses(1).midnightBundles!,
+) as Address;
 
 // Synthetic chainIds owned by exactly one case each — see chainAddressOverrides.
 const NO_BUNDLES_CHAIN_ID = 1_000_001;
 const SDK_ERROR_CHAIN_ID = 1_000_002;
+const ONLY_MIDNIGHT_CHAIN_ID = 1_000_003;
 
-// No bundles cataloged — retention check fully skipped.
+// Neither bundles nor midnightBundles cataloged — retention check fully skipped.
 chainAddressOverrides.set(NO_BUNDLES_CHAIN_ID, () => ({
+  ...addressesRegistry[1],
+  bundles: undefined,
+  midnightBundles: undefined,
+}));
+// Only midnightBundles present — the check still guards `MidnightBundlesV1`.
+chainAddressOverrides.set(ONLY_MIDNIGHT_CHAIN_ID, () => ({
   ...addressesRegistry[1],
   bundles: undefined,
 }));
@@ -106,7 +116,7 @@ describe("assertNoBundlesRetention", () => {
     ).not.toThrow();
   });
 
-  it("warns and skips when blue-sdk knows the chain but has no bundles config", () => {
+  it("warns and skips when blue-sdk knows the chain but has no restricted intermediary config", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     expect(() =>
@@ -119,7 +129,7 @@ describe("assertNoBundlesRetention", () => {
     ).not.toThrow();
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "Chain known to blue-sdk but has no bundles config, retention check skipped",
+      "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
       { chainId: NO_BUNDLES_CHAIN_ID },
     );
   });
@@ -387,6 +397,42 @@ describe("assertNoBundlesRetention", () => {
     expect(() =>
       assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
     ).not.toThrow();
+  });
+
+  it("behavior: throws when MidnightBundlesV1 retains tokens above dust threshold", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: MIDNIGHT_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlesRetention({ chainId: 1, transfers, assetChanges: [] }),
+    ).toThrow(BlacklistViolationError);
+  });
+
+  it("behavior: guards MidnightBundlesV1 even when the chain has no bundles config", () => {
+    const transfers = parseTransfers([
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: MIDNIGHT_BUNDLES,
+          amount: 1000000n,
+        }),
+      ]),
+    ]);
+    expect(() =>
+      assertNoBundlesRetention({
+        chainId: ONLY_MIDNIGHT_CHAIN_ID,
+        transfers,
+        assetChanges: [],
+      }),
+    ).toThrow(BlacklistViolationError);
   });
 
   // ─── Native ETH ──────────────────────────────────────────────────────────

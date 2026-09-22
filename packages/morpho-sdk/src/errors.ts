@@ -29,6 +29,7 @@ export {
   ChainIdMismatchError as MidnightChainIdMismatchError,
   InvalidEcrecoverSignatureVError as InvalidMidnightEcrecoverSignatureVError,
   InvalidMarketParameterError as InvalidMidnightMarketParameterError,
+  InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
   InvalidOfferGroupError as InvalidMidnightOfferGroupError,
   InvalidOfferParameterError as InvalidMidnightOfferParameterError,
