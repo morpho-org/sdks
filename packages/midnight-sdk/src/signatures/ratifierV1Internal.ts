@@ -81,7 +81,7 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
  *
  * Caller-provided descriptors are fully re-validated: height, lengths, leaf
  * hashes, visible-offer correspondence, padding placement, and the Merkle
- * root must all agree, mirroring `RatifierUtils.normalizeTree`.
+ * root must all agree, mirroring `Ratifier.normalizeTree`.
  */
 export function resolveRatifierV1Tree<
   TStruct extends { readonly offer: OfferStruct },
