@@ -172,7 +172,8 @@ jobs:
 
       # A push during the review cancels this run via the concurrency group, leaving Claude's
       # "PR Review in progress" tracking comment behind next to the superseding run's one. Delete the
-      # comments carrying this run's job link (scripts/ci/claude-review-gate.ts cleanup), with the
+      # in-progress comments still carrying this run's `[View job run]` link (a finalized summary is
+      # rewritten to `[View job]` and retained) via scripts/ci/claude-review-gate.ts cleanup, with the
       # same empty-environment trusted-copy invocation as the verify step.
       - name: Delete tracking comments of the cancelled run
         if: cancelled() && github.event_name == 'pull_request' && steps.trusted.outputs.node_bin != ''

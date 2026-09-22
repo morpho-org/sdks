@@ -63,7 +63,10 @@ export type FetchLike = (
   status: number;
 }>;
 
-/** Inputs of {@link listReviews}. */
+/**
+ * Request options shared by the GitHub API helpers ({@link listReviews},
+ * {@link listIssueComments}, {@link deleteIssueComment}).
+ */
 export interface ListReviewsOptions {
   readonly apiBaseUrl?: string;
   readonly fetchImpl?: FetchLike;
@@ -288,12 +291,16 @@ export function countNewReviews(
  * the "Claude Code is working…" placeholder and the "PR Review in progress" checklist Claude rewrites
  * it into carry that link, so the run id is what binds a comment to the job that posted it. Once the
  * action finalizes the comment it rewrites the link text to `[View job](…)`, so a finished summary is
- * never selected even when the run is cancelled afterwards.
+ * never selected even when the run is cancelled afterwards. The run id must be numeric: it is
+ * interpolated into the matching pattern, and a mis-wired value must not widen the deletion.
  */
 export function selectRunTrackingComments(
   comments: readonly IssueComment[],
   runId: string,
 ): IssueComment[] {
+  if (!/^\d+$/.test(runId)) {
+    throw new Error(`Invalid GITHUB_RUN_ID: expected digits, got "${runId}".`);
+  }
   const runLink = new RegExp(
     `\\[View job run\\]\\([^)]*/actions/runs/${runId}(?:[^0-9)][^)]*)?\\)`,
   );

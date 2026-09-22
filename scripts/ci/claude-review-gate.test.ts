@@ -235,6 +235,27 @@ describe("selectRunTrackingComments", () => {
     ).toEqual([]);
   });
 
+  test("behavior: a non-digit suffix after the run id still matches", () => {
+    expect(
+      selectRunTrackingComments(
+        [
+          {
+            body: `Claude Code is working…\n\n[View job run](https://github.com/morpho-org/sdks/actions/runs/${RUN_ID}/attempts/2)`,
+            id: 1,
+            user: { login: REVIEW_AUTHOR },
+          },
+        ],
+        RUN_ID,
+      ).map((c) => c.id),
+    ).toEqual([1]);
+  });
+
+  test("error: rejects a non-numeric run id", () => {
+    expect(() => selectRunTrackingComments([trackingComment(1)], ".*")).toThrow(
+      /Invalid GITHUB_RUN_ID/,
+    );
+  });
+
   test("behavior: a finalized comment with the same run link is retained", () => {
     expect(
       selectRunTrackingComments(
