@@ -112,7 +112,7 @@
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
-    "fast-check": "^4.9.0",
+    "fast-check": "^4.10.1",
     "typescript": "catalog:",
     "viem": "^2.55.10",
     "vitest": "catalog:"
