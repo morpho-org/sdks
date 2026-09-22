@@ -3,11 +3,11 @@ import type { IOffer, OfferStruct } from "../offers/index.js";
 import type {
   PriceRatifierV1Leaf,
   PriceRatifierV1LeafStruct,
-} from "./PriceRatifierV1Utils.js";
+} from "./PriceRatifierV1.js";
 import type {
   RateRatifierV1Leaf,
   RateRatifierV1LeafStruct,
-} from "./RateRatifierV1Utils.js";
+} from "./RateRatifierV1.js";
 import type { Tree } from "./Tree.js";
 import type {
   RatifierTreeInput,

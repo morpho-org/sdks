@@ -28,9 +28,9 @@ import {
   OfferUtils,
 } from "../offers/index.js";
 import {
-  EcrecoverRatifierUtils,
+  EcrecoverRatifier,
   type EcrecoverSignatureInput,
-} from "./EcrecoverRatifierUtils.js";
+} from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import {
@@ -38,10 +38,10 @@ import {
   isEmptyOfferStruct,
 } from "./offerStructInternal.js";
 import { Payload } from "./Payload.js";
-import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
-import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { PriceRatifierV1 } from "./PriceRatifierV1.js";
+import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifier } from "./SetterRatifier.js";
 import type { Tree } from "./Tree.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 import type { AnyTreeSnapshot, TreeCreateRequest } from "./treeTypes.js";
@@ -622,20 +622,20 @@ export namespace TreeUtils {
       }
     } else if (params.ratification.type === "ecrecover") {
       if (params.ratification.signature != null) {
-        items = await EcrecoverRatifierUtils.ratify({
+        items = await EcrecoverRatifier.ratify({
           tree: params.tree,
           signature: params.ratification.signature,
           account: params.ratification.account,
         });
       } else {
-        items = await EcrecoverRatifierUtils.ratify({
+        items = await EcrecoverRatifier.ratify({
           tree: params.tree,
           client: params.ratification.client,
           account: params.ratification.account,
         });
       }
     } else {
-      items = SetterRatifierUtils.ratify({ tree: params.tree });
+      items = SetterRatifier.ratify({ tree: params.tree });
     }
 
     const payload = await Payload.encode(items);
@@ -736,9 +736,7 @@ export namespace TreeUtils {
     if ("type" in entries) {
       switch (entries.type) {
         case "priceV1": {
-          const descriptor = PriceRatifierV1Utils.buildDescriptor(
-            entries.entries,
-          );
+          const descriptor = PriceRatifierV1.buildDescriptor(entries.entries);
           return deepFreeze({
             ...descriptor,
             type: "priceV1",
@@ -748,9 +746,7 @@ export namespace TreeUtils {
           });
         }
         case "rateV1": {
-          const descriptor = RateRatifierV1Utils.buildDescriptor(
-            entries.entries,
-          );
+          const descriptor = RateRatifierV1.buildDescriptor(entries.entries);
           return deepFreeze({
             ...descriptor,
             type: "rateV1",
@@ -761,7 +757,7 @@ export namespace TreeUtils {
         }
         case "ecrecover":
         case "setter": {
-          const { tree } = RatifierUtils.normalizeRatifierTree({
+          const { tree } = Ratifier.normalizeRatifierTree({
             tree: entries.entries,
             label: entries.type === "ecrecover" ? "Ecrecover" : "Setter",
           });
@@ -859,7 +855,7 @@ export namespace TreeUtils {
    * Builds a Merkle root from already-hashed leaves.
    *
    * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
-   * offer hashes, for example `RateRatifierV1Utils.hashLeaf` outputs. The leaf
+   * offer hashes, for example `RateRatifierV1.hashLeaf` outputs. The leaf
    * count must be a power of two; pad non-power-of-two lists beforehand.
    *
    * @param leaves - Leaf hashes in leaf order; length must be a power of two.
@@ -1104,7 +1100,7 @@ export namespace TreeUtils {
    * Verifies a local Merkle proof for an already-hashed leaf against a root.
    *
    * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
-   * offer hashes, for example `RateRatifierV1Utils.hashLeaf` outputs. The leaf
+   * offer hashes, for example `RateRatifierV1.hashLeaf` outputs. The leaf
    * index determines each sibling's left/right position, matching
    * `HashLib.isLeaf` onchain.
    *

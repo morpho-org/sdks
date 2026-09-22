@@ -29,7 +29,7 @@ import { MarketParams } from "../market/index.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { eip712Digest } from "./eip712.js";
 import type { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
 import type { TypedRatifierTreeInput } from "./treeTypes.js";
 
@@ -146,17 +146,17 @@ function toCanonicalYParity(v: number): 0 | 1 {
  *
  * @example
  * ```ts
- * import { EcrecoverRatifierUtils, type DecodedEcrecoverRatifierData } from "@morpho-org/midnight-sdk";
+ * import { EcrecoverRatifier, type DecodedEcrecoverRatifierData } from "@morpho-org/midnight-sdk";
  * import { zeroHash } from "viem";
  *
- * const data = EcrecoverRatifierUtils.encodeRatifierData({
+ * const data = EcrecoverRatifier.encodeRatifierData({
  *   signature: { v: 27, r: zeroHash, s: zeroHash },
  *   root: zeroHash,
  *   leafIndex: 0n,
  *   proof: [],
  * });
  * const decoded: DecodedEcrecoverRatifierData =
- *   EcrecoverRatifierUtils.decodeRatifierData(data);
+ *   EcrecoverRatifier.decodeRatifierData(data);
  * console.log(decoded.signature.v);
  * ```
  */
@@ -174,7 +174,7 @@ export interface DecodedEcrecoverRatifierData extends TreeProof {
  *
  * @example
  * ```ts
- * import { EcrecoverRatifierUtils, Offer, Tree, type EcrecoverRatificationTypedData } from "@morpho-org/midnight-sdk";
+ * import { EcrecoverRatifier, Offer, Tree, type EcrecoverRatificationTypedData } from "@morpho-org/midnight-sdk";
  * import { zeroAddress } from "viem";
  *
  * const offer = Offer.create({
@@ -203,7 +203,7 @@ export interface DecodedEcrecoverRatifierData extends TreeProof {
  *   maxUnits: 100n,
  * });
  * const typedData: EcrecoverRatificationTypedData =
- *   EcrecoverRatifierUtils.typedData({
+ *   EcrecoverRatifier.typedData({
  *     tree: Tree.create([offer]),
  *     chainId: 8453n,
  *   });
@@ -247,7 +247,7 @@ export type EcrecoverSignatureInput =
   | Signature<number, number>;
 
 /**
- * Parameters for {@link EcrecoverRatifierUtils.typedData}.
+ * Parameters for {@link EcrecoverRatifier.typedData}.
  *
  * Use these after `Tree.create` and after the maker route has been classified
  * as `ecrecover`.
@@ -297,7 +297,7 @@ export interface EcrecoverRatifierTypedDataParams {
 }
 
 /**
- * Parameters for {@link EcrecoverRatifierUtils.ratify}.
+ * Parameters for {@link EcrecoverRatifier.ratify}.
  *
  * Use this after tree validation. Provide either a signing client plus account
  * or a precomputed signature plus the account that produced it.
@@ -468,12 +468,12 @@ export interface VerifiedEcrecoverRatifierData
  *
  * @example
  * ```ts
- * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+ * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
  *
- * console.log(EcrecoverRatifierUtils.treeTypeHash(0));
+ * console.log(EcrecoverRatifier.treeTypeHash(0));
  * ```
  */
-export namespace EcrecoverRatifierUtils {
+export namespace EcrecoverRatifier {
   /**
    * Returns the Solidity HashLib tree typehash for a tree height.
    *
@@ -482,9 +482,9 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when height exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
-   * console.log(EcrecoverRatifierUtils.treeTypeHash(0));
+   * console.log(EcrecoverRatifier.treeTypeHash(0));
    * ```
    */
   export function treeTypeHash(height: number) {
@@ -509,7 +509,7 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
@@ -539,7 +539,7 @@ export namespace EcrecoverRatifierUtils {
    *   maxUnits: 100n,
    * });
    *
-   * const typedData = EcrecoverRatifierUtils.typedData({
+   * const typedData = EcrecoverRatifier.typedData({
    *   tree: Tree.create([offer]),
    *   chainId: 8453n,
    * });
@@ -550,7 +550,7 @@ export namespace EcrecoverRatifierUtils {
     params: EcrecoverRatifierTypedDataParams,
   ): EcrecoverRatificationTypedData {
     const { tree, ratifier: verifyingContract } =
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: params.tree,
         label: "Ecrecover",
       });
@@ -583,7 +583,7 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when height exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
@@ -613,7 +613,7 @@ export namespace EcrecoverRatifierUtils {
    *   maxUnits: 100n,
    * });
    *
-   * const digest = EcrecoverRatifierUtils.digest({
+   * const digest = EcrecoverRatifier.digest({
    *   tree: Tree.create([offer]),
    *   chainId: 8453n,
    * });
@@ -622,7 +622,7 @@ export namespace EcrecoverRatifierUtils {
    */
   export function digest(params: EcrecoverRatifierTypedDataParams) {
     const { tree, ratifier: verifyingContract } =
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: params.tree,
         label: "Ecrecover",
       });
@@ -661,10 +661,10 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when `proofLength` exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const digest = EcrecoverRatifierUtils.digestForRoot({
+   * const digest = EcrecoverRatifier.digestForRoot({
    *   chainId: 8453n,
    *   offer,
    *   root: zeroHash,
@@ -710,9 +710,9 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const digest = EcrecoverRatifierUtils.digestRatifierData({
+   * const digest = EcrecoverRatifier.digestRatifierData({
    *   chainId: 8453n,
    *   offer,
    *   ratifierData,
@@ -752,9 +752,9 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+   * const verified = await EcrecoverRatifier.verifyRatifierData({
    *   chainId: 8453n,
    *   offer,
    *   ratifierData,
@@ -816,7 +816,7 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { createWalletClient, http, zeroAddress } from "viem";
    * import { base } from "viem/chains";
@@ -851,7 +851,7 @@ export namespace EcrecoverRatifierUtils {
    *   transport: http(),
    * });
    *
-   * const signature = await EcrecoverRatifierUtils.sign({
+   * const signature = await EcrecoverRatifier.sign({
    *   tree: Tree.create([offer]),
    *   client,
    *   account: offer.maker,
@@ -864,7 +864,7 @@ export namespace EcrecoverRatifierUtils {
     readonly client: Client<Transport, Chain, Account | undefined>;
     readonly account: Account | Address;
   }): Promise<Hex> {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Ecrecover",
     });
@@ -927,10 +927,10 @@ export namespace EcrecoverRatifierUtils {
    * @returns Signature tuple.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const signature = EcrecoverRatifierUtils.toSignature({
+   * const signature = EcrecoverRatifier.toSignature({
    *   v: 27,
    *   r: zeroHash,
    *   s: zeroHash,
@@ -973,9 +973,9 @@ export namespace EcrecoverRatifierUtils {
    * @returns ABI-encoded ratifier data.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const data = EcrecoverRatifierUtils.encodeRatifierData({
+   * const data = EcrecoverRatifier.encodeRatifierData({
    *   signature: {
    *     v: 27,
    *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -1018,16 +1018,16 @@ export namespace EcrecoverRatifierUtils {
    * @returns Decoded Ecrecover ratifier data.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const data = EcrecoverRatifierUtils.encodeRatifierData({
+   * const data = EcrecoverRatifier.encodeRatifierData({
    *   signature: { v: 27, r: zeroHash, s: zeroHash },
    *   root: zeroHash,
    *   leafIndex: 0n,
    *   proof: [],
    * });
-   * const decoded = EcrecoverRatifierUtils.decodeRatifierData(data);
+   * const decoded = EcrecoverRatifier.decodeRatifierData(data);
    * console.log(decoded.leafIndex);
    * ```
    */
@@ -1062,7 +1062,7 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils, Offer, Tree } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier, Offer, Tree } from "@morpho-org/midnight-sdk";
    * import { zeroAddress, zeroHash } from "viem";
    *
    * const offer = Offer.create({
@@ -1090,7 +1090,7 @@ export namespace EcrecoverRatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const data = EcrecoverRatifierUtils.ratifierData({
+   * const data = EcrecoverRatifier.ratifierData({
    *   tree: Tree.create([offer]),
    *   leafIndex: 0n,
    *   signature: { v: 27, r: zeroHash, s: zeroHash },
@@ -1099,7 +1099,7 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export function ratifierData(params: EcrecoverRatifierDataParams): Hex {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Ecrecover",
     });
@@ -1130,7 +1130,7 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTypedDataSignatureError} when client signing or a precomputed signature does not recover to `params.account`.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { createWalletClient, http, zeroAddress } from "viem";
    * import { base } from "viem/chains";
@@ -1165,7 +1165,7 @@ export namespace EcrecoverRatifierUtils {
    *   transport: http(),
    * });
    *
-   * const items = await EcrecoverRatifierUtils.ratify({
+   * const items = await EcrecoverRatifier.ratify({
    *   tree: Tree.create([offer]),
    *   client,
    *   account: offer.maker,
@@ -1176,7 +1176,7 @@ export namespace EcrecoverRatifierUtils {
   export async function ratify(
     params: EcrecoverRatifierRatifyParams,
   ): Promise<readonly Payload.Item[]> {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Ecrecover",
     });
@@ -1239,3 +1239,6 @@ export namespace EcrecoverRatifierUtils {
     }));
   }
 }
+
+/** @deprecated Use {@link EcrecoverRatifier}. Retained for compatibility. */
+export { EcrecoverRatifier as EcrecoverRatifierUtils };

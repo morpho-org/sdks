@@ -8,7 +8,7 @@ import {
 import { InvalidTreeError } from "../errors.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
 import type { TypedRatifierTreeInput } from "./treeTypes.js";
 
@@ -26,16 +26,16 @@ const setterRatifierDataAbi = [
  *
  * @example
  * ```ts
- * import { SetterRatifierUtils, type DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
+ * import { SetterRatifier, type DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
  * import { zeroHash } from "viem";
  *
- * const data = SetterRatifierUtils.encodeRatifierData({
+ * const data = SetterRatifier.encodeRatifierData({
  *   root: zeroHash,
  *   leafIndex: 0n,
  *   proof: [],
  * });
  * const decoded: DecodedSetterRatifierData =
- *   SetterRatifierUtils.decodeRatifierData(data);
+ *   SetterRatifier.decodeRatifierData(data);
  * console.log(decoded.root);
  * ```
  */
@@ -113,12 +113,12 @@ export interface SetterRatifierDataVerificationParams {
  *
  * @example
  * ```ts
- * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+ * import { SetterRatifier } from "@morpho-org/midnight-sdk";
  *
- * console.log(typeof SetterRatifierUtils.encodeRatifierData);
+ * console.log(typeof SetterRatifier.encodeRatifierData);
  * ```
  */
-export namespace SetterRatifierUtils {
+export namespace SetterRatifier {
   /**
    * Encodes SetterRatifier ratifier data.
    *
@@ -132,9 +132,9 @@ export namespace SetterRatifierUtils {
    * @returns ABI-encoded ratifier data.
    * @example
    * ```ts
-   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const data = SetterRatifierUtils.encodeRatifierData({
+   * const data = SetterRatifier.encodeRatifierData({
    *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
    *   leafIndex: 0n,
    *   proof: [],
@@ -164,15 +164,15 @@ export namespace SetterRatifierUtils {
    * @returns Decoded Setter ratifier data.
    * @example
    * ```ts
-   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const data = SetterRatifierUtils.encodeRatifierData({
+   * const data = SetterRatifier.encodeRatifierData({
    *   root: zeroHash,
    *   leafIndex: 0n,
    *   proof: [],
    * });
-   * const decoded = SetterRatifierUtils.decodeRatifierData(data);
+   * const decoded = SetterRatifier.decodeRatifierData(data);
    * console.log(decoded.proof);
    * ```
    */
@@ -198,9 +198,9 @@ export namespace SetterRatifierUtils {
    * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
    * @example
    * ```ts
-   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const decoded = SetterRatifierUtils.verifyRatifierData({
+   * const decoded = SetterRatifier.verifyRatifierData({
    *   offer,
    *   ratifierData,
    * });
@@ -240,7 +240,7 @@ export namespace SetterRatifierUtils {
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
    * @example
    * ```ts
-   * import { Offer, SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer, SetterRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
    * const offer = Offer.create({
@@ -268,7 +268,7 @@ export namespace SetterRatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000005000",
    *   maxUnits: 100n,
    * });
-   * const data = SetterRatifierUtils.ratifierData({
+   * const data = SetterRatifier.ratifierData({
    *   tree: Tree.create([offer]),
    *   leafIndex: 0n,
    * });
@@ -276,7 +276,7 @@ export namespace SetterRatifierUtils {
    * ```
    */
   export function ratifierData(params: SetterRatifierDataParams): Hex {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Setter",
     });
@@ -304,7 +304,7 @@ export namespace SetterRatifierUtils {
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @example
    * ```ts
-   * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
@@ -334,7 +334,7 @@ export namespace SetterRatifierUtils {
    *   maxUnits: 100n,
    * });
    *
-   * const items = SetterRatifierUtils.ratify({
+   * const items = SetterRatifier.ratify({
    *   tree: Tree.create([offer]),
    * });
    * console.log(items.length);
@@ -343,7 +343,7 @@ export namespace SetterRatifierUtils {
   export function ratify(params: {
     readonly tree: TypedRatifierTreeInput<"setter">;
   }): readonly Payload.Item[] {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Setter",
     });
@@ -359,3 +359,6 @@ export namespace SetterRatifierUtils {
     }));
   }
 }
+
+/** @deprecated Use {@link SetterRatifier}. Retained for compatibility. */
+export { SetterRatifier as SetterRatifierUtils };

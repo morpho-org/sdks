@@ -24,12 +24,12 @@ import {
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifier } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifier } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -231,7 +231,7 @@ describe("Tree.mempoolValidate", () => {
       }),
     ]);
     const signature = await account.signTypedData(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+      EcrecoverRatifier.typedData({ tree, chainId: 8453n }),
     );
 
     await tree.mempoolValidate({
@@ -248,13 +248,13 @@ describe("Tree.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
+    const ratifierData = EcrecoverRatifier.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
     expect(ratifierData.signature).toEqual(
-      EcrecoverRatifierUtils.toSignature(signature),
+      EcrecoverRatifier.toSignature(signature),
     );
     expect(
       TreeUtils.verifyProof({
@@ -365,7 +365,7 @@ describe("TreeUtils.mempoolValidate", () => {
       }),
     ]);
     const signature = await account.signTypedData(
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+      EcrecoverRatifier.typedData({ tree, chainId: 8453n }),
     );
 
     await TreeUtils.mempoolValidate({
@@ -383,13 +383,13 @@ describe("TreeUtils.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
+    const ratifierData = EcrecoverRatifier.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
     expect(ratifierData.signature).toEqual(
-      EcrecoverRatifierUtils.toSignature(signature),
+      EcrecoverRatifier.toSignature(signature),
     );
     expect(ratifierData.root).toBe(tree.root);
   });
@@ -477,7 +477,7 @@ describe("TreeUtils.mempoolValidate", () => {
       Record<string, unknown>
     >;
     const decoded = await Payload.decode(body.payload as Hex);
-    const ratifierData = SetterRatifierUtils.decodeRatifierData(
+    const ratifierData = SetterRatifier.decodeRatifierData(
       decoded[0]!.ratifierData,
     );
 
@@ -995,13 +995,13 @@ describe("TreeUtils.buildProofs", () => {
   });
 });
 
-describe("RatifierUtils.normalizeRatifierTree", () => {
+describe("Ratifier.normalizeRatifierTree", () => {
   test("behavior: accepts grouped offer input", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
 
     expect(
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: [group],
         label: "Ecrecover",
       }).ratifier,
@@ -1010,7 +1010,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
   test("error: InvalidTreeError for malformed empty tree-like input", () => {
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: {
           offers: [],
           paddedOffers: [],

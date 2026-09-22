@@ -3,8 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { GroupUtils } from "./GroupUtils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifier } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -22,7 +22,7 @@ const { baseOffer } = createFixtures({
   ecrecoverRatifier,
 });
 
-describe("SetterRatifierUtils.ratify", () => {
+describe("SetterRatifier.ratify", () => {
   test("default", () => {
     const offer = baseOffer({
       maxAssets: 0n,
@@ -30,10 +30,8 @@ describe("SetterRatifierUtils.ratify", () => {
     });
     const tree = Tree.create([offer]);
 
-    const items = SetterRatifierUtils.ratify({ tree });
-    const decoded = SetterRatifierUtils.decodeRatifierData(
-      items[0]!.ratifierData,
-    );
+    const items = SetterRatifier.ratify({ tree });
+    const decoded = SetterRatifier.decodeRatifierData(items[0]!.ratifierData);
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).toBe(tree.offers[0]);
@@ -54,11 +52,11 @@ describe("SetterRatifierUtils.ratify", () => {
       ),
     );
 
-    const items = SetterRatifierUtils.ratify({ tree });
+    const items = SetterRatifier.ratify({ tree });
 
     expect(items).toHaveLength(3);
     for (const [index, item] of items.entries()) {
-      const decoded = SetterRatifierUtils.decodeRatifierData(item.ratifierData);
+      const decoded = SetterRatifier.decodeRatifierData(item.ratifierData);
       expect(decoded.leafIndex).toBe(BigInt(index));
       expect(
         TreeUtils.verifyProof({
@@ -77,10 +75,8 @@ describe("SetterRatifierUtils.ratify", () => {
       ratifier: setterRatifier,
     });
 
-    const items = SetterRatifierUtils.ratify({ tree: offer });
-    const decoded = SetterRatifierUtils.decodeRatifierData(
-      items[0]!.ratifierData,
-    );
+    const items = SetterRatifier.ratify({ tree: offer });
+    const decoded = SetterRatifier.decodeRatifierData(items[0]!.ratifierData);
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).not.toBe(offer);
@@ -100,10 +96,10 @@ describe("SetterRatifierUtils.ratify", () => {
       baseOffer({ maxAssets: 0n, maxUnits: 1n, ratifier: setterRatifier }),
       baseOffer({ maxAssets: 0n, maxUnits: 2n, ratifier: setterRatifier }),
     ]);
-    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+    const normalize = vi.spyOn(Ratifier, "normalizeRatifierTree");
 
     try {
-      SetterRatifierUtils.ratify({ tree });
+      SetterRatifier.ratify({ tree });
 
       expect(
         normalize.mock.calls.filter(([params]) => params.tree === tree),
@@ -125,13 +121,11 @@ describe("SetterRatifierUtils.ratify", () => {
       }),
     ]);
 
-    expect(() => SetterRatifierUtils.ratify({ tree })).toThrow(
-      InvalidTreeError,
-    );
+    expect(() => SetterRatifier.ratify({ tree })).toThrow(InvalidTreeError);
   });
 });
 
-describe("SetterRatifierUtils.ratifierData", () => {
+describe("SetterRatifier.ratifierData", () => {
   test("error: InvalidTreeError mixed ratifiers", () => {
     const tree = Tree.create([
       baseOffer({
@@ -144,22 +138,22 @@ describe("SetterRatifierUtils.ratifierData", () => {
       }),
     ]);
 
-    expect(() =>
-      SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n }),
-    ).toThrow(InvalidTreeError);
+    expect(() => SetterRatifier.ratifierData({ tree, leafIndex: 0n })).toThrow(
+      InvalidTreeError,
+    );
   });
 });
 
-describe("SetterRatifierUtils.verifyRatifierData", () => {
+describe("SetterRatifier.verifyRatifierData", () => {
   test("behavior: verifies proof and returns decoded ratifier data", () => {
     const offer = baseOffer({
       maxAssets: 0n,
       ratifier: setterRatifier,
     });
     const tree = Tree.create([offer]);
-    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+    const data = SetterRatifier.ratifierData({ tree, leafIndex: 0n });
 
-    const decoded = SetterRatifierUtils.verifyRatifierData({
+    const decoded = SetterRatifier.verifyRatifierData({
       offer: tree.offers[0]!,
       ratifierData: data,
     });
@@ -180,10 +174,10 @@ describe("SetterRatifierUtils.verifyRatifierData", () => {
         ratifier: setterRatifier,
       }),
     ]);
-    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+    const data = SetterRatifier.ratifierData({ tree, leafIndex: 0n });
 
     expect(() =>
-      SetterRatifierUtils.verifyRatifierData({
+      SetterRatifier.verifyRatifierData({
         offer: tree.offers[1]!,
         ratifierData: data,
       }),
@@ -191,15 +185,15 @@ describe("SetterRatifierUtils.verifyRatifierData", () => {
   });
 });
 
-describe("SetterRatifierUtils.encodeRatifierData", () => {
+describe("SetterRatifier.encodeRatifierData", () => {
   test("behavior: decode round trip", () => {
-    const data = SetterRatifierUtils.encodeRatifierData({
+    const data = SetterRatifier.encodeRatifierData({
       root,
       leafIndex: 3n,
       proof: [proofNode],
     });
 
-    expect(SetterRatifierUtils.decodeRatifierData(data)).toEqual({
+    expect(SetterRatifier.decodeRatifierData(data)).toEqual({
       root,
       leafIndex: 3n,
       proof: [proofNode],

@@ -12,9 +12,9 @@ import {
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
-import { PriceRatifierV1Utils } from "./PriceRatifierV1Utils.js";
-import { RateRatifierV1Utils } from "./RateRatifierV1Utils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { PriceRatifierV1 } from "./PriceRatifierV1.js";
+import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { Ratifier } from "./Ratifier.js";
 import {
   type TreeCreateParams,
   type TreeInput,
@@ -185,8 +185,8 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * Creates a route-typed tree from standard offer/groups or Price/Rate leaf inputs.
    *
    * Use after `Offer.create` and optional `Group.create`, before
-   * `Tree.mempoolValidate`, `EcrecoverRatifierUtils.ratify`, or
-   * `SetterRatifierUtils.ratify`. Groups are flattened, and every standalone
+   * `Tree.mempoolValidate`, `EcrecoverRatifier.ratify`, or
+   * `SetterRatifier.ratify`. Groups are flattened, and every standalone
    * offer is normalized as a singleton group using the router-compatible group
    * id algorithm.
    *
@@ -327,7 +327,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
     switch (descriptor.type) {
       case "priceV1":
         // Validate caller-controlled hashes, offers and padding before constructing an instance.
-        PriceRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 0n });
+        PriceRatifierV1.buildProof({ tree: descriptor, leafIndex: 0n });
         return new Tree("priceV1", {
           ...descriptor,
           entries: descriptor.entries.map((entry, index) => ({
@@ -340,7 +340,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
         });
       case "rateV1":
         // Validate caller-controlled hashes, offers and padding before constructing an instance.
-        RateRatifierV1Utils.buildProof({ tree: descriptor, leafIndex: 0n });
+        RateRatifierV1.buildProof({ tree: descriptor, leafIndex: 0n });
         return new Tree("rateV1", {
           ...descriptor,
           entries: descriptor.entries.map((entry, index) => ({
@@ -356,7 +356,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
       case "setter":
       case undefined: {
         // Validate the complete standard offer commitment without reassigning groups.
-        RatifierUtils.normalizeRatifierTree({
+        Ratifier.normalizeRatifierTree({
           tree: { ...descriptor, paddedOffers: descriptor.entries },
           label: descriptor.type === "setter" ? "Setter" : "Ecrecover",
         });
@@ -465,10 +465,10 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
       params.ratification == null
         ? this.offers.map((offer) => ({ offer, ratifierData: "0x" as const }))
         : this.type === "priceV1"
-          ? PriceRatifierV1Utils.ratify({
+          ? PriceRatifierV1.ratify({
               tree: descriptor as TreeSnapshot<"priceV1">,
             })
-          : RateRatifierV1Utils.ratify({
+          : RateRatifierV1.ratify({
               tree: descriptor as TreeSnapshot<"rateV1">,
             });
     const result = await MidnightApi.validateMempoolPayload({
