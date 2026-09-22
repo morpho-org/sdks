@@ -136,8 +136,9 @@ const expectedSharesBurnt = (params: {
 };
 
 // The allowance the entity approves: the share burn `exitAssets` costs at a price one
-// `slippageTolerance` step (at minimum one RAY price unit) below the floor, so a below-floor
-// price reverts on the contract's `minSharePriceE27` check rather than on the allowance.
+// `slippageTolerance` step (at minimum one RAY price unit) below the floor and, in any case, one
+// share above the burn at the floor, so a below-floor price reverts on the contract's
+// `minSharePriceE27` check rather than on the allowance.
 const priceFloorCeiling = (params: {
   exitAssets: bigint;
   minSharePriceE27: bigint;
@@ -146,20 +147,24 @@ const priceFloorCeiling = (params: {
   const slippageTolerance =
     params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
 
-  return MathLib.mulDivUp(
-    params.exitAssets,
-    MathLib.RAY,
-    MathLib.max(
-      MathLib.min(
-        MathLib.mulDivDown(
-          params.minSharePriceE27,
-          MathLib.WAD - slippageTolerance,
-          MathLib.WAD,
+  return MathLib.max(
+    MathLib.mulDivUp(
+      params.exitAssets,
+      MathLib.RAY,
+      MathLib.max(
+        MathLib.min(
+          MathLib.mulDivDown(
+            params.minSharePriceE27,
+            MathLib.WAD - slippageTolerance,
+            MathLib.WAD,
+          ),
+          params.minSharePriceE27 - 1n,
         ),
-        params.minSharePriceE27 - 1n,
+        1n,
       ),
-      1n,
     ),
+    MathLib.mulDivUp(params.exitAssets, MathLib.RAY, params.minSharePriceE27) +
+      1n,
   );
 };
 
@@ -276,6 +281,41 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     expect(allowance).toBeGreaterThan(sharesAtFloor);
     expect(allowance).toBe(
       MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27 - 1n),
+    );
+  });
+
+  test("behavior: a zero slippage tolerance leaves one share of headroom at a realistic share price", async () => {
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = vaultFor(handle, { supportSignature: true }).forceWithdraw({
+      exitAssets: 51n,
+      // A ~1:1 share price puts the E27 floor near 1e27, where the one-price-unit denominator
+      // step rounds to the same share count as the at-floor burn; the share-space branch is what
+      // keeps the headroom on realistic vaults.
+      vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+      userAddress: IN_KIND_USER,
+      slippageTolerance: 0n,
+    });
+    const [requirement] = await exit.getRequirements();
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (requirement?.action.type !== "permit") {
+      throw new Error("Expected a permit requirement");
+    }
+    const allowance = requirement.action.args.amount;
+    const sharesAtFloor = MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27);
+
+    // Price-space headroom rounds away here: `mulDivUp(51, RAY, floor - 1)` collides with the
+    // at-floor burn, so the guarantee comes from `atFloor + 1` shares.
+    expect(MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27 - 1n)).toBe(
+      sharesAtFloor,
+    );
+    expect(allowance).toBe(sharesAtFloor + 1n);
+    expect(allowance).toBe(
+      priceFloorCeiling({
+        exitAssets: 51n,
+        minSharePriceE27,
+        slippageTolerance: 0n,
+      }),
     );
   });
 
@@ -448,7 +488,7 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ),
     ).toBe(0n);
     expect(approval.action.args.amount).toBe(
-      MathLib.min(MathLib.mulDivUp(1n, MathLib.RAY, 1n), maxUint256),
+      MathLib.min(MathLib.mulDivUp(1n, MathLib.RAY, 1n) + 1n, maxUint256),
     );
   });
 

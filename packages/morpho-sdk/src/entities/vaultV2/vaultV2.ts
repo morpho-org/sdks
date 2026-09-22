@@ -446,11 +446,10 @@ export interface VaultV2Actions {
    * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
    * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
    * full-balance exit does not revert for insufficient shares. The approved share allowance this
-   * handle returns covers a burn one `slippageTolerance` step below the price floor — at minimum
-   * one RAY price unit whenever the floor exceeds 1 (a floor of exactly 1 is already the smallest
-   * representable price and has no headroom), so `slippageTolerance: 0n` still has headroom —
-   * so a below-floor price reverts on the contract's `minSharePriceE27` check rather than on the
-   * allowance.
+   * handle returns covers a burn at least one `slippageTolerance` step below the price floor
+   * and, in any case, at least one share above the burn at the floor, so a price within that
+   * headroom below the floor reverts on the contract's `minSharePriceE27` check rather than on
+   * the allowance; a deeper drop can still surface as an ERC-20 allowance underflow.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
@@ -1344,12 +1343,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     // The allowance is only a spend cap, never the price protection: the bundle checks
     // `minSharePriceE27` after its last withdrawal, so an allowance sized exactly to the floor
     // underflows `_spendAllowance` (panic 0x11) on a below-floor price before that check runs. Size
-    // it for a price one tolerance step below the floor so the miss surfaces as the bundle's own
-    // revert instead, and add the fee shares the first withdrawal mints since the burn measured
-    // on-chain includes them. The `minSharePriceE27 - 1` branch keeps the denominator strictly
-    // below the floor whenever the floor exceeds 1, so even `slippageTolerance: 0n` leaves
-    // headroom; only a floor of exactly 1 — already the smallest representable price — has none.
-    // Saturated at `maxUint256` as an ABI-slot guard.
+    // it for a price at least one tolerance step below the floor so the miss surfaces as the
+    // bundle's own revert instead, and, in any case, for at least one share above the at-floor
+    // burn — a burn of `atFloor + 1` shares prices strictly below the floor since
+    // `atFloor >= exitAssets * RAY / floor`. The `minSharePriceE27 - 1` branch keeps the
+    // denominator strictly below the floor whenever the floor exceeds 1, so even
+    // `slippageTolerance: 0n` leaves price-space headroom; a deeper drop still exhausts the
+    // allowance first. Add the fee shares the first withdrawal mints since the burn measured
+    // on-chain includes them. Saturated at `maxUint256` as an ABI-slot guard.
     const allowanceSharePriceE27 = MathLib.max(
       MathLib.min(
         MathLib.mulDivDown(
@@ -1362,8 +1363,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       1n,
     );
     const requiredShareAllowance = MathLib.min(
-      MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27) +
-        feeSharesProjected,
+      MathLib.max(
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+      ) + feeSharesProjected,
       maxUint256,
     );
 

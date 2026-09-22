@@ -96,13 +96,14 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
   liquidity adapter that is not the vault's sole adapter.
 - The new share allowance is
-  `mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
-  minSharePriceE27 - 1), 1))` plus the fee shares projected through `deadline`, saturated at
-  `maxUint256`. It is a spend cap, not the price protection: sizing it for a burn one tolerance
-  step — and at least one RAY price unit, when the floor exceeds 1 — below the floor keeps a
-  within-tolerance or below-floor price drop from reverting on allowance, so the miss surfaces on
-  the bundle's own `SlippageExceeded` check instead of silently nullifying the advertised
-  `slippageTolerance`. This is a bound on a **newly required** approval, not a replacement for one:
-  the multicall path needed no approval at all, because the vault burned `msg.sender`'s own shares.
+  `max(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
+  minSharePriceE27 - 1), 1)), mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)` plus the fee shares
+  projected through `deadline`, saturated at `maxUint256`. It is a spend cap, not the price
+  protection: it covers a burn at least one `slippageTolerance` step below the floor and, in any
+  case, at least one share above the burn at the floor, so a price within that headroom below the
+  floor reverts on the bundle's own `SlippageExceeded` check rather than on the allowance; a deeper
+  drop can still surface as an ERC-20 allowance underflow. This is a bound on a **newly required**
+  approval, not a replacement for one: the multicall path needed no approval at all, because the
+  vault burned `msg.sender`'s own shares.
 
 See `docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full decision record.

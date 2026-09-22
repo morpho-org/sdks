@@ -406,13 +406,13 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: now })`; so the
  * entity nets each endpoint before taking the max (`max(burnRaw, burnNow - feeSharesNow)`) rather
  * than subtracting the `now` fee from a gross max. The allowance is
- * `min(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
- * minSharePriceE27 - 1), 1))
+ * `min(max(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance,
+ * WAD), minSharePriceE27 - 1), 1)), mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)
  * + computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp: deadline }),
- * maxUint256)`: the permit pays for the *gross* burn, with at least one price unit and up to one
- * tolerance step of headroom past the floor whenever the floor exceeds 1 — a floor of exactly 1 is
- * already the smallest representable price and has no headroom — so a below-floor price reverts on
- * the contract's price check, not on the allowance.
+ * maxUint256)`: the permit pays for the *gross* burn, covering a burn at least one tolerance step
+ * below the floor and, in any case, at least one share above the burn at the floor, so a price
+ * within that headroom below the floor reverts on the contract's `minSharePriceE27` check rather
+ * than on the allowance; a deeper drop can still surface as an ERC-20 allowance underflow.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
@@ -461,7 +461,10 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  *   1n,
  * );
  * const requiredShareAllowance = MathLib.min(
- *   MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27) +
+ *   MathLib.max(
+ *     MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+ *     MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+ *   ) +
  *     computeVaultV2ForceWithdrawFeeSharesMinted({
  *       vaultData,
  *       owner,
