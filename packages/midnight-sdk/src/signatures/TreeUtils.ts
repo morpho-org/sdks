@@ -28,7 +28,7 @@ import {
   OfferUtils,
 } from "../offers/index.js";
 import {
-  EcrecoverRatifier,
+  EcrecoverRatifierUtils,
   type EcrecoverSignatureInput,
 } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
@@ -41,10 +41,14 @@ import { Payload } from "./Payload.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
 import { Ratifier } from "./Ratifier.js";
-import { SetterRatifier } from "./SetterRatifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
 import type { Tree } from "./Tree.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
-import type { AnyTreeSnapshot, TreeCreateRequest } from "./treeTypes.js";
+import type {
+  AnyTreeSnapshot,
+  EcrecoverTreeCreateRequest,
+  TreeCreateRequest,
+} from "./treeTypes.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   if (isPowerOfTwo(offers.length)) return [...offers];
@@ -219,7 +223,9 @@ export interface TreeProof {
 }
 
 /**
- * Entries accepted by {@link Tree.create}.
+ * Legacy untagged entries accepted by {@link Tree.create}.
+ *
+ * @deprecated Use EcrecoverTreeCreateRequest or SetterTreeCreateRequest with an explicit type and entries.
  *
  * Entries are either explicit groups or standalone offers. Explicit groups are
  * flattened, and standalone offers are hashed with their own group ids.
@@ -260,7 +266,7 @@ export interface TreeProof {
  * console.log(tree.root);
  * ```
  */
-export type TreeCreateParams = readonly GroupInput[];
+export type TreeCreateParams = EcrecoverTreeCreateRequest["entries"];
 
 /**
  * Plain creation input or class tree accepted by {@link Tree.from}.
@@ -622,20 +628,20 @@ export namespace TreeUtils {
       }
     } else if (params.ratification.type === "ecrecover") {
       if (params.ratification.signature != null) {
-        items = await EcrecoverRatifier.ratify({
+        items = await EcrecoverRatifierUtils.ratify({
           tree: params.tree,
           signature: params.ratification.signature,
           account: params.ratification.account,
         });
       } else {
-        items = await EcrecoverRatifier.ratify({
+        items = await EcrecoverRatifierUtils.ratify({
           tree: params.tree,
           client: params.ratification.client,
           account: params.ratification.account,
         });
       }
     } else {
-      items = SetterRatifier.ratify({ tree: params.tree });
+      items = SetterRatifierUtils.ratify({ tree: params.tree });
     }
 
     const payload = await Payload.encode(items);
@@ -729,6 +735,21 @@ export namespace TreeUtils {
   export function buildDescriptor<R extends TreeCreateRequest>(
     entries: R,
   ): Extract<AnyTreeSnapshot, { readonly type: R["type"] }>;
+  /**
+   * Builds a descriptor using the legacy standard-offer input.
+   * @deprecated Pass a TreeCreateRequest with an explicit ratifier type instead.
+   * @param entries - Untagged offers or groups in leaf order.
+   * @returns Legacy padded standard-offer descriptor.
+   * @throws {InvalidTreeError} When entries are empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} When the tree height is unsupported.
+   * @example
+   * ```ts
+   * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
+   * function legacyDescriptor(entries: TreeCreateParams) {
+   *   return TreeUtils.buildDescriptor(entries);
+   * }
+   * ```
+   */
   export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor;
   export function buildDescriptor(
     entries: TreeCreateParams | TreeCreateRequest,

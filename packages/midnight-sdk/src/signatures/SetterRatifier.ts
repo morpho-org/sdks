@@ -9,8 +9,13 @@ import { InvalidTreeError } from "../errors.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
 import { Ratifier } from "./Ratifier.js";
+import type {
+  SetterRatifierDataRequest,
+  SetterRatifierRatifyRequest,
+} from "./ratifierRequests.js";
+import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
+import type { RatifierTreeInput } from "./TreeUtils.js";
 import { type TreeProof, TreeUtils } from "./TreeUtils.js";
-import type { TypedRatifierTreeInput } from "./treeTypes.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -26,16 +31,16 @@ const setterRatifierDataAbi = [
  *
  * @example
  * ```ts
- * import { SetterRatifier, type DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
+ * import { SetterRatifierUtils, type DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
  * import { zeroHash } from "viem";
  *
- * const data = SetterRatifier.encodeRatifierData({
+ * const data = SetterRatifierUtils.encodeRatifierData({
  *   root: zeroHash,
  *   leafIndex: 0n,
  *   proof: [],
  * });
  * const decoded: DecodedSetterRatifierData =
- *   SetterRatifier.decodeRatifierData(data);
+ *   SetterRatifierUtils.decodeRatifierData(data);
  * console.log(decoded.root);
  * ```
  */
@@ -84,10 +89,11 @@ export type DecodedSetterRatifierData = TreeProof;
  * };
  * console.log(params.leafIndex);
  * ```
+ * @deprecated Use {@link SetterRatifierDataRequest} with {@link SetterRatifier}.
  */
 export interface SetterRatifierDataParams {
   /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
-  readonly tree: TypedRatifierTreeInput<"setter">;
+  readonly tree: RatifierTreeInput;
   /** Leaf index to prove. */
   readonly leafIndex: BigIntish;
 }
@@ -113,12 +119,13 @@ export interface SetterRatifierDataVerificationParams {
  *
  * @example
  * ```ts
- * import { SetterRatifier } from "@morpho-org/midnight-sdk";
+ * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
  *
- * console.log(typeof SetterRatifier.encodeRatifierData);
+ * console.log(typeof SetterRatifierUtils.encodeRatifierData);
  * ```
+ * @deprecated Use {@link SetterRatifier} with a tagged tree.
  */
-export namespace SetterRatifier {
+export namespace SetterRatifierUtils {
   /**
    * Encodes SetterRatifier ratifier data.
    *
@@ -132,9 +139,9 @@ export namespace SetterRatifier {
    * @returns ABI-encoded ratifier data.
    * @example
    * ```ts
-   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
    *
-   * const data = SetterRatifier.encodeRatifierData({
+   * const data = SetterRatifierUtils.encodeRatifierData({
    *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
    *   leafIndex: 0n,
    *   proof: [],
@@ -164,15 +171,15 @@ export namespace SetterRatifier {
    * @returns Decoded Setter ratifier data.
    * @example
    * ```ts
-   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
    * import { zeroHash } from "viem";
    *
-   * const data = SetterRatifier.encodeRatifierData({
+   * const data = SetterRatifierUtils.encodeRatifierData({
    *   root: zeroHash,
    *   leafIndex: 0n,
    *   proof: [],
    * });
-   * const decoded = SetterRatifier.decodeRatifierData(data);
+   * const decoded = SetterRatifierUtils.decodeRatifierData(data);
    * console.log(decoded.proof);
    * ```
    */
@@ -188,7 +195,7 @@ export namespace SetterRatifier {
   /**
    * Verifies that Setter ratifier data proves one payload offer belongs to its root.
    *
-   * This helper intentionally does not check `SetterRatifier.isRootRatified` or
+   * This helper intentionally does not check `SetterRatifierUtils.isRootRatified` or
    * `Midnight.isAuthorized` state. Consumers can query those values at their
    * own block context after local proof verification.
    *
@@ -198,9 +205,9 @@ export namespace SetterRatifier {
    * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
    * @example
    * ```ts
-   * import { SetterRatifier } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
    *
-   * const decoded = SetterRatifier.verifyRatifierData({
+   * const decoded = SetterRatifierUtils.verifyRatifierData({
    *   offer,
    *   ratifierData,
    * });
@@ -268,7 +275,7 @@ export namespace SetterRatifier {
    *   ratifier: "0x0000000000000000000000000000000000005000",
    *   maxUnits: 100n,
    * });
-   * const data = SetterRatifier.ratifierData({
+   * const data = SetterRatifierUtils.ratifierData({
    *   tree: Tree.create([offer]),
    *   leafIndex: 0n,
    * });
@@ -304,7 +311,7 @@ export namespace SetterRatifier {
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @example
    * ```ts
-   * import { SetterRatifier, Tree } from "@morpho-org/midnight-sdk";
+   * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
@@ -334,14 +341,14 @@ export namespace SetterRatifier {
    *   maxUnits: 100n,
    * });
    *
-   * const items = SetterRatifier.ratify({
+   * const items = SetterRatifierUtils.ratify({
    *   tree: Tree.create([offer]),
    * });
    * console.log(items.length);
    * ```
    */
   export function ratify(params: {
-    readonly tree: TypedRatifierTreeInput<"setter">;
+    readonly tree: RatifierTreeInput;
   }): readonly Payload.Item[] {
     const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
@@ -360,5 +367,56 @@ export namespace SetterRatifier {
   }
 }
 
-/** @deprecated Use {@link SetterRatifier}. Retained for compatibility. */
-export { SetterRatifier as SetterRatifierUtils };
+/**
+ * Tagged-tree API for SetterRatifier with validated portable leaf commitments.
+ * Legacy untagged inputs remain available through {@link SetterRatifierUtils}.
+ */
+export namespace SetterRatifier {
+  /**
+   * Encodes the proof for one tagged Setter leaf.
+   * @param request.tree - Matching tagged tree or portable snapshot; commitments are validated before use.
+   * @param request.leafIndex - Leaf to prove.
+   * @returns ABI-encoded ratifier data for the requested leaf.
+   * @throws {InvalidTreeError} When the tag, commitments, or root are invalid.
+   * @throws {InvalidTreeHeightError} When the descriptor height is unsupported.
+   * @example
+   * ```ts
+   * import { SetterRatifier, type SetterRatifierDataRequest } from "@morpho-org/midnight-sdk";
+   * function execute(request: SetterRatifierDataRequest) {
+   *   return SetterRatifier.ratifierData(request);
+   * }
+   * ```
+   */
+  export function ratifierData(request: SetterRatifierDataRequest): Hex {
+    const tree = parseStandardRatifierTree(request.tree, "setter");
+    return SetterRatifierUtils.ratifierData({ ...request, tree });
+  }
+
+  /**
+   * Builds payload items for a tagged Setter tree after onchain root approval.
+   * @param request.tree - Matching tagged tree or portable snapshot; commitments are validated before use.
+   * @returns One payload item per non-padding offer, including its ratifier data.
+   * @throws {InvalidTreeError} When the tag, commitments, or root are invalid.
+   * @throws {InvalidTreeHeightError} When the descriptor height is unsupported.
+   * @example
+   * ```ts
+   * import { SetterRatifier, type SetterRatifierRatifyRequest } from "@morpho-org/midnight-sdk";
+   * function execute(request: SetterRatifierRatifyRequest) {
+   *   return SetterRatifier.ratify(request);
+   * }
+   * ```
+   */
+  export function ratify(
+    request: SetterRatifierRatifyRequest,
+  ): readonly Payload.Item[] {
+    const tree = parseStandardRatifierTree(request.tree, "setter");
+    return SetterRatifierUtils.ratify({ ...request, tree });
+  }
+
+  /** {@inheritDoc SetterRatifierUtils.encodeRatifierData} */
+  export const encodeRatifierData = SetterRatifierUtils.encodeRatifierData;
+  /** {@inheritDoc SetterRatifierUtils.decodeRatifierData} */
+  export const decodeRatifierData = SetterRatifierUtils.decodeRatifierData;
+  /** {@inheritDoc SetterRatifierUtils.verifyRatifierData} */
+  export const verifyRatifierData = SetterRatifierUtils.verifyRatifierData;
+}
