@@ -327,7 +327,9 @@ describe("cleanup", () => {
       cleanup({ env: envWithoutRunId, fetchImpl, writeOutput: () => {} }),
     ).rejects.toThrow(/GITHUB_RUN_ID/);
   });
+});
 
+describe("listIssueComments", () => {
   test("error: rejects a malformed comment entry", async () => {
     const { fetchImpl } = createFetch([{ body: [{ id: "1" }] }]);
 

@@ -287,7 +287,7 @@ export function countNewReviews(
 
 /**
  * Keeps only the in-progress tracking comments the Claude action posted from a given run: authored
- * by the job token and ending with the action's `[View job run](…/actions/runs/<run id>)` link. Both
+ * by the job token and carrying the action's `[View job run](…/actions/runs/<run id>)` link. Both
  * the "Claude Code is working…" placeholder and the "PR Review in progress" checklist Claude rewrites
  * it into carry that link, so the run id is what binds a comment to the job that posted it. Once the
  * action finalizes the comment it rewrites the link text to `[View job](…)`, so a finished summary is
