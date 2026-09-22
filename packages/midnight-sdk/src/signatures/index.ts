@@ -9,3 +9,16 @@ export * from "./RatifierUtils.js";
 export * from "./SetterRatifierUtils.js";
 export * from "./Tree.js";
 export * from "./TreeUtils.js";
+
+export type {
+  AnyTree,
+  AnyTreeSnapshot,
+  RatifierKind,
+  RatifierTypes,
+  TreeCreateRequest,
+  TreeData,
+  TreeEntry,
+  TreeSnapshot,
+  TypedRatifierTreeInput,
+  TypedTreeMempoolValidateParams,
+} from "./treeTypes.js";

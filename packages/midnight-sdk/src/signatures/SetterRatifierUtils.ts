@@ -9,11 +9,8 @@ import { InvalidTreeError } from "../errors.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
-import {
-  type RatifierTreeInput,
-  type TreeProof,
-  TreeUtils,
-} from "./TreeUtils.js";
+import { type TreeProof, TreeUtils } from "./TreeUtils.js";
+import type { TypedRatifierTreeInput } from "./treeTypes.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -90,7 +87,7 @@ export type DecodedSetterRatifierData = TreeProof;
  */
 export interface SetterRatifierDataParams {
   /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
-  readonly tree: RatifierTreeInput;
+  readonly tree: TypedRatifierTreeInput<"setter">;
   /** Leaf index to prove. */
   readonly leafIndex: BigIntish;
 }
@@ -344,7 +341,7 @@ export namespace SetterRatifierUtils {
    * ```
    */
   export function ratify(params: {
-    readonly tree: RatifierTreeInput;
+    readonly tree: TypedRatifierTreeInput<"setter">;
   }): readonly Payload.Item[] {
     const { tree } = RatifierUtils.normalizeRatifierTree({
       tree: params.tree,

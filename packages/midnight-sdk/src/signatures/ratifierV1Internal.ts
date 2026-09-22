@@ -15,18 +15,10 @@ import {
 import { isZeroAddress } from "./offerStructInternal.js";
 import { TreeUtils } from "./TreeUtils.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import type { TreeData } from "./treeTypes.js";
 
 /** @internal Padded V1 ratifier leaf descriptor shared by the V1 ratifier utils. */
-export interface RatifierV1Descriptor<TStruct> {
-  /** Leaf structs in leaf order, including trailing padding. */
-  readonly entries: readonly TStruct[];
-  /** Leaf hashes for the padded tree. */
-  readonly leaves: readonly Hash[];
-  /** Merkle root. */
-  readonly root: Hash;
-  /** Tree height. */
-  readonly height: number;
-}
+export type RatifierV1Descriptor<TStruct> = Omit<TreeData<TStruct>, "offers">;
 
 /**
  * @internal Pads, hash-checks, and roots a V1 ratifier leaf list.
@@ -105,12 +97,20 @@ export function resolveRatifierV1Tree<
     readonly isPadding: (entry: TStruct) => boolean;
     readonly ratifierOf: (entry: TStruct) => Address;
     readonly label: string;
+    readonly type: "priceV1" | "rateV1";
   },
 ): TDescriptor {
   const { buildDescriptor, hashLeaf, isPadding, ratifierOf, label } = helpers;
   if (Array.isArray(tree)) return buildDescriptor(tree as readonly TLeaf[]);
 
   const descriptor = tree as TDescriptor;
+  if (
+    "type" in descriptor &&
+    descriptor.type != null &&
+    descriptor.type !== helpers.type
+  ) {
+    throw new InvalidTreeError("Ratifier route does not match the tree route.");
+  }
   if (
     !Number.isInteger(descriptor.height) ||
     descriptor.height < 0 ||
