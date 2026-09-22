@@ -4,6 +4,7 @@
  * lives here, tested, rather than as ordered shell lines in `.github/workflows/claude.yml`.
  *
  *   node post-claude.ts verify-review              # trusted-scripts verify, then claude-review-gate verify
+ *   node post-claude.ts cleanup-tracking           # trusted-scripts verify, then claude-review-gate cleanup
  *   node post-claude.ts scrub <input> <output>     # trusted-scripts verify, then scrub-transcript
  *
  * Reads `TRUSTED_SCRIPTS_DIR` and `SCRIPTS_DIGEST` from the environment for the integrity check; the
@@ -37,9 +38,13 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
   const writeOutput = options.writeOutput ?? writeStdout;
   const [mode, ...rest] = argv;
 
-  if (mode !== "verify-review" && mode !== "scrub") {
+  if (
+    mode !== "verify-review" &&
+    mode !== "cleanup-tracking" &&
+    mode !== "scrub"
+  ) {
     throw new Error(
-      `Unknown mode "${mode ?? ""}". Usage: post-claude.ts <verify-review | scrub <input> <output>>`,
+      `Unknown mode "${mode ?? ""}". Usage: post-claude.ts <verify-review | cleanup-tracking | scrub <input> <output>>`,
     );
   }
 
@@ -49,6 +54,10 @@ export async function main(options: PostClaudeOptions = {}): Promise<void> {
 
   if (mode === "verify-review") {
     await gateMain({ ...options, argv: ["verify"], env, writeOutput });
+    return;
+  }
+  if (mode === "cleanup-tracking") {
+    await gateMain({ ...options, argv: ["cleanup"], env, writeOutput });
     return;
   }
   scrubMain({ ...options, argv: rest, env, writeOutput });

@@ -170,6 +170,40 @@ jobs:
           MAX_ID_BEFORE="$MAX_ID_BEFORE"
           "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
 
+      # A push during the review cancels this run via the concurrency group, leaving Claude's
+      # "PR Review in progress" tracking comment behind next to the superseding run's one. Delete the
+      # comments carrying this run's job link (scripts/ci/claude-review-gate.ts cleanup), with the
+      # same empty-environment trusted-copy invocation as the verify step.
+      - name: Delete tracking comments of the cancelled run
+        if: cancelled() && github.event_name == 'pull_request' && steps.trusted.outputs.node_bin != ''
+        continue-on-error: true
+        env:
+          BASH_ENV: ''
+          SHELLOPTS: ''
+          PS4: ''
+          LD_PRELOAD: ''
+          LD_AUDIT: ''
+          LD_LIBRARY_PATH: ''
+          NODE_OPTIONS: ''
+          TRUSTED_TEMP: ${{ runner.temp }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          /usr/bin/env -i
+          HOME="$HOME"
+          RUNNER_TEMP="$TRUSTED_TEMP"
+          TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
+          SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
+          GH_TOKEN="$GH_TOKEN"
+          GITHUB_REPOSITORY="$REPOSITORY"
+          GITHUB_RUN_ID="$RUN_ID"
+          PR_NUMBER="$PR_NUMBER"
+          "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" cleanup-tracking
+
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
       # and mask the job's secrets plus token-shaped strings first (scripts/ci/scrub-transcript.ts).

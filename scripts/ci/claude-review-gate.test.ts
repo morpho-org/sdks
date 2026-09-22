@@ -4,9 +4,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
+  cleanup,
   countNewReviews,
   type FetchLike,
   getMaxReviewId,
+  type IssueComment,
+  listIssueComments,
   listReviews,
   main,
   parseMaxIdBefore,
@@ -16,6 +19,7 @@ import {
   type Review,
   runMarker,
   selectClaudeReviews,
+  selectRunTrackingComments,
   snapshot,
   verify,
 } from "./claude-review-gate.ts";
@@ -65,6 +69,18 @@ const botPlaceholder = (id: number, commitId = HEAD): Review => ({
   id,
   state: "COMMENTED",
   user: { login: REVIEW_AUTHOR },
+});
+
+const trackingComment = (
+  id: number,
+  {
+    login = REVIEW_AUTHOR,
+    runId = RUN_ID,
+  }: { login?: string; runId?: string } = {},
+): IssueComment => ({
+  body: `### PR Review in progress\n\n- [ ] Validate CI environment and PR state\n\n[View job run](https://github.com/morpho-org/sdks/actions/runs/${runId})`,
+  id,
+  user: { login },
 });
 
 const env = {
@@ -192,6 +208,101 @@ describe("countNewReviews", () => {
         countOptions,
       ),
     ).toBe(0);
+  });
+});
+
+describe("selectRunTrackingComments", () => {
+  test("default", () => {
+    const comments = [
+      trackingComment(1),
+      trackingComment(2, { runId: "999" }),
+      trackingComment(3, { login: "0xbulma" }),
+      { body: null, id: 4, user: { login: REVIEW_AUTHOR } },
+      { body: "@codex review", id: 5, user: { login: REVIEW_AUTHOR } },
+    ];
+
+    expect(
+      selectRunTrackingComments(comments, RUN_ID).map((c) => c.id),
+    ).toEqual([1]);
+  });
+
+  test("behavior: a run id that merely prefixes another does not match", () => {
+    expect(
+      selectRunTrackingComments(
+        [trackingComment(1, { runId: `${RUN_ID}7` })],
+        RUN_ID,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("cleanup", () => {
+  test("default: deletes every tracking comment of the run", async () => {
+    const { fetchImpl, requests } = createFetch([
+      {
+        body: [trackingComment(1), trackingComment(2, { runId: "999" })],
+        next: true,
+      },
+      { body: [trackingComment(3)] },
+      { body: null, status: 204 },
+      { body: null, status: 204 },
+    ]);
+    const output: string[] = [];
+
+    await expect(
+      cleanup({ env, fetchImpl, writeOutput: (m) => output.push(m) }),
+    ).resolves.toBe(2);
+    expect(requests.map((r) => `${r.init.method} ${r.url.pathname}`)).toEqual([
+      "GET /repos/morpho-org/sdks/issues/1076/comments",
+      "GET /repos/morpho-org/sdks/issues/1076/comments",
+      "DELETE /repos/morpho-org/sdks/issues/comments/1",
+      "DELETE /repos/morpho-org/sdks/issues/comments/3",
+    ]);
+    expect(output.join("")).toBe(
+      `Deleted 2 tracking comment(s) of run ${RUN_ID}.\n`,
+    );
+  });
+
+  test("behavior: nothing to delete", async () => {
+    const { fetchImpl, requests } = createFetch([{ body: [] }]);
+
+    await expect(
+      cleanup({ env, fetchImpl, writeOutput: () => {} }),
+    ).resolves.toBe(0);
+    expect(requests).toHaveLength(1);
+  });
+
+  test("error: a failed DELETE is reported", async () => {
+    const { fetchImpl } = createFetch([
+      { body: [trackingComment(1)] },
+      { body: null, status: 403 },
+    ]);
+
+    await expect(
+      cleanup({ env, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(/DELETE .*comments\/1 failed with 403/);
+  });
+
+  test("error: GITHUB_RUN_ID must be bound", async () => {
+    const { fetchImpl } = createFetch([]);
+    const { GITHUB_RUN_ID: _unused, ...envWithoutRunId } = env;
+
+    await expect(
+      cleanup({ env: envWithoutRunId, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(/GITHUB_RUN_ID/);
+  });
+
+  test("error: rejects a malformed comment entry", async () => {
+    const { fetchImpl } = createFetch([{ body: [{ id: "1" }] }]);
+
+    await expect(
+      listIssueComments({
+        fetchImpl,
+        prNumber: "1076",
+        repository: "morpho-org/sdks",
+        token: "ghs_test",
+      }),
+    ).rejects.toThrow(/malformed comment entry/);
   });
 });
 
@@ -460,6 +571,17 @@ describe("main", () => {
     } finally {
       rmSync(dir, { force: true, recursive: true });
     }
+  });
+
+  test("behavior: cleanup mode", async () => {
+    const { fetchImpl } = createFetch([
+      { body: [trackingComment(1)] },
+      { body: null, status: 204 },
+    ]);
+
+    await expect(
+      main({ argv: ["cleanup"], env, fetchImpl, writeOutput: () => {} }),
+    ).resolves.toBe(1);
   });
 
   test("error: unknown mode", async () => {

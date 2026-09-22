@@ -79,6 +79,39 @@ describe("post-claude main", () => {
     ]);
   });
 
+  test("default: cleanup-tracking checks the trusted copy, then deletes the run's comments", async () => {
+    const { digest, trusted } = trustedFixture();
+    const requests: string[] = [];
+    const out: string[] = [];
+
+    await main({
+      argv: ["cleanup-tracking"],
+      env: gateEnv(trusted, digest),
+      fetchImpl: async (url, init) => {
+        requests.push(`${init.method} ${url.pathname}`);
+        if (init.method === "DELETE")
+          return new Response(null, { status: 204 });
+        return new Response(
+          JSON.stringify([
+            {
+              body: `[View job run](https://github.com/morpho-org/sdks/actions/runs/${RUN_ID})`,
+              id: 9,
+              user: { login: "github-actions[bot]" },
+            },
+          ]),
+          { status: 200 },
+        );
+      },
+      writeOutput: (m) => out.push(m),
+    });
+
+    expect(requests).toEqual([
+      "GET /repos/morpho-org/sdks/issues/1/comments",
+      "DELETE /repos/morpho-org/sdks/issues/comments/9",
+    ]);
+    expect(out[1]).toBe(`Deleted 1 tracking comment(s) of run ${RUN_ID}.\n`);
+  });
+
   test("error: a tampered trusted copy stops before the authenticated gate runs", async () => {
     const { digest, trusted } = trustedFixture();
     writeFileSync(join(trusted, "a.ts"), "tampered");

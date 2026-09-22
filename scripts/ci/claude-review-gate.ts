@@ -5,10 +5,12 @@
  *
  *   node scripts/ci/claude-review-gate.ts snapshot   # before Claude runs
  *   node scripts/ci/claude-review-gate.ts verify     # after Claude runs
+ *   node scripts/ci/claude-review-gate.ts cleanup    # after Claude was cancelled
  *
- * Reads `GH_TOKEN`, `GITHUB_REPOSITORY` and `PR_NUMBER`, plus `GITHUB_OUTPUT` for `snapshot` and
- * `HEAD_SHA`, `MAX_ID_BEFORE` and `GITHUB_RUN_ID` for `verify`. Every missing variable and every
- * GitHub API failure is an error, never a silent 0, so the gate can only pass on a real review.
+ * Reads `GH_TOKEN`, `GITHUB_REPOSITORY` and `PR_NUMBER`, plus `GITHUB_OUTPUT` for `snapshot`,
+ * `HEAD_SHA`, `MAX_ID_BEFORE` and `GITHUB_RUN_ID` for `verify`, and `GITHUB_RUN_ID` for `cleanup`.
+ * Every missing variable and every GitHub API failure is an error, never a silent 0, so the gate
+ * can only pass on a real review.
  */
 
 import { appendFileSync } from "node:fs";
@@ -32,6 +34,13 @@ export const RUN_MARKER_PREFIX = "CLAUDE_REVIEW_RUN:";
 /** Builds the body marker the workflow prompt asks Claude to include for a given run. */
 export function runMarker(runId: string): string {
   return `<!-- ${RUN_MARKER_PREFIX}${runId} -->`;
+}
+
+/** Subset of a GitHub issue comment the cleanup inspects. */
+export interface IssueComment {
+  readonly body: string | null;
+  readonly id: number;
+  readonly user: { readonly login: string } | null;
 }
 
 /** Subset of a GitHub pull-request review the gate inspects. */
@@ -73,25 +82,35 @@ export interface RunOptions {
   readonly writeOutput?: (message: string) => void;
 }
 
-/** Lists every formal review on a pull request, following GitHub's `Link` pagination. */
-export async function listReviews(
+function apiHeaders(token: string): Record<string, string> {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
+    "User-Agent": USER_AGENT,
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+interface PaginatedResource<T> {
+  readonly isItem: (value: unknown) => value is T;
+  readonly itemName: string;
+  readonly path: string;
+}
+
+async function listPaginated<T>(
   options: ListReviewsOptions,
-): Promise<Review[]> {
+  resource: PaginatedResource<T>,
+): Promise<T[]> {
   const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
-  const reviews: Review[] = [];
+  const items: T[] = [];
   let url: URL | null = new URL(
-    `repos/${options.repository}/pulls/${options.prNumber}/reviews?per_page=100`,
+    `repos/${options.repository}/${resource.path}?per_page=100`,
     options.apiBaseUrl ?? DEFAULT_API_BASE_URL,
   );
 
   while (url != null) {
     const response = await fetchImpl(url, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${options.token}`,
-        "User-Agent": USER_AGENT,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: apiHeaders(options.token),
       method: "GET",
     });
 
@@ -109,17 +128,82 @@ export async function listReviews(
     }
 
     for (const item of page) {
-      if (!isReview(item)) {
+      if (!resource.isItem(item)) {
         throw new Error(
-          `GitHub API GET ${url.pathname} returned a malformed review entry.`,
+          `GitHub API GET ${url.pathname} returned a malformed ${resource.itemName} entry.`,
         );
       }
-      reviews.push(item);
+      items.push(item);
     }
     url = parseNextLink(response.headers.get("link"));
   }
 
-  return reviews;
+  return items;
+}
+
+/** Lists every formal review on a pull request, following GitHub's `Link` pagination. */
+export async function listReviews(
+  options: ListReviewsOptions,
+): Promise<Review[]> {
+  return listPaginated(options, {
+    isItem: isReview,
+    itemName: "review",
+    path: `pulls/${options.prNumber}/reviews`,
+  });
+}
+
+/** Lists every issue comment on a pull request, following GitHub's `Link` pagination. */
+export async function listIssueComments(
+  options: ListReviewsOptions,
+): Promise<IssueComment[]> {
+  return listPaginated(options, {
+    isItem: isIssueComment,
+    itemName: "comment",
+    path: `issues/${options.prNumber}/comments`,
+  });
+}
+
+/** Deletes one issue comment. */
+export async function deleteIssueComment(
+  options: ListReviewsOptions,
+  commentId: number,
+): Promise<void> {
+  const fetchImpl: FetchLike = options.fetchImpl ?? fetch;
+  const url = new URL(
+    `repos/${options.repository}/issues/comments/${commentId}`,
+    options.apiBaseUrl ?? DEFAULT_API_BASE_URL,
+  );
+  const response = await fetchImpl(url, {
+    headers: apiHeaders(options.token),
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `GitHub API DELETE ${url.pathname} failed with ${response.status}.`,
+    );
+  }
+}
+
+function isLogin(user: unknown): user is { login: string } | null {
+  return (
+    user === null ||
+    (typeof user === "object" &&
+      user != null &&
+      typeof (user as { login?: unknown }).login === "string")
+  );
+}
+
+function isIssueComment(value: unknown): value is IssueComment {
+  if (typeof value !== "object" || value == null) return false;
+  const { body, id, user } = value as Record<keyof IssueComment, unknown>;
+
+  return (
+    (body === null || typeof body === "string") &&
+    typeof id === "number" &&
+    Number.isInteger(id) &&
+    isLogin(user)
+  );
 }
 
 function isReview(value: unknown): value is Review {
@@ -128,11 +212,6 @@ function isReview(value: unknown): value is Review {
     keyof Review,
     unknown
   >;
-  const userOk =
-    user === null ||
-    (typeof user === "object" &&
-      user != null &&
-      typeof (user as { login?: unknown }).login === "string");
 
   return (
     (body === null || typeof body === "string") &&
@@ -140,7 +219,7 @@ function isReview(value: unknown): value is Review {
     typeof id === "number" &&
     Number.isInteger(id) &&
     typeof state === "string" &&
-    userOk
+    isLogin(user)
   );
 }
 
@@ -201,6 +280,26 @@ export function countNewReviews(
       review.commit_id === options.headSha &&
       review.body?.includes(marker) === true,
   ).length;
+}
+
+/**
+ * Keeps only the tracking comments the Claude action posted from a given run: authored by the job
+ * token and ending with the action's `[View job run](…/actions/runs/<run id>)` link. Both the
+ * "Claude Code is working…" placeholder and the "PR Review in progress" checklist Claude rewrites it
+ * into carry that link, so the run id is what binds a comment to the job that posted it.
+ */
+export function selectRunTrackingComments(
+  comments: readonly IssueComment[],
+  runId: string,
+): IssueComment[] {
+  const runLink = new RegExp(`/actions/runs/${runId}(?:[^0-9]|$)`);
+
+  return comments.filter(
+    (comment) =>
+      comment.user?.login === REVIEW_AUTHOR &&
+      typeof comment.body === "string" &&
+      runLink.test(comment.body),
+  );
 }
 
 /**
@@ -272,7 +371,38 @@ export async function verify(options: RunOptions = {}): Promise<number> {
   return count;
 }
 
-/** CLI entrypoint: `node scripts/ci/claude-review-gate.ts <snapshot|verify>`. */
+/**
+ * `cleanup` mode: deletes the tracking comments this run posted. Runs when the job is cancelled
+ * (a new push superseded the in-flight review), so a stale "PR Review in progress" comment does
+ * not sit next to the superseding run's one.
+ */
+export async function cleanup(options: RunOptions = {}): Promise<number> {
+  const env = options.env ?? process.env;
+  const writeOutput = options.writeOutput ?? writeStdout;
+  const runId = readRequiredEnv(env, "GITHUB_RUN_ID");
+  const listOptions: ListReviewsOptions = {
+    apiBaseUrl: options.apiBaseUrl,
+    fetchImpl: options.fetchImpl,
+    prNumber: readRequiredEnv(env, "PR_NUMBER"),
+    repository: readRequiredEnv(env, "GITHUB_REPOSITORY"),
+    token: readRequiredEnv(env, "GH_TOKEN"),
+  };
+  const comments = selectRunTrackingComments(
+    await listIssueComments(listOptions),
+    runId,
+  );
+
+  for (const comment of comments) {
+    await deleteIssueComment(listOptions, comment.id);
+  }
+  writeOutput(
+    `Deleted ${comments.length} tracking comment(s) of run ${runId}.\n`,
+  );
+
+  return comments.length;
+}
+
+/** CLI entrypoint: `node scripts/ci/claude-review-gate.ts <snapshot|verify|cleanup>`. */
 export async function main(options: RunOptions = {}): Promise<number> {
   const argv = options.argv ?? process.argv.slice(2);
   const mode = argv[0];
@@ -282,9 +412,11 @@ export async function main(options: RunOptions = {}): Promise<number> {
       return snapshot(options);
     case "verify":
       return verify(options);
+    case "cleanup":
+      return cleanup(options);
     default:
       throw new Error(
-        `Unknown mode "${mode ?? ""}". Usage: claude-review-gate.ts <snapshot|verify>`,
+        `Unknown mode "${mode ?? ""}". Usage: claude-review-gate.ts <snapshot|verify|cleanup>`,
       );
   }
 }
