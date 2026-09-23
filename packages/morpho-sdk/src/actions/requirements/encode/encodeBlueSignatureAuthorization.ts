@@ -96,10 +96,9 @@ export const encodeBlueSignatureAuthorization = async (
   // Pin the authorized operator to the chain's registered BlueBundlesV1 so a direct caller
   // cannot sign an authorization granting an arbitrary address control over the signer's Morpho
   // positions. Mirrors the `getBlueAuthorizationRequirement` resolver guard and applies to grant
-  // and revoke payloads alike.
+  // and revoke payloads alike: the registry is pinned per release, so revoking a rotated-out
+  // operator is outside this helper's scope.
   const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
-  // Applies to grants and revokes alike: the operator is pinned to the registered BlueBundlesV1
-  // per release; revoking a rotated-out operator is outside this helper's scope.
   if (!isAddressEqual(blueBundlesV1, authorized)) {
     throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
   }
