@@ -207,7 +207,7 @@ export function parseActionPins(workflows: readonly SourceFile[]): Map<
     }
   >();
   const pattern =
-    /uses:\s*["']?([\w.-]+)\/([\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40})\s*#\s*(v?\d+(?:\.\d+){0,2}\S*)/g;
+    /uses:\s*["']?([\w.-]+)\/([\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40})\s*#\s*(v?\d+(?:\.\d+){0,2})\b/g;
 
   for (const file of workflows) {
     for (const match of file.content.matchAll(pattern)) {
