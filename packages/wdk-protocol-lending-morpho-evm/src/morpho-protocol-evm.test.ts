@@ -1323,7 +1323,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("error: BlueBundlesV1DeadlineExceedsWindowError on a far-future signature deadline", async () => {
       const requirementSignature = {
         args: {
-          deadline: BigInt(Math.floor(Date.now() / 1_000)) + 7_200n + 1n,
+          deadline: BigInt(Math.floor(Date.now() / 1_000)) + 7_200n + 3_600n,
         },
         action: { type: "authorization" },
       } as unknown as AuthorizationRequirementSignature;
@@ -1337,8 +1337,8 @@ describe.sequential("MorphoProtocolEvm", () => {
       ).rejects.toBeInstanceOf(BlueBundlesV1DeadlineExceedsWindowError);
     });
 
-    test("behavior: accepts a signature deadline exactly at the two-hour window bound", async () => {
-      const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n;
+    test("behavior: accepts a signature deadline exactly at the two-hour window bound plus the clock-skew allowance", async () => {
+      const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n + 300n;
       const requirementSignature = {
         args: { deadline },
         action: { type: "authorization" },
@@ -1358,6 +1358,27 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(marketEntity.borrow).toHaveBeenCalledWith(
         expect.objectContaining({ deadline }),
       );
+    });
+
+    test("error: BlueBundlesV1DeadlineExceedsWindowError one second past the two-hour window plus the clock-skew allowance", async () => {
+      const requirementSignature = {
+        args: {
+          deadline: BigInt(Math.floor(Date.now() / 1_000)) + 7_200n + 301n,
+        },
+        action: { type: "authorization" },
+      } as unknown as AuthorizationRequirementSignature;
+
+      const error = await protocol
+        .borrow({
+          token: TOKEN,
+          amount: 100_000n,
+          requirementSignature,
+        })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(BlueBundlesV1DeadlineExceedsWindowError);
+      expect(
+        (error as BlueBundlesV1DeadlineExceedsWindowError).maxDeadline,
+      ).toBe(BigInt(Math.floor(Date.now() / 1_000)) + 7_500n);
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {

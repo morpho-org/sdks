@@ -2,7 +2,7 @@
 export class BlueBundlesV1DeadlineExceedsWindowError extends Error {
   /**
    * @param deadline - Supplied signature deadline in Unix seconds.
-   * @param maxDeadline - Latest accepted deadline (now plus the two-hour window).
+   * @param maxDeadline - Latest accepted deadline (now plus the two-hour window and the 300-second clock-skew allowance).
    */
   constructor(
     readonly deadline: bigint,

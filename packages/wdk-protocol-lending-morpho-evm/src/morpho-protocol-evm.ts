@@ -667,6 +667,7 @@ const SUPPORTED_CHAINS: Record<number, Chain> = {
 
 const MARKET_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
 const BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS = 7_200n;
+const BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS = 300n;
 
 function getBlueBundlesV1Deadline(
   signature?:
@@ -677,8 +678,14 @@ function getBlueBundlesV1Deadline(
     BigInt(Math.floor(Date.now() / 1_000)) +
     BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS;
   const deadline = signature?.args.deadline;
-  if (deadline != null && deadline > maxDeadline) {
-    throw new BlueBundlesV1DeadlineExceedsWindowError(deadline, maxDeadline);
+  if (
+    deadline != null &&
+    deadline > maxDeadline + BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS
+  ) {
+    throw new BlueBundlesV1DeadlineExceedsWindowError(
+      deadline,
+      maxDeadline + BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS,
+    );
   }
 
   return deadline ?? maxDeadline;
