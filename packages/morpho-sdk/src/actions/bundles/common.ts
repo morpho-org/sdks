@@ -33,8 +33,6 @@ import {
   MixedBundlesFundingError,
   NegativeInputError,
   NonPositiveInputError,
-  type Permit2SignatureTransferAction,
-  type PermitAction,
   type PermitRequirementSignature,
   type RequirementSignature,
   selectRequirementSignatures,
@@ -78,9 +76,6 @@ export interface BundleSharesPermit {
   /** ECDSA signature `s`, or zero for the empty sentinel. */
   readonly s: Hex;
 }
-
-/** Compatibility alias for the canonical {@link BundleSharesPermit} tuple. */
-export type BundlesSharesPermit = BundleSharesPermit;
 
 /** Common deadline and referral fields shared by fixed bundles calls. */
 export interface BundlesCommonParams {
@@ -378,7 +373,8 @@ export const normalizeBundlesSignature = (
  * @returns The signed share permit or the contract's empty-permit sentinel.
  * @throws {NonPositiveInputError} when a bundle or permit deadline is not positive.
  * @throws {InputExceedsMaxError} when a bundle or permit deadline exceeds uint256.
- * @throws {BundlesPermitMismatchError} when the requirement kind, token, or signature is invalid.
+ * @throws {BundlesPermitMismatchError} when the requirement kind, token, owner, spender, amount,
+ *   deadline or a supplied action nonce, or signature is invalid.
  * @example
  * ```ts
  * import { getBundlesSharesPermit } from "@morpho-org/morpho-sdk";
@@ -463,6 +459,16 @@ export const getBundlesSharesPermit = (params: {
   }
   if (
     (params.owner != null || params.spender != null || params.amount != null) &&
+    requirementSignature.action.args.amount !== requirementSignature.args.amount
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "amount",
+      expected: String(requirementSignature.args.amount),
+      actual: String(requirementSignature.action.args.amount),
+    });
+  }
+  if (
+    (params.owner != null || params.spender != null || params.amount != null) &&
     requirementSignature.action.args.deadline !==
       requirementSignature.args.deadline
   ) {
@@ -470,6 +476,16 @@ export const getBundlesSharesPermit = (params: {
       field: "deadline",
       expected: String(requirementSignature.args.deadline),
       actual: String(requirementSignature.action.args.deadline),
+    });
+  }
+  if (
+    requirementSignature.action.args.nonce != null &&
+    requirementSignature.action.args.nonce !== requirementSignature.args.nonce
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "nonce",
+      expected: String(requirementSignature.args.nonce),
+      actual: String(requirementSignature.action.args.nonce),
     });
   }
   const signature = normalizeBundlesSignature(
@@ -489,14 +505,23 @@ export const getBundlesSharesPermit = (params: {
  * @internal
  *
  * @param signatures - Signatures passed to `buildTx`.
- * @param expectedRequirement - Signature requirement captured by this prepared operation.
+ * @param expected - Immutable spender, amount, and deadline required by the operation.
+ * @param expected.spender - Fixed bundles contract the signature must authorize.
+ * @param expected.amount - Exact pull amount the signature must cover.
+ * @param expected.deadline - Deadline the signature must carry.
  * @returns The selected ERC-2612 or Permit2 SignatureTransfer signature.
  * @throws {UnexpectedRequirementSignatureError} when a non-token signature is supplied.
  * @throws {AmbiguousRequirementSignaturesError} when both token signature kinds are supplied.
+ * @throws {BundlesPermitMismatchError} when the signature's spender, amount, or deadline differ
+ *   from the operation's, or when a carried action nonce is inconsistent with the signed nonce.
  */
 export const selectBundlesTokenRequirementSignature = (
   signatures: readonly RequirementSignature[] | undefined,
-  expectedRequirement?: PermitAction | Permit2SignatureTransferAction,
+  expected: {
+    readonly spender: Address;
+    readonly amount: bigint;
+    readonly deadline: bigint;
+  },
 ): BundlesTokenRequirementSignature | undefined => {
   if (signatures == null || signatures.length === 0) return undefined;
   const selected = signatures.filter(
@@ -523,126 +548,53 @@ export const selectBundlesTokenRequirementSignature = (
   }
   const selectedSignature = selected[0];
   if (selectedSignature == null) return undefined;
-  validatePreparedBundlesRequirementSignature(
-    selectedSignature,
-    expectedRequirement,
-  );
-  return selectedSignature;
-};
-
-const validatePreparedBundlesRequirementSignature = (
-  signature: BundlesTokenRequirementSignature | Erc2612RequirementSignature,
-  expectedRequirement:
-    | PermitAction
-    | Permit2SignatureTransferAction
-    | undefined,
-): void => {
-  if (expectedRequirement == null) {
-    throw new BundlesPermitMismatchError({
-      field: "nonce",
-      expected: "the nonce from getRequirements()",
-      actual: String(signature.args.nonce),
-    });
-  }
-  if (signature.action.type !== expectedRequirement.type) {
-    throw new BundlesPermitMismatchError({
-      field: "type",
-      expected: expectedRequirement.type,
-      actual: signature.action.type,
-    });
-  }
-  const expectedArgs = expectedRequirement.args;
-  if (!isAddressEqual(signature.action.args.spender, expectedArgs.spender)) {
+  const { action } = selectedSignature;
+  if (!isAddressEqual(action.args.spender, expected.spender)) {
     throw new BundlesPermitMismatchError({
       field: "spender",
-      expected: expectedArgs.spender,
-      actual: signature.action.args.spender,
+      expected: expected.spender,
+      actual: action.args.spender,
     });
   }
   if (
-    signature.args.amount !== expectedArgs.amount ||
-    signature.action.args.amount !== expectedArgs.amount
+    selectedSignature.args.amount !== expected.amount ||
+    action.args.amount !== expected.amount
   ) {
     throw new BundlesPermitMismatchError({
       field: "amount",
-      expected: String(expectedArgs.amount),
-      actual: String(signature.args.amount),
+      expected: String(expected.amount),
+      actual: String(
+        selectedSignature.args.amount !== expected.amount
+          ? selectedSignature.args.amount
+          : action.args.amount,
+      ),
     });
   }
   if (
-    signature.args.deadline !== expectedArgs.deadline ||
-    signature.action.args.deadline !== expectedArgs.deadline
+    selectedSignature.args.deadline !== expected.deadline ||
+    action.args.deadline !== expected.deadline
   ) {
     throw new BundlesPermitMismatchError({
       field: "deadline",
-      expected: String(expectedArgs.deadline),
-      actual: String(signature.args.deadline),
+      expected: String(expected.deadline),
+      actual: String(
+        selectedSignature.args.deadline !== expected.deadline
+          ? selectedSignature.args.deadline
+          : action.args.deadline,
+      ),
     });
   }
   if (
-    expectedArgs.nonce == null ||
-    signature.args.nonce !== expectedArgs.nonce ||
-    signature.action.args.nonce !== expectedArgs.nonce
+    action.args.nonce != null &&
+    action.args.nonce !== selectedSignature.args.nonce
   ) {
     throw new BundlesPermitMismatchError({
       field: "nonce",
-      expected:
-        expectedArgs.nonce == null
-          ? "the nonce from getRequirements()"
-          : String(expectedArgs.nonce),
-      actual: String(signature.args.nonce),
+      expected: String(selectedSignature.args.nonce),
+      actual: String(action.args.nonce),
     });
   }
-};
-
-/**
- * Selects the exact ERC-2612 vault-share permit produced for one prepared exit.
- *
- * @internal
- *
- * @param signatures - Signatures passed to the prepared operation's `buildTx` function.
- * @param prepared - Exact share cap and permit requirement captured by this prepared operation.
- * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
- * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612, was built for another
- *   share cap, or is supplied before this operation resolves its share cap.
- */
-export const selectBundlesSharesRequirementSignature = (
-  signatures: readonly RequirementSignature[] | undefined,
-  prepared: {
-    readonly requiredShareAllowance: bigint | undefined;
-    readonly expectedRequirement?: PermitAction;
-  },
-): Erc2612RequirementSignature | undefined => {
-  const { permit } = selectRequirementSignatures(signatures, { permit: true });
-  if (permit == null) return undefined;
-  const { action } = permit;
-  if (action.type !== "permit") {
-    throw new BundlesPermitMismatchError({
-      field: "type",
-      expected: "permit",
-      actual: action.type,
-    });
-  }
-  if (
-    prepared.requiredShareAllowance == null ||
-    permit.args.amount !== prepared.requiredShareAllowance ||
-    action.args.amount !== prepared.requiredShareAllowance
-  ) {
-    throw new BundlesPermitMismatchError({
-      field: "amount",
-      expected:
-        prepared.requiredShareAllowance == null
-          ? "the current cap from getRequirements()"
-          : String(prepared.requiredShareAllowance),
-      actual: String(permit.args.amount),
-    });
-  }
-  const selectedPermit = { args: permit.args, action };
-  validatePreparedBundlesRequirementSignature(
-    selectedPermit,
-    prepared.expectedRequirement,
-  );
-  return selectedPermit;
+  return selectedSignature;
 };
 
 /**
@@ -652,10 +604,13 @@ export const selectBundlesSharesRequirementSignature = (
  *
  * @param signatures - Signatures passed to the operation's `buildTx` function.
  * @param expected - Immutable spender, amount, and deadline required by the operation.
+ * @param expected.spender - Fixed bundles contract the permit must authorize.
+ * @param expected.amount - Exact share allowance the permit must cover.
+ * @param expected.deadline - Deadline the permit must carry.
  * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
- * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612 or its spender, amount or
- *   deadline differ from the operation's. The nonce is not checked here: it is onchain state the
- *   vault's `permit` verifies at execution.
+ * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612 or its spender, amount
+ *   or deadline differ from the operation's. The nonce is not checked here: it is onchain state
+ *   the vault's `permit` verifies at execution.
  */
 export const selectBundlesSharesPermitSignature = (
   signatures: readonly RequirementSignature[] | undefined,

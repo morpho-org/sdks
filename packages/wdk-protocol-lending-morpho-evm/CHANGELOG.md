@@ -1,5 +1,77 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0-next.4
+
+### Patch Changes
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+- Updated dependencies [[`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8), [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac), [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47), [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec), [`7991d97`](https://github.com/morpho-org/sdks/commit/7991d979c98d77d306338eeae7342f3abb3fbbfa), [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8), [`ab2bc02`](https://github.com/morpho-org/sdks/commit/ab2bc0254a56f8c9084c2a5bccdc5d50d2e1743d), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e), [`e2a5a40`](https://github.com/morpho-org/sdks/commit/e2a5a409f1aecf05a5ebe992f6ecaf6dfd65bbbf)]:
+  - @morpho-org/blue-sdk-viem@6.0.0-next.1
+  - @morpho-org/morpho-sdk@6.0.0-next.4
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
+## 2.0.0-next.3
+
+### Major Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
+  blue-sdk-viem, and WDK. This includes Vault V1 PublicAllocator addresses, ABIs, models, fetchers,
+  augmentation, planners, action inputs, and compatibility aliases; deprecated utility, URL, permit,
+  deployless-fetch, capacity, adapter-id, error, signature, and facade aliases; and the deprecated WDK
+  requirement type. Use Vault V2 BluePublicAllocator APIs and each symbol's canonical replacement.
+
+  Remove morpho-sdk's low-level Bundler3 composition surface and the residual Bundler3 executor,
+  adapter, migration-adapter, address, deployment, action, requirement, ABI, and error exports from
+  morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk and blue-sdk-viem.
+  This completes removal of the old migration-sdk-viem implementation, including its Aave and
+  Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
+  entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
+  supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+  Bundler3 and adapter addresses are no longer guarded.
+
+  Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
+  Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop
+  reading those contracts. These fields and the low-level Bundler3 surfaces were stable APIs without
+  a published deprecation.
+
+  Some removals did not receive a published deprecation window: the stable low-level Bundler3 and
+  migration-adapter surfaces (including registry and ABI re-exports), compatibility errors, signature
+  helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
+  five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
+  consumers must migrate to the standalone bundle actions and canonical exports or stay on the
+  previous major versions. The deviation and its symbol scope are recorded in
+  `docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+  AGENTS.md release exception.
+
+  Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+  v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+  and blue-sdk-viem majors.
+
+  Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
+
+### Minor Changes
+
+- [#1072](https://github.com/morpho-org/sdks/pull/1072) [`c053164`](https://github.com/morpho-org/sdks/commit/c053164cdeae02a5e63ef0972898c4f0f32ab3ca) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Max repay requirements keep a reusable approval default for stateless adapter flows, with `requirementOptions.approvalAmount` available for explicit approval control.
+
+### Patch Changes
+
+- [#1061](https://github.com/morpho-org/sdks/pull/1061) [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350) Thanks [@jinmel](https://github.com/jinmel)! - Reject in-kind exit and permit deadlines outside uint256 before encoding or exposing approval requirements. Validate Vault V1 withdrawal utilization defaults and per-market overrides between zero and WAD. Pass market tick spacing in fixed-rate offer-chain examples.
+
+- Updated dependencies [[`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8), [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f), [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.3
+  - @morpho-org/blue-sdk@7.0.0-next.1
+  - @morpho-org/blue-sdk-viem@6.0.0-next.0
+
 ## 2.0.0-next.2
 
 ### Patch Changes

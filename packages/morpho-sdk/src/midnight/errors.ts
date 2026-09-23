@@ -2,6 +2,7 @@ export {
   ChainIdMismatchError,
   InvalidEcrecoverSignatureVError,
   InvalidMarketParameterError,
+  InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,

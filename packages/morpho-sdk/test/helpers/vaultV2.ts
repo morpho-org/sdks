@@ -107,7 +107,7 @@ export const deployVaultV2 = async (
  * Produces the only vault shape `VaultExitBundlesV1` Vault V2 exits accept: `adaptersLength() == 1`
  * and a markets-based adapter. Returns the vault, its adapter, and a helper that allocates the
  * caller's deposit across markets. Optionally configures the vault's annual management fee for the
- * test account.
+ * test account and its `maxRate` (the per-second WAD cap on total-assets growth).
  */
 export const setUpSingleAdapterVaultV2 = async (
   client: AnvilTestClient,
@@ -117,6 +117,7 @@ export const setUpSingleAdapterVaultV2 = async (
     readonly forceDeallocatePenalty?: bigint;
     readonly liquidityMarket?: MarketParams;
     readonly managementFee?: bigint;
+    readonly maxRate?: bigint;
   },
 ) => {
   const vault = await deployVaultV2(client, params.asset);
@@ -181,6 +182,16 @@ export const setUpSingleAdapterVaultV2 = async (
         abi: vaultV2Abi,
         functionName: "setForceDeallocatePenalty",
         args: [adapter, params.forceDeallocatePenalty],
+      }),
+    });
+  }
+  if (params.maxRate != null) {
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setMaxRate",
+        args: [params.maxRate],
       }),
     });
   }

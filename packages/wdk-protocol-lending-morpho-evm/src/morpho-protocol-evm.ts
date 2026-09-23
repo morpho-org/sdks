@@ -12,6 +12,7 @@ import {
   ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
+  MAX_TOKEN_APPROVALS,
   type Metadata,
   MixedBundlesFundingError,
   type MorphoClientType,
@@ -54,6 +55,7 @@ import {
   custom,
   erc20Abi,
   erc4626Abi,
+  getAddress,
   isAddress,
   isAddressEqual,
   maxUint256,
@@ -157,7 +159,7 @@ export class UnresolvedVaultWithdrawRequirementsError extends Error {
   }
 }
 
-/** Controls token requirements for prepared vault deposits and Blue writes. */
+/** Controls token requirements for prepared vault deposits and Blue loan and collateral writes; `approvalAmount` applies only to the Blue writes. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
   readonly useSimplePermit?: boolean;
@@ -166,6 +168,12 @@ export interface RequirementOptions {
    * owner when omitted; set it only when concurrent flows must partition nonces themselves.
    */
   readonly permit2Nonce?: bigint;
+  /**
+   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval such
+   * as `maxUint256`. Applies only to Blue loan/collateral token requirements; ignored by vault
+   * deposit handles and signature paths.
+   */
+  readonly approvalAmount?: bigint;
 }
 
 /** Fields shared by ERC-20 and native Morpho Vault supply operations. */
@@ -752,20 +760,11 @@ function normalizeDepositAmounts({
   throw new NonPositiveInputError("amount or nativeAmount", 0n);
 }
 
-function normalizeCollateralSupplyOptions(
-  options: MorphoCollateralSupplyOptions,
-): MorphoCollateralSupplyOptions {
-  return {
-    ...options,
-    requirementSignature: snapshotRequirementSignature(
-      options.requirementSignature,
-    ),
-  } as MorphoCollateralSupplyOptions;
-}
+function snapshotRequirementSignatureOptions<
+  TOptions extends { readonly requirementSignature?: RequirementSignature },
+>(options: TOptions): TOptions {
+  if (options.requirementSignature === undefined) return { ...options };
 
-function normalizeWithdrawCollateralOptions(
-  options: MorphoWithdrawCollateralOptions,
-): MorphoWithdrawCollateralOptions {
   return {
     ...options,
     requirementSignature: snapshotRequirementSignature(
@@ -793,17 +792,6 @@ function normalizeBorrowOptions(
           : { ...reallocation.from },
       to: { ...reallocation.to },
     })),
-  };
-}
-
-function normalizeRepayOptions(
-  options: MorphoRepayOptions,
-): MorphoRepayOptions {
-  return {
-    ...options,
-    requirementSignature: snapshotRequirementSignature(
-      options.requirementSignature,
-    ),
   };
 }
 
@@ -1136,7 +1124,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
         const operationRequirementOptions =
           requirementOptions === undefined
             ? undefined
-            : { ...requirementOptions };
+            : {
+                useSimplePermit: requirementOptions.useSimplePermit,
+                permit2Nonce: requirementOptions.permit2Nonce,
+              };
         // Recheck the live chain before using the captured SDK action.
         await this._revalidate(context);
         const requirements = (await action.getRequirements(
@@ -1317,6 +1308,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return vault.entity.withdraw({
       amount: normalizedAmount,
       userAddress,
+      vaultData: accrualVault,
       slippageTolerance: this._options.slippageTolerance,
     });
   }
@@ -1670,7 +1662,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<RepayResult> {
     this._assertWritable("repay(options)");
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const amount =
       operationOptions.amount === "max"
@@ -1693,8 +1685,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Returns Morpho SDK requirements for a repay.
    *
-   * A max repay without signature support may return the token's reusable maximum approval so
-   * rebuilding the bounded debt quote before submission cannot make the prior allowance insufficient.
+   * A max repay without a signature defaults to the token's reusable maximum approval because this
+   * adapter rebuilds the bounded debt quote; pass `requirementOptions.approvalAmount` to override.
    *
    * @param options.token - Address of the configured market's loan token.
    * @param options.amount - Assets to repay, or `"max"` to repay all current borrow shares.
@@ -1704,10 +1696,14 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
    *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 loan-token approvals or signable token requirements.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
    * @throws {InputExceedsMaxError} when a nonce or full-share quote deadline exceeds its bound.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
@@ -1742,13 +1738,25 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
   ) {
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
+    const market = await this._getMarket(context);
     const action = await this._getRepayAction(context, operationOptions);
+    const approvalAmount =
+      operationRequirementOptions?.approvalAmount ??
+      (operationOptions.amount === "max"
+        ? // The adapter rebuilds the debt quote with fresh deadline and state at submission,
+          // so an exact allowance from requirement time could be short by accrued interest.
+          (MAX_TOKEN_APPROVALS[context.chainId]?.[
+            getAddress(market.params.loanToken)
+          ] ?? maxUint256)
+        : undefined);
     const requirements = await action.getRequirements(
-      operationRequirementOptions,
+      approvalAmount === undefined
+        ? operationRequirementOptions
+        : { ...operationRequirementOptions, approvalAmount },
     );
     await this._revalidate(context);
 
@@ -1792,7 +1800,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoRepayOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<RepayResult, "hash">> {
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getRepayTransaction(context, operationOptions);
@@ -1901,7 +1909,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     if (options.amount !== undefined && options.nativeAmount !== undefined) {
       throw new MixedBlueCollateralFundingError();
     }
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const depositAmounts = normalizeDepositAmounts(operationOptions);
     const context = await this._getMarketContext();
@@ -1934,11 +1942,15 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param requirementOptions.useSimplePermit - Prefer ERC-2612 when the token supports it.
    * @param requirementOptions.permit2Nonce - Optional unused Permit2 SignatureTransfer nonce;
    *   defaults to the lowest unused nonce when omitted.
+   * @param requirementOptions.approvalAmount - Optional classic ERC-20 allowance amount, such as
+   *   `maxUint256`, to reuse across operations; ignored by signature paths.
    * @returns A readonly list of BlueBundlesV1 collateral-token approvals or signable requirements;
    *   native funding returns an empty list.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NoUnusedPermit2NonceError} when every Permit2 nonce for the owner is consumed.
    * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the supplied Permit2 nonce is consumed.
+   * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
+   *   funded amount.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
@@ -1971,7 +1983,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
   ) {
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
@@ -2026,7 +2038,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoCollateralSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getSupplyCollateralTransaction(
@@ -2133,7 +2145,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdrawCollateral(options)");
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getWithdrawCollateralTransaction(
@@ -2191,7 +2203,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   async getWithdrawCollateralRequirements(
     options: MorphoWithdrawCollateralOptions,
   ) {
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const context = await this._getMarketContext();
     const action = await this._getWithdrawCollateralAction(
       context,
@@ -2242,7 +2254,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoWithdrawCollateralOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getWithdrawCollateralTransaction(

@@ -14,6 +14,7 @@ import {
   InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
+  VaultAddressMismatchError,
 } from "../../types/index.js";
 
 describe("MorphoVaultV2 deposit input validation", () => {
@@ -142,6 +143,9 @@ describe("MorphoVaultV2 withdraw input validation", () => {
           vault.withdraw({
             amount: 1n,
             userAddress: KeyrockUsdcVaultV2.address,
+            vaultData: inKindVaultV2Data({
+              address: KeyrockUsdcVaultV2.address,
+            }),
             ...params,
           }),
         ),
@@ -160,8 +164,46 @@ describe("MorphoVaultV2 withdraw input validation", () => {
       vault.withdraw({
         amount: 1n,
         userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: { address: KeyrockUsdcVaultV2.address } as never,
       }),
     ).toThrow(UnknownAddressError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: VaultAddressMismatchError when vaultData belongs to another vault", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: inKindVaultV2Data(),
+      }),
+    ).toThrow(VaultAddressMismatchError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: NonPositiveInputError when vaultData yields a zero share cap", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: {
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
+          toShares: () => 0n,
+          accrueInterest: () => ({ toShares: () => 0n }),
+        } as never,
+      }),
+    ).toThrow(NonPositiveInputError);
     expect(handle.request).not.toHaveBeenCalled();
   });
 
@@ -171,10 +213,14 @@ describe("MorphoVaultV2 withdraw input validation", () => {
       .extend(morphoViemExtension())
       .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
 
+    const vaultData = inKindVaultV2Data({
+      address: KeyrockUsdcVaultV2.address,
+    });
     for (const slippageTolerance of [0n, MAX_SLIPPAGE_TOLERANCE]) {
       const action = vault.withdraw({
         amount: maxUint256,
         userAddress: KeyrockUsdcVaultV2.address,
+        vaultData,
         slippageTolerance,
       });
       expect(action.buildTx().action.args.amount).toBe(maxUint256);

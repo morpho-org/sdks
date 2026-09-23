@@ -8,7 +8,7 @@ Every PR is measured against the rules below. A change that violates an architec
 
 > **Enforcement note.** Some rules below are enforced by tooling today (Biome formatter, fork harness in `@morpho-org/test`, Changesets generation). Most are **review-time conventions** that humans and reviewing agents apply: JSDoc on every export, layered-import bans, the §2 forbidden-patterns list (Biome's `noExplicitAny` is warn-level, `noParameterAssign` is disabled, and there's no rule banning `as unknown as` / `@ts-ignore` / async-in-actions / framework imports / mocked viem clients on RPC paths), changeset-gates-CI, full coverage thresholds. Where a rule isn't backed by an automated check, treat it as binding regardless — wiring CI gates is tracked separately.
 
-> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked by the `/pr-review-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
+> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked by the `/review-pr-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
 
 ---
 
@@ -212,13 +212,13 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 10. Review automation & CI/release security
 
-PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
+PR review is automated by the `/review-pr-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
 
 ### Orchestration
 
 | File | Role |
 |---|---|
-| [`.agents/commands/pr-review-{ci,gh,local}.md`](./.agents/commands/) + [`pr-fix.md`](./.agents/commands/pr-fix.md) | Caller-side commands (CI verdict / local PR / pre-PR terminal / fix). Each parses args, resolves branches, then delegates Steps 3–6 to the engine. Symlinked into `.claude/commands/`. |
+| [`.agents/commands/review-pr-{ci,gh,local}.md`](./.agents/commands/) + [`fix-pr.md`](./.agents/commands/fix-pr.md) | Caller-side commands (CI verdict / local PR / pre-PR terminal / fix). Each parses args, resolves branches, then delegates Steps 3–6 to the engine. Symlinked into `.claude/commands/`. |
 | [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) | Shared review **engine** (Steps 3–6) — reads `<PROJECT_CONTEXT>`, computes conditional flags, fans out the agents, then aggregates / dedups / snaps findings to diff lines. Encodes no rule; orchestrates only. Not invocable directly (not symlinked into `.claude/commands/`). Supersedes the former `lib/pr-review-base.md`. |
 | [`.agents/pr-review-engine/scripts/`](./.agents/pr-review-engine/scripts/) | Deterministic helpers run by the engine / callers: `build-changed-lines`, `validate-findings`, `findings-ledger` (stateful ledger + idempotency cache), `review-scope`. Unit-tested under the `agents-engine` Vitest project. |
 | [`.agents/pr-review-engine/references/`](./.agents/pr-review-engine/references/) | Shared rubric content cited by agents (changed-lines, scope-filter, calibration, secrets, injection, github-actions, skill-authoring). |

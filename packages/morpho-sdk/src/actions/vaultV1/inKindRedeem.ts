@@ -38,9 +38,9 @@ export interface VaultV1InKindRedeemParams {
  * @param params.vault.address - Target Vault V1 address.
  * @param params.args.amount - Asset-denominated amount to exit.
  * @param params.args.marketParamsList - Ordered markets consumed greedily by the contract.
- * @param params.args.userAddress - Expected transaction sender, recorded in action metadata only.
- *   VaultExitBundlesV1 burns `msg.sender`'s vault shares, so the submitting account must equal this
- *   address.
+ * @param params.args.userAddress - Redeeming account, recorded in action metadata and validated as
+ *   the expected owner of an optional `requirementSignature` permit. VaultExitBundlesV1 burns
+ *   `msg.sender`'s vault shares, so the submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.requirementSignature - Optional bounded Vault V1 shares permit.
  * @param params.metadata - Optional analytics metadata.
@@ -51,7 +51,9 @@ export interface VaultV1InKindRedeemParams {
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
+ * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind, asset, owner,
+ *   spender, or signature encoding, or when its signed and action amounts, deadlines, or a supplied
+ *   action nonce disagree.
  * @example
  * ```ts
  * import { vaultV1InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -86,6 +88,8 @@ export const vaultV1InKindRedeem = ({
   const sharesPermit = getBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
+    owner: args.userAddress,
+    spender: to,
     requirementSignature: args.requirementSignature,
   });
   let tx = {

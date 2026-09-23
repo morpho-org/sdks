@@ -1,5 +1,119 @@
 # @morpho-org/morpho-sdk
 
+## 6.0.0-next.4
+
+### Minor Changes
+
+- [#1132](https://github.com/morpho-org/sdks/pull/1132) [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deprecate all pre-liquidation logic. Every pre-liquidation export is now marked `@deprecated` and will be removed in the next major; there is no successor.
+
+  - `blue-sdk`: `PreLiquidationParams`, `IPreLiquidationParams`, `PreLiquidationPosition`, `IPreLiquidationPosition`, `defaultPreLiquidationParamsRegistry`, `getDefaultPreLiquidationParams`, and `UnsupportedPreLiquidationParamsError`.
+  - `blue-sdk-viem`: `fetchPreLiquidationParams`, `fetchPreLiquidationPosition`, `AccrualPosition.fetchPreLiquidation`, `preLiquidationAbi`, and `preLiquidationFactoryAbi`.
+  - `morpho-sdk`: the matching `/blue/*` raw re-exports and the `Blue`-qualified facade aliases (`BluePreLiquidationParams`, `IBluePreLiquidationParams`, `BluePreLiquidationPosition`, `IBluePreLiquidationPosition`, `fetchBluePreLiquidationParams`, `fetchBluePreLiquidationPosition`, `UnsupportedBluePreLiquidationParamsError`, `bluePreLiquidationAbi`, `bluePreLiquidationFactoryAbi`, `blueDefaultPreLiquidationParamsRegistry`, `getBlueDefaultPreLiquidationParams`, and `BlueAccrualPosition.fetchPreLiquidation`).
+  - `morpho-ts`: the `preLiquidationFactory` chain-address field.
+
+  Runtime behavior is unchanged; this only adds `@deprecated` JSDoc.
+
+- [#1116](https://github.com/morpho-org/sdks/pull/1116) [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `MidnightApi` takeable-offer mappers (`fetchBookQuote`, `fetchBookTakeableOffers`, `fetchTakeableOffers`) now reject offers that cannot be executed by the Midnight contract: caps must set exactly one non-zero `uint128` cap, `receiverIfMakerIsSeller` must be a well-formed address, and buy offers must carry a zero `receiverIfMakerIsSeller`. Such responses throw `InvalidMidnightApiResponseError` instead of being quoted and skipped onchain, which could otherwise fall through to worse-priced liquidity.
+
+  `MidnightApi.fetchBookQuote` now throws the new `InvalidMidnightApiQuoteTargetError` when the runtime input does not set exactly one of `units` or `assets`, instead of sending both query parameters and silently evaluating the `units` branch. The error is re-exported from `@morpho-org/morpho-sdk/errors` and `@morpho-org/morpho-sdk/midnight/errors`.
+
+- [#1125](https://github.com/morpho-org/sdks/pull/1125) [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `safeParseUnits` now validates the whole input against an anchored decimal grammar (`/^[-+]?(\d+\.?\d*|\.\d+)$/`) before parsing, so malformed strings such as `"100.00.999"`, `"1e5"`, or `"abc1"` throw `InvalidNumberError` (exported from `@morpho-org/blue-sdk-viem` and the `morpho-sdk` errors facades) instead of being silently truncated to a different amount. Sign handling is normalized before calling `parseUnits`, and fractional truncation to `decimals` is unchanged.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+### Patch Changes
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#1122](https://github.com/morpho-org/sdks/pull/1122) [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject `MidnightApi.fetchBooks` results outside the requested filters. `fetchBooks` now throws `InvalidMidnightApiResponseError` when a returned book falls outside any supplied `chainIds`, `loanTokens`, `collateralTokens`, or `maturities` filter, extending the existing `marketIds` binding so a hostile or compromised API cannot return a coherent foreign market for a filtered listing. `morpho-sdk` re-exports this API via its `/midnight-api` facade and takes a matching patch.
+
+- [#1117](https://github.com/morpho-org/sdks/pull/1117) [`7991d97`](https://github.com/morpho-org/sdks/commit/7991d979c98d77d306338eeae7342f3abb3fbbfa) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject a vault-share permit whose supplied `action.args.nonce` disagrees with `args.nonce` in `getBundlesSharesPermit` with `BundlesPermitMismatchError`, matching the existing amount and deadline cross-checks, so a malformed requirement signature can never forward a lower nonce that the bundles peripheries' shared `TokenLib.submitPermit` (VaultBundlesV1 and VaultExitBundlesV1) would treat as an already-consumed permit.
+
+- [#1121](https://github.com/morpho-org/sdks/pull/1121) [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Sort Midnight API book price levels best first (asks ascending tick, bids descending tick) instead of trusting API order.
+
+- [#1118](https://github.com/morpho-org/sdks/pull/1118) [`ab2bc02`](https://github.com/morpho-org/sdks/commit/ab2bc0254a56f8c9084c2a5bccdc5d50d2e1743d) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reset an oversized vault-share allowance for VaultBundlesV1 with an onchain `erc20Approval` even
+  when `supportSignature` is enabled. `MorphoVaultV1`/`MorphoVaultV2` `withdraw()`, `redeem()`, and
+  `migrateToV2()` previously returned an ERC-2612 permit lowering the allowance to the computed cap;
+  VaultBundlesV1 skips a permit whose nonce was already consumed, so a stale permit submission left
+  the oversized allowance as the effective share-burn cap. A permit is now only requested when the
+  current allowance is below the cap, matching the in-kind redemption handles.
+
+- [#1105](https://github.com/morpho-org/sdks/pull/1105) [`e2a5a40`](https://github.com/morpho-org/sdks/commit/e2a5a409f1aecf05a5ebe992f6ecaf6dfd65bbbf) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix `VaultV2.forceWithdraw` deriving a `minSharePriceE27` floor above the vault's realized share price and coupling the share allowance exactly to it.
+
+  - The floor is now priced off the larger of the raw snapshot burn and the burn accrued to `now` net of the fee shares minted to the user at `now` (each endpoint netted before the max, so a fee-recipient exit is not credited a `now` fee mint against the raw burn), so it never exceeds either the un-projected share price or the projected one (after `slippageTolerance`). Previously a long elapsed window on a fee-bearing vault projected the price up while the chain realized a lower price, and the resulting floor sat above the realized price.
+  - The approved / permitted share allowance now covers a burn at least one `slippageTolerance` step below the floor whenever the floor exceeds one RAY unit and, in any case, at least one share above the burn at the floor, so a price within that headroom below the floor reverts on the bundle's `minSharePriceE27` check rather than underflowing `_spendAllowance` (`panic 0x11`) on the final `withdraw` leg; a deeper drop can still surface as an ERC-20 allowance underflow. Still saturated at `maxUint256`.
+  - `previewVaultV2ForceWithdraw` mirrors the new denominator for its zero-floor screen.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8), [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac), [`047e86c`](https://github.com/morpho-org/sdks/commit/047e86cf02c2a4bdd2ef11d47510b8762b4f5447), [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47), [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec), [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+  - @morpho-org/blue-sdk-viem@6.0.0-next.1
+  - @morpho-org/midnight-sdk@1.7.0-next.0
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
+## 6.0.0-next.3
+
+### Major Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
+  blue-sdk-viem, and WDK. This includes Vault V1 PublicAllocator addresses, ABIs, models, fetchers,
+  augmentation, planners, action inputs, and compatibility aliases; deprecated utility, URL, permit,
+  deployless-fetch, capacity, adapter-id, error, signature, and facade aliases; and the deprecated WDK
+  requirement type. Use Vault V2 BluePublicAllocator APIs and each symbol's canonical replacement.
+
+  Remove morpho-sdk's low-level Bundler3 composition surface and the residual Bundler3 executor,
+  adapter, migration-adapter, address, deployment, action, requirement, ABI, and error exports from
+  morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk and blue-sdk-viem.
+  This completes removal of the old migration-sdk-viem implementation, including its Aave and
+  Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
+  entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
+  supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+  Bundler3 and adapter addresses are no longer guarded.
+
+  Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
+  Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop
+  reading those contracts. These fields and the low-level Bundler3 surfaces were stable APIs without
+  a published deprecation.
+
+  Some removals did not receive a published deprecation window: the stable low-level Bundler3 and
+  migration-adapter surfaces (including registry and ABI re-exports), compatibility errors, signature
+  helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
+  five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
+  consumers must migrate to the standalone bundle actions and canonical exports or stay on the
+  previous major versions. The deviation and its symbol scope are recorded in
+  `docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+  AGENTS.md release exception.
+
+  Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+  v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+  and blue-sdk-viem majors.
+
+  Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
+
+### Minor Changes
+
+- [#1073](https://github.com/morpho-org/sdks/pull/1073) [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Bound Vault V2 force-withdraw `minSharePriceE27` overrides by the SDK's maximum-slippage floor so overrides cannot disable meaningful share-price protection.
+
+### Patch Changes
+
+- [#1072](https://github.com/morpho-org/sdks/pull/1072) [`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Full repay now defaults its classic approval to the exact `maxRepayAssets` pull instead of the token's reusable maximum or `maxUint256`; pass `approvalAmount` to keep a reusable allowance.
+
+- [#1071](https://github.com/morpho-org/sdks/pull/1071) [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Require exact vault-share allowances for Vault V1 and Vault V2 in-kind redemptions, replacing oversized allowances with onchain approvals and strictly validating embedded permits.
+
+- [#1061](https://github.com/morpho-org/sdks/pull/1061) [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350) Thanks [@jinmel](https://github.com/jinmel)! - Reject in-kind exit and permit deadlines outside uint256 before encoding or exposing approval requirements. Validate Vault V1 withdrawal utilization defaults and per-market overrides between zero and WAD. Pass market tick spacing in fixed-rate offer-chain examples.
+
+- Updated dependencies [[`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350)]:
+  - @morpho-org/morpho-ts@3.0.0-next.0
+  - @morpho-org/blue-sdk@7.0.0-next.1
+  - @morpho-org/blue-sdk-viem@6.0.0-next.0
+  - @morpho-org/midnight-sdk@1.5.1-next.0
+
 ## 6.0.0-next.2
 
 ### Major Changes
@@ -319,6 +433,25 @@ slippageTolerance?, minSharePriceE27?, referralFeePct?, referralFeeRecipient? }`
   An omitted `deadline` still defaults to two hours from now.
 
 - [#972](https://github.com/morpho-org/sdks/pull/972) [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route the `MorphoVaultV1` and `MorphoVaultV2` action-method chain checks through the shared `validateChainId` helper instead of inlining the `ChainIdMismatchError` guard at each call site. Pure internal maintenance: the thrown error class and arguments are unchanged, and the `getData` guards keep their intentional chainless-client tolerance.
+
+## 5.13.0
+
+### Minor Changes
+
+- [#1102](https://github.com/morpho-org/sdks/pull/1102) [`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the Robinhood Chain (chain 4663) Midnight deployments from morpho-org/deployments
+  address-book.json: `midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, each with its deployment block in the
+  registry. `getChainAddress(ChainId.RobinhoodMainnet, ...)` now resolves these labels, so the Midnight
+  SDK works on Robinhood Chain. Addresses are sourced byte-for-byte from the canonical deployment
+  registry; deployment blocks were derived from the deployer contract creation receipts on Robinhood
+  Chain.
+
+### Patch Changes
+
+- Updated dependencies [[`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e)]:
+  - @morpho-org/morpho-ts@2.15.0
+  - @morpho-org/blue-sdk@6.11.0
+  - @morpho-org/midnight-sdk@1.6.0
 
 ## 5.12.0
 

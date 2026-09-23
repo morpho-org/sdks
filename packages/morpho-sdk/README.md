@@ -46,8 +46,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
-Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and
-Robinhood Chain. Custom deployments can still be configured with `registerCustomAddresses`.
+Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
+Robinhood Chain, and Arc. Custom deployments can still be configured with `registerCustomAddresses`.
 
 ## How it works
 
@@ -150,7 +150,8 @@ async function withdrawUsdc(provider: EIP1193Provider, supportSignature = false)
   const [userAddress] = await walletClient.requestAddresses();
   if (!userAddress) throw new Error("Connect a wallet account before withdrawing.");
   const vault = client.morpho.vaultV2("0x04422053aDDbc9bB2759b248B574e3FCA76Bc145", mainnet.id);
-  const withdrawal = vault.withdraw({ amount: 500_000n, userAddress });
+  const vaultData = await vault.getData();
+  const withdrawal = vault.withdraw({ amount: 500_000n, userAddress, vaultData });
   const requirements = await withdrawal.getRequirements();
   const requirement = requirements[0];
 
@@ -351,7 +352,8 @@ Link this package to your app for local debugging:
 
 ```bash
 # In this morpho-sdk project
-pnpm run build:link
+pnpm build
+pnpm link
 ```
 
 ```bash

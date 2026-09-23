@@ -23,6 +23,7 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
+  ReferralFeePctExceededError,
   ReferralFeeRecipientMissingError,
 } from "../../types/index.js";
 import { vaultV2ForceWithdraw } from "./forceWithdraw.js";
@@ -381,7 +382,7 @@ describe("vaultV2ForceWithdraw", () => {
   });
 
   test.each([MathLib.WAD, MathLib.WAD + 1n, maxUint256])(
-    "error: InputExceedsMaxError for referralFeePct %s",
+    "error: ReferralFeePctExceededError for referralFeePct %s",
     (referralFeePct) => {
       expect(() =>
         vaultV2ForceWithdraw({
@@ -396,7 +397,7 @@ describe("vaultV2ForceWithdraw", () => {
             referralFeeRecipient,
           },
         }),
-      ).toThrow(InputExceedsMaxError);
+      ).toThrow(ReferralFeePctExceededError);
     },
   );
 

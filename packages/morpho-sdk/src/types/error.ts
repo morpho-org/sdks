@@ -443,6 +443,50 @@ export class VaultV2ForceWithdrawZeroSharePriceError extends Error {
 }
 
 /**
+ * Thrown when a supplied force-withdraw share-price floor is below the SDK safety floor.
+ *
+ * An override below the floor derived at `MAX_SLIPPAGE_TOLERANCE` would weaken the on-chain
+ * share-price protection and let the required share allowance grow without bound, so the entity
+ * rejects it instead of encoding it.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawSharePriceBelowFloorError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets, vaultData, userAddress, minSharePriceE27 });
+ * } catch (error) {
+ *   if (error instanceof VaultV2ForceWithdrawSharePriceBelowFloorError) {
+ *     console.error(error.minSharePriceE27, error.floorE27);
+ *   }
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawSharePriceBelowFloorError extends Error {
+  /** Supplied force-withdraw share-price floor. */
+  public readonly minSharePriceE27: bigint;
+  /** Minimum share-price floor allowed at maximum SDK slippage tolerance. */
+  public readonly floorE27: bigint;
+
+  /**
+   * @param params - Supplied and minimum allowed share-price floors.
+   * @param params.minSharePriceE27 - Supplied force-withdraw share-price floor.
+   * @param params.floorE27 - Minimum floor derived at maximum SDK slippage tolerance.
+   */
+  public constructor(params: {
+    readonly minSharePriceE27: bigint;
+    readonly floorE27: bigint;
+  }) {
+    super(
+      `Force-withdraw share price floor "${params.minSharePriceE27}" is below the minimum allowed "${params.floorE27}" (max slippage tolerance). Raise minSharePriceE27 or use slippageTolerance.`,
+    );
+    this.minSharePriceE27 = params.minSharePriceE27;
+    this.floorE27 = params.floorE27;
+    this.name = "VaultV2ForceWithdrawSharePriceBelowFloorError";
+  }
+}
+
+/**
  * Thrown when fee shares projected to the accepted deadline reach the lower force-withdraw
  * burn bound at that time.
  *

@@ -1,6 +1,11 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import {
+  ChainId,
+  UnknownAddressError,
+  UnsupportedChainIdError,
+} from "@morpho-org/morpho-ts";
+import {
   type Chain,
   createWalletClient,
   http,
@@ -17,6 +22,7 @@ import {
   ExpiredDeadlineError,
   InputExceedsMaxError,
   NonPositiveInputError,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
 
@@ -43,6 +49,39 @@ describe("encodeBlueSignatureAuthorization", () => {
         nonce: 0n,
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
+  test("error: UnsupportedChainIdError on a chain with no registry", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(999_999), {
+        owner: account.address,
+        authorized: blueBundlesV1,
+        chainId: 999_999,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainIdError);
+  });
+
+  test("error: UnknownAddressError on a chain without BlueBundlesV1", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(ChainId.FraxtalMainnet), {
+        owner: account.address,
+        authorized: blueBundlesV1,
+        chainId: ChainId.FraxtalMainnet,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnknownAddressError);
+  });
+
+  test("error: UnsupportedAuthorizationOperatorError", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(), {
+        owner: account.address,
+        authorized: "0x1111111111111111111111111111111111111111",
+        chainId: mainnet.id,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedAuthorizationOperatorError);
   });
 
   test("default: signs a verifiable Morpho authorization", async () => {

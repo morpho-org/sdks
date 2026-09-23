@@ -22,7 +22,7 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 ## Review method
 
 1. Read the diff and changed files, then identify every touched protocol verb, ABI name, address constant, operation type, typed-data domain, share-price/slippage field, LLTV/accounting helper, or adapter route.
-2. Before claiming a protocol mismatch, inspect the relevant pinned source of truth from `<PROJECT_CONTEXT>`: package/nested `AGENTS.md`, ABI exports (`packages/*-viem/src/abis.ts`), address/constant registries, and operation/action type definitions. If the needed ABI/source excerpt is missing from context, say so; do not guess from memory.
+2. Before claiming a protocol mismatch, inspect the relevant pinned source of truth from `<PROJECT_CONTEXT>`: package/nested `AGENTS.md`, ABI exports (`packages/morpho-ts/src/abis.ts`, `packages/blue-sdk-viem/src/abis.ts`, `packages/morpho-sdk/src/abis.ts`, `packages/midnight-sdk/src/abis.ts`), address/constant registries, and operation/action type definitions. If the needed ABI/source excerpt is missing from context, say so; do not guess from memory.
 3. Compare the encoded output or returned entity against the protocol path expected by the local docs: direct calls vs registered fixed-bundle routes, bundle authorization/spender semantics, `BluePublicAllocator` allocation shapes, native wrapping rules, and V1/V2/Market naming.
 4. Return only actionable findings introduced by the diff. No protocol redesigns unless the diff already changes that surface.
 

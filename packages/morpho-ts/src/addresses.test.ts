@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   addresses,
   addressesRegistry,
+  blueDeployments,
   type ChainAddresses,
   type ChainDeployments,
   deployments,
@@ -452,6 +453,48 @@ describe("addressesRegistry", () => {
       "setterRatifier",
       "0x3915156EBFC246Ee9aC3236af561546B7D9D924c",
       20_320_779n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnight",
+      "0x6120765Ba5336150BbdDdD0Cd9108B5bFD369632",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightBundles",
+      "0x71aa985ff80AbcE3b8b443845633674Ca9f7575C",
+      65_387_381n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x53cbCd884CABA07762c72F43283D3fa72de42D4f",
+      65_391_242n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "midnightMempool",
+      "0xcEF685D4796FA80F71a97e803D2c0b6719F1b4E2",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "ecrecoverRatifier",
+      "0x90B800999e4ACd1bD20283BD450bBd2e06D91F7C",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "ecrecoverAuthorizer",
+      "0x75FCdD113fe33a8bEd3CD3C35955DE094Bd2bdf8",
+      65_366_296n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "setterRatifier",
+      "0x708d6Bf6F847202a0755bb5636bE663B174242ea",
+      65_366_296n,
     ],
     [
       ChainId.ScrollMainnet,
@@ -904,22 +947,22 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = deployments[ChainId.PolygonMainnet];
+    const polygonDeployments = deployments[ChainId.PolygonMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
-      permit2: blueDeployments.permit2,
+      permit2: polygonDeployments.permit2,
     };
 
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          ...blueDeployments,
+          ...polygonDeployments,
           ...chainDeployments,
         },
       },
     });
 
-    expect(deployments[chainId]).toMatchObject(blueDeployments);
+    expect(deployments[chainId]).toMatchObject(polygonDeployments);
     expect(deployments[chainId]).toMatchObject(chainDeployments);
   });
 });
@@ -1238,6 +1281,90 @@ describe("registerCustomAddresses", () => {
       unwrappedTokens[wrappedToken] = randomAddress();
     }).not.toThrow();
 
+    expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
+  });
+
+  test("behavior: leaves addresses unchanged when a deployment patch in the same call is rejected", () => {
+    const chainId = 31_337_300;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+    });
+
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: {
+            ...chainDeployments,
+            midnight: chainDeployments.midnight + 1n,
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
+    );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+  });
+
+  test("behavior: leaves addresses and deployments unchanged when an unwrappedTokens patch in the same call is rejected", () => {
+    const chainId = 31_337_301;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+    const wrappedToken = randomAddress();
+    const unwrappedToken = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+      unwrappedTokens: {
+        [chainId]: { [wrappedToken]: unwrappedToken },
+      },
+    });
+
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: { ...chainDeployments, wNative: 1n },
+        },
+        unwrappedTokens: {
+          [chainId]: { [wrappedToken]: randomAddress() },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
+    );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.wNative).toBeUndefined();
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
 });

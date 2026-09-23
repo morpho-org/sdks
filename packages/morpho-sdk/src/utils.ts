@@ -2,7 +2,9 @@ export type { CapacityLimit, RoundingDirection } from "@morpho-org/blue-sdk";
 export {
   AdaptiveCurveIrmLib as BlueAdaptiveCurveIrmLib,
   CapacityLimitReason,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   defaultPreLiquidationParamsRegistry as blueDefaultPreLiquidationParamsRegistry,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   getDefaultPreLiquidationParams as getBlueDefaultPreLiquidationParams,
   MarketUtils as BlueMarketUtils,
   MathLib,

@@ -89,7 +89,7 @@ Use this checklist when adding a chain to the SDKs.
 
 ### 1. Add the Chain ID
 
-Update `packages/blue-sdk/src/chain.ts`:
+Update `packages/morpho-ts/src/chain.ts`:
 
 ```typescript
 export enum ChainId {
@@ -99,7 +99,7 @@ export enum ChainId {
 
 ### 2. Add Chain Metadata
 
-Update `CHAIN_METADATA` in `packages/blue-sdk/src/chain.ts`:
+Update `CHAIN_METADATA` in `packages/morpho-ts/src/chain.ts`:
 
 ```typescript
 [ChainId.YourNewChain]: {

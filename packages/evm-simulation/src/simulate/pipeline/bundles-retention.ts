@@ -37,7 +37,8 @@ interface AssertNoBundlesRetentionParams {
 
 /**
  * Assert that no value is retained by standalone `bundles` periphery contracts
- * (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`).
+ * (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) or by
+ * `MidnightBundlesV1` (`midnightBundles`).
  *
  * Uses net flow (inbound minus outbound) per (restricted address, token) pair.
  * These contracts legitimately receive tokens as an intermediary (user →
@@ -65,9 +66,9 @@ interface AssertNoBundlesRetentionParams {
  *
  * @internal Internal pipeline stage, composed by `simulate`; not part of the
  *   package's public API (only re-exported from the internal pipeline barrel).
- * @param params.chainId - Chain whose blue-sdk `bundles` registry defines the
- *   restricted address set. Chains without one are skipped (a `logger.warn`
- *   records the skip).
+ * @param params.chainId - Chain whose blue-sdk `bundles` and `midnightBundles`
+ *   registry entries define the restricted address set. Chains cataloging
+ *   neither are skipped (a `logger.warn` records the skip).
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
  * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
@@ -77,15 +78,16 @@ interface AssertNoBundlesRetentionParams {
  * @returns Nothing. Returns silently when no restricted contract retains value
  *   above `DUST_THRESHOLD`; otherwise throws.
  * @throws {BlacklistViolationError} when net inbound flow to a restricted
- *   `bundles` contract exceeds `DUST_THRESHOLD` for any token.
+ *   `bundles` or `midnightBundles` contract exceeds `DUST_THRESHOLD` for any
+ *   token.
  */
 export function assertNoBundlesRetention(
   params: AssertNoBundlesRetentionParams,
 ): void {
   const { chainId, transfers, assetChanges, logger } = params;
 
-  // Standalone bundles contracts are transient intermediaries that route user
-  // value and must never retain it.
+  // Standalone bundles contracts and `MidnightBundlesV1` are transient
+  // intermediaries that route user value and must never retain it.
   let addresses: ReturnType<typeof getChainAddresses>;
   try {
     addresses = getChainAddresses(chainId);
@@ -106,11 +108,14 @@ export function assertNoBundlesRetention(
     for (const addr of Object.values(addresses.bundles).filter(isDefined))
       restrictedAddresses.add(getAddress(addr));
   }
+  if (addresses.midnightBundles) {
+    restrictedAddresses.add(getAddress(addresses.midnightBundles));
+  }
   if (restrictedAddresses.size === 0) {
-    // blue-sdk knows the chain but cataloged no bundles contracts. Treat the
-    // same as UnsupportedChainIdError — retention check skipped.
+    // blue-sdk knows the chain but cataloged no restricted intermediary for it.
+    // Treat the same as UnsupportedChainIdError — retention check skipped.
     logger?.warn(
-      "Chain known to blue-sdk but has no bundles config, retention check skipped",
+      "Chain known to blue-sdk but has no restricted intermediary config, retention check skipped",
       { chainId },
     );
     return;
