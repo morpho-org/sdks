@@ -15,7 +15,15 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { coerce, gt, major, minVersion, prerelease, valid } from "semver";
+import {
+  coerce,
+  gt,
+  major,
+  minVersion,
+  prerelease,
+  valid,
+  validRange,
+} from "semver";
 
 import { isMain, readRequiredEnv, reportCliError } from "./workflow.ts";
 
@@ -417,11 +425,7 @@ export function mergeBumpEvents(events: readonly BumpEvent[]): BumpEvent[] {
  * cannot be parsed (e.g. a dist-tag like `latest`).
  */
 export function parseSpecMinVersion(spec: string): string | null {
-  try {
-    return minVersion(spec)?.version ?? null;
-  } catch {
-    return null;
-  }
+  return validRange(spec) != null ? (minVersion(spec)?.version ?? null) : null;
 }
 
 const REPO = "morpho-org/sdks";
