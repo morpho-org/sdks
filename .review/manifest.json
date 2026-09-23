@@ -1,0 +1,148 @@
+{
+  "version": 2,
+  "skills": [
+    {
+      "id": "security-investigation",
+      "title": "SDK protocol and transaction safety",
+      "description": "Assess SDK protocol semantics and transaction authority for ABI/address, accounting, chain, approval, signature, routing, simulation or transaction-flow changes; follow CI and code trust boundaries through their owning SDK areas.",
+      "agents": ["behavior", "design", "product", "security"]
+    },
+    {
+      "id": "architecture-simplicity-reuse",
+      "title": "SDK integrator compatibility and architecture",
+      "description": "Assess integrator compatibility and SDK architecture for public behavior, defaults, signatures, exports, state transport, dependencies, package boundaries or deprecation changes.",
+      "agents": ["behavior", "design", "product", "security"]
+    },
+    {
+      "id": "sdk-correctness",
+      "title": "SDK implementation and failure behavior",
+      "description": "Assess changed implementation and failure behavior for types, units, input mutation, errors, promises, optional lookups, fallback, generated sources, secrets or injection.",
+      "agents": ["behavior", "design", "product", "security"],
+      "path": "skills/sdk-correctness/SKILL.md"
+    },
+    {
+      "id": "sdk-evidence",
+      "title": "SDK tests and documentation",
+      "description": "Assess tests and documentation for changed public behavior, failure branches, protocol invariants, generated schemas, fork boundaries, examples, Markdown references or repository rules.",
+      "agents": ["behavior", "design", "product", "security"],
+      "path": "skills/sdk-evidence/SKILL.md"
+    },
+    {
+      "id": "developer-workflow",
+      "title": "SDK CI, release and automation integrity",
+      "description": "Assess SDK CI, releases and automation for workflows, commands, dependencies, manifests, lockfiles, changesets, installation, publishing, review criteria or agent instructions.",
+      "agents": ["behavior", "design", "product", "security"]
+    }
+  ],
+  "routing": {
+    "baselineLenses": ["behavior"],
+    "pathRules": [
+      {
+        "id": "sdk-protocol-authority",
+        "paths": [
+          "packages/morpho-sdk/src/**",
+          "packages/blue-sdk/src/**",
+          "packages/blue-sdk-viem/src/**",
+          "packages/midnight-sdk/src/**",
+          "packages/wdk-protocol-lending-morpho-evm/src/**",
+          "packages/morpho-ts/src/**"
+        ],
+        "lenses": ["security"],
+        "minimumRisk": "high",
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "sdk-ci-release-authority",
+        "paths": [
+          ".github/workflows/**",
+          ".github/actions/**",
+          "scripts/ci/**",
+          "scripts/release/**",
+          ".changeset/**",
+          "**/package.json",
+          "package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          ".npmrc"
+        ],
+        "lenses": ["security"],
+        "minimumDepth": "thorough"
+      },
+      {
+        "id": "sdk-review-and-rules",
+        "paths": [
+          ".review/**",
+          ".agents/**",
+          ".claude/**",
+          ".codex/**",
+          "**/SKILL.md",
+          "**/AGENTS.md",
+          "AGENTS.md",
+          "CLAUDE.md"
+        ],
+        "lenses": ["design"],
+        "minimumDepth": "thorough"
+      }
+    ]
+  },
+  "overrides": {
+    "skills.behavior-tracing": {
+      "action": "disable"
+    },
+    "skills.regression-testing": {
+      "action": "disable"
+    },
+    "skills.api-compatibility": {
+      "action": "disable"
+    },
+    "skills.database-review": {
+      "action": "disable"
+    },
+    "skills.api-scenario-validation": {
+      "action": "disable"
+    },
+    "skills.repository-standards": {
+      "action": "disable"
+    },
+    "skills.architecture-simplicity-reuse": {
+      "action": "replace",
+      "path": "skills/architecture-simplicity-reuse/SKILL.md"
+    },
+    "skills.agent-instruction-review": {
+      "action": "disable"
+    },
+    "skills.decision-documentation": {
+      "action": "disable"
+    },
+    "skills.requirements-scope": {
+      "action": "disable"
+    },
+    "skills.copy-interaction": {
+      "action": "disable"
+    },
+    "skills.browser-accessibility": {
+      "action": "disable"
+    },
+    "skills.security-investigation": {
+      "action": "replace",
+      "path": "skills/security-investigation/SKILL.md"
+    },
+    "skills.transaction-safety": {
+      "action": "disable"
+    },
+    "skills.rollout-reliability": {
+      "action": "disable"
+    },
+    "skills.developer-workflow": {
+      "action": "replace",
+      "path": "skills/developer-workflow/SKILL.md"
+    }
+  },
+  "methods": [
+    {
+      "id": "sdk-criteria",
+      "path": "review.md",
+      "stages": ["review", "synthesis"]
+    }
+  ]
+}
