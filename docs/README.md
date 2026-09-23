@@ -1,0 +1,92 @@
+# Documentation
+
+Docs are context for the humans and agents who work in this repo. The better they capture _why_
+decisions were made, the better agents can assist with implementation, review, and extending the
+SDK over time.
+
+---
+
+## What lives where
+
+| Type                                      | Where it lives                            | Relationship                                                                  |
+| ----------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| **ADRs** (Architectural Decision Records) | This repo — `docs/adrs/`                  | Frozen record of a hard-to-revert decision or a new standard; plans link them |
+| **Technical Project Plans**               | Linear — the project description          | Mutable; hold context, judgement calls, milestones, rollout; link their ADRs  |
+| **Implementation tickets**                | Linear                                    | One per PR, flowing from the plan's milestones                                |
+| **Retrospectives**                        | Linear — the project's final update       | Compare delivered work against the plan; check ADR invariants held            |
+| **TIBs** (Technical Intent Briefs)        | This repo — `docs/tibs/`                  | Retired convention. Frozen historical records; no new TIBs are written        |
+
+This repo is the home for **architectural decisions** and **code-level documentation** (READMEs,
+`AGENTS.md`, JSDoc). Linear is the home for **planning and tracking implementation**. ADRs settle
+the "why this approach" question; the plan handles "what to build and when."
+
+> **Full guide:** See [`DEVELOPMENT-LIFECYCLE.md`](./DEVELOPMENT-LIFECYCLE.md) for the eight
+> phases, the two stakeholder checkpoints, and when a decision earns an ADR.
+
+---
+
+## Architectural Decision Records (ADRs)
+
+An ADR is the frozen record of a **single technical decision** that is hard to revert or sets a
+new technical standard: the context, the rule, its invariants, and the alternatives rejected.
+
+The test: would this still be true if the project were cancelled tomorrow and the code rewritten
+next year? If not, it belongs in the Technical Project Plan.
+
+ADRs are small and focused — one decision per ADR. An ADR is accepted through its own PR, needs
+at least one developer review, ships no changeset, and is never edited after merge. Status is the
+only field that changes. A changed decision gets a new ADR that supersedes the old one.
+
+> **Before writing an ADR**, read [`DEVELOPMENT-LIFECYCLE.md`](./DEVELOPMENT-LIFECYCLE.md) and the
+> preamble of [`templates/ADR.md`](./templates/ADR.md). Agents must follow these rules when
+> proposing or creating decision records.
+
+### Creating an ADR
+
+```bash
+# Use today's date; the slug distinguishes two records drafted on the same day
+cp docs/templates/ADR.md docs/adrs/ADR-YYYY-MM-DD-short-slug.md
+```
+
+### Naming convention
+
+`ADR-YYYY-MM-DD-short-slug.md` (CalVer — the date the ADR was first drafted). The filename stem is
+the record's canonical identifier: cite it from other ADRs and in `superseded by` with the full
+slugged stem, never the date alone.
+
+The header's **Scope** names the packages and target versions the decision binds (e.g.
+`morpho-sdk 6.0.0, WDK 2.0.0`), or `Repo-wide` for a process, tooling, or documentation decision.
+
+Example: `docs/adrs/ADR-2026-09-23-adr-structure.md`
+
+---
+
+## Technical Project Plans
+
+A Technical Project Plan is the one document a project accumulates as it moves through the
+lifecycle: overview, background, goals and non-goals, requirements, proposed design with its
+decisions, alternatives, milestones and rollout, testing and observability, security, dependencies,
+and open questions. It is mutable, lives as the Linear project description, and is disposable once
+the project ships.
+
+The plan links any ADR it produced. An ADR never links the plan.
+
+---
+
+## Folder layout
+
+```
+docs/
+  README.md                 # this file
+  DEVELOPMENT-LIFECYCLE.md  # the eight phases, two checkpoints, ADR vs plan
+  jsdoc-style.md            # canonical JSDoc shape for exported symbols
+
+  adrs/                     # Architectural Decision Records
+    ADR-YYYY-MM-DD-short-slug.md
+
+  tibs/                     # retired Technical Intent Briefs (frozen records)
+    TIB-*.md
+
+  templates/
+    ADR.md                  # ADR template (decision records)
+```
