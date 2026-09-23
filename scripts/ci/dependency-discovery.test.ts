@@ -5,6 +5,7 @@ import {
   buildBumpEvent,
   collectNpmDependencies,
   dispatch,
+  fetchAllPages,
   isDuplicate,
   mergeBumpEvents,
   parseActionPins,
@@ -234,6 +235,18 @@ describe("parseActionPins", () => {
     expect(pins.size).toBe(1);
   });
 
+  test("behavior: parses major-only version comments", () => {
+    const pins = parseActionPins([
+      {
+        path: ".github/workflows/claude.yml",
+        content:
+          "uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1",
+      },
+    ]);
+
+    expect(pins.get("anthropics/claude-code-action")?.version).toBe("v1");
+  });
+
   test("behavior: accumulates targets across workflows", () => {
     const pin = (name: string) => ({
       path: `.github/workflows/${name}.yml`,
@@ -277,6 +290,38 @@ describe("selectActionTarget", () => {
         minAgeMinutes: MIN_AGE,
       }),
     ).toBeNull();
+  });
+
+  test("behavior: rejects SemVer prerelease tags even when not flagged", () => {
+    expect(
+      selectActionTarget("v6.0.0", {
+        releases: [{ tag: "v8.0.0-rc.1", publishedAt: OLD, prerelease: false }],
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toBeNull();
+  });
+
+  test("behavior: major-only pin only selects a higher major", () => {
+    const options = {
+      now: NOW,
+      minAgeMinutes: MIN_AGE,
+    };
+    expect(
+      selectActionTarget("v1", {
+        releases: [{ tag: "v1.2.0", publishedAt: OLD, prerelease: false }],
+        ...options,
+      }),
+    ).toBeNull();
+    expect(
+      selectActionTarget("v1", {
+        releases: [
+          { tag: "v1.2.0", publishedAt: OLD, prerelease: false },
+          { tag: "v2.0.0", publishedAt: OLD, prerelease: false },
+        ],
+        ...options,
+      }),
+    ).toEqual({ to: "v2.0.0", publishDate: OLD });
   });
 
   test("behavior: returns null for a non-semver current pin", () => {
@@ -407,6 +452,53 @@ describe("mergeBumpEvents", () => {
     ]);
 
     expect(merged).toHaveLength(2);
+  });
+});
+
+describe("fetchAllPages", () => {
+  test("default", async () => {
+    const fetchImpl = vi.fn(
+      async (
+        url: string,
+      ): Promise<{
+        ok: boolean;
+        status: number;
+        json: () => Promise<unknown>;
+      }> => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          url.includes("page=1&")
+            ? Array.from({ length: 100 }, (_, i) => i)
+            : [100, 101, 102],
+      }),
+    );
+
+    const items = await fetchAllPages<number>(
+      "https://api.github.com/x?state=open",
+      { fetchImpl, headers: {}, label: "items" },
+    );
+
+    expect(items).toHaveLength(103);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      "https://api.github.com/x?state=open&page=2&per_page=100",
+      { headers: {} },
+    );
+  });
+
+  test("error: a failed page aborts with the label and status", async () => {
+    await expect(
+      fetchAllPages("https://api.github.com/x", {
+        fetchImpl: async () => ({
+          ok: false,
+          status: 403,
+          json: async () => ({}),
+        }),
+        headers: {},
+        label: "devin branches",
+      }),
+    ).rejects.toThrowError("Failed to list devin branches (status 403).");
   });
 });
 

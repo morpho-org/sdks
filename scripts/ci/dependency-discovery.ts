@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { gt, minVersion, valid } from "semver";
+import { gt, major, minVersion, prerelease, valid } from "semver";
 
 import { isMain, readRequiredEnv, reportCliError } from "./workflow.ts";
 
@@ -182,7 +182,7 @@ export function selectNpmTarget(
 }
 
 /**
- * Extracts commit-SHA-pinned action references (`uses: owner/repo[/sub]@<40-hex> # vX.Y.Z`) from
+ * Extracts commit-SHA-pinned action references (`uses: owner/repo[/sub]@<40-hex> # vX[.Y[.Z]]`) from
  * workflow file contents, keyed `owner/repo`. Local (`./…`) and `docker://` uses are ignored.
  * `targets` lists the workflow files referencing the action.
  */
@@ -207,7 +207,7 @@ export function parseActionPins(workflows: readonly SourceFile[]): Map<
     }
   >();
   const pattern =
-    /uses:\s*["']?([\w.-]+)\/([\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40})\s*#\s*(v?\d+\.\d+\.\d+\S*)/g;
+    /uses:\s*["']?([\w.-]+)\/([\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40})\s*#\s*(v?\d+(?:\.\d+){0,2}\S*)/g;
 
   for (const file of workflows) {
     for (const match of file.content.matchAll(pattern)) {
@@ -249,8 +249,11 @@ export interface ActionRelease {
 
 /**
  * Picks the bump target for a pinned action: the highest release tag parsable as SemVer,
- * non-prerelease, strictly greater than `current`, and at least `minAgeMinutes` old. Returns
- * `null` when nothing qualifies.
+ * neither marked prerelease on GitHub nor carrying a SemVer prerelease component, strictly
+ * greater than `current`, and at least `minAgeMinutes` old. A major-only pin (`# v1`) is
+ * coerced to `N.0.0` for comparison and only selects releases whose major is strictly greater
+ * than N — patch releases behind a floating `v1` tag are maintained by the publisher, not a
+ * bump for us. Returns `null` when nothing qualifies.
  */
 export function selectActionTarget(
   current: string,
@@ -264,15 +267,20 @@ export function selectActionTarget(
     minAgeMinutes: number;
   },
 ): { to: string; publishDate: string } | null {
-  const currentVersion = valid(current);
+  const majorOnly = /^v?(\d+)$/.exec(current);
+  const currentVersion =
+    majorOnly != null ? `${majorOnly[1]}.0.0` : valid(current);
   if (currentVersion == null) return null;
 
   const cutoff = now.getTime() - minAgeMinutes * 60_000;
   let best: { tag: string; publishedAt: string } | null = null;
   for (const release of releases) {
-    if (release.prerelease) continue;
+    if (release.prerelease || prerelease(release.tag) != null) continue;
     const parsed = valid(release.tag);
     if (parsed == null || !gt(parsed, currentVersion)) continue;
+    if (majorOnly != null && major(release.tag) <= Number(majorOnly[1])) {
+      continue;
+    }
     const published = Date.parse(release.publishedAt);
     if (Number.isNaN(published) || published > cutoff) continue;
     if (best == null || gt(parsed, valid(best.tag) ?? "0.0.0")) {
@@ -394,6 +402,40 @@ export function mergeBumpEvents(events: readonly BumpEvent[]): BumpEvent[] {
 }
 
 const REPO = "morpho-org/sdks";
+
+/**
+ * Fetches every page of a list endpoint (`page=N&per_page=100`, `&`-joined when `baseUrl`
+ * already carries a query) until a page returns fewer than 100 items. Throws when any page
+ * request fails, naming `label` — a failed dedupe listing must abort the run rather than
+ * silently dropping the dedupe check.
+ */
+export async function fetchAllPages<T>(
+  baseUrl: string,
+  {
+    fetchImpl,
+    headers,
+    label,
+  }: {
+    fetchImpl: FetchLike;
+    headers: Record<string, string>;
+    label: string;
+  },
+): Promise<T[]> {
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const response = await fetchImpl(
+      `${baseUrl}${separator}page=${page}&per_page=100`,
+      { headers },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to list ${label} (status ${response.status}).`);
+    }
+    const pageItems = (await response.json()) as T[];
+    items.push(...pageItems);
+    if (pageItems.length < 100) return items;
+  }
+}
 
 interface GitHubRef {
   readonly object: { readonly sha: string; readonly type: string };
@@ -614,25 +656,19 @@ export async function main(options: MainOptions = {}): Promise<void> {
   }
 
   const [openPrs, branchRefs] = await Promise.all([
-    fetchImpl(
-      `https://api.github.com/repos/${REPO}/pulls?state=open&per_page=100`,
-      { headers: githubHeaders },
+    fetchAllPages<{ title: string }>(
+      `https://api.github.com/repos/${REPO}/pulls?state=open`,
+      { fetchImpl, headers: githubHeaders, label: "open PRs" },
     ),
-    fetchImpl(
+    fetchAllPages<{ ref: string }>(
       `https://api.github.com/repos/${REPO}/git/matching-refs/heads/devin/`,
-      { headers: githubHeaders },
+      { fetchImpl, headers: githubHeaders, label: "devin branches" },
     ),
   ]);
-  const openPrTitles = openPrs.ok
-    ? ((await openPrs.json()) as ReadonlyArray<{ title: string }>).map(
-        (pr) => pr.title,
-      )
-    : [];
-  const branches = branchRefs.ok
-    ? ((await branchRefs.json()) as ReadonlyArray<{ ref: string }>).map((ref) =>
-        ref.ref.replace(/^refs\/heads\//, ""),
-      )
-    : [];
+  const openPrTitles = openPrs.map((pr) => pr.title);
+  const branches = branchRefs.map((ref) =>
+    ref.ref.replace(/^refs\/heads\//, ""),
+  );
 
   const fresh = mergeBumpEvents(events).filter(
     (event) => !isDuplicate(event, { openPrTitles, branches }),
