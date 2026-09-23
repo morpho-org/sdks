@@ -146,7 +146,8 @@ export interface VaultV2Actions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
-   *   deadline differ from this operation's.
+   *   deadline differ from this operation's, or when the signature's carried action nonce is
+   *   inconsistent with its signed nonce.
    * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
    * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the vault asset.
    * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when signature metadata is malformed.

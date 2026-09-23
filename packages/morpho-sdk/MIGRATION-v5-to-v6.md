@@ -41,9 +41,11 @@ Update deposit inputs as follows:
 
 For ERC-20 funding, approvals and ERC-2612 permits now name VaultBundlesV1 as spender. Permit2
 keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTransfer payload names
-VaultBundlesV1. `buildTx()` validates the supplied signature's nonce, deadline, asset, owner,
-amount, and spender against the operation's values, so finalize on any handle built from identical
-params (or one resumed from serialized state):
+VaultBundlesV1. `buildTx()` validates the supplied signature's deadline, asset, owner, amount,
+and spender against the operation's values; the signed nonce is checked against the nonce carried
+on the requirement's action when present and otherwise verified onchain by the spender (a
+consumed-nonce permit is skipped and the live allowance applies). Finalize on any handle built
+from identical params (or one resumed from serialized state):
 
 ```ts
 const deposit = vault.deposit({
@@ -153,7 +155,7 @@ stable, but now encode one direct VaultBundlesV1 call instead of a direct vault 
 
 | Flow | v5 input | v6 input |
 | --- | --- | --- |
-| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
+| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; add required `vaultData` (from `await vault.getData()`); remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
 
 `withdraw` now returns `{ buildTx, getRequirements }` instead of `{ buildTx }`. VaultBundlesV1 spends
 the caller's vault shares, so the withdrawal needs a vault-share allowance for VaultBundlesV1 — a
@@ -167,9 +169,9 @@ prerequisite v5 withdrawals did not have. Await `getRequirements()` and satisfy 
   transaction instead, because VaultBundlesV1 skips a permit whose nonce was already consumed.
 
 The allowance is the only cap on the burn, since asset-mode calldata carries no maximum-shares
-argument. `getRequirements()` therefore derives an exact cap from the vault snapshot, the deadline,
-and `slippageTolerance` (default 0.03%), and returns an approval or permit for exactly that amount
-whenever the current allowance differs.
+argument. The exact cap is derived at handle creation from the supplied `vaultData`, the deadline,
+and `slippageTolerance` (default 0.03%); `getRequirements()` re-reads the live allowance against
+that fixed cap and returns an approval or permit for exactly that amount whenever it differs.
 
 `getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
 its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.

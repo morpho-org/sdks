@@ -22,6 +22,7 @@ import {
   InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
+  VaultAddressMismatchError,
 } from "../../types/index.js";
 
 describe("MorphoVaultV1 deposit input validation", () => {
@@ -291,6 +292,22 @@ describe("MorphoVaultV1 withdraw input validation", () => {
         vaultData: { address: SteakhouseUsdcVaultV1.address } as never,
       }),
     ).toThrow(UnknownAddressError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: VaultAddressMismatchError when vaultData belongs to another vault", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: inKindVaultV1Data(),
+      }),
+    ).toThrow(VaultAddressMismatchError);
     expect(handle.request).not.toHaveBeenCalled();
   });
 

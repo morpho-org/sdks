@@ -169,12 +169,13 @@ then deposits net assets into Vault V2 with a destination maximum-share-price bo
 contract rather than the vault directly. VaultBundlesV1
 burns `msg.sender`'s vault shares and pays out the requested `assets`, minus an optional referral
 fee. Because asset-mode calldata carries no maximum-shares argument, the vault-share allowance
-_is_ the only cap on that burn: `getRequirements()` derives the exact allowance from the vault
-snapshot, deadline, and slippage tolerance, and returns an approval for exactly that amount — or,
-when `supportSignature` is enabled and the current allowance is below the cap, an ERC-2612 shares
-permit folded into the call. A larger leftover approval is always reset with an onchain approval
-rather than reused (VaultBundlesV1 skips a permit whose nonce was already consumed), so the cap
-holds on every withdrawal.
+_is_ the only cap on that burn: `withdraw()` derives the exact allowance cap once at handle
+creation from the caller-supplied `vaultData`, deadline, and slippage tolerance, and
+`getRequirements()` re-reads the live allowance against that fixed cap, returning an approval for
+exactly that amount — or, when `supportSignature` is enabled and the current allowance is below
+the cap, an ERC-2612 shares permit folded into the call. A larger leftover approval is always
+reset with an onchain approval rather than reused (VaultBundlesV1 skips a permit whose nonce was
+already consumed), so the cap holds on every withdrawal.
 
 **Redeem (V1 & V2)** also routes through VaultBundlesV1. The caller grants an exact share
 allowance or, when `supportSignature` is enabled and the current allowance is below the redeemed

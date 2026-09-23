@@ -566,7 +566,11 @@ export const selectBundlesTokenRequirementSignature = (
     throw new BundlesPermitMismatchError({
       field: "amount",
       expected: String(expected.amount),
-      actual: String(selectedSignature.args.amount),
+      actual: String(
+        selectedSignature.args.amount !== expected.amount
+          ? selectedSignature.args.amount
+          : action.args.amount,
+      ),
     });
   }
   if (
@@ -576,7 +580,11 @@ export const selectBundlesTokenRequirementSignature = (
     throw new BundlesPermitMismatchError({
       field: "deadline",
       expected: String(expected.deadline),
-      actual: String(selectedSignature.args.deadline),
+      actual: String(
+        selectedSignature.args.deadline !== expected.deadline
+          ? selectedSignature.args.deadline
+          : action.args.deadline,
+      ),
     });
   }
   if (

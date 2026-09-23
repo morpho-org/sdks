@@ -548,6 +548,31 @@ describe("selectBundlesTokenRequirementSignature", () => {
     },
   );
 
+  test("error: BundlesPermitMismatchError reports the divergent action amount", () => {
+    const divergentAmount = expected.amount + 1n;
+    expect(() =>
+      selectBundlesTokenRequirementSignature(
+        [
+          {
+            ...permit2,
+            action: {
+              ...permit2.action,
+              args: { ...permit2.action.args, amount: divergentAmount },
+            },
+          },
+        ],
+        expected,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "amount",
+        expected: String(expected.amount),
+        actual: String(divergentAmount),
+      }),
+    );
+  });
+
   test("error: BundlesPermitMismatchError for a divergent ERC-2612 action nonce", () => {
     expect(() =>
       selectBundlesTokenRequirementSignature(
