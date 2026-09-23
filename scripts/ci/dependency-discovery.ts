@@ -383,12 +383,10 @@ export function isDuplicate(
     return true;
   }
 
-  const branchPattern = new RegExp(
-    `^devin/.*-bump-${RegExp.escape(branchSlug(event.package))}-${RegExp.escape(
-      event.to,
-    )}$`,
+  const suffix = `-bump-${branchSlug(event.package)}-${event.to}`;
+  return branches.some(
+    (branch) => branch.startsWith("devin/") && branch.endsWith(suffix),
   );
-  return branches.some((branch) => branchPattern.test(branch));
 }
 
 /** Composes a {@link BumpEvent} from its parts. */
