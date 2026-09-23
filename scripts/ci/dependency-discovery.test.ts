@@ -257,6 +257,16 @@ describe("selectNpmTarget", () => {
       }),
     ).toBeNull();
   });
+
+  test("behavior: returns null when the only newer version has an unparseable time", () => {
+    expect(
+      selectNpmTarget("^1.0.0", {
+        versions: { "1.0.0": OLD, "2.0.0": "not-a-date" },
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("parseActionPins", () => {
@@ -443,6 +453,26 @@ describe("selectActionTarget", () => {
         minAgeMinutes: MIN_AGE,
       }),
     ).toBeNull();
+  });
+
+  test("behavior: skips releases with an unparseable publish date", () => {
+    expect(
+      selectActionTarget("v6.0.0", {
+        releases: [{ tag: "v7.0.0", publishedAt: "", prerelease: false }],
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toBeNull();
+    expect(
+      selectActionTarget("v6.0.0", {
+        releases: [
+          { tag: "v8.0.0", publishedAt: "not-a-date", prerelease: false },
+          { tag: "v7.0.0", publishedAt: OLD, prerelease: false },
+        ],
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toEqual({ to: "v7.0.0", publishDate: OLD });
   });
 });
 
