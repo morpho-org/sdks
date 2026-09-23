@@ -1,0 +1,50 @@
+name: Install Lupin
+description: >-
+  Install the pinned standalone Lupin release from morpho-org/internal-tools and verify the archive
+  against the checksum recorded here. Each job installs it separately: the private executable is
+  never uploaded as an artifact of this public repository.
+
+inputs:
+  app-id:
+    description: GitHub App allowed to read morpho-org/internal-tools release assets
+    required: true
+  private-key:
+    description: Private key of that GitHub App
+    required: true
+
+outputs:
+  bin:
+    description: Absolute path of the installed lupin executable
+    value: ${{ steps.install.outputs.bin }}
+
+runs:
+  using: composite
+  steps:
+    # Short-lived, read-only token for one private repository; revoked when the job ends.
+    - name: Create release download token
+      id: token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: morpho-org
+        repositories: internal-tools
+        permission-contents: read
+
+    # Upgrading Lupin changes both values together; the checksum is the linux-x64 archive's.
+    - name: Download and verify Lupin
+      id: install
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.token.outputs.token }}
+        LUPIN_VERSION: 0.13.2
+        LUPIN_SHA256: a1dab0622ad0395fe75e3ecdd4162901526a73c5013ab19fef14a56ca7d24f73
+      run: |
+        archive="lupin-$LUPIN_VERSION-linux-x64"
+        mkdir -p "$RUNNER_TEMP/lupin"
+        gh release download "@morpho-org/review-cli@$LUPIN_VERSION" --repo morpho-org/internal-tools \
+          --pattern "$archive.tar.gz" --dir "$RUNNER_TEMP/lupin"
+        echo "$LUPIN_SHA256  $RUNNER_TEMP/lupin/$archive.tar.gz" | sha256sum --check --strict
+        tar -xzf "$RUNNER_TEMP/lupin/$archive.tar.gz" -C "$RUNNER_TEMP/lupin"
+        "$RUNNER_TEMP/lupin/$archive/lupin" --version
+        echo "bin=$RUNNER_TEMP/lupin/$archive/lupin" >> "$GITHUB_OUTPUT"
