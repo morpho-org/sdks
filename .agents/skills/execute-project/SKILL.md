@@ -133,7 +133,9 @@ that apply. Every child brief links to this file. Keep it current when the user 
 3. Classify each issue: **Done** (completed status type), **Cancelled** (cancelled status type;
    its dependents are go/no-go items — the user drops the edge, rescopes, or skips), **Human-owned** (status
    In Progress / In Review with a non-agent assignee, or an open PR from a branch that is not
-   ours), **Candidate** (everything else).
+   ours), **Candidate** (everything else). Exception, checked first: an In Progress issue carrying
+   the skill's own `Execution started by /execute-project` comment and no open PR from the expected
+   branch is a failed prior dispatch and stays a Candidate whatever its assignee (see Re-running).
 4. Build the graph over Candidates. Drop satisfied edges. Flag **external blockers** (blockers
    outside the project or Human-owned) — an issue behind one cannot be executed in this run unless
    the user says otherwise in Step 5.
@@ -163,10 +165,12 @@ For every Candidate, decide whether the issue is **executable as written**. An i
   `docs/`, `.agents/`) that the project owns.
 - It carries no unresolved open question (`Q-x` with no default) and no comment that reverses it.
 - It does not touch a **guarded surface**: `.github/` (workflows, CODEOWNERS, dependabot),
-  `.changeset/config.json`, the publish/release flow (`publish.yml`, `version-pr.yml`,
-  `scripts/release/`), `.npmrc`, `pnpm-workspace.yaml`, secrets or environment variables, a new
-  runtime dependency (`AGENTS.md` §2 rule 9 needs a written justification), a major version bump
-  or the removal of a public symbol without the §7 deprecation flow, or pinned ABIs and addresses.
+  the agent surface itself (`.agents/`, `.claude/`, `.codex/` — review engine, personas, skills,
+  commands; a child must not weaken the review of its own diff), `.changeset/config.json`, the
+  publish/release flow (`publish.yml`, `version-pr.yml`, `scripts/release/`), `.npmrc`,
+  `pnpm-workspace.yaml`, secrets or environment variables, a new runtime dependency (`AGENTS.md`
+  §2 rule 9 needs a written justification), a major version bump or the removal of a public symbol
+  without the §7 deprecation flow, or pinned ABIs and addresses.
 
 Every failed check is a go/no-go item, not a reason to silently skip or silently proceed.
 
@@ -185,12 +189,14 @@ Present, in the thread:
 | Wave | ID | Title | Priority | Stack position | Base branch | Audit |
 | ---- | -- | ----- | -------- | -------------- | ----------- | ----- |
 | 1 | SDK-101 | feat(blue-sdk): add VaultV2 adapter entity | High | root | main | OK |
+| 1 | SDK-104 | feat(morpho-ts): register VaultV2 adapter addresses | Normal | root | main | OK |
 | 2 | SDK-102 | feat(morpho-sdk): expose VaultV2 adapter facade | High | child of SDK-101 | <branch-101> | OK |
 | 2 | SDK-103 | docs(morpho-sdk): document VaultV2 adapters | Normal | root | main | OK |
-| 3 | SDK-105 | feat(blue-sdk-viem): fetch VaultV2 adapter state | Normal | multi-parent (101, 104) | <branch-101> | ASK |
+| 2 | SDK-105 | feat(blue-sdk-viem): fetch VaultV2 adapter state | Normal | multi-parent (101, 104) | <branch-101> | ASK |
 
 ### Dependency graph
-SDK-101 → SDK-102 → SDK-105
+SDK-101 → SDK-102
+SDK-101 → SDK-105
 SDK-104 → SDK-105
 SDK-103 (independent)
 
@@ -230,7 +236,7 @@ Pick the host's primitive:
 | Host        | Primitive                                                                                                                                                                            |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Claude Code | `Agent` tool, `general-purpose` type (or a specialist type when the issue is clearly protocol/contract work). One call per issue, in one message per wave so they run concurrently.  |
-| Codex       | One custom agent per issue from `.codex/agents/` when a match exists, else the general agent.                                                                                        |
+| Codex       | One sub-agent per issue — a matching custom agent when one is defined, else the general agent.                                                                                       |
 | Devin       | One **Linear-triggered** session per issue, adopted by the orchestrator (below). Fall back to a plain child session (`managing-child-sessions`) only when the trigger does not fire. |
 
 Children that share the orchestrator's machine each work in their **own git worktree**
@@ -258,11 +264,17 @@ _from_ Linear, so a Devin orchestrator does not create children directly:
    comment time) until a session whose title or prompt carries the issue identifier appears, and
    record its ID in the context pack next to the issue. It is not a child of the orchestrator, so
    wait on it with `devin_session_interact` `get` (status) and steer it with `message` — the
-   same review, re-brief, and rebase instructions as for any child go through `message`.
+   same review, re-brief, and rebase instructions as for any child go through `message`. A
+   session that is sleeping or awaiting input without having reported gets one `message` nudge;
+   if its status has not changed after that, treat it as **No report** (Step 7).
 3. If no session appears within a few minutes, the integration did not fire (Devin not connected
-   to that Linear team, or the comment was not treated as a mention). Fall back to one child
-   session with the same brief and comment its URL on the issue so the link exists at least as
-   text; note the fallback in the Step 9 report.
+   to that Linear team, or the comment was not treated as a mention). Before falling back, reply
+   to the trigger comment that the orchestrator is dispatching the issue itself so a late session
+   knows to stand down. Then run one child session with the same brief and comment its URL on the
+   issue so the link exists at least as text; note the fallback in the Step 9 report. If a
+   Linear-triggered session appears afterwards anyway, keep whichever has pushed (else the
+   fallback), stop the other with a `message` telling it to stop without pushing, and record both
+   IDs in the context pack.
 
 **Claude Code / Codex orchestrator — sub-agents.** Do not mention or assign Devin in Linear; the
 issue is worked by a sub-agent of this session. The sub-agent's PR URL is commented on the issue
@@ -285,8 +297,10 @@ in Step 7, which is the only link Linear gets.
   (or `pnpm --filter <pkg> test` while iterating, then the root suite once). Zero errors and zero
   warnings, or report BLOCKED with the output.
 - PR instructions: open a **draft** PR with the base set explicitly (`gh pr create --draft
-  --assignee @me --base <base-branch>`), following `/create-pr` for the body and the commit title
-  convention (`<type>(<package>): <description> (<ISSUE-ID>)`, commitlint-enforced), with a bare
+  --assignee @me --base <base-branch>`), following `/create-pr` for the body. Title:
+  `<type>(<package>): <description> (<ISSUE-ID>)` — commitlint enforces only the conventional
+  `<type>(<scope>): <subject>` shape; the package scope and trailing `(<ISSUE-ID>)` are the repo's
+  convention (see `git log main`) that the child adds itself. The body carries a bare
   `Closes <ISSUE-ID>` line. When the base is not `main`, the body says so in the first line
   (`Stacked on #<parent-pr>`). Then run `/review-pr-gh <pr-number>` and fix High/Medium findings
   with `/fix-pr` before reporting.
@@ -308,8 +322,9 @@ For every report:
 
 1. Read the child's full diff (`git fetch origin <branch>` then
    `git diff origin/<base>...origin/<branch>`), not its prose. Check it against the issue, the
-   context pack, and the review personas' rubrics (`/review-pr-local <base>` from the child's
-   worktree, or read the `/review-pr-gh` output the child already posted). A report is a claim; the
+   context pack, and the review personas' rubrics (`/review-pr-local <base>` run from the
+   orchestrator's own checkout so the rubrics come from a trusted tree, or read the
+   `/review-pr-gh` output the child already posted). A report is a claim; the
    diff and the validation output are the evidence.
 2. `DONE` with a clean diff: comment the PR URL on the Linear issue (skip when a Linear-triggered
    Devin session already attached it) and move it to **In Review** (or the team's equivalent). Its
@@ -321,8 +336,8 @@ For every report:
    raise a go/no-go with the child's question verbatim and the options you see. Dependents of a
    blocked issue are **held**, never re-parented onto `main` silently — re-parenting changes the
    plan the user approved.
-5. **No report** (the child call errored, the session or worktree died, or the report carries
-   none of the four statuses): treat it as `BLOCKED`. Check whether a branch and PR were pushed
+5. **No report** (the child call errored, the session or worktree died, the session stalled
+   after a nudge, or the report carries none of the four statuses): treat it as `BLOCKED`. Check whether a branch and PR were pushed
    anyway; if so, re-brief a new child on that branch, else re-dispatch once from the original
    brief. A second failure is a go/no-go, and the issue's dependents are held meanwhile. Step 9
    fires once every dispatched issue has either reported or been marked `BLOCKED` this way.
@@ -389,6 +404,10 @@ new child with the existing branch) instead. The project comment from Step 9
 is the handover record between runs.
 
 ## Notes
+
+- Linear tool names are those of the current Linear MCP server (`save_issue`, `save_comment`,
+  `save_*` upserts). An older server exposes `create_issue` / `update_issue` instead — use
+  whichever namespace and names are present.
 
 - The orchestrator writes to Linear only through `save_issue` (state) and `save_comment`
   (progress, decisions, PR links, and — on Devin — the `@Devin` trigger brief). It never edits
