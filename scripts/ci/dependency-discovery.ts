@@ -143,7 +143,9 @@ export function collectNpmDependencies(
   }
 
   let section: "catalog" | "overrides" | null = null;
-  for (const line of workspaceYaml.split("\n")) {
+  for (const raw of workspaceYaml.split("\n")) {
+    const line = raw.replace(/\s*#.*$/, "");
+    if (line.trim() === "") continue;
     const topLevel = /^(\w[\w-]*):/.exec(line);
     if (topLevel != null) {
       section =
@@ -363,19 +365,21 @@ const restAfterTo = (rest: string, to: string): boolean => {
 };
 
 /**
- * Hand-rolled equivalent of `bump.*<package>.*to <to>` (case-insensitive, with the same
- * non-name-character boundaries on both the package and the target version). Deliberately not a
- * `RegExp`: the pattern needed lookbehind/lookahead chains that scan as a potential ReDoS vector,
- * and plain `indexOf` scans are cheaper anyway.
+ * Whether `title` already announces this bump: the word `bump` appears before the package name,
+ * the package is delimited by non-package-name characters, and a boundary-delimited `to`, one or
+ * more whitespace characters, and a boundary-terminated copy of the target version appear after
+ * it. Deliberately not a `RegExp`: the equivalent pattern needed lookbehind/lookahead chains that
+ * scan as a potential ReDoS vector, and plain `indexOf` scans are cheaper anyway.
  */
 function titleMatchesBump(title: string, event: BumpEvent): boolean {
   const text = title.toLowerCase();
-  if (!text.includes("bump")) return false;
+  const bumpIndex = text.indexOf("bump");
+  if (bumpIndex < 0) return false;
 
   const pkg = event.package.toLowerCase();
   const to = event.to.toLowerCase();
 
-  let pkgIndex = text.indexOf(pkg);
+  let pkgIndex = text.indexOf(pkg, bumpIndex + 4);
   while (pkgIndex >= 0) {
     const before = text[pkgIndex - 1];
     const after = text[pkgIndex + pkg.length];
@@ -681,18 +685,21 @@ export async function main(options: MainOptions = {}): Promise<void> {
       }
       const metadata = (await response.json()) as {
         time?: Record<string, string>;
-        versions?: Record<string, unknown>;
+        versions?: Record<string, { deprecated?: unknown }>;
       };
-      const published = new Set(Object.keys(metadata.versions ?? {}));
+      const packumentVersions = metadata.versions ?? {};
       versions = {};
       for (const [version, time] of Object.entries(metadata.time ?? {})) {
         if (
-          version !== "created" &&
-          version !== "modified" &&
-          published.has(version)
+          version === "created" ||
+          version === "modified" ||
+          !(version in packumentVersions)
         ) {
-          versions[version] = time;
+          continue;
         }
+        const { deprecated } = packumentVersions[version] ?? {};
+        if (typeof deprecated === "string" && deprecated !== "") continue;
+        versions[version] = time;
       }
       metadataCache.set(pkgName, versions);
     }

@@ -174,6 +174,18 @@ describe("collectNpmDependencies", () => {
     ]);
     expect(deps.get("axios@1.18.1")?.targets).toEqual(["pnpm-workspace.yaml"]);
   });
+
+  test("behavior: strips trailing comments in catalog and overrides entries", () => {
+    const deps = collectNpmDependencies(
+      [],
+      ["catalog:", "  vitest: ^4.1.11 # note", "  # foo: 1.0.0"].join("\n"),
+    );
+
+    expect(deps.get("vitest@^4.1.11")?.targets).toEqual([
+      "pnpm-workspace.yaml",
+    ]);
+    expect([...deps.keys()].some((key) => key.startsWith("foo@"))).toBe(false);
+  });
 });
 
 describe("selectNpmTarget", () => {
@@ -510,6 +522,42 @@ describe("isDuplicate", () => {
         branches: [],
       }),
     ).toBe(true);
+  });
+
+  test("behavior: requires bump before the package name", () => {
+    const viem = buildBumpEvent({
+      ecosystem: "npm",
+      package: "viem",
+      from: "2.0.0",
+      to: "2.1.0",
+      publishDate: OLD,
+      targets: ["package.json"],
+    });
+    expect(
+      isDuplicate(viem, {
+        openPrTitles: ["migrate viem config to 2.1.0 and bump lodash"],
+        branches: [],
+      }),
+    ).toBe(false);
+  });
+
+  test("behavior: requires a whitespace-separated to <version>", () => {
+    const viem = buildBumpEvent({
+      ecosystem: "npm",
+      package: "viem",
+      from: "7.8.4",
+      to: "7.8.5",
+      publishDate: OLD,
+      targets: ["package.json"],
+    });
+    for (const title of [
+      "bump viem into 7.8.5",
+      "bump viem from 7.8.4 to7.8.5",
+    ]) {
+      expect(isDuplicate(viem, { openPrTitles: [title], branches: [] })).toBe(
+        false,
+      );
+    }
   });
 
   test("behavior: ignores a branch for a different version", () => {
@@ -1124,6 +1172,73 @@ describe("main", () => {
       .map((line) => JSON.parse(line) as BumpEvent);
     const lodash = events.find((event) => event.package === "lodash");
     expect(lodash?.to).toBe("4.5.0");
+  });
+
+  test("behavior: skips deprecated versions in the packument", async () => {
+    const rootDir = fixtureRoot({ nock: "14.0.17" });
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url === "https://registry.npmjs.org/nock"
+          ? ok({
+              time: {
+                "14.0.17": "2020-01-01T00:00:00Z",
+                "15.0.0": "2026-01-02T00:00:00Z",
+              },
+              // 15.0.0 was published but is deprecated.
+              versions: {
+                "14.0.17": {},
+                "15.0.0": { deprecated: "released accidentally" },
+              },
+            })
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events.some((event) => event.package === "nock")).toBe(false);
+  });
+
+  test("behavior: selects an aged non-deprecated version over a deprecated one", async () => {
+    const rootDir = fixtureRoot({ nock: "14.0.17" });
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url === "https://registry.npmjs.org/nock"
+          ? ok({
+              time: {
+                "14.0.17": "2020-01-01T00:00:00Z",
+                "15.0.0": "2026-01-02T00:00:00Z",
+                "15.0.1": "2026-01-03T00:00:00Z",
+              },
+              versions: {
+                "14.0.17": {},
+                "15.0.0": { deprecated: "released accidentally" },
+                "15.0.1": {},
+              },
+            })
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events.find((event) => event.package === "nock")?.to).toBe("15.0.1");
   });
 
   test("error: a failed tag ref lookup aborts the run", async () => {
