@@ -218,22 +218,51 @@ export namespace GroupUtils {
    * This is the ratifier-agnostic core of {@link hash}: each member hash must
    * commit the offer with `group = 0` under the scheme the offer is ratified
    * with (the protocol offer hash for Ecrecover/Setter, the zero-group leaf
-   * hash for `RateRatifierV1`/`PriceRatifierV1`). Hashes are sorted,
-   * concatenated, then keccak'd, so member order does not affect the id.
+   * hash for `RateRatifierV1`/`PriceRatifierV1`). Hashes are lowercased,
+   * sorted, concatenated, then keccak'd, so neither member order nor hex
+   * casing affects the id.
    *
    * @param memberHashes - Zero-group member hashes of one consumption group.
    * @returns Content-addressed group id.
    * @throws {InvalidOfferGroupError} when `memberHashes` is empty.
    * @example
    * ```ts
-   * import { GroupUtils, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { GroupUtils, Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const id = GroupUtils.hashMembers([OfferUtils.groupHash(offer)]);
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const id = GroupUtils.hashMembers([
+   *   RateRatifierV1.memberHash({ offer, rate: 50_000_000_000_000_000n }),
+   * ]);
    * console.log(id);
    * ```
    */
   export function hashMembers(memberHashes: Iterable<Hash>): Hash {
-    const hashes = Array.from(memberHashes);
+    const hashes = Array.from(memberHashes, (h) => h.toLowerCase() as Hash);
     if (hashes.length === 0) {
       throw new InvalidOfferGroupError(
         "Provide at least one member hash in the group.",

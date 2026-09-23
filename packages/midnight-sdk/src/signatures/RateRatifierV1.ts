@@ -425,6 +425,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -597,6 +598,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -638,6 +640,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";

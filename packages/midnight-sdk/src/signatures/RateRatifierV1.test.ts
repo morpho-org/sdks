@@ -276,6 +276,25 @@ describe("RateRatifierV1.buildDescriptor", () => {
     );
   });
 
+  test("behavior: default group commits the leaf allowedTaker", () => {
+    const l = { ...leaf({}, 5n), allowedTaker };
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
+    expect(offer!.group).not.toBe(
+      RateRatifierV1.groupId([{ ...l, allowedTaker: zeroAddress }]),
+    );
+  });
+
+  test("error: InvalidTreeError on default-group leaves differing only by tick", () => {
+    expect(() =>
+      RateRatifierV1.buildDescriptor([
+        leaf({ tick: 5_000n }, 5n),
+        leaf({ tick: 5_004n }, 5n),
+      ]),
+    ).toThrow(InvalidTreeError);
+  });
+
   test("behavior: commits an explicit group as-is", () => {
     const group = keccak256("0x01");
     const l = { ...leaf(), offer: { ...leaf().offer, group } };

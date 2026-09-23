@@ -1,4 +1,5 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
+import type { Hash } from "viem";
 import { describe, expect, test } from "vitest";
 import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
 import { InvalidOfferGroupError } from "../errors.js";
@@ -60,6 +61,19 @@ describe("GroupUtils.hashMembers", () => {
         OfferUtils.groupHash(a),
       ]),
     ).toBe(GroupUtils.hash([a, b]));
+  });
+
+  test("behavior: ignores member hash casing", () => {
+    const hashes = [
+      OfferUtils.groupHash(baseOfferInput({ maxAssets: 0n })),
+      OfferUtils.groupHash(baseOfferInput({ maxAssets: 0n, maxUnits: 7n })),
+    ];
+    const upper = hashes.map((h) => `0x${h.slice(2).toUpperCase()}` as Hash);
+
+    expect(GroupUtils.hashMembers(upper)).toBe(GroupUtils.hashMembers(hashes));
+    expect(GroupUtils.hashMembers([...upper].reverse())).toBe(
+      GroupUtils.hashMembers(hashes),
+    );
   });
 
   test("error: InvalidOfferGroupError", () => {

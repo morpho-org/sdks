@@ -204,6 +204,16 @@ describe("PriceRatifierV1.buildDescriptor", () => {
     );
   });
 
+  test("behavior: default group commits the leaf allowedTaker", () => {
+    const leaf = { offer: offer(), allowedTaker };
+    const [resolved] = PriceRatifierV1.buildDescriptor([leaf]).offers;
+
+    expect(resolved!.group).toBe(PriceRatifierV1.groupId([leaf]));
+    expect(resolved!.group).not.toBe(
+      PriceRatifierV1.groupId([{ ...leaf, allowedTaker: zeroAddress }]),
+    );
+  });
+
   test("behavior: commits an explicit group as-is", () => {
     const group = keccak256("0x01");
     const [resolved] = PriceRatifierV1.buildDescriptor([
