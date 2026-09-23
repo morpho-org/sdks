@@ -186,7 +186,7 @@ Present, in the thread:
 ```
 ## Execute Project: <project-name>
 
-**Context**: <n> resources read · <n> unread (listed below)
+**Context**: <n> resources read · <n> unread (see the context pack)
 **Issues**: <total> · <done> done · <human> human-owned · <n> candidates in <w> waves
 
 ### Waves and stack
@@ -194,7 +194,8 @@ Present, in the thread:
 | Wave | ID | Title | Priority | Stack position | Base branch | Audit |
 | ---- | -- | ----- | -------- | -------------- | ----------- | ----- |
 | 1 | SDK-101 | feat(blue-sdk): add VaultV2 adapter entity | High | root | main | ASK |
-| 1 | SDK-104 | feat(morpho-ts): register VaultV2 adapter addresses | Normal | root | main | OK |
+| 1 | SDK-104 | feat(morpho-ts): register VaultV2 adapter addresses | Normal | root | main | ASK |
+| 1 | SDK-107 | ci: run VaultV2 adapter fork tests | Low | root | main | ASK |
 | 1 | SDK-103 | docs(morpho-sdk): document VaultV2 adapters | Normal | root | main | OK |
 | 2 | SDK-102 | feat(morpho-sdk): expose VaultV2 adapter facade | High | child of SDK-101 | <branch-101> | OK |
 | 2 | SDK-105 | feat(blue-sdk-viem): fetch VaultV2 adapter state | Normal | multi-parent (101, 104) | <branch-101> | ASK |
@@ -204,6 +205,7 @@ SDK-101 → SDK-102
 SDK-101 → SDK-105
 SDK-104 → SDK-105
 SDK-103 (independent)
+SDK-107 (independent)
 
 ### Go/no-go
 1. SDK-105 has two open blockers; stacking on SDK-101 leaves SDK-104's changes out of its base
@@ -212,7 +214,9 @@ SDK-103 (independent)
    105 from it · skip.
 2. SDK-107 touches `.github/workflows/test.yml` (guarded surface). Options: execute · skip ·
    execute but stop before pushing.
-3. Q-2 in the overview ("does the facade re-export the raw name under `/blue/vaults`?") has no
+3. SDK-104 adds pinned addresses (guarded surface). Options: execute, the child must cite the
+   deployment source for every address · skip.
+4. Q-2 in the overview ("does the facade re-export the raw name under `/blue/vaults`?") has no
    default and SDK-101 depends on it. Options: <the plausible answers> · skip SDK-101 and
    everything behind it.
 
@@ -279,7 +283,9 @@ _from_ Linear, so a Devin orchestrator does not create children directly:
    issue so the link exists at least as text; note the fallback in the Step 9 report. If a
    Linear-triggered session appears afterwards anyway, keep whichever has pushed (else the
    fallback), stop the other with a `message` telling it to stop without pushing, and record both
-   IDs in the context pack.
+   IDs in the context pack. When both have pushed, keep the Linear-triggered session (it carries
+   the issue linkage), stop the fallback, and tell the kept session to verify the branch head
+   still contains its work before continuing.
 
 **Claude Code / Codex orchestrator — sub-agents.** Do not mention or assign Devin in Linear; the
 issue is worked by a sub-agent of this session. The sub-agent's PR URL is commented on the issue
@@ -299,10 +305,16 @@ in Step 7, which is the only link Linear gets.
   stacks the facade as a child issue, the brief names that issue and tells the child to answer a
   facade-audit review finding by pointing at it, not by widening scope; §5 test placement; §6
   JSDoc on every new export; §7 a changeset via `pnpm changeset` for any semver-relevant change to a
-  published package, none for docs/tests/agent files; §8 tooling), the `AGENTS.md` of the affected
+  published package, none for docs/tests/agent files, and the dependent-bump audit — a changeset
+  that bumps a package includes its direct maintained dependents with at least a patch bump, e.g.
+  `morpho-sdk` for a `blue-sdk` bump, and checks internal peer ranges; §8 tooling), the `AGENTS.md` of the affected
   package, and `docs/jsdoc-style.md`.
-- Validation to run before pushing: `pnpm lint`, `pnpm build`, and `pnpm test` from the repo root
-  (or `pnpm --filter <pkg> test` while iterating, then the root suite once). Zero errors and zero
+- Validation to run before pushing, following the Gate commands of
+  [`review-pr-local`](../../commands/review-pr-local.md): `pnpm build`, `pnpm exec biome check
+  <changed files>`, `pnpm --filter <pkg> exec tsc --noEmit`, and the affected Vitest project in
+  non-watch mode (`dotenv -- node node_modules/vitest/vitest.mjs run --project <name>`). Never
+  bare `pnpm test` (watch mode, never exits) and never the full fork suite (needs
+  `MAINNET_RPC_URL`, which a fresh worktree or clone does not have). Zero errors and zero
   warnings, or report BLOCKED with the output.
 - PR instructions: open a **draft** PR with the base set explicitly (`gh pr create --draft
   --assignee @me --base <base-branch>`), following `/create-pr` for the body. Title:
@@ -330,10 +342,13 @@ For every report:
 
 1. Read the child's full diff (`git fetch origin <branch>` then
    `git diff origin/<base>...origin/<branch>`), not its prose. Check it against the issue, the
-   context pack, and the review personas' rubrics (`/review-pr-local <base>` run from the
-   orchestrator's own checkout so the rubrics come from a trusted tree, or read the
-   `/review-pr-gh` output the child already posted). A report is a claim; the
-   diff and the validation output are the evidence.
+   context pack, and the review personas' rubrics. `/review-pr-local <base>` reviews the
+   checked-out branch, so run it in a worktree of the orchestrator's own checkout with the fetched
+   child branch checked out (`git worktree add ../review-<issue-id> origin/<branch>`), so the
+   rubrics come from a trusted tree. The `/review-pr-gh` output the child posted is supporting
+   evidence only, and only once the diff read has confirmed the branch touches no `.agents/`,
+   `.claude/`, or `.codex/` path. A report is a claim; the diff and the validation output are
+   the evidence.
 2. `DONE` with a clean diff: comment the PR URL on the Linear issue (skip when a Linear-triggered
    Devin session already attached it) and move it to **In Review** (or the team's equivalent). Its
    branch becomes a valid base for the next wave. A `DONE` whose diff review fails is handled as
@@ -367,7 +382,8 @@ For every report:
   PR diff shows only that issue's change.
 - **Merge order**: children into the parent first, then the parent into `main`. Before the root
   merges, confirm its description carries a `Closes SDK-N` line for every child squashed into it
-  and that the changesets of every child are present on the branch (one release PR bumps them all).
+  and that the changesets of every child are present on the branch and cover the direct
+  maintained dependents of every bumped package (§7; one release PR bumps them all).
   The orchestrator does not merge; it tells the user what is mergeable and in which order.
 - **CI**: a red check on a child PR goes back to that child with the failing job log. A red check
   caused by the parent goes to the parent's child agent, and the dependents wait.
@@ -406,10 +422,14 @@ when the project cannot be resolved or has no candidates.
 ## Re-running
 
 The skill is idempotent per project. On a second run, Step 3 finds issues already **In Review**
-with a PR from an expected branch and treats them as satisfied blockers (their branch is the base
-for dependents). An issue that is **In Progress** with the skill's own `Execution started by
-/execute-project` comment but no open PR from the expected branch is a failed prior dispatch, not
-Human-owned: it is a Candidate again (its assignee is unchanged since Step 6 never sets one). It
+with an **open or merged** PR from an expected branch and treats them as satisfied blockers (their
+branch is the base for dependents). An In Review issue whose PR was closed without merging is a
+Candidate again, or a go/no-go when a human assignee suggests they took it over. An issue that is
+**In Progress** with the skill's own `Execution started by /execute-project` comment but no open
+PR from the expected branch is a failed prior dispatch, not Human-owned: it is a Candidate again
+(its assignee is unchanged since Step 6 never sets one) — except on Devin, where the rerun first
+checks the session IDs recorded in the context pack and `devin_session_search` for a still-running
+prior session and re-adopts it instead of re-dispatching. It
 never opens a second PR for an issue that has an open one; it re-briefs the existing child (or a
 new child with the existing branch) instead. The project comment from Step 9
 is the handover record between runs.
@@ -420,9 +440,10 @@ is the handover record between runs.
   `save_*` upserts). An older server exposes `create_issue` / `update_issue` instead — use
   whichever namespace and names are present.
 
-- The orchestrator writes to Linear only through `save_issue` (state) and `save_comment`
-  (progress, decisions, PR links, and — on Devin — the `@Devin` trigger brief). It never edits
-  descriptions, relations, or assignees.
+- The orchestrator writes to existing Linear issues only through `save_issue` (state) and
+  `save_comment` (progress, decisions, PR links, and — on Devin — the `@Devin` trigger brief). It
+  never edits their descriptions, relations, or assignees; the one creation it performs is the
+  approved split ticket below.
 - The orchestrator never pushes code. Every commit comes from a child on its own branch.
 - One issue, one child, one branch, one PR. A child that wants to split its issue reports
   `NEEDS_CONTEXT` and the split is a go/no-go — file the new ticket in the SDK Linear team with
