@@ -396,9 +396,10 @@ function titleMatchesBump(title: string, event: BumpEvent): boolean {
 }
 
 /**
- * Whether an equivalent bump is already in flight: an open PR title of the form
- * `bump <package> from <from> to <to>` (case-insensitive; containing the package and the target
- * version is enough) or an existing branch `devin/*-bump-<slug>-<to>`.
+ * Whether an equivalent bump is already in flight: an open same-repo PR title that contains
+ * `bump`, then the boundary-delimited package name, then a boundary-delimited `to`, whitespace,
+ * and the boundary-terminated target version (case-insensitive — merely containing the package
+ * and the version is not enough), or an existing branch `devin/*-bump-<slug>-<to>`.
  */
 export function isDuplicate(
   event: BumpEvent,

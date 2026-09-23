@@ -560,6 +560,31 @@ describe("isDuplicate", () => {
     }
   });
 
+  test("behavior: requires the target version to end at a boundary", () => {
+    const viem = buildBumpEvent({
+      ecosystem: "npm",
+      package: "viem",
+      from: "2.0.0",
+      to: "2.1.0",
+      publishDate: OLD,
+      targets: ["package.json"],
+    });
+    for (const title of [
+      "bump viem from 2.0.0 to 2.1.0-rc.1",
+      "bump viem from 2.0.0 to 2.1.01",
+    ]) {
+      expect(isDuplicate(viem, { openPrTitles: [title], branches: [] })).toBe(
+        false,
+      );
+    }
+    expect(
+      isDuplicate(viem, {
+        openPrTitles: ["bump viem from 2.0.0 to 2.1.0 (SDK-1)"],
+        branches: [],
+      }),
+    ).toBe(true);
+  });
+
   test("behavior: ignores a branch for a different version", () => {
     expect(
       isDuplicate(event, {
@@ -678,6 +703,20 @@ describe("fetchAllPages", () => {
       "https://api.github.com/x?state=open&page=2&per_page=100",
       { headers: {} },
     );
+  });
+
+  test("behavior: uses ? as separator when the base URL has no query", async () => {
+    const urls: string[] = [];
+    await fetchAllPages<number>("https://api.github.com/x", {
+      fetchImpl: async (url) => {
+        urls.push(url);
+        return { ok: true, status: 200, json: async () => [] };
+      },
+      headers: {},
+      label: "items",
+    });
+
+    expect(urls[0]).toBe("https://api.github.com/x?page=1&per_page=100");
   });
 
   test("error: a failed page aborts with the label and status", async () => {
@@ -1239,6 +1278,79 @@ describe("main", () => {
       .filter((line) => line.startsWith("{"))
       .map((line) => JSON.parse(line) as BumpEvent);
     expect(events.find((event) => event.package === "nock")?.to).toBe("15.0.1");
+  });
+
+  test("behavior: skips package directories without a manifest", async () => {
+    const rootDir = fixtureRoot({ lodash: "^4.0.0" });
+    writeFileSync(
+      join(rootDir, "packages", "x", "package.json"),
+      JSON.stringify({ dependencies: { "@scope/name": "^1.0.0" } }),
+    );
+    mkdirSync(join(rootDir, "packages", "no-manifest"), { recursive: true });
+    writeFileSync(join(rootDir, "packages", "no-manifest", "README.md"), "hi");
+    const calls: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: stubFetch(calls),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: () => {},
+      dryRun: true,
+      rootDir,
+    });
+
+    expect(calls).toContain("https://registry.npmjs.org/%40scope%2Fname");
+    expect(calls).toContain("https://registry.npmjs.org/lodash");
+  });
+
+  test("error: a non-ENOENT manifest read failure aborts", async () => {
+    const rootDir = fixtureRoot({});
+    mkdirSync(join(rootDir, "packages", "broken", "package.json"), {
+      recursive: true,
+    });
+
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+        fetch: stubFetch([]),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: true,
+        rootDir,
+      }),
+    ).rejects.toThrowError(/EISDIR/);
+  });
+
+  test("behavior: caches npm metadata and merges targets across specs", async () => {
+    const rootDir = fixtureRoot({ lodash: "^4.0.0" });
+    writeFileSync(
+      join(rootDir, "packages", "x", "package.json"),
+      JSON.stringify({ dependencies: { lodash: "~4.0.0" } }),
+    );
+    const calls: string[] = [];
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: stubFetch(calls),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    expect(
+      calls.filter((url) => url === "https://registry.npmjs.org/lodash"),
+    ).toHaveLength(1);
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    const lodashEvents = events.filter((event) => event.package === "lodash");
+    expect(lodashEvents).toHaveLength(1);
+    expect(lodashEvents[0]?.targets).toEqual([
+      "package.json",
+      "packages/x/package.json",
+    ]);
   });
 
   test("error: a failed tag ref lookup aborts the run", async () => {
