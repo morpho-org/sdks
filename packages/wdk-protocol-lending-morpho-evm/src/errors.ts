@@ -1,5 +1,9 @@
 /** Thrown when a supplied signature deadline exceeds the adapter's bounded execution window. */
 export class BlueBundlesV1DeadlineExceedsWindowError extends Error {
+  /**
+   * @param deadline - Supplied signature deadline in Unix seconds.
+   * @param maxDeadline - Latest accepted deadline (now plus the two-hour window).
+   */
   constructor(
     readonly deadline: bigint,
     readonly maxDeadline: bigint,

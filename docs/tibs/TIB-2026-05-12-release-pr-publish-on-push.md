@@ -62,6 +62,10 @@ Use `cancel-in-progress: true` for all push workflows.
 
 The version job uses a GitHub App token scoped to contents and pull-request writes. The publish job keeps npm trusted publishing through `id-token: write`. Versioning commits are allowlisted to package manifests, generated package changelogs, consumed changesets, and `.changeset/pre.json`; unexpected generated files fail the job.
 
-### Addendum (2026-09-23): CI no longer auto-enters prerelease mode
+## Addenda
+
+### 2026-09-23 — CI no longer auto-enters prerelease mode
+
+**Author:** @foulques
 
 `version-pr.yml` no longer runs `pnpm changeset pre enter next` when `next` has pending changesets. Prerelease mode on `next` is now a manual maintainer opt-in (`pnpm changeset pre enter next`, then `pnpm changeset pre exit` before graduating to `main`); both `version-pr.yml` and `publish.yml` still refuse to run on `main` while `.changeset/pre.json` exists.
