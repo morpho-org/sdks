@@ -35,7 +35,7 @@ const { baseOffer, baseMarketParamsInput } = createFixtures({
   midnight: "0x0000000000000000000000000000000000001000",
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000",
 });
-const offers = [1n, 2n, 3n].map((tick) =>
+const offers = [5_000n, 5_004n, 5_008n].map((tick) =>
   baseOffer({
     tick,
     maxAssets: 0n,

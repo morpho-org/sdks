@@ -14,6 +14,7 @@ import { rateRatifierV1Abi } from "../abis.js";
 import { RATE_RATIFIER_V1_OFFER_TYPEHASH } from "../constants.js";
 import {
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidTreeError,
 } from "../errors.js";
@@ -217,6 +218,23 @@ export type RateRatifierV1TreeInput =
  */
 export namespace RateRatifierV1 {
   /**
+   * Lowest nominal `offer.tick` the router accepts for a RateRatifierV1 leaf
+   * (tick 3372, price >= 0.5 WAD).
+   *
+   * The router prices RateRatifierV1 offers from `rate`, but its gatekeeper
+   * still validates the committed `offer.tick`; ticks below this are rejected
+   * as `min_tick`.
+   *
+   * @example
+   * ```ts
+   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(RateRatifierV1.MIN_TICK); // 3372n
+   * ```
+   */
+  export const MIN_TICK = TickLib.priceToTick(MathLib.WAD / 2n, 1n);
+
+  /**
    * Computes the RateRatifierV1 EIP-712 leaf hash for one leaf struct.
    *
    * This is the SDK port of `HashLib.hashRateRatifierV1Offer`: the offer's
@@ -331,6 +349,7 @@ export namespace RateRatifierV1 {
    * @returns RateRatifierV1 tree descriptor.
    * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
@@ -352,6 +371,9 @@ export namespace RateRatifierV1 {
 
       const allowedTaker = leaf.allowedTaker ?? zeroAddress;
       const input = Offer.from(leaf.offer);
+      if (input.tick < MIN_TICK)
+        throw new InvalidRateRatifierV1TickError(input.tick, MIN_TICK);
+
       const offer = input.hasExplicitGroup
         ? input
         : Offer.from({

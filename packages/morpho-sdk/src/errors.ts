@@ -37,6 +37,7 @@ export {
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
   InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError as InvalidMidnightRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
   InvalidRatifierV1AddressError as InvalidMidnightRatifierV1AddressError,
   InvalidTickSpacingError as InvalidMidnightTickSpacingError,

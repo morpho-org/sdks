@@ -18,6 +18,7 @@ import { rateRatifierV1Abi } from "../abis.js";
 import {
   InvalidOfferGroupError,
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError,
   InvalidTreeError,
@@ -225,6 +226,21 @@ describe("RateRatifierV1.buildDescriptor", () => {
     expect(() => RateRatifierV1.buildDescriptor([leaf({}, -1n)])).toThrow(
       InvalidRateRatifierV1RateError,
     );
+  });
+
+  test("behavior: MIN_TICK is the tick whose price is 0.5 WAD", () => {
+    expect(RateRatifierV1.MIN_TICK).toBe(3372n);
+    expect(() =>
+      RateRatifierV1.buildDescriptor([leaf({ tick: RateRatifierV1.MIN_TICK })]),
+    ).not.toThrow();
+  });
+
+  test("error: InvalidRateRatifierV1TickError on tick below MIN_TICK", () => {
+    for (const tick of [0n, RateRatifierV1.MIN_TICK - 1n]) {
+      expect(() => RateRatifierV1.buildDescriptor([leaf({ tick })])).toThrow(
+        InvalidRateRatifierV1TickError,
+      );
+    }
   });
 
   test("behavior: does not deep-freeze offer instances", () => {

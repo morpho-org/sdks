@@ -68,6 +68,7 @@ import {
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
   InvalidMidnightRateRatifierV1RateError,
+  InvalidMidnightRateRatifierV1TickError,
   InvalidMidnightRateRatifierV1TimeError,
   InvalidMidnightRatifierV1AddressError,
   InvalidNumberError,
@@ -107,6 +108,7 @@ import { Market as RawMidnightMarket } from "@morpho-org/morpho-sdk/midnight/ent
 import {
   InvalidOfferGroupError as RawMidnightInvalidOfferGroupError,
   InvalidRateRatifierV1RateError as RawMidnightInvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError as RawMidnightInvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError as RawMidnightInvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError as RawMidnightInvalidRatifierV1AddressError,
   RatifierV1TakerNotAllowedError as RawMidnightRatifierV1TakerNotAllowedError,
@@ -229,6 +231,10 @@ describe("protocol facades", () => {
     [
       InvalidMidnightRateRatifierV1RateError,
       RawMidnightInvalidRateRatifierV1RateError,
+    ],
+    [
+      InvalidMidnightRateRatifierV1TickError,
+      RawMidnightInvalidRateRatifierV1TickError,
     ],
     [
       InvalidMidnightRateRatifierV1TimeError,

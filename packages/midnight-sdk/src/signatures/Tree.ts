@@ -135,6 +135,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
    * ```ts
    * import { Offer, Tree } from "@morpho-org/midnight-sdk";
@@ -209,6 +210,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
    * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
    * ```ts
    * import { Offer, Tree } from "@morpho-org/midnight-sdk";
