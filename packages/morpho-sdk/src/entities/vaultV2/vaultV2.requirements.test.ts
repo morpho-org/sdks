@@ -17,7 +17,6 @@ import {
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
-  BundlesPermitMismatchError,
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
   isRequirementApproval,
@@ -64,8 +63,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       deposit.getRequirements(),
     ]);
 
-    // One shared in-flight promise. A second concurrent resolution would overwrite
-    // the captured requirement, making `buildTx()` reject the other caller's signature.
+    // One shared in-flight promise: concurrent callers share the same round of reads.
     expect(countAllowanceReads(handle)).toBe(1);
     expect(second).toBe(first);
     expect(
@@ -167,9 +165,9 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
     const nextAction = nextRequirement.action;
     expect(nextAction.args.nonce).toBe(1n);
     expect(countAllowanceReads(handle)).toBe(2);
-    expect(() => deposit.buildTx([signature])).toThrow(
-      BundlesPermitMismatchError,
-    );
+    // The nonce is onchain state Permit2 verifies at execution, so the earlier
+    // signature still finalizes.
+    expect(() => deposit.buildTx([signature])).not.toThrow();
     expect(() =>
       deposit.buildTx([
         {
@@ -178,6 +176,59 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
         },
       ]),
     ).not.toThrow();
+  });
+
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const handle = createMockClient(mainnet);
+    const permit2 = getChainAddress(mainnet.id, "permit2");
+    mockRead(handle, {
+      address: IN_KIND_ASSET,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "nonceBitmap",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const params = {
+      amount,
+      userAddress: IN_KIND_USER,
+      vaultData: inKindVaultV2Data(),
+    };
+    const depositA = vault.deposit(params);
+
+    const requirement = (await depositA.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (requirement?.action.type !== "permit2SignatureTransfer") {
+      throw new Error("Permit2 SignatureTransfer requirement not found");
+    }
+    const signature = {
+      action: requirement.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_ASSET,
+        amount,
+        nonce: requirement.action.args.nonce,
+        deadline: requirement.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies BundlesTokenRequirementSignature;
+
+    const depositB = vault.deposit(params);
+    expect(depositB.buildTx([signature])).toEqual(
+      depositA.buildTx([signature]),
+    );
   });
 
   test("behavior: a failed resolution is not cached", async () => {
@@ -267,7 +318,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
 
 describe("MorphoVaultV2 redeem getRequirements", () => {
   test.each(["redeem"] as const)(
-    "behavior: %s refreshes allowances and nonces and rejects consumed permits",
+    "behavior: %s refreshes allowances and nonces while signed permits stay usable",
     async () => {
       const handle = createMockClient(mainnet);
       mockRead(handle, {
@@ -324,9 +375,9 @@ describe("MorphoVaultV2 redeem getRequirements", () => {
       if (refreshed?.action.type !== "permit")
         throw new Error("Share permit requirement not found");
       expect(refreshed.action.args.nonce).toBe(1n);
-      expect(() => prepared.buildTx([signature])).toThrow(
-        BundlesPermitMismatchError,
-      );
+      // The nonce is onchain state the vault's permit verifies at execution, so the
+      // earlier signature still finalizes.
+      expect(() => prepared.buildTx([signature])).not.toThrow();
       const refreshedSignature = {
         action: refreshed.action,
         args: { ...signature.args, nonce: 1n },
@@ -341,9 +392,7 @@ describe("MorphoVaultV2 redeem getRequirements", () => {
         result: first.action.args.amount,
       });
       expect(await prepared.getRequirements()).toEqual([]);
-      expect(() => prepared.buildTx([refreshedSignature])).toThrow(
-        BundlesPermitMismatchError,
-      );
+      expect(() => prepared.buildTx([refreshedSignature])).not.toThrow();
       expect(() => prepared.buildTx()).not.toThrow();
 
       // Revoking that allowance must make the requirement outstanding again.
@@ -660,8 +709,8 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     } satisfies BundlesTokenRequirementSignature;
     expect(() => withdraw.buildTx([signature])).not.toThrow();
 
-    // An oversized allowance is reset onchain; the earlier permit must no longer be accepted,
-    // since VaultBundlesV1 would skip it once its nonce is consumed and burn under the old cap.
+    // An oversized allowance is reset onchain; the earlier permit still finalizes since
+    // `buildTx()` no longer cross-checks the cap, and its nonce is verified by the vault.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
@@ -675,8 +724,58 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
         .filter(isRequirementApproval)
         .map(({ action }) => action.args),
     ).toEqual([expect.objectContaining({ amount: permit.action.args.amount })]);
-    expect(() => withdraw.buildTx([signature])).toThrow(
-      BundlesPermitMismatchError,
+    expect(() => withdraw.buildTx([signature])).not.toThrow();
+  });
+
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
+    const params = {
+      amount,
+      userAddress: IN_KIND_USER as Address,
+      deadline: Time.timestamp() + 7_200n,
+    };
+    const withdrawA = vault.withdraw(params);
+
+    const permit = (await withdrawA.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (permit?.action.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const signature = {
+      action: permit.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_VAULT,
+        amount: permit.action.args.amount,
+        nonce: 0n,
+        deadline: permit.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies Erc2612RequirementSignature;
+
+    const withdrawB = vault.withdraw(params);
+    expect(withdrawB.buildTx([signature])).toEqual(
+      withdrawA.buildTx([signature]),
     );
   });
 });

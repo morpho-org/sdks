@@ -11,6 +11,7 @@ import {
 import { describe, expect, expectTypeOf, test } from "vitest";
 import type { BundleSharesPermit, BundlesSharesPermit } from "../../index.js";
 import {
+  AmbiguousRequirementSignaturesError,
   type BundlesFundingArgs,
   BundlesPermitMismatchError,
   BundlesRequirementSignatureMismatchError,
@@ -33,7 +34,6 @@ import {
   getBundlesTokenPermit,
   resolveBundlesFunding,
   selectBundlesSharesPermitSignature,
-  selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "./common.js";
 
@@ -434,55 +434,6 @@ describe("getBundlesTokenPermit", () => {
   });
 });
 
-describe("selectBundlesSharesRequirementSignature", () => {
-  const permit = {
-    args: {
-      owner,
-      asset: vault,
-      amount: 7n,
-      nonce: 9n,
-      deadline: 11n,
-      signature,
-    },
-    action: {
-      type: "permit",
-      args: { spender, amount: 7n, deadline: 11n, nonce: 9n },
-    },
-  } satisfies PermitRequirementSignature;
-
-  test("default", () => {
-    expect(
-      selectBundlesSharesRequirementSignature([permit], {
-        requiredShareAllowance: 7n,
-        expectedRequirement: permit.action,
-      }),
-    ).toEqual(permit);
-  });
-
-  test("error: BundlesPermitMismatchError", () => {
-    expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
-        requiredShareAllowance: undefined,
-      }),
-    ).toThrow(BundlesPermitMismatchError);
-    expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
-        requiredShareAllowance: 8n,
-        expectedRequirement: permit.action,
-      }),
-    ).toThrow(BundlesPermitMismatchError);
-    expect(() =>
-      selectBundlesSharesRequirementSignature([permit], {
-        requiredShareAllowance: 7n,
-        expectedRequirement: {
-          ...permit.action,
-          args: { ...permit.action.args, nonce: 10n },
-        },
-      }),
-    ).toThrow(BundlesPermitMismatchError);
-  });
-});
-
 describe("selectBundlesSharesPermitSignature", () => {
   const permit = {
     args: {
@@ -537,6 +488,15 @@ describe("selectBundlesSharesPermitSignature", () => {
       );
     },
   );
+
+  test("behavior: accepts any signed amount when expected.amount is omitted", () => {
+    expect(
+      selectBundlesSharesPermitSignature([permit], {
+        spender,
+        deadline: 11n,
+      }),
+    ).toEqual(permit);
+  });
 });
 
 describe("selectBundlesTokenRequirementSignature", () => {
@@ -562,32 +522,66 @@ describe("selectBundlesTokenRequirementSignature", () => {
     },
   } satisfies Permit2SignatureTransferRequirementSignature;
 
+  const expected = { spender, amount: 7n, deadline: 11n };
+
   test("default", () => {
-    expect(
-      selectBundlesTokenRequirementSignature([permit], permit.action),
-    ).toEqual(permit);
-  });
-
-  test("error: rejects signatures outside the prepared requirement", () => {
-    expect(() => selectBundlesTokenRequirementSignature([permit])).toThrow(
-      BundlesPermitMismatchError,
+    expect(selectBundlesTokenRequirementSignature([permit], expected)).toEqual(
+      permit,
     );
-    expect(() =>
-      selectBundlesTokenRequirementSignature([permit], {
-        ...permit.action,
-        args: { ...permit.action.args, deadline: 12n },
-      }),
-    ).toThrow(BundlesPermitMismatchError);
+    expect(selectBundlesTokenRequirementSignature([permit2], expected)).toEqual(
+      permit2,
+    );
+    expect(
+      selectBundlesTokenRequirementSignature(undefined, expected),
+    ).toBeUndefined();
   });
 
-  test("error: BundlesPermitMismatchError for a non-ERC-2612 permit", () => {
+  test.each([
+    ["spender", { spender: owner }],
+    ["amount", { amount: 8n }],
+    ["deadline", { deadline: 12n }],
+  ] as const)(
+    "error: BundlesPermitMismatchError for a different %s",
+    (field, change) => {
+      expect(() =>
+        selectBundlesTokenRequirementSignature([permit], {
+          ...expected,
+          ...change,
+        }),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field,
+        }),
+      );
+    },
+  );
+
+  test("error: BundlesPermitMismatchError for a different nonce", () => {
     expect(() =>
-      selectBundlesTokenRequirementSignature([permit2], permit.action),
+      selectBundlesTokenRequirementSignature(
+        [
+          {
+            ...permit2,
+            action: {
+              ...permit2.action,
+              args: { ...permit2.action.args, nonce: 10n },
+            },
+          },
+        ],
+        expected,
+      ),
     ).toThrowError(
       expect.objectContaining({
         name: "BundlesPermitMismatchError",
-        field: "type",
+        field: "nonce",
       }),
     );
+  });
+
+  test("error: AmbiguousRequirementSignaturesError for both token signature kinds", () => {
+    expect(() =>
+      selectBundlesTokenRequirementSignature([permit, permit2], expected),
+    ).toThrow(AmbiguousRequirementSignaturesError);
   });
 });

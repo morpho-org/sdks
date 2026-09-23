@@ -3,15 +3,19 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   createPublicClient,
   createWalletClient,
+  decodeFunctionData,
   erc20Abi,
   http,
   maxUint256,
+  serializeSignature,
+  toHex,
 } from "viem";
 import { fraxtal, mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import { inKindVaultV1Data } from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
@@ -109,7 +113,7 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
   const targetVault = "0x0000000000000000000000000000000000000002" as const;
   const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 
-  test("error: BundlesPermitMismatchError for a withdrawal permit above the resolved share cap", async () => {
+  test("behavior: a withdrawal permit above the resolved share cap encodes its signed amount", async () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
@@ -140,7 +144,11 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
         amount: 11n,
         nonce: 0n,
         deadline: maxUint256,
-        signature: "0x",
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
       },
       action: {
         type: "permit",
@@ -155,9 +163,14 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
     expect(await withdrawal.getRequirements()).toStrictEqual(requirements);
     expect(getData).toHaveBeenCalledOnce();
 
-    expect(() => withdrawal.buildTx([oversizedPermit])).toThrow(
-      BundlesPermitMismatchError,
-    );
+    // The cap is signing-time state carried by the signature: `buildTx()` no longer rejects a
+    // permit above it, and the encoded permit value is the signed amount.
+    const tx = withdrawal.buildTx([oversizedPermit]);
+    const { args } = decodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      data: tx.data,
+    });
+    expect(args?.[3]).toMatchObject({ value: 11n });
   });
 
   test("error: BundlesPermitMismatchError for an asset migration permit above the computed share cap", () => {

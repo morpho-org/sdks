@@ -36,7 +36,7 @@ export interface VaultV1WithdrawParams {
  * Encodes an exact-assets Vault V1 withdrawal through VaultBundlesV1.
  *
  * This low-level builder does not bind `permit.value` to a share cap; use
- * `MorphoVaultV1.withdraw().buildTx()` to validate it against the cap from `getRequirements()`.
+ * `MorphoVaultV1.withdraw().buildTx()` to validate its spender and deadline against the operation's.
  *
  * @param params.vault.chainId - Chain containing the vault and its registered VaultBundlesV1 contract.
  * @param params.vault.address - Vault V1 whose shares are burned for the withdrawal.
