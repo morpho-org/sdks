@@ -318,6 +318,52 @@ export function branchSlug(packageName: string): string {
   return packageName.replace(/[@/]/g, "-");
 }
 
+const beforePackage = /[\w@/.-]/;
+const afterPackage = /[\w/.-]/;
+const wordOrVersionChar = /[\w.-]/;
+const TO_KEYWORD = /\bto\s+/g;
+
+/**
+ * Hand-rolled equivalent of `bump.*<package>.*to <to>` (case-insensitive, with the same
+ * non-name-character boundaries on both the package and the target version). Deliberately not a
+ * dynamically built `RegExp`: the pattern needed lookbehind/lookahead chains that scan as a
+ * potential ReDoS vector, and plain `indexOf` scans are cheaper anyway.
+ */
+function titleMatchesBump(title: string, event: BumpEvent): boolean {
+  const text = title.toLowerCase();
+  if (!text.includes("bump")) return false;
+
+  const pkg = event.package.toLowerCase();
+  const to = event.to.toLowerCase();
+
+  let pkgIndex = text.indexOf(pkg);
+  while (pkgIndex >= 0) {
+    const before = text[pkgIndex - 1];
+    const after = text[pkgIndex + pkg.length];
+    if (
+      (before == null || !beforePackage.test(before)) &&
+      (after == null || !afterPackage.test(after))
+    ) {
+      const rest = text.slice(pkgIndex + pkg.length);
+      TO_KEYWORD.lastIndex = 0;
+      for (let match = TO_KEYWORD.exec(rest); match != null; ) {
+        const versionStart = match.index + match[0].length;
+        const afterTo = rest[versionStart + to.length];
+        if (
+          rest.startsWith(to, versionStart) &&
+          (afterTo == null || !wordOrVersionChar.test(afterTo))
+        ) {
+          return true;
+        }
+        match = TO_KEYWORD.exec(rest);
+      }
+    }
+    pkgIndex = text.indexOf(pkg, pkgIndex + 1);
+  }
+
+  return false;
+}
+
 /**
  * Whether an equivalent bump is already in flight: an open PR title of the form
  * `bump <package> from <from> to <to>` (case-insensitive; containing the package and the target
@@ -333,11 +379,9 @@ export function isDuplicate(
     branches: readonly string[];
   },
 ): boolean {
-  const titlePattern = new RegExp(
-    `bump.*(?<![\\w@/.-])${RegExp.escape(event.package)}(?![\\w/.-]).*\\bto\\s+(?<![\\w.-])${RegExp.escape(event.to)}(?![\\w.-])`,
-    "i",
-  );
-  if (openPrTitles.some((title) => titlePattern.test(title))) return true;
+  if (openPrTitles.some((title) => titleMatchesBump(title, event))) {
+    return true;
+  }
 
   const branchPattern = new RegExp(
     `^devin/.*-bump-${RegExp.escape(branchSlug(event.package))}-${RegExp.escape(
