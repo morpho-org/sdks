@@ -1337,6 +1337,29 @@ describe.sequential("MorphoProtocolEvm", () => {
       ).rejects.toBeInstanceOf(BlueBundlesV1DeadlineExceedsWindowError);
     });
 
+    test("behavior: accepts a signature deadline exactly at the two-hour window bound", async () => {
+      const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n;
+      const requirementSignature = {
+        args: { deadline },
+        action: { type: "authorization" },
+      } as unknown as AuthorizationRequirementSignature;
+
+      await protocol.borrow({
+        token: TOKEN,
+        amount: 100_000n,
+        requirementSignature,
+      });
+
+      expect(borrowAction.buildTx).toHaveBeenCalledWith([
+        expect.objectContaining({
+          action: expect.objectContaining({ type: "authorization" }),
+        }),
+      ]);
+      expect(marketEntity.borrow).toHaveBeenCalledWith(
+        expect.objectContaining({ deadline }),
+      );
+    });
+
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {
       await expect(
         protocol.borrow({

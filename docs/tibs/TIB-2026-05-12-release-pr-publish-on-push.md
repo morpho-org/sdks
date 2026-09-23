@@ -32,7 +32,7 @@ Package releases are driven by Changesets, but branch pushes need a deterministi
 
 Use `.github/workflows/push.yml` as the only release entrypoint. All pushes run the normal checks. For `main` and `next`, the workflow then calls `version-pr.yml` and `publish.yml`.
 
-`version-pr.yml` detects pending `.changeset/*.md` files. If any exist, it refuses prerelease mode on `main` (prerelease mode is never entered by CI; a maintainer opts in manually with `pnpm changeset pre enter`), runs `pnpm run version`, force-pushes `changeset-release/<base>` with lease protection, and opens or updates the `chore: version packages (<base>)` PR for that release branch.
+`version-pr.yml` detects pending `.changeset/*.md` files. If any exist, it enters prerelease mode for `next` when needed, refuses prerelease mode on `main`, runs `pnpm run version`, force-pushes `changeset-release/<base>` with lease protection, and opens or updates the `chore: version packages (<base>)` PR for that release branch.
 
 `publish.yml` intentionally skips while pending changesets still exist. After the release PR is merged, the next push has consumed changesets and generated package versions/changelogs, so publish runs `pnpm release --tag latest` for `main` or `pnpm release --tag next` for `next`. It recreates missing tags for package versions changed by the release commit, records local package tags that are not yet on the remote, pushes them atomically, and creates or updates one GitHub Release per published package from the generated package changelog section. `next` GitHub Releases are marked prerelease.
 
@@ -61,3 +61,7 @@ Use `cancel-in-progress: true` for all push workflows.
 ## Security
 
 The version job uses a GitHub App token scoped to contents and pull-request writes. The publish job keeps npm trusted publishing through `id-token: write`. Versioning commits are allowlisted to package manifests, generated package changelogs, consumed changesets, and `.changeset/pre.json`; unexpected generated files fail the job.
+
+### Addendum (2026-09-23): CI no longer auto-enters prerelease mode
+
+`version-pr.yml` no longer runs `pnpm changeset pre enter next` when `next` has pending changesets. Prerelease mode on `next` is now a manual maintainer opt-in (`pnpm changeset pre enter next`, then `pnpm changeset pre exit` before graduating to `main`); both `version-pr.yml` and `publish.yml` still refuse to run on `main` while `.changeset/pre.json` exists.
