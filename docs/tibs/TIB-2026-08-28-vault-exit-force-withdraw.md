@@ -502,8 +502,9 @@ aliases while the deprecated names last.
   — never a permanent unlimited approval to the periphery.
 - [ ] `referralFeePct` stays outside the slippage guard and that is documented in JSDoc and the
   action's parameter docs.
-- [ ] `forceRedeem` is untouched and retains the multicall path; `EmptyDeallocationsError`,
-  `encodeForceDeallocateCall`, and the `Deallocation` type remain exported.
+- [ ] `forceRedeem` is untouched and retains the multicall path; `EmptyDeallocationsError` and the
+  `Deallocation` type remain exported, and the internal `encodeForceDeallocateCall` helper stays in
+  place for `forceRedeem`.
 - [ ] A major changeset, migration-guide entry, and maintained-dependent audit ship with the
   change, per the §7 exception's non-waived duties.
 

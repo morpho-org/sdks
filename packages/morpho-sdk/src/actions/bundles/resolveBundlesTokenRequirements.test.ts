@@ -6,10 +6,12 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   ApprovalAmountLessThanSpendAmountError,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
   NegativeInputError,
+  NonPositiveInputError,
   Permit2SignatureTransferNonceAlreadyUsedError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../types/index.js";
@@ -123,6 +125,32 @@ describe("resolveBundlesTokenRequirements", () => {
             type: "permit2SignatureTransfer",
             permit2Allowance: maxUint256,
             permit2Nonce,
+            nonceBitmap: 0n,
+          },
+        }),
+      ).toThrow(error);
+    },
+  );
+
+  test.each([
+    { signatureDeadline: 0n, error: NonPositiveInputError },
+    { signatureDeadline: 1n, error: ExpiredDeadlineError },
+    { signatureDeadline: maxUint256 + 1n, error: InputExceedsMaxError },
+  ])(
+    "error: $error.name for SignatureTransfer deadline $signatureDeadline",
+    ({ signatureDeadline, error }) => {
+      expect(() =>
+        resolveBundlesTokenRequirements({
+          token: usdc,
+          spender,
+          owner,
+          chainId,
+          amount: 1n,
+          deadline: signatureDeadline,
+          state: {
+            type: "permit2SignatureTransfer",
+            permit2Allowance: maxUint256,
+            permit2Nonce: 0n,
             nonceBitmap: 0n,
           },
         }),
