@@ -33,6 +33,7 @@ Per AGENTS.md §5, every package uses the same layout:
 - Removed or modified public exports without their tests updated (e.g. signature change, behavior change).
 - Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, contract round-trips and paths whose correctness depends on real onchain state use Anvil forks via `@morpho-org/test` at pinned blocks. Unit tests for code that calls `viem/actions` but does not depend on real onchain state may use `createMockClient` from `@morpho-org/test/mock`, which mocks the `client.transport` surface those actions use. Do not recommend `vi.mock` / `vi.spyOn` of viem actions for RPC paths. Fork-bound tests belong under the package's `test/` directory with `*.integration.test.ts` names.
 - Snapshot or schema tests not updated when generated outputs (GraphQL types, ABIs) change.
+- A new or changed entity flow that consumes a `RequirementSignature` without a cross-handle test: prepare on handle A, sign, then assert `buildTx(signatures)` on a fresh handle B built from the same inputs equals A's. Per [`TIB-2026-09-23-stateless-entity-flows`](../../../docs/tibs/TIB-2026-09-23-stateless-entity-flows.md) this test must fail if `buildTx` starts reading closure state written by `getRequirements()`/`sign()`. Flag as **high** when the flow derives an encoded value (funding cap, payload) from the signature.
 
 ### Wrong-place findings (the colocation enforcer)
 

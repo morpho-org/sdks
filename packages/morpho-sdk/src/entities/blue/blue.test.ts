@@ -5,10 +5,16 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, maxUint256 } from "viem";
+import {
+  type Address,
+  erc20Abi,
+  maxUint256,
+  serializeSignature,
+  toHex,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
@@ -20,11 +26,13 @@ import {
 } from "../../helpers/index.js";
 import {
   AccrualPositionUserMismatchError,
+  type AuthorizationRequirementSignature,
   BorrowExceedsSafeLtvError,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  isRequirementSignature,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
@@ -1002,6 +1010,166 @@ describe("MorphoBlue position validation", () => {
       MaxRepayAssetsBelowRepayAssetsError,
     );
   });
+
+  test.each([
+    {
+      method: "supply",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supply({ userAddress, assets: 1_000n, deadline }),
+    },
+    {
+      method: "supplyCollateralBorrow",
+      fundedToken: marketParams.collateralToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supplyCollateralBorrow({
+          userAddress,
+          positionData: makePosition(marketParams),
+          collateralAssets: 1_000n,
+          borrowAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "withdraw",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.withdraw({
+          userAddress,
+          positionData: makePosition(marketParams, {
+            borrowShares: 0n,
+            supplyShares: 10n ** 18n,
+          }),
+          assets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "repay",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.repay({
+          userAddress,
+          positionData: makePosition(marketParams, {
+            lastUpdate: deadline - 3_600n,
+          }),
+          repayShares: maxUint256,
+          deadline,
+        }),
+    },
+    {
+      method: "refinance",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.refinance({
+          userAddress,
+          positionData: makePosition(marketParams),
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: makePosition(destinationMarketParams, {
+              borrowShares: 0n,
+              collateral: 0n,
+            }),
+          },
+          deadline,
+        }),
+    },
+  ])(
+    "behavior: $method signatures prepared on one handle finalize on a fresh handle",
+    async ({ fundedToken, prepare }) => {
+      const now = 1_800_000_000n;
+      const deadline = now + 3_600n;
+      const blueBundlesV1 = getChainAddress(
+        mainnet.id,
+        "bundles.blueBundlesV1",
+      );
+      const makeSignatureEntity = () => {
+        const handle = createMockClient(mainnet);
+        for (const address of [
+          marketParams.loanToken,
+          marketParams.collateralToken,
+        ]) {
+          mockRead(handle, {
+            address,
+            abi: erc20Abi,
+            functionName: "allowance",
+            result: 0n,
+          });
+        }
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "permit2"),
+          abi: permit2Abi,
+          functionName: "nonceBitmap",
+          result: 0n,
+        });
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "blue"),
+          abi: blueAbi,
+          functionName: "isAuthorized",
+          result: false,
+        });
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "blue"),
+          abi: blueAbi,
+          functionName: "nonce",
+          result: 0n,
+        });
+        return handle.client
+          .extend(morphoViemExtension({ supportSignature: true }))
+          .morpho.blue(marketParams, mainnet.id);
+      };
+      const stubSignature = serializeSignature({
+        r: toHex(1n, { size: 32 }),
+        s: toHex(2n, { size: 32 }),
+        yParity: 0,
+      });
+
+      const actionA = withChainTimestamp(now, () =>
+        prepare(makeSignatureEntity(), deadline),
+      );
+      const requirements = (
+        await withChainTimestamp(now, () => actionA.getRequirements())
+      ).filter(isRequirementSignature);
+      expect(requirements.length).toBeGreaterThan(0);
+      const signatures = requirements.map((requirement) => {
+        switch (requirement.action.type) {
+          case "permit2SignatureTransfer":
+            return {
+              action: requirement.action,
+              args: {
+                owner: userAddress,
+                asset: fundedToken,
+                amount: requirement.action.args.amount,
+                nonce: requirement.action.args.nonce,
+                deadline: requirement.action.args.deadline,
+                signature: stubSignature,
+              },
+            } satisfies BundlesTokenRequirementSignature;
+          case "authorization":
+            return {
+              action: requirement.action,
+              args: {
+                owner: userAddress,
+                authorized: blueBundlesV1,
+                isAuthorized: true,
+                nonce: 0n,
+                deadline: requirement.action.args.deadline,
+                signature: stubSignature,
+              },
+            } satisfies AuthorizationRequirementSignature;
+          default:
+            throw new Error(
+              `Unexpected requirement ${requirement.action.type}`,
+            );
+        }
+      });
+
+      const actionB = withChainTimestamp(now, () =>
+        prepare(makeSignatureEntity(), deadline),
+      );
+      expect(actionB.buildTx(signatures)).toEqual(actionA.buildTx(signatures));
+    },
+  );
 
   test("behavior: full repay approval equals the encoded maxRepayAssets", async () => {
     const now = 1_800_000_000n;

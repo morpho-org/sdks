@@ -1344,6 +1344,35 @@ describe("MorphoMidnight", () => {
       });
     });
 
+    test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+      const mockHandle = (): MidnightMockHandle => {
+        const handle = createMockClient(midnightTestChain);
+        mockAllowance({
+          handle,
+          token: midnightAddresses.loanToken,
+          result: maxUint256,
+        });
+        mockMidnightAuthorization(handle, true);
+        return handle;
+      };
+      const data = offersData(true, offerSignerAccount.address);
+      const params = {
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+      };
+      const outputA = await midnightWithHandle(mockHandle()).makeLend(params);
+      const signature = await signOfferRootRequirement(
+        await outputA.getRequirements(),
+      );
+
+      const outputB = await midnightWithHandle(mockHandle()).makeLend(params);
+      expect(outputB.buildTx(signature)).toEqual(outputA.buildTx(signature));
+      expect(outputB.buildTx(signature).data).toBe(signature.args.payload);
+    });
+
     test("behavior: signs reviewable offer tree typed data", async () => {
       const account = privateKeyToAccount(
         "0x0000000000000000000000000000000000000000000000000000000000000001",
