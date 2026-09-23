@@ -64,4 +64,5 @@ export type {
   VerifiedEcrecoverRatifierData as MidnightVerifiedEcrecoverRatifierData,
 } from "@morpho-org/midnight-sdk";
 export type { ChainMetadata } from "@morpho-org/morpho-ts";
+export type { BuilderOnlyActionOutput } from "./types/action.js";
 export * from "./types/index.js";

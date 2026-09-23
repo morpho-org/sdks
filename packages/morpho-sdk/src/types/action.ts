@@ -806,19 +806,42 @@ interface ActionRequirementsParams {
   readonly useSimplePermit?: boolean;
 }
 
-/** Lazy entity result exposing prerequisite resolution and synchronous transaction building. */
+/**
+ * Lazy entity result exposing prerequisite resolution and synchronous transaction building.
+ *
+ * @typeParam TAction - Exact transaction action metadata.
+ * @typeParam TSignatures - Optional signature input; `never` gives a zero-argument builder.
+ * @typeParam TRequirementsParams - Optional resolution options; `never` gives a zero-argument resolver.
+ * @typeParam TRequirements - Exact prerequisite array, including its mutability. Defaults to all readonly action requirements.
+ */
 export interface ActionOutput<
   TAction extends BaseAction = TransactionAction,
   TSignatures = RequirementSignature,
   TRequirementsParams = ActionRequirementsParams,
+  TRequirements extends readonly (
+    | ActionRequirement
+    | Requirement
+  )[] = readonly ActionRequirement[],
 > {
   readonly buildTx: (
-    signatures?: TSignatures,
+    ...args: [TSignatures] extends [never] ? [] : [signatures?: TSignatures]
   ) => Readonly<Transaction<TAction>>;
   readonly getRequirements: (
-    params?: TRequirementsParams,
-  ) => Promise<readonly ActionRequirement[]>;
+    ...args: [TRequirementsParams] extends [never]
+      ? []
+      : [params?: TRequirementsParams]
+  ) => Promise<TRequirements>;
 }
+
+/**
+ * Lazy entity result for actions with no prerequisite resolver or signature input.
+ * Only `buildTx` exists at runtime; no `getRequirements` member is implied.
+ *
+ * @typeParam TAction - Exact transaction action metadata.
+ */
+export type BuilderOnlyActionOutput<
+  TAction extends BaseAction = TransactionAction,
+> = Pick<ActionOutput<TAction, never>, "buildTx">;
 
 export function isRequirementApproval(
   requirement: unknown,

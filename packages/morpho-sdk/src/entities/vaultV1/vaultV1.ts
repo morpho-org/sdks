@@ -35,6 +35,7 @@ import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
   type ActionRequirement,
+  type BuilderOnlyActionOutput,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type DepositAmountArgs,
@@ -93,19 +94,15 @@ export interface VaultV1Actions {
       vaultData: AccrualVault;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    VaultV1DepositAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
   /**
    * Prepares a withdraw from a VaultV1 (MetaMorpho) contract.
    *
@@ -114,9 +111,10 @@ export interface VaultV1Actions {
    * @param {Address} params.userAddress - User address initiating the withdraw.
    * @returns {Object} Object with `buildTx`.
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV1WithdrawAction>>;
-  };
+  withdraw: (params: {
+    amount: bigint;
+    userAddress: Address;
+  }) => BuilderOnlyActionOutput<VaultV1WithdrawAction>;
   /**
    * Prepares a redeem from a VaultV1 (MetaMorpho) contract.
    *
@@ -125,9 +123,10 @@ export interface VaultV1Actions {
    * @param {Address} params.userAddress - User address initiating the redeem.
    * @returns {Object} Object with `buildTx`.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV1RedeemAction>>;
-  };
+  redeem: (params: {
+    shares: bigint;
+    userAddress: Address;
+  }) => BuilderOnlyActionOutput<VaultV1RedeemAction>;
   /**
    * Prepares an illiquid Vault V1 exit into the vault's Morpho Blue supply positions.
    *
@@ -280,17 +279,15 @@ export interface VaultV1Actions {
     targetVault: AccrualVaultV2;
     shares: bigint;
     slippageTolerance?: bigint;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  }) => ActionOutput<
+    VaultV1MigrateToV2Action,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
@@ -319,6 +316,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     });
   }
 
+  /** {@inheritDoc VaultV1Actions.deposit} */
   deposit({
     amount = 0n,
     userAddress,
@@ -329,7 +327,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     userAddress: Address;
     vaultData: AccrualVault;
     slippageTolerance?: bigint;
-  } & DepositAmountArgs) {
+  } & DepositAmountArgs): ReturnType<VaultV1Actions["deposit"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (!isAddressEqual(vaultData.address, this.vault)) {
@@ -416,7 +414,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
-  withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV1Actions.withdraw} */
+  withdraw({
+    amount,
+    userAddress,
+  }: {
+    amount: bigint;
+    userAddress: Address;
+  }): ReturnType<VaultV1Actions["withdraw"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -433,7 +438,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV1Actions.redeem} */
+  redeem({
+    shares,
+    userAddress,
+  }: {
+    shares: bigint;
+    userAddress: Address;
+  }): ReturnType<VaultV1Actions["redeem"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -648,7 +660,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     targetVault: AccrualVaultV2;
     shares: bigint;
     slippageTolerance?: bigint;
-  }) {
+  }): ReturnType<VaultV1Actions["migrateToV2"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {

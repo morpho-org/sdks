@@ -54,7 +54,9 @@ import {
 import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
+  type ActionOutput,
   type AssetsOrSharesArgs,
+  type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   type BlueBorrowAction,
   type BlueReallocationPlan,
@@ -67,6 +69,7 @@ import {
   type BlueWithdrawAction,
   type BlueWithdrawCollateralAction,
   BorrowAmountAndSharesExclusiveError,
+  type BuilderOnlyActionOutput,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   MarketIdMismatchError,
@@ -154,24 +157,17 @@ export interface BlueActions {
    * @param params - Supply collateral parameters.
    * @returns Object with `buildTx` and `getRequirements`.
    */
-  supplyCollateral: (params: { userAddress: Address } & DepositAmountArgs) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  supplyCollateral: (
+    params: { userAddress: Address } & DepositAmountArgs,
+  ) => ActionOutput<
+    BlueSupplyCollateralAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
 
   /**
    * Prepares a loan-asset supply transaction.
@@ -194,24 +190,15 @@ export interface BlueActions {
       marketData: Market;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    BlueSupplyAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
 
   /**
    * Prepares a loan-asset withdraw transaction.
@@ -253,18 +240,16 @@ export interface BlueActions {
       /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
       reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueWithdrawAction>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    BlueWithdrawAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement
+    )[]
+  >;
 
   /**
    * Prepares a borrow transaction.
@@ -301,18 +286,16 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
     reallocations?: BlueReallocationPlan;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueBorrowAction>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  }) => ActionOutput<
+    BlueBorrowAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement
+    )[]
+  >;
 
   /**
    * Prepares a repay transaction.
@@ -339,24 +322,15 @@ export interface BlueActions {
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRepayAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    BlueRepayAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
 
   /**
    * Prepares a withdraw-collateral transaction.
@@ -377,9 +351,7 @@ export interface BlueActions {
     userAddress: Address;
     amount: bigint;
     positionData: AccrualPosition;
-  }) => {
-    buildTx: () => Readonly<Transaction<BlueWithdrawCollateralAction>>;
-  };
+  }) => BuilderOnlyActionOutput<BlueWithdrawCollateralAction>;
 
   /**
    * Prepares an atomic repay-and-withdraw-collateral transaction.
@@ -405,25 +377,16 @@ export interface BlueActions {
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    BlueRepayWithdrawCollateralAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement
+    )[]
+  >;
 
   /**
    * Prepares an atomic supply-collateral-and-borrow transaction.
@@ -463,25 +426,16 @@ export interface BlueActions {
       /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
       reallocations?: BlueReallocationPlan;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    BlueSupplyCollateralBorrowAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement
+    )[]
+  >;
 
   /**
    * Prepares an atomic refinance migrating this market's position to another Morpho Blue market
@@ -533,18 +487,16 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     /** Vault V1 inputs are deprecated for high-level Blue writes; prefer Vault V2. */
     targetReallocations?: BlueReallocationPlan;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRefinanceAction>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  }) => ActionOutput<
+    BlueRefinanceAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement
+    )[]
+  >;
 
   /**
    * Fetches all on-chain data needed to construct a {@link VaultV1ReallocationData}
@@ -792,6 +744,7 @@ export class MorphoBlue implements BlueActions {
     );
   }
 
+  /** {@inheritDoc BlueActions.supply} */
   supply({
     amount = 0n,
     userAddress,
@@ -802,7 +755,7 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     marketData: Market;
     slippageTolerance?: bigint;
-  } & DepositAmountArgs) {
+  } & DepositAmountArgs): ReturnType<BlueActions["supply"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
@@ -869,6 +822,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.withdraw} */
   withdraw(
     params: {
       userAddress: Address;
@@ -877,7 +831,17 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance?: bigint;
       reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
-  ) {
+  ): ActionOutput<
+    BlueWithdrawAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement<PermitRequirementSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    )[]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const {
@@ -986,11 +950,14 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.supplyCollateral} */
   supplyCollateral({
     amount = 0n,
     userAddress,
     nativeAmount,
-  }: { userAddress: Address } & DepositAmountArgs) {
+  }: { userAddress: Address } & DepositAmountArgs): ReturnType<
+    BlueActions["supplyCollateral"]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
@@ -1042,6 +1009,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.borrow} */
   borrow({
     amount,
     userAddress,
@@ -1054,7 +1022,17 @@ export class MorphoBlue implements BlueActions {
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
     reallocations?: BlueReallocationPlan;
-  }) {
+  }): ActionOutput<
+    BlueBorrowAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement<PermitRequirementSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    )[]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
@@ -1131,13 +1109,14 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.repay} */
   repay(
     params: {
       userAddress: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) {
+  ): ReturnType<BlueActions["repay"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const {
@@ -1287,6 +1266,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.withdrawCollateral} */
   withdrawCollateral({
     userAddress,
     amount,
@@ -1295,7 +1275,7 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     amount: bigint;
     positionData: AccrualPosition;
-  }) {
+  }): ReturnType<BlueActions["withdrawCollateral"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
@@ -1344,6 +1324,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.repayWithdrawCollateral} */
   repayWithdrawCollateral(
     params: {
       userAddress: Address;
@@ -1351,7 +1332,17 @@ export class MorphoBlue implements BlueActions {
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) {
+  ): ActionOutput<
+    BlueRepayWithdrawCollateralAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement<PermitRequirementSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    )[]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const {
@@ -1542,6 +1533,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.supplyCollateralBorrow} */
   supplyCollateralBorrow({
     amount = 0n,
     userAddress,
@@ -1556,7 +1548,17 @@ export class MorphoBlue implements BlueActions {
     borrowAmount: bigint;
     slippageTolerance?: bigint;
     reallocations?: BlueReallocationPlan;
-  } & DepositAmountArgs) {
+  } & DepositAmountArgs): ActionOutput<
+    BlueSupplyCollateralBorrowAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement<PermitRequirementSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    )[]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
@@ -1690,6 +1692,7 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
+  /** {@inheritDoc BlueActions.refinance} */
   refinance({
     userAddress,
     positionData,
@@ -1711,7 +1714,17 @@ export class MorphoBlue implements BlueActions {
     borrowShares?: bigint;
     slippageTolerance?: bigint;
     targetReallocations?: BlueReallocationPlan;
-  }) {
+  }): ActionOutput<
+    BlueRefinanceAction,
+    readonly RequirementSignature[],
+    never,
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Readonly<Transaction<BlueAuthorizationAction>>
+      | Requirement<PermitRequirementSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    )[]
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
     const targetReallocationPlan = validateAndNormalizeReallocations({
