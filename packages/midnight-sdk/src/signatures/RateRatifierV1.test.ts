@@ -8,6 +8,7 @@ import {
   type Hex,
   hashStruct,
   isAddressEqual,
+  keccak256,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -15,6 +16,7 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { rateRatifierV1Abi } from "../abis.js";
 import {
+  InvalidOfferGroupError,
   InvalidRateRatifierV1RateError,
   InvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError,
@@ -24,6 +26,7 @@ import {
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
 
@@ -228,8 +231,56 @@ describe("RateRatifierV1.buildDescriptor", () => {
     const offer = leaf().offer;
     const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
 
+    expect(Object.isFrozen(offer)).toBe(false);
+    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
     expect(offer.hash).toBe(OfferUtils.hash(offer));
-    expect(descriptor.offers[0]!.hash).toBe(offer.hash);
+    expect(descriptor.offers[0]!.hash).toBe(
+      OfferUtils.hash(descriptor.offers[0]!),
+    );
+  });
+
+  test("behavior: defaults group to the rate-aware singleton id", () => {
+    const l = leaf({}, 5n);
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
+    expect(offer!.group).toBe(
+      keccak256(
+        RateRatifierV1.hashLeaf({
+          offer: OfferUtils.toStruct({ offer: l.offer, group: zeroHash }),
+          rate: 5n,
+          allowedTaker: zeroAddress,
+        }),
+      ),
+    );
+    expect(offer!.group).not.toBe(l.offer.group);
+    expect(RateRatifierV1.groupId([{ ...l, rate: 6n }])).not.toBe(offer!.group);
+    expect(RateRatifierV1.groupId([{ ...l, allowedTaker }])).not.toBe(
+      offer!.group,
+    );
+  });
+
+  test("behavior: commits an explicit group as-is", () => {
+    const group = keccak256("0x01");
+    const l = { ...leaf(), offer: { ...leaf().offer, group } };
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(group);
+    expect(offer!.hasExplicitGroup).toBe(true);
+  });
+
+  test("behavior: groupId is order-independent across leaves", () => {
+    const a = leaf({}, 1n);
+    const b = leaf({ maxUnits: 7n }, 2n);
+
+    expect(RateRatifierV1.groupId([a, b])).toBe(RateRatifierV1.groupId([b, a]));
+    expect(RateRatifierV1.groupId([a, b])).toBe(
+      GroupUtils.hashMembers([
+        RateRatifierV1.memberHash(a),
+        RateRatifierV1.memberHash(b),
+      ]),
+    );
+    expect(() => RateRatifierV1.groupId([])).toThrow(InvalidOfferGroupError);
   });
 
   test("error: InvalidTreeError for a tampered descriptor root", () => {
@@ -444,14 +495,14 @@ describe("RateRatifierV1.buildProof", () => {
 
 describe("RateRatifierV1.ratifierData", () => {
   test("default", () => {
-    const tree = [
+    const tree = RateRatifierV1.buildDescriptor([
       leaf({}, 5n),
       { offer: leaf({ maxUnits: 7n }).offer, rate: 6n, allowedTaker },
-    ];
+    ]);
     const data = RateRatifierV1.ratifierData({ tree, leafIndex: 1n });
 
     const decoded = RateRatifierV1.verifyRatifierData({
-      offer: tree[1]!.offer,
+      offer: tree.offers[1]!,
       ratifierData: data,
       taker: allowedTaker,
     });

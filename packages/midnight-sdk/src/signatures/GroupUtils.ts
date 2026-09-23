@@ -209,9 +209,38 @@ export namespace GroupUtils {
       );
     }
 
-    const offerHashes = offerInputs.map((offer) => OfferUtils.groupHash(offer));
-    const sorted =
-      offerHashes.length > 1 ? [...offerHashes].sort() : offerHashes;
+    return hashMembers(offerInputs.map((offer) => OfferUtils.groupHash(offer)));
+  }
+
+  /**
+   * Derives a content-addressed group id from ratifier-specific member hashes.
+   *
+   * This is the ratifier-agnostic core of {@link hash}: each member hash must
+   * commit the offer with `group = 0` under the scheme the offer is ratified
+   * with (the protocol offer hash for Ecrecover/Setter, the zero-group leaf
+   * hash for `RateRatifierV1`/`PriceRatifierV1`). Hashes are sorted,
+   * concatenated, then keccak'd, so member order does not affect the id.
+   *
+   * @param memberHashes - Zero-group member hashes of one consumption group.
+   * @returns Content-addressed group id.
+   * @throws {InvalidOfferGroupError} when `memberHashes` is empty.
+   * @example
+   * ```ts
+   * import { GroupUtils, OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const id = GroupUtils.hashMembers([OfferUtils.groupHash(offer)]);
+   * console.log(id);
+   * ```
+   */
+  export function hashMembers(memberHashes: Iterable<Hash>): Hash {
+    const hashes = Array.from(memberHashes);
+    if (hashes.length === 0) {
+      throw new InvalidOfferGroupError(
+        "Provide at least one member hash in the group.",
+      );
+    }
+
+    const sorted = hashes.length > 1 ? [...hashes].sort() : hashes;
 
     return keccak256(concat(sorted));
   }

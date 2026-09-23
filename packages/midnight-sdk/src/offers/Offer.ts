@@ -167,6 +167,15 @@ export class Offer {
 
   private cachedHash: Hash | undefined;
 
+  /**
+   * Whether the group id was supplied at construction rather than derived.
+   *
+   * Ratifier-specific tree builders (`RateRatifierV1`, `PriceRatifierV1`)
+   * only substitute their own content-addressed singleton group when this is
+   * `false`; an explicit group is always committed as-is.
+   */
+  public readonly hasExplicitGroup: boolean;
+
   /** Optional maker callback. */
   public readonly callback: Address;
 
@@ -202,6 +211,7 @@ export class Offer {
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
     this.cachedGroup = offer.group;
+    this.hasExplicitGroup = offer.group !== undefined;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;

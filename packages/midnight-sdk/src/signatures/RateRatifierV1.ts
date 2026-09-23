@@ -8,6 +8,7 @@ import {
   type Hex,
   keccak256,
   zeroAddress,
+  zeroHash,
 } from "viem";
 import { rateRatifierV1Abi } from "../abis.js";
 import { RATE_RATIFIER_V1_OFFER_TYPEHASH } from "../constants.js";
@@ -24,6 +25,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import {
   EMPTY_OFFER_STRUCT,
   isEmptyOfferStruct,
@@ -262,12 +264,63 @@ export namespace RateRatifierV1 {
   }
 
   /**
+   * Zero-group member hash of one leaf, as consumed by `GroupUtils.hashMembers`.
+   *
+   * This is what the router recomputes for its `group_identity` check: the
+   * RateRatifierV1 leaf hash with `group = 0`, so the id commits to `rate`
+   * and `allowedTaker` rather than to `tick`.
+   *
+   * @param leaf - Rate-bounded offer leaf.
+   * @returns Zero-group RateRatifierV1 leaf hash.
+   * @example
+   * ```ts
+   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(RateRatifierV1.memberHash({ offer, rate: 0n }));
+   * ```
+   */
+  export function memberHash(leaf: RateRatifierV1Leaf): Hash {
+    return hashLeaf({
+      offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
+      rate: BigInt(leaf.rate),
+      allowedTaker: leaf.allowedTaker ?? zeroAddress,
+    });
+  }
+
+  /**
+   * Content-addressed consumption group id for RateRatifierV1 leaves.
+   *
+   * Mirrors `GroupUtils.hash` with the RateRatifierV1 {@link memberHash}, so
+   * it matches the router-derived group. Use it to share one group across
+   * several leaves; single leaves get this id by default in
+   * {@link buildDescriptor}.
+   *
+   * @param leaves - Leaves sharing one consumption group.
+   * @returns Content-addressed group id.
+   * @throws {InvalidOfferGroupError} when `leaves` is empty.
+   * @example
+   * ```ts
+   * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   *
+   * const group = RateRatifierV1.groupId(leaves);
+   * const grouped = leaves.map((leaf) => ({
+   *   ...leaf,
+   *   offer: Offer.from({ ...leaf.offer, group }),
+   * }));
+   * ```
+   */
+  export function groupId(leaves: Iterable<RateRatifierV1Leaf>): Hash {
+    return GroupUtils.hashMembers(Array.from(leaves, memberHash));
+  }
+
+  /**
    * Builds a RateRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. An explicit `group` is committed as-is; only an
-   * omitted `group` defaults to the offer's content-addressed singleton group
-   * id derived by `Offer.from`.
+   * highest leaf indices. An explicit `group` is committed as-is; an omitted
+   * `group` defaults to the leaf's content-addressed singleton
+   * {@link groupId}, which commits to `rate` and `allowedTaker` like the
+   * router does.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
@@ -292,14 +345,17 @@ export namespace RateRatifierV1 {
       const rate = BigInt(leaf.rate);
       if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
 
-      const offer = Offer.from(leaf.offer);
+      const allowedTaker = leaf.allowedTaker ?? zeroAddress;
+      const input = Offer.from(leaf.offer);
+      const offer = input.hasExplicitGroup
+        ? input
+        : Offer.from({
+            ...input,
+            group: groupId([{ offer: input, rate, allowedTaker }]),
+          });
       offers.push(offer);
 
-      return {
-        offer: OfferUtils.toStruct({ offer }),
-        rate,
-        allowedTaker: leaf.allowedTaker ?? zeroAddress,
-      };
+      return { offer: OfferUtils.toStruct({ offer }), rate, allowedTaker };
     });
 
     const descriptor = buildRatifierV1Descriptor({

@@ -1,6 +1,8 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
+import { InvalidOfferGroupError } from "../errors.js";
+import { OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 
@@ -38,5 +40,29 @@ describe("GroupUtils.toStructs", () => {
 
     expect(structs[0]!.group).toBe(GroupUtils.hash([offer]));
     expect(structs[0]!.group).not.toBe(staleGroup);
+  });
+});
+
+describe("GroupUtils.hashMembers", () => {
+  test("default", () => {
+    const a = baseOfferInput({ maxAssets: 0n });
+    const b = baseOfferInput({ maxAssets: 0n, maxUnits: 7n });
+
+    expect(
+      GroupUtils.hashMembers([
+        OfferUtils.groupHash(a),
+        OfferUtils.groupHash(b),
+      ]),
+    ).toBe(GroupUtils.hash([a, b]));
+    expect(
+      GroupUtils.hashMembers([
+        OfferUtils.groupHash(b),
+        OfferUtils.groupHash(a),
+      ]),
+    ).toBe(GroupUtils.hash([a, b]));
+  });
+
+  test("error: InvalidOfferGroupError", () => {
+    expect(() => GroupUtils.hashMembers([])).toThrow(InvalidOfferGroupError);
   });
 });

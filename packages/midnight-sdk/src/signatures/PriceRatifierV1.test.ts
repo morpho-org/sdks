@@ -7,6 +7,7 @@ import {
   type Hex,
   hashStruct,
   isAddressEqual,
+  keccak256,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -14,11 +15,13 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { priceRatifierV1Abi } from "../abis.js";
 import {
+  InvalidOfferGroupError,
   InvalidRatifierV1AddressError,
   InvalidTreeError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { isZeroAddress } from "./offerStructInternal.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 
@@ -174,8 +177,57 @@ describe("PriceRatifierV1.buildDescriptor", () => {
     const input = offer();
     const descriptor = PriceRatifierV1.buildDescriptor([{ offer: input }]);
 
+    expect(Object.isFrozen(input)).toBe(false);
+    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
     expect(input.hash).toBe(OfferUtils.hash(input));
-    expect(descriptor.offers[0]!.hash).toBe(input.hash);
+    expect(descriptor.offers[0]!.hash).toBe(
+      OfferUtils.hash(descriptor.offers[0]!),
+    );
+  });
+
+  test("behavior: defaults group to the price-aware singleton id", () => {
+    const leaf = { offer: offer() };
+    const [resolved] = PriceRatifierV1.buildDescriptor([leaf]).offers;
+
+    expect(resolved!.group).toBe(PriceRatifierV1.groupId([leaf]));
+    expect(resolved!.group).toBe(
+      keccak256(
+        PriceRatifierV1.hashLeaf({
+          offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
+          allowedTaker: zeroAddress,
+        }),
+      ),
+    );
+    expect(resolved!.group).not.toBe(leaf.offer.group);
+    expect(PriceRatifierV1.groupId([{ ...leaf, allowedTaker }])).not.toBe(
+      resolved!.group,
+    );
+  });
+
+  test("behavior: commits an explicit group as-is", () => {
+    const group = keccak256("0x01");
+    const [resolved] = PriceRatifierV1.buildDescriptor([
+      { offer: { ...offer(), group } },
+    ]).offers;
+
+    expect(resolved!.group).toBe(group);
+    expect(resolved!.hasExplicitGroup).toBe(true);
+  });
+
+  test("behavior: groupId is order-independent across leaves", () => {
+    const a = { offer: offer() };
+    const b = { offer: offer({ maxUnits: 7n }), allowedTaker };
+
+    expect(PriceRatifierV1.groupId([a, b])).toBe(
+      PriceRatifierV1.groupId([b, a]),
+    );
+    expect(PriceRatifierV1.groupId([a, b])).toBe(
+      GroupUtils.hashMembers([
+        PriceRatifierV1.memberHash(a),
+        PriceRatifierV1.memberHash(b),
+      ]),
+    );
+    expect(() => PriceRatifierV1.groupId([])).toThrow(InvalidOfferGroupError);
   });
 
   test("error: InvalidTreeError for a tampered descriptor root", () => {
@@ -336,16 +388,16 @@ describe("PriceRatifierV1.buildProof", () => {
 
 describe("PriceRatifierV1.ratifierData", () => {
   test("default", () => {
-    const tree = [
+    const tree = PriceRatifierV1.buildDescriptor([
       { offer: offer() },
       { offer: offer({ maxUnits: 7n }), allowedTaker },
-    ];
+    ]);
     const data = PriceRatifierV1.ratifierData({ tree, leafIndex: 1n });
 
     expect(
       isAddressEqual(
         PriceRatifierV1.verifyRatifierData({
-          offer: tree[1]!.offer,
+          offer: tree.offers[1]!,
           ratifierData: data,
           taker: allowedTaker,
         }).allowedTaker,

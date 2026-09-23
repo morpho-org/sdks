@@ -46,7 +46,10 @@ const priceLeaves = offers.map((offer) => ({
   offer,
   allowedTaker: zeroAddress,
 }));
-const rateLeaves = offers.map((offer) => ({ offer, rate: 100n }));
+const rateLeaves = offers.map((offer, index) => ({
+  offer,
+  rate: 100n + BigInt(index),
+}));
 
 const trees = () =>
   [
