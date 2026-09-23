@@ -47,6 +47,10 @@ jobs:
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         run: echo "No pending changesets; no version PR needed."
 
+      - name: Enter next prerelease mode
+        if: env.TARGET_BRANCH == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
+        run: pnpm changeset pre enter next
+
       - name: Refuse prerelease mode on main
         if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |

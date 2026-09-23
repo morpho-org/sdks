@@ -81,7 +81,7 @@ Skip the changeset when the diff is repo metadata, non-API documentation-only, f
 
 After changes land on `main` or `next`, the push workflow runs lint, build, and tests. If pending changesets exist, CI runs `pnpm run version`, pushes `changeset-release/<branch>`, and opens or updates the `chore: version packages (<branch>)` release PR. The release PR merge triggers publishing — `latest` from `main`, `next` from `next`. The publish job pushes git tags and creates one GitHub Release per published package.
 
-CI never enters Changesets prerelease mode on its own. If a maintainer opts `next` into prerelease mode with `pnpm changeset pre enter next`, run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change before merging `next` back into `main` — both `version-pr.yml` and `publish.yml` refuse to run on `main` while `pre.json` exists.
+Before merging `next` back into `main`, run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 
 ## Listing a New Chain to Support
 
