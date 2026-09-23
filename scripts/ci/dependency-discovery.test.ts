@@ -1,12 +1,18 @@
-import { describe, expect, test, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  type BumpEvent,
   branchSlug,
   buildBumpEvent,
   collectNpmDependencies,
   dispatch,
   fetchAllPages,
   isDuplicate,
+  main,
   mergeBumpEvents,
   parseActionPins,
   readMinimumReleaseAgeMinutes,
@@ -30,6 +36,18 @@ describe("readMinimumReleaseAgeMinutes", () => {
 
   test("behavior: defaults to 0 when absent", () => {
     expect(readMinimumReleaseAgeMinutes("packages:\n  - packages/*\n")).toBe(0);
+  });
+
+  test("behavior: accepts a trailing comment", () => {
+    expect(
+      readMinimumReleaseAgeMinutes("minimumReleaseAge: 4320 # 3 days"),
+    ).toBe(4320);
+  });
+
+  test("error: throws on an unparseable value", () => {
+    expect(() =>
+      readMinimumReleaseAgeMinutes("minimumReleaseAge: abc"),
+    ).toThrowError("Unparseable minimumReleaseAge in pnpm-workspace.yaml");
   });
 });
 
@@ -247,6 +265,43 @@ describe("parseActionPins", () => {
     expect(pins.get("anthropics/claude-code-action")?.version).toBe("v1");
   });
 
+  test("behavior: highest version wins regardless of file order", () => {
+    const pin = ({
+      name,
+      sha,
+      version,
+    }: {
+      name: string;
+      sha: string;
+      version: string;
+    }) => ({
+      path: `.github/workflows/${name}.yml`,
+      content: `uses: actions/setup-node@${sha} # ${version}`,
+    });
+    const sha410 = "a".repeat(40);
+    const sha420 = "b".repeat(40);
+    for (const files of [
+      [
+        pin({ name: "a", sha: sha410, version: "v4.1.0" }),
+        pin({ name: "b", sha: sha420, version: "v4.2.0" }),
+      ],
+      [
+        pin({ name: "a", sha: sha420, version: "v4.2.0" }),
+        pin({ name: "b", sha: sha410, version: "v4.1.0" }),
+      ],
+    ]) {
+      const parsed = parseActionPins(files);
+      expect(parsed.get("actions/setup-node")?.sha).toBe(sha420);
+      expect(parsed.get("actions/setup-node")?.version).toBe("v4.2.0");
+    }
+
+    const mixed = parseActionPins([
+      pin({ name: "a", sha: "c".repeat(40), version: "v1" }),
+      pin({ name: "b", sha: sha420, version: "v7.0.1" }),
+    ]);
+    expect(mixed.get("actions/setup-node")?.version).toBe("v7.0.1");
+  });
+
   test("behavior: accumulates targets across workflows", () => {
     const pin = (name: string) => ({
       path: `.github/workflows/${name}.yml`,
@@ -365,6 +420,27 @@ describe("isDuplicate", () => {
         branches: ["devin/1770000000-bump--morpho-org-blue-sdk-7.0.0"],
       }),
     ).toBe(true);
+  });
+
+  test("behavior: does not match a package name inside a longer name", () => {
+    expect(
+      isDuplicate(
+        buildBumpEvent({
+          ecosystem: "npm",
+          package: "viem",
+          from: "2.0.0",
+          to: "2.1.0",
+          publishDate: OLD,
+          targets: ["package.json"],
+        }),
+        {
+          openPrTitles: [
+            "chore(deps): bump @morpho-org/blue-sdk-viem from 2.0.0 to 2.1.0",
+          ],
+          branches: [],
+        },
+      ),
+    ).toBe(false);
   });
 
   test("behavior: ignores a branch for a different version", () => {
@@ -562,5 +638,142 @@ describe("dispatch", () => {
         }),
       }),
     ).rejects.toThrowError(/^((?!s3cret).)*$/);
+  });
+});
+
+describe("main", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function fixtureRoot(): string {
+    const dir = mkdtempSync(join(tmpdir(), "dependency-discovery-"));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, "pnpm-workspace.yaml"),
+      "minimumReleaseAge: 4320\n",
+    );
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        dependencies: { lodash: "^4.0.0", "@scope/name": "^1.0.0" },
+      }),
+    );
+    mkdirSync(join(dir, "packages", "x"), { recursive: true });
+    writeFileSync(
+      join(dir, "packages", "x", "package.json"),
+      JSON.stringify({ dependencies: {} }),
+    );
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(dir, ".github", "workflows", "a.yml"),
+      `      - uses: actions/checkout@${"d".repeat(40)} # v7.0.1\n`,
+    );
+    return dir;
+  }
+
+  const ok = (body: unknown) =>
+    Promise.resolve({
+      ok: true as const,
+      status: 200,
+      json: async () => body,
+    });
+
+  function stubFetch(calls: string[]) {
+    return async (url: string) => {
+      calls.push(url);
+      if (url === "https://registry.npmjs.org/lodash") {
+        return ok({
+          time: {
+            created: "2010-01-01T00:00:00Z",
+            modified: "2026-01-01T00:00:00Z",
+            "4.0.0": "2020-01-01T00:00:00Z",
+            "4.5.0": "2026-01-02T00:00:00Z",
+          },
+        });
+      }
+      if (url === "https://registry.npmjs.org/%40scope%2Fname") {
+        return ok({ time: { "1.0.0": "2020-01-01T00:00:00Z" } });
+      }
+      if (url.endsWith("/releases?per_page=30")) {
+        return ok([
+          {
+            tag_name: "v8.0.0",
+            published_at: "2026-01-01T00:00:00Z",
+            prerelease: false,
+          },
+        ]);
+      }
+      if (url.endsWith("/git/ref/tags/v8.0.0")) {
+        return ok({ object: { sha: "tagsha", type: "tag" } });
+      }
+      if (url.endsWith("/git/tags/tagsha")) {
+        return ok({ object: { sha: "commitsha", type: "commit" } });
+      }
+      if (url.includes("/pulls") || url.includes("/matching-refs")) {
+        return ok([]);
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    };
+  }
+
+  test("default", async () => {
+    const rootDir = fixtureRoot();
+    const calls: string[] = [];
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: stubFetch(calls),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs.map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toEqual([
+      expect.objectContaining({
+        ecosystem: "github-actions",
+        package: "actions/checkout",
+        from: "v7.0.1",
+        to: "v8.0.0",
+        sha: "commitsha",
+      }),
+      expect.objectContaining({
+        ecosystem: "npm",
+        package: "lodash",
+        from: "4.0.0",
+        to: "4.5.0",
+      }),
+    ]);
+    expect(calls).toContain("https://registry.npmjs.org/%40scope%2Fname");
+  });
+
+  test("behavior: MAX_DISPATCH_PER_RUN caps to the oldest publishDate", async () => {
+    const rootDir = fixtureRoot();
+    const calls: string[] = [];
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "1" },
+      fetch: stubFetch(calls),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.package).toBe("actions/checkout");
+    expect(
+      logs.some((line) => line.includes("MAX_DISPATCH_PER_RUN reached")),
+    ).toBe(true);
   });
 });

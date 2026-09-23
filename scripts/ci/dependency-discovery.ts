@@ -71,8 +71,18 @@ const SKIPPED_SPEC =
  * Defaults to 0 (no age gate) when the key is absent.
  */
 export function readMinimumReleaseAgeMinutes(workspaceYaml: string): number {
-  const match = /^minimumReleaseAge:\s*(\d+)\s*$/m.exec(workspaceYaml);
-  return match?.[1] != null ? Number.parseInt(match[1], 10) : 0;
+  const match = /^minimumReleaseAge:\s*(.*)$/m.exec(workspaceYaml);
+  const raw = match?.[1];
+  if (raw == null) return 0;
+  const value = raw
+    .replace(/\s*#.*$/, "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  if (!/^\d+$/.test(value) || Number.parseInt(value, 10) <= 0) {
+    throw new Error("Unparseable minimumReleaseAge in pnpm-workspace.yaml");
+  }
+
+  return Number.parseInt(value, 10);
 }
 
 /**
@@ -171,7 +181,7 @@ export function selectNpmTarget(
   let best: string | null = null;
   for (const [version, time] of Object.entries(versions)) {
     const parsed = valid(version);
-    if (parsed == null || version.includes("-")) continue;
+    if (parsed == null || prerelease(version) != null) continue;
     if (!gt(version, current.version)) continue;
     const published = Date.parse(time);
     if (Number.isNaN(published) || published > cutoff) continue;
@@ -315,7 +325,7 @@ export function isDuplicate(
   },
 ): boolean {
   const titlePattern = new RegExp(
-    `bump.*${escapeRegExp(event.package)}.*${escapeRegExp(event.to)}`,
+    `bump.*(?<![\\w@/.-])${escapeRegExp(event.package)}(?![\\w/.-]).*${escapeRegExp(event.to)}`,
     "i",
   );
   if (openPrTitles.some((title) => titlePattern.test(title))) return true;
@@ -505,7 +515,8 @@ function readWorkspaceFiles(rootDir: string): {
         path,
         content: readFileSync(join(rootDir, path), "utf8"),
       });
-    } catch {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       // Directories without a package.json are not workspace packages.
     }
   }
@@ -520,6 +531,7 @@ function readWorkspaceFiles(rootDir: string): {
   return { workspaceYaml, packageJsonFiles, workflowFiles };
 }
 
+/** Options for {@link main}: dependency injection points plus CLI behaviour flags. */
 export interface MainOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly fetch?: FetchLike;
@@ -536,7 +548,7 @@ export interface MainOptions {
  */
 export async function main(options: MainOptions = {}): Promise<void> {
   const env = options.env ?? process.env;
-  const fetchImpl = options.fetch ?? (fetch as unknown as FetchLike);
+  const fetchImpl: FetchLike = options.fetch ?? fetch;
   const now = options.now ?? new Date();
   const log = options.log ?? console.log;
   const dryRun = options.dryRun ?? false;
@@ -550,6 +562,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ? ""
     : readRequiredEnv(env, "DEVIN_DEPENDENCY_WEBHOOK_SECRET");
   const maxDispatch = Number.parseInt(env.MAX_DISPATCH_PER_RUN ?? "10", 10);
+  if (Number.isNaN(maxDispatch) || maxDispatch < 0) {
+    throw new Error("MAX_DISPATCH_PER_RUN must be a non-negative integer.");
+  }
 
   const { workspaceYaml, packageJsonFiles, workflowFiles } =
     readWorkspaceFiles(rootDir);
