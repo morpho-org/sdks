@@ -70,6 +70,7 @@ export async function fetchPosition(
  *
  * Reads `preLiquidationParams()` and wraps the result in `PreLiquidationParams`.
  *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
  * @param preLiquidation - Address of the pre-liquidation contract.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
@@ -169,6 +170,7 @@ export async function fetchAccrualPosition(
  * Reads the raw user position, market state, pre-liquidation params, and pre-liquidation oracle price
  * when available.
  *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
  * @param user - Address whose position is fetched.
  * @param marketId - Market id of the position.
  * @param preLiquidation - Address of the pre-liquidation contract.

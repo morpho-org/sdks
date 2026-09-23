@@ -51,7 +51,7 @@ For nested options bags, document every leaf field with dot notation. Do **not**
  * @param params.vault.asset - The vault's underlying ERC-20 asset.
  * @param params.args.amount - Asset amount to deposit, in the asset's smallest unit.
  * @param params.args.maxSharePrice - Maximum accepted vault share price, scaled by RAY.
- * @param params.args.recipient - Address that receives the minted vault shares.
+ * @param params.args.recipient - Unsupported; shares are always minted to the transaction sender.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  */
 ```
@@ -219,8 +219,7 @@ What's wrong:
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
  *   {@link InputExceedsMaxError}, so either class catches it.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
- * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit or a
- *   Permit2 AllowanceTransfer signature is supplied.
+ * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit.
  * @throws {InputExceedsMaxError} when funding, `maxSharePrice`, or `deadline` exceeds uint256.
  * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
  * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.

@@ -1,5 +1,17 @@
 # @morpho-org/evm-simulation
 
+## 4.2.0-next.2
+
+### Patch Changes
+
+- [#1128](https://github.com/morpho-org/sdks/pull/1128) [`1d32278`](https://github.com/morpho-org/sdks/commit/1d322787b8ca26d7012835e69e0730ec78e7a97d) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Guard `MidnightBundlesV1` with the simulation retention check so bundles that leave token value on the transient router fail closed with `BlacklistViolationError`.
+
+- [#1123](https://github.com/morpho-org/sdks/pull/1123) [`35f6ea6`](https://github.com/morpho-org/sdks/commit/35f6ea603c7aecff3d4d962c098bddaa80cb1985) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `parseTransfers` now lowercases log `topics` and `data` before signature dispatch and WETH9 pair matching, so mixed-case hex from a backend can no longer drop a transfer from the parsed output or the retention check.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
 ## 4.2.0-next.1
 
 ### Minor Changes
@@ -72,6 +84,21 @@
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
 
 - [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
+
+## 4.1.10
+
+### Patch Changes
+
+- [#1102](https://github.com/morpho-org/sdks/pull/1102) [`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the Robinhood Chain (chain 4663) Midnight deployments from morpho-org/deployments
+  address-book.json: `midnight`, `midnightBundles`, `midnightBlueBuyCallbackFactory`, `midnightMempool`,
+  `ecrecoverRatifier`, `ecrecoverAuthorizer`, `setterRatifier`, each with its deployment block in the
+  registry. `getChainAddress(ChainId.RobinhoodMainnet, ...)` now resolves these labels, so the Midnight
+  SDK works on Robinhood Chain. Addresses are sourced byte-for-byte from the canonical deployment
+  registry; deployment blocks were derived from the deployer contract creation receipts on Robinhood
+  Chain.
+- Updated dependencies [[`d98eca5`](https://github.com/morpho-org/sdks/commit/d98eca535fdbf389b2a77e2d42f1dd10cb78139e)]:
+  - @morpho-org/morpho-ts@2.15.0
+  - @morpho-org/blue-sdk@6.11.0
 
 ## 4.1.9
 

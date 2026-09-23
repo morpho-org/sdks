@@ -25,10 +25,10 @@ GeneralAdapter1.
 > application needs deposits or withdrawals on an affected chain until VaultBundlesV1 is deployed
 > and registered in the SDK.
 
-As checked on 2026-09-07, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
-and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 13 chains: Ethereum,
-Arbitrum, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain, and
-World Chain. Bundler3 availability alone does not imply support for v6 vault deposits or withdrawals.
+As checked on 2026-09-23, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
+and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 14 chains: Ethereum,
+Arbitrum, Arc, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain,
+and World Chain. Bundler3 availability alone does not imply support for v6 vault deposits or withdrawals.
 
 Update deposit inputs as follows:
 
@@ -41,8 +41,12 @@ Update deposit inputs as follows:
 
 For ERC-20 funding, approvals and ERC-2612 permits now name VaultBundlesV1 as spender. Permit2
 keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTransfer payload names
-VaultBundlesV1. Resolve requirements and build from the same prepared handle so its captured nonce,
-deadline, asset, owner, amount, and spender remain consistent:
+VaultBundlesV1. `buildTx()` validates the supplied signature's deadline, asset, owner, amount,
+and spender against the operation's values; the signed nonce is checked against the nonce carried
+on the requirement's action when present and otherwise verified onchain by the spender (a
+consumed-nonce ERC-2612 permit is skipped and the live allowance applies; a consumed Permit2
+SignatureTransfer nonce reverts onchain). Finalize on any handle built
+from identical params (or one resumed from serialized state):
 
 ```ts
 const deposit = vault.deposit({
@@ -89,7 +93,7 @@ Version 6 also preserves the Vault V1 and Vault V2 method and builder names whil
 | Stable method | v5 input/workflow | v6 input/workflow |
 | --- | --- | --- |
 | `deposit` | Additive `amount` and `nativeAmount`; Bundler3/GeneralAdapter1 requirements. | Supply exactly one of `amount` or `nativeAmount`; optionally set `deadline`, `referralFeePct`, and `referralFeeRecipient`. Token requirements authorize VaultBundlesV1 and may return Permit2 SignatureTransfer. |
-| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Pass required `vaultData` (from `await vault.getData()`); optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
 | `redeem` | Direct vault redemption with no share requirement. | Exact-shares VaultBundlesV1 exit. Optionally set `deadline` and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
 | `migrateToV2` (Vault V1 only) | Share-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Keep the existing `shares` mode or supply the new `assets` alternative; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
 
@@ -152,7 +156,7 @@ stable, but now encode one direct VaultBundlesV1 call instead of a direct vault 
 
 | Flow | v5 input | v6 input |
 | --- | --- | --- |
-| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
+| `withdraw` | `amount`, `userAddress` | Keep `amount` and `userAddress`; add required `vaultData` (from `await vault.getData()`); remove the implicit `recipient` / `onBehalf` (VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`); add optional `slippageTolerance`, `deadline`, and referral-fee fields. |
 
 `withdraw` now returns `{ buildTx, getRequirements }` instead of `{ buildTx }`. VaultBundlesV1 spends
 the caller's vault shares, so the withdrawal needs a vault-share allowance for VaultBundlesV1 — a
@@ -160,13 +164,15 @@ prerequisite v5 withdrawals did not have. Await `getRequirements()` and satisfy 
 `buildTx()`, or the withdrawal reverts:
 
 - Without signature support, it returns one ERC-20 approval transaction to send first.
-- With `supportSignature: true`, it returns one signable ERC-2612 shares permit; pass the signature
-  to `buildTx([sharesPermit])` and it is folded into the VaultBundlesV1 call.
+- With `supportSignature: true`, it returns one signable ERC-2612 shares permit when the current
+  allowance is below the cap; pass the signature to `buildTx([sharesPermit])` and it is folded into
+  the VaultBundlesV1 call. A larger leftover allowance is always reset with an ERC-20 approval
+  transaction instead, because VaultBundlesV1 skips a permit whose nonce was already consumed.
 
 The allowance is the only cap on the burn, since asset-mode calldata carries no maximum-shares
-argument. `getRequirements()` therefore derives an exact cap from the vault snapshot, the deadline,
-and `slippageTolerance` (default 0.03%), and returns an approval or permit for exactly that amount
-whenever the current allowance differs — including when a larger leftover approval already exists.
+argument. The exact cap is derived at handle creation from the supplied `vaultData`, the deadline,
+and `slippageTolerance` (default 0.03%); `getRequirements()` re-reads the live allowance against
+that fixed cap and returns an approval or permit for exactly that amount whenever it differs.
 
 `getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
 its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
@@ -516,7 +522,8 @@ can inspect the bundle's transient initiator, validate them by simulating the fi
 after satisfying requirements rather than by pre-reading the gate.
 
 ```ts
-const withdrawal = vault.withdraw({ amount, userAddress });
+const vaultData = await vault.getData();
+const withdrawal = vault.withdraw({ amount, userAddress, vaultData });
 const signatures = [];
 for (const requirement of await withdrawal.getRequirements()) {
   if ("sign" in requirement) {

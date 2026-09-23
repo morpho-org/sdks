@@ -10,7 +10,9 @@ export {
   fetchMarket,
   fetchMarketParams,
   fetchPosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationPosition,
   fetchToken,
   fetchUser,

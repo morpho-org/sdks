@@ -13,12 +13,14 @@ export {
   UnknownVaultConfigError as UnknownBlueVaultConfigError,
   UnsupportedChainIdError,
   UnsupportedMarketIrmError as UnsupportedBlueMarketIrmError,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   UnsupportedPreLiquidationParamsError as UnsupportedBluePreLiquidationParamsError,
   UnsupportedVaultV2AdapterError as UnsupportedBlueVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
 export {
   getUnsupportedVaultV2Adapter as getBlueUnsupportedVaultV2Adapter,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
@@ -28,6 +30,7 @@ export {
   ChainIdMismatchError as MidnightChainIdMismatchError,
   InvalidEcrecoverSignatureVError as InvalidMidnightEcrecoverSignatureVError,
   InvalidMarketParameterError as InvalidMidnightMarketParameterError,
+  InvalidMidnightApiQuoteTargetError,
   InvalidMidnightApiResponseError,
   InvalidOfferGroupError as InvalidMidnightOfferGroupError,
   InvalidOfferParameterError as InvalidMidnightOfferParameterError,

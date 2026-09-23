@@ -207,6 +207,31 @@ describe("vaultV2InKindRedeem", () => {
     ).toThrow(BundlesPermitMismatchError);
   });
 
+  test("error: BundlesPermitMismatchError on nonce disagreement", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline: 1_900_000_000n,
+          requirementSignature: {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: {
+                ...permit.action.args,
+                nonce: permit.args.nonce + 1n,
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(BundlesPermitMismatchError);
+  });
+
   test("error: BundlesPermitMismatchError on amount disagreement", () => {
     expect(() =>
       vaultV2InKindRedeem({

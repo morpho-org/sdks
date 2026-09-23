@@ -472,6 +472,7 @@ describe("DepositVaultV1", () => {
         const withdraw = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: amount,
+          vaultData: await vaultV1.getData(),
         });
 
         for (const requirement of await withdraw.getRequirements()) {

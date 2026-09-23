@@ -44,11 +44,14 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   path had no slippage bound at all; the derived one rejects a share-price drop, a penalty increase,
   and liquidity shifting from the penalty-free leg to the penalised leg. It does not cover the
   referral fee, which the contract deducts after the check.
-- The derived bound's denominator is the share burn accrued to **`now`** (execution time). The raw
-  `lastUpdate` snapshot would underestimate the burn a stale fee-bearing vault realizes on its first
-  withdrawal and lift the floor above the faithful price, tripping `SlippageExceeded`; accruing to
-  `now` — not the caller-chosen `deadline` — tracks execution without letting a long deadline weaken
-  the guard. `slippageTolerance` absorbs the residual drift.
+- The derived bound's denominator is the larger of the raw `lastUpdate` snapshot burn and the burn
+  accrued to **`now`** (execution time) net of the fee shares minted to the user at `now`
+  (`max(sharesBurntRaw, sharesBurntNow - feeSharesNow)`), so the floor never exceeds either the
+  un-projected or the projected share price. The raw snapshot alone underestimates the burn a stale
+  fee-bearing vault realizes on its first withdrawal, while the `now` projection alone can
+  overestimate the realized price over a long window — hence the max; accruing to `now`, not the
+  caller-chosen `deadline`, tracks execution without letting a long deadline weaken the guard.
+  `slippageTolerance` absorbs the residual drift.
 - A supplied `minSharePriceE27` override must be positive: the contract reads `0` as "no bound", so
   an override can no longer opt out of the slippage check. A non-positive override throws
   `NonPositiveInputError`.
@@ -92,12 +95,15 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   `liquidityData` blob that does not decode as `MarketParams` — the case the contract's `abi.decode`
   reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
   liquidity adapter that is not the vault's sole adapter.
-- The new share allowance is bounded to the largest burn the on-chain price check can accept —
-  `mulDivUp(exitAssets, RAY, minSharePriceE27)`, since `withdrawn <= exitAssets` and
-  `withdrawn / burnt >= minSharePriceE27`. Deriving it from the price floor (not the snapshot plan)
-  keeps a within-tolerance price drop from reverting on allowance and silently nullifying the
-  advertised `slippageTolerance`. This is a bound on a **newly required** approval, not a replacement
-  for one: the multicall path needed no approval at all, because the vault burned `msg.sender`'s own
-  shares.
+- The new share allowance is
+  `max(mulDivUp(exitAssets, RAY, max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
+  minSharePriceE27 - 1), 1)), mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)` plus the fee shares
+  projected through `deadline`, saturated at `maxUint256`. It is a spend cap, not the price
+  protection: it covers a burn at least one `slippageTolerance` step below the floor whenever the
+  floor exceeds one RAY unit and, in any case, at least one share above the burn at the floor, so a
+  price within that headroom below the floor reverts on the bundle's own `SlippageExceeded` check
+  rather than on the allowance; a deeper drop can still surface as an ERC-20 allowance underflow. This is a bound on a **newly required**
+  approval, not a replacement for one: the multicall path needed no approval at all, because the
+  vault burned `msg.sender`'s own shares.
 
 See `docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full decision record.

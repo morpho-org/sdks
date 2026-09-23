@@ -1,11 +1,8 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "6.0.0-next.3",
+  "version": "6.0.0-next.4",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb <https://x.com/FoulkPlb>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",

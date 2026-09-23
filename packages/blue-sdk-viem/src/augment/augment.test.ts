@@ -110,4 +110,13 @@ describe("blue-sdk augmentations", () => {
       expect(get()).toBe(expected);
     },
   );
+
+  test("behavior: augment subpaths resolve through the package exports map", async () => {
+    const mod = await import("@morpho-org/blue-sdk-viem/augment/Market");
+    expect(mod.Market.fetch).toBe(fetchMarket);
+
+    await expect(
+      import("@morpho-org/blue-sdk-viem/augment"),
+    ).resolves.toBeDefined();
+  });
 });

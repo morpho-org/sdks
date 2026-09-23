@@ -940,6 +940,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        vaultData,
         slippageTolerance: undefined,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
@@ -969,6 +970,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        vaultData,
         slippageTolerance: 5_000_000_000_000_000n,
       });
     });
@@ -1656,6 +1658,50 @@ describe.sequential("MorphoProtocolEvm", () => {
       ]);
       expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith(
         expect.objectContaining({ deadline: SIGNATURE_DEADLINE }),
+      );
+    });
+
+    test("snapshots the requirement signature before resolving chain state", async () => {
+      const observedChain = Promise.withResolvers<number>();
+      mockGetChainId.mockImplementationOnce(() => observedChain.promise);
+      const requirementSignature = {
+        args: {
+          owner: ADDRESS,
+          authorized: COLLATERAL,
+          isAuthorized: true,
+          nonce: 1n,
+          deadline: 2n,
+          signature: "0x01",
+        },
+        action: {
+          type: "authorization",
+          args: { authorized: COLLATERAL, isAuthorized: true, deadline: 2n },
+        },
+      } satisfies AuthorizationRequirementSignature;
+
+      const pending = protocol.withdrawCollateral({
+        token: COLLATERAL,
+        amount: 100_000n,
+        requirementSignature,
+      });
+      requirementSignature.args.deadline = 3n;
+      requirementSignature.action.args.deadline = 3n;
+      observedChain.resolve(1);
+      await pending;
+
+      const forwardedSignature =
+        withdrawCollateralAction.buildTx.mock.calls[0]?.[0]?.[0];
+      expect(forwardedSignature).not.toBe(requirementSignature);
+      expect(forwardedSignature).toEqual(
+        expect.objectContaining({
+          args: expect.objectContaining({ deadline: 2n }),
+          action: expect.objectContaining({
+            args: expect.objectContaining({ deadline: 2n }),
+          }),
+        }),
+      );
+      expect(marketEntity.withdrawCollateral).toHaveBeenCalledWith(
+        expect.objectContaining({ deadline: 2n }),
       );
     });
   });

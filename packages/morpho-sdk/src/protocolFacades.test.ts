@@ -14,6 +14,7 @@ import {
   DivisionByZeroError as RawBlueDivisionByZeroError,
   InvalidBitLengthError as RawBlueInvalidBitLengthError,
   InvalidMarketParamsError as RawBlueInvalidMarketParamsError,
+  InvalidNumberError as RawBlueInvalidNumberError,
   InvalidPermitDomainChainIdError as RawBlueInvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
@@ -61,6 +62,7 @@ import {
   InvalidBitLengthError,
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isBlueUnknownOfFactoryError,
@@ -132,6 +134,7 @@ describe("protocol facades", () => {
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
     [DivisionByZeroError, RawBlueDivisionByZeroError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
+    [InvalidNumberError, RawBlueInvalidNumberError],
     [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],
     [
       InvalidPermitDomainVerifyingContractError,

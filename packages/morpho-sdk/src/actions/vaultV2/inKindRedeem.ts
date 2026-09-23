@@ -53,7 +53,8 @@ export interface VaultV2InKindRedeemParams {
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
  * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind, asset, owner,
- *   spender, or signature encoding, or when its signed and action amounts or deadlines disagree.
+ *   spender, or signature encoding, or when its signed and action amounts, deadlines, or a supplied
+ *   action nonce disagree.
  * @example
  * ```ts
  * import { vaultV2InKindRedeem } from "@morpho-org/morpho-sdk";

@@ -81,9 +81,23 @@ describe("getVaultBundlesSharesRequirements", () => {
     });
   });
 
-  test("behavior: requests an exact permit over an oversized allowance", async () => {
+  test("behavior: resets an oversized allowance onchain even with signature support", async () => {
     const handle = createMockClient(mainnet);
-    mockAllowance(handle, 2n ** 256n - 1n);
+    // A lowering permit could be skipped once its nonce is consumed, leaving the stale cap live.
+    mockAllowance(handle, requiredShareAllowance + 1n);
+
+    const requirements = await resolve(handle, true);
+
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender, amount: requiredShareAllowance },
+    });
+  });
+
+  test("behavior: requests an exact permit when the allowance is below the cap", async () => {
+    const handle = createMockClient(mainnet);
+    mockAllowance(handle, requiredShareAllowance - 1n);
     mockRead(handle, {
       address: vaultData.address,
       abi: erc2612Abi,

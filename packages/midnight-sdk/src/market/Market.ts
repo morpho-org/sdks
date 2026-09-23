@@ -284,8 +284,8 @@ export class MarketParams {
       seenCollateralTokens.add(token);
     }
 
-    this.collateralParams = collateralParams.sort((a, b) =>
-      a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1,
+    this.collateralParams = collateralParams.sort(
+      MarketUtils.compareCollateralTokens,
     );
     this.maturity = BigInt(params.maturity);
     this.rcfThreshold = BigInt(params.rcfThreshold);

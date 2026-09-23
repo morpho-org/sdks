@@ -7,9 +7,8 @@ Generalize the fixed-bundles token requirement surface shared by BlueBundlesV1 a
 including the distinct Permit2 SignatureTransfer discriminator, explicit unordered nonces, canonical
 Permit2 approvals, referral-fee math, vault bounds, and registered-spender validation.
 
-Reject out-of-range uint256 pull amounts in the standalone requirement resolver. Share the
-canonical `BundleSharesPermit` tuple through the `BundlesSharesPermit` and
-`VaultExitBundlesV1PermitStruct` compatibility aliases.
+Reject out-of-range uint256 pull amounts in the standalone requirement resolver. Expose the
+canonical `BundleSharesPermit` tuple as the single shares-permit shape (no compatibility aliases).
 
 Update the WDK's public token requirement signatures to `BundlesTokenRequirementSignature` from
 the new morpho-sdk major.

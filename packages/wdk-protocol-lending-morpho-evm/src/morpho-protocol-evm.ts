@@ -760,20 +760,11 @@ function normalizeDepositAmounts({
   throw new NonPositiveInputError("amount or nativeAmount", 0n);
 }
 
-function normalizeCollateralSupplyOptions(
-  options: MorphoCollateralSupplyOptions,
-): MorphoCollateralSupplyOptions {
-  return {
-    ...options,
-    requirementSignature: snapshotRequirementSignature(
-      options.requirementSignature,
-    ),
-  } as MorphoCollateralSupplyOptions;
-}
+function snapshotRequirementSignatureOptions<
+  TOptions extends { readonly requirementSignature?: RequirementSignature },
+>(options: TOptions): TOptions {
+  if (options.requirementSignature === undefined) return { ...options };
 
-function normalizeWithdrawCollateralOptions(
-  options: MorphoWithdrawCollateralOptions,
-): MorphoWithdrawCollateralOptions {
   return {
     ...options,
     requirementSignature: snapshotRequirementSignature(
@@ -801,17 +792,6 @@ function normalizeBorrowOptions(
           : { ...reallocation.from },
       to: { ...reallocation.to },
     })),
-  };
-}
-
-function normalizeRepayOptions(
-  options: MorphoRepayOptions,
-): MorphoRepayOptions {
-  return {
-    ...options,
-    requirementSignature: snapshotRequirementSignature(
-      options.requirementSignature,
-    ),
   };
 }
 
@@ -1328,6 +1308,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return vault.entity.withdraw({
       amount: normalizedAmount,
       userAddress,
+      vaultData: accrualVault,
       slippageTolerance: this._options.slippageTolerance,
     });
   }
@@ -1681,7 +1662,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<RepayResult> {
     this._assertWritable("repay(options)");
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const amount =
       operationOptions.amount === "max"
@@ -1757,7 +1738,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoRepayOptions,
     requirementOptions?: RequirementOptions,
   ) {
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
@@ -1819,7 +1800,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoRepayOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<RepayResult, "hash">> {
-    const operationOptions = normalizeRepayOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getRepayTransaction(context, operationOptions);
@@ -1928,7 +1909,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     if (options.amount !== undefined && options.nativeAmount !== undefined) {
       throw new MixedBlueCollateralFundingError();
     }
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const depositAmounts = normalizeDepositAmounts(operationOptions);
     const context = await this._getMarketContext();
@@ -2002,7 +1983,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoCollateralSupplyOptions,
     requirementOptions?: RequirementOptions,
   ) {
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationRequirementOptions =
       requirementOptions === undefined ? undefined : { ...requirementOptions };
     const context = await this._getMarketContext();
@@ -2057,7 +2038,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoCollateralSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const operationOptions = normalizeCollateralSupplyOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getSupplyCollateralTransaction(
@@ -2164,7 +2145,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdrawCollateral(options)");
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getWithdrawCollateralTransaction(
@@ -2222,7 +2203,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   async getWithdrawCollateralRequirements(
     options: MorphoWithdrawCollateralOptions,
   ) {
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const context = await this._getMarketContext();
     const action = await this._getWithdrawCollateralAction(
       context,
@@ -2273,7 +2254,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoWithdrawCollateralOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<WithdrawResult, "hash">> {
-    const operationOptions = normalizeWithdrawCollateralOptions(options);
+    const operationOptions = snapshotRequirementSignatureOptions(options);
     const operationConfig = normalizeTransactionConfig(config);
     const context = await this._getMarketContext();
     const tx = await this._getWithdrawCollateralTransaction(

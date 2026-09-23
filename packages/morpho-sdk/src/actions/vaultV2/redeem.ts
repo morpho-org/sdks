@@ -17,24 +17,54 @@ import {
 
 /** Parameters for {@link vaultV2Redeem}. */
 export interface VaultV2RedeemParams {
-  readonly vault: { readonly chainId: number; readonly address: Address };
+  readonly vault: {
+    /** Chain containing the vault and its registered VaultBundlesV1 contract. */
+    readonly chainId: number;
+    /** Vault V2 whose shares are burned for the redemption. */
+    readonly address: Address;
+  };
   readonly args: {
+    /** Vault shares to redeem, in share base units. */
     readonly shares: bigint;
+    /** Share owner and transaction sender; receives the net redeemed assets. */
     readonly userAddress: Address;
+    /** Unsupported; net assets are always paid to the transaction sender. */
     readonly recipient?: never;
+    /** Unsupported; VaultBundlesV1 always burns the transaction sender's shares. */
     readonly onBehalf?: never;
+    /** Optional ERC-2612 vault-share permit for the redeemed shares. */
     readonly requirementSignature?: Erc2612RequirementSignature;
+    /** Optional WAD-scaled fee in [0, 1e18), defaulting to zero. */
     readonly referralFeePct?: bigint;
+    /** Optional fee recipient; a nonzero address is required when `referralFeePct > 0n`. */
     readonly referralFeeRecipient?: Address;
+    /** Positive uint256 Unix timestamp in seconds after which execution reverts. */
     readonly deadline: bigint;
   };
+  /** Optional analytics metadata appended to the transaction calldata. */
   readonly metadata?: Metadata;
 }
 
 /**
  * Encodes an exact-shares Vault V2 redemption through VaultBundlesV1.
  *
- * @param params - Vault, shares, share permit, fee, and deadline values.
+ * @param params.vault.chainId - Chain containing the vault and its registered VaultBundlesV1 contract.
+ * @param params.vault.address - Vault V2 whose shares are burned for the redemption.
+ * @param params.args.shares - Positive vault shares to redeem, in share base units.
+ * @param params.args.userAddress - Share owner and transaction sender; receives the net redeemed assets.
+ * @param params.args.recipient - Unsupported; net assets are always paid to the transaction sender.
+ * @param params.args.onBehalf - Unsupported; VaultBundlesV1 always burns the transaction sender's shares.
+ * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
+ *   and the registered VaultBundlesV1 spender. Omit when the share allowance is already set.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ *   The fee is rounded down and deducted from the gross redeemed assets.
+ * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
+ *   when `referralFeePct > 0n`.
+ * @param params.args.deadline - Required positive uint256 Unix timestamp in seconds after which
+ *   execution reverts. This pure builder does not check the current time.
+ * @param params.metadata - Optional analytics metadata appended to the transaction calldata.
+ * @param params.metadata.origin - Hex origin identifier of at most four bytes, with an optional `0x` prefix.
+ * @param params.metadata.timestamp - Optional flag to append the current timestamp; defaults to false.
  * @returns A deep-frozen VaultBundlesV1 redemption transaction.
  * @throws {NonPositiveInputError} when `shares` or `deadline` is not positive.
  * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.

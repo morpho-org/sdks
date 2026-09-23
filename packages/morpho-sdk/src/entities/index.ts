@@ -12,7 +12,9 @@ export type {
   IMarket as IBlueMarket,
   IMarketParams as IBlueMarketParams,
   IPosition as IBluePosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   IPreLiquidationParams as IBluePreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   IPreLiquidationPosition as IBluePreLiquidationPosition,
   IToken,
   IVault,
@@ -47,7 +49,9 @@ export {
   Market as BlueMarket,
   MarketParams as BlueMarketParams,
   Position as BluePosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   PreLiquidationParams as BluePreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   PreLiquidationPosition as BluePreLiquidationPosition,
   Token,
   User as BlueUser,
