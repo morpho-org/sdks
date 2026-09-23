@@ -13,7 +13,7 @@
  * `--dry-run` prints the events as JSON lines instead of POSTing them.
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 import {
   coerce,
@@ -609,15 +609,18 @@ function readWorkspaceFiles(rootDir: string): {
       content: readFileSync(join(rootDir, "package.json"), "utf8"),
     },
   ];
-  for (const dir of readdirSync(join(rootDir, "packages"), {
-    withFileTypes: true,
-  })) {
-    if (!dir.isDirectory()) continue;
+  const packagesDir = resolve(rootDir, "packages");
+  for (const dir of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!dir.isDirectory() || !/^[\w.-]+$/.test(dir.name)) continue;
+    // Resolve inside packagesDir and verify containment before reading — the name comes from
+    // readdir output, so path traversal must be impossible.
+    const manifestPath = resolve(packagesDir, dir.name, "package.json");
+    if (!manifestPath.startsWith(packagesDir + sep)) continue;
     const path = join("packages", dir.name, "package.json");
     try {
       packageJsonFiles.push({
         path,
-        content: readFileSync(join(rootDir, path), "utf8"),
+        content: readFileSync(manifestPath, "utf8"),
       });
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
