@@ -68,7 +68,9 @@ describe("GroupUtils.hashMembers", () => {
       OfferUtils.groupHash(baseOfferInput({ maxAssets: 0n })),
       OfferUtils.groupHash(baseOfferInput({ maxAssets: 0n, maxUnits: 7n })),
     ];
-    const upper = hashes.map((h) => `0x${h.slice(2).toUpperCase()}` as Hash);
+    const upper = hashes.map(
+      (h) => h.toUpperCase().replace("0X", "0x") as Hash,
+    );
 
     expect(GroupUtils.hashMembers(upper)).toBe(GroupUtils.hashMembers(hashes));
     expect(GroupUtils.hashMembers([...upper].reverse())).toBe(

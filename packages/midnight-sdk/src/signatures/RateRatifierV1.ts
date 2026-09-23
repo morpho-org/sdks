@@ -293,7 +293,34 @@ export namespace RateRatifierV1 {
    * @throws {InvalidRateRatifierV1RateError} when `leaf.rate` is negative.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
    *
    * console.log(RateRatifierV1.memberHash({ offer, rate: 0n }));
    * ```
@@ -324,6 +351,37 @@ export namespace RateRatifierV1 {
    * @example
    * ```ts
    * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const leaves = [
+   *   { offer, rate: 50_000_000_000_000_000n },
+   *   { offer: Offer.from({ ...offer, buy: false }), rate: 60_000_000_000_000_000n },
+   * ];
    *
    * const group = RateRatifierV1.groupId(leaves);
    * const grouped = leaves.map((leaf) => ({

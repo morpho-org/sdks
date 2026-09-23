@@ -251,7 +251,34 @@ export namespace PriceRatifierV1 {
    * @returns Zero-group PriceRatifierV1 leaf hash.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { Offer, PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
    *
    * console.log(PriceRatifierV1.memberHash({ offer }));
    * ```
@@ -277,6 +304,34 @@ export namespace PriceRatifierV1 {
    * @example
    * ```ts
    * import { Offer, PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const leaves = [{ offer }, { offer: Offer.from({ ...offer, buy: false }) }];
    *
    * const group = PriceRatifierV1.groupId(leaves);
    * const grouped = leaves.map((leaf) => ({

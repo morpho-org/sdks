@@ -257,6 +257,7 @@ describe("RateRatifierV1.buildDescriptor", () => {
 
   test("behavior: defaults group to the rate-aware singleton id", () => {
     const l = leaf({}, 5n);
+    const protocolGroup = l.offer.group;
     const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
 
     expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
@@ -269,7 +270,7 @@ describe("RateRatifierV1.buildDescriptor", () => {
         }),
       ),
     );
-    expect(offer!.group).not.toBe(l.offer.group);
+    expect(offer!.group).not.toBe(protocolGroup);
     expect(RateRatifierV1.groupId([{ ...l, rate: 6n }])).not.toBe(offer!.group);
     expect(RateRatifierV1.groupId([{ ...l, allowedTaker }])).not.toBe(
       offer!.group,

@@ -187,6 +187,7 @@ describe("PriceRatifierV1.buildDescriptor", () => {
 
   test("behavior: defaults group to the price-aware singleton id", () => {
     const leaf = { offer: offer() };
+    const protocolGroup = leaf.offer.group;
     const [resolved] = PriceRatifierV1.buildDescriptor([leaf]).offers;
 
     expect(resolved!.group).toBe(PriceRatifierV1.groupId([leaf]));
@@ -198,7 +199,7 @@ describe("PriceRatifierV1.buildDescriptor", () => {
         }),
       ),
     );
-    expect(resolved!.group).not.toBe(leaf.offer.group);
+    expect(resolved!.group).not.toBe(protocolGroup);
     expect(PriceRatifierV1.groupId([{ ...leaf, allowedTaker }])).not.toBe(
       resolved!.group,
     );
