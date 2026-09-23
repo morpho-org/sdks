@@ -585,8 +585,8 @@ export const selectBundlesTokenRequirementSignature = (
   ) {
     throw new BundlesPermitMismatchError({
       field: "nonce",
-      expected: String(action.args.nonce),
-      actual: String(selectedSignature.args.nonce),
+      expected: String(selectedSignature.args.nonce),
+      actual: String(action.args.nonce),
     });
   }
   return selectedSignature;

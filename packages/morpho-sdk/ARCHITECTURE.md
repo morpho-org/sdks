@@ -299,8 +299,10 @@ For ERC-20 deposits, `getBundlesTokenRequirements` resolves the selected route:
 
 Concurrent `getRequirements()` calls share one in-flight read and its first caller's options.
 After that read settles, the next call refreshes allowance and nonce state using its own options.
-`buildTx()` validates signatures against the latest completed resolution; collect and submit the
-signature from that resolution. The handle retains its original deadline and share-price bound.
+`buildTx()` validates signatures against the operation's immutable spender, amount, and deadline
+plus the data carried on the signature itself, so a requirement prepared on one handle can be
+finalized on any handle built from identical params — or on a handle resumed from serialized
+state. The handle retains its original deadline and share-price bound.
 
 Withdrawals, redemptions, and V1-to-V2 migrations resolve source-vault share authorization. The
 allowance must equal the resolved share cap; an existing larger allowance is replaced. Asset-mode
@@ -327,17 +329,18 @@ inside the BlueBundlesV1 call.
 ### How signatures flow into fixed bundles
 
 Call `requirement.sign(walletClient, userAddress)` for a signable requirement and pass the result
-to the same prepared handle's `buildTx([signature])`. Submit any approval transactions and wait
-for their receipts before sending the deposit transaction.
+to `buildTx([signature])` on any handle built from identical params. Submit any approval
+transactions and wait for their receipts before sending the deposit transaction.
 
 ```
 getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([signature])
 ```
 
 The builder reshapes the accepted ERC-2612 or Permit2 SignatureTransfer signature into the
-`TokenPermit` struct inside `vaultBundlesV1Deposit`. The signature owner, asset, amount, spender,
-nonce, and deadline must match the prepared requirement. With classic approval, `buildTx()`
-encodes an empty token permit and VaultBundlesV1 pulls the approved assets. Native funding also
+`TokenPermit` struct inside `vaultBundlesV1Deposit`. The signature's amount, spender, and
+deadline must match the operation's; its signed nonce is checked against the nonce carried on the
+requirement's action when present and otherwise verified onchain by the spender. With classic
+approval, `buildTx()` encodes an empty token permit and VaultBundlesV1 pulls the approved assets. Native funding also
 uses an empty permit and rejects token signatures.
 
 Direct BlueBundlesV1 writes use the same lazy collection workflow. Their builders additionally

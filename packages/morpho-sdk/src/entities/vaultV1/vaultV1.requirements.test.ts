@@ -505,8 +505,10 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     } satisfies BundlesTokenRequirementSignature;
     expect(() => withdraw.buildTx([signature])).not.toThrow();
 
-    // An oversized allowance is reset onchain; the earlier permit still finalizes since it
-    // matches the cap derived from `vaultData`, and its nonce is verified by the vault.
+    // An oversized allowance is reset onchain. The earlier permit still encodes in `buildTx()`
+    // since it matches the cap derived from `vaultData`; if its nonce is consumed onchain,
+    // VaultBundlesV1 skips it and burns under the live allowance, so the caller must execute
+    // the latest requirements (the reset) before submitting.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
@@ -657,8 +659,8 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       if (refreshed?.action.type !== "permit")
         throw new Error("Share permit requirement not found");
       expect(refreshed.action.args.nonce).toBe(1n);
-      // The nonce is onchain state the vault's permit verifies at execution, so the
-      // earlier signature still finalizes.
+      // A consumed nonce is not an encoding error: the spender skips the permit onchain and
+      // proceeds under the live allowance, so the earlier signature still finalizes.
       expect(() => prepared.buildTx([signature])).not.toThrow();
       const refreshedSignature = {
         action: refreshed.action,
@@ -775,6 +777,52 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       }
     },
   );
+
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+    const params = { shares: amount, userAddress: IN_KIND_USER as Address };
+    const redeemA = vault.redeem(params);
+
+    const permit = (await redeemA.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (permit?.action.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const signature = {
+      action: permit.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_VAULT,
+        amount: permit.action.args.amount,
+        nonce: 0n,
+        deadline: permit.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies Erc2612RequirementSignature;
+
+    const redeemB = vault.redeem(params);
+    expect(redeemB.buildTx([signature])).toEqual(redeemA.buildTx([signature]));
+  });
 });
 
 describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
@@ -943,6 +991,59 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
         .map(({ action }) => action.args),
     ).toEqual(
       first.filter(isRequirementApproval).map(({ action }) => action.args),
+    );
+  });
+
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: IN_KIND_VAULT,
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: 0n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+    const params = {
+      assets: amount,
+      userAddress: IN_KIND_USER as Address,
+      sourceVault: inKindVaultV1Data(),
+      targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
+    };
+    const migrationA = vault.migrateToV2(params);
+
+    const permit = (await migrationA.getRequirements()).find(
+      isRequirementSignature,
+    );
+    if (permit?.action.type !== "permit")
+      throw new Error("Share permit requirement not found");
+    const signature = {
+      action: permit.action,
+      args: {
+        owner: IN_KIND_USER,
+        asset: IN_KIND_VAULT,
+        amount: permit.action.args.amount,
+        nonce: 0n,
+        deadline: permit.action.args.deadline,
+        signature: serializeSignature({
+          r: toHex(1n, { size: 32 }),
+          s: toHex(2n, { size: 32 }),
+          yParity: 0,
+        }),
+      },
+    } satisfies Erc2612RequirementSignature;
+
+    const migrationB = vault.migrateToV2(params);
+    expect(migrationB.buildTx([signature])).toEqual(
+      migrationA.buildTx([signature]),
     );
   });
 });

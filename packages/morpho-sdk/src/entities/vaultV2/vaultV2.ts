@@ -214,6 +214,9 @@ export interface VaultV2Actions {
    *   onchain approval, and an insufficient one is raised by an approval or, with signature
    *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
    *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
+   *   under the live allowance, so execute every requirement returned by the latest
+   *   `getRequirements()` — including the oversized-allowance reset — before submitting.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
@@ -512,7 +515,7 @@ export interface VaultV2Actions {
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
    *   deadline differs from this operation. Any handle built from the same inputs accepts the
-   *   permit; the nonce is verified onchain by the vault's `permit`.
+   *   permit; a permit whose nonce was consumed is skipped onchain and the live allowance applies.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
@@ -747,7 +750,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const slippageTolerance =
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
-    // Fail eagerly if VaultBundlesV1 is unavailable; only validation is needed here.
+    // Resolve the spender eagerly so an unregistered VaultBundlesV1 fails at handle creation.
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     const requiredShareAllowance = computeVaultMaxShareAllowance({
       vaultData,

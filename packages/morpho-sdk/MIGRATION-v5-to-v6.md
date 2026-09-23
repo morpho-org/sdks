@@ -41,8 +41,9 @@ Update deposit inputs as follows:
 
 For ERC-20 funding, approvals and ERC-2612 permits now name VaultBundlesV1 as spender. Permit2
 keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTransfer payload names
-VaultBundlesV1. Resolve requirements and build from the same prepared handle so its captured nonce,
-deadline, asset, owner, amount, and spender remain consistent:
+VaultBundlesV1. `buildTx()` validates the supplied signature's nonce, deadline, asset, owner,
+amount, and spender against the operation's values, so finalize on any handle built from identical
+params (or one resumed from serialized state):
 
 ```ts
 const deposit = vault.deposit({

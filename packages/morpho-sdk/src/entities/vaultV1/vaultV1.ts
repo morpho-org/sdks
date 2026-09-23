@@ -196,6 +196,9 @@ export interface VaultV1Actions {
    *   onchain approval, and an insufficient one is raised by an approval or, with signature
    *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
    *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
+   *   under the live allowance, so execute every requirement returned by the latest
+   *   `getRequirements()` — including the oversized-allowance reset — before submitting.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
@@ -668,7 +671,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const slippageTolerance =
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
-    // Fail eagerly if VaultBundlesV1 is unavailable; only validation is needed here.
+    // Resolve the spender eagerly so an unregistered VaultBundlesV1 fails at handle creation.
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     const requiredShareAllowance = computeVaultMaxShareAllowance({
       vaultData,

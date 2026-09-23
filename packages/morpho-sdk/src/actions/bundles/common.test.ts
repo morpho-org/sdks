@@ -548,7 +548,29 @@ describe("selectBundlesTokenRequirementSignature", () => {
     },
   );
 
-  test("error: BundlesPermitMismatchError for a different nonce", () => {
+  test("error: BundlesPermitMismatchError for a divergent ERC-2612 action nonce", () => {
+    expect(() =>
+      selectBundlesTokenRequirementSignature(
+        [
+          {
+            ...permit,
+            action: {
+              ...permit.action,
+              args: { ...permit.action.args, nonce: 10n },
+            },
+          },
+        ],
+        expected,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "nonce",
+      }),
+    );
+  });
+
+  test("error: BundlesPermitMismatchError for a divergent Permit2 action nonce", () => {
     expect(() =>
       selectBundlesTokenRequirementSignature(
         [
@@ -568,6 +590,21 @@ describe("selectBundlesTokenRequirementSignature", () => {
         field: "nonce",
       }),
     );
+  });
+
+  test("behavior: accepts a permit whose action omits nonce", () => {
+    const { nonce: _omitted, ...actionArgs } = permit.action.args;
+    expect(
+      selectBundlesTokenRequirementSignature(
+        [
+          {
+            ...permit,
+            action: { ...permit.action, args: actionArgs },
+          } as typeof permit,
+        ],
+        expected,
+      ),
+    ).toEqual(expect.objectContaining({ args: permit.args }));
   });
 
   test("error: AmbiguousRequirementSignaturesError for both token signature kinds", () => {
