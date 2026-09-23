@@ -3,6 +3,7 @@ import {
   type Address,
   createWalletClient,
   custom,
+  maxUint256,
   verifyTypedData,
   zeroHash,
 } from "viem";
@@ -11,6 +12,8 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   AddressMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { selectBundlesSharesPermitSignature } from "../../bundles/common.js";
@@ -338,6 +341,36 @@ describe("encodeVaultSharesPermit", () => {
     await expect(
       requirement.sign(walletClient, account.address),
     ).rejects.toBeInstanceOf(AddressMismatchError);
+  });
+
+  test("error: ExpiredDeadlineError when deadline is not in the future", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: 1n,
+      }),
+    ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("error: InputExceedsMaxError when deadline exceeds uint256", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: UnsupportedErc20ApprovalSpenderError", () => {

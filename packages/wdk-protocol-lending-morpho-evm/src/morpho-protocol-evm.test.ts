@@ -16,7 +16,10 @@ import { createMockClient } from "@morpho-org/test/mock";
 import * as viem from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import { MissingWalletProviderError } from "./errors.js";
+import {
+  BlueBundlesV1DeadlineExceedsWindowError,
+  MissingWalletProviderError,
+} from "./errors.js";
 import type {
   AuthorizationOrSignatureRequirement,
   BundlesApprovalOrSignatureRequirement,
@@ -1315,6 +1318,21 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(marketEntity.borrow).toHaveBeenCalledWith(
         expect.objectContaining({ deadline: SIGNATURE_DEADLINE }),
       );
+    });
+
+    test("error: BlueBundlesV1DeadlineExceedsWindowError on a far-future signature deadline", async () => {
+      const requirementSignature = {
+        args: { deadline: 1_900_000_000n },
+        action: { type: "authorization" },
+      } as unknown as AuthorizationRequirementSignature;
+
+      await expect(
+        protocol.borrow({
+          token: TOKEN,
+          amount: 100_000n,
+          requirementSignature,
+        }),
+      ).rejects.toBeInstanceOf(BlueBundlesV1DeadlineExceedsWindowError);
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {

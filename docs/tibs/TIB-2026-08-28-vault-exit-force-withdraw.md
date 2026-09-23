@@ -162,62 +162,6 @@ Three further facts from `vault-v2/src/VaultV2.sol` that shape the SDK's checks:
 only liquidity configurations the contract can actually resolve are unset or the vault's sole
 adapter.
 
-### Public surface
-
-**Action** — `src/actions/vaultV2/forceWithdraw.ts`, pure and synchronous, `to` resolved from
-`getChainAddress(chainId, "bundles.vaultExitBundlesV1")`, `value` always `0n`:
-
-```ts
-vaultV2ForceWithdraw({
-  vault: { chainId, address },
-  args: {
-    adapter, exitAssets, minSharePriceE27, userAddress, deadline,
-    referralFeePct?, referralFeeRecipient?, requirementSignature?,
-  },
-  metadata?,
-}): Readonly<Transaction<VaultV2ForceWithdrawAction>>
-```
-
-**Entity** — `MorphoVaultV2.forceWithdraw` returns
-`ActionOutput<VaultV2ForceWithdrawAction, readonly RequirementSignature[], undefined>`:
-
-```ts
-forceWithdraw({
-  exitAssets, vaultData, userAddress,
-  adapter?, deadline?, slippageTolerance?, minSharePriceE27?,
-  referralFeePct?, referralFeeRecipient?,
-})
-```
-
-`buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind TIB's
-Considered Alternatives §5. Only `getRequirements()` is async.
-
-**Helpers** — five new pure exports, deliberately split so the numeric core has exactly one
-implementation:
-
-- `resolveVaultV2ForceWithdrawEligibility(vaultData, adapter?)` returns a **discriminated union**
-  (`"eligible" | "adapterCount" | "adapterMismatch" | "unsupportedAdapter" |
-  "unsupportedLiquidityAdapter" | "undecodableLiquidityData"`). The entity maps each failing tag to a
-  typed error; the preview maps them all to `undefined`. Same source of truth, different failure
-  semantics — which is the whole reason the split exists rather than duplicating the four
-  preconditions.
-- `computeVaultV2ForceWithdrawPlan({ vaultData, adapter, liquidityMarketId, exitAssets, timestamp })`
-  returns every amount the exit needs.
-- `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
-  upper bound, accrued to `now` on both endpoints, for the denominator of the slippage bound. The
-  authorized allowance is *not* this value — it is read off the price floor itself (see below), so it
-  covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
-  permits.
-- `computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })` — lower burn bound (Down
-  rounding) the fee guard compares against.
-- `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp })` —
-  management/performance fee shares the first withdrawal mints to `owner` at `timestamp`.
-
-Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongside its siblings, and
-`previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`. The preview separates its
-capacity clock (`timestamp`) from its fee-mint projection clock (`feeProjectionTimestamp`) so a
-fee-recipient quote can mirror the entity's deadline guard without inflating `maxExitAssets`.
-
 ### The simulation
 
 Everything comes from the `AccrualVaultV2` snapshot the caller already fetched — `assetBalance`,
@@ -302,8 +246,10 @@ minSharesBurnt(v)= v.toShares(min(withdrawnAssets + wMulUp(assetsToDeallocate, p
                                                                        // any split debits within 1 + penalty (< 2) of exitAssets
 require deadline <= now + 1 year
 require feeShares(deadline) < minSharesBurnt(accrue(deadline)) // else VaultV2ForceWithdrawFeeSharesExceedBurnError
+sharesBurntForFloor = max(sharesBurnt(vaultData),                    // raw lastUpdate snapshot burn
+                          sharesBurnt(nowVaultData) - feeShares(now))
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
-                              sharesBurnt(nowVaultData) - feeShares(now))
+                              sharesBurntForFloor)
 allowancePriceE27= max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
                            minSharePriceE27 - 1), 1)             // one tolerance step below the floor
 allowance        = min(max(mulDivUp(exitAssets, RAY, allowancePriceE27),
@@ -319,9 +265,13 @@ recipients, so for a fee-recipient caller the measured burn is `burn − minted`
 grow while the accrued share price only lowers the burn bound, so the accepted deadline bounds the
 entire execution window. Deadlines beyond one year are rejected before planning.
 
-The **price floor** accrues its denominator to `now` (execution time): the raw `lastUpdate` snapshot
-underestimates the burn a stale fee-bearing vault realizes once its first withdrawal accrues pending
-management fees, which lifts the floor above the faithful price and reverts a valid exit with
+The **price floor** prices off the larger of two denominators: the burn computed on the raw
+`lastUpdate` snapshot and the burn accrued to `now` (execution time) net of the fee shares minted to
+the caller at `now`. The raw snapshot alone underestimates the burn a stale fee-bearing vault
+realizes once its first withdrawal accrues pending management fees — the measured burn includes
+those mints — while the `now`-accrued endpoint underestimates it on a vault whose pending fees are
+small but whose share price has already drifted down. Taking the `max` of both keeps the floor at or
+below the faithful price at either endpoint, so it never reverts a valid exit with
 `SlippageExceeded`. Accruing to `now` rather than the caller-chosen `deadline` fixes that without
 letting a long deadline weaken the guard — a larger denominator only lowers the floor — and
 `slippageTolerance` absorbs the residual drift until inclusion.
@@ -395,7 +345,7 @@ Every `require`, every unchecked array index, and every nested call was walked o
 | `PctExceeded` | `referralFeePct < WAD` | `ReferralFeePctExceededError` *(new; extends `InputExceedsMaxError`)* |
 | `safeTransfer` to `address(0)` | `referralFeePct > 0 ⇒ recipient ≠ zeroAddress` | `ReferralFeeRecipientMissingError` **(canonical; `MissingReferralFeeRecipientError` kept as a deprecated alias)** |
 | `DeadlinePassed` / `PermitDeadlineExpired` | `deadline > now`, at creation **and** again before `getRequirements()` reads | `ExpiredDeadlineError` *(reused)* |
-| the `SlippageExceeded` guard silently passes — the contract reads `minSharePriceE27 == 0` as "no bound" | a supplied `minSharePriceE27` override is `> 0` | `NonPositiveInputError` *(reused)* |
+| the `SlippageExceeded` guard silently passes — the contract reads `minSharePriceE27 == 0` as "no bound" | a supplied `minSharePriceE27` override is `> 0` and `>=` the floor derived at `MAX_SLIPPAGE_TOLERANCE` (which may round to `0n` on dust exits, in which case any positive override is accepted) | `NonPositiveInputError` *(reused)*, `VaultV2ForceWithdrawSharePriceBelowFloorError` **(new)** |
 | — | `exitAssets > 0` | `NonPositiveInputError` *(reused)* |
 | — | `slippageTolerance <= MAX_SLIPPAGE_TOLERANCE` | `ExcessiveSlippageToleranceError` *(via `validateSlippageTolerance`)* |
 
@@ -426,7 +376,84 @@ the snapshot, and Blue always holds at least `Σ (supply − borrow)`.
 - Idle balance, penalty, adapter position, and market liquidity drift — unclosable, bounded by
   timelocks (the penalty is capped at 2% and its changes are timelocked, as are market removals).
 
-## Considered Alternatives
+## Public Interface
+
+**Action** — `src/actions/vaultV2/forceWithdraw.ts`, pure and synchronous, `to` resolved from
+`getChainAddress(chainId, "bundles.vaultExitBundlesV1")`, `value` always `0n`:
+
+```ts
+vaultV2ForceWithdraw({
+  vault: { chainId, address },
+  args: {
+    adapter, exitAssets, minSharePriceE27, userAddress, deadline,
+    referralFeePct?, referralFeeRecipient?, requirementSignature?,
+  },
+  metadata?,
+}): Readonly<Transaction<VaultV2ForceWithdrawAction>>
+```
+
+**Entity** — `MorphoVaultV2.forceWithdraw` returns
+`ActionOutput<VaultV2ForceWithdrawAction, readonly RequirementSignature[], undefined>`:
+
+```ts
+forceWithdraw({
+  exitAssets, vaultData, userAddress,
+  adapter?, deadline?, slippageTolerance?, minSharePriceE27?,
+  referralFeePct?, referralFeeRecipient?,
+})
+```
+
+`buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind TIB's
+Rejected alternatives §5. Only `getRequirements()` is async.
+
+**Helpers** — five new pure exports, deliberately split so the numeric core has exactly one
+implementation:
+
+- `resolveVaultV2ForceWithdrawEligibility(vaultData, adapter?)` returns a **discriminated union**
+  (`"eligible" | "adapterCount" | "adapterMismatch" | "unsupportedAdapter" |
+  "unsupportedLiquidityAdapter" | "undecodableLiquidityData"`). The entity maps each failing tag to a
+  typed error; the preview maps them all to `undefined`. Same source of truth, different failure
+  semantics — which is the whole reason the split exists rather than duplicating the four
+  preconditions.
+- `computeVaultV2ForceWithdrawPlan({ vaultData, adapter, liquidityMarketId, exitAssets, timestamp })`
+  returns every amount the exit needs.
+- `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
+  upper bound, accrued to `now` on both endpoints, for the denominator of the slippage bound. The
+  authorized allowance is *not* this value — it is read off the price floor itself (see below), so it
+  covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
+  permits.
+- `computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan })` — lower burn bound (Down
+  rounding) the fee guard compares against.
+- `computeVaultV2ForceWithdrawFeeSharesMinted({ vaultData, owner, timestamp })` —
+  management/performance fee shares the first withdrawal mints to `owner` at `timestamp`.
+
+Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongside its siblings, and
+`previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`. The preview separates its
+capacity clock (`timestamp`) from its fee-mint projection clock (`feeProjectionTimestamp`) so a
+fee-recipient quote can mirror the entity's deadline guard without inflating `maxExitAssets`.
+
+## Behavior
+
+Observable behavior lives in the Decision subsections: the deallocation simulation and the
+`maxExitAssets` ceiling in [The simulation](#the-simulation), and the realized-price floor plus the
+allowance derivation in [The `minSharePriceE27` bound](#the-minsharepricee27-bound).
+
+## Invariants
+
+- **SDK-side coverage rejection.** `coveredAssets >= assetsToDeallocate` is enforced before
+  submission; `VaultV2ForceWithdrawCoverageError` reports `maxExitAssets` (see the
+  [validation matrix](#the-validation-matrix)).
+- **`minSharePriceE27` floor.** The entity always derives a positive bound from the exit plan —
+  pessimistic on both sides — and a supplied override must clear the
+  `MAX_SLIPPAGE_TOLERANCE`-derived floor or fail with
+  `VaultV2ForceWithdrawSharePriceBelowFloorError`.
+- **Exact allowance / permit.** The vault-share requirement is sized from the price floor — one
+  tolerance step below it plus projected fee-recipient mints, saturated at `maxUint256` — never a
+  standing unlimited approval to VaultExitBundlesV1.
+- **Stateless `buildTx`.** The action and the handle's `buildTx` stay pure and synchronous, deriving
+  everything from their arguments (root `AGENTS.md` §1).
+
+## Rejected alternatives
 
 ### Alternative 1: keep the net-denominated amount and invert it in the SDK
 
@@ -470,7 +497,11 @@ conservative-both-sides construction makes a spurious revert essentially impossi
 guard real, and `minSharePriceE27` remains overridable for callers who genuinely want out. The
 low-level `vaultV2ForceWithdraw` action even accepts `0n` to disable the bound; the high-level
 `MorphoVaultV2.forceWithdraw` entity, however, requires a strictly positive override
-(`NonPositiveInputError` otherwise) so it cannot silently opt out of the guard it exists to add.
+(`NonPositiveInputError` otherwise) so it cannot silently opt out of the guard it exists to add. An
+override must additionally clear a floor derived at `MAX_SLIPPAGE_TOLERANCE` — an override below
+that floor is rejected with `VaultV2ForceWithdrawSharePriceBelowFloorError`, so a looser-than-floor
+bound cannot actually be supplied (on dust exits the floor can round to zero, leaving every
+positive override acceptable).
 
 ### Alternative 5: hide the referral fee
 
@@ -551,12 +582,14 @@ the in-kind TIB, so no downstream peer-range audit is required.
   from reverting on allowance and nullifying the slippage guard. The one regime where it does reach
   `maxUint256` is the deliberate saturation above, which only triggers for a floor so small that no
   smaller allowance could satisfy the exit anyway.
-- **The coverage check removes the only opaque revert** in the flow. The fork suite asserts the
-  SDK-side direction — `maxExitAssets + 1` is rejected before submission with
-  `VaultV2ForceWithdrawCoverageError`. The matching on-chain `0x32` panic is *not* asserted, because
-  an `exitAssets` above the whole position reverts on shares/allowance long before the contract's
-  unbounded loop; the panic correspondence therefore rests on the contract's unbounded-loop
-  semantics, not a dedicated fork assertion.
+- **The coverage check removes the only opaque revert** in the flow. The mock-client unit suite
+  (`src/entities/vaultV2/vaultV2.forceWithdraw.test.ts`) asserts the SDK-side direction —
+  `maxExitAssets + 1` is rejected before submission with `VaultV2ForceWithdrawCoverageError`. The
+  fork suite asserts the same rejection with an oversized exit of twice the vault's whole position —
+  uncoverable however the loop walks the markets. The matching on-chain `0x32` panic is *not*
+  asserted, because an `exitAssets` above the whole position reverts on shares/allowance long
+  before the contract's unbounded loop; the panic correspondence therefore rests on the contract's
+  unbounded-loop semantics, not a dedicated fork assertion.
 - **The referral fee is outside the slippage guard** — stated in the JSDoc, the action's parameter
   docs, and here, because it is the one way a caller can lose value the bound does not see.
 - **Nothing can strand in the periphery**: the contract transfers the payout and the fee in the same
