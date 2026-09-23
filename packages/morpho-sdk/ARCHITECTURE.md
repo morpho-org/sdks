@@ -174,8 +174,10 @@ creation from the caller-supplied `vaultData`, deadline, and slippage tolerance,
 `getRequirements()` re-reads the live allowance against that fixed cap, returning an approval for
 exactly that amount — or, when `supportSignature` is enabled and the current allowance is below
 the cap, an ERC-2612 shares permit folded into the call. A larger leftover approval is always
-reset with an onchain approval rather than reused (VaultBundlesV1 skips a permit whose nonce was
-already consumed), so the cap holds on every withdrawal.
+reset with an onchain approval rather than reused: VaultBundlesV1 skips a permit whose nonce was
+already consumed and proceeds under the live allowance, so execute every requirement returned by
+the latest `getRequirements()` — including the oversized-allowance reset — before submitting; only
+then does the cap hold on every withdrawal.
 
 **Redeem (V1 & V2)** also routes through VaultBundlesV1. The caller grants an exact share
 allowance or, when `supportSignature` is enabled and the current allowance is below the redeemed
@@ -338,8 +340,8 @@ getRequirements() → Requirement { sign() } → RequirementSignature → buildT
 ```
 
 The builder reshapes the accepted ERC-2612 or Permit2 SignatureTransfer signature into the
-`TokenPermit` struct inside `vaultBundlesV1Deposit`. The signature's amount, spender, and
-deadline must match the operation's; its signed nonce is checked against the nonce carried on the
+`TokenPermit` struct inside `vaultBundlesV1Deposit`. The signature's owner, asset, amount,
+spender, and deadline must match the operation's; its signed nonce is checked against the nonce carried on the
 requirement's action when present and otherwise verified onchain by the spender. With classic
 approval, `buildTx()` encodes an empty token permit and VaultBundlesV1 pulls the approved assets. Native funding also
 uses an empty permit and rejects token signatures.
