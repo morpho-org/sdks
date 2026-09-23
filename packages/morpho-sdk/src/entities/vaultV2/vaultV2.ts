@@ -31,6 +31,7 @@ import {
   type ActionOutput,
   type ActionRequirement,
   AdapterNotPartOfVaultError,
+  type BuilderOnlyActionOutput,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type Deallocation,
@@ -87,9 +88,8 @@ export interface VaultV2Actions {
    * @param {AccrualVaultV2} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @returns A lazy action output with a synchronous `buildTx()` returning the deep-frozen transaction.
+   *   Deposits also expose `getRequirements()` for approval or permit resolution.
    * @throws {UnsupportedBlueMarketIrmError} when an underlying market with positive debt uses an unsupported IRM.
    */
   deposit: (
@@ -98,19 +98,15 @@ export interface VaultV2Actions {
       vaultData: AccrualVaultV2;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV2DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => ActionOutput<
+    VaultV2DepositAction,
+    readonly RequirementSignature[],
+    { readonly useSimplePermit?: boolean },
+    (
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    )[]
+  >;
   /**
    * Prepares a withdraw transaction for the VaultV2 contract.
    *
@@ -119,12 +115,12 @@ export interface VaultV2Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
+   * @returns A lazy action output with a synchronous `buildTx()` returning the deep-frozen transaction.
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2WithdrawAction>>;
-  };
+  withdraw: (params: {
+    amount: bigint;
+    userAddress: Address;
+  }) => BuilderOnlyActionOutput<VaultV2WithdrawAction>;
   /**
    * Prepares a redeem transaction for the VaultV2 contract.
    *
@@ -133,12 +129,12 @@ export interface VaultV2Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
+   * @returns A lazy action output with a synchronous `buildTx()` returning the deep-frozen transaction.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
-  };
+  redeem: (params: {
+    shares: bigint;
+    userAddress: Address;
+  }) => BuilderOnlyActionOutput<VaultV2RedeemAction>;
   /**
    * Prepares an illiquid Vault V2 exit into idle assets and Morpho Blue supply positions.
    *
@@ -233,16 +229,13 @@ export interface VaultV2Actions {
    * @param {Object} params.withdraw - The withdraw parameters applied after deallocations.
    * @param {bigint} params.withdraw.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address (penalty source and withdraw recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceWithdrawAction>>} returns.buildTx The prepared multicall transaction.
+   * @returns A lazy action output with a synchronous `buildTx()` returning the deep-frozen transaction.
    */
   forceWithdraw: (params: {
     deallocations: readonly Deallocation[];
     withdraw: { amount: bigint };
     userAddress: Address;
-  }) => {
-    buildTx: () => Readonly<Transaction<VaultV2ForceWithdrawAction>>;
-  };
+  }) => BuilderOnlyActionOutput<VaultV2ForceWithdrawAction>;
   /**
    * Prepares a force redeem transaction for the VaultV2 contract using the vault's native multicall.
    *
@@ -262,16 +255,13 @@ export interface VaultV2Actions {
    * @param {Object} params.redeem - The redeem parameters applied after deallocations.
    * @param {bigint} params.redeem.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.buildTx The prepared multicall transaction.
+   * @returns A lazy action output with a synchronous `buildTx()` returning the deep-frozen transaction.
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];
     redeem: { shares: bigint };
     userAddress: Address;
-  }) => {
-    buildTx: () => Readonly<Transaction<VaultV2ForceRedeemAction>>;
-  };
+  }) => BuilderOnlyActionOutput<VaultV2ForceRedeemAction>;
 }
 
 export class MorphoVaultV2 implements VaultV2Actions {
@@ -300,6 +290,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
+  /** {@inheritDoc VaultV2Actions.deposit} */
   deposit({
     amount = 0n,
     userAddress,
@@ -310,7 +301,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     userAddress: Address;
     vaultData: AccrualVaultV2;
     slippageTolerance?: bigint;
-  } & DepositAmountArgs) {
+  } & DepositAmountArgs): ReturnType<VaultV2Actions["deposit"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (!isAddressEqual(vaultData.address, this.vault)) {
@@ -403,7 +394,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
-  withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV2Actions.withdraw} */
+  withdraw({
+    amount,
+    userAddress,
+  }: {
+    amount: bigint;
+    userAddress: Address;
+  }): ReturnType<VaultV2Actions["withdraw"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -420,7 +418,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV2Actions.redeem} */
+  redeem({
+    shares,
+    userAddress,
+  }: {
+    shares: bigint;
+    userAddress: Address;
+  }): ReturnType<VaultV2Actions["redeem"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -669,6 +674,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
+  /** {@inheritDoc VaultV2Actions.forceWithdraw} */
   forceWithdraw({
     deallocations,
     withdraw,
@@ -677,7 +683,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     deallocations: readonly Deallocation[];
     withdraw: { amount: bigint };
     userAddress: Address;
-  }) {
+  }): ReturnType<VaultV2Actions["forceWithdraw"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -697,6 +703,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
+  /** {@inheritDoc VaultV2Actions.forceRedeem} */
   forceRedeem({
     deallocations,
     redeem,
@@ -705,7 +712,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     deallocations: readonly Deallocation[];
     redeem: { shares: bigint };
     userAddress: Address;
-  }) {
+  }): ReturnType<VaultV2Actions["forceRedeem"]> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
