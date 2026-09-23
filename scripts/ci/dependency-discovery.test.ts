@@ -300,6 +300,22 @@ describe("parseActionPins", () => {
       pin({ name: "b", sha: sha420, version: "v7.0.1" }),
     ]);
     expect(mixed.get("actions/setup-node")?.version).toBe("v7.0.1");
+
+    const sha9 = "e".repeat(40);
+    for (const files of [
+      [
+        pin({ name: "a", sha: sha9, version: "v9" }),
+        pin({ name: "b", sha: sha420, version: "v7.0.1" }),
+      ],
+      [
+        pin({ name: "a", sha: sha420, version: "v7.0.1" }),
+        pin({ name: "b", sha: sha9, version: "v9" }),
+      ],
+    ]) {
+      const parsed = parseActionPins(files);
+      expect(parsed.get("actions/setup-node")?.version).toBe("v9");
+      expect(parsed.get("actions/setup-node")?.sha).toBe(sha9);
+    }
   });
 
   test("behavior: accumulates targets across workflows", () => {
@@ -377,6 +393,19 @@ describe("selectActionTarget", () => {
         ...options,
       }),
     ).toEqual({ to: "v2.0.0", publishDate: OLD });
+  });
+
+  test("behavior: two-component pin compares like a version", () => {
+    expect(
+      selectActionTarget("v4.1", {
+        releases: [
+          { tag: "v4.1.0", publishedAt: OLD, prerelease: false },
+          { tag: "v4.2.0", publishedAt: OLD, prerelease: false },
+        ],
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toEqual({ to: "v4.2.0", publishDate: OLD });
   });
 
   test("behavior: returns null for a non-semver current pin", () => {
@@ -775,5 +804,76 @@ describe("main", () => {
     expect(
       logs.some((line) => line.includes("MAX_DISPATCH_PER_RUN reached")),
     ).toBe(true);
+  });
+
+  test("error: throws on invalid MAX_DISPATCH_PER_RUN", async () => {
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "abc" },
+        fetch: stubFetch([]),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: true,
+        rootDir: fixtureRoot(),
+      }),
+    ).rejects.toThrowError(
+      "MAX_DISPATCH_PER_RUN must be a non-negative integer.",
+    );
+  });
+
+  test("behavior: a failed registry request skips the package but keeps others", async () => {
+    const rootDir = fixtureRoot();
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url === "https://registry.npmjs.org/lodash"
+          ? { ok: false, status: 500, json: async () => ({}) }
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.package).toBe("actions/checkout");
+    expect(
+      logs.some(
+        (line) => line.includes("::notice::") && line.includes("skipping"),
+      ),
+    ).toBe(true);
+  });
+
+  test("behavior: dedupes against open PR titles and devin branches", async () => {
+    const rootDir = fixtureRoot();
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) => {
+        if (url.includes("/pulls")) {
+          return ok([{ title: "bump lodash from 4.0.0 to 4.5.0" }]);
+        }
+        if (url.includes("/matching-refs")) {
+          return ok([
+            { ref: "refs/heads/devin/123-bump-actions-checkout-v8.0.0" },
+          ]);
+        }
+        return base(url, init);
+      },
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    expect(logs.filter((line) => line.startsWith("{"))).toHaveLength(0);
   });
 });

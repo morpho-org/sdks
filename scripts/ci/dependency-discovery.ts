@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { gt, major, minVersion, prerelease, valid } from "semver";
+import { coerce, gt, major, minVersion, prerelease, valid } from "semver";
 
 import { isMain, readRequiredEnv, reportCliError } from "./workflow.ts";
 
@@ -64,11 +64,12 @@ const DEPENDENCY_FIELDS = [
 ] as const;
 
 const SKIPPED_SPEC =
-  /^(?:workspace:|catalog:|link:|file:|git\+|https?:|github:)/;
+  /^(?:workspace:|catalog:|link:|file:|npm:|git\+|https?:|github:)/;
 
 /**
  * Reads the top-level `minimumReleaseAge:` setting (in minutes) from `pnpm-workspace.yaml` content.
- * Defaults to 0 (no age gate) when the key is absent.
+ * Defaults to 0 (no age gate) when the key is absent. Throws when the key is present but not
+ * a positive integer (fails closed).
  */
 export function readMinimumReleaseAgeMinutes(workspaceYaml: string): number {
   const match = /^minimumReleaseAge:\s*(.*)$/m.exec(workspaceYaml);
@@ -95,8 +96,11 @@ export function readMinimumReleaseAgeMinutes(workspaceYaml: string): number {
 export function collectNpmDependencies(
   files: readonly SourceFile[],
   workspaceYaml: string,
-): Map<string, { spec: string; targets: string[] }> {
-  const deps = new Map<string, { spec: string; targets: string[] }>();
+): Map<string, { name: string; spec: string; targets: string[] }> {
+  const deps = new Map<
+    string,
+    { name: string; spec: string; targets: string[] }
+  >();
 
   const add = ({
     name,
@@ -111,7 +115,7 @@ export function collectNpmDependencies(
     const key = `${name}@${spec}`;
     const entry = deps.get(key);
     if (entry == null) {
-      deps.set(key, { spec, targets: [target] });
+      deps.set(key, { name, spec, targets: [target] });
     } else if (!entry.targets.includes(target)) {
       entry.targets.push(target);
     }
@@ -194,7 +198,8 @@ export function selectNpmTarget(
 /**
  * Extracts commit-SHA-pinned action references (`uses: owner/repo[/sub]@<40-hex> # vX[.Y[.Z]]`) from
  * workflow file contents, keyed `owner/repo`. Local (`./…`) and `docker://` uses are ignored.
- * `targets` lists the workflow files referencing the action.
+ * When an action is pinned at different versions across workflows the highest version (and its
+ * sha) wins; `targets` is the union of the workflow files referencing the action.
  */
 export function parseActionPins(workflows: readonly SourceFile[]): Map<
   string,
@@ -219,6 +224,8 @@ export function parseActionPins(workflows: readonly SourceFile[]): Map<
   const pattern =
     /uses:\s*["']?([\w.-]+)\/([\w.-]+)(?:\/[\w./-]+)?@([0-9a-f]{40})\s*#\s*(v?\d+(?:\.\d+){0,2})\b/g;
 
+  const pinVersion = (v: string) => coerce(v)?.version ?? "0.0.0";
+
   for (const file of workflows) {
     for (const match of file.content.matchAll(pattern)) {
       const [, owner, repo, sha, version] = match;
@@ -236,7 +243,7 @@ export function parseActionPins(workflows: readonly SourceFile[]): Map<
           targets: [file.path],
         });
       } else {
-        if (gt(valid(version) ?? "0.0.0", valid(existing.version) ?? "0.0.0")) {
+        if (gt(pinVersion(version), pinVersion(existing.version))) {
           existing.sha = sha;
           existing.version = version;
         }
@@ -279,7 +286,9 @@ export function selectActionTarget(
 ): { to: string; publishDate: string } | null {
   const majorOnly = /^v?(\d+)$/.exec(current);
   const currentVersion =
-    majorOnly != null ? `${majorOnly[1]}.0.0` : valid(current);
+    majorOnly != null
+      ? `${majorOnly[1]}.0.0`
+      : (coerce(current)?.version ?? null);
   if (currentVersion == null) return null;
 
   const cutoff = now.getTime() - minAgeMinutes * 60_000;
@@ -300,9 +309,6 @@ export function selectActionTarget(
 
   return best == null ? null : { to: best.tag, publishDate: best.publishedAt };
 }
-
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Slug used in `devin/*-bump-<slug>-<to>` branch names (`@` and `/` become `-`). */
 export function branchSlug(packageName: string): string {
@@ -325,13 +331,13 @@ export function isDuplicate(
   },
 ): boolean {
   const titlePattern = new RegExp(
-    `bump.*(?<![\\w@/.-])${escapeRegExp(event.package)}(?![\\w/.-]).*${escapeRegExp(event.to)}`,
+    `bump.*(?<![\\w@/.-])${RegExp.escape(event.package)}(?![\\w/.-]).*${RegExp.escape(event.to)}`,
     "i",
   );
   if (openPrTitles.some((title) => titlePattern.test(title))) return true;
 
   const branchPattern = new RegExp(
-    `^devin/.*-bump-${escapeRegExp(branchSlug(event.package))}-${escapeRegExp(
+    `^devin/.*-bump-${RegExp.escape(branchSlug(event.package))}-${RegExp.escape(
       event.to,
     )}$`,
   );
@@ -579,7 +585,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
   const npmDeps = collectNpmDependencies(packageJsonFiles, workspaceYaml);
   const metadataCache = new Map<string, Record<string, string>>();
   for (const [key, dep] of npmDeps) {
-    const pkgName = key.substring(0, key.lastIndexOf("@"));
+    const pkgName = dep.name;
     let versions = metadataCache.get(pkgName);
     if (versions == null) {
       const response = await fetchImpl(
