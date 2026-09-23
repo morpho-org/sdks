@@ -573,6 +573,31 @@ describe("selectBundlesTokenRequirementSignature", () => {
     );
   });
 
+  test("error: BundlesPermitMismatchError reports the divergent action deadline", () => {
+    const divergentDeadline = expected.deadline + 1n;
+    expect(() =>
+      selectBundlesTokenRequirementSignature(
+        [
+          {
+            ...permit2,
+            action: {
+              ...permit2.action,
+              args: { ...permit2.action.args, deadline: divergentDeadline },
+            },
+          },
+        ],
+        expected,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "deadline",
+        expected: String(expected.deadline),
+        actual: String(divergentDeadline),
+      }),
+    );
+  });
+
   test("error: BundlesPermitMismatchError for a divergent ERC-2612 action nonce", () => {
     expect(() =>
       selectBundlesTokenRequirementSignature(

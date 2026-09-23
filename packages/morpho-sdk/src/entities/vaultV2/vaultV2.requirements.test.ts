@@ -200,6 +200,7 @@ describe("MorphoVaultV2 deposit getRequirements", () => {
       amount,
       userAddress: IN_KIND_USER,
       vaultData: inKindVaultV2Data(),
+      deadline: Time.timestamp() + 7_200n,
     };
     const depositA = vault.deposit(params);
 
@@ -536,7 +537,11 @@ describe("MorphoVaultV2 redeem getRequirements", () => {
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
     vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
-    const params = { shares: amount, userAddress: IN_KIND_USER as Address };
+    const params = {
+      shares: amount,
+      userAddress: IN_KIND_USER as Address,
+      deadline: Time.timestamp() + 7_200n,
+    };
     const redeemA = vault.redeem(params);
 
     const permit = (await redeemA.getRequirements()).find(

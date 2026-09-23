@@ -44,7 +44,8 @@ keeps its ERC-20 approval on canonical Permit2, while its one-time SignatureTran
 VaultBundlesV1. `buildTx()` validates the supplied signature's deadline, asset, owner, amount,
 and spender against the operation's values; the signed nonce is checked against the nonce carried
 on the requirement's action when present and otherwise verified onchain by the spender (a
-consumed-nonce permit is skipped and the live allowance applies). Finalize on any handle built
+consumed-nonce ERC-2612 permit is skipped and the live allowance applies; a consumed Permit2
+SignatureTransfer nonce reverts onchain). Finalize on any handle built
 from identical params (or one resumed from serialized state):
 
 ```ts
@@ -92,7 +93,7 @@ Version 6 also preserves the Vault V1 and Vault V2 method and builder names whil
 | Stable method | v5 input/workflow | v6 input/workflow |
 | --- | --- | --- |
 | `deposit` | Additive `amount` and `nativeAmount`; Bundler3/GeneralAdapter1 requirements. | Supply exactly one of `amount` or `nativeAmount`; optionally set `deadline`, `referralFeePct`, and `referralFeeRecipient`. Token requirements authorize VaultBundlesV1 and may return Permit2 SignatureTransfer. |
-| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Pass required `vaultData` (from `await vault.getData()`); optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
 | `redeem` | Direct vault redemption with no share requirement. | Exact-shares VaultBundlesV1 exit. Optionally set `deadline` and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
 | `migrateToV2` (Vault V1 only) | Share-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Keep the existing `shares` mode or supply the new `assets` alternative; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
 
