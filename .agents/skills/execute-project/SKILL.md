@@ -321,7 +321,12 @@ For every report:
    raise a go/no-go with the child's question verbatim and the options you see. Dependents of a
    blocked issue are **held**, never re-parented onto `main` silently — re-parenting changes the
    plan the user approved.
-5. Never squash, amend, or force-push a child's branch yourself. Corrections go back to the child
+5. **No report** (the child call errored, the session or worktree died, or the report carries
+   none of the four statuses): treat it as `BLOCKED`. Check whether a branch and PR were pushed
+   anyway; if so, re-brief a new child on that branch, else re-dispatch once from the original
+   brief. A second failure is a go/no-go, and the issue's dependents are held meanwhile. Step 9
+   fires once every dispatched issue has either reported or been marked `BLOCKED` this way.
+6. Never squash, amend, or force-push a child's branch yourself. Corrections go back to the child
    as a brief.
 
 ### Step 8: Keep the stack healthy
@@ -376,8 +381,11 @@ when the project cannot be resolved or has no candidates.
 
 The skill is idempotent per project. On a second run, Step 3 finds issues already **In Review**
 with a PR from an expected branch and treats them as satisfied blockers (their branch is the base
-for dependents). It never opens a second PR for an issue that has an open one; it re-briefs the
-existing child (or a new child with the existing branch) instead. The project comment from Step 9
+for dependents). An issue that is **In Progress** with the skill's own `Execution started by
+/execute-project` comment but no open PR from the expected branch is a failed prior dispatch, not
+Human-owned: it is a Candidate again (its assignee is unchanged since Step 6 never sets one). It
+never opens a second PR for an issue that has an open one; it re-briefs the existing child (or a
+new child with the existing branch) instead. The project comment from Step 9
 is the handover record between runs.
 
 ## Notes
