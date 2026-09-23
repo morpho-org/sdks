@@ -283,6 +283,16 @@ describe("RateRatifierV1.buildDescriptor", () => {
     expect(() => RateRatifierV1.groupId([])).toThrow(InvalidOfferGroupError);
   });
 
+  test("error: InvalidRateRatifierV1RateError from memberHash and groupId", () => {
+    const negative = { offer: baseOffer, rate: -1n };
+    expect(() => RateRatifierV1.memberHash(negative)).toThrow(
+      InvalidRateRatifierV1RateError,
+    );
+    expect(() => RateRatifierV1.groupId([negative])).toThrow(
+      InvalidRateRatifierV1RateError,
+    );
+  });
+
   test("error: InvalidTreeError for a tampered descriptor root", () => {
     const descriptor = RateRatifierV1.buildDescriptor([
       leaf(),

@@ -272,6 +272,7 @@ export namespace RateRatifierV1 {
    *
    * @param leaf - Rate-bounded offer leaf.
    * @returns Zero-group RateRatifierV1 leaf hash.
+   * @throws {InvalidRateRatifierV1RateError} when `leaf.rate` is negative.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -280,9 +281,12 @@ export namespace RateRatifierV1 {
    * ```
    */
   export function memberHash(leaf: RateRatifierV1Leaf): Hash {
+    const rate = BigInt(leaf.rate);
+    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+
     return hashLeaf({
       offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
-      rate: BigInt(leaf.rate),
+      rate,
       allowedTaker: leaf.allowedTaker ?? zeroAddress,
     });
   }
@@ -298,6 +302,7 @@ export namespace RateRatifierV1 {
    * @param leaves - Leaves sharing one consumption group.
    * @returns Content-addressed group id.
    * @throws {InvalidOfferGroupError} when `leaves` is empty.
+   * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
    * @example
    * ```ts
    * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
