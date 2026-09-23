@@ -40,6 +40,8 @@ interface EncodeBlueSignatureAuthorizationParams {
  * `RequirementSignature` the selected transaction route consumes. The requirement's
  * `action.typedData` holds that EIP-712 payload so it can be inspected or displayed before signing.
  * Deadline defaults to two hours from `Time.timestamp()`.
+ * The operator pin applies to grants and revocations alike: revoking a previously registered
+ * operator is outside this helper's scope.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Authorization encoding parameters.
@@ -94,7 +96,8 @@ export const encodeBlueSignatureAuthorization = async (
   // Pin the authorized operator to the chain's registered BlueBundlesV1 so a direct caller
   // cannot sign an authorization granting an arbitrary address control over the signer's Morpho
   // positions. Mirrors the `getBlueAuthorizationRequirement` resolver guard and applies to grant
-  // and revoke payloads alike.
+  // and revoke payloads alike: the registry is pinned per release, so revoking a rotated-out
+  // operator is outside this helper's scope.
   const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
   if (!isAddressEqual(blueBundlesV1, authorized)) {
     throw new UnsupportedAuthorizationOperatorError(authorized, chainId);

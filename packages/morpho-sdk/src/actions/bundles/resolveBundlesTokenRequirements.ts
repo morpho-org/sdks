@@ -62,7 +62,8 @@ export type BundlesTokenRequirementsState =
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
  *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
  * @throws {NegativeInputError} when an amount or Permit2 nonce is negative.
- * @throws {InputExceedsMaxError} when `amount` or the Permit2 nonce exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount`, the Permit2 nonce, or the SignatureTransfer
+ *   `deadline` exceeds uint256.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the selected nonce bit is set.
  * @throws {ApprovalAmountLessThanSpendAmountError} when a classic approval cannot cover the pull.
  * @throws {UnknownAddressError} when the SignatureTransfer branch runs on a chain without canonical Permit2.

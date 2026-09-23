@@ -25,7 +25,7 @@ GeneralAdapter1.
 > application needs deposits or withdrawals on an affected chain until VaultBundlesV1 is deployed
 > and registered in the SDK.
 
-As checked on 2026-09-07, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
+As checked on 2026-09-23, the [official deployment list](https://docs.morpho.org/developers/contracts/addresses/#bundles)
 and the [SDK registry](../morpho-ts/src/addresses.ts) list VaultBundlesV1 on 14 chains: Ethereum,
 Arbitrum, Arc, Base, HyperEVM, Katana, Monad, Optimism, Polygon, Robinhood, Stable, Tempo, Unichain,
 and World Chain. Bundler3 availability alone does not imply support for v6 vault deposits or withdrawals.
