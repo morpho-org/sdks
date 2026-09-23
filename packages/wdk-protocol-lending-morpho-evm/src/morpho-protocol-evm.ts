@@ -1328,6 +1328,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return vault.entity.withdraw({
       amount: normalizedAmount,
       userAddress,
+      vaultData: accrualVault,
       slippageTolerance: this._options.slippageTolerance,
     });
   }

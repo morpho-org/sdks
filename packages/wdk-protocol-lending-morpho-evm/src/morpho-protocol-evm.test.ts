@@ -940,6 +940,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        vaultData,
         slippageTolerance: undefined,
       });
       expect(account.signTransaction).toHaveBeenCalledWith({
@@ -969,6 +970,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Entity.withdraw).toHaveBeenCalledWith({
         amount: 100_000n,
         userAddress: ADDRESS,
+        vaultData,
         slippageTolerance: 5_000_000_000_000_000n,
       });
     });

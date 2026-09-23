@@ -150,7 +150,8 @@ async function withdrawUsdc(provider: EIP1193Provider, supportSignature = false)
   const [userAddress] = await walletClient.requestAddresses();
   if (!userAddress) throw new Error("Connect a wallet account before withdrawing.");
   const vault = client.morpho.vaultV2("0x04422053aDDbc9bB2759b248B574e3FCA76Bc145", mainnet.id);
-  const withdrawal = vault.withdraw({ amount: 500_000n, userAddress });
+  const vaultData = await vault.getData();
+  const withdrawal = vault.withdraw({ amount: 500_000n, userAddress, vaultData });
   const requirements = await withdrawal.getRequirements();
   const requirement = requirements[0];
 

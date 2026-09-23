@@ -13,7 +13,7 @@ import {
   AddressMismatchError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
-import { selectBundlesSharesRequirementSignature } from "../../bundles/common.js";
+import { selectBundlesSharesPermitSignature } from "../../bundles/common.js";
 import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 
 const vault = "0x0000000000000000000000000000000000002001" as const;
@@ -88,9 +88,10 @@ describe("encodeVaultSharesPermit", () => {
     }
 
     expect(
-      selectBundlesSharesRequirementSignature([signed], {
-        requiredShareAllowance: amount,
-        expectedRequirement: action,
+      selectBundlesSharesPermitSignature([signed], {
+        spender,
+        amount,
+        deadline: 1_900_000_000n,
       }),
     ).toEqual(signed);
   });

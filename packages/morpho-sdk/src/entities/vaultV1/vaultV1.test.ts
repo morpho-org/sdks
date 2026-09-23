@@ -58,6 +58,7 @@ describe("MorphoVaultV1 chain validation", () => {
       vault.withdraw({
         amount: 1n,
         userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: {} as never,
       }),
     ).toThrow(ChainIdMismatchError);
     expect(() =>

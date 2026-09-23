@@ -20,9 +20,6 @@ describe("MorphoVaultV2 bundles deadlines", () => {
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    vi.spyOn(vault, "getData").mockResolvedValue(
-      withChainTimestamp(now, () => inKindVaultV2Data()),
-    );
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
@@ -33,6 +30,7 @@ describe("MorphoVaultV2 bundles deadlines", () => {
     const withdraw = vault.withdraw({
       amount: 100n,
       userAddress: IN_KIND_USER,
+      vaultData: withChainTimestamp(now, () => inKindVaultV2Data()),
       deadline,
     });
 
