@@ -1,6 +1,10 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
-import { UnsupportedChainIdError } from "@morpho-org/morpho-ts";
+import {
+  ChainId,
+  UnknownAddressError,
+  UnsupportedChainIdError,
+} from "@morpho-org/morpho-ts";
 import {
   type Chain,
   createWalletClient,
@@ -56,6 +60,17 @@ describe("encodeBlueSignatureAuthorization", () => {
         nonce: 0n,
       }),
     ).rejects.toBeInstanceOf(UnsupportedChainIdError);
+  });
+
+  test("error: UnknownAddressError on a chain without BlueBundlesV1", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(ChainId.FraxtalMainnet), {
+        owner: account.address,
+        authorized: blueBundlesV1,
+        chainId: ChainId.FraxtalMainnet,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnknownAddressError);
   });
 
   test("error: UnsupportedAuthorizationOperatorError", async () => {

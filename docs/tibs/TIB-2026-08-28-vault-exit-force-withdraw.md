@@ -559,7 +559,18 @@ the in-kind TIB, so no downstream peer-range audit is required.
   (like `previewVaultV2InKindRedeem`'s per-market choices) would let a UI show penalty-free versus
   penalised tiers separately.
 
-### Addendum (2026-09-17): deprecated compatibility aliases removed
+## References
+
+- [`VaultExitBundlesV1.sol`](https://github.com/morpho-org/bundles/blob/main/src/vault-exit/VaultExitBundlesV1.sol) — the contract
+- [`VaultV2ExitBundlesTest.sol`](https://github.com/morpho-org/bundles/blob/main/test/VaultV2ExitBundlesTest.sol) — `testForceWithdrawTightPriceBound` is the source of the dust term
+- [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `exit`, `forceDeallocate`, `previewWithdraw`, the gates
+- [`TIB-2026-07-27`](./TIB-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
+
+## Addenda
+
+### 2026-09-17 — Deprecated compatibility aliases removed
+
+**Author:** @foulques
 
 The three deprecated aliases recorded in the validation matrix —
 `InKindRedeemRequiresSingleAdapterError`, `UnsupportedInKindAdapterError`, and
@@ -567,13 +578,6 @@ The three deprecated aliases recorded in the validation matrix —
 [`TIB-2026-09-17`](./TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md). The
 canonical names (`VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
 `ReferralFeeRecipientMissingError`) are unchanged; only the `export const X = Y;` aliases are gone.
-
-## References
-
-- [`VaultExitBundlesV1.sol`](https://github.com/morpho-org/bundles/blob/main/src/vault-exit/VaultExitBundlesV1.sol) — the contract
-- [`VaultV2ExitBundlesTest.sol`](https://github.com/morpho-org/bundles/blob/main/test/VaultV2ExitBundlesTest.sol) — `testForceWithdrawTightPriceBound` is the source of the dust term
-- [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `exit`, `forceDeallocate`, `previewWithdraw`, the gates
-- [`TIB-2026-07-27`](./TIB-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
 
 <!--
 TIB conventions:
