@@ -134,8 +134,10 @@ that apply. Every child brief links to this file. Keep it current when the user 
    its dependents are go/no-go items — the user drops the edge, rescopes, or skips), **Human-owned** (status
    In Progress / In Review with a non-agent assignee, or an open PR from a branch that is not
    ours), **Candidate** (everything else). Exception, checked first: an In Progress issue carrying
-   the skill's own `Execution started by /execute-project` comment and no open PR from the expected
-   branch is a failed prior dispatch and stays a Candidate whatever its assignee (see Re-running).
+   the skill's own `Execution started by /execute-project` comment is ours whatever its assignee
+   (see Re-running) — with no open PR from the expected branch it is a failed prior dispatch and a
+   Candidate again; with an open PR from that branch it is resumed through the Step 7 review and
+   re-brief path rather than re-dispatched.
 4. Build the graph over Candidates. Drop satisfied edges. Flag **external blockers** (blockers
    outside the project or Human-owned) — an issue behind one cannot be executed in this run unless
    the user says otherwise in Step 5.
@@ -164,6 +166,9 @@ For every Candidate, decide whether the issue is **executable as written**. An i
 - Its scope (title prefix, referenced paths) names a package under `packages/` (or `scripts/`,
   `docs/`, `.agents/`) that the project owns.
 - It carries no unresolved open question (`Q-x` with no default) and no comment that reverses it.
+- If it adds or changes a consumer-facing export in `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk`,
+  the matching `morpho-sdk` facade audit (`AGENTS.md` §4) is either in its own scope or in a stacked
+  child issue of the plan; when it is neither, the issue fails the audit.
 - It does not touch a **guarded surface**: `.github/` (workflows, CODEOWNERS, dependabot),
   the agent surface itself (`.agents/`, `.claude/`, `.codex/` — review engine, personas, skills,
   commands; a child must not weaken the review of its own diff), `.changeset/config.json`, the
@@ -188,10 +193,10 @@ Present, in the thread:
 
 | Wave | ID | Title | Priority | Stack position | Base branch | Audit |
 | ---- | -- | ----- | -------- | -------------- | ----------- | ----- |
-| 1 | SDK-101 | feat(blue-sdk): add VaultV2 adapter entity | High | root | main | OK |
+| 1 | SDK-101 | feat(blue-sdk): add VaultV2 adapter entity | High | root | main | ASK |
 | 1 | SDK-104 | feat(morpho-ts): register VaultV2 adapter addresses | Normal | root | main | OK |
+| 1 | SDK-103 | docs(morpho-sdk): document VaultV2 adapters | Normal | root | main | OK |
 | 2 | SDK-102 | feat(morpho-sdk): expose VaultV2 adapter facade | High | child of SDK-101 | <branch-101> | OK |
-| 2 | SDK-103 | docs(morpho-sdk): document VaultV2 adapters | Normal | root | main | OK |
 | 2 | SDK-105 | feat(blue-sdk-viem): fetch VaultV2 adapter state | Normal | multi-parent (101, 104) | <branch-101> | ASK |
 
 ### Dependency graph
@@ -289,8 +294,11 @@ in Step 7, which is the only link Linear gets.
   **branch name** to create. For a child PR: "Your diff is reviewed against `<parent-branch>`; do
   not re-implement anything already on that branch, and do not merge `main` into your branch."
 - The repo rules that apply to every change: never commit to `main`, never commit secrets or ENV
-  values; root `AGENTS.md` (§1 layering; §2 forbidden patterns; §5 test placement; §6 JSDoc on
-  every new export; §7 a changeset via `pnpm changeset` for any semver-relevant change to a
+  values; root `AGENTS.md` (§1 layering; §2 forbidden patterns; §4 same-PR `morpho-sdk` facade
+  audit for consumer-facing `blue-sdk` / `blue-sdk-viem` / `midnight-sdk` changes — when the plan
+  stacks the facade as a child issue, the brief names that issue and tells the child to answer a
+  facade-audit review finding by pointing at it, not by widening scope; §5 test placement; §6
+  JSDoc on every new export; §7 a changeset via `pnpm changeset` for any semver-relevant change to a
   published package, none for docs/tests/agent files; §8 tooling), the `AGENTS.md` of the affected
   package, and `docs/jsdoc-style.md`.
 - Validation to run before pushing: `pnpm lint`, `pnpm build`, and `pnpm test` from the repo root
@@ -328,10 +336,13 @@ For every report:
    diff and the validation output are the evidence.
 2. `DONE` with a clean diff: comment the PR URL on the Linear issue (skip when a Linear-triggered
    Devin session already attached it) and move it to **In Review** (or the team's equivalent). Its
-   branch becomes a valid base for the next wave.
+   branch becomes a valid base for the next wave. A `DONE` whose diff review fails is handled as
+   `DONE_WITH_CONCERNS`.
 3. `DONE_WITH_CONCERNS`: decide. If the concern is scope (the child did more or less than the
-   issue), send one consolidated correction brief to the same child. If the concern needs the
-   user, it is a go/no-go and the issue's dependents wait.
+   issue) or a rubric violation, send one consolidated correction brief to the same child; the
+   branch is not a valid base and dependents wait until the diff passes, and a second failed
+   correction round is a go/no-go. If the concern needs the user, it is a go/no-go and the
+   issue's dependents wait.
 4. `BLOCKED` / `NEEDS_CONTEXT`: answer from the context pack if you can, in one re-brief. Otherwise
    raise a go/no-go with the child's question verbatim and the options you see. Dependents of a
    blocked issue are **held**, never re-parented onto `main` silently — re-parenting changes the
