@@ -130,7 +130,7 @@ jobs:
       # comments, so it is deliberately treated as a failure here. Logic + tests: scripts/ci/post-claude.ts
       # (trusted-copy integrity check, then claude-review-gate.ts).
       #
-      # Claude's subprocesses can append to $GITHUB_ENV, so both post-Claude steps start from an empty
+      # Claude's subprocesses can append to $GITHUB_ENV, so the post-Claude steps start from an empty
       # environment (`env -i`) and pass only the variables listed: nothing injected (BASH_ENV, NODE_OPTIONS,
       # LD_*, HTTPS_PROXY/NODE_USE_ENV_PROXY, NODE_EXTRA_CA_CERTS, ...) reaches the node process that
       # holds the token. The step's own bash starts before `env -i` runs, so the variables that would
@@ -169,6 +169,41 @@ jobs:
           HEAD_SHA="$HEAD_SHA"
           MAX_ID_BEFORE="$MAX_ID_BEFORE"
           "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" verify-review
+
+      # A push during the review cancels this run via the concurrency group, leaving Claude's
+      # "PR Review in progress" tracking comment behind next to the superseding run's one. Delete the
+      # in-progress comments still carrying this run's `[View job run]` link (a finalized summary is
+      # rewritten to `[View job]` and retained) via scripts/ci/claude-review-gate.ts cleanup, with the
+      # same empty-environment trusted-copy invocation as the verify step.
+      - name: Delete tracking comments of the cancelled run
+        if: cancelled() && github.event_name == 'pull_request' && steps.trusted.outputs.node_bin != ''
+        continue-on-error: true
+        env:
+          BASH_ENV: ''
+          SHELLOPTS: ''
+          PS4: ''
+          LD_PRELOAD: ''
+          LD_AUDIT: ''
+          LD_LIBRARY_PATH: ''
+          NODE_OPTIONS: ''
+          TRUSTED_TEMP: ${{ runner.temp }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          NODE_BIN: ${{ steps.trusted.outputs.node_bin }}
+          SCRIPTS_DIGEST: ${{ steps.trusted.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          /usr/bin/env -i
+          HOME="$HOME"
+          RUNNER_TEMP="$TRUSTED_TEMP"
+          TRUSTED_SCRIPTS_DIR="$TRUSTED_TEMP/trusted-scripts"
+          SCRIPTS_DIGEST="$SCRIPTS_DIGEST"
+          GH_TOKEN="$GH_TOKEN"
+          GITHUB_REPOSITORY="$REPOSITORY"
+          GITHUB_RUN_ID="$RUN_ID"
+          PR_NUMBER="$PR_NUMBER"
+          "$NODE_BIN" "$TRUSTED_TEMP/trusted-scripts/ci/post-claude.ts" cleanup-tracking
 
       # The execution transcript is hidden from the job log; keep it for diagnosing incomplete reviews.
       # Artifacts on a public repo skip job-log secret redaction, so only publish it when the run failed,
