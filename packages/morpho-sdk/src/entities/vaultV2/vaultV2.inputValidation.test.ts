@@ -186,6 +186,27 @@ describe("MorphoVaultV2 withdraw input validation", () => {
     expect(handle.request).not.toHaveBeenCalled();
   });
 
+  test("error: NonPositiveInputError when vaultData yields a zero share cap", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: {
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
+          toShares: () => 0n,
+          accrueInterest: () => ({ toShares: () => 0n }),
+        } as never,
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
   test("behavior: accepts uint256 and slippage boundaries without RPC reads", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

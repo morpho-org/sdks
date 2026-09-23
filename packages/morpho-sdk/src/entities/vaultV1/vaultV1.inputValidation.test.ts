@@ -311,6 +311,27 @@ describe("MorphoVaultV1 withdraw input validation", () => {
     expect(handle.request).not.toHaveBeenCalled();
   });
 
+  test("error: NonPositiveInputError when vaultData yields a zero share cap", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: {
+          address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
+          toShares: () => 0n,
+          accrueInterest: () => ({ toShares: () => 0n }),
+        } as never,
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
   test("behavior: accepts uint256 and slippage boundaries without RPC reads", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
