@@ -67,7 +67,10 @@ resolved.
   it no longer covers the freshly derived minimum. An opaque payload the handle cannot re-derive
   synchronously (the Midnight encoded offer-root payload) is bound to the handle through the
   validation of its sibling `args` and a presence check; `buildTx()` does not promise byte-level
-  integrity of such a payload.
+  integrity of such a payload. Integrity of an opaque payload across storage and transport is the
+  caller's obligation (the signature it accompanies is the caller's proof of origin), exactly as
+  it is for the signature bytes themselves; a flow that introduces a new opaque payload must state
+  in its PR why the payload cannot be re-derived synchronously rather than inherit this bar.
 - If a flow needs a chain snapshot to derive its transaction (vault data, position data), then the
   caller supplies that snapshot as a handle input; `getRequirements()` may validate it against the
   chain but never replaces it for `buildTx()`.
