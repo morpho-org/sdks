@@ -14,6 +14,7 @@ import {
   AddressMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  NonPositiveInputError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { selectBundlesSharesPermitSignature } from "../../bundles/common.js";
@@ -356,6 +357,21 @@ describe("encodeVaultSharesPermit", () => {
         deadline: 1n,
       }),
     ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("error: NonPositiveInputError when deadline is not positive", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: 0n,
+      }),
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: InputExceedsMaxError when deadline exceeds uint256", () => {
