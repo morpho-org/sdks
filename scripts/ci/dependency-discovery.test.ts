@@ -10,6 +10,7 @@ import {
   buildBumpEvent,
   collectNpmDependencies,
   dispatch,
+  type FetchLike,
   fetchAllPages,
   isDuplicate,
   main,
@@ -712,7 +713,7 @@ describe("main", () => {
     });
 
   function stubFetch(calls: string[]) {
-    return async (url: string) => {
+    return async (url: string, _init?: Parameters<FetchLike>[1]) => {
       calls.push(url);
       if (url === "https://registry.npmjs.org/lodash") {
         return ok({
