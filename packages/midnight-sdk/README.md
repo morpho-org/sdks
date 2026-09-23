@@ -162,7 +162,7 @@ remaining legs settle at a price the quote never authorized. The high-level
 and resolve approvals for you; the recipe below shows the same route with this package's raw ABI.
 
 ```ts
-import { getChainAddress } from "@morpho-org/morpho-ts";
+import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { MidnightApi } from "@morpho-org/midnight-sdk/api";
 import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import {
@@ -177,7 +177,6 @@ import { base } from "viem/chains";
 
 const chainId = base.id;
 const midnightBundles = getChainAddress(chainId, "midnightBundles");
-const WAD = 10n ** 18n;
 
 export async function takeAskQuoteAtomically(params: {
   readonly walletClient: WalletClient;
@@ -196,8 +195,7 @@ export async function takeAskQuoteAtomically(params: {
   // Keep the caller's target and the quote's aggregate guard as two independent inputs.
   // Do not substitute `quote.data.availableUnits` for the target: it is fallback capacity,
   // not what the caller asked for.
-  const maxBuyerAssets =
-    (targetUnits * BigInt(quote.data.averageWorstPrice) + WAD - 1n) / WAD;
+  const maxBuyerAssets = MathLib.wMulUp(targetUnits, quote.data.averageWorstPrice);
 
   // Two confirmed prerequisites before this call: the taker has approved `midnightBundles`
   // to spend `maxBuyerAssets` of the loan token (or passes an ERC-2612/Permit2 payload as
