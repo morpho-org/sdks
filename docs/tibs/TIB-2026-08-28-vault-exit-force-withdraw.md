@@ -304,7 +304,10 @@ require deadline <= now + 1 year
 require feeShares(deadline) < minSharesBurnt(accrue(deadline)) // else VaultV2ForceWithdrawFeeSharesExceedBurnError
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
                               sharesBurnt(nowVaultData) - feeShares(now))
-allowance        = min(mulDivUp(exitAssets, RAY, minSharePriceE27)
+allowancePriceE27= max(min(mulDivDown(minSharePriceE27, WAD - slippageTolerance, WAD),
+                           minSharePriceE27 - 1), 1)             // one tolerance step below the floor
+allowance        = min(max(mulDivUp(exitAssets, RAY, allowancePriceE27),
+                           mulDivUp(exitAssets, RAY, minSharePriceE27) + 1)
                        + feeShares(deadline), maxUint256)
 ```
 
@@ -323,12 +326,20 @@ management fees, which lifts the floor above the faithful price and reverts a va
 letting a long deadline weaken the guard — a larger denominator only lowers the floor — and
 `slippageTolerance` absorbs the residual drift until inclusion.
 
-The **allowance** is then read straight off that floor. The on-chain check accepts any exit whose
-realized price stays at or above `minSharePriceE27`, so it can burn at most
+The **allowance** is then derived from that floor, with headroom. The on-chain check accepts any
+exit whose realized price stays at or above `minSharePriceE27`, so an accepted exit burns at most
 `mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn ≤ exitAssets` and
-`withdrawn / burnt ≥ minSharePriceE27`. This one expression is a mechanics-independent ceiling: it
+`withdrawn / burnt ≥ minSharePriceE27`. That at-floor burn is a mechanics-independent ceiling: it
 dominates the burn at every accrual endpoint *and* covers the within-tolerance price drop the floor
-deliberately permits. It is saturated at `maxUint256`, because a very small accepted floor scales it
+deliberately permits. The allowance is deliberately sized *above* it, because it is only a spend
+cap and never the price protection: the bundle checks `minSharePriceE27` after its last
+withdrawal, so an allowance sized exactly to the floor would underflow `_spendAllowance`
+(panic 0x11) on a below-floor price before that check runs. Sizing it for a price one tolerance
+step below the floor (and, whenever the floor exceeds 1, strictly below it even at
+`slippageTolerance: 0`), and in any case for at least one share above the at-floor burn, lets a
+miss surface as the bundle's own `SlippageExceeded` revert; a deeper drop still exhausts the
+allowance first. Fee shares the first withdrawal mints to a fee-recipient caller are added because
+the burn measured on-chain includes them. It is saturated at `maxUint256`, because a very small accepted floor scales it
 past the ABI slot: the approval encoder clamps what it emits, so an uncapped requirement would sit
 permanently above any grantable allowance and `getRequirements()` would keep re-emitting the same
 approval. Saturating loses nothing real — `totalSharesBurnt ≤ totalSupply ≤ maxUint256`, so the clamp
