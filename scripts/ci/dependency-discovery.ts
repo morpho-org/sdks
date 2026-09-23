@@ -318,16 +318,55 @@ export function branchSlug(packageName: string): string {
   return packageName.replace(/[@/]/g, "-");
 }
 
-const beforePackage = /[\w@/.-]/;
-const afterPackage = /[\w/.-]/;
-const wordOrVersionChar = /[\w.-]/;
-const TO_KEYWORD = /\bto\s+/g;
+const isWordChar = (ch: string): boolean =>
+  (ch >= "a" && ch <= "z") ||
+  (ch >= "A" && ch <= "Z") ||
+  (ch >= "0" && ch <= "9") ||
+  ch === "_";
+
+const isWhitespace = (ch: string): boolean =>
+  ch === " " ||
+  ch === "\t" ||
+  ch === "\n" ||
+  ch === "\r" ||
+  ch === "\v" ||
+  ch === "\f";
+
+const isPackageChar = (ch: string): boolean =>
+  isWordChar(ch) || ch === "@" || ch === "/" || ch === "." || ch === "-";
+
+const isVersionChar = (ch: string): boolean =>
+  isWordChar(ch) || ch === "." || ch === "-";
+
+const isAfterPackageChar = (ch: string): boolean =>
+  isVersionChar(ch) || ch === "/";
+
+const restAfterTo = (rest: string, to: string): boolean => {
+  let toIndex = rest.indexOf("to");
+  while (toIndex >= 0) {
+    const before = rest[toIndex - 1];
+    if (before == null || !isWordChar(before)) {
+      let versionStart = toIndex + 2;
+      let ch = rest[versionStart];
+      while (ch != null && isWhitespace(ch)) {
+        versionStart += 1;
+        ch = rest[versionStart];
+      }
+      if (versionStart > toIndex + 2 && rest.startsWith(to, versionStart)) {
+        const afterTo = rest[versionStart + to.length];
+        if (afterTo == null || !isVersionChar(afterTo)) return true;
+      }
+    }
+    toIndex = rest.indexOf("to", toIndex + 1);
+  }
+  return false;
+};
 
 /**
  * Hand-rolled equivalent of `bump.*<package>.*to <to>` (case-insensitive, with the same
  * non-name-character boundaries on both the package and the target version). Deliberately not a
- * dynamically built `RegExp`: the pattern needed lookbehind/lookahead chains that scan as a
- * potential ReDoS vector, and plain `indexOf` scans are cheaper anyway.
+ * `RegExp`: the pattern needed lookbehind/lookahead chains that scan as a potential ReDoS vector,
+ * and plain `indexOf` scans are cheaper anyway.
  */
 function titleMatchesBump(title: string, event: BumpEvent): boolean {
   const text = title.toLowerCase();
@@ -341,22 +380,10 @@ function titleMatchesBump(title: string, event: BumpEvent): boolean {
     const before = text[pkgIndex - 1];
     const after = text[pkgIndex + pkg.length];
     if (
-      (before == null || !beforePackage.test(before)) &&
-      (after == null || !afterPackage.test(after))
+      (before == null || !isPackageChar(before)) &&
+      (after == null || !isAfterPackageChar(after))
     ) {
-      const rest = text.slice(pkgIndex + pkg.length);
-      TO_KEYWORD.lastIndex = 0;
-      for (let match = TO_KEYWORD.exec(rest); match != null; ) {
-        const versionStart = match.index + match[0].length;
-        const afterTo = rest[versionStart + to.length];
-        if (
-          rest.startsWith(to, versionStart) &&
-          (afterTo == null || !wordOrVersionChar.test(afterTo))
-        ) {
-          return true;
-        }
-        match = TO_KEYWORD.exec(rest);
-      }
+      if (restAfterTo(text.slice(pkgIndex + pkg.length), to)) return true;
     }
     pkgIndex = text.indexOf(pkg, pkgIndex + 1);
   }
