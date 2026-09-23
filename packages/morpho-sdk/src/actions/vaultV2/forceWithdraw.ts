@@ -70,8 +70,9 @@ export interface VaultV2ForceWithdrawParams {
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `exitAssets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `referralFeePct` or `minSharePriceE27` is negative.
- * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contract rejects it
- *   with `PctExceeded`), or when `exitAssets`, `deadline`, or `minSharePriceE27` exceeds `uint256`.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD (the contract
+ *   rejects it with `PctExceeded`); it extends {@link InputExceedsMaxError}.
+ * @throws {InputExceedsMaxError} when `exitAssets`, `deadline`, or `minSharePriceE27` exceeds `uint256`.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.

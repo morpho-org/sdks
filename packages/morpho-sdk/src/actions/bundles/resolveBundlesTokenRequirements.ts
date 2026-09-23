@@ -48,7 +48,8 @@ export type BundlesTokenRequirementsState =
  * @param params.owner - Account funding the operation and owning the Permit2 nonce bitmap.
  * @param params.chainId - Target chain id used to resolve supported approval spenders and canonical Permit2.
  * @param params.amount - Exact pull amount in the token's smallest unit; zero returns no requirements.
- * @param params.deadline - Signature expiration as a Unix timestamp in seconds.
+ * @param params.deadline - Signature expiration as a Unix timestamp in seconds; in the
+ *   SignatureTransfer branch it must be positive, within uint256, and in the future.
  * @param params.state - Prefetched state for either classic approval or Permit2 SignatureTransfer.
  * @param params.state.type - `approval` for a direct allowance or `permit2SignatureTransfer` for a signed pull.
  * @param params.state.allowance - In the approval branch, current token allowance from `owner` to `spender`.
@@ -61,10 +62,13 @@ export type BundlesTokenRequirementsState =
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's registered
  *   BlueBundlesV1 or VaultBundlesV1 deployment, including for a zero-amount request.
  * @throws {NegativeInputError} when an amount or Permit2 nonce is negative.
- * @throws {InputExceedsMaxError} when `amount` or the Permit2 nonce exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount`, the Permit2 nonce, or the SignatureTransfer
+ *   `deadline` exceeds uint256.
  * @throws {Permit2SignatureTransferNonceAlreadyUsedError} when the selected nonce bit is set.
  * @throws {ApprovalAmountLessThanSpendAmountError} when a classic approval cannot cover the pull.
  * @throws {UnknownAddressError} when the SignatureTransfer branch runs on a chain without canonical Permit2.
+ * @throws {NonPositiveInputError} when the SignatureTransfer `deadline` is not positive.
+ * @throws {ExpiredDeadlineError} when the SignatureTransfer `deadline` is positive but not in the future.
  * @example
  * ```ts
  * import { resolveBundlesTokenRequirements } from "@morpho-org/morpho-sdk";

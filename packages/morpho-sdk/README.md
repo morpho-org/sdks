@@ -46,8 +46,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
-Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and
-Robinhood Chain. Custom deployments can still be configured with `registerCustomAddresses`.
+Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
+Robinhood Chain, and Arc. Custom deployments can still be configured with `registerCustomAddresses`.
 
 ## How it works
 
@@ -351,7 +351,8 @@ Link this package to your app for local debugging:
 
 ```bash
 # In this morpho-sdk project
-pnpm run build:link
+pnpm build
+pnpm link
 ```
 
 ```bash

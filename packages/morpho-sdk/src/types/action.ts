@@ -643,6 +643,7 @@ export type RequirementTypedData = TypedDataDefinition<
   string
 >;
 
+/** Signable ERC-2612 permit requirement for a fixed-bundles token pull. */
 export interface PermitAction
   extends BaseAction<
     "permit",

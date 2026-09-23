@@ -33,8 +33,9 @@ export const optionalBoolean = [undefined, false, true] as const;
  * Fetches a user's token holding, allowances, permit nonce, and transfer permission state.
  *
  * Reads native balances directly for `NATIVE_ADDRESS`. For ERC20 tokens, uses the deployless
- * `GetHolding` query by default and falls back to individual ERC20, Permit2, ERC-2612, Backed, and
- * permissioned-wrapper contract reads when allowed.
+ * `GetHolding` query by default and falls back to individual ERC20, ERC-2612, Backed, and
+ * permissioned-wrapper contract reads, plus ERC-20 allowances to Morpho Blue and Permit2, when
+ * allowed.
  *
  * @param user - Address whose holding is fetched.
  * @param token - Token address, or `NATIVE_ADDRESS` for the native asset.

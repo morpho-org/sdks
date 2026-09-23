@@ -51,7 +51,7 @@ For nested options bags, document every leaf field with dot notation. Do **not**
  * @param params.vault.asset - The vault's underlying ERC-20 asset.
  * @param params.args.amount - Asset amount to deposit, in the asset's smallest unit.
  * @param params.args.maxSharePrice - Maximum accepted vault share price, scaled by RAY.
- * @param params.args.recipient - Address that receives the minted vault shares.
+ * @param params.args.recipient - Unsupported; shares are always minted to the transaction sender.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  */
 ```
