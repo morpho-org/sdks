@@ -498,8 +498,10 @@ aliases while the deprecated names last.
 - [ ] The deallocation simulation rejects under-covered `exitAssets` with
   `VaultV2ForceWithdrawCoverageError` before submission, so the contract's unbounded loop can never
   surface a `panic 0x32`.
-- [ ] The required vault-share allowance is bounded — `mulDivUp(exitAssets, RAY, minSharePriceE27)`
-  — never a permanent unlimited approval to the periphery.
+- [ ] The required vault-share allowance is derived from the slippage floor — at least one share
+  above `mulDivUp(exitAssets, RAY, minSharePriceE27)` plus projected fee-recipient mints, saturated
+  at `maxUint256` (see the allowance derivation in the Decision section) — never a standing
+  unlimited approval to the periphery.
 - [ ] `referralFeePct` stays outside the slippage guard and that is documented in JSDoc and the
   action's parameter docs.
 - [ ] `forceRedeem` is untouched and retains the multicall path; `EmptyDeallocationsError` and the
