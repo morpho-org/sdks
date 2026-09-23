@@ -244,12 +244,16 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
 
     expect(vaultData.forceDeallocatePenalties[adapterAddress]).toBe(penalty);
     expect(marketParamsList).toHaveLength(2);
+    // The permit deadline is freshness-checked against the wall clock, not the
+    // (stale) pinned fork timestamp.
+    const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n;
     const exit = withChainTimestamp(await client.timestamp(), () =>
       vault.inKindRedeem({
         amount,
         marketParamsList,
         vaultData,
         userAddress: client.account.address,
+        deadline,
       }),
     );
     const [permitRequirement] = await withChainTimestamp(
