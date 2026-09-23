@@ -63,15 +63,12 @@ function workspace() {
   const root = makeTempDir();
   const reviewOutput = join(root, "review-output");
   const githubOutput = join(root, "github-output");
-  const summary = join(root, "summary.md");
   writeFileSync(githubOutput, "");
-  writeFileSync(summary, "");
   return {
     env: {
       GITHUB_OUTPUT: githubOutput,
       GITHUB_REPOSITORY: "morpho-org/sdks",
       GITHUB_RUN_ATTEMPT: "2",
-      GITHUB_STEP_SUMMARY: summary,
       LUPIN: "/opt/lupin/lupin",
       PR_NUMBER: "1128",
       REVIEW_OUTPUT: reviewOutput,
@@ -81,16 +78,12 @@ function workspace() {
     githubOutput,
     reviewOutput,
     root,
-    summary,
   };
 }
 
-function saveResult(reviewOutput: string, summary?: string): void {
-  mkdirSync(join(reviewOutput, "run", "delivery"), { recursive: true });
+function saveResult(reviewOutput: string): void {
+  mkdirSync(join(reviewOutput, "run"), { recursive: true });
   writeFileSync(join(reviewOutput, "run", "review.json"), "{}");
-  if (summary != null) {
-    writeFileSync(join(reviewOutput, "run", "delivery", "github.md"), summary);
-  }
 }
 
 const found = (directory: string) =>
@@ -256,21 +249,19 @@ describe("history", () => {
 });
 
 describe("result", () => {
-  test("default: a saved result is exposed with its summary", () => {
-    const { env, githubOutput, reviewOutput, summary } = workspace();
-    saveResult(reviewOutput, "## Lupin review\n");
+  test("default: a saved result is exposed to the publisher", () => {
+    const { env, githubOutput, reviewOutput } = workspace();
+    saveResult(reviewOutput);
 
     expect(result({ env })).toBe(true);
     expect(readFileSync(githubOutput, "utf8")).toBe("present=true\n");
-    expect(readFileSync(summary, "utf8")).toBe("## Lupin review\n");
   });
 
-  test("behavior: a missing result is summarized as a failure", () => {
-    const { env, githubOutput, summary } = workspace();
+  test("behavior: a missing result is not exposed", () => {
+    const { env, githubOutput } = workspace();
 
     expect(result({ env })).toBe(false);
     expect(readFileSync(githubOutput, "utf8")).toBe("");
-    expect(readFileSync(summary, "utf8")).toMatch(/did not produce a result/);
   });
 });
 

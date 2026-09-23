@@ -9,20 +9,14 @@
  *
  * Every mode reads `REVIEW_OUTPUT`. `history` also reads `LUPIN` (the pinned executable),
  * `GITHUB_REPOSITORY`, `PR_NUMBER`, `RUNNER_TEMP` and `GITHUB_OUTPUT`; `result` reads
- * `GITHUB_OUTPUT` and `GITHUB_STEP_SUMMARY`; `publish` reads `LUPIN`, `GITHUB_REPOSITORY`,
+ * `GITHUB_OUTPUT`; `publish` reads `LUPIN`, `GITHUB_REPOSITORY`,
  * `PR_NUMBER`, `RUN_URL`, `GITHUB_RUN_ATTEMPT`, `REVIEW_RESULT` and `START_RESULT`. Lupin owns
  * admission, review and publication; this script only chooses which Lupin command runs and never
  * turns a missing result into a clean review.
  */
 
 import { spawnSync } from "node:child_process";
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -238,22 +232,15 @@ export function history(options: LupinReviewOptions = {}): PreviousReview {
   return previous;
 }
 
-/** Records whether the run saved a result and copies its GitHub summary into the job summary. */
+/** Records whether the run saved a result the publisher can deliver. */
 export function result(options: LupinReviewOptions = {}): boolean {
   const env = options.env ?? process.env;
-  const runDirectory = join(readRequiredEnv(env, "REVIEW_OUTPUT"), "run");
-  const summaryPath = join(runDirectory, "delivery", "github.md");
-  const present = existsSync(join(runDirectory, "review.json"));
-
+  const present = existsSync(
+    join(readRequiredEnv(env, "REVIEW_OUTPUT"), "run", "review.json"),
+  );
   if (present) {
     appendFileSync(readRequiredEnv(env, "GITHUB_OUTPUT"), "present=true\n");
   }
-  appendFileSync(
-    readRequiredEnv(env, "GITHUB_STEP_SUMMARY"),
-    existsSync(summaryPath)
-      ? readFileSync(summaryPath, "utf8")
-      : "Review did not produce a result. Inspect the review artifact and job logs.\n",
-  );
 
   return present;
 }
