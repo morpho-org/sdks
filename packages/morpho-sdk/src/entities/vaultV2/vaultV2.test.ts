@@ -46,7 +46,11 @@ describe("MorphoVaultV2 chain validation", () => {
       .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
 
     expect(() =>
-      vault.withdraw({ amount: 1n, userAddress: KeyrockUsdcVaultV2.address }),
+      vault.withdraw({
+        amount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: {} as never,
+      }),
     ).toThrow(ChainIdMismatchError);
     expect(() =>
       vault.redeem({ shares: 1n, userAddress: KeyrockUsdcVaultV2.address }),

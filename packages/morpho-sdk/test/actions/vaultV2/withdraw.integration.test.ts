@@ -34,6 +34,7 @@ describe("Withdraw VaultV2", () => {
         const withdraw = vaultV2.withdraw({
           userAddress: client.account.address,
           amount: assets,
+          vaultData: await vaultV2.getData(),
         });
         const requirements = await withdraw.getRequirements();
         expect(requirements).toHaveLength(1);
@@ -86,6 +87,7 @@ describe("Withdraw VaultV2", () => {
         const withdraw = vaultV2.withdraw({
           userAddress: client.account.address,
           amount: assets,
+          vaultData: await vaultV2.getData(),
         });
         const requirements = await withdraw.getRequirements();
         expect(requirements).toHaveLength(1);

@@ -3,19 +3,15 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   createPublicClient,
   createWalletClient,
-  decodeFunctionData,
   erc20Abi,
   http,
   maxUint256,
-  serializeSignature,
-  toHex,
 } from "viem";
 import { fraxtal, mainnet } from "viem/chains";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { inKindVaultV1Data } from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
-import { vaultBundlesV1Abi } from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
@@ -113,7 +109,7 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
   const targetVault = "0x0000000000000000000000000000000000000002" as const;
   const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
 
-  test("behavior: a withdrawal permit above the resolved share cap encodes its signed amount", async () => {
+  test("error: BundlesPermitMismatchError for a withdrawal permit above the share cap", async () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
@@ -124,7 +120,6 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
       toShares: () => 10n,
       accrueInterest: () => ({ toShares: () => 10n }),
     } as never;
-    const getData = vi.spyOn(vault, "getData").mockResolvedValue(vaultData);
     mockRead(handle, {
       address: SteakhouseUsdcVaultV1.address,
       abi: erc20Abi,
@@ -134,6 +129,7 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
     const withdrawal = vault.withdraw({
       amount: 100n,
       userAddress: owner,
+      vaultData,
       slippageTolerance: 0n,
       deadline: maxUint256,
     });
@@ -144,11 +140,7 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
         amount: 11n,
         nonce: 0n,
         deadline: maxUint256,
-        signature: serializeSignature({
-          r: toHex(1n, { size: 32 }),
-          s: toHex(2n, { size: 32 }),
-          yParity: 0,
-        }),
+        signature: "0x",
       },
       action: {
         type: "permit",
@@ -161,16 +153,13 @@ describe("MorphoVaultV1 asset exit permit validation", () => {
     // Re-resolution re-reads the live allowance, so the array is rebuilt rather than memoized;
     // the cap it reports must still be the one this handle already committed to.
     expect(await withdrawal.getRequirements()).toStrictEqual(requirements);
-    expect(getData).toHaveBeenCalledOnce();
 
-    // The cap is signing-time state carried by the signature: `buildTx()` no longer rejects a
-    // permit above it, and the encoded permit value is the signed amount.
-    const tx = withdrawal.buildTx([oversizedPermit]);
-    const { args } = decodeFunctionData({
-      abi: vaultBundlesV1Abi,
-      data: tx.data,
-    });
-    expect(args?.[3]).toMatchObject({ value: 11n });
+    expect(() => withdrawal.buildTx([oversizedPermit])).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "amount",
+      }),
+    );
   });
 
   test("error: BundlesPermitMismatchError for an asset migration permit above the computed share cap", () => {
@@ -275,6 +264,12 @@ describe("MorphoVaultV1 withdraw input validation", () => {
           vault.withdraw({
             amount: 1n,
             userAddress: SteakhouseUsdcVaultV1.address,
+            vaultData: {
+              address: SteakhouseUsdcVaultV1.address,
+              asset: SteakhouseUsdcVaultV1.asset,
+              toShares: () => 1n,
+              accrueInterest: () => ({ toShares: () => 1n }),
+            } as never,
             ...params,
           }),
         ),
@@ -293,6 +288,7 @@ describe("MorphoVaultV1 withdraw input validation", () => {
       vault.withdraw({
         amount: 1n,
         userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: { address: SteakhouseUsdcVaultV1.address } as never,
       }),
     ).toThrow(UnknownAddressError);
     expect(handle.request).not.toHaveBeenCalled();
@@ -303,11 +299,18 @@ describe("MorphoVaultV1 withdraw input validation", () => {
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const vaultData = {
+      address: SteakhouseUsdcVaultV1.address,
+      asset: SteakhouseUsdcVaultV1.asset,
+      toShares: () => 10n,
+      accrueInterest: () => ({ toShares: () => 10n }),
+    } as never;
 
     for (const slippageTolerance of [0n, MAX_SLIPPAGE_TOLERANCE]) {
       const action = vault.withdraw({
         amount: maxUint256,
         userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData,
         slippageTolerance,
       });
       expect(action.buildTx().action.args.amount).toBe(maxUint256);

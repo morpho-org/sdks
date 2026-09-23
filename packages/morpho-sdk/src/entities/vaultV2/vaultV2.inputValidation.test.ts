@@ -142,6 +142,9 @@ describe("MorphoVaultV2 withdraw input validation", () => {
           vault.withdraw({
             amount: 1n,
             userAddress: KeyrockUsdcVaultV2.address,
+            vaultData: inKindVaultV2Data({
+              address: KeyrockUsdcVaultV2.address,
+            }),
             ...params,
           }),
         ),
@@ -160,6 +163,7 @@ describe("MorphoVaultV2 withdraw input validation", () => {
       vault.withdraw({
         amount: 1n,
         userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: { address: KeyrockUsdcVaultV2.address } as never,
       }),
     ).toThrow(UnknownAddressError);
     expect(handle.request).not.toHaveBeenCalled();
@@ -171,10 +175,14 @@ describe("MorphoVaultV2 withdraw input validation", () => {
       .extend(morphoViemExtension())
       .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
 
+    const vaultData = inKindVaultV2Data({
+      address: KeyrockUsdcVaultV2.address,
+    });
     for (const slippageTolerance of [0n, MAX_SLIPPAGE_TOLERANCE]) {
       const action = vault.withdraw({
         amount: maxUint256,
         userAddress: KeyrockUsdcVaultV2.address,
+        vaultData,
         slippageTolerance,
       });
       expect(action.buildTx().action.args.amount).toBe(maxUint256);

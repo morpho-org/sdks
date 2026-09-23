@@ -41,6 +41,7 @@ describe("Withdraw VaultV1", () => {
         const withdraw = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: assets,
+          vaultData: await vaultV1.getData(),
         });
         const requirements = await withdraw.getRequirements();
         expect(requirements).toHaveLength(1);
@@ -106,6 +107,7 @@ describe("Withdraw VaultV1", () => {
         const withdraw = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: assets,
+          vaultData: await vaultV1.getData(),
           referralFeePct,
           referralFeeRecipient,
         });
@@ -167,6 +169,7 @@ describe("Withdraw VaultV1", () => {
         const withdraw1 = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: firstWithdraw,
+          vaultData: await vaultV1.getData(),
         });
         const requirements1 = await withdraw1.getRequirements();
         expect(requirements1).toHaveLength(1);
@@ -180,6 +183,7 @@ describe("Withdraw VaultV1", () => {
         const withdraw2 = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: secondWithdraw,
+          vaultData: await vaultV1.getData(),
         });
         const requirements2 = await withdraw2.getRequirements();
         expect(requirements2).toHaveLength(1);
@@ -235,6 +239,7 @@ describe("Withdraw VaultV1", () => {
         const withdraw = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: assets,
+          vaultData: await vaultV1.getData(),
         });
         const requirements = await withdraw.getRequirements();
         expect(requirements).toHaveLength(1);

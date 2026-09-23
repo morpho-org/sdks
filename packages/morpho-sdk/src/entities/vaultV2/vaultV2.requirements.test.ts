@@ -540,10 +540,10 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
       const vault = handle.client
         .extend(morphoViemExtension({ supportSignature: true }))
         .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
       const params = {
         amount,
         userAddress: IN_KIND_USER as Address,
+        vaultData: inKindVaultV2Data(),
         deadline: Time.timestamp() + 7_200n,
       };
       const reference = vault.withdraw({ ...params });
@@ -602,12 +602,12 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const getData = vi
-      .spyOn(vault, "getData")
-      .mockResolvedValue(inKindVaultV2Data());
     return {
-      getData,
-      withdraw: vault.withdraw({ amount, userAddress: IN_KIND_USER }),
+      withdraw: vault.withdraw({
+        amount,
+        userAddress: IN_KIND_USER,
+        vaultData: inKindVaultV2Data(),
+      }),
     };
   };
 
@@ -648,14 +648,12 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
       functionName: "allowance",
       result: 0n,
     });
-    const { getData, withdraw } = prepareWithdraw(handle);
+    const { withdraw } = prepareWithdraw(handle);
 
     const first = await withdraw.getRequirements();
     const second = await withdraw.getRequirements();
 
-    // Re-reading the allowance must not retarget the cap this handle already committed to, so
-    // the vault snapshot it was derived from is fetched exactly once.
-    expect(getData).toHaveBeenCalledTimes(1);
+    // Re-reading the allowance must not retarget the cap derived from `vaultData` at creation.
     expect(countAllowanceReads(handle)).toBe(2);
     expect(
       second.filter(isRequirementApproval).map(({ action }) => action.args),
@@ -681,10 +679,10 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
     const withdraw = vault.withdraw({
       amount,
       userAddress: IN_KIND_USER,
+      vaultData: inKindVaultV2Data(),
       deadline: Time.timestamp() + 7_200n,
     });
     const permit = (await withdraw.getRequirements()).find(
@@ -709,8 +707,8 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     } satisfies BundlesTokenRequirementSignature;
     expect(() => withdraw.buildTx([signature])).not.toThrow();
 
-    // An oversized allowance is reset onchain; the earlier permit still finalizes since
-    // `buildTx()` no longer cross-checks the cap, and its nonce is verified by the vault.
+    // An oversized allowance is reset onchain; the earlier permit still finalizes since it
+    // matches the cap derived from `vaultData`, and its nonce is verified by the vault.
     mockRead(handle, {
       address: IN_KIND_VAULT,
       abi: erc20Abi,
@@ -744,10 +742,10 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV2Data());
     const params = {
       amount,
       userAddress: IN_KIND_USER as Address,
+      vaultData: inKindVaultV2Data(),
       deadline: Time.timestamp() + 7_200n,
     };
     const withdrawA = vault.withdraw(params);
@@ -776,6 +774,21 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     const withdrawB = vault.withdraw(params);
     expect(withdrawB.buildTx([signature])).toEqual(
       withdrawA.buildTx([signature]),
+    );
+
+    // A permit signed for a larger amount than the derived share cap is rejected.
+    const oversizedSignature = {
+      action: {
+        ...permit.action,
+        args: { ...permit.action.args, amount: permit.action.args.amount + 1n },
+      },
+      args: { ...signature.args, amount: permit.action.args.amount + 1n },
+    } satisfies Erc2612RequirementSignature;
+    expect(() => withdrawB.buildTx([oversizedSignature])).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "amount",
+      }),
     );
   });
 });

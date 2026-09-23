@@ -192,13 +192,14 @@ export interface VaultV2Actions {
   /**
    * Prepares an exact-assets Vault V2 withdrawal through VaultBundlesV1.
    *
-   * Reads the vault accrual state on the first `getRequirements()` call, then reads the live
-   * vault-share allowance and, when a signature is needed, the permit nonce on each call.
-   * Captures the requested amount and owner at creation, so later changes to `params` do not
-   * change this handle's requirements or transaction.
+   * Derives the share-burn cap from the supplied `vaultData` snapshot at handle creation, then
+   * reads the live vault-share allowance and, when a signature is needed, the permit nonce on
+   * each `getRequirements()` call. Captures the requested amount and owner at creation, so later
+   * changes to `params` do not change this handle's requirements or transaction.
    *
    * @param params.amount - Positive gross withdrawal in underlying asset base units, before fees.
    * @param params.userAddress - Share owner that must sign and submit; receives the net assets.
+   * @param params.vaultData - Pre-fetched Vault V2 snapshot used to derive the share cap.
    * @param params.slippageTolerance - Optional WAD-scaled share-price loss tolerance applied to
    *   the share cap.
    *   Defaults to 0.03% and cannot exceed 10%.
@@ -211,8 +212,8 @@ export interface VaultV2Actions {
    *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
    *   when the allowance equals the cap; an oversized allowance is always reset with an exact
    *   onchain approval, and an insufficient one is raised by an approval or, with signature
-   *   support, an ERC-2612 request. The cap stays pinned to the first resolution while each call
-   *   re-reads the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
+   *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
@@ -222,12 +223,13 @@ export interface VaultV2Actions {
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds 10%.
+   * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
-   *   its spender or deadline differ from this operation's.
+   *   its spender, amount or deadline differ from this operation's.
    * @throws {viem.BaseError} when a vault, allowance, or nonce read or transaction encoding fails.
    * @example
    * ```ts
@@ -240,7 +242,8 @@ export interface VaultV2Actions {
    *   const client = createPublicClient({ chain: mainnet, transport: http() })
    *     .extend(morphoViemExtension({ supportSignature: false }));
    *   const vault = client.morpho.vaultV2(vaultAddress, mainnet.id);
-   *   const action = vault.withdraw({ amount: 1_000_000n, userAddress });
+   *   const vaultData = await vault.getData();
+   *   const action = vault.withdraw({ amount: 1_000_000n, userAddress, vaultData });
    *   const requirements = await action.getRequirements();
    *   // Send and confirm each approval before calling action.buildTx().
    *   // action.buildTx() returns Readonly<Transaction<VaultV2WithdrawAction>>.
@@ -251,6 +254,7 @@ export interface VaultV2Actions {
   withdraw: (params: {
     readonly amount: bigint;
     readonly userAddress: Address;
+    readonly vaultData: AccrualVaultV2;
     readonly slippageTolerance?: bigint;
     readonly referralFeePct?: bigint;
     readonly referralFeeRecipient?: Address;
@@ -717,13 +721,17 @@ export class MorphoVaultV2 implements VaultV2Actions {
   withdraw(params: {
     readonly amount: bigint;
     readonly userAddress: Address;
+    readonly vaultData: AccrualVaultV2;
     readonly slippageTolerance?: bigint;
     readonly referralFeePct?: bigint;
     readonly referralFeeRecipient?: Address;
     readonly deadline?: bigint;
   }) {
-    const { amount, userAddress } = params;
+    const { amount, userAddress, vaultData } = params;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (!isAddressEqual(vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, vaultData.address);
+    }
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
     // Reject values outside the ABI range before resolving any requirements.
     validateUint256Field("amount", amount);
@@ -741,8 +749,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
     validateSlippageTolerance(slippageTolerance);
     // Fail eagerly if VaultBundlesV1 is unavailable; only validation is needed here.
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
-    let requiredShareAllowance: bigint | undefined;
-    let vaultSnapshot: AccrualVaultV2 | undefined;
+    const requiredShareAllowance = computeVaultMaxShareAllowance({
+      vaultData,
+      deadline,
+      assets: amount,
+      slippageTolerance,
+    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
@@ -750,17 +762,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
         // Re-read the live share allowance on every call instead of caching the resolved
         // requirements: the allowance is the sole cap on the burn, so a caller that executed the
         // returned approval must see it satisfied on the next call, and an allowance revoked or
-        // raised afterwards must resurface as an outstanding requirement. Only the vault snapshot
-        // and the cap derived from it are pinned, so re-reading cannot move the cap this handle
-        // already committed to; the snapshot is used for immutable identity and permit-domain
-        // fields only.
-        const vaultData = (vaultSnapshot ??= await this.getData());
-        requiredShareAllowance ??= computeVaultMaxShareAllowance({
-          vaultData,
-          deadline,
-          assets: amount,
-          slippageTolerance,
-        });
+        // raised afterwards must resurface as an outstanding requirement. The cap derived from
+        // `vaultData` is pinned at handle creation, so re-reading cannot move it.
         return getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData,
           version: "vaultV2",
@@ -774,6 +777,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const permit = selectBundlesSharesPermitSignature(signatures, {
           spender,
+          amount: requiredShareAllowance,
           deadline,
         });
         return vaultV2Withdraw({

@@ -488,15 +488,6 @@ describe("selectBundlesSharesPermitSignature", () => {
       );
     },
   );
-
-  test("behavior: accepts any signed amount when expected.amount is omitted", () => {
-    expect(
-      selectBundlesSharesPermitSignature([permit], {
-        spender,
-        deadline: 11n,
-      }),
-    ).toEqual(permit);
-  });
 });
 
 describe("selectBundlesTokenRequirementSignature", () => {

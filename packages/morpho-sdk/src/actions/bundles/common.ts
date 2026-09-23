@@ -598,22 +598,20 @@ export const selectBundlesTokenRequirementSignature = (
  * @internal
  *
  * @param signatures - Signatures passed to the operation's `buildTx` function.
- * @param expected - Immutable spender and deadline required by the operation, plus an optional
- *   share cap.
+ * @param expected - Immutable spender, amount, and deadline required by the operation.
  * @param expected.spender - Fixed bundles contract the permit must authorize.
- * @param expected.amount - Optional exact share allowance; checked only when supplied. Omit it
- *   when the cap is signing-time state carried by the signature itself.
+ * @param expected.amount - Exact share allowance the permit must cover.
  * @param expected.deadline - Deadline the permit must carry.
  * @returns The matching ERC-2612 signature, or `undefined` when no signature is supplied.
  * @throws {BundlesPermitMismatchError} when the signature is not ERC-2612 or its spender, amount
- *   (when `expected.amount` is supplied), or deadline differ from the operation's. The nonce is
- *   not checked here: it is onchain state the vault's `permit` verifies at execution.
+ *   or deadline differ from the operation's. The nonce is not checked here: it is onchain state
+ *   the vault's `permit` verifies at execution.
  */
 export const selectBundlesSharesPermitSignature = (
   signatures: readonly RequirementSignature[] | undefined,
   expected: {
     readonly spender: Address;
-    readonly amount?: bigint;
+    readonly amount: bigint;
     readonly deadline: bigint;
   },
 ): Erc2612RequirementSignature | undefined => {
@@ -635,9 +633,8 @@ export const selectBundlesSharesPermitSignature = (
     });
   }
   if (
-    expected.amount != null &&
-    (permit.args.amount !== expected.amount ||
-      action.args.amount !== expected.amount)
+    permit.args.amount !== expected.amount ||
+    action.args.amount !== expected.amount
   ) {
     throw new BundlesPermitMismatchError({
       field: "amount",

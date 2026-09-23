@@ -518,7 +518,8 @@ can inspect the bundle's transient initiator, validate them by simulating the fi
 after satisfying requirements rather than by pre-reading the gate.
 
 ```ts
-const withdrawal = vault.withdraw({ amount, userAddress });
+const vaultData = await vault.getData();
+const withdrawal = vault.withdraw({ amount, userAddress, vaultData });
 const signatures = [];
 for (const requirement of await withdrawal.getRequirements()) {
   if ("sign" in requirement) {
