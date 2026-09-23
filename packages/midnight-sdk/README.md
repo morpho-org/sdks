@@ -199,8 +199,12 @@ export async function takeAskQuoteAtomically(params: {
   const maxBuyerAssets =
     (targetUnits * BigInt(quote.data.averageWorstPrice) + WAD - 1n) / WAD;
 
-  // The taker must have approved `midnightBundles` to spend `maxBuyerAssets` of the loan
-  // token beforehand (or pass an ERC-2612/Permit2 payload as `loanTokenPermit`).
+  // Two confirmed prerequisites before this call: the taker has approved `midnightBundles`
+  // to spend `maxBuyerAssets` of the loan token (or passes an ERC-2612/Permit2 payload as
+  // `loanTokenPermit`), and has authorized the bundle on Midnight via
+  // `Midnight.setIsAuthorized(midnightBundles, true, taker)` so it can act on the taker's
+  // behalf (`@morpho-org/morpho-sdk`'s `getMidnightAuthorizationRequirement` resolves this
+  // for you).
   return params.walletClient.writeContract({
     account: params.taker,
     chain: base,
