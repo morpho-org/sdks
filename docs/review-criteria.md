@@ -2,7 +2,7 @@
 
 [The SDK policy](../.review/manifest.json) prepares Lupin to replace the existing AI review orchestration. It prioritizes business logic, integrator safety and CI/release integrity, with supported, non-obvious findings over optional style comments. Both independent reviewers receive the same [five-area brief](../.review/review.md); synthesis receives it too.
 
-The initial reviewers are Claude and OpenAI through Pi/Vercel, using the existing Claude/Codex lens IDs. Adding this policy enables no workflow and changes no merge gate. The current engine remains active under [AGENTS.md §10](../AGENTS.md#10-review-automation--cirelease-security) until coordinated cutover.
+The initial reviewers are Claude and OpenAI through Pi/Vercel, using the existing Claude/Codex lens IDs. The [Lupin workflow](#hosted-workflow) runs them on request and changes no merge gate. The current engine remains active under [AGENTS.md §10](../AGENTS.md#10-review-automation--cirelease-security) until coordinated cutover.
 
 ## Ownership
 
@@ -56,8 +56,27 @@ The checked shared policy requests changes for retained critical/warning finding
 
 Preparation and preview establish supplied inputs, not review accuracy. Evaluate fixed revisions/context/model settings against earlier defects and clean counterparts, including business logic, compatibility and CI/release cases. Inspect supported findings, false alarms, missed obligations, repeated findings and coverage honesty. Measure total review-plus-fix cost and author rounds separately from isolated review latency; fewer skills or comments alone proves no improvement.
 
+## Hosted workflow
+
+[`lupin.yml`](../.github/workflows/lupin.yml) runs the reviewers above. A maintainer requests a review of the current revision with a PR comment whose first line is `/lupin review`, optionally followed by guidance, or dispatches the workflow with a PR number. Lupin also requires write, maintain or admin permission from the commenter. Fork PRs are never reviewed.
+
+- **Admission** (`start`) freezes the exact head/base, supersedes older runs of the PR and acknowledges the request.
+- **Review** has read-only credentials. It fetches the PR as Git objects, supplies the previous completed review of the PR when its artifact and revisions are still available, and runs both reviewers and synthesis in a read-only sandbox. There is no job timeout; elapsed time is diagnostic.
+- **Publication** (`comment`) is the only write-scoped job. It posts one overview plus inline findings (`--delivery comment`) and submits no formal approval or change request; human approval remains the merge gate. A run without a result records a failed or cancelled status rather than looking clean.
+
+[`scripts/ci/lupin-review.ts`](../scripts/ci/lupin-review.ts) owns the workflow's data-driven choices (history, result, publication), per §10. Every job installs the standalone Lupin release pinned in [`install-lupin`](../.github/actions/install-lupin/action.yml) and verifies its checksum; upgrade the version and checksum together, then recheck the resolved composition. The executable comes from the private `morpho-org/internal-tools` release and is never uploaded as an artifact here. Review artifacts keep 30 days of evidence and history.
+
+Repository administration supplies:
+
+| Setting | Purpose |
+| --- | --- |
+| `AI_GATEWAY_API_KEY` secret | Vercel AI Gateway key billed for the review models |
+| `LUPIN_RELEASE_APP_ID`, `LUPIN_RELEASE_APP_PRIVATE_KEY` secrets | GitHub App installed on `morpho-org/internal-tools` with read-only Contents, used for a short-lived release download token |
+| `LUPIN_AUTO_REVIEW` variable | Unset until cutover. `true` also reviews eligible non-draft, same-repository, non-Dependabot PR updates on every target branch |
+| `LUPIN_AUTOMATIC_LINE_LIMIT` variable | Optional exclusive additions-plus-deletions limit for automatic review; larger PRs need an explicit request |
+
 ## Cutover
 
-Enablement remains separate: verify distribution/bootstrap and invocation, remove competing automatic review triggers, and reconcile root §10/backlinks, command symlinks, old scripts/tests and workflow references. Preserve engineering/security checks and human merge gates.
+Enablement remains separate: verify distribution/bootstrap and invocation on a requested review, then enable `LUPIN_AUTO_REVIEW` when the change removing competing automatic review triggers lands, and reconcile root §10/backlinks, command symlinks, old scripts/tests and workflow references. Preserve engineering/security checks and human merge gates.
 
 Verify the author/fixer can consume Lupin feedback and resubmit, including failed reviews, rejected findings and repeated claims. Its coordination owns edit permissions, retry/stop conditions and escalation. Verify review publication and history-aware reassessment on the intended revision before calling the replacement operational.
