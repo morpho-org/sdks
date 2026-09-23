@@ -40,7 +40,10 @@ export interface BumpEvent {
   /** ISO-8601 publication timestamp of the target version. */
   readonly publishDate: string;
   readonly ageGate: "satisfied";
-  /** Manifest files where the dependency is declared. */
+  /**
+   * Files where the dependency is declared: `package.json`/`pnpm-workspace.yaml` for npm,
+   * workflow files under `.github/workflows/` for actions.
+   */
   readonly targets: readonly string[];
   /** Resolved commit SHA of the target release (actions only). */
   readonly sha?: string;
@@ -509,7 +512,8 @@ export function mergeBumpEvents(events: readonly BumpEvent[]): BumpEvent[] {
 
 /**
  * Resolves the minimum version of an npm spec (`semver.minVersion`), or `null` when the spec
- * cannot be parsed (e.g. a dist-tag like `latest`).
+ * cannot be parsed (e.g. a dist-tag like `latest`) or when the range is valid but unsatisfiable
+ * (e.g. `<0.0.0`).
  */
 export function parseSpecMinVersion(spec: string): string | null {
   return validRange(spec) != null ? (minVersion(spec)?.version ?? null) : null;
@@ -611,11 +615,24 @@ function readWorkspaceFiles(rootDir: string): {
   ];
   const packagesDir = resolve(rootDir, "packages");
   for (const dir of readdirSync(packagesDir, { withFileTypes: true })) {
-    if (!dir.isDirectory() || !/^[\w.-]+$/.test(dir.name)) continue;
+    const skipReason = !dir.isDirectory()
+      ? "not a directory"
+      : /^[\w.-]+$/.test(dir.name)
+        ? null
+        : "invalid directory name";
+    if (skipReason != null) {
+      console.log(`::notice::skipping packages/${dir.name}: ${skipReason}`);
+      continue;
+    }
     // Resolve inside packagesDir and verify containment before reading — the name comes from
     // readdir output, so path traversal must be impossible.
     const manifestPath = resolve(packagesDir, dir.name, "package.json");
-    if (!manifestPath.startsWith(packagesDir + sep)) continue;
+    if (!manifestPath.startsWith(packagesDir + sep)) {
+      console.log(
+        `::notice::skipping packages/${dir.name}: resolves outside packages/`,
+      );
+      continue;
+    }
     const path = join("packages", dir.name, "package.json");
     try {
       packageJsonFiles.push({

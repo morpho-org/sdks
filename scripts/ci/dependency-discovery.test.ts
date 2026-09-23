@@ -1424,6 +1424,80 @@ describe("main", () => {
     ]);
   });
 
+  test("behavior: logs a notice for filtered packages entries", async () => {
+    const rootDir = fixtureRoot({ lodash: "^4.0.0" });
+    writeFileSync(join(rootDir, "packages", "README.md"), "hi");
+    mkdirSync(join(rootDir, "packages", "bad name"), { recursive: true });
+    writeFileSync(
+      join(rootDir, "packages", "bad name", "package.json"),
+      JSON.stringify({ dependencies: { lodash: "^4.0.0" } }),
+    );
+    const logs: string[] = [];
+    const notices: string[] = [];
+    const spy = vi
+      .spyOn(console, "log")
+      .mockImplementation((message?: unknown) => {
+        notices.push(String(message));
+      });
+
+    try {
+      await main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+        fetch: stubFetch([]),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: (message) => logs.push(message),
+        dryRun: true,
+        rootDir,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(notices).toContain(
+      "::notice::skipping packages/README.md: not a directory",
+    );
+    expect(notices).toContain(
+      "::notice::skipping packages/bad name: invalid directory name",
+    );
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    const lodash = events.find((event) => event.package === "lodash");
+    expect(lodash?.targets).toEqual(["package.json"]);
+  });
+
+  test("behavior: defaults to dispatching at most 10 bumps per run", async () => {
+    const dependencies = Object.fromEntries(
+      Array.from({ length: 11 }, (_, i) => [`pkg${i}`, "^1.0.0"]),
+    );
+    const rootDir = fixtureRoot(dependencies);
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token" },
+      fetch: async (url, init) =>
+        url.startsWith("https://registry.npmjs.org/")
+          ? ok({
+              time: {
+                "1.0.0": "2020-01-01T00:00:00Z",
+                "2.0.0": "2020-01-02T00:00:00Z",
+              },
+              versions: { "1.0.0": {}, "2.0.0": {} },
+            })
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(10);
+  });
+
   test("error: a failed annotated-tag dereference aborts the run", async () => {
     const rootDir = fixtureRoot({});
     const base = stubFetch([]);
