@@ -331,7 +331,7 @@ export namespace PriceRatifierV1 {
    *   ratifier: "0x000000000000000000000000000000000000a111",
    *   maxUnits: 100n,
    * });
-   * const leaves = [{ offer }, { offer: Offer.from({ ...offer, buy: false }) }];
+   * const leaves = [{ offer }, { offer: Offer.from({ ...offer, tick: 5_004n }) }];
    *
    * const group = PriceRatifierV1.groupId(leaves);
    * const grouped = leaves.map((leaf) => ({

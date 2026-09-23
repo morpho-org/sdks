@@ -380,7 +380,7 @@ export namespace RateRatifierV1 {
    * });
    * const leaves = [
    *   { offer, rate: 50_000_000_000_000_000n },
-   *   { offer: Offer.from({ ...offer, buy: false }), rate: 60_000_000_000_000_000n },
+   *   { offer: Offer.from({ ...offer, tick: 5_004n }), rate: 60_000_000_000_000_000n },
    * ];
    *
    * const group = RateRatifierV1.groupId(leaves);

@@ -320,7 +320,7 @@ describe("RateRatifierV1.buildDescriptor", () => {
   });
 
   test("error: InvalidRateRatifierV1RateError from memberHash and groupId", () => {
-    const negative = { offer: baseOffer, rate: -1n };
+    const negative = { offer: baseOffer(), rate: -1n };
     expect(() => RateRatifierV1.memberHash(negative)).toThrow(
       InvalidRateRatifierV1RateError,
     );
