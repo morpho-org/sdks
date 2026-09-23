@@ -1,3 +1,4 @@
+import { Time } from "@morpho-org/morpho-ts";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -123,7 +124,7 @@ describe("MigrateToV2 VaultV1", () => {
         const timestamp = await client.timestamp();
         // The permit deadline is freshness-checked against the wall clock, not the
         // (stale) pinned fork timestamp.
-        const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n;
+        const deadline = Time.timestamp() + 7_200n;
         const migrate = withChainTimestamp(timestamp, () =>
           vaultV1.migrateToV2({
             userAddress: client.account.address,

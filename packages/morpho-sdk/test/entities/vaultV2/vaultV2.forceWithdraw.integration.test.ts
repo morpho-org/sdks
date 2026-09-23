@@ -231,7 +231,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     const initial = await balances(client, vaultAddress);
     // The permit deadline is freshness-checked against the wall clock, not the
     // (stale) pinned fork timestamp.
-    const deadline = BigInt(Math.floor(Date.now() / 1_000)) + 7_200n;
+    const deadline = Time.timestamp() + 7_200n;
     const exit = withChainTimestamp(await client.timestamp(), () =>
       vault.forceWithdraw({
         exitAssets,
