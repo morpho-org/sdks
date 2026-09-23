@@ -60,12 +60,14 @@ resolved.
 - If `buildTx()` needs a value the caller cannot know before requirements resolve (a Permit2
   funding cap, a Midnight offer-root payload), then that value is read from the matching
   signature's `args`. An identity field the handle can re-derive from its immutable inputs
-  (spender, deadline, owner, root, offer count) is compared to them and a mismatch is rejected with
-  a typed error rather than silently replaced. A bound the signer may legitimately have signed
-  wider than the fresh derivation (the Blue share-mode repay funding cap) is validated as a lower
-  bound: the signed cap is encoded as-is and `MaxRepayAssetsBelowRepayAssetsError` fires only when
-  it no longer covers the freshly derived minimum. An opaque payload the handle cannot re-derive
-  synchronously (the Midnight encoded offer-root payload) is bound to the handle through the
+  (spender, owner, root, offer count) is compared to them and a mismatch is rejected with a typed
+  error rather than silently replaced. A field the chain enforces itself (the signed deadline) is
+  checked for `args` ↔ `action.args` consistency with a typed error and encoded as signed. A bound
+  the signer may legitimately have signed wider than the fresh derivation (the Blue share-mode
+  repay funding cap) is validated as a lower bound: the signed cap is encoded as-is and
+  `MaxRepayAssetsBelowRepayAssetsError` fires only when it no longer covers the freshly derived
+  minimum. An opaque payload the handle cannot re-derive synchronously (the Midnight encoded
+  offer-root payload) is bound to the handle through the
   validation of its sibling `args` and a presence check; `buildTx()` does not promise byte-level
   integrity of such a payload. Integrity of an opaque payload across storage and transport is the
   caller's obligation (the signature it accompanies is the caller's proof of origin), exactly as
