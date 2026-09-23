@@ -90,7 +90,7 @@ export function readMinimumReleaseAgeMinutes(workspaceYaml: string): number {
  * Collects npm dependency specs across the workspace: every `package.json` handed in (typically
  * the root plus `packages/<pkg>/package.json`), plus `catalog:` and `overrides:` entries in
  * `pnpm-workspace.yaml` (targeted as `"pnpm-workspace.yaml"`). `peerDependencies`, `workspace:`,
- * `catalog:`, `link:`, `file:` and git/URL specs are skipped. The same package under different specs yields separate
+ * `catalog:`, `link:`, `file:`, `npm:` and git/URL specs are skipped. The same package under different specs yields separate
  * entries keyed `name@spec`, so each resolvable range produces its own bump event.
  */
 export function collectNpmDependencies(
@@ -173,12 +173,7 @@ export function selectNpmTarget(
     minAgeMinutes: number;
   },
 ): { to: string; publishDate: string } | null {
-  let current: ReturnType<typeof minVersion>;
-  try {
-    current = minVersion(spec);
-  } catch {
-    return null;
-  }
+  const current = parseSpecMinVersion(spec);
   if (current == null) return null;
 
   const cutoff = now.getTime() - minAgeMinutes * 60_000;
@@ -186,7 +181,7 @@ export function selectNpmTarget(
   for (const [version, time] of Object.entries(versions)) {
     const parsed = valid(version);
     if (parsed == null || prerelease(version) != null) continue;
-    if (!gt(version, current.version)) continue;
+    if (!gt(version, current)) continue;
     const published = Date.parse(time);
     if (Number.isNaN(published) || published > cutoff) continue;
     if (best == null || gt(version, best)) best = version;
@@ -417,6 +412,18 @@ export function mergeBumpEvents(events: readonly BumpEvent[]): BumpEvent[] {
   return [...merged.values()];
 }
 
+/**
+ * Resolves the minimum version of an npm spec (`semver.minVersion`), or `null` when the spec
+ * cannot be parsed (e.g. a dist-tag like `latest`).
+ */
+export function parseSpecMinVersion(spec: string): string | null {
+  try {
+    return minVersion(spec)?.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const REPO = "morpho-org/sdks";
 
 /**
@@ -567,10 +574,11 @@ export async function main(options: MainOptions = {}): Promise<void> {
   const secret = dryRun
     ? ""
     : readRequiredEnv(env, "DEVIN_DEPENDENCY_WEBHOOK_SECRET");
-  const maxDispatch = Number.parseInt(env.MAX_DISPATCH_PER_RUN ?? "10", 10);
-  if (Number.isNaN(maxDispatch) || maxDispatch < 0) {
+  const rawMaxDispatch = env.MAX_DISPATCH_PER_RUN ?? "10";
+  if (!/^\d+$/.test(rawMaxDispatch)) {
     throw new Error("MAX_DISPATCH_PER_RUN must be a non-negative integer.");
   }
+  const maxDispatch = Number.parseInt(rawMaxDispatch, 10);
 
   const { workspaceYaml, packageJsonFiles, workflowFiles } =
     readWorkspaceFiles(rootDir);
@@ -609,14 +617,17 @@ export async function main(options: MainOptions = {}): Promise<void> {
       }
       metadataCache.set(pkgName, versions);
     }
+    const from = parseSpecMinVersion(dep.spec);
+    if (from == null) {
+      log(`::notice::skipping ${key}: unparseable spec`);
+      continue;
+    }
     const target = selectNpmTarget(dep.spec, {
       versions,
       now,
       minAgeMinutes,
     });
     if (target == null) continue;
-    const from = minVersion(dep.spec)?.version;
-    if (from == null) continue;
     events.push(
       buildBumpEvent({
         ecosystem: "npm",

@@ -50,6 +50,18 @@ describe("readMinimumReleaseAgeMinutes", () => {
       readMinimumReleaseAgeMinutes("minimumReleaseAge: abc"),
     ).toThrowError("Unparseable minimumReleaseAge in pnpm-workspace.yaml");
   });
+
+  test("behavior: accepts a quoted value", () => {
+    expect(readMinimumReleaseAgeMinutes('minimumReleaseAge: "4320"')).toBe(
+      4320,
+    );
+  });
+
+  test("error: throws on zero", () => {
+    expect(() =>
+      readMinimumReleaseAgeMinutes("minimumReleaseAge: 0"),
+    ).toThrowError("Unparseable minimumReleaseAge in pnpm-workspace.yaml");
+  });
 });
 
 describe("collectNpmDependencies", () => {
@@ -132,6 +144,7 @@ describe("collectNpmDependencies", () => {
               b: "file:./b.tgz",
               c: "git+https://example.com/c.git",
               d: "https://example.com/d.tgz",
+              e: "npm:lodash@^4.0.0",
             },
           }),
         },
@@ -679,19 +692,19 @@ describe("main", () => {
     }
   });
 
-  function fixtureRoot(): string {
+  function fixtureRoot(
+    dependencies: Record<string, string> = {
+      lodash: "^4.0.0",
+      "@scope/name": "^1.0.0",
+    },
+  ): string {
     const dir = mkdtempSync(join(tmpdir(), "dependency-discovery-"));
     dirs.push(dir);
     writeFileSync(
       join(dir, "pnpm-workspace.yaml"),
       "minimumReleaseAge: 4320\n",
     );
-    writeFileSync(
-      join(dir, "package.json"),
-      JSON.stringify({
-        dependencies: { lodash: "^4.0.0", "@scope/name": "^1.0.0" },
-      }),
-    );
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ dependencies }));
     mkdirSync(join(dir, "packages", "x"), { recursive: true });
     writeFileSync(
       join(dir, "packages", "x", "package.json"),
@@ -739,6 +752,9 @@ describe("main", () => {
       }
       if (url.endsWith("/git/ref/tags/v8.0.0")) {
         return ok({ object: { sha: "tagsha", type: "tag" } });
+      }
+      if (url.endsWith("/git/ref/tags/v9.0.0")) {
+        return ok({ object: { sha: "lightsha", type: "commit" } });
       }
       if (url.endsWith("/git/tags/tagsha")) {
         return ok({ object: { sha: "commitsha", type: "commit" } });
@@ -820,6 +836,18 @@ describe("main", () => {
     ).rejects.toThrowError(
       "MAX_DISPATCH_PER_RUN must be a non-negative integer.",
     );
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "5.9" },
+        fetch: stubFetch([]),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: true,
+        rootDir: fixtureRoot(),
+      }),
+    ).rejects.toThrowError(
+      "MAX_DISPATCH_PER_RUN must be a non-negative integer.",
+    );
   });
 
   test("behavior: a failed registry request skips the package but keeps others", async () => {
@@ -876,5 +904,150 @@ describe("main", () => {
     });
 
     expect(logs.filter((line) => line.startsWith("{"))).toHaveLength(0);
+  });
+
+  test("behavior: logs a skip notice for an unparseable spec", async () => {
+    const rootDir = fixtureRoot({ tape: "latest" });
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url === "https://registry.npmjs.org/tape"
+          ? ok({ time: {} })
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    expect(
+      logs.some(
+        (line) =>
+          line.includes("::notice::skipping") &&
+          line.includes("unparseable spec"),
+      ),
+    ).toBe(true);
+    // Only the action event remains.
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.ecosystem).toBe("github-actions");
+  });
+
+  test("behavior: lightweight tag sha needs no dereference", async () => {
+    const rootDir = fixtureRoot({});
+    const calls: string[] = [];
+    const base = stubFetch(calls);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url.endsWith("/releases?per_page=30")
+          ? ok([
+              {
+                tag_name: "v9.0.0",
+                published_at: "2026-01-01T00:00:00Z",
+                prerelease: false,
+              },
+            ])
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.sha).toBe("lightsha");
+    expect(calls.some((url) => url.includes("/git/tags/"))).toBe(false);
+  });
+
+  test("behavior: a failed releases request skips the action but keeps npm bumps", async () => {
+    const rootDir = fixtureRoot({ lodash: "^4.0.0" });
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url.endsWith("/releases?per_page=30")
+          ? { ok: false as const, status: 500, json: async () => ({}) }
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.package).toBe("lodash");
+    expect(
+      logs.some(
+        (line) => line.includes("::notice::") && line.includes("skipping"),
+      ),
+    ).toBe(true);
+  });
+
+  test("default: non-dry-run POSTs each event to the webhook", async () => {
+    const rootDir = fixtureRoot({});
+    const base = stubFetch([]);
+    const logs: string[] = [];
+    const posts: { url: string; init?: Parameters<FetchLike>[1] }[] = [];
+
+    await main({
+      env: {
+        GH_TOKEN: "token",
+        MAX_DISPATCH_PER_RUN: "10",
+        DEVIN_DEPENDENCY_WEBHOOK_URL: "https://hooks.example.com/devin",
+        DEVIN_DEPENDENCY_WEBHOOK_SECRET: "s3cret",
+      },
+      fetch: async (url, init) => {
+        if (url === "https://hooks.example.com/devin") {
+          posts.push({ url, init });
+          return ok({});
+        }
+        return base(url, init);
+      },
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: false,
+      rootDir,
+    });
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.init?.method).toBe("POST");
+    expect(posts[0]?.init?.headers?.["X-Webhook-Secret"]).toBe("s3cret");
+    expect((JSON.parse(posts[0]?.init?.body ?? "") as BumpEvent).package).toBe(
+      "actions/checkout",
+    );
+    expect(logs.some((line) => line.includes("::notice::dispatched"))).toBe(
+      true,
+    );
+  });
+
+  test("error: non-dry-run requires DEVIN_DEPENDENCY_WEBHOOK_URL", async () => {
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+        fetch: stubFetch([]),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: false,
+        rootDir: fixtureRoot(),
+      }),
+    ).rejects.toThrowError(
+      "Missing required environment variable DEVIN_DEPENDENCY_WEBHOOK_URL.",
+    );
   });
 });
