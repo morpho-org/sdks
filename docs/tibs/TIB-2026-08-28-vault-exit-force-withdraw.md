@@ -485,7 +485,7 @@ maintained-dependent audit, or continued availability of the previous major. `fo
 the multicall path for multi-adapter and legacy-adapter vaults, which lose `forceWithdraw`
 entirely. Callers migrate by replacing their deallocation plan with a penalty-inclusive
 `exitAssets` amount (quoted via `previewVaultV2ForceWithdraw`) and supplying a `getData()`
-snapshot; the two canonical error renames keep `instanceof` working through `export const X = Y;`
+snapshot; the three canonical error renames keep `instanceof` working through `export const X = Y;`
 aliases while the deprecated names last.
 
 ## Acceptance Criteria

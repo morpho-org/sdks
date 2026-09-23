@@ -1,5 +1,6 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
+import { UnsupportedChainIdError } from "@morpho-org/morpho-ts";
 import {
   type Chain,
   createWalletClient,
@@ -44,6 +45,17 @@ describe("encodeBlueSignatureAuthorization", () => {
         nonce: 0n,
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
+  test("error: UnsupportedChainIdError on a chain with no registry", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(999_999), {
+        owner: account.address,
+        authorized: blueBundlesV1,
+        chainId: 999_999,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainIdError);
   });
 
   test("error: UnsupportedAuthorizationOperatorError", async () => {
