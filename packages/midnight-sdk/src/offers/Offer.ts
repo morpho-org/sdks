@@ -212,8 +212,11 @@ export class Offer {
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
-    this.cachedGroup = offer.group;
-    this.hasExplicitGroup = offer.group !== undefined;
+    this.hasExplicitGroup =
+      offer instanceof Offer
+        ? offer.hasExplicitGroup
+        : offer.group !== undefined;
+    this.cachedGroup = this.hasExplicitGroup ? offer.group : undefined;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;

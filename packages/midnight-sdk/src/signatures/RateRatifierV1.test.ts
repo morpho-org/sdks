@@ -26,7 +26,7 @@ import {
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
@@ -294,6 +294,17 @@ describe("RateRatifierV1.buildDescriptor", () => {
         leaf({ tick: 5_004n }, 5n),
       ]),
     ).toThrow(InvalidTreeError);
+  });
+
+  test("behavior: substitutes the group on a copied offer instance", () => {
+    const l = leaf({}, 5n);
+    const copy = new Offer(l.offer);
+    const [offer] = RateRatifierV1.buildDescriptor([
+      { ...l, offer: copy },
+    ]).offers;
+
+    expect(copy.hasExplicitGroup).toBe(false);
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
   });
 
   test("behavior: commits an explicit group as-is", () => {

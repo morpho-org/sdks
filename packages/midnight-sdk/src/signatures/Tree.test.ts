@@ -2,7 +2,11 @@ import { zeroAddress, zeroHash } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidRateRatifierV1TickError,
+  InvalidTreeError,
+  InvalidTreeHeightError,
+} from "../errors.js";
 import { Offer, type OfferStruct } from "../offers/index.js";
 import {
   EcrecoverRatifier,
@@ -194,6 +198,20 @@ describe("Tree.create", () => {
         }),
       ).toThrow(InvalidTreeError);
     }
+  });
+
+  test("error: InvalidRateRatifierV1TickError on a rateV1 tick below MIN_TICK", () => {
+    expect(() =>
+      Tree.create({
+        type: "rateV1",
+        entries: [
+          {
+            offer: { ...offers[0]!, tick: RateRatifierV1.MIN_TICK - 1n },
+            rate: 100n,
+          },
+        ],
+      }),
+    ).toThrow(InvalidRateRatifierV1TickError);
   });
 });
 
