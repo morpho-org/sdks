@@ -63,7 +63,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Class-specific methods and getters delegate to pure `*Utils` namespace functions that accept readonly plain JavaScript objects compatible with the class's public shape. This keeps the user-facing API composable and class-based while preserving broad compatibility for object-first integrations.
 - `*Utils` namespaces own deterministic object-compatible behavior, validation, encoding math, and struct reshaping. They should not be the primary user-facing constructor surface for a class instance.
 
-> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (testability).
+> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (testability), [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (cross-handle statelessness tests).
 
 ---
 

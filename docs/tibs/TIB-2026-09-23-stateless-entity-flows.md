@@ -59,8 +59,12 @@ resolved.
   same inputs on any instance, then `B.buildTx(signatures)` equals `A.buildTx(signatures)`.
 - If `buildTx()` needs a value the caller cannot know before requirements resolve (a Permit2
   funding cap, a Midnight offer-root payload), then that value is read from the matching
-  signature's `args` and validated against the handle's immutable inputs; a signature carrying an
-  inconsistent value is rejected with a typed error rather than silently replaced.
+  signature's `args`. A value the handle can re-derive from its immutable inputs (a funding cap,
+  spender, deadline, owner, root, offer count) is compared to them and a mismatch is rejected with
+  a typed error rather than silently replaced. An opaque payload the handle cannot re-derive
+  synchronously (the Midnight encoded offer-root payload) is bound to the handle through the
+  validation of its sibling `args` and a presence check; `buildTx()` does not promise byte-level
+  integrity of such a payload.
 - If a flow needs a chain snapshot to derive its transaction (vault data, position data), then the
   caller supplies that snapshot as a handle input; `getRequirements()` may validate it against the
   chain but never replaces it for `buildTx()`.
@@ -96,8 +100,10 @@ resolved.
 - [ ] Every entity flow that consumes a signature has a test proving a signature prepared on one
       handle finalizes identically on a fresh handle built from the same inputs; the test fails if
       `buildTx()` starts reading closure state.
-- [ ] Every value `buildTx()` derives from a signature is read from `signature.args`, validated
-      against the handle's immutable inputs, and rejected with a typed error on mismatch.
+- [ ] Every value `buildTx()` derives from a signature is read from `signature.args`; every
+      re-derivable value is validated against the handle's immutable inputs and rejected with a
+      typed error on mismatch, and every opaque payload is presence-checked with its sibling
+      `args` validated.
 - [ ] Review confirms no closure variable of an `ActionOutput` is written in
       `getRequirements()`/`sign()` and read in `buildTx()`; in-flight promise coalescing is the only
       permitted mutable binding and is never consumed by `buildTx()`.

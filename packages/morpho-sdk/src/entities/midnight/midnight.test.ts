@@ -1344,34 +1344,68 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-      const mockHandle = (): MidnightMockHandle => {
-        const handle = createMockClient(midnightTestChain);
-        mockAllowance({
-          handle,
-          token: midnightAddresses.loanToken,
-          result: maxUint256,
-        });
-        mockMidnightAuthorization(handle, true);
-        return handle;
-      };
-      const data = offersData(true, offerSignerAccount.address);
-      const params = {
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-      };
-      const outputA = await midnightWithHandle(mockHandle()).makeLend(params);
-      const signature = await signOfferRootRequirement(
-        await outputA.getRequirements(),
-      );
+    test.each([
+      {
+        method: "makeLend",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(true, offerSignerAccount.address);
+          return entity.makeLend({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+            loanToken: midnightAddresses.loanToken,
+            loanAssets: 1_000n,
+          });
+        },
+      },
+      {
+        method: "makeBorrow",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(false, offerSignerAccount.address);
+          return entity.makeBorrow({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+          });
+        },
+      },
+      {
+        method: "supplyCollateralMakeBorrow",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(false, offerSignerAccount.address);
+          return entity.supplyCollateralMakeBorrow({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            collateralAssets: 1_000n,
+          });
+        },
+      },
+    ])(
+      "behavior: $method signature prepared on one handle finalizes on a fresh handle",
+      async ({ prepare }) => {
+        const mockHandle = (): MidnightMockHandle => {
+          const handle = createMockClient(midnightTestChain);
+          for (const token of [
+            midnightAddresses.loanToken,
+            midnightAddresses.collateralToken,
+          ]) {
+            mockAllowance({ handle, token, result: maxUint256 });
+          }
+          mockMidnightAuthorization(handle, true);
+          return handle;
+        };
+        const outputA = await prepare(midnightWithHandle(mockHandle()));
+        const signature = await signOfferRootRequirement(
+          await outputA.getRequirements(),
+        );
 
-      const outputB = await midnightWithHandle(mockHandle()).makeLend(params);
-      expect(outputB.buildTx(signature)).toEqual(outputA.buildTx(signature));
-      expect(outputB.buildTx(signature).data).toBe(signature.args.payload);
-    });
+        const outputB = await prepare(midnightWithHandle(mockHandle()));
+        expect(outputB.buildTx(signature)).toEqual(outputA.buildTx(signature));
+        expect(outputB.buildTx(signature).data).toBe(signature.args.payload);
+      },
+    );
 
     test("behavior: signs reviewable offer tree typed data", async () => {
       const account = privateKeyToAccount(
