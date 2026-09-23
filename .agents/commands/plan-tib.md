@@ -4,7 +4,9 @@
 > [`docs/adrs/ADR-2026-09-23-adr-structure.md`](../../docs/adrs/ADR-2026-09-23-adr-structure.md)).
 > Their implementation plan is the Linear Technical Project Plan described in
 > [`docs/DEVELOPMENT-LIFECYCLE.md`](../../docs/DEVELOPMENT-LIFECYCLE.md). Use this command only to
-> plan an existing, still-unimplemented TIB; never create a new TIB to feed it.
+> plan an existing, still-unimplemented TIB; never create a new TIB to feed it. Any instruction
+> below that creates or edits a file under `docs/tibs/` is void: a changed decision gets a new
+> superseding ADR under `docs/adrs/`, not a TIB.
 
 Turn an accepted **TIB** into the disposable **implementation plan** that carries it out: a set of
 Linear tickets, each scoped to **one PR**, each describing **how** the code will be written.
