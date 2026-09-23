@@ -16,6 +16,7 @@ import {
   main,
   mergeBumpEvents,
   parseActionPins,
+  parseSpecMinVersion,
   readMinimumReleaseAgeMinutes,
   selectActionTarget,
   selectNpmTarget,
@@ -486,6 +487,31 @@ describe("isDuplicate", () => {
     ).toBe(false);
   });
 
+  test("behavior: requires the target version in the title", () => {
+    const viem = buildBumpEvent({
+      ecosystem: "npm",
+      package: "viem",
+      from: "2.0.0",
+      to: "2.1.0",
+      publishDate: OLD,
+      targets: ["package.json"],
+    });
+    for (const title of [
+      "bump viem from 2.0.0 to 12.1.0",
+      "bump viem from 2.1.0 to 3.0.0",
+    ]) {
+      expect(isDuplicate(viem, { openPrTitles: [title], branches: [] })).toBe(
+        false,
+      );
+    }
+    expect(
+      isDuplicate(viem, {
+        openPrTitles: ["bump viem from 2.0.0 to 2.1.0"],
+        branches: [],
+      }),
+    ).toBe(true);
+  });
+
   test("behavior: ignores a branch for a different version", () => {
     expect(
       isDuplicate(event, {
@@ -736,10 +762,14 @@ describe("main", () => {
             "4.0.0": "2020-01-01T00:00:00Z",
             "4.5.0": "2026-01-02T00:00:00Z",
           },
+          versions: { "4.0.0": {}, "4.5.0": {} },
         });
       }
       if (url === "https://registry.npmjs.org/%40scope%2Fname") {
-        return ok({ time: { "1.0.0": "2020-01-01T00:00:00Z" } });
+        return ok({
+          time: { "1.0.0": "2020-01-01T00:00:00Z" },
+          versions: { "1.0.0": {} },
+        });
       }
       if (url.endsWith("/releases?per_page=30")) {
         return ok([
@@ -888,12 +918,19 @@ describe("main", () => {
       env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
       fetch: async (url, init) => {
         if (url.includes("/pulls")) {
-          return ok([{ title: "bump lodash from 4.0.0 to 4.5.0" }]);
+          return ok([
+            {
+              title: "bump lodash from 4.0.0 to 4.5.0",
+              head: { repo: { full_name: "morpho-org/sdks" } },
+            },
+            {
+              title: "bump actions/checkout from v7.0.1 to v8.0.0",
+              head: { repo: { full_name: "fork-owner/sdks" } },
+            },
+          ]);
         }
         if (url.includes("/matching-refs")) {
-          return ok([
-            { ref: "refs/heads/devin/123-bump-actions-checkout-v8.0.0" },
-          ]);
+          return ok([]);
         }
         return base(url, init);
       },
@@ -903,7 +940,13 @@ describe("main", () => {
       rootDir,
     });
 
-    expect(logs.filter((line) => line.startsWith("{"))).toHaveLength(0);
+    // The in-repo PR title suppresses the lodash bump; the fork PR title and
+    // the (empty) branch list do not suppress the action bump.
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.package).toBe("actions/checkout");
   });
 
   test("behavior: logs a skip notice for an unparseable spec", async () => {
@@ -1049,5 +1092,95 @@ describe("main", () => {
     ).rejects.toThrowError(
       "Missing required environment variable DEVIN_DEPENDENCY_WEBHOOK_URL.",
     );
+  });
+
+  test("behavior: ignores versions absent from the packument", async () => {
+    const rootDir = fixtureRoot({ lodash: "^4.0.0" });
+    const base = stubFetch([]);
+    const logs: string[] = [];
+
+    await main({
+      env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+      fetch: async (url, init) =>
+        url === "https://registry.npmjs.org/lodash"
+          ? ok({
+              time: {
+                "4.0.0": "2020-01-01T00:00:00Z",
+                "4.5.0": "2026-01-02T00:00:00Z",
+                "9.9.9": "2026-01-03T00:00:00Z",
+              },
+              // 9.9.9 has a publish time but was never published.
+              versions: { "4.0.0": {}, "4.5.0": {} },
+            })
+          : base(url, init),
+      now: new Date("2026-02-01T00:00:00Z"),
+      log: (message) => logs.push(message),
+      dryRun: true,
+      rootDir,
+    });
+
+    const events = logs
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as BumpEvent);
+    const lodash = events.find((event) => event.package === "lodash");
+    expect(lodash?.to).toBe("4.5.0");
+  });
+
+  test("error: a failed tag ref lookup aborts the run", async () => {
+    const rootDir = fixtureRoot({});
+    const base = stubFetch([]);
+
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+        fetch: async (url, init) =>
+          url.includes("/git/ref/tags/")
+            ? { ok: false as const, status: 404, json: async () => ({}) }
+            : base(url, init),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: true,
+        rootDir,
+      }),
+    ).rejects.toThrowError(/Failed to resolve tag/);
+  });
+});
+
+describe("buildBumpEvent", () => {
+  test("default", () => {
+    expect(
+      buildBumpEvent({
+        ecosystem: "npm",
+        package: "viem",
+        from: "2.0.0",
+        to: "2.1.0",
+        publishDate: OLD,
+        targets: ["package.json"],
+      }),
+    ).toEqual({
+      kind: "dependency_update",
+      ageGate: "satisfied",
+      security: null,
+      ecosystem: "npm",
+      package: "viem",
+      from: "2.0.0",
+      to: "2.1.0",
+      publishDate: OLD,
+      targets: ["package.json"],
+    });
+  });
+});
+
+describe("parseSpecMinVersion", () => {
+  test("default", () => {
+    expect(parseSpecMinVersion("^1.2.0")).toBe("1.2.0");
+  });
+
+  test("behavior: returns null for a dist-tag", () => {
+    expect(parseSpecMinVersion("latest")).toBeNull();
+  });
+
+  test("behavior: returns null for an unsatisfiable range", () => {
+    expect(parseSpecMinVersion("<0.0.0")).toBeNull();
   });
 });

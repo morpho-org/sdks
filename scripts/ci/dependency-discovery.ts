@@ -334,7 +334,7 @@ export function isDuplicate(
   },
 ): boolean {
   const titlePattern = new RegExp(
-    `bump.*(?<![\\w@/.-])${RegExp.escape(event.package)}(?![\\w/.-]).*${RegExp.escape(event.to)}`,
+    `bump.*(?<![\\w@/.-])${RegExp.escape(event.package)}(?![\\w/.-]).*\\bto\\s+(?<![\\w.-])${RegExp.escape(event.to)}(?![\\w.-])`,
     "i",
   );
   if (openPrTitles.some((title) => titlePattern.test(title))) return true;
@@ -612,10 +612,16 @@ export async function main(options: MainOptions = {}): Promise<void> {
       }
       const metadata = (await response.json()) as {
         time?: Record<string, string>;
+        versions?: Record<string, unknown>;
       };
+      const published = new Set(Object.keys(metadata.versions ?? {}));
       versions = {};
       for (const [version, time] of Object.entries(metadata.time ?? {})) {
-        if (version !== "created" && version !== "modified") {
+        if (
+          version !== "created" &&
+          version !== "modified" &&
+          published.has(version)
+        ) {
           versions[version] = time;
         }
       }
@@ -692,16 +698,23 @@ export async function main(options: MainOptions = {}): Promise<void> {
   }
 
   const [openPrs, branchRefs] = await Promise.all([
-    fetchAllPages<{ title: string }>(
-      `https://api.github.com/repos/${REPO}/pulls?state=open`,
-      { fetchImpl, headers: githubHeaders, label: "open PRs" },
-    ),
+    fetchAllPages<{
+      title: string;
+      head?: { repo: { full_name: string } | null };
+    }>(`https://api.github.com/repos/${REPO}/pulls?state=open`, {
+      fetchImpl,
+      headers: githubHeaders,
+      label: "open PRs",
+    }),
     fetchAllPages<{ ref: string }>(
       `https://api.github.com/repos/${REPO}/git/matching-refs/heads/devin/`,
       { fetchImpl, headers: githubHeaders, label: "devin branches" },
     ),
   ]);
-  const openPrTitles = openPrs.map((pr) => pr.title);
+  // Only same-repo PR heads dedupe — a fork PR is not an in-flight bump branch.
+  const openPrTitles = openPrs
+    .filter((pr) => pr.head?.repo?.full_name === REPO)
+    .map((pr) => pr.title);
   const branches = branchRefs.map((ref) =>
     ref.ref.replace(/^refs\/heads\//, ""),
   );
