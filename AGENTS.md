@@ -236,7 +236,7 @@ Baseline personas (always fire):
 | [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body) | Swallowed errors, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
 | [`documentation`](./.agents/pr-review-engine/agents/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
-| [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) | §5, §2 (rule 6) | Missing tests for new code paths and onchain interactions. |
+| [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) | §5, §2 (rule 6), §1 (cross-handle statelessness tests) | Missing tests for new code paths and onchain interactions. |
 
 Conditional personas (fire only when their trigger flag is true):
 
