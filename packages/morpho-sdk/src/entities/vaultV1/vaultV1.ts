@@ -216,7 +216,7 @@ export interface VaultV1Actions {
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
    * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
    *   its spender, amount or deadline differ from this operation's.
-   * @throws {viem.BaseError} when a vault, allowance, or nonce read or transaction encoding fails.
+   * @throws {viem.BaseError} when an allowance or nonce read or transaction encoding fails.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
