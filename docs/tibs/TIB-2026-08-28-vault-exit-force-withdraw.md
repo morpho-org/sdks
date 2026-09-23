@@ -39,7 +39,7 @@ by walking the adapter's own market list, and **checks the realized exit share p
 `minSharePriceE27`. The caller supplies an amount, not a plan.
 
 The contract carries the same two audits as the in-kind entry points (blackthorn, trustsec,
-2026-07-06) and is already deployed on the 13 chains where `bundles.vaultExitBundlesV1` is
+2026-07-06) and is already deployed on the 14 chains where `bundles.vaultExitBundlesV1` is
 registered.
 
 ## Goals / Non-Goals
@@ -88,12 +88,12 @@ The plumbing this TIB needs already exists, all of it from the in-kind work:
 | Already in place                                              | Location                                                  |
 | ------------------------------------------------------------- | --------------------------------------------------------- |
 | `vaultExitBundlesV1ForceWithdrawVaultV2` in the vendored ABI  | `src/abis.ts`                                             |
-| Addresses on 13 chains                                        | `packages/morpho-ts/src/addresses.ts`                     |
-| `Permit` struct reshaping, empty sentinel, EIP-2098 handling  | `src/actions/signatures/getVaultExitBundlesV1PermitStruct.ts` |
+| Addresses on 14 chains                                        | `packages/morpho-ts/src/addresses.ts`                     |
+| `Permit` struct reshaping, empty sentinel, EIP-2098 handling  | `src/actions/bundles/common.ts` (`getBundlesSharesPermit`) |
 | Vault V2's two-field EIP-712 permit domain                    | `src/actions/requirements/encode/encodeVaultSharesPermit.ts` |
-| `vaultExitBundlesV1` on both spender allowlists               | `src/helpers/validateRequirementSpender.ts`, `encodeErc20Approval.ts` |
+| `vaultExitBundlesV1` on both spender allowlists               | `src/helpers/validateRequirementSpender.ts`, `src/actions/requirements/encode/encodeErc20Approval.ts` |
 
-## Proposed Solution
+## Decision
 
 ### What the contract does
 
@@ -471,6 +471,42 @@ integrators who need them off the SDK entirely. Exposing them with validation
 explicit note that the fee sits outside `minSharePriceE27` is more honest than pretending the feature
 is absent.
 
+## Breaking Changes & Migration
+
+`morpho-sdk` bumps a **major** (6.0.0). `MorphoVaultV2.forceWithdraw` and the `vaultV2ForceWithdraw`
+action change their inputs (`{ deallocations, withdraw }` → `{ exitAssets, vaultData }`), their
+`VaultV2ForceWithdrawAction.args` are retyped, and the method now targets `VaultExitBundlesV1`
+instead of `VaultV2.multicall` — a public-surface break that rides the AGENTS.md §7
+`Vault V2 forceWithdraw` route exception: the successor-introduction, `@deprecated`, and one-minor
+coexistence steps are skipped because the prior multicall path carried no slippage bound at all,
+so a coexistence minor would keep that fund-loss surface exported (rejected Alternative 2). The
+exception does not waive the major changeset, this TIB's migration guidance, the
+maintained-dependent audit, or continued availability of the previous major. `forceRedeem` keeps
+the multicall path for multi-adapter and legacy-adapter vaults, which lose `forceWithdraw`
+entirely. Callers migrate by replacing their deallocation plan with a penalty-inclusive
+`exitAssets` amount (quoted via `previewVaultV2ForceWithdraw`) and supplying a `getData()`
+snapshot; the two canonical error renames keep `instanceof` working through `export const X = Y;`
+aliases while the deprecated names last.
+
+## Acceptance Criteria
+
+- [ ] `MorphoVaultV2.forceWithdraw` / `vaultV2ForceWithdraw` encode a single
+  `vaultExitBundlesV1ForceWithdrawVaultV2` call resolved from the chain registry, preserving the
+  established method and action names.
+- [ ] `minSharePriceE27` is derived in the SDK from the exit plan (not the raw share price) and a
+  supplied override is validated `> 0`; the bound is asserted by tests that fail if it is removed.
+- [ ] The deallocation simulation rejects under-covered `exitAssets` with
+  `VaultV2ForceWithdrawCoverageError` before submission, so the contract's unbounded loop can never
+  surface a `panic 0x32`.
+- [ ] The required vault-share allowance is bounded — `mulDivUp(exitAssets, RAY, minSharePriceE27)`
+  — never a permanent unlimited approval to the periphery.
+- [ ] `referralFeePct` stays outside the slippage guard and that is documented in JSDoc and the
+  action's parameter docs.
+- [ ] `forceRedeem` is untouched and retains the multicall path; `EmptyDeallocationsError`,
+  `encodeForceDeallocateCall`, and the `Deallocation` type remain exported.
+- [ ] A major changeset, migration-guide entry, and maintained-dependent audit ship with the
+  change, per the §7 exception's non-waived duties.
+
 ## Assumptions & Constraints
 
 - **Single-adapter, markets-based vaults only.** The contract's constraint, not ours. Multi-adapter
@@ -522,6 +558,15 @@ the in-kind TIB, so no downstream peer-range audit is required.
 - `previewVaultV2ForceWithdraw` currently caps at `maxExitAssets` and re-plans; a multi-tier preview
   (like `previewVaultV2InKindRedeem`'s per-market choices) would let a UI show penalty-free versus
   penalised tiers separately.
+
+### Addendum (2026-09-17): deprecated compatibility aliases removed
+
+The three deprecated aliases recorded in the validation matrix —
+`InKindRedeemRequiresSingleAdapterError`, `UnsupportedInKindAdapterError`, and
+`MissingReferralFeeRecipientError` — were subsequently removed outright by
+[`TIB-2026-09-17`](./TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md). The
+canonical names (`VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
+`ReferralFeeRecipientMissingError`) are unchanged; only the `export const X = Y;` aliases are gone.
 
 ## References
 

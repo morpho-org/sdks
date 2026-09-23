@@ -17,6 +17,7 @@ import {
   ExpiredDeadlineError,
   InputExceedsMaxError,
   NonPositiveInputError,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
 
@@ -43,6 +44,17 @@ describe("encodeBlueSignatureAuthorization", () => {
         nonce: 0n,
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
+  test("error: UnsupportedAuthorizationOperatorError", async () => {
+    await expect(
+      encodeBlueSignatureAuthorization(walletClient(), {
+        owner: account.address,
+        authorized: "0x1111111111111111111111111111111111111111",
+        chainId: mainnet.id,
+        nonce: 0n,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedAuthorizationOperatorError);
   });
 
   test("default: signs a verifiable Morpho authorization", async () => {
