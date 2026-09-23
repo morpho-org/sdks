@@ -107,7 +107,7 @@ Before launching review agents, read the project-level documentation that define
 
 5. `docs/jsdoc-style.md` — canonical JSDoc style guide. Read whenever the diff touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment.
 6. `SECURITY.md` — security policy. Read if any security-relevant code is touched (auth, crypto, parsers, network entry points, secrets handling, onchain contract calls, wallet operations, CI / publish flow).
-7. `docs/tibs/TEMPLATE.md` — read if a doc/TIB-style file is touched.
+7. `docs/templates/ADR.md` and `docs/DEVELOPMENT-LIFECYCLE.md` — read if a file under `docs/adrs/` or `docs/tibs/` is touched.
 
 ### Per-package context (only for packages touched by the diff)
 

@@ -1,5 +1,12 @@
 # create-tib
 
+> **Retired.** TIBs are no longer written (see
+> [`docs/adrs/ADR-2026-09-23-adr-structure.md`](../../docs/adrs/ADR-2026-09-23-adr-structure.md)).
+> Do not scaffold a file under `docs/tibs/`. Record the decision as an ADR instead: copy
+> [`docs/templates/ADR.md`](../../docs/templates/ADR.md) into `docs/adrs/` and follow
+> [`docs/DEVELOPMENT-LIFECYCLE.md`](../../docs/DEVELOPMENT-LIFECYCLE.md). The rulebook below is
+> kept for reading historical TIBs until this command is rewritten for ADRs.
+
 Scaffold and draft a TIB — **Technical Intent Brief**: the frozen, dated record of **what** we
 decided and **why**. Asks the author targeted questions only where the brief cannot be written
 without the answer.

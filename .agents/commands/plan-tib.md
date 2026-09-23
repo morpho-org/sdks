@@ -1,5 +1,11 @@
 # plan-tib
 
+> **Retired input.** New decisions are ADRs under `docs/adrs/`, not TIBs (see
+> [`docs/adrs/ADR-2026-09-23-adr-structure.md`](../../docs/adrs/ADR-2026-09-23-adr-structure.md)).
+> Their implementation plan is the Linear Technical Project Plan described in
+> [`docs/DEVELOPMENT-LIFECYCLE.md`](../../docs/DEVELOPMENT-LIFECYCLE.md). Use this command only to
+> plan an existing, still-unimplemented TIB; never create a new TIB to feed it.
+
 Turn an accepted **TIB** into the disposable **implementation plan** that carries it out: a set of
 Linear tickets, each scoped to **one PR**, each describing **how** the code will be written.
 

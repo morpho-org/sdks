@@ -34,8 +34,9 @@ or `superseded by <ADR stem>`; it is the only field that changes after acceptanc
 packages and target versions the decision binds, or `Repo-wide`.
 
 All ADRs live in a single directory, `docs/adrs/`, named `ADR-YYYY-MM-DD-short-slug.md`. There is
-no per-package ADR location: the SDK packages version and release together and a decision that
-touches one package's public surface almost always constrains its dependents.
+no per-package ADR location: the packages version independently through Changesets but ship from
+one monorepo and one release flow, and a decision that touches one package's public surface
+constrains its dependents through the dependent-bump and peer-range audit.
 
 An ADR records what is true regardless of how the project is executed. In this repo that includes
 the public signatures a decision adds, changes, removes, or deprecates, the observable behavior
@@ -57,8 +58,8 @@ written.
   file outside the Status row is rejected.
 - `docs/adrs/` contains only ADRs; every filename matches `ADR-YYYY-MM-DD-*.md` → `ls docs/adrs`.
 - No file under `docs/tibs/` is modified after this record is accepted → `git log -- docs/tibs`.
-- Revisit if the packages stop releasing together: a per-package ADR location would then be
-  reconsidered.
+- Revisit if a package stops releasing from this monorepo's release flow: a per-package ADR
+  location would then be reconsidered.
 
 ## Rejected alternatives
 
@@ -66,7 +67,7 @@ written.
   (acceptance criteria, open questions, migration steps) are exactly what the lifecycle moves to
   the Linear plan; patching the header keeps the mixed artifact.
 - **Package-scoped ADR directories (`packages/<pkg>/docs/adrs/`).** Rejected because the packages
-  release in lockstep and most SDK decisions cross package boundaries; scope is carried by the
+  share one release flow and most SDK decisions cross package boundaries; scope is carried by the
   header field instead.
 - **Drop public signatures and semver from ADRs, as the application-monorepo template does.**
   Rejected because for an SDK the exported surface is the decision, and semver consequence is what
@@ -76,6 +77,5 @@ written.
 
 ## References
 
-- [`docs/templates/ADR.md`](../templates/ADR.md)
-- [`docs/DEVELOPMENT-LIFECYCLE.md`](../DEVELOPMENT-LIFECYCLE.md)
 - morpho-org/morpho-apps#6225 — the application-monorepo ADR structure this adapts
+- morpho-org/sdks#1157 — the PR that accepted this record

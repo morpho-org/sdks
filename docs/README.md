@@ -85,6 +85,7 @@ docs/
     ADR-YYYY-MM-DD-short-slug.md
 
   tibs/                     # retired Technical Intent Briefs (frozen records)
+    TEMPLATE.md             # retirement pointer to the ADR template
     TIB-*.md
 
   templates/
