@@ -1,5 +1,5 @@
 ---
-"@morpho-org/wdk-protocol-lending-morpho-evm": patch
+"@morpho-org/wdk-protocol-lending-morpho-evm": minor
 ---
 
 Reject caller-supplied `requirementSignature` deadlines beyond the adapter's bounded execution

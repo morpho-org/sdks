@@ -67,7 +67,7 @@ registered.
   the penalty to reach an `exitAssets` that redeems exactly the user's balance is the kind of
   arithmetic this TIB is trying to remove, not add. `encodeForceDeallocateCall`, the `Deallocation`
   type, and `EmptyDeallocationsError` therefore all stay.
-- **No net-denominated amount mode.** See [Considered Alternatives §1](#alternative-1-keep-the-net-denominated-amount-and-invert-it-in-the-sdk).
+- **No net-denominated amount mode.** See [Rejected alternatives §1](#alternative-1-keep-the-net-denominated-amount-and-invert-it-in-the-sdk).
 - **No share-sufficiency validation.** Carried over from the in-kind TIB: a sufficient allowance
   settles *authorization*, not *balance*. Sizing `exitAssets` against
   `vault.previewRedeem(sharesHeld)` — with a small buffer, since per-leg penalty and share rounding
@@ -404,7 +404,7 @@ forceWithdraw({
 ```
 
 `buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind TIB's
-Rejected alternatives §5. Only `getRequirements()` is async.
+Considered Alternatives §5. Only `getRequirements()` is async.
 
 **Helpers** — five new pure exports, deliberately split so the numeric core has exactly one
 implementation:
@@ -418,7 +418,9 @@ implementation:
 - `computeVaultV2ForceWithdrawPlan({ vaultData, adapter, liquidityMarketId, exitAssets, timestamp })`
   returns every amount the exit needs.
 - `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
-  upper bound, accrued to `now` on both endpoints, for the denominator of the slippage bound. The
+  burn upper bound for a given snapshot. The entity computes it on both the raw `lastUpdate`
+  snapshot and the `now`-accrued snapshot, and prices the slippage bound off the larger of the raw
+  burn and the `now` burn net of fee shares (see the bound derivation below). The
   authorized allowance is *not* this value — it is read off the price floor itself (see below), so it
   covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
   permits.

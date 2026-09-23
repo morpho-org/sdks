@@ -1322,7 +1322,9 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("error: BlueBundlesV1DeadlineExceedsWindowError on a far-future signature deadline", async () => {
       const requirementSignature = {
-        args: { deadline: 1_900_000_000n },
+        args: {
+          deadline: BigInt(Math.floor(Date.now() / 1_000)) + 7_200n + 1n,
+        },
         action: { type: "authorization" },
       } as unknown as AuthorizationRequirementSignature;
 

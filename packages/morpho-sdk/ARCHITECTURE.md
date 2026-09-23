@@ -258,8 +258,10 @@ Provides protocol-level constants and math:
 
 On-chain data fetching and contract ABIs:
 
-- **ABIs**: `metaMorphoAbi` (V1) and `vaultV2Abi` (V2) — used for entity-layer reads (e.g. the V1
-  `MORPHO()` read in `src/entities/vaultV1/vaultV1.ts`); V1 write calldata is encoded with the local
+- **ABIs**: `metaMorphoAbi` (V1) is used for entity-layer reads (the V1 `MORPHO()` read in
+  `src/entities/vaultV1/vaultV1.ts`); `vaultV2Abi` (V2) encodes the V2 `forceRedeem` multicall /
+  `forceDeallocate` write calldata (`src/actions/vaultV2/forceRedeem.ts`,
+  `src/helpers/encodeDeallocation.ts`). V1/V2 bundles write calldata uses the local
   `vaultBundlesV1Abi`/`vaultExitBundlesV1Abi` from `src/abis.ts`.
 - **Fetchers**: `fetchVault`, `fetchAccrualVault` (V1), `fetchVaultV2`, `fetchAccrualVaultV2`
   (V2) — read vault state from the blockchain.

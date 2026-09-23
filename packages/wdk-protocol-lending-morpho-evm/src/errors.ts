@@ -5,7 +5,7 @@ export class BlueBundlesV1DeadlineExceedsWindowError extends Error {
     readonly maxDeadline: bigint,
   ) {
     super(
-      `Signature deadline "${deadline}" exceeds the maximum "${maxDeadline}" (now + 2h). Re-sign the requirement with a shorter deadline.`,
+      `Signature deadline "${deadline}" exceeds the maximum "${maxDeadline}". Re-sign the requirement with a shorter deadline.`,
     );
   }
 }

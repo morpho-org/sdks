@@ -1,4 +1,5 @@
 import { Eip5267Domain, getChainAddress, Token } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   createWalletClient,
@@ -24,6 +25,7 @@ const vault = "0x0000000000000000000000000000000000002001" as const;
 const spender = getChainAddress(mainnet.id, "bundles.vaultExitBundlesV1");
 const otherSpender = "0x0000000000000000000000000000000000002999" as const;
 const amount = 500n;
+const deadline = Time.timestamp() + 3_600n;
 const permitTypes = {
   Permit: [
     { name: "owner", type: "address" },
@@ -56,20 +58,20 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     const signed = await requirement.sign(walletClient, account.address);
 
     expect(signed.action).toMatchObject({
       type: "permit",
-      args: { spender, amount, deadline: 1_900_000_000n, nonce: 9n },
+      args: { spender, amount, deadline: deadline, nonce: 9n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
       asset: vault,
       amount,
       nonce: 9n,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     expect(signed.args.signature).toMatch(/^0x[0-9a-f]{130}$/);
   });
@@ -83,7 +85,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     const signed = await requirement.sign(walletClient, account.address);
     const { action } = signed;
@@ -95,7 +97,7 @@ describe("encodeVaultSharesPermit", () => {
       selectBundlesSharesPermitSignature([signed], {
         spender,
         amount,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       }),
     ).toEqual(signed);
   });
@@ -109,7 +111,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     const typedData = requirement.action.typedData;
@@ -125,7 +127,7 @@ describe("encodeVaultSharesPermit", () => {
       spender,
       value: amount,
       nonce: 9n,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
   });
 
@@ -138,7 +140,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     await expect(
@@ -158,7 +160,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     const typedData = requirement.action.typedData;
@@ -184,7 +186,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 3n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     await expect(
@@ -207,7 +209,7 @@ describe("encodeVaultSharesPermit", () => {
         chainId: mainnet.id,
         nonce: 3n,
         amount,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       }),
     ).not.toThrow();
   });
@@ -221,7 +223,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     };
     const requirement = encodeVaultSharesPermit(params);
     params.spender = otherSpender;
@@ -238,7 +240,7 @@ describe("encodeVaultSharesPermit", () => {
         spender,
         value: amount,
         nonce: 9n,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       },
     });
 
@@ -269,7 +271,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 3n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     expect(Object.isFrozen(requirement.action.typedData.domain)).toBe(true);
@@ -299,7 +301,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 3n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     extensions.push(1n);
 
@@ -320,7 +322,7 @@ describe("encodeVaultSharesPermit", () => {
         spender,
         value: amount,
         nonce: 3n,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       },
     });
 
@@ -336,7 +338,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 0n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     await expect(
@@ -399,7 +401,7 @@ describe("encodeVaultSharesPermit", () => {
         chainId: mainnet.id,
         nonce: 0n,
         amount,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);
   });
