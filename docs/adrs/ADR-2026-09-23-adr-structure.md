@@ -12,11 +12,13 @@ _Status is the only field that changes after acceptance._
 ## Context
 
 The repo recorded technical decisions as Technical Intent Briefs (TIBs) under `docs/tibs/`, with
-a template of fourteen optional sections spanning decision content (public interface, behavior,
-invariants, semver) and planning content (acceptance criteria, open questions, migration steps).
-TIBs carried `Status`, `Supersedes`, and `Superseded by` header fields, but no rule bound them:
-most implemented TIBs still read `Proposed`, and no superseded TIB had its `Superseded by` row
-filled, so a reader of an old record had no reliable signal that it was no longer current.
+a template of fourteen sections, half of them optional, spanning decision content (public
+interface, behavior, invariants, semver) and planning content (acceptance criteria, open questions,
+migration steps).
+TIBs carried `Status`, `Supersedes`, and `Superseded by` header fields, and the rulebook required
+filling `Superseded by` on the superseded record, but the convention was not applied: most
+implemented TIBs still read `Proposed`, and no superseded TIB had its row filled, so a reader of an
+old record had no reliable signal that it was no longer current.
 
 The wider organisation adopted a Software Development Lifecycle in which every project accumulates
 a mutable Technical Project Plan in Linear, and hard-to-revert decisions are frozen as ADRs in the
