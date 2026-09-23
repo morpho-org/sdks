@@ -1,5 +1,19 @@
 # @morpho-org/morpho-sdk
 
+## 6.0.0-next.5
+
+### Patch Changes
+
+- [#1147](https://github.com/morpho-org/sdks/pull/1147) [`1ee9b2a`](https://github.com/morpho-org/sdks/commit/1ee9b2a9ed6ad7727a1683a7573548f190424027) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Pin the `authorized` operator to the chain's registered BlueBundlesV1 deployment in
+  `encodeBlueSignatureAuthorization`. Previously the encoder embedded any caller-supplied
+  `authorized` address into the Morpho `Authorization` EIP-712 payload, so a direct caller could be
+  walked through signing an authorization that grants an arbitrary address full control over the
+  signer's Morpho positions. It now throws `UnsupportedAuthorizationOperatorError` up front —
+  matching the `getBlueAuthorizationRequirement` resolver, which already enforced this on every
+  in-SDK route — for grant and revocation payloads alike.
+
+- [#1148](https://github.com/morpho-org/sdks/pull/1148) [`f100c95`](https://github.com/morpho-org/sdks/commit/f100c95cffbd51e1a4c00e8e840d5d894b487f0b) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - VaultV1/VaultV2 `deposit`, `withdraw`, `redeem` and `migrateToV2` handles no longer share state between `getRequirements()` and `buildTx()`: `buildTx()` validates the supplied signature against the handle's immutable spender/amount/deadline and the data carried on the signature, so a requirement prepared on one handle can be finalized on another (or after serialize/resume). The permit2 nonce is no longer cross-checked against the last `getRequirements()` call; Permit2 verifies it onchain. `withdraw()` now requires a `vaultData` snapshot (like `deposit()`), from which the share cap is derived at handle creation and enforced in `buildTx()`. An ERC-2612 permit whose nonce was consumed no longer fails to encode — the spender skips it onchain and proceeds under the live allowance (a consumed Permit2 SignatureTransfer nonce reverts onchain), so callers must execute every requirement returned by the latest `getRequirements()` (including allowance resets) before submitting. The WDK adapter now forwards its fetched vault snapshot as `vaultData` to Vault V1/V2 withdrawals so the share cap is fixed at handle creation.
+
 ## 6.0.0-next.4
 
 ### Minor Changes

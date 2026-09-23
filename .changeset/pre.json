@@ -17,6 +17,7 @@
     "atomic-register-custom-addresses",
     "auto-permit2-nonce",
     "blue-authorization-deadline-guard",
+    "blue-authorization-operator-guard",
     "blue-bundles-permit2-guards",
     "blue-bundles-position-actions",
     "blue-bundles-refinance",
@@ -48,9 +49,11 @@
     "vault-bundles-redeem",
     "vault-bundles-withdraw",
     "vault-exit-bundles-inkind-refactor",
+    "vault-handle-stateless-buildtx",
     "vault-v2-accrue-nested-entities",
     "vault-v2-force-withdraw-floor-allowance",
     "vault-v2-force-withdraw-via-vault-exit-bundles",
-    "wdk-repay-reusable-approval"
+    "wdk-repay-reusable-approval",
+    "wdk-shared-requirement-signature-normalizer"
   ]
 }
