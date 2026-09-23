@@ -31,6 +31,7 @@ allowed-tools:
   - WebFetch
   - Agent
   - Skill
+  - AskUserQuestion
 version: 1.0.0
 ---
 
@@ -195,8 +196,9 @@ SDK-103 (independent)
 
 ### Go/no-go
 1. SDK-105 has two open blockers; stacking on SDK-101 leaves SDK-104's changes out of its base
-   until one merges. Options: stack on 101 and rebase later · wait for 104 to merge, then have
-   101's child rebase onto `main` before 105 is dispatched · skip.
+   until one merges. Options: stack on 101 and rebase later · wait for 104 to merge, have
+   SDK-101's agent rebase <branch-101> onto `main` and confirm it now carries 104, then dispatch
+   105 from it · skip.
 2. SDK-107 touches `.github/workflows/test.yml` (guarded surface). Options: execute · skip ·
    execute but stop before pushing.
 3. Q-2 in the overview ("does the facade re-export the raw name under `/blue/vaults`?") has no
