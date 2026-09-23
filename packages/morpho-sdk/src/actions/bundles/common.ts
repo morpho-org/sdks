@@ -77,13 +77,6 @@ export interface BundleSharesPermit {
   readonly s: Hex;
 }
 
-/**
- * Compatibility alias for the canonical {@link BundleSharesPermit} tuple.
- *
- * @deprecated Use {@link BundleSharesPermit}.
- */
-export type BundlesSharesPermit = BundleSharesPermit;
-
 /** Common deadline and referral fields shared by fixed bundles calls. */
 export interface BundlesCommonParams {
   /** Contract execution deadline. */
