@@ -1058,6 +1058,52 @@ describe("MorphoBlue position validation", () => {
         }),
     },
     {
+      method: "supplyCollateral",
+      fundedToken: marketParams.collateralToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supplyCollateral({
+          userAddress,
+          collateralAssets: 1_000n,
+          deadline,
+        }),
+    },
+    {
+      method: "borrow",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.borrow({
+          userAddress,
+          positionData: makePosition(marketParams),
+          borrowAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "withdrawCollateral",
+      fundedToken: marketParams.collateralToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.withdrawCollateral({
+          userAddress,
+          positionData: makePosition(marketParams, { borrowShares: 0n }),
+          collateralAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "repayWithdrawCollateral",
+      fundedToken: marketParams.loanToken,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.repayWithdrawCollateral({
+          userAddress,
+          positionData: makePosition(marketParams, {
+            lastUpdate: deadline - 3_600n,
+          }),
+          repayShares: maxUint256,
+          collateralAssets: 1n,
+          deadline,
+        }),
+    },
+    {
       method: "refinance",
       fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
