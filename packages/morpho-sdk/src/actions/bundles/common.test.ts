@@ -9,7 +9,7 @@ import {
   zeroHash,
 } from "viem";
 import { describe, expect, expectTypeOf, test } from "vitest";
-import type { BundleSharesPermit, BundlesSharesPermit } from "../../index.js";
+import type { BundleSharesPermit } from "../../index.js";
 import {
   AmbiguousRequirementSignaturesError,
   type BundlesFundingArgs,
@@ -139,7 +139,6 @@ describe("getBundlesSharesPermit", () => {
     expectTypeOf<
       ReturnType<typeof getBundlesSharesPermit>
     >().toEqualTypeOf<BundleSharesPermit>();
-    expectTypeOf<BundlesSharesPermit>().toEqualTypeOf<BundleSharesPermit>();
     expect(getBundlesSharesPermit({ vault, deadline: 13n })).toEqual({
       value: 0n,
       nonce: 0n,

@@ -219,8 +219,7 @@ What's wrong:
  * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD; it extends
  *   {@link InputExceedsMaxError}, so either class catches it.
  * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
- * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit or a
- *   Permit2 AllowanceTransfer signature is supplied.
+ * @throws {UnexpectedRequirementSignatureError} when native funding carries a token permit.
  * @throws {InputExceedsMaxError} when funding, `maxSharePrice`, or `deadline` exceeds uint256.
  * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
  * @throws {DepositAssetMismatchError} when the signed asset differs from the vault asset.
