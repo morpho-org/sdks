@@ -55,10 +55,11 @@ export type FetchLike = (
   },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
+// `peerDependencies` are intentionally excluded: Dependabot does not bump peer ranges, and the
+// Devin bump session widens them itself when a new major requires it (AGENTS.md §4).
 const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
-  "peerDependencies",
   "optionalDependencies",
 ] as const;
 
@@ -77,8 +78,8 @@ export function readMinimumReleaseAgeMinutes(workspaceYaml: string): number {
 /**
  * Collects npm dependency specs across the workspace: every `package.json` handed in (typically
  * the root plus `packages/<pkg>/package.json`), plus `catalog:` and `overrides:` entries in
- * `pnpm-workspace.yaml` (targeted as `"pnpm-workspace.yaml"`). `workspace:`, `catalog:`, `link:`,
- * `file:` and git/URL specs are skipped. The same package under different specs yields separate
+ * `pnpm-workspace.yaml` (targeted as `"pnpm-workspace.yaml"`). `peerDependencies`, `workspace:`,
+ * `catalog:`, `link:`, `file:` and git/URL specs are skipped. The same package under different specs yields separate
  * entries keyed `name@spec`, so each resolvable range produces its own bump event.
  */
 export function collectNpmDependencies(
@@ -364,6 +365,34 @@ export async function dispatch(
   }
 }
 
+/**
+ * Merges bump events that target the same `ecosystem + package + to` version — e.g. one package
+ * declared under different specs in several manifests — into a single event whose `targets` are
+ * the sorted union and whose `from` is the lowest SemVer `from` among the merged events.
+ */
+export function mergeBumpEvents(events: readonly BumpEvent[]): BumpEvent[] {
+  const merged = new Map<string, BumpEvent>();
+  for (const event of events) {
+    const key = `${event.ecosystem}\0${event.package}\0${event.to}`;
+    const existing = merged.get(key);
+    if (existing == null) {
+      merged.set(key, event);
+      continue;
+    }
+    const targets = [
+      ...new Set([...existing.targets, ...event.targets]),
+    ].sort();
+    const from =
+      valid(event.from) != null &&
+      (valid(existing.from) == null || gt(existing.from, event.from))
+        ? event.from
+        : existing.from;
+    merged.set(key, { ...existing, from, targets });
+  }
+
+  return [...merged.values()];
+}
+
 const REPO = "morpho-org/sdks";
 
 interface GitHubRef {
@@ -605,7 +634,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
       )
     : [];
 
-  const fresh = events.filter(
+  const fresh = mergeBumpEvents(events).filter(
     (event) => !isDuplicate(event, { openPrTitles, branches }),
   );
   fresh.sort((a, b) => Date.parse(a.publishDate) - Date.parse(b.publishDate));

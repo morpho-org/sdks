@@ -6,6 +6,7 @@ import {
   collectNpmDependencies,
   dispatch,
   isDuplicate,
+  mergeBumpEvents,
   parseActionPins,
   readMinimumReleaseAgeMinutes,
   selectActionTarget,
@@ -58,11 +59,27 @@ describe("collectNpmDependencies", () => {
       "package.json",
       "packages/foo/package.json",
     ]);
-    expect(deps.get("@scope/pkg@^1.0.0")?.targets).toEqual([
-      "packages/foo/package.json",
-    ]);
+    expect(deps.has("@scope/pkg@^1.0.0")).toBe(false);
     expect([...deps.keys()]).not.toContain("typescript@catalog:");
     expect([...deps.keys()]).not.toContain("local@workspace:*");
+  });
+
+  test("behavior: skips peerDependencies entirely", () => {
+    const deps = collectNpmDependencies(
+      [
+        {
+          path: "packages/foo/package.json",
+          content: JSON.stringify({
+            peerDependencies: { viem: "^2.0.0" },
+            dependencies: { graphql: "^16.0.0" },
+          }),
+        },
+      ],
+      "",
+    );
+
+    expect(deps.has("viem@^2.0.0")).toBe(false);
+    expect(deps.has("graphql@^16.0.0")).toBe(true);
   });
 
   test("behavior: keeps different specs as separate entries", () => {
@@ -312,6 +329,84 @@ describe("isDuplicate", () => {
         branches: ["devin/1770000000-bump--morpho-org-blue-sdk-6.1.0"],
       }),
     ).toBe(false);
+  });
+});
+
+describe("mergeBumpEvents", () => {
+  const base = {
+    publishDate: OLD,
+    targets: ["package.json"] as readonly string[],
+  };
+
+  test("default", () => {
+    const merged = mergeBumpEvents([
+      buildBumpEvent({
+        ...base,
+        ecosystem: "npm",
+        package: "graphql",
+        from: "16.14.2",
+        to: "17.0.2",
+        targets: ["packages/b/package.json"],
+      }),
+      buildBumpEvent({
+        ...base,
+        ecosystem: "npm",
+        package: "graphql",
+        from: "14.0.0",
+        to: "17.0.2",
+        targets: ["packages/a/package.json"],
+      }),
+    ]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.from).toBe("14.0.0");
+    expect(merged[0]?.targets).toEqual([
+      "packages/a/package.json",
+      "packages/b/package.json",
+    ]);
+  });
+
+  test("behavior: keeps distinct to versions as separate events", () => {
+    const merged = mergeBumpEvents([
+      buildBumpEvent({
+        ...base,
+        ecosystem: "npm",
+        package: "p",
+        from: "1.0.0",
+        to: "2.0.0",
+      }),
+      buildBumpEvent({
+        ...base,
+        ecosystem: "npm",
+        package: "p",
+        from: "1.0.0",
+        to: "3.0.0",
+      }),
+    ]);
+
+    expect(merged).toHaveLength(2);
+  });
+
+  test("behavior: does not merge across ecosystems", () => {
+    const merged = mergeBumpEvents([
+      buildBumpEvent({
+        ...base,
+        ecosystem: "npm",
+        package: "a/b",
+        from: "1.0.0",
+        to: "2.0.0",
+      }),
+      buildBumpEvent({
+        ...base,
+        ecosystem: "github-actions",
+        package: "a/b",
+        from: "v1.0.0",
+        to: "v2.0.0",
+        sha: "abc",
+      }),
+    ]);
+
+    expect(merged).toHaveLength(2);
   });
 });
 
