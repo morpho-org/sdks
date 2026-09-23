@@ -342,7 +342,9 @@ export namespace RateRatifierV1 {
    * Mirrors `GroupUtils.hash` with the RateRatifierV1 {@link memberHash}, so
    * it matches the router-derived group. Use it to share one group across
    * several leaves; single leaves get this id by default in
-   * {@link buildDescriptor}.
+   * {@link buildDescriptor}. Leaves sharing a group must satisfy the same
+   * constraints as `Group.create` (one maker, side, and cap mode/value); this
+   * helper only derives the id and does not check them.
    *
    * @param leaves - Leaves sharing one consumption group.
    * @returns Content-addressed group id.
@@ -401,7 +403,9 @@ export namespace RateRatifierV1 {
    * highest leaf indices. An explicit `group` is committed as-is; an omitted
    * `group` defaults to the leaf's content-addressed singleton
    * {@link groupId}, which commits to `rate` and `allowedTaker` like the
-   * router does.
+   * router does. Explicit groups must come from {@link groupId}; ids from
+   * `Group.create` / `GroupUtils.hash` use the protocol offer hash and are
+   * rejected by the router's `group_identity` rule.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.

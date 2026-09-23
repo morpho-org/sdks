@@ -161,8 +161,11 @@ export namespace GroupUtils {
   /**
    * Derives the deterministic content-addressed id for a group of offers.
    *
-   * This mirrors the router implementation: hash each offer with `group = 0`,
-   * sort those hashes, concatenate them, then keccak the result.
+   * Hashes each offer with `group = 0` using the protocol offer hash, sorts
+   * those hashes, concatenates them, then keccaks the result. This matches the
+   * router for Ecrecover and Setter offers only; RateRatifierV1 and
+   * PriceRatifierV1 commit to scheme leaf hashes, so use
+   * `RateRatifierV1.groupId` / `PriceRatifierV1.groupId` for those.
    *
    * @param offers - Offers to hash as one group.
    * @returns Content-addressed group id.
