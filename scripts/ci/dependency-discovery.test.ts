@@ -455,6 +455,16 @@ describe("selectActionTarget", () => {
     ).toBeNull();
   });
 
+  test("behavior: skips releases flagged as prerelease", () => {
+    expect(
+      selectActionTarget("v6.0.0", {
+        releases: [{ tag: "v9.0.0", publishedAt: OLD, prerelease: true }],
+        now: NOW,
+        minAgeMinutes: MIN_AGE,
+      }),
+    ).toBeNull();
+  });
+
   test("behavior: skips releases with an unparseable publish date", () => {
     expect(
       selectActionTarget("v6.0.0", {
@@ -799,6 +809,37 @@ describe("dispatch", () => {
       },
       body: JSON.stringify(event),
     });
+  });
+
+  test("error: network failure does not leak the webhook host", async () => {
+    const failure = await dispatch(event, {
+      url: "https://secret-host.example/x",
+      secret: "s3cret",
+      fetch: async () => {
+        throw new Error("getaddrinfo ENOTFOUND secret-host.example");
+      },
+    }).then(
+      () => null,
+      (error: Error) => error,
+    );
+    expect(failure?.message).toMatch(/network error/);
+    expect(failure?.message).not.toContain("secret-host");
+  });
+
+  test("error: non-https URLs are rejected before fetching", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    }));
+    await expect(
+      dispatch(event, {
+        url: "http://hooks.example.com/x",
+        secret: "s3cret",
+        fetch: fetchImpl,
+      }),
+    ).rejects.toThrowError("DEVIN_DEPENDENCY_WEBHOOK_URL must use https.");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   test("error: non-2xx reports the status without the secret", async () => {
@@ -1381,6 +1422,25 @@ describe("main", () => {
       "package.json",
       "packages/x/package.json",
     ]);
+  });
+
+  test("error: a failed annotated-tag dereference aborts the run", async () => {
+    const rootDir = fixtureRoot({});
+    const base = stubFetch([]);
+
+    await expect(
+      main({
+        env: { GH_TOKEN: "token", MAX_DISPATCH_PER_RUN: "10" },
+        fetch: async (url, init) =>
+          url.endsWith("/git/tags/tagsha")
+            ? { ok: false as const, status: 404, json: async () => ({}) }
+            : base(url, init),
+        now: new Date("2026-02-01T00:00:00Z"),
+        log: () => {},
+        dryRun: true,
+        rootDir,
+      }),
+    ).rejects.toThrowError(/dereference annotated tag/);
   });
 
   test("error: a failed tag ref lookup aborts the run", async () => {

@@ -365,7 +365,8 @@ const restAfterTo = (rest: string, to: string): boolean => {
 };
 
 /**
- * Whether `title` already announces this bump: the word `bump` appears before the package name,
+ * Whether `title` already announces this bump: `bump` appears (as a substring, so `bumped` or
+ * `rebump` also match) before the package name,
  * the package is delimited by non-package-name characters, and a boundary-delimited `to`, one or
  * more whitespace characters, and a boundary-terminated copy of the target version appear after
  * it. Deliberately not a `RegExp`: the equivalent pattern needed lookbehind/lookahead chains that
@@ -440,8 +441,10 @@ export function buildBumpEvent(fields: {
 }
 
 /**
- * POSTs one bump event to the Devin automation webhook. Throws on a non-2xx response, with the
- * HTTP status in the message; the webhook secret is never echoed.
+ * POSTs one bump event to the Devin automation webhook. Requires an `https://` URL. Throws on a
+ * non-2xx response with the HTTP status in the message, and on a network failure with a generic
+ * message — the underlying cause is deliberately not attached so the undici cause chain (which
+ * can carry the webhook hostname) never reaches `reportCliError`. The secret is never echoed.
  */
 export async function dispatch(
   event: BumpEvent,
@@ -451,14 +454,24 @@ export async function dispatch(
     fetch: fetchImpl,
   }: { url: string; secret: string; fetch: FetchLike },
 ): Promise<void> {
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Webhook-Secret": secret,
-    },
-    body: JSON.stringify(event),
-  });
+  if (!url.startsWith("https://")) {
+    throw new Error("DEVIN_DEPENDENCY_WEBHOOK_URL must use https.");
+  }
+  let response: Awaited<ReturnType<FetchLike>>;
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Secret": secret,
+      },
+      body: JSON.stringify(event),
+    });
+  } catch {
+    throw new Error(
+      `Webhook dispatch for ${event.package}@${event.to} failed: network error.`,
+    );
+  }
   if (!response.ok) {
     throw new Error(
       `Webhook dispatch for ${event.package}@${event.to} failed with status ${response.status}.`,
