@@ -66,8 +66,8 @@ describe("SimulationRevertedError", () => {
   });
 
   it("attaches optional details payload", () => {
-    const err = new SimulationRevertedError("x", { raw: "tenderly response" });
-    expect(err.details).toEqual({ raw: "tenderly response" });
+    const err = new SimulationRevertedError("x", { raw: "RPC response" });
+    expect(err.details).toEqual({ raw: "RPC response" });
     expect(err.cause).toBeUndefined();
   });
 
@@ -118,7 +118,7 @@ describe("UnsupportedChainError", () => {
 describe("ExternalServiceError", () => {
   it("forwards cause via Error options", () => {
     const cause = new Error("underlying fetch failure");
-    const err = new ExternalServiceError("Tenderly 502", { cause });
+    const err = new ExternalServiceError("RPC 502", { cause });
     expect(err.cause).toBe(cause);
   });
 });

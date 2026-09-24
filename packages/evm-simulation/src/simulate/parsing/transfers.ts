@@ -48,9 +48,8 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * those made through internal calls (e.g. a `WETH.withdraw` refund) — are
  * synthesized as `Transfer` events emitted from the native sentinel
  * `0xeee…eee`. These are parsed like any ERC20 transfer, with `token`
- * collapsed to viem's `ethAddress` so native deltas key consistently across
- * backends. Tenderly does not emit these synthetic logs (it derives native ETH
- * separately), so this path is inert there.
+ * collapsed to viem's `ethAddress` so native deltas key consistently in
+ * transfer reporting, asset changes and retention accounting.
  *
  * **WETH9 dedup assumption — canonical atomic emission.** Dedup for the
  * registered wrapped-native token is scoped to the same tx: a zero-address

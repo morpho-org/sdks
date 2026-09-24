@@ -3,6 +3,8 @@ import {
   type Address,
   concatHex,
   encodeFunctionData,
+  erc20Abi,
+  ethAddress,
   padHex,
   parseEther,
   toHex,
@@ -10,7 +12,11 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
-import { simulate } from "../../src/index.js";
+import {
+  BlacklistViolationError,
+  SimulationRevertedError,
+  simulate,
+} from "../../src/index.js";
 import { WITHDRAWAL_TOPIC } from "../../src/simulate/parsing/transfers.js";
 import { test } from "../setup.js";
 
@@ -90,5 +96,160 @@ describe.sequential("simulate — registered wrapped-native events", () => {
         changes.every(({ token }) => token !== LOOKALIKE_TOKEN),
       ),
     ).toBe(true);
+  });
+});
+
+describe.sequential("simulate — standalone-bundle retention", () => {
+  const bundles = getChainAddresses(mainnet.id).bundles!;
+
+  test.for([
+    bundles.blueBundlesV1!,
+    bundles.vaultBundlesV1!,
+    bundles.vaultExitBundlesV1!,
+  ])(
+    "error: BlacklistViolationError for ERC-20 retention at %s",
+    async (recipient, { client }) => {
+      await client.deal({ erc20: WETH, amount: 101n });
+      await expect(
+        simulate(
+          {
+            chains: new Map([
+              [mainnet.id, { simulateV1Url: client.transport.url! }],
+            ]),
+          },
+          {
+            chainId: mainnet.id,
+            transactions: [
+              {
+                from: client.account.address,
+                to: WETH,
+                data: encodeFunctionData({
+                  abi: erc20Abi,
+                  functionName: "transfer",
+                  args: [recipient, 101n],
+                }),
+              },
+            ],
+          },
+        ),
+      ).rejects.toBeInstanceOf(BlacklistViolationError);
+    },
+  );
+
+  test("behavior: permits exactly the ERC-20 dust threshold", async ({
+    client,
+  }) => {
+    await client.deal({ erc20: WETH, amount: 100n });
+    const result = await simulate(
+      {
+        chains: new Map([
+          [mainnet.id, { simulateV1Url: client.transport.url! }],
+        ]),
+      },
+      {
+        chainId: mainnet.id,
+        transactions: [
+          {
+            from: client.account.address,
+            to: WETH,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [bundles.vaultBundlesV1!, 100n],
+            }),
+          },
+        ],
+      },
+    );
+    expect(result.transfers).toContainEqual({
+      token: WETH,
+      from: client.account.address,
+      to: bundles.vaultBundlesV1!,
+      amount: 100n,
+      txIdx: 0,
+    });
+  });
+
+  test.for([100n, 101n])(
+    "behavior: internal native retention threshold at %s raw units",
+    async (amount, { client }) => {
+      // A real CALL forwards the received value to the restricted address.
+      // The fixture returns CALL's success flag, preserving evidence of execution.
+      await client.setCode({
+        address: LOOKALIKE_TOKEN,
+        bytecode: concatHex([
+          "0x5f5f5f5f3473",
+          bundles.vaultBundlesV1!,
+          "0x5af15f5260205ff3",
+        ]),
+      });
+      const execution = simulate(
+        {
+          chains: new Map([
+            [mainnet.id, { simulateV1Url: client.transport.url! }],
+          ]),
+        },
+        {
+          chainId: mainnet.id,
+          transactions: [
+            {
+              from: client.account.address,
+              to: LOOKALIKE_TOKEN,
+              data: "0x",
+              value: amount,
+            },
+          ],
+        },
+      );
+      if (amount > 100n) {
+        await expect(execution).rejects.toBeInstanceOf(BlacklistViolationError);
+        return;
+      }
+      const result = await execution;
+      expect(result.calls[0]?.returnData).toBe(padHex("0x1", { size: 32 }));
+      expect(result.transfers).toContainEqual({
+        token: ethAddress,
+        from: LOOKALIKE_TOKEN,
+        to: bundles.vaultBundlesV1!,
+        amount,
+        txIdx: 0,
+      });
+      expect(result.assetChanges).toContainEqual({
+        account: bundles.vaultBundlesV1!,
+        changes: [{ token: ethAddress, diff: amount }],
+      });
+      expect(
+        result.assetChanges.find(({ account }) => account === LOOKALIKE_TOKEN),
+      ).toBeUndefined();
+    },
+  );
+
+  test("error: SimulationRevertedError for insufficient ERC-20 balance", async ({
+    client,
+  }) => {
+    await client.deal({ erc20: WETH, amount: 0n });
+    await expect(
+      simulate(
+        {
+          chains: new Map([
+            [mainnet.id, { simulateV1Url: client.transport.url! }],
+          ]),
+        },
+        {
+          chainId: mainnet.id,
+          transactions: [
+            {
+              from: client.account.address,
+              to: WETH,
+              data: encodeFunctionData({
+                abi: erc20Abi,
+                functionName: "transfer",
+                args: [LOOKALIKE_TOKEN, 1n],
+              }),
+            },
+          ],
+        },
+      ),
+    ).rejects.toBeInstanceOf(SimulationRevertedError);
   });
 });

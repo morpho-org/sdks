@@ -43,7 +43,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 - [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`)
 
-- [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, with Tenderly RPC and `eth_simulateV1` backends, signature authorization handling, and bundle-periphery retention checks
+- [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, using `eth_simulateV1`, signature authorization handling, and bundle-periphery retention checks
 
 ### Testing
 

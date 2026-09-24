@@ -1,12 +1,4 @@
-import {
-  type Address,
-  ExecutionRevertedError,
-  ethAddress,
-  type Hex,
-  maxUint256,
-  parseEther,
-  type SimulateCallsParameters,
-} from "viem";
+import { type Address, ethAddress, maxUint256, parseEther, toHex } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -18,581 +10,291 @@ import {
   makeTransferLog,
   padAddress,
 } from "../../test-helpers/index.js";
-import type { SimulationTransaction } from "../../types.js";
+import type { RawLog, SimulationTransaction } from "../../types.js";
 import { WITHDRAWAL_TOPIC } from "../parsing/transfers.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
-type MockSimulateCalls = (args: SimulateCallsParameters) => Promise<unknown>;
-
-const mockSimulateCalls = vi.fn<MockSimulateCalls>();
-
-vi.mock("viem", async () => {
-  const actual = await vi.importActual<typeof import("viem")>("viem");
-  return {
-    ...actual,
-    createPublicClient: () => ({
-      simulateCalls: (args: SimulateCallsParameters) => mockSimulateCalls(args),
-    }),
-    http: () => () => undefined, // transport factory — return value unused because client is mocked
-  };
-});
-
 const USER: Address = "0x1111111111111111111111111111111111111111";
-const OTHER: Address = "0x2222222222222222222222222222222222222222";
 const VAULT: Address = "0x3333333333333333333333333333333333333333";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-
-const BASIC_TX: SimulationTransaction = {
-  from: USER,
-  to: VAULT,
-  data: "0x12" as Hex,
+const BASIC_TX: SimulationTransaction = { from: USER, to: VAULT, data: "0x12" };
+const params = {
+  rpcUrl: "https://rpc.example",
+  chainId: 1,
+  transactions: [BASIC_TX],
 };
+const fetchMock = vi.fn<typeof fetch>();
 
-beforeEach(() => vi.clearAllMocks());
+// Exercise real viem serialization/parsing; only the HTTP boundary is replaced.
+function respond(
+  calls: {
+    status?: string;
+    gasUsed?: string;
+    returnData?: string;
+    logs?: readonly RawLog[];
+  }[],
+) {
+  fetchMock.mockResolvedValueOnce(
+    Response.json({
+      jsonrpc: "2.0",
+      id: 1,
+      result: [
+        {
+          calls: [
+            ...calls.map((call) => ({
+              status: "0x1",
+              gasUsed: "0x5208",
+              returnData: "0x",
+              logs: [],
+              ...call,
+            })),
+            // viem simulateCalls appends a sentinel call and removes it from results.
+            { status: "0x1", gasUsed: "0x0", returnData: "0x", logs: [] },
+          ],
+        },
+      ],
+    }),
+  );
+}
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+});
+afterEach(() => vi.unstubAllGlobals());
 
 describe.sequential("simulateV1", () => {
-  it("returns one calls entry per tx with logs, status, returnData, gasUsed", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 21_000n,
-          data: "0xfeed" as Hex,
-          logs: [
-            {
-              address: USDC,
-              topics: ["0xaaaa" as Hex],
-              data: "0xdeadbeef" as Hex,
-            },
-          ],
-        },
-        {
-          status: "success",
-          gasUsed: 42_000n,
-          data: "0x" as Hex,
-          logs: [
-            { address: USDC, topics: ["0xbbbb" as Hex], data: "0xabcd" as Hex },
-          ],
-        },
-      ],
-    });
-
+  test("default", async () => {
+    const logs = [
+      makeTransferLog({
+        token: USDC,
+        from: USER,
+        to: VAULT,
+        amount: 1_000_000n,
+      }),
+    ];
+    respond([{ logs, returnData: "0xfeed" }, { gasUsed: "0xa410" }]);
     const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
+      ...params,
       transactions: [BASIC_TX, BASIC_TX],
     });
-
-    expect(result.calls).toHaveLength(2);
-    expect(result.calls[0]!.status).toBe(true);
-    expect(result.calls[0]!.returnData).toBe("0xfeed");
-    expect(result.calls[0]!.gasUsed).toBe(21_000n);
-    expect(result.calls[0]!.logs).toHaveLength(1);
-    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
-    expect(result.calls[1]!.gasUsed).toBe(42_000n);
-    expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0xbbbb");
-  });
-
-  it("requires at least one transaction", async () => {
-    await expect(
-      simulateV1({ rpcUrl: "http://rpc.local", chainId: 1, transactions: [] }),
-    ).rejects.toThrow(SimulationValidationError);
-  });
-
-  it("rejects bundles where transactions have different senders", async () => {
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [
-          BASIC_TX,
-          { from: OTHER, to: VAULT, data: "0x12" as Hex },
-        ],
-      }),
-    ).rejects.toThrow(SimulationValidationError);
-  });
-
-  it("normalizes senders case-insensitively before comparing", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    // Real mixed-case address — not palindromic — so checksum and lowercase
-    // forms differ byte-for-byte. This actually exercises the getAddress()
-    // normalization inside simulateV1.
-    const checksum: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-    const lower = checksum.toLowerCase() as Address;
-    expect(checksum).not.toBe(lower);
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [
-          { from: checksum, to: VAULT, data: "0x11" as Hex },
-          { from: lower, to: VAULT, data: "0x22" as Hex },
-        ],
-      }),
-    ).resolves.toBeDefined();
-  });
-
-  it("throws SimulationRevertedError when a result has status != success", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-        {
-          status: "failure",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          error: { message: "ERC20: insufficient balance" },
-          logs: [],
-        },
-      ],
-    });
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow(SimulationRevertedError);
-  });
-
-  it("inflates sender ETH balance to half of uint256 via stateOverride", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    const callArgs = mockSimulateCalls.mock.calls[0]![0];
-    // Half of uint256 (not the ceiling) leaves headroom for inbound native ETH
-    // so a refund to the sender does not overflow and revert the transfer.
-    expect(callArgs.stateOverrides).toEqual([
-      { address: USER, balance: maxUint256 / 2n },
+    expect(result.calls).toEqual([
+      { logs, status: true, returnData: "0xfeed", gasUsed: 21_000n },
+      { logs: [], status: true, returnData: "0x", gasUsed: 42_000n },
     ]);
-  });
-
-  it("passes blockNumber as bigint when provided", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-      blockNumber: 20_000_000n,
-    });
-
-    const callArgs = mockSimulateCalls.mock.calls[0]![0];
-    expect(callArgs.blockNumber).toBe(20_000_000n);
-    expect(callArgs.blockTag).toBeUndefined();
-  });
-
-  it("passes blockTag when a tag string is provided", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-      blockNumber: "latest",
-    });
-
-    const callArgs = mockSimulateCalls.mock.calls[0]![0];
-    expect(callArgs.blockTag).toBe("latest");
-    expect(callArgs.blockNumber).toBeUndefined();
-  });
-
-  it("passes AbortSignal through to the HTTP transport options", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    const signal = new AbortController().signal;
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-      signal,
-    });
-
-    expect(mockSimulateCalls).toHaveBeenCalledOnce();
-  });
-
-  it("uses a default revert message when eth_simulateV1 omits the error", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "failure", gasUsed: 0n, data: "0x" as Hex }],
-    });
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow("Simulation failed");
-  });
-
-  it("omits both block params when blockNumber is undefined", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    const callArgs = mockSimulateCalls.mock.calls[0]![0];
-    expect(callArgs.blockNumber).toBeUndefined();
-    expect(callArgs.blockTag).toBeUndefined();
-  });
-
-  it("wraps unknown viem errors in ExternalServiceError", async () => {
-    mockSimulateCalls.mockRejectedValueOnce(new Error("network refused"));
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow(ExternalServiceError);
-  });
-
-  it("wraps non-Error viem failures in ExternalServiceError", async () => {
-    mockSimulateCalls.mockRejectedValueOnce("transport down");
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow("transport down");
-  });
-
-  it("preserves SimulationRevertedError when viem throws one", async () => {
-    mockSimulateCalls.mockRejectedValueOnce(
-      new SimulationRevertedError("revert"),
-    );
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow(SimulationRevertedError);
-  });
-
-  it("maps a node-level ExecutionRevertedError to SimulationRevertedError", async () => {
-    const cause = new ExecutionRevertedError({
-      message: "execution reverted: insufficient collateral",
-    });
-    mockSimulateCalls.mockRejectedValueOnce(cause);
-
-    const error = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    }).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(SimulationRevertedError);
-    expect(error).not.toBeInstanceOf(ExternalServiceError);
-    expect((error as SimulationRevertedError).details).toBe(cause);
-    expect((error as SimulationRevertedError).cause).toBe(cause);
-  });
-
-  it("throws ExternalServiceError when results is not an array", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({ results: null });
-
-    await expect(
-      simulateV1({
-        rpcUrl: "http://rpc.local",
-        chainId: 1,
-        transactions: [BASIC_TX],
-      }),
-    ).rejects.toThrow(ExternalServiceError);
-  });
-
-  it("defaults log data to 0x when missing from a log entry", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [{ address: USDC, topics: ["0xaaaa" as Hex] /* no data */ }],
-        },
-      ],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    expect(result.calls[0]!.logs[0]!.data).toBe("0x");
-  });
-
-  it("does not crash when a result has no logs array", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", gasUsed: 0n /* no data or logs */ }],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    expect(result.calls[0]!.logs).toEqual([]);
-    expect(result.calls[0]!.returnData).toBe("0x");
-  });
-
-  it("groups assetChanges by account from transfer logs (both endpoints)", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            makeTransferLog({
-              token: USDC,
-              from: USER,
-              to: VAULT,
-              amount: 1_000_000n,
-            }),
-          ],
-        },
-      ],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
     expect(result.assetChanges).toEqual([
       { account: USER, changes: [{ token: USDC, diff: -1_000_000n }] },
       { account: VAULT, changes: [{ token: USDC, diff: 1_000_000n }] },
     ]);
   });
 
-  test("behavior: ignores WETH9 events in assetChanges on known tokenless chains", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            {
-              address: USDC,
-              topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
-              data: encodeUint256(1_000n),
-            },
-          ],
-        },
-      ],
-    });
+  test.each([undefined, "latest", 20_000_000n] as const)(
+    "behavior: serializes block %s and native tracing",
+    async (blockNumber) => {
+      respond([{}]);
+      await simulateV1({ ...params, blockNumber });
+      const request: unknown = JSON.parse(
+        String(fetchMock.mock.calls[0]?.[1]?.body),
+      );
+      expect(request).toMatchObject({
+        method: "eth_simulateV1",
+        params: [
+          {
+            traceTransfers: true,
+            blockStateCalls: [
+              {
+                calls: [
+                  { from: USER, to: VAULT, data: "0x12" },
+                  { to: "0x0000000000000000000000000000000000000000" },
+                ],
+                stateOverrides: { [USER]: { balance: toHex(maxUint256 / 2n) } },
+              },
+            ],
+          },
+          typeof blockNumber === "bigint" ? toHex(blockNumber) : "latest",
+        ],
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
 
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-      wNative: null,
-    });
-
-    expect(result.assetChanges).toEqual([]);
+  test("behavior: passes the caller's abort signal to HTTP", async () => {
+    respond([{}]);
+    const signal = new AbortController().signal;
+    await simulateV1({ ...params, signal });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(signal);
   });
 
-  it("nets inbound and outbound transfers of the same token to zero and drops it", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 5n }),
-            makeTransferLog({ token: USDC, from: VAULT, to: USER, amount: 5n }),
-          ],
-        },
-      ],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    expect(result.assetChanges).toEqual([]);
+  test("behavior: accepts checksum and lowercase versions of one sender", async () => {
+    respond([{}, {}]);
+    await expect(
+      simulateV1({
+        ...params,
+        transactions: [
+          { ...BASIC_TX, from: USDC },
+          { ...BASIC_TX, from: USDC.toLowerCase() as Address },
+        ],
+      }),
+    ).resolves.toBeDefined();
   });
 
-  it("returns empty assetChanges when no transfer logs are emitted", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
+  test.for([[], [BASIC_TX, { ...BASIC_TX, from: VAULT }]])(
+    "error: SimulationValidationError before RPC for invalid calls",
+    async (transactions) => {
+      await expect(
+        simulateV1({ ...params, transactions }),
+      ).rejects.toBeInstanceOf(SimulationValidationError);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    expect(result.assetChanges).toEqual([]);
+  test("error: SimulationRevertedError for a failed call", async () => {
+    respond([{ status: "0x0" }]);
+    await expect(simulateV1(params)).rejects.toBeInstanceOf(
+      SimulationRevertedError,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("enables traceTransfers so the node synthesizes native-ETH logs", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    expect(mockSimulateCalls.mock.calls[0]![0].traceTransfers).toBe(true);
+  test("error: SimulationRevertedError preserves node rejection as its cause", async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: 3, message: "execution reverted" },
+      }),
+    );
+    const error = await simulateV1(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    if (error instanceof SimulationRevertedError) {
+      expect(error.cause).toBeInstanceOf(Error);
+      expect(error.details).toBe(error.cause);
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("accounts native ETH from traceTransfers synthetic logs (payer debited, recipient credited)", async () => {
-    // With traceTransfers, the node logs native moves as Transfer events from
-    // the eth sentinel — including ETH moved through internal calls.
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            makeTransferLog({
-              token: ethAddress,
-              from: USER,
-              to: VAULT,
-              amount: parseEther("1"),
-            }),
-          ],
-        },
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            makeTransferLog({
-              token: ethAddress,
-              from: USER,
-              to: VAULT,
-              amount: parseEther("2"),
-            }),
-          ],
-        },
-      ],
-    });
+  test.each([new Error("network refused"), "transport down"])(
+    "error: ExternalServiceError for transport failure",
+    async (cause) => {
+      fetchMock.mockRejectedValueOnce(cause);
+      await expect(simulateV1(params)).rejects.toBeInstanceOf(
+        ExternalServiceError,
+      );
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
 
+  test("error: ExternalServiceError for HTTP failure without retries", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response("unavailable", { status: 503 }),
+    );
+    await expect(simulateV1(params)).rejects.toBeInstanceOf(
+      ExternalServiceError,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test.each([null, {}, [{ calls: null }]])(
+    "error: ExternalServiceError for malformed RPC result %j",
+    async (result) => {
+      fetchMock.mockResolvedValueOnce(
+        Response.json({ jsonrpc: "2.0", id: 1, result }),
+      );
+      await expect(simulateV1(params)).rejects.toBeInstanceOf(
+        ExternalServiceError,
+      );
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
+
+  test("behavior: nets transfers and omits zero changes", async () => {
+    respond([
+      {
+        logs: [
+          makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 5n }),
+          makeTransferLog({ token: USDC, from: VAULT, to: USER, amount: 5n }),
+        ],
+      },
+    ]);
+    expect((await simulateV1(params)).assetChanges).toEqual([]);
+  });
+
+  test("behavior: ignores wrapped-native lookalike events on tokenless chains", async () => {
+    respond([
+      {
+        logs: [
+          {
+            address: USDC,
+            topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+            data: encodeUint256(1000n),
+          },
+        ],
+      },
+    ]);
+    expect(
+      (await simulateV1({ ...params, wNative: null })).assetChanges,
+    ).toEqual([]);
+  });
+
+  test("behavior: accounts internal native transfers and top-level value exactly once", async () => {
+    respond([
+      {
+        logs: [
+          makeTransferLog({
+            token: ethAddress,
+            from: USER,
+            to: VAULT,
+            amount: parseEther("1"),
+          }),
+        ],
+      },
+      {
+        logs: [
+          makeTransferLog({
+            token: ethAddress,
+            from: VAULT,
+            to: USER,
+            amount: parseEther("0.5"),
+          }),
+        ],
+      },
+    ]);
     const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX, BASIC_TX],
+      ...params,
+      transactions: [{ ...BASIC_TX, value: parseEther("1") }, BASIC_TX],
     });
-
     expect(result.assetChanges).toEqual([
       {
         account: USER,
-        changes: [{ token: ethAddress, diff: -parseEther("3") }],
+        changes: [{ token: ethAddress, diff: -parseEther("0.5") }],
       },
       {
         account: VAULT,
-        changes: [{ token: ethAddress, diff: parseEther("3") }],
+        changes: [{ token: ethAddress, diff: parseEther("0.5") }],
       },
     ]);
   });
 
-  it("does not double-count: top-level value is ignored, only logs are accounted", async () => {
-    // The synthetic log already carries the top-level value, so adding `value`
-    // on top would double-count. A tx with `value` but no native log nets zero.
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [{ ...BASIC_TX, value: parseEther("1") }],
-    });
-
-    expect(result.assetChanges).toEqual([]);
-  });
-
-  it("merges native ETH and ERC20 deltas, sorted by token address", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        {
-          status: "success",
-          gasUsed: 0n,
-          data: "0x" as Hex,
-          logs: [
-            makeTransferLog({
-              token: USDC,
-              from: USER,
-              to: VAULT,
-              amount: 1_000_000n,
-            }),
-            makeTransferLog({
-              token: ethAddress,
-              from: USER,
-              to: VAULT,
-              amount: parseEther("1"),
-            }),
-          ],
-        },
-      ],
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    // USDC (0xa0b8…) sorts before the ethAddress sentinel (0xeeee…).
-    expect(result.assetChanges).toEqual([
+  test("behavior: combines ERC-20 and native deltas in token order", async () => {
+    respond([
+      {
+        logs: [
+          makeTransferLog({
+            token: USDC,
+            from: USER,
+            to: VAULT,
+            amount: 1_000_000n,
+          }),
+          makeTransferLog({
+            token: ethAddress,
+            from: USER,
+            to: VAULT,
+            amount: parseEther("1"),
+          }),
+        ],
+      },
+    ]);
+    expect((await simulateV1(params)).assetChanges).toEqual([
       {
         account: USER,
         changes: [

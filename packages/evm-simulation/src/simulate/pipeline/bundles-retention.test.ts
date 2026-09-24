@@ -437,12 +437,12 @@ describe("assertNoBundlesRetention", () => {
 
   // ─── Native ETH ──────────────────────────────────────────────────────────
   // Native ETH emits no event log, so it never reaches `transfers` on the
-  // Tenderly primary backend — it must be read from `assetChanges`. Regression
+  // aggregate result — it must be read from `assetChanges`. Regression
   // suite for Cantina finding 1440 (retained native ETH silently passing the guard).
   const ONE_ETH = 1_000000000000000000n;
 
-  it("behavior: throws when bundles contract retains native ETH reported only in assetChanges (Tenderly path)", () => {
-    // Tenderly derives native ETH into assetChanges and emits no transfer log.
+  it("behavior: throws when bundles contract retains native ETH reported only in assetChanges (aggregate evidence)", () => {
+    // Exercise aggregate native evidence independently of transfer logs.
     // Before the fix this resolved instead of throwing (finding 1440).
     expect(() =>
       assertNoBundlesRetention({

@@ -13,11 +13,9 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
-  AccountAssetChanges,
   RawCall,
   RawSimulationResult,
   SimulationTransaction,
-  Transfer,
 } from "../../types.js";
 import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
 import { parseTransfers } from "../parsing/index.js";
@@ -35,6 +33,27 @@ import { parseTransfers } from "../parsing/index.js";
  * account) entirely from the emitted transfer logs, with native ETH normalized
  * to viem's `ethAddress`. Top-level `value` is intentionally *not* added on top:
  * `traceTransfers` already logs it, so adding it would double-count.
+ *
+ * @internal
+ * @param params - RPC endpoint, chain, ordered transactions and optional block/native token/deadline.
+ * @returns Per-call outputs and net balance changes derived from transfer logs.
+ * @throws {SimulationValidationError} For empty calls or mixed senders.
+ * @throws {SimulationRevertedError} When a call or the node reports an execution revert.
+ * @throws {ExternalServiceError} When the RPC fails, times out or cannot be parsed.
+ * @example
+ * ```ts
+ * import { simulateV1 } from "./eth-simulate-v1.js";
+ *
+ * const result = await simulateV1({
+ *   rpcUrl: "https://rpc.example", chainId: 1,
+ *   transactions: [{
+ *     from: "0x1111111111111111111111111111111111111111",
+ *     to: "0x2222222222222222222222222222222222222222",
+ *     data: "0x", value: 1n,
+ *   }],
+ * });
+ * // result.calls[0].status === true
+ * ```
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -49,6 +68,10 @@ export async function simulateV1(params: {
   const client = createPublicClient({
     transport: http(rpcUrl, {
       fetchOptions: signal ? { signal } : undefined,
+      // A failed request must not consume another attempt or a fresh budget.
+      retryCount: 0,
+      // The pipeline abort signal owns the overall execution deadline.
+      timeout: signal ? 0 : undefined,
     }),
   });
 
@@ -130,10 +153,15 @@ export async function simulateV1(params: {
       gasUsed: r.gasUsed,
     }));
 
-    return {
-      calls: rawCalls,
-      assetChanges: toAssetChanges(parseTransfers(rawCalls, { wNative })),
-    };
+    const entries: AssetChangeEntry[] = [];
+    for (const { token, from, to, amount } of parseTransfers(rawCalls, {
+      wNative,
+    })) {
+      entries.push({ account: to, token, diff: amount });
+      entries.push({ account: from, token, diff: -amount });
+    }
+
+    return { calls: rawCalls, assetChanges: groupAssetChanges(entries) };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -145,21 +173,4 @@ export async function simulateV1(params: {
       { cause: error },
     );
   }
-}
-
-/**
- * Reduce parsed transfer logs to net per-token balance changes grouped by
- * account. With `traceTransfers` enabled, native ETH (top-level and internal)
- * arrives as transfer logs under viem's `ethAddress`, so no separate top-level
- * `value` accounting is needed — doing so would double-count.
- */
-function toAssetChanges(transfers: Transfer[]): AccountAssetChanges[] {
-  const entries: AssetChangeEntry[] = [];
-
-  for (const { token, from, to, amount } of transfers) {
-    entries.push({ account: to, token, diff: amount });
-    entries.push({ account: from, token, diff: -amount });
-  }
-
-  return groupAssetChanges(entries);
 }

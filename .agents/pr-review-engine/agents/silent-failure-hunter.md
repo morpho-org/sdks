@@ -25,6 +25,8 @@ The boundary with `code-quality` is sharp: `code-quality` owns whether the failu
 - **Dead code paths** the type-checker missed — branches the type narrowing makes unreachable; `default:` arms on exhaustive `switch`es; conditionals that can never be true given the types.
 - **Recovery paths that don't recover** — a `catch` that logs and re-throws the same generic error, losing the typed `cause`.
 
+- **Simulation provider recovery** — per [`evm-simulation/AGENTS.md`](../../../packages/evm-simulation/AGENTS.md), `eth_simulateV1` is the sole backend. Flag provider selection/fallback, retrying execution with a fresh budget, or converting RPC failures, timeouts, unsupported configuration or execution reverts into successful results. Preserve typed error identity and the single overall timeout budget.
+
 ## Severity guidance
 
 - **High** — swallowed error on a financial-impact code path (transaction, signature, money movement). Same for `tx.wait()` not awaited.

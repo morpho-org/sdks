@@ -49,15 +49,9 @@ interface AssertNoBundlesRetentionParams {
  * current-bundle retention, so it is warned instead of raising a blacklist
  * violation.
  *
- * **Two flow sources, one per asset class.** ERC20 / WETH9 retention is read
- * from parsed `transfers` (log-derived, identical across backends). Native ETH
- * emits no event log, so it can never appear in `transfers` on the Tenderly
- * primary backend — Tenderly derives native moves into `assetChanges` instead.
- * Native ETH is therefore read from `assetChanges`, the cross-backend source of
- * truth for native value: Tenderly derives it from its trace, and
- * `eth_simulateV1` derives it from the synthetic `traceTransfers` logs. Without
- * this, native ETH stuck in a bundles contract would pass the guard undetected
- * on the Tenderly path (Cantina finding 1440).
+ * ERC20 / WETH9 retention is read from parsed `transfers`. Native ETH is
+ * read from `assetChanges`, derived from synthetic `traceTransfers` logs.
+ * Both top-level value and internal native transfers participate in retention.
  *
  * To avoid double-counting native ETH on `eth_simulateV1` — where the same
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
@@ -71,7 +65,7 @@ interface AssertNoBundlesRetentionParams {
  *   neither are skipped (a `logger.warn` records the skip).
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
- * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
+ * @param params.assetChanges - Per-account native-ETH deltas, the aggregate
  *   source of truth for native value stuck in a restricted contract.
  * @param params.logger - Optional logger. Receives retention-check skip warnings
  *   and pre-existing-balance sweep telemetry (net-negative flow).

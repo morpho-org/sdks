@@ -22,8 +22,8 @@ import {
  * Simulate a bundle of EVM transactions.
  *
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
- * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
+ * through `eth_simulateV1` with the full timeout budget → parses ERC20 transfers and
+ * WETH9 events from per-tx logs, restricting WETH9
  * events to the registered wrapped-native token, rejecting them on known tokenless chains,
  * and retaining signature-based parsing for unknown chains → asserts no funds are retained
  * by standalone `bundles` periphery contracts → returns the full result
@@ -35,12 +35,12 @@ import {
  *   Aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe gas limit; consumers
  *   deriving one must add their own headroom.
  * - `assetChanges` → net per-asset balance changes grouped by account (sender and
- *   counterparties) over the whole bundle, normalized to the same shape across backends.
+ *   counterparties) over the whole bundle.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
- * @param config - Backend configuration: per-chain Tenderly RPC and/or `eth_simulateV1`
- *   URL, optional logger, and the overall timeout budget.
+ * @param config - Required per-chain `eth_simulateV1` URL, optional logger, and
+ *   the overall timeout budget.
  * @param params - Per-call simulation input.
  * @param params.chainId - Chain id the bundle targets.
  * @param params.transactions - The bundle's transactions, in execution order. All must share the
@@ -50,13 +50,13 @@ import {
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
- * @throws {UnsupportedChainError} when the chain is not configured for any backend.
- * @throws {SimulationRevertedError} when the bundle reverts on either backend.
+ * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1` endpoint configured.
+ * @throws {SimulationRevertedError} when the bundle reverts.
  * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
  *   the dust threshold by a `bundles` periphery contract (VaultExitBundlesV1,
  *   VaultBundlesV1, BlueBundlesV1). Never bypassable.
- * @throws {ExternalServiceError} (a) when both backends are unavailable within the
- *   timeout budget, or (b) when a backend returns a `calls` array whose length does
+ * @throws {ExternalServiceError} (a) when the RPC is unavailable within the
+ *   timeout budget, or (b) when the backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
  *   per-tx output.
  * @returns A {@link SimulationResult} carrying the resolved `simulationTxs`, per-tx
@@ -65,28 +65,38 @@ import {
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
+ * import { encodeFunctionData, erc20Abi } from "viem";
+ *
+ * const user = "0x1111111111111111111111111111111111111111";
+ * const recipient = "0x2222222222222222222222222222222222222222";
+ * const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
  *
  * const result = await simulate(
  *   {
  *     chains: new Map([
  *       [1, {
- *         tenderlyRpc: { rpcUrl: process.env.TENDERLY_RPC_URL! },
- *         simulateV1Url: process.env.MAINNET_RPC_URL,
+ *         simulateV1Url: process.env.MAINNET_RPC_URL!,
  *       }],
  *     ]),
  *   },
  *   {
  *     chainId: 1,
- *     transactions: [{ from: user, to: vaultAddress, data: encodedCalldata, value: 0n }],
+ *     transactions: [{
+ *       from: user, to: usdc,
+ *       data: encodeFunctionData({
+ *         abi: erc20Abi, functionName: "transfer", args: [recipient, 1_000_000n],
+ *       }),
+ *     }],
  *   },
  * );
- * // result satisfies SimulationResult
+ * // result.transfers includes the 1 USDC transfer when the sender is funded.
  * ```
  */
 export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,
 ): Promise<SimulationResult> {
+  // Reject invalid input before preparing or executing any calls.
   validateInput(params);
 
   const wNative = _try(
@@ -113,6 +123,7 @@ export async function simulate(
     logger: config.logger,
   });
 
+  // Reject retained funds before returning a successful simulation.
   assertNoBundlesRetention({
     chainId: params.chainId,
     transfers,
