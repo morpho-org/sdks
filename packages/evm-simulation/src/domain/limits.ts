@@ -118,36 +118,21 @@ export interface OperationLimitFields {
     readonly expectedReceiver?: Address;
     readonly minSharesMinted?: bigint;
   };
-  readonly vaultV2Deposit: {
-    readonly vault: Address;
-    readonly expectedAssets?: bigint;
-    readonly expectedReceiver?: Address;
-    readonly minSharesMinted?: bigint;
-  };
+  readonly vaultV2Deposit: OperationLimitFields["vaultV1Deposit"];
   readonly vaultV1Withdraw: {
     readonly vault: Address;
     readonly expectedAssets?: bigint;
     readonly expectedReceiver?: Address;
     readonly maxSharesBurned?: bigint;
   };
-  readonly vaultV2Withdraw: {
-    readonly vault: Address;
-    readonly expectedAssets?: bigint;
-    readonly expectedReceiver?: Address;
-    readonly maxSharesBurned?: bigint;
-  };
+  readonly vaultV2Withdraw: OperationLimitFields["vaultV1Withdraw"];
   readonly vaultV1Redeem: {
     readonly vault: Address;
     readonly expectedShares?: bigint;
     readonly expectedReceiver?: Address;
     readonly minAssetsReceived?: bigint;
   };
-  readonly vaultV2Redeem: {
-    readonly vault: Address;
-    readonly expectedShares?: bigint;
-    readonly expectedReceiver?: Address;
-    readonly minAssetsReceived?: bigint;
-  };
+  readonly vaultV2Redeem: OperationLimitFields["vaultV1Redeem"];
   readonly vaultV2ForceWithdraw: {
     readonly vault: Address;
     readonly expectedExitAssets?: bigint;
@@ -174,16 +159,7 @@ export interface OperationLimitFields {
     readonly maxPenaltyAssets?: bigint;
     readonly maxResidualShareAllowance?: bigint;
   };
-  readonly vaultV2InKindRedeem: {
-    readonly vault: Address;
-    readonly expectedAssets?: bigint;
-    readonly expectedMarketIds?: readonly MarketId[];
-    readonly maxSharesBurned?: bigint;
-    readonly minIdleAssetsReceived?: bigint;
-    readonly minSupplyAssetsByMarket?: readonly MarketSupplyMinimum[];
-    readonly maxPenaltyAssets?: bigint;
-    readonly maxResidualShareAllowance?: bigint;
-  };
+  readonly vaultV2InKindRedeem: OperationLimitFields["vaultV1InKindRedeem"];
   readonly vaultV1MigrateToV2: {
     readonly sourceVault: Address;
     readonly targetVault: Address;
