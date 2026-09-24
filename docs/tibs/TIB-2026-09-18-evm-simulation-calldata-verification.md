@@ -251,14 +251,14 @@ sequenceDiagram
 
     opt Preview succeeds and consumer proceeds
         Consumer->>Wallet: Fulfill the same requirements in order
-        Note over Consumer,Wallet: Confirm approval transactions;<br/>sign exact requirement typed data
+        Note over Consumer,Wallet: Confirm approval transactions,<br/>sign exact requirement typed data
         Wallet-->>Consumer: Confirmed approvals and requirement signatures
         Consumer->>SDK: buildTx(signatures)
         SDK-->>Consumer: Final transaction with selected permit kind
         Consumer->>Simulation: simulate(config, { mode: "final", transactions, limits, chainId })
-        Note over Simulation: Execute actual signed calldata;<br/>verify effects and limits without permission preparation
+        Note over Simulation: Execute actual signed calldata,<br/>verify effects and limits without permission preparation
         Simulation-->>Consumer: VerifiedSimulationResult or typed error
-        Note over Consumer: Result includes calls, transfers, asset changes<br/>and verification evidence; any error blocks submission
+        Note over Consumer: Result includes calls, transfers, asset changes<br/>and verification evidence, any error blocks submission
     end
 ```
 
