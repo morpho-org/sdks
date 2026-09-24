@@ -4,7 +4,7 @@
 # Copy unchanged into a repository and expose it as a package script. See
 # https://github.com/morpho-org/internal-tools/blob/main/docs/install.md
 set -eu
-minimum=0.14.3
+minimum=0.14.4
 bin_dir=${PR_CONTEXT_BIN_DIR:-"$HOME/.local/bin"}
 installed="$bin_dir/pr-context"
 if [ -x "$installed" ]; then
