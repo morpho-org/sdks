@@ -49,6 +49,7 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
  * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
  * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example
  * ```ts

@@ -51,7 +51,6 @@ import {
   AmountAndSharesExclusiveError,
   type BundlesFundingArgs,
   type BundlesTokenRequirementsOptions,
-  ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
@@ -80,6 +79,7 @@ export interface VaultV1Actions {
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
    * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
    */
   getData: (
     parameters?: FetchParameters,
@@ -269,6 +269,7 @@ export interface VaultV1Actions {
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
@@ -443,6 +444,7 @@ export interface VaultV1Actions {
    * @throws {NegativeInputError} when slippage tolerance or `referralFeePct` is negative.
    * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {InputExceedsMaxError} when the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -518,15 +520,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
