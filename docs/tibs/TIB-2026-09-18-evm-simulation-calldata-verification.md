@@ -4,7 +4,7 @@
 | --- | --- |
 | **Date** | 2026-09-18; revised 2026-09-24 |
 | **Author** | @foulques, @jinmel |
-| **Scope** | `evm-simulation` 5.0.0, under the approved 2026-09-24 lifecycle exception; consumers: Vaults frontend and write API |
+| **Scope** | `evm-simulation` 5.0.0, following a deprecation minor; consumers: Vaults frontend and write API |
 | **SDK baseline** | `morpho-sdk` **6.0.0**, released 2026-09-24; pinned version for routes, ABIs, addresses and behavior |
 
 ## Context and decision
@@ -290,19 +290,10 @@ calldata in preview instead of attempting to bypass signature verification.
 
 ## Migration
 
-On 2026-09-24 the user approved a one-time exception to the prior successor-introduction,
-`@deprecated`, and published deprecation-minor/coexistence steps. `evm-simulation` 5.0.0 may
-remove only `TenderlyRpcConfig`, `ChainSimulationConfig.tenderlyRpc`, Tenderly/provider-fallback
-behavior, and the legacy `approval` / `signature` `SimulationAuthorization` variants without
-that minor. SDK-1291 retires Tenderly; SDK-1293 replaces the authorization variants. No other
-API removal inherits this exception. Root `AGENTS.md` §7 and the `module-api-architecture`
-review persona codify the same scope.
-
-The major changeset, migration guide, maintained-dependent/runtime/peer audit and any required
-bumps, Cantina major audit with its public report linked from the release CHANGELOG, and
-continued availability of the previous major remain mandatory. Work stays on the unreleased
-v5 integration branch until SDK-1297 promotes the complete stack; publication is SDK-556.
-See the [v4 → v5 migration guide](../migrations/evm-simulation-v4-to-v5.md).
+Ship a deprecation minor for the Tenderly configuration and legacy `approval` / `signature`
+authorization variants before `evm-simulation` 5.0.0 removes them. The major requires
+`simulateV1Url`, introduces the typed authorization requests and verification output, and makes
+`txIdx` index only caller transactions. The SDK baseline remains pinned to `morpho-sdk` 6.0.0.
 
 Provide a migration guide for these changes, update `packages/evm-simulation/AGENTS.md` to match,
 and remove consumer error bypasses. Consumers must distinguish execution failures, verification
