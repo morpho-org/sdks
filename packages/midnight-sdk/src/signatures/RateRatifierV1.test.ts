@@ -8,6 +8,7 @@ import {
   type Hex,
   hashStruct,
   isAddressEqual,
+  keccak256,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -15,7 +16,9 @@ import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { rateRatifierV1Abi } from "../abis.js";
 import {
+  InvalidOfferGroupError,
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError,
   InvalidTreeError,
@@ -23,7 +26,8 @@ import {
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
 
@@ -224,12 +228,116 @@ describe("RateRatifierV1.buildDescriptor", () => {
     );
   });
 
+  test("behavior: MIN_TICK is the tick whose price is 0.5 WAD", () => {
+    expect(RateRatifierV1.MIN_TICK).toBe(3372n);
+    expect(() =>
+      RateRatifierV1.buildDescriptor([leaf({ tick: RateRatifierV1.MIN_TICK })]),
+    ).not.toThrow();
+  });
+
+  test("error: InvalidRateRatifierV1TickError on tick below MIN_TICK", () => {
+    for (const tick of [0n, RateRatifierV1.MIN_TICK - 1n]) {
+      expect(() => RateRatifierV1.buildDescriptor([leaf({ tick })])).toThrow(
+        InvalidRateRatifierV1TickError,
+      );
+    }
+  });
+
   test("behavior: does not deep-freeze offer instances", () => {
     const offer = leaf().offer;
     const descriptor = RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
 
+    expect(Object.isFrozen(offer)).toBe(false);
+    expect(Object.isFrozen(descriptor.offers[0])).toBe(false);
     expect(offer.hash).toBe(OfferUtils.hash(offer));
-    expect(descriptor.offers[0]!.hash).toBe(offer.hash);
+    expect(descriptor.offers[0]!.hash).toBe(
+      OfferUtils.hash(descriptor.offers[0]!),
+    );
+  });
+
+  test("behavior: defaults group to the rate-aware singleton id", () => {
+    const l = leaf({}, 5n);
+    const protocolGroup = l.offer.group;
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
+    expect(offer!.group).toBe(
+      keccak256(
+        RateRatifierV1.hashLeaf({
+          offer: OfferUtils.toStruct({ offer: l.offer, group: zeroHash }),
+          rate: 5n,
+          allowedTaker: zeroAddress,
+        }),
+      ),
+    );
+    expect(offer!.group).not.toBe(protocolGroup);
+    expect(RateRatifierV1.groupId([{ ...l, rate: 6n }])).not.toBe(offer!.group);
+    expect(RateRatifierV1.groupId([{ ...l, allowedTaker }])).not.toBe(
+      offer!.group,
+    );
+  });
+
+  test("behavior: default group commits the leaf allowedTaker", () => {
+    const l = { ...leaf({}, 5n), allowedTaker };
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
+    expect(offer!.group).not.toBe(
+      RateRatifierV1.groupId([{ ...l, allowedTaker: zeroAddress }]),
+    );
+  });
+
+  test("error: InvalidTreeError on default-group leaves differing only by tick", () => {
+    expect(() =>
+      RateRatifierV1.buildDescriptor([
+        leaf({ tick: 5_000n }, 5n),
+        leaf({ tick: 5_004n }, 5n),
+      ]),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("behavior: substitutes the group on a copied offer instance", () => {
+    const l = leaf({}, 5n);
+    const copy = new Offer(l.offer);
+    const [offer] = RateRatifierV1.buildDescriptor([
+      { ...l, offer: copy },
+    ]).offers;
+
+    expect(copy.hasExplicitGroup).toBe(false);
+    expect(offer!.group).toBe(RateRatifierV1.groupId([l]));
+  });
+
+  test("behavior: commits an explicit group as-is", () => {
+    const group = keccak256("0x01");
+    const l = { ...leaf(), offer: { ...leaf().offer, group } };
+    const [offer] = RateRatifierV1.buildDescriptor([l]).offers;
+
+    expect(offer!.group).toBe(group);
+    expect(offer!.hasExplicitGroup).toBe(true);
+  });
+
+  test("behavior: groupId is order-independent across leaves", () => {
+    const a = leaf({}, 1n);
+    const b = leaf({ maxUnits: 7n }, 2n);
+
+    expect(RateRatifierV1.groupId([a, b])).toBe(RateRatifierV1.groupId([b, a]));
+    expect(RateRatifierV1.groupId([a, b])).toBe(
+      GroupUtils.hashMembers([
+        RateRatifierV1.memberHash(a),
+        RateRatifierV1.memberHash(b),
+      ]),
+    );
+    expect(() => RateRatifierV1.groupId([])).toThrow(InvalidOfferGroupError);
+  });
+
+  test("error: InvalidRateRatifierV1RateError from memberHash and groupId", () => {
+    const negative = { offer: baseOffer(), rate: -1n };
+    expect(() => RateRatifierV1.memberHash(negative)).toThrow(
+      InvalidRateRatifierV1RateError,
+    );
+    expect(() => RateRatifierV1.groupId([negative])).toThrow(
+      InvalidRateRatifierV1RateError,
+    );
   });
 
   test("error: InvalidTreeError for a tampered descriptor root", () => {
@@ -444,14 +552,14 @@ describe("RateRatifierV1.buildProof", () => {
 
 describe("RateRatifierV1.ratifierData", () => {
   test("default", () => {
-    const tree = [
+    const tree = RateRatifierV1.buildDescriptor([
       leaf({}, 5n),
       { offer: leaf({ maxUnits: 7n }).offer, rate: 6n, allowedTaker },
-    ];
+    ]);
     const data = RateRatifierV1.ratifierData({ tree, leafIndex: 1n });
 
     const decoded = RateRatifierV1.verifyRatifierData({
-      offer: tree[1]!.offer,
+      offer: tree.offers[1]!,
       ratifierData: data,
       taker: allowedTaker,
     });

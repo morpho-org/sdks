@@ -10,6 +10,7 @@ export {
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError,
   InvalidTickSpacingError,

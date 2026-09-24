@@ -340,6 +340,34 @@ export class InvalidRateRatifierV1RateError extends Error {
 }
 
 /**
+ * Thrown when a RateRatifierV1 leaf offer commits a nominal tick below the
+ * router's minimum takeable tick.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1TickError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1TickError(0n, 3372n);
+ * ```
+ */
+export class InvalidRateRatifierV1TickError extends Error {
+  /** Nominal tick that was rejected. */
+  public readonly tick: bigint;
+
+  /** Minimum accepted tick. */
+  public readonly minTick: bigint;
+
+  public constructor(tick: bigint, minTick: bigint) {
+    super(
+      `Offer tick "${tick}" is below the minimum "${minTick}" (price >= 0.5 WAD). RateRatifierV1 prices from \`rate\`, but the router still validates the committed tick; set a nominal tick of at least "${minTick}".`,
+    );
+    this.name = "InvalidRateRatifierV1TickError";
+    this.tick = tick;
+    this.minTick = minTick;
+  }
+}
+
+/**
  * Thrown when a RateRatifierV1 time parameter is negative.
  *
  * @example

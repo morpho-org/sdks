@@ -34,8 +34,12 @@ the underlying offers; it omits the additional Price/Rate commitment fields.
 
 Ecrecover and Setter share leaf hashing. Price adds the allowed taker under its
 own type hash. Rate commits to the rate instead of the tick, also with an allowed
-taker and its own type hash. Group normalization and padding retain their existing
-route-specific semantics, so existing roots and proofs remain unchanged.
+taker and its own type hash. Ecrecover and Setter group normalization, padding,
+roots and proofs are unchanged. Price and Rate derive an omitted `group` from
+their scheme leaf hash with `group = 0` (Price commits `tick` + `allowedTaker`,
+Rate commits `rate` + `allowedTaker`), matching the router's `group_identity`
+rule; omitted-group V1 roots therefore differ from the earlier protocol-hash
+derivation. Explicit groups are committed as-is.
 
 ## Ratification
 
