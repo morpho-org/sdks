@@ -158,12 +158,17 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
         ],
       });
 
-      const error = await tree.mempoolValidate({ chainId }).then(
-        () => {
-          throw new Error("Expected mempoolValidate to reject.");
-        },
-        (caught: unknown) => caught,
-      );
+      const error = await tree
+        .mempoolValidate({
+          chainId,
+          ratification: { type: "rateV1" },
+        })
+        .then(
+          () => {
+            throw new Error("Expected mempoolValidate to reject.");
+          },
+          (caught: unknown) => caught,
+        );
 
       expect(error).toBeInstanceOf(MidnightMempoolValidationError);
       expect(error).toMatchObject({
@@ -186,12 +191,17 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
         ],
       });
 
-      const error = await tree.mempoolValidate({ chainId }).then(
-        () => {
-          throw new Error("Expected mempoolValidate to reject.");
-        },
-        (caught: unknown) => caught,
-      );
+      const error = await tree
+        .mempoolValidate({
+          chainId,
+          ratification: { type: "priceV1" },
+        })
+        .then(
+          () => {
+            throw new Error("Expected mempoolValidate to reject.");
+          },
+          (caught: unknown) => caught,
+        );
 
       expect(error).toBeInstanceOf(MidnightMempoolValidationError);
       expect(error).toMatchObject({
@@ -215,7 +225,10 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
         ],
       });
 
-      const result = await tree.mempoolValidate({ chainId });
+      const result = await tree.mempoolValidate({
+        chainId,
+        ratification: { type: "rateV1" },
+      });
       expect(result).toEqual({ valid: true, issues: [] });
     },
     API_TIMEOUT,
@@ -234,7 +247,10 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
         ],
       });
 
-      const result = await tree.mempoolValidate({ chainId });
+      const result = await tree.mempoolValidate({
+        chainId,
+        ratification: { type: "priceV1" },
+      });
       expect(result).toEqual({ valid: true, issues: [] });
     },
     API_TIMEOUT,
