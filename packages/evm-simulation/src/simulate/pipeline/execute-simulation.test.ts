@@ -72,6 +72,9 @@ describe.sequential("executeSimulation", () => {
 
       expect(timeoutSpy).toHaveBeenCalledTimes(1);
       expect(timeoutSpy).toHaveBeenCalledWith(3000);
+      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
+        timeoutSpy.mock.results[0]!.value,
+      );
     } finally {
       timeoutSpy.mockRestore();
     }
@@ -89,6 +92,9 @@ describe.sequential("executeSimulation", () => {
       });
 
       expect(timeoutSpy).toHaveBeenCalledWith(5000);
+      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
+        timeoutSpy.mock.results[0]!.value,
+      );
     } finally {
       timeoutSpy.mockRestore();
     }
