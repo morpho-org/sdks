@@ -5,6 +5,7 @@ import {
   getAddress,
   type Hex,
   isAddress,
+  isHex,
   maxUint256,
 } from "viem";
 import { z } from "zod";
@@ -23,7 +24,7 @@ const addressSchema = z
 
 const hexSchema = z
   .string()
-  .regex(/^0x[0-9a-fA-F]*$/, { error: "must be hex data" })
+  .refine(isHex, { error: "must be hex data" })
   .transform((value) => value as Hex);
 
 const bytes32Schema = z
@@ -65,7 +66,7 @@ const domainSchema = z.strictObject({
   salt: bytes32Schema.optional(),
 });
 
-const typedField = (name: string, type: string) =>
+const typedField = <N extends string, T extends string>(name: N, type: T) =>
   z.strictObject({ name: z.literal(name), type: z.literal(type) });
 
 const erc2612TypedDataSchema = z.strictObject({
@@ -399,15 +400,16 @@ const operationLimitSchema = z.union([
     maxResidualShareAllowance: uint256Schema.optional(),
     ...transactionIndexField,
   }),
+  // Exactly one expected quantity: `neither` would be a vacuous limit.
   z.strictObject({
     ...migrateToV2Base,
-    expectedAssets: uint256Schema.optional(),
+    expectedAssets: uint256Schema,
     expectedShares: z.undefined().optional(),
   }),
   z.strictObject({
     ...migrateToV2Base,
     expectedAssets: z.undefined().optional(),
-    expectedShares: uint256Schema.optional(),
+    expectedShares: uint256Schema,
   }),
 ]);
 
@@ -434,6 +436,15 @@ const requestSchema = z.strictObject({
   authorizations: z.array(authorizationSchema).optional(),
   limits: limitsSchema.optional(),
 });
+
+// Compile-time binding: the parsed authorization output must stay assignable
+// to the SDK-1292 domain union, or the cross-field checks below stop compiling.
+type _Extends<A, B> = A extends B ? true : false;
+type _Expect<T extends true> = T;
+type _AuthorizationSchemaOutput = z.output<typeof authorizationSchema>;
+type _AssertAuthorizationSchema = _Expect<
+  _Extends<_AuthorizationSchemaOutput, SimulationAuthorization>
+>;
 
 const authorizationOwner = (authorization: SimulationAuthorization): Address =>
   authorization.type === "erc20Approval"
@@ -503,17 +514,13 @@ export function parseRequest(input: unknown): ParsedRequest {
   }
 
   for (const [i, authorization] of (authorizations ?? []).entries()) {
-    const authorizationOwnerAddress = authorizationOwner(
-      authorization as SimulationAuthorization,
-    );
+    const authorizationOwnerAddress = authorizationOwner(authorization);
     if (authorizationOwnerAddress !== owner) {
       fieldErrors.push(
         `authorizations[${i}]: owner must equal the bundle sender ${owner} (got ${authorizationOwnerAddress})`,
       );
     }
-    const domainChainId = authorizationDomainChainId(
-      authorization as SimulationAuthorization,
-    );
+    const domainChainId = authorizationDomainChainId(authorization);
     if (
       domainChainId !== undefined &&
       BigInt(domainChainId) !== BigInt(parsed.chainId)
@@ -566,7 +573,7 @@ export function parseRequest(input: unknown): ParsedRequest {
     ...(mode === "preview"
       ? { mode, authorizations: authorizations ?? [] }
       : { mode, authorizations: [] }),
-  } as NormalizedSimulateParams);
+  });
 
   return brandParsed(normalized);
 }

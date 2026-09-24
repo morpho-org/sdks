@@ -51,6 +51,28 @@ describe("resolveEffectiveLimits", () => {
     },
     { maxSignatureLifetimeSeconds: 0n },
     { maxSlippageWad: -1n },
+    {
+      wallet: {
+        maxDebit: [
+          {
+            token:
+              "0x0000000000000000000000000000000000000001" as `0x${string}`,
+            amount: -1n,
+          },
+        ],
+      },
+    },
+    {
+      wallet: {
+        minCredit: [
+          {
+            token:
+              "0x0000000000000000000000000000000000000001" as `0x${string}`,
+            amount: -1n,
+          },
+        ],
+      },
+    },
   ])(
     "error: SimulationValidationError for weaker or invalid limits %#",
     (limits) => {

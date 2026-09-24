@@ -77,7 +77,8 @@ import { parseRequest } from "./request/index.js";
  * @throws {MissingVerificationEvidenceError} when a probe fails or its data
  *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
- *   trusted (bad shape, call-count mismatch, no block advancement).
+ *   trusted (bad shape, call-count mismatch, block behind the pinned state,
+ *   or a state-block hash that changed mid-flight).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Never bypassable.
@@ -95,7 +96,17 @@ import { parseRequest } from "./request/index.js";
  *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
  *   {
  *     chainId: 1,
- *     transactions: [{ from: user, to: usdc, data: transferCalldata }],
+ *     transactions: [
+ *       {
+ *         from: user,
+ *         to: usdc,
+ *         data: encodeFunctionData({
+ *           abi: erc20Abi,
+ *           functionName: "transfer",
+ *           args: [recipient, 1_000_000n],
+ *         }),
+ *       },
+ *     ],
  *   },
  * );
  * ```

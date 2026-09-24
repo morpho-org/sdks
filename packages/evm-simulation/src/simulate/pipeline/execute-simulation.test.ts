@@ -45,6 +45,14 @@ function respondHappy(callCount = 3) {
           })),
         },
       ]),
+    )
+    // Post-simulation reorg check re-fetches the pinned state block.
+    .mockResolvedValueOnce(
+      rpc({
+        number: numberToHex(20_000_000n),
+        hash: `0x${"ab".repeat(32)}`,
+        timestamp: numberToHex(1_700_000_000n),
+      }),
     );
 }
 
@@ -67,7 +75,7 @@ afterEach(() => {
 
 describe.sequential("executeSimulation", () => {
   test.each([undefined, 10_000, 1])(
-    "behavior: uses the full timeout budget %s across all three RPC steps",
+    "behavior: uses the full timeout budget %s across all four RPC steps",
     async (timeoutMs) => {
       const timeout = vi.spyOn(AbortSignal, "timeout");
       respondHappy();
@@ -76,9 +84,10 @@ describe.sequential("executeSimulation", () => {
         plan: makePlan(),
       });
       expect(timeout).toHaveBeenCalledWith(timeoutMs ?? 5000);
-      // One shared signal across chainId, getBlock and eth_simulateV1.
+      // One shared signal across chainId, getBlock, eth_simulateV1 and the
+      // reorg-check getBlock.
       const signals = fetchMock.mock.calls.map((call) => call[1]?.signal);
-      expect(signals).toHaveLength(3);
+      expect(signals).toHaveLength(4);
       expect(new Set(signals).size).toBe(1);
     },
   );
@@ -140,6 +149,13 @@ describe.sequential("executeSimulation", () => {
             ],
           },
         ]),
+      )
+      .mockResolvedValueOnce(
+        rpc({
+          number: numberToHex(20_000_000n),
+          hash: `0x${"ab".repeat(32)}`,
+          timestamp: numberToHex(1_700_000_000n),
+        }),
       );
     await expect(
       executeSimulation({ config, plan: makePlan() }),

@@ -120,16 +120,6 @@ export interface SimulationLogger {
 // ─── Internal (consumed by backend / pipeline) ───────────────────────────────
 
 /**
- * Internal raw result from a simulation adapter before normalization.
- * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
- * backend; `assetChanges` is the bundle-level aggregate grouped by account.
- */
-export interface RawSimulationResult {
-  calls: RawCall[];
-  assetChanges: AccountAssetChanges[];
-}
-
-/**
  * Normalized EVM log emitted by a single simulated call. The shape is the
  * log shape produced by `eth_simulateV1` via viem. Returned indirectly via
  * `SimulationCall.logs` and consumed by the SDK's transfer parser.
@@ -141,8 +131,7 @@ export interface RawLog {
 }
 
 /**
- * Internal mirror of `SimulationCall`, mutable during construction by the
- * simulation backend.
+ * Input-side mirror of `SimulationCall` accepted by the transfer parser.
  *
  * @internal
  */

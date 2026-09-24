@@ -17,6 +17,7 @@ import {
 import {
   BlacklistViolationError,
   ExternalServiceError,
+  InvalidSimulationResponseError,
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
@@ -357,6 +358,31 @@ describe.sequential("simulate — error handling", () => {
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
+  });
+
+  it("throws InvalidSimulationResponseError when evidence is missing a user call", async () => {
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
+      const evidence = makeEvidence(plan);
+      // Drop the second transaction-identity call from the evidence.
+      const calls = evidence.calls.filter(
+        (call) =>
+          call.identity.type !== "transaction" ||
+          call.identity.transactionIndex !== 1,
+      );
+      return Promise.resolve(brandExecuted({ ...evidence, calls }));
+    });
+
+    await expect(
+      simulate(
+        makeConfig(),
+        makeParams({
+          transactions: [
+            { from: USER, to: USDC, data: "0x095ea7b3" as Hex },
+            { from: USER, to: VAULT, data: "0xa9059cbb" as Hex },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(InvalidSimulationResponseError);
   });
 });
 
