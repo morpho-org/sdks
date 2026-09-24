@@ -3,47 +3,23 @@ import type { Address, BlockTag, Hex } from "viem";
 // ─── Config ────────────────────────────────────────────────────────────────────
 // Shapes the caller constructs once and passes into `simulate()`.
 
-/**
- * Credentials for the Tenderly Node Web3 Gateway. The `rpcUrl` is the
- * chain-specific gateway URL with the access key embedded in the path,
- * e.g. `https://mainnet.gateway.tenderly.co/{ACCESS_KEY}`.
- */
-export interface TenderlyRpcConfig {
-  rpcUrl: string;
+/** Per-chain backend configuration. */
+export interface ChainSimulationConfig {
+  /** JSON-RPC URL supporting `eth_simulateV1`. */
+  simulateV1Url: string;
 }
-
-/**
- * Per-chain backend capabilities. Exactly one configuration shape per chain;
- * the discriminated union enforces that **at least one** of `tenderlyRpc`
- * (primary) or `simulateV1Url` (fallback) is supplied.
- */
-export type ChainSimulationConfig =
-  | {
-      /** Tenderly RPC config — `tenderly_simulateTransaction` / `tenderly_simulateBundle`. */
-      tenderlyRpc: TenderlyRpcConfig;
-      /** JSON-RPC URL supporting `eth_simulateV1`. Optional when Tenderly is set. */
-      simulateV1Url?: string;
-    }
-  | {
-      tenderlyRpc?: TenderlyRpcConfig;
-      simulateV1Url: string;
-    };
 
 /**
  * Top-level configuration for `simulate`.
  *
- * Every chain entry must declare at least one backend (Tenderly RPC primary,
- * `eth_simulateV1` fallback, or both). Calling `simulate` for a `chainId`
- * missing from `chains` throws `UnsupportedChainError`.
+ * Calling `simulate` for a `chainId` missing from `chains` throws
+ * `UnsupportedChainError`.
  */
 export interface SimulationConfig {
   /** Per-chain simulation capabilities. */
   chains: Map<number, ChainSimulationConfig>;
   logger?: SimulationLogger;
-  /**
-   * Overall timeout budget in ms (default 5000). Tenderly gets ~60% of budget.
-   * On timeout/failure, fallback gets remaining time (deadline - now).
-   */
+  /** Timeout budget in ms for the single `eth_simulateV1` request (default 5000). */
   timeoutMs?: number;
 }
 
@@ -96,10 +72,10 @@ export interface AssetChange {
  * alike (the zero address is kept for mints/burns). Accounts and their `changes`
  * are sorted by address for deterministic, cross-backend output.
  *
- * Both backends report the full net native-ETH delta, including ETH moved via
- * internal calls (e.g. a `WETH.withdraw` refund): Tenderly derives it from its
- * trace, and the `eth_simulateV1` fallback runs with `traceTransfers` so the
- * node synthesizes native moves as transfer logs under viem's `ethAddress`.
+ * The full net native-ETH delta is reported, including ETH moved via internal
+ * calls (e.g. a `WETH.withdraw` refund): `eth_simulateV1` runs with
+ * `traceTransfers` so the node synthesizes native moves as transfer logs under
+ * viem's `ethAddress`.
  */
 export interface AccountAssetChanges {
   readonly account: Address;
@@ -182,9 +158,8 @@ export interface RawSimulationResult {
 }
 
 /**
- * Normalized EVM log emitted by a single simulated call. The shape is the
- * common subset both backends (`eth_simulateV1` via viem and Tenderly RPC)
- * produce after schema validation. Returned indirectly via
+ * Normalized EVM log emitted by a single simulated call, as produced by
+ * `eth_simulateV1` via viem. Returned indirectly via
  * `SimulationCall.logs` and consumed by the SDK's transfer parser.
  */
 export interface RawLog {

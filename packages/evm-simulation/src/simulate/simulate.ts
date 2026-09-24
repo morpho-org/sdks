@@ -22,12 +22,12 @@ import {
  * Simulate a bundle of EVM transactions.
  *
  * Validates input → resolves authorizations into prepended approve txs → runs the bundle
- * through Tenderly RPC (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
- * events to the registered wrapped-native token, rejecting them on known tokenless chains,
- * and retaining signature-based parsing for unknown chains → asserts no funds are retained
- * by the restricted standalone bundles contracts (VaultExitBundlesV1, VaultBundlesV1,
- * BlueBundlesV1, MidnightBundlesV1) → returns the full result
+ * through `eth_simulateV1` within the timeout budget → parses ERC20 transfers and
+ * WETH9 events from per-tx logs, restricting WETH9 events to the registered wrapped-native
+ * token, rejecting them on known tokenless chains, and retaining signature-based parsing
+ * for unknown chains → asserts no funds are retained by the restricted standalone bundles
+ * contracts (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1) →
+ * returns the full result
  * set. The caller reads whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.
@@ -40,8 +40,8 @@ import {
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
- * @param config - Backend configuration: per-chain Tenderly RPC and/or `eth_simulateV1`
- *   URL, optional logger, and the overall timeout budget.
+ * @param config - Backend configuration: per-chain `eth_simulateV1` URL, optional
+ *   logger, and the timeout budget.
  * @param params - Per-call simulation input.
  * @param params.chainId - Chain id the bundle targets.
  * @param params.transactions - The bundle's transactions, in execution order. All must share the
@@ -52,11 +52,11 @@ import {
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
- * @throws {SimulationRevertedError} when the bundle reverts on either backend.
+ * @throws {SimulationRevertedError} when the bundle reverts.
  * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
  *   the dust threshold by a `bundles` periphery contract (VaultExitBundlesV1,
  *   VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1). Never bypassable.
- * @throws {ExternalServiceError} (a) when both backends are unavailable within the
+ * @throws {ExternalServiceError} (a) when the RPC fails or does not answer within the
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
  *   per-tx output.
@@ -70,10 +70,7 @@ import {
  * const result = await simulate(
  *   {
  *     chains: new Map([
- *       [1, {
- *         tenderlyRpc: { rpcUrl: process.env.TENDERLY_RPC_URL! },
- *         simulateV1Url: process.env.MAINNET_RPC_URL,
- *       }],
+ *       [1, { simulateV1Url: process.env.MAINNET_RPC_URL! }],
  *     ]),
  *   },
  *   {
