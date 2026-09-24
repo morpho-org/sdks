@@ -99,7 +99,7 @@ export interface BlueTokenRequirementsParams {
   readonly approvalAmount?: bigint;
 }
 
-/** Action surface for Morpho Blue writes routed through BlueBundlesV1. */
+/** Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1. */
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.

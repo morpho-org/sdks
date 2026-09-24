@@ -73,7 +73,7 @@ import {
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
-/** Action surface for Vault V1 reads and writes routed through VaultBundlesV1 and VaultExitBundlesV1. */
+/** Action surface for Vault V1 reads and writes; writes route through VaultBundlesV1 and VaultExitBundlesV1. */
 export interface VaultV1Actions {
   /**
    * Fetches direct onchain vault and allocation state without applying virtual interest.

@@ -945,7 +945,8 @@ export function isRequirementBlueAuthorization(
  *   if (isRequirementSignature(requirement)) {
  *     signatures.push(await requirement.sign(walletClient, userAddress));
  *   } else {
- *     await walletClient.sendTransaction(requirement);
+ *     const hash = await walletClient.sendTransaction(requirement);
+ *     await client.waitForTransactionReceipt({ hash });
  *   }
  * }
  * ```
