@@ -15,8 +15,9 @@ const DEFAULT_TIMEOUT_MS = 5000;
  *
  * Runs the bundle through `eth_simulateV1` with the full `timeoutMs` budget.
  * Every failure — RPC error, timeout, or `SimulationRevertedError` — propagates
- * as-is; there is no second provider. Transport-level retries (viem's `http`
- * defaults) stay within the same `AbortSignal` budget.
+ * as-is; there is no second provider. viem's `http` transport may retry, but
+ * every attempt shares the same `AbortSignal`, so only its inter-retry backoff
+ * can extend wall-clock slightly past `timeoutMs`.
  */
 export async function executeSimulation(params: {
   config: SimulationConfig;

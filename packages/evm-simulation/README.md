@@ -58,9 +58,9 @@ All symbols below are re-exported from the package root.
 
 ### Deeper docs
 
-See [`CLAUDE.md`](./CLAUDE.md) in this directory for the execution flow diagram,
-authorizations model, error-handling table, retention rules, and the recipe
-for adding a chain via `SimulationConfig.chains`.
+See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, authorizations
+encoding, the error hierarchy, retention rules, and the recipe for adding a
+chain via `SimulationConfig.chains`.
 
 ## Development
 

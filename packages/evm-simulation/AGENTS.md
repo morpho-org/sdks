@@ -1,6 +1,6 @@
 # evm-simulation Conventions
 
-- Simulate EVM bundles through `eth_simulateV1` only. It is the sole backend: no Tenderly, no provider fallback, no pipeline-level retry. `timeoutMs` bounds the whole call, including viem's transport retries.
+- Simulate EVM bundles through `eth_simulateV1` only. It is the sole backend: no Tenderly, no provider fallback, no pipeline-level retry. `timeoutMs` aborts every viem transport attempt; only viem's inter-retry backoff can push wall-clock slightly past it.
 - Keep the simulation pipeline staged as validation, authorization resolution, backend execution, parsing, and retention checks.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep backend output normalized to `RawSimulationResult` in `src/simulate/backends/`; do not add parallel backends.
