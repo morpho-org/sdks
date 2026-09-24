@@ -83,6 +83,7 @@ export interface VaultV1Actions {
    * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
    * @returns The hydrated `AccrualVault` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    */
   getData: (
     parameters?: FetchParameters,

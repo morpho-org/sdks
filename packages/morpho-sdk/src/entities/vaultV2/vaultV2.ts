@@ -88,7 +88,10 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 // accrual model stays well-defined inside it.
 const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
-/** Action surface for Vault V2 reads and writes routed through VaultBundlesV1 and VaultExitBundlesV1. */
+/**
+ * Action surface for Vault V2 reads and writes; writes route through VaultBundlesV1 and
+ * VaultExitBundlesV1, except `forceRedeem`, which uses the vault's native multicall.
+ */
 export interface VaultV2Actions {
   /**
    * Fetches the latest accrual snapshot of the vault.
@@ -98,6 +101,7 @@ export interface VaultV2Actions {
    * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
    * @returns The hydrated `AccrualVaultV2` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    */
   getData: (
     parameters?: FetchParameters,
@@ -578,6 +582,10 @@ export interface VaultV2Actions {
    * @param params.userAddress - Account that pays the deallocation penalties and receives the redeemed assets.
    * @returns An object whose `buildTx()` returns a deep-frozen `Transaction<VaultV2ForceRedeemAction>`
    *   encoding the vault `multicall`.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {EmptyDeallocationsError} from `buildTx()` when `deallocations` is empty.
+   * @throws {NonPositiveInputError} from `buildTx()` when `redeem.shares <= 0n` or any deallocation
+   *   amount is non-positive.
    * @example
    * ```ts
    * const vault = client.morpho.vaultV2(vaultAddress, 1);
