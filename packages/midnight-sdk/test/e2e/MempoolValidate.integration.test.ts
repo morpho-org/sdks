@@ -16,6 +16,7 @@ import type { IMarketParams } from "../../src/market/Market.js";
 import { Offer } from "../../src/offers/Offer.js";
 import { EcrecoverRatifier } from "../../src/signatures/EcrecoverRatifier.js";
 import { Payload } from "../../src/signatures/Payload.js";
+import { RateRatifierV1 } from "../../src/signatures/RateRatifierV1.js";
 import { SetterRatifier } from "../../src/signatures/SetterRatifier.js";
 import { Tree } from "../../src/signatures/Tree.js";
 
@@ -55,9 +56,17 @@ beforeAll(async () => {
     chainIds: [ChainId.BaseMainnet],
     limit: 20,
   });
-  const candidate = books.find((entry) => entry.bids.length > 0);
-  if (candidate == null)
-    throw new Error("No Midnight book with bids on Base for the test fixture.");
+  let level: MidnightApiBookMarket["bids"][number] | undefined;
+  const candidate = books.find(
+    (entry) =>
+      (level = entry.bids.find(
+        (bid) => BigInt(bid.tick) >= RateRatifierV1.MIN_TICK,
+      )) != null,
+  );
+  if (candidate == null || level == null)
+    throw new Error(
+      `No Midnight book on Base with a bid at or above RateRatifierV1.MIN_TICK (${RateRatifierV1.MIN_TICK}) for the test fixture.`,
+    );
 
   book = candidate;
   market = {
@@ -76,7 +85,6 @@ beforeAll(async () => {
     liquidatorGate: book.liquidatorGate,
   };
 
-  const level = book.bids[0]!;
   tick = BigInt(level.tick);
   maxAssets = BigInt(level.assets);
 
