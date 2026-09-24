@@ -12,8 +12,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
   `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
 - `bundles/` — shared funding and permit resolution helpers used by the vault and Blue builders:
-  `resolveBundlesFunding`, `resolveBundlesTokenRequirements`, `getBundlesTokenPermit`,
-  `getBundlesSharesPermit`, and the `BundlesPermitKind` discriminator.
+  `resolveBundlesFunding`, `getBundlesTokenPermit`, `getBundlesSharesPermit`, and the
+  `BundlesPermitKind` discriminator; plus `resolveBundlesTokenRequirements`, consumed by the
+  entity-layer resolver `entities/requirements/getBundlesTokenRequirements.ts`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
 
