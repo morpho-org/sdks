@@ -81,7 +81,7 @@ export function parseSimulationResponse(params: {
   readonly stateBlockTimestamp: bigint;
 }): ExecutionEvidence {
   const { plan, response } = params;
-  const context0: SimulationErrorContext = {
+  const errorContext: SimulationErrorContext = {
     stage: "evidence",
     chainId: plan.request.chainId,
     mode: plan.request.mode,
@@ -91,7 +91,7 @@ export function parseSimulationResponse(params: {
   if (!parsed.success) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
-      context0,
+      errorContext,
     );
   }
 
@@ -101,20 +101,20 @@ export function parseSimulationResponse(params: {
   if (blockNumber < params.stateBlockNumber) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 simulated at block ${blockNumber}, behind the pinned state block ${params.stateBlockNumber}. Check that the endpoint executes on top of the requested block.`,
-      context0,
+      errorContext,
     );
   }
   if (blockTimestamp < params.stateBlockTimestamp) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block timestamp ${blockTimestamp}, behind the pinned state block timestamp ${params.stateBlockTimestamp}. Check that the endpoint executes on top of the requested block.`,
-      context0,
+      errorContext,
     );
   }
 
   if (block.calls.length !== plan.calls.length) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 returned ${block.calls.length} call result(s) for ${plan.calls.length} planned call(s). Refusing to map evidence with mismatched lengths.`,
-      context0,
+      errorContext,
     );
   }
 
@@ -128,6 +128,7 @@ export function parseSimulationResponse(params: {
   };
 
   const calls = block.calls.map((call, index) => {
+    const planned = plan.calls[index]!;
     const logs: RawLog[] = (call.logs ?? []).map((log) => ({
       address: log.address as Address,
       topics: log.topics as readonly Hex[],
@@ -139,39 +140,37 @@ export function parseSimulationResponse(params: {
       returnData: call.returnData as Hex,
       gasUsed: BigInt(call.gasUsed),
     };
-    return { identity: plan.calls[index]!.identity, result, call };
+    return { planned, result, call };
   });
 
   // A user-transaction revert belongs to the bundle, not the boundary.
   const failedUserCall = calls.find(
-    ({ identity, result }) => identity.type === "transaction" && !result.status,
+    ({ planned, result }) =>
+      planned.identity.type === "transaction" && !result.status,
   );
   if (failedUserCall) {
     throw new SimulationRevertedError(
       failedUserCall.call.error?.message ?? "Simulation failed",
       deepFreeze(
         calls
-          .filter(({ identity }) => identity.type === "transaction")
-          .map(({ identity, result }) => ({ identity, result })),
+          .filter(({ planned }) => planned.identity.type === "transaction")
+          .map(({ planned, result }) => ({
+            identity: planned.identity,
+            result,
+          })),
       ),
     );
   }
 
   const snapshots: ObservedSnapshot[] = [];
-  for (const { identity, result, call } of calls) {
-    if (identity.type !== "probe") continue;
-    const plannedCall = plan.calls.find(
-      (planned) => planned.identity === identity,
-    );
-    if (
-      !result.status ||
-      plannedCall === undefined ||
-      !("read" in plannedCall)
-    ) {
+  for (const { planned, result, call } of calls) {
+    if (!("read" in planned)) continue;
+    const { identity } = planned;
+    if (!result.status) {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${identity.probeId}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
         {
-          ...context0,
+          ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
         },
       );
@@ -183,7 +182,7 @@ export function parseSimulationResponse(params: {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
         {
-          ...context0,
+          ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
         },
       );
@@ -192,9 +191,7 @@ export function parseSimulationResponse(params: {
       identity,
       context,
       snapshot: {
-        wallet: [
-          { account: plannedCall.read.account, token: ethAddress, assets },
-        ],
+        wallet: [{ account: planned.read.account, token: ethAddress, assets }],
         permissions: [],
         positions: [],
         vaults: [],
@@ -207,7 +204,10 @@ export function parseSimulationResponse(params: {
     deepFreeze({
       plan,
       context,
-      calls: calls.map(({ identity, result }) => ({ identity, result })),
+      calls: calls.map(({ planned, result }) => ({
+        identity: planned.identity,
+        result,
+      })),
       snapshots,
     }),
   );
