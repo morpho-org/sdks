@@ -348,6 +348,8 @@ Every `require`, every unchecked array index, and every nested call was walked o
 | the `SlippageExceeded` guard silently passes — the contract reads `minSharePriceE27 == 0` as "no bound" | a supplied `minSharePriceE27` override is `> 0` and `>=` the floor derived at `MAX_SLIPPAGE_TOLERANCE` (which may round to `0n` on dust exits, in which case any positive override is accepted) | `NonPositiveInputError` *(reused)*, `VaultV2ForceWithdrawSharePriceBelowFloorError` **(new)** |
 | — | `exitAssets > 0` | `NonPositiveInputError` *(reused)* |
 | — | `slippageTolerance <= MAX_SLIPPAGE_TOLERANCE` | `ExcessiveSlippageToleranceError` *(via `validateSlippageTolerance`)* |
+| a zero `minSharePriceE27` floor means "no bound", so a dust exit whose derived floor rounds to `0n` would run unprotected | the default derived share-price floor is `> 0` | `VaultV2ForceWithdrawZeroSharePriceError` **(new; raised by `computeMinForceWithdrawSharePrice`)** |
+| the fee recipient is minted more shares than the burn produced | projected `feeShares(deadline) < minSharesBurnt(accrue(deadline))` | `VaultV2ForceWithdrawFeeSharesExceedBurnError` **(new)** |
 
 The two canonical renames keep `instanceof` working through
 `export const X = Y; export type X = Y;`, the pattern already used in `error.ts`. The old names read
