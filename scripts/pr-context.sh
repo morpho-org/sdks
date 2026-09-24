@@ -37,7 +37,7 @@ install() {
 }
 install
 if ! current "$installed"; then
-  install --version "$minimum"
+  install --version "$minimum" || :
   current "$installed" || {
     echo "pr-context v$minimum or newer is required but could not be installed." >&2
     exit 1
