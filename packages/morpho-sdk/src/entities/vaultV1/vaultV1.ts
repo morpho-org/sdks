@@ -84,8 +84,8 @@ export interface VaultV1Actions {
    * @returns The hydrated `AccrualVault` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
-   * @throws {UnknownOfFactory} when the vault is not a MetaMorpho vault from the configured factory.
+   * @throws {UnknownBlueFactory} when the configured chain has no MetaMorpho factory.
+   * @throws {UnknownBlueOfFactory} when the vault is not a MetaMorpho vault from the configured factory.
    */
   getData: (
     parameters?: FetchParameters,
