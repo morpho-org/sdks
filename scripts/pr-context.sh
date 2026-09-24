@@ -12,12 +12,13 @@ if [ -x "$installed" ]; then
 else
   cli=$(command -v pr-context 2>/dev/null) || cli=
 fi
-if [ -n "$cli" ]; then
-  version=$("$cli" --version 2>/dev/null | sed -n 's/^pr-context v//p') || version=
+current() {
+  version=$("$1" --version 2>/dev/null | sed -n 's/^pr-context v//p') || version=
   lowest=$(printf '%s\n%s\n' "$version" "$minimum" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)
-  if [ -n "$version" ] && [ "$lowest" = "$minimum" ]; then
-    exec "$cli" "$@"
-  fi
+  [ -n "$version" ] && [ "$lowest" = "$minimum" ]
+}
+if [ -n "$cli" ] && current "$cli"; then
+  exec "$cli" "$@"
 fi
 command -v gh >/dev/null 2>&1 || {
   echo 'pr-context needs GitHub CLI: install gh, then run gh auth login --hostname github.com.' >&2
@@ -30,6 +31,16 @@ bootstrap=$(GH_HOST=github.com gh api \
   echo 'Could not fetch the pr-context installer; check gh auth status and access to morpho-org/internal-tools.' >&2
   exit 1
 }
-result=$(printf '%s\n' "$bootstrap" | sh -s -- --bin-dir "$bin_dir")
-printf '%s\n' "$result" | head -n 1 >&2
+install() {
+  result=$(printf '%s\n' "$bootstrap" | sh -s -- --bin-dir "$bin_dir" "$@")
+  printf '%s\n' "$result" | head -n 1 >&2
+}
+install
+if ! current "$installed"; then
+  install --version "$minimum"
+  current "$installed" || {
+    echo "pr-context v$minimum or newer is required but could not be installed." >&2
+    exit 1
+  }
+fi
 exec "$installed" "$@"
