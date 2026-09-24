@@ -26,9 +26,11 @@ export interface BaseAction<
   readonly args: TArgs;
 }
 
+/** Metadata for an ERC-20 `approve` call granting `spender` an `amount` allowance. */
 export interface ERC20ApprovalAction
   extends BaseAction<"erc20Approval", { spender: Address; amount: bigint }> {}
 
+/** Metadata for an ERC-2612 permit signature requirement, exposing only the `sign` callback. */
 export interface ERC20PermitAction {
   sign: (client: WalletClient, userAddress: Address) => Promise<Hex>;
 }
@@ -135,6 +137,7 @@ export interface VaultV2ForceWithdrawAction
     }
   > {}
 
+/** Metadata for a Vault V2 force redeem executed through the vault's native multicall. */
 export interface VaultV2ForceRedeemAction
   extends BaseAction<
     "vaultV2ForceRedeem",
@@ -927,6 +930,27 @@ export function isRequirementBlueAuthorization(
   );
 }
 
+/**
+ * Narrows an action requirement to a signature requirement.
+ *
+ * A signature requirement exposes a `sign` callback; call requirements are plain transactions.
+ *
+ * @param requirement - The requirement returned by `getRequirements()` to test.
+ * @returns `true` when `requirement` carries a `sign` function.
+ * @example
+ * ```ts
+ * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+ *
+ * for (const requirement of await handle.getRequirements()) {
+ *   if (isRequirementSignature(requirement)) {
+ *     signatures.push(await requirement.sign(walletClient, userAddress));
+ *   } else {
+ *     const hash = await walletClient.sendTransaction(requirement);
+ *     await client.waitForTransactionReceipt({ hash });
+ *   }
+ * }
+ * ```
+ */
 export function isRequirementSignature<
   T extends RequirementSignature = RequirementSignature,
 >(

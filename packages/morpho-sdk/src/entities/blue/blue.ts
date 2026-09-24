@@ -99,6 +99,7 @@ export interface BlueTokenRequirementsParams {
   readonly approvalAmount?: bigint;
 }
 
+/** Action surface for Morpho Blue reads and writes; writes route through BlueBundlesV1. */
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
@@ -944,6 +945,7 @@ export interface BlueActions {
   };
 }
 
+/** Binds a viem client to a Morpho Blue market's action builders. */
 export class MorphoBlue implements BlueActions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
