@@ -123,11 +123,21 @@ interface VaultOperation extends BundledOperation {
 
 /** Operation-specific decoded v6 parameters; the parser independently verifies bindings. @internal */
 export interface DecodedOperationFields {
-  readonly blueSupply: BlueOperation & {
+  readonly blueSupply: Omit<BlueOperation, "authorizationSignature"> & {
+    /** The supply entrypoint carries no Morpho authorization. */
+    readonly authorizationSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
     readonly assets: bigint;
     readonly funding: OperationFunding;
   };
-  readonly blueWithdraw: BlueOperation & {
+  readonly blueWithdraw: Omit<BlueOperation, "tokenSignature"> & {
+    /** The withdraw entrypoint pulls no user tokens, so it carries no token permit. */
+    readonly tokenSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
     readonly amount: OperationAmount;
     readonly fullClose: boolean;
     readonly reallocations: readonly OperationReallocation[];

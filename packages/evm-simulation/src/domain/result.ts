@@ -76,21 +76,15 @@ export interface OperationOutcomeFields {
   readonly vaultV1Deposit: {
     readonly sharesMinted: bigint;
   };
-  readonly vaultV2Deposit: {
-    readonly sharesMinted: bigint;
-  };
+  readonly vaultV2Deposit: OperationOutcomeFields["vaultV1Deposit"];
   readonly vaultV1Withdraw: {
     readonly sharesBurned: bigint;
   };
-  readonly vaultV2Withdraw: {
-    readonly sharesBurned: bigint;
-  };
+  readonly vaultV2Withdraw: OperationOutcomeFields["vaultV1Withdraw"];
   readonly vaultV1Redeem: {
     readonly assetsReceived: bigint;
   };
-  readonly vaultV2Redeem: {
-    readonly assetsReceived: bigint;
-  };
+  readonly vaultV2Redeem: OperationOutcomeFields["vaultV1Redeem"];
   readonly vaultV2ForceWithdraw: {
     readonly sharesBurned: bigint;
     readonly assetsReceived: bigint;
@@ -111,16 +105,7 @@ export interface OperationOutcomeFields {
     readonly penaltyAssets: bigint;
     readonly residualShareAllowance: bigint;
   };
-  readonly vaultV2InKindRedeem: {
-    readonly sharesBurned: bigint;
-    readonly idleAssetsReceived: bigint;
-    readonly supplyAssetsByMarket: readonly {
-      readonly marketId: MarketId;
-      readonly assets: bigint;
-    }[];
-    readonly penaltyAssets: bigint;
-    readonly residualShareAllowance: bigint;
-  };
+  readonly vaultV2InKindRedeem: OperationOutcomeFields["vaultV1InKindRedeem"];
   readonly vaultV1MigrateToV2: {
     readonly targetSharesMinted: bigint;
   };

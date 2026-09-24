@@ -134,10 +134,8 @@ export interface SimulationStageContracts {
     response: unknown,
   ) => CompleteEvidence;
   readonly verifyEffects: (evidence: CompleteEvidence) => VerifiedEffects;
-  readonly enforceLimits: (
-    effects: VerifiedEffects,
-    limits: readonly BoundOperationLimit[],
-  ) => ConstrainedEffects;
+  /** Binds the effective limits carried inside the effects; no external list is accepted. */
+  readonly enforceLimits: (effects: VerifiedEffects) => ConstrainedEffects;
   readonly assembleResult: (
     effects: ConstrainedEffects,
   ) => VerifiedSimulationResult;

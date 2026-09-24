@@ -76,9 +76,7 @@ const value: VerifiedSimulationResult = { simulationTxs: [], calls: [], transfer
         writeFileSync(join(directory, `${fixture.name}.ts`), fixture.source);
 
       const result = spawnSync(
-        fileURLToPath(
-          new URL("../../../../node_modules/.bin/tsc", import.meta.url),
-        ),
+        fileURLToPath(new URL("../../node_modules/.bin/tsc", import.meta.url)),
         ["--project", join(directory, "tsconfig.json"), "--pretty", "false"],
         { encoding: "utf8", timeout: 10_000 },
       );
