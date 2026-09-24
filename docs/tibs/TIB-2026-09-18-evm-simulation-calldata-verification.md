@@ -233,6 +233,83 @@ cap is a limit violation; an incorrectly charged penalty is `FeeMismatchError`. 
 slippage bound that reverts is an execution failure; a successful conversion outside a verification
 bound is a constraint violation.
 
+# Proposed design
+
+Use the SDK action's `getRequirements()` as the single source of truth for permit selection and
+pending simulation authorizations. The simulator independently checks those requests against
+calldata and state.
+
+### Vault bundle permit selection
+
+Resolve requirements using the caller's signature capabilities and permit preference:
+
+| Funding path | Selection |
+| --- | --- |
+| Native deposit | No token authorization |
+| ERC-20 deposit, signatures disabled | Direct approval to the vault bundle, unless existing allowance suffices |
+| ERC-20 deposit, simple permit requested and supported | ERC-2612 permit |
+| Otherwise, signatures enabled and Permit2 available | Permit2 SignatureTransfer, plus approval to canonical Permit2 if needed |
+| Neither signature path available | Direct approval |
+| Vault-share exit | Route-supported ERC-2612 or direct approval; no Permit2 |
+
+For VaultBundlesV1 exits, the share allowance is the burn cap: an exact allowance needs no request;
+an insufficient allowance may be raised by permit; an oversized allowance must be reduced through
+an approval transaction. Other exit routes retain their own allowance rules.
+
+The final builder derives the encoded permit kind from the supplied requirement signature. Without
+a signature, it uses the no-permit path. Consumers do not select the encoded kind independently.
+
+### Deriving simulation authorizations
+
+Add a pure adapter in `evm-simulation`, provisionally
+`toSimulationAuthorizations({ owner, requirements }): readonly SimulationAuthorization[]`.
+It converts pending action requirements into the existing authorization union:
+
+| SDK requirement | Simulation authorization |
+| --- | --- |
+| ERC-20 approval transaction | `erc20Approval`, decoded from the transaction |
+| `permit` signature requirement | `erc2612Permit`, preserving exact `action.typedData` |
+| `permit2SignatureTransfer` signature requirement | `permit2SignatureTransfer`, preserving typed data and binding `owner` |
+| Morpho authorization transaction | `blueAuthorization`, decoded from the transaction |
+| `authorization` signature requirement | `blueAuthorizationSignature`, preserving exact `action.typedData` |
+
+Preserve request order, including zero-reset approvals. Never widen amounts, invent approvals or
+reconstruct typed data from summaries. Unsupported requirements fail explicitly. Conversion creates
+descriptors; it does not establish that the requests are safe for the decoded operation.
+
+### Consumer flow
+
+1. Create the vault action and resolve its requirements.
+2. Convert pending requirements into authorizations and preview the no-signature `buildTx()` output.
+3. Fulfill those same wallet requests, then pass their signatures to `buildTx(signatures)`.
+4. After prerequisite approvals are confirmed, run `final` with no pending `authorizations`.
+
+A Permit2 deposit may require both approval **to Permit2** and a transfer signature naming
+**VaultBundlesV1 as spender**. Preserve both requests. If the permit preference changes or a
+nonce/deadline becomes stale, regenerate requirements and preview again before signing. No shared
+mutable state connects preparation, signing and transaction building.
+
+### Permit2 preview compatibility
+
+The unsigned `buildTx()` encodes `PermitKind.None` and pulls tokens directly through the vault
+bundle. Approval to canonical Permit2 alone cannot fund this path. For each validated
+`permit2SignatureTransfer` request, preview must simulate an exact token approval from `owner` to
+the signed bundle `spender` for `message.permitted.amount`, then read back the allowance before
+executing the unchanged unsigned transaction. Record this as preparation for that request, never
+as an additional wallet request. Supported tokens requiring a zero reset need recorded reset/grant
+preparation; unsupported approval behavior fails explicitly.
+
+Separately verify that the real token allowance to canonical Permit2 covers the final transfer,
+or that a supplied approval request provides it. Validate the signed domain, owner, token, spender,
+gross amount, deadline and unused nonce bit. A missing Permit2 approval must fail even if the
+simulated direct allowance would let preview execute.
+
+Preview neither consumes nor overrides the Permit2 nonce and never inserts a dummy signature.
+Permission checks must distinguish modeled direct allowance consumption from final Permit2 nonce
+consumption; preview does not prove that the signed transfer will execute. Final uses the real
+Permit2 signature and verifies its execution and nonce consumption. Reject signature-consuming
+calldata in preview instead of attempting to bypass signature verification.
+
 ## Migration
 
 Ship a deprecation minor for the Tenderly configuration and legacy `approval` / `signature`
@@ -254,6 +331,10 @@ failures and constraint violations while blocking acceptance on all three.
       constraint, invalid limit bindings, and attempts to weaken SDK defaults.
 - [ ] Preview validates exact wallet requests without widening authority; final verifies real signed
       execution. Preparation never changes public transaction indices or hides unrelated effects.
+- [ ] Permit2 fork tests cover zero initial bundle allowance, existing or pending approval to Permit2,
+      missing Permit2 approval, stale/reused nonces, wrong spender or amount, reset-required tokens,
+      and rejection of signature-consuming preview calldata. Preview leaves the nonce unchanged;
+      successful final execution consumes it. Invalid signatures fail in final.
 - [ ] Missing evidence, unsupported routes and unknown failures fail explicitly. Existing error
       compatibility is preserved, and consumers block every failure category.
 - [ ] Repeated inputs at the same pinned block produce identical verification output; migration
