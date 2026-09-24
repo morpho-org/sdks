@@ -6,7 +6,7 @@ import type { Address, BlockTag, Hex } from "viem";
 /** Per-chain backend configuration. */
 export interface ChainSimulationConfig {
   /** JSON-RPC URL supporting `eth_simulateV1`. */
-  simulateV1Url: string;
+  readonly simulateV1Url: string;
 }
 
 /**
@@ -56,7 +56,8 @@ export type SimulationAuthorization =
 /**
  * Net balance change for a single asset (one token) within an account's entry.
  * Native ETH uses viem's `ethAddress` sentinel as `token`. `symbol`/`decimals`
- * are best-effort and may be absent, notably on the `eth_simulateV1` fallback.
+ * are never populated today (log-derived asset changes carry no token metadata)
+ * and are retained for forward compatibility.
  */
 export interface AssetChange {
   readonly token: Address;
@@ -70,7 +71,7 @@ export interface AssetChange {
  * Net per-token balance changes for one account over the whole bundle. Returned
  * for every account that nets a non-zero change, the sender and counterparties
  * alike (the zero address is kept for mints/burns). Accounts and their `changes`
- * are sorted by address for deterministic, cross-backend output.
+ * are sorted by address for deterministic output.
  *
  * The full net native-ETH delta is reported, including ETH moved via internal
  * calls (e.g. a `WETH.withdraw` refund): `eth_simulateV1` runs with
@@ -108,8 +109,7 @@ export interface Transfer {
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the net per-asset balance change over the whole bundle,
- *   grouped by account (sender and counterparties), normalized to the same
- *   shape across backends — see `AccountAssetChanges`.
+ *   grouped by account (sender and counterparties) — see `AccountAssetChanges`.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */

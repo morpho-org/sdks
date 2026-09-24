@@ -36,7 +36,7 @@ import {
  *   Aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe gas limit; consumers
  *   deriving one must add their own headroom.
  * - `assetChanges` → net per-asset balance changes grouped by account (sender and
- *   counterparties) over the whole bundle, normalized to the same shape across backends.
+ *   counterparties) over the whole bundle.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
@@ -51,7 +51,7 @@ import {
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
- * @throws {UnsupportedChainError} when the chain is not configured for any backend.
+ * @throws {UnsupportedChainError} when the chain is missing from `config.chains`.
  * @throws {SimulationRevertedError} when the bundle reverts.
  * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
  *   the dust threshold by a `bundles` periphery contract (VaultExitBundlesV1,

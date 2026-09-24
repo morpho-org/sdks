@@ -59,8 +59,8 @@ All symbols below are re-exported from the package root.
 ### Deeper docs
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for the execution flow diagram,
-backend tradeoffs, authorizations model, error-handling table,
-and recipes for adding a chain or a new backend.
+authorizations model, error-handling table, retention rules, and the recipe
+for adding a chain via `SimulationConfig.chains`.
 
 ## Development
 

@@ -68,8 +68,8 @@ interface AssertNoBundlesRetentionParams {
  *   neither are skipped (a `logger.warn` records the skip).
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
- * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
- *   source of truth for native value stuck in a restricted contract.
+ * @param params.assetChanges - Per-account native-ETH deltas, the source of
+ *   truth for native value stuck in a restricted contract.
  * @param params.logger - Optional logger. Receives retention-check skip warnings
  *   and pre-existing-balance sweep telemetry (net-negative flow).
  * @returns Nothing. Returns silently when no restricted contract retains value
@@ -136,9 +136,9 @@ export function assertNoBundlesRetention(
     }
   };
 
-  // Native ETH from `assetChanges` (authoritative, cross-backend). Track which
-  // restricted contracts already have a native entry here so the transfer-log
-  // pass below does not re-add the same native move on `eth_simulateV1`.
+  // Native ETH from `assetChanges` (authoritative). Track which restricted
+  // contracts already have a native entry here so the transfer-log pass below
+  // does not re-add the same native move on `eth_simulateV1`.
   const nativeFromAssetChanges = new Set<string>();
   for (const { account, changes } of assetChanges) {
     if (!restrictedAddresses.has(account)) continue;

@@ -6,6 +6,7 @@ export interface AssetChangeEntry {
   account: Address;
   token: Address;
   diff: bigint;
+  /** Not populated by `eth_simulateV1`; kept for forward compatibility. */
   symbol?: string;
   decimals?: number;
 }

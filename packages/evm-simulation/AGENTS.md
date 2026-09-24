@@ -3,7 +3,7 @@
 - Simulate EVM bundles through `eth_simulateV1` only. It is the sole backend: no Tenderly, no provider fallback, no retry. `timeoutMs` is the budget for that single request.
 - Keep the simulation pipeline staged as validation, authorization resolution, backend execution, parsing, and retention checks.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
-- Keep backend outputs normalized to `RawSimulationResult`; add new backends under `src/simulate/backends/` with colocated parity tests.
+- Keep backend output normalized to `RawSimulationResult` in `src/simulate/backends/`; do not add parallel backends.
 - Encode signature authorizations as `approve(spender, amount ?? maxUint256)` and prepend them to the simulated bundle.
 - Enforce retention by net `(restricted address, token)` balance across the blue-sdk `bundles` registry plus `midnightBundles` with `DUST_THRESHOLD = 100n`; skip only chains that catalog neither.
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
