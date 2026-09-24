@@ -1,4 +1,9 @@
-import { addresses, type ChainAddresses, ChainId } from "@morpho-org/morpho-ts";
+import {
+  addresses,
+  type ChainAddresses,
+  ChainId,
+  getChainAddress,
+} from "@morpho-org/morpho-ts";
 import { type Address, createWalletClient, custom, zeroAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
@@ -14,14 +19,17 @@ import { Payload } from "../../src/signatures/Payload.js";
 import { SetterRatifier } from "../../src/signatures/SetterRatifier.js";
 import { Tree } from "../../src/signatures/Tree.js";
 
-const chainId = 8453;
+const chainId = ChainId.BaseMainnet;
 const API_TIMEOUT = 30_000;
 
 const account = privateKeyToAccount(generatePrivateKey());
 
 const baseAddresses: ChainAddresses = addresses[ChainId.BaseMainnet];
-const ecrecoverRatifier = baseAddresses.ecrecoverRatifier!;
-const setterRatifier = baseAddresses.setterRatifier!;
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
 
 let book: MidnightApiBookMarket;
 let market: IMarketParams;
@@ -103,7 +111,8 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
         account,
         signature,
       });
-      expect(items[0]?.ratifierData).not.toBe("0x");
+      expect(items).toHaveLength(1);
+      expect(items[0]!.ratifierData).not.toBe("0x");
 
       const result = await MidnightApi.validateMempoolPayload({
         chainId,
