@@ -1,5 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, ethAddress, type Hex } from "viem";
+import { type Address, ethAddress, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
 import type { SimulationErrorContext } from "../../domain/diagnostics.js";
 import type { ExecutionContext } from "../../domain/evidence.js";
@@ -17,25 +17,29 @@ import {
 import type { RawLog, SimulationCall } from "../../types.js";
 import { decodeNativeBalanceProbe } from "../plan/native-balance-probe.js";
 
-const hexString = z.string().regex(/^0x[0-9a-fA-F]*$/);
+// RPC quantities are never the empty "0x" — BigInt("0x") would throw.
+const quantity = z.string().regex(/^0x[0-9a-fA-F]+$/);
+const bytes32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
+const hexData = z.string().refine(isHex);
+const address = z.string().refine(isAddress);
 
 const responseSchema = z
   .array(
     z.object({
-      number: hexString,
-      timestamp: hexString,
-      hash: hexString,
+      number: quantity,
+      timestamp: quantity,
+      hash: bytes32,
       calls: z.array(
         z.object({
-          status: hexString,
-          returnData: hexString,
-          gasUsed: hexString,
+          status: z.enum(["0x0", "0x1"]),
+          returnData: hexData,
+          gasUsed: quantity,
           logs: z
             .array(
               z.object({
-                address: hexString,
-                topics: z.array(hexString),
-                data: hexString.optional(),
+                address,
+                topics: z.array(bytes32),
+                data: hexData.optional(),
               }),
             )
             .optional(),
@@ -92,6 +96,7 @@ export function parseSimulationResponse(params: {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
       errorContext,
+      { cause: parsed.error },
     );
   }
 
@@ -168,7 +173,7 @@ export function parseSimulationResponse(params: {
     const { identity } = planned;
     if (!result.status) {
       throw new MissingVerificationEvidenceError(
-        `Native balance probe "${identity.probeId}" failed during simulation. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
+        `Native balance probe "${identity.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
         {
           ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
@@ -178,13 +183,14 @@ export function parseSimulationResponse(params: {
     let assets: bigint;
     try {
       assets = decodeNativeBalanceProbe(call.returnData as Hex);
-    } catch {
+    } catch (error) {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
         {
           ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
         },
+        { cause: error },
       );
     }
     snapshots.push({

@@ -2,6 +2,7 @@
 
 // Types
 export type {
+  AuthorizationDomain,
   BlueAuthorizationTypedData,
   Erc2612TypedData,
   Permit2SignatureTransferTypedData,

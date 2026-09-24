@@ -182,9 +182,9 @@ export type OperationLimit = {
 
 /** Optional consumer constraints; amounts use raw units and ratios/APYs use WAD. */
 export interface SimulationLimits {
-  /** Defaults to DEFAULT_SLIPPAGE_TOLERANCE (0.03%); may only decrease. */
+  /** Defaults to `DEFAULT_MAX_SLIPPAGE_WAD` (0.03%); may only decrease. */
   readonly maxSlippageWad?: bigint;
-  /** Defaults to DEFAULT_LLTV_BUFFER (0.5%); may only increase. */
+  /** Defaults to `DEFAULT_MIN_LLTV_BUFFER_WAD` (0.5%); may only increase. */
   readonly minLltvBufferWad?: bigint;
   /** Defaults to 7200 seconds from the pinned execution timestamp; may only decrease. */
   readonly maxSignatureLifetimeSeconds?: bigint;

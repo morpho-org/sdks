@@ -81,10 +81,11 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** Calldata routed to an operation the verifier does not support. Not bypassable. */
-export class UnsupportedOperationError extends SimulationPackageError {
-  readonly code = "UNSUPPORTED_OPERATION";
-
+/**
+ * Shared constructor for errors carrying a {@link SimulationErrorContext}.
+ * @internal
+ */
+abstract class SimulationContextError extends SimulationPackageError {
   // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
   constructor(
     message: string,
@@ -93,187 +94,84 @@ export class UnsupportedOperationError extends SimulationPackageError {
   ) {
     super(message, options);
   }
+}
+
+/** Calldata routed to an operation the verifier does not support. Not bypassable. */
+export class UnsupportedOperationError extends SimulationContextError {
+  readonly code = "UNSUPPORTED_OPERATION";
 }
 
 /** A decoded effect is bound to the wrong chain, deployment, or subject. Not bypassable. */
-export class ProtocolBindingMismatchError extends SimulationPackageError {
+export class ProtocolBindingMismatchError extends SimulationContextError {
   readonly code = "PROTOCOL_BINDING_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** The caller requested a verification feature this release does not implement. Not bypassable. */
-export class UnsupportedVerificationFeatureError extends SimulationPackageError {
+export class UnsupportedVerificationFeatureError extends SimulationContextError {
   readonly code = "UNSUPPORTED_VERIFICATION_FEATURE";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** The simulation node returned a response that cannot be trusted. Not bypassable. */
-export class InvalidSimulationResponseError extends SimulationPackageError {
+export class InvalidSimulationResponseError extends SimulationContextError {
   readonly code = "INVALID_SIMULATION_RESPONSE";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Required verification evidence could not be collected. Not bypassable. */
-export class MissingVerificationEvidenceError extends SimulationPackageError {
+export class MissingVerificationEvidenceError extends SimulationContextError {
   readonly code = "MISSING_VERIFICATION_EVIDENCE";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** An authorization does not match the pending wallet request it claims to satisfy. Not bypassable. */
-export class AuthorizationRequestMismatchError extends SimulationPackageError {
+export class AuthorizationRequestMismatchError extends SimulationContextError {
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Observed wallet asset changes differ from the verified expectation. Not bypassable. */
-export class AssetChangeMismatchError extends SimulationPackageError {
+export class AssetChangeMismatchError extends SimulationContextError {
   readonly code = "ASSET_CHANGE_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Observed permission changes differ from the verified expectation. Not bypassable. */
-export class PermissionChangeMismatchError extends SimulationPackageError {
+export class PermissionChangeMismatchError extends SimulationContextError {
   readonly code = "PERMISSION_CHANGE_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Observed position, market, or vault state changes differ from the verified expectation. Not bypassable. */
-export class StateChangeMismatchError extends SimulationPackageError {
+export class StateChangeMismatchError extends SimulationContextError {
   readonly code = "STATE_CHANGE_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Execution would violate a protocol market constraint. Not bypassable. */
-export class MarketConstraintViolationError extends SimulationPackageError {
+export class MarketConstraintViolationError extends SimulationContextError {
   readonly code = "MARKET_CONSTRAINT_VIOLATION";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Execution would exceed the caller's slippage bound. Not bypassable. */
-export class SlippageLimitExceededError extends SimulationPackageError {
+export class SlippageLimitExceededError extends SimulationContextError {
   readonly code = "SLIPPAGE_LIMIT_EXCEEDED";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** An observed fee differs from its expected recipient, rate, or amount. Not bypassable. */
-export class FeeMismatchError extends SimulationPackageError {
+export class FeeMismatchError extends SimulationContextError {
   readonly code = "FEE_MISMATCH";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /** Verified effects violate a caller-supplied limit. Carries the bound constraint. Not bypassable. */
-export class ConsumerLimitViolationError extends SimulationPackageError {
+export class ConsumerLimitViolationError extends SimulationContextError {
   readonly code = "CONSUMER_LIMIT_VIOLATION";
 
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
+  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, constraint, options) signature
   constructor(
     message: string,
-    public readonly context: SimulationErrorContext,
+    context: SimulationErrorContext,
     public readonly constraint: ConsumerConstraintContext,
     options?: ErrorOptions,
   ) {
-    super(message, options);
+    super(message, context, options);
   }
 }
 
 /** A failure the simulator cannot classify more precisely. Not bypassable. */
-export class UnexpectedSimulationError extends SimulationPackageError {
+export class UnexpectedSimulationError extends SimulationContextError {
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
-
-  // biome-ignore lint/complexity/useMaxParams: public error API requires the (message, context, options) signature
-  constructor(
-    message: string,
-    public readonly context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }

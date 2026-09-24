@@ -23,10 +23,12 @@ import { parseSimulationResponse } from "./parse-response.js";
  * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
  *    mismatch is an endpoint-configuration failure (`ExternalServiceError`),
  *    not a simulation failure.
- * 2. **Single block resolution** — the requested `blockNumber`/tag/`latest`
- *    resolves to one concrete state block (`stateBlock*`). `latest` is
- *    therefore resolved exactly once; the simulation below pins that number
- *    so a drifting head cannot smear the evidence across blocks.
+ * 2. **Single block resolution + reorg check** — the requested
+ *    `blockNumber`/tag/`latest` resolves to one concrete state block
+ *    (`stateBlock*`). `latest` is therefore resolved exactly once; the
+ *    simulation below pins that number so a drifting head cannot smear the
+ *    evidence across blocks, and the state block is re-fetched after the
+ *    simulation to detect a reorg that swapped its hash mid-flight.
  * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from` (probes are sent from the zero address),
  *    the probe code override as `stateOverrides`, `traceTransfers: true` so
@@ -51,7 +53,8 @@ import { parseSimulationResponse } from "./parse-response.js";
  * @throws {ExternalServiceError} For chain mismatch, transport failures,
  *   timeouts, or malformed JSON-RPC envelopes.
  * @throws {InvalidSimulationResponseError} For a response that cannot be
- *   trusted (bad shape, call-count mismatch, block behind the pinned state).
+ *   trusted (bad shape, call-count mismatch, block behind the pinned state,
+ *   or a state-block hash that changed mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts.
  * @throws {MissingVerificationEvidenceError} When a probe fails or cannot be
  *   decoded.
@@ -75,12 +78,13 @@ export async function executePlan(params: {
     }),
   });
 
+  let evidence: ExecutionEvidence;
   try {
     // (a) Endpoint chain identity must match the configured chain.
     const rpcChainId = await client.getChainId();
     if (rpcChainId !== plan.request.chainId) {
       throw new ExternalServiceError(
-        `RPC at ${rpcUrl} reports chain ${rpcChainId}, expected ${plan.request.chainId}. Fix SimulationConfig.chains.`,
+        `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
       );
     }
 
@@ -130,7 +134,25 @@ export async function executePlan(params: {
       ],
     });
 
-    return parseSimulationResponse({
+    // Reorg window: the pinned state block must still carry the same hash
+    // after simulation, or the evidence may describe a different chain tip.
+    const stateBlockAfter = await client.getBlock({
+      blockNumber: stateBlock.number,
+    });
+    if (stateBlockAfter.hash !== stateBlock.hash) {
+      throw new InvalidSimulationResponseError(
+        `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
+        {
+          stage: "evidence",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+        },
+      );
+    }
+
+    // Response parsing is evidence validation, not transport — it must reach
+    // the caller as InvalidSimulationResponseError, never ExternalServiceError.
+    evidence = parseSimulationResponse({
       plan,
       response,
       stateBlockNumber: stateBlock.number,
@@ -165,4 +187,5 @@ export async function executePlan(params: {
       { cause: error },
     );
   }
+  return evidence;
 }

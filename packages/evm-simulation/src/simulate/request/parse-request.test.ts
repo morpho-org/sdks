@@ -259,6 +259,58 @@ describe("parseRequest", () => {
     );
   });
 
+  test.each([
+    ["expectedAssets only", { expectedAssets: 1n }],
+    ["expectedShares only", { expectedShares: 1n }],
+  ])(
+    "behavior: accepts a vaultV1MigrateToV2 limit with %s",
+    (_name, fields) => {
+      const request = parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV1MigrateToV2",
+              sourceVault: SPENDER,
+              targetVault: TARGET,
+              ...fields,
+            },
+          ],
+        },
+      });
+      expect(request.limits?.operations).toHaveLength(1);
+    },
+  );
+
+  test.each([
+    [
+      "both expectedAssets and expectedShares",
+      { expectedAssets: 1n, expectedShares: 1n },
+    ],
+    ["neither", {}],
+  ])(
+    "error: SimulationValidationError for a vaultV1MigrateToV2 limit with %s",
+    (_name, fields) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "vaultV1MigrateToV2",
+                sourceVault: SPENDER,
+                targetVault: TARGET,
+                ...fields,
+              },
+            ],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+
   test("behavior: accepts limits within bounds", () => {
     const request = parse({
       chainId: 1,

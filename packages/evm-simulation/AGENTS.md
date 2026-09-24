@@ -1,7 +1,7 @@
 # evm-simulation Conventions
 
 - Simulate EVM bundles only through `eth_simulateV1`. RPC failures, timeouts, unsupported configuration and execution reverts propagate as typed errors; never select another provider, retry execution, or return a successful result after failure. Give the sole execution the full `timeoutMs` budget (default 5000 ms) — one shared `AbortSignal` covers `eth_chainId`, `eth_getBlock*` and `eth_simulateV1`.
-- Keep the simulation pipeline staged as request parsing → planning → `eth_simulateV1` boundary (chain identity, single block resolution, probes) → evidence parsing → transfer/retention derivation.
+- Keep the simulation pipeline staged as request parsing → planning → `eth_simulateV1` boundary (chain identity, single block resolution + reorg check, probes) → evidence parsing → transfer/retention derivation.
 - The boundary requires an endpoint supporting `eth_simulateV1` with `stateOverrides` code injection, per-call `from`, and `traceTransfers`. There is no fallback backend.
 - No balance inflation: `value` transfers are funded by the sender's real native balance. `validation: false` means gas is not charged, which is how gas is separated from economic effects.
 - Block advancement is observed, not required: geth-style nodes report the simulated block as `stateBlockNumber + 1` while Anvil reports the pinned block itself. The boundary rejects only a block behind the pinned state; consumers must read `context.blockNumber`/`context.blockTimestamp`, never assume +1.

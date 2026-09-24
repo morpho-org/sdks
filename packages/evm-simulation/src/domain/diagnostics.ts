@@ -4,7 +4,7 @@ import type { RiskMetric } from "./evidence.js";
 import type { OperationLimitFields, SimulationDeallocation } from "./limits.js";
 import type { DecodedOperation, OperationIdentity } from "./operations.js";
 
-/** Canonical error class/code identities implemented by this package's public error classes. */
+/** Canonical error class/code identities implemented by this package's public error classes. @internal */
 export interface SimulationErrorCodes {
   readonly SimulationValidationError: "VALIDATION_ERROR";
   readonly UnsupportedChainError: "UNSUPPORTED_CHAIN";
