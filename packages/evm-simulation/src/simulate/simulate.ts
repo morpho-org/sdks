@@ -26,7 +26,8 @@ import {
  * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
  * events to the registered wrapped-native token, rejecting them on known tokenless chains,
  * and retaining signature-based parsing for unknown chains → asserts no funds are retained
- * by standalone `bundles` periphery contracts → returns the full result
+ * by the restricted standalone bundles contracts (VaultExitBundlesV1, VaultBundlesV1,
+ * BlueBundlesV1, MidnightBundlesV1) → returns the full result
  * set. The caller reads whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.

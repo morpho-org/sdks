@@ -35,6 +35,7 @@ import { fetchMarket } from "../Market.js";
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2MorphoMarketV1AdapterV2` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1AdapterV2 factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example
@@ -197,6 +198,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVaultV2MorphoMarketV1AdapterV2` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1AdapterV2 factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example

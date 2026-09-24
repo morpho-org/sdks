@@ -31,6 +31,7 @@ import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Vault` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
  * @example
@@ -329,6 +330,7 @@ export async function fetchVault(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVault` containing direct onchain allocation state.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
  * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
  * @example

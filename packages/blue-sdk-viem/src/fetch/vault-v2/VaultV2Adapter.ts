@@ -37,6 +37,7 @@ import {
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated supported VaultV2 adapter entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
  * @example
  * ```ts
@@ -130,6 +131,7 @@ export async function fetchVaultV2Adapter(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated supported VaultV2 accrual adapter entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnsupportedVaultV2AdapterError} when `address` is not a supported adapter type.
  * @example
  * ```ts

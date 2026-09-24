@@ -23,13 +23,16 @@ import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarket
 /**
  * Fetches a Vault V2's BluePublicAllocator-wide configuration.
  *
+ * Reads `BluePublicAllocator.vaultData(vault)` for the vault's `canPullFromIdle` flag and
+ * WAD-scaled `penalty`.
+ *
  * @param vault - Vault V2 address.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @returns Hydrated vault allocator configuration with penalty calculations.
+ * @returns The hydrated `VaultV2BluePublicAllocatorConfig` entity with penalty calculations.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when the contract read fails.

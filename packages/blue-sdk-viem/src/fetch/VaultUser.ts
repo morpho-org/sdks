@@ -22,6 +22,7 @@ import { fetchVaultConfig } from "./VaultConfig.js";
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultUser` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { VaultUser } from "@morpho-org/blue-sdk";

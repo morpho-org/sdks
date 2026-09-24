@@ -18,6 +18,7 @@ import { fetchToken } from "./Token.js";
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode forwarded to token metadata reads.
  * @returns The hydrated `VaultConfig` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { VaultConfig } from "@morpho-org/blue-sdk";
