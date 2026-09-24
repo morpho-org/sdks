@@ -175,7 +175,7 @@ Requirement entries are one of:
 - Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
 - Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call. Prepared vault deposits take theirs on the handle's `submit(requirementSignature)` or `quote(requirementSignature)`.
 - Vault-share approval or permit: vault withdrawals route through VaultBundlesV1, which burns the account's vault shares, so `prepareWithdraw(options).getRequirements()` returns the exact share approval — or a signable ERC-2612 shares permit when `supportSignature` is enabled — that must be satisfied before `submit()`.
-- BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
+- BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline as long as it is within two hours (plus a 300-second clock-skew allowance) of submission — a longer deadline throws `BlueBundlesV1DeadlineExceedsWindowError`. Unsigned calls default to a two-hour deadline.
 
 For withdrawal quotes, keep the same prepared handle: confirm its approval before `prepared.quote()`,
 or pass its signed share permit to `prepared.quote(signedPermit)`. Both `quoteWithdraw()` and unsigned

@@ -18,6 +18,17 @@ describe("MorphoVaultV2 chain validation", () => {
     await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
   });
 
+  test("error: ChainIdMismatchError when the client has no chain", async () => {
+    const publicClient = createPublicClient({
+      transport: http("https://rpc.example"),
+    });
+    const vault = publicClient
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
+  });
+
   test("deposit throws ChainIdMismatchError when client chain differs", () => {
     const publicClient = createPublicClient({
       chain: mainnet,

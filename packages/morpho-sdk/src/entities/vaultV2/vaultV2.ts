@@ -53,7 +53,6 @@ import {
   AdapterNotPartOfVaultError,
   type BundlesFundingArgs,
   type BundlesTokenRequirementsOptions,
-  ChainIdMismatchError,
   type Deallocation,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
@@ -97,6 +96,7 @@ export interface VaultV2Actions {
    * @param {FetchParameters} [parameters] - The parameters for the fetch operation.
    *
    * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>} The latest vault data.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
    */
   getData: (
     parameters?: FetchParameters,
@@ -275,17 +275,18 @@ export interface VaultV2Actions {
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
    * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
    *
-   * @param {Object} params - The redeem parameters.
-   * @param {bigint} params.shares - Exact vault shares to burn.
-   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
-   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
-   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
-   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @param params - The redeem parameters.
+   * @param params.shares - Exact vault shares to burn.
+   * @param params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
+   * @param [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
@@ -597,15 +598,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
       ...parameters,

@@ -258,11 +258,16 @@ Provides protocol-level constants and math:
 
 On-chain data fetching and contract ABIs:
 
-- **ABIs**: `metaMorphoAbi` (V1) and `vaultV2Abi` (V2) — used for calldata encoding in actions.
+- **ABIs**: `metaMorphoAbi` (V1) is used for entity-layer reads (the V1 `MORPHO()` read in
+  `src/entities/vaultV1/vaultV1.ts`); `vaultV2Abi` (V2) encodes the V2 `forceRedeem` multicall /
+  `forceDeallocate` write calldata (`src/actions/vaultV2/forceRedeem.ts`,
+  `src/helpers/encodeDeallocation.ts`). V1/V2 bundles write calldata uses the local
+  `vaultBundlesV1Abi`/`vaultExitBundlesV1Abi` from `src/abis.ts`.
 - **Fetchers**: `fetchVault`, `fetchAccrualVault` (V1), `fetchVaultV2`, `fetchAccrualVaultV2`
   (V2) — read vault state from the blockchain.
 - **`fetchHolding`** — reads a user's token allowances, EIP-2612 nonce, and Permit2 state.
-  Used by the requirements system to determine what approvals are needed.
+  Exposed via the fetch facade/augment only; the requirements resolver reads allowance and nonce
+  state itself via raw `readContract`.
 - **`fetchToken`** — token metadata lookups.
 - **Typed data helpers**: `getPermitTypedData` and `getPermit2TransferFromTypedData` — used to build
   EIP-712 signing payloads for ERC-2612 and Permit2 SignatureTransfer flows.
@@ -353,7 +358,8 @@ Vault exits and migrations encode an ERC-2612 share permit in the fixed VaultBun
 
 ### Guard functions
 
-Two type guards distinguish requirement types in application code:
+Three type guards distinguish requirement types in application code:
 
 - `isRequirementApproval(r)` — true when `r` is a `Transaction<ERC20ApprovalAction>` (send as tx).
 - `isRequirementSignature(r)` — true when `r` is a `Requirement` (needs signing first).
+- `isRequirementBlueAuthorization(r)` — true when `r` is a `Transaction<BlueAuthorizationAction>` (send as tx).
