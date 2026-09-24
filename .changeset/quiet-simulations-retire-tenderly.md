@@ -8,7 +8,8 @@ require `simulateV1Url` for every configured chain. Use the full `timeoutMs`
 budget (default 5000 ms) for one request without automatic retries. Preserve
 logger support, existing error constructors and result fields, internal native
 transfer reporting, and standalone-bundle retention checks. Optional asset
-symbol/decimals metadata is omitted by the log-derived backend.
+symbol/decimals metadata is omitted by the log-derived backend. The `zod`
+runtime dependency, used only by the Tenderly adapter, is dropped.
 
 The one-time exception approved on 2026-09-24 permits these removals and the
 legacy approval/signature authorization replacement planned in SDK-1293 without
