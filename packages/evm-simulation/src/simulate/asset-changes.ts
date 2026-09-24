@@ -18,8 +18,9 @@ export interface AssetChangeEntry {
  * is keyed by the exact `ethAddress` constant here and in the bundles-retention
  * guard, so a checksummed
  * sentinel would land on a separate map key and silently escape retention checks.
- * This is the single source of truth for token normalization shared by the
- * transfer-log parser and the asset-change aggregator.
+ * This is the single source of truth for token normalization, applied by the
+ * transfer-log parser; asset-change aggregation and the bundler-retention guard
+ * rely on its `ethAddress` keying.
  *
  * @param address - Token address emitting a transfer or carried by an asset change.
  * @returns `ethAddress` for the native sentinel, else the checksummed address.
