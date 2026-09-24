@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-/** Chain-bound EIP-712 domain, owned locally to absorb upstream type changes. @internal */
+/** Chain-bound EIP-712 domain, owned locally to absorb upstream type changes. */
 export interface AuthorizationDomain {
   readonly name?: string;
   readonly version?: string;
@@ -14,7 +14,7 @@ type Field<Name extends string, Type extends string> = {
   readonly type: Type;
 };
 
-/** Exact ERC-2612 wallet payload, including the ordered signed field schema. @internal */
+/** Exact ERC-2612 wallet payload, including the ordered signed field schema. */
 export interface Erc2612TypedData {
   readonly domain: AuthorizationDomain;
   readonly primaryType: "Permit";
@@ -36,7 +36,7 @@ export interface Erc2612TypedData {
   };
 }
 
-/** One-time Permit2 SignatureTransfer payload; the owner is outside the message. @internal */
+/** One-time Permit2 SignatureTransfer payload; the owner is outside the message. */
 export interface Permit2SignatureTransferTypedData {
   readonly domain: AuthorizationDomain;
   readonly primaryType: "PermitTransferFrom";
@@ -63,7 +63,7 @@ export interface Permit2SignatureTransferTypedData {
   };
 }
 
-/** Exact Morpho authorization wallet payload. @internal */
+/** Exact Morpho authorization wallet payload. */
 export interface BlueAuthorizationTypedData {
   readonly domain: AuthorizationDomain;
   readonly primaryType: "Authorization";
@@ -85,7 +85,7 @@ export interface BlueAuthorizationTypedData {
   };
 }
 
-/** Pending wallet requests in their original order; descriptors do not prove authority. @internal */
+/** Pending wallet requests in their original order; descriptors do not prove authority. */
 export type SimulationAuthorization =
   | {
       readonly type: "erc20Approval";

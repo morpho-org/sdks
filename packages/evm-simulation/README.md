@@ -32,8 +32,10 @@ try {
     config,
     {
       chainId: 1,
+      // mode: "final" (default) executes the signed calldata against actual
+      // permissions; mode: "preview" accepts typed authorization descriptors.
       transactions: [{ from: user, to: vault, data: encodedDeposit }],
-      authorizations: [{ type: "signature", token: usdc, spender: vault }],
+      // limits: { maxSlippageWad: 1_00000000000000n },
     },
   );
 } catch (err) {
@@ -52,9 +54,12 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams`, `SimulationTransaction`, `SimulationAuthorization`.
-- Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
+- Input types: `SimulateParams` (`PreviewSimulateParams` | `FinalSimulateParams`), `SimulationTransaction`, `SimulationAuthorization` (typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes), `SimulationLimits`, `OperationLimit`.
+- Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`, `ExecutionContext`.
+- Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+
+Until the authorization-verification release, preview `authorizations` and `limits` are rejected with `UnsupportedVerificationFeatureError` rather than silently ignored.
 
 ### Deeper docs
 

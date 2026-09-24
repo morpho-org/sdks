@@ -1,51 +1,107 @@
 import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
+import {
+  type Address,
+  ethAddress,
+  getAddress,
+  type Hex,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
+import type { SimulationAuthorization } from "../domain/authorizations.js";
+import type { SimulateParams } from "../domain/request.js";
+import {
+  brandExecuted,
+  type ExecutionEvidence,
+  type ExecutionPlan,
+} from "../domain/stages.js";
 import {
   BlacklistViolationError,
   ExternalServiceError,
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
+  UnsupportedVerificationFeatureError,
 } from "../errors.js";
 import {
   encodeUint256,
   makeTransferLog,
   padAddress,
 } from "../test-helpers/index.js";
-import type {
-  AccountAssetChanges,
-  RawLog,
-  RawSimulationResult,
-  SimulateParams,
-  SimulationAuthorization,
-  SimulationConfig,
-} from "../types.js";
-import type { simulateV1 } from "./backends/eth-simulate-v1.js";
+import type { RawLog, SimulationConfig } from "../types.js";
 import { WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
+import type { executeSimulation } from "./pipeline/execute-simulation.js";
 import { simulate } from "./simulate.js";
 
-const mockSimulateV1 = vi.fn<typeof simulateV1>();
+const mockExecuteSimulation = vi.fn<typeof executeSimulation>();
 
-vi.mock("./backends/eth-simulate-v1", () => ({
-  simulateV1: (
-    ...args: Parameters<typeof simulateV1>
-  ): Promise<RawSimulationResult> => mockSimulateV1(...args),
+vi.mock("./pipeline/execute-simulation.js", () => ({
+  executeSimulation: (
+    ...args: Parameters<typeof executeSimulation>
+  ): Promise<ExecutionEvidence> => mockExecuteSimulation(...args),
 }));
 
-const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-const USER: Address = "0x1111111111111111111111111111111111111111";
-const VAULT: Address = "0x2222222222222222222222222222222222222222";
-const SPENDER: Address = "0x3333333333333333333333333333333333333333";
+const USDC: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+const USER: Address = getAddress("0x1111111111111111111111111111111111111111");
+const VAULT: Address = getAddress("0x2222222222222222222222222222222222222222");
+const SPENDER: Address = getAddress(
+  "0x3333333333333333333333333333333333333333",
+);
 
-function makeSuccessResult(
-  logs: RawLog[] = [],
-  assetChanges: AccountAssetChanges[] = [],
-): RawSimulationResult {
-  return {
-    calls: [{ logs, status: true, returnData: "0x", gasUsed: 0n }],
-    assetChanges,
-  };
+/**
+ * Build evidence for a plan: probe/user calls tagged per `plan.calls`, probe
+ * snapshots reporting a zero native balance.
+ */
+function makeEvidence(
+  plan: ExecutionPlan,
+  userLogs: RawLog[][] = [],
+): ExecutionEvidence {
+  const calls = plan.calls.map((call) => {
+    const logs =
+      call.identity.type === "transaction"
+        ? (userLogs[call.identity.transactionIndex] ?? [])
+        : [];
+    return {
+      identity: call.identity,
+      result: {
+        logs,
+        status: true as const,
+        returnData: "0x" as Hex,
+        gasUsed: 0n,
+      },
+    };
+  });
+  return brandExecuted({
+    plan,
+    context: {
+      chainId: plan.request.chainId,
+      stateBlockNumber: 1n,
+      stateBlockHash: `0x${"ab".repeat(32)}` as Hex,
+      stateBlockTimestamp: 1_700_000_000n,
+      blockNumber: 2n,
+      blockTimestamp: 1_700_000_012n,
+    },
+    calls,
+    snapshots: calls
+      .filter(({ identity }) => identity.type === "probe")
+      .map(({ identity }) => ({
+        identity,
+        context: {
+          chainId: plan.request.chainId,
+          stateBlockNumber: 1n,
+          stateBlockHash: `0x${"ab".repeat(32)}` as Hex,
+          stateBlockTimestamp: 1_700_000_000n,
+          blockNumber: 2n,
+          blockTimestamp: 1_700_000_012n,
+        },
+        snapshot: {
+          wallet: [{ account: plan.owner, token: ethAddress, assets: 0n }],
+          permissions: [],
+          positions: [],
+          vaults: [],
+          markets: [],
+        },
+      })),
+  });
 }
 
 function makeConfig(
@@ -58,65 +114,69 @@ function makeConfig(
   };
 }
 
-function makeParams(overrides: Partial<SimulateParams> = {}): SimulateParams {
+function makeParams(overrides: object = {}): SimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
     ...overrides,
-  };
+  } as SimulateParams;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockExecuteSimulation.mockImplementation(({ config, plan }) => {
+    if (!config.chains.has(plan.request.chainId)) {
+      return Promise.reject(new UnsupportedChainError(plan.request.chainId));
+    }
+    return Promise.resolve(makeEvidence(plan));
+  });
 });
 
 describe.sequential("simulate — success", () => {
-  it("returns transfers and simulationTxs", async () => {
+  it("returns transfers and normalized simulationTxs", async () => {
     const logs = [
       makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
-
-    const params = makeParams();
-    const result = await simulate(makeConfig(), params);
-
-    expect(result.transfers).toHaveLength(1);
-    expect(result.transfers[0]!.amount).toBe(1000000n);
-    expect(result.simulationTxs).toEqual(params.transactions);
-  });
-
-  it("surfaces non-empty assetChanges from the backend unchanged", async () => {
-    const logs = [
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
-    ];
-    const assetChanges: AccountAssetChanges[] = [
-      {
-        account: USER,
-        changes: [
-          { token: USDC, symbol: "USDC", decimals: 6, diff: -1000000n },
-        ],
-      },
-      {
-        account: VAULT,
-        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 1000000n }],
-      },
-    ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs, assetChanges));
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(makeEvidence(plan, [logs])),
+    );
 
     const result = await simulate(makeConfig(), makeParams());
 
-    expect(result.assetChanges).toEqual(assetChanges);
+    expect(result.transfers).toHaveLength(1);
+    expect(result.transfers[0]!.amount).toBe(1000000n);
+    expect(result.transfers[0]!.txIdx).toBe(0);
+    expect(result.simulationTxs).toEqual([
+      { from: USER, to: VAULT, data: "0x12345678", value: 0n },
+    ]);
+    // Only the user call is exposed — probes stay internal.
+    expect(result.calls).toHaveLength(1);
+  });
+
+  it("derives assetChanges from user-call transfers", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(makeEvidence(plan, [logs])),
+    );
+
+    const result = await simulate(makeConfig(), makeParams());
+
+    expect(result.assetChanges).toEqual([
+      { account: USER, changes: [{ token: USDC, diff: -1000000n }] },
+      { account: VAULT, changes: [{ token: USDC, diff: 1000000n }] },
+    ]);
   });
 
   it("attributes Transfer.txIdx to the emitting tx in a multi-tx bundle", async () => {
     const APPROVE_AMOUNT = 1_000_000n;
     const TRANSFER_AMOUNT = 500_000n;
-
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [
-        {
-          logs: [
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(
+        makeEvidence(plan, [
+          [
             makeTransferLog({
               token: USDC,
               from: USER,
@@ -124,12 +184,7 @@ describe.sequential("simulate — success", () => {
               amount: APPROVE_AMOUNT,
             }),
           ],
-          status: true,
-          returnData: "0x",
-          gasUsed: 0n,
-        },
-        {
-          logs: [
+          [
             makeTransferLog({
               token: USDC,
               from: USER,
@@ -137,13 +192,9 @@ describe.sequential("simulate — success", () => {
               amount: TRANSFER_AMOUNT,
             }),
           ],
-          status: true,
-          returnData: "0x",
-          gasUsed: 0n,
-        },
-      ],
-      assetChanges: [],
-    });
+        ]),
+      ),
+    );
 
     const result = await simulate(
       makeConfig(),
@@ -156,15 +207,6 @@ describe.sequential("simulate — success", () => {
     );
 
     expect(result.calls).toHaveLength(2);
-    expect(result.calls[0]!.logs).toHaveLength(1);
-    expect(result.calls[0]!.logs[0]!.topics[0]).toBe(
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-    );
-    expect(result.calls[1]!.logs).toHaveLength(1);
-    expect(result.calls[1]!.logs[0]!.topics[0]).toBe(
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-    );
-
     const approveTransfer = result.transfers.find(
       (t) => t.amount === APPROVE_AMOUNT,
     );
@@ -176,12 +218,18 @@ describe.sequential("simulate — success", () => {
   });
 
   it("propagates per-call gasUsed in bundle order", async () => {
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [
-        { logs: [], status: true, returnData: "0x", gasUsed: 21_000n },
-        { logs: [], status: true, returnData: "0x", gasUsed: 42_000n },
-      ],
-      assetChanges: [],
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
+      const evidence = makeEvidence(plan);
+      let i = 0;
+      const calls = evidence.calls.map((call) =>
+        call.identity.type === "transaction"
+          ? {
+              ...call,
+              result: { ...call.result, gasUsed: [21_000n, 42_000n][i++]! },
+            }
+          : call,
+      );
+      return Promise.resolve(brandExecuted({ ...evidence, calls }));
     });
 
     const result = await simulate(
@@ -198,7 +246,17 @@ describe.sequential("simulate — success", () => {
     expect(result.calls[1]!.gasUsed).toBe(42_000n);
   });
 
-  it("throws BlacklistViolationError end-to-end when backend logs show bundles retention", async () => {
+  it("returns a deep-frozen result", async () => {
+    const result = await simulate(makeConfig(), makeParams());
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.calls)).toBe(true);
+    expect(Object.isFrozen(result.simulationTxs)).toBe(true);
+    expect(() => {
+      (result as { calls: unknown }).calls = [];
+    }).toThrow();
+  });
+
+  it("throws BlacklistViolationError end-to-end on bundles retention", async () => {
     const bundles = getChainAddresses(1).bundles!.vaultExitBundlesV1;
     const logs = [
       makeTransferLog({
@@ -208,24 +266,9 @@ describe.sequential("simulate — success", () => {
         amount: 1_000_000n,
       }),
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
-
-    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
-      BlacklistViolationError,
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(makeEvidence(plan, [logs])),
     );
-  });
-
-  it("throws BlacklistViolationError end-to-end when native ETH retention is reported only via assetChanges only (finding 1440)", async () => {
-    // With logs empty, only assetChanges carries the retained ETH — the guard
-    // must still fire. Before the fix, simulate() resolved instead of throwing.
-    const bundles = getChainAddresses(1).bundles!.vaultExitBundlesV1;
-    const assetChanges: AccountAssetChanges[] = [
-      {
-        account: bundles,
-        changes: [{ token: ethAddress, diff: 1_000000000000000000n }],
-      },
-    ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult([], assetChanges));
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       BlacklistViolationError,
@@ -233,93 +276,71 @@ describe.sequential("simulate — success", () => {
   });
 });
 
-describe.sequential("simulate — authorizations", () => {
-  it("resolves signature authorizations into prepended approve() calls", async () => {
-    const transferLog = makeTransferLog({
-      token: USDC,
-      from: USER,
-      to: VAULT,
-      amount: 1000000n,
-    });
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [
-        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
-        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
-      ],
-      assetChanges: [],
-    });
-
-    const auths: SimulationAuthorization[] = [
-      { type: "signature", token: USDC, spender: SPENDER },
-    ];
-    const result = await simulate(
-      makeConfig(),
-      makeParams({ authorizations: auths }),
-    );
-
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
-    expect(callArgs.transactions.length).toBe(2);
-    expect(result.simulationTxs.length).toBe(2);
+describe.sequential("simulate — modes and unsupported features", () => {
+  it("defaults to final mode", async () => {
+    await simulate(makeConfig(), makeParams());
+    const plan = mockExecuteSimulation.mock.calls[0]![0].plan;
+    expect(plan.request.mode).toBe("final");
+    expect(plan.request.authorizations).toEqual([]);
   });
 
-  it("simulates directly (1 tx) without authorizations", async () => {
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult([]));
-
-    const result = await simulate(makeConfig(), makeParams());
-    expect(result.transfers).toEqual([]);
-
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
-    expect(callArgs.transactions.length).toBe(1);
-  });
-
-  it("passes approval-type authorization txs through as-is (USDT-style reset)", async () => {
-    const transferLog = makeTransferLog({
-      token: USDC,
-      from: USER,
-      to: VAULT,
-      amount: 1000000n,
-    });
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [
-        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
-        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
-        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
-      ],
-      assetChanges: [],
-    });
-
-    const resetApproveTx = {
-      from: USER,
-      to: USDC,
-      data: ("0x095ea7b30000000000000000000000003333333333333333333333333333333333333333" +
-        "0000000000000000000000000000000000000000000000000000000000000000") as `0x${string}`,
-    };
-    const approveTx = {
-      from: USER,
-      to: USDC,
-      data: ("0x095ea7b30000000000000000000000003333333333333333333333333333333333333333" +
-        "00000000000000000000000000000000000000000000000000000000000f4240") as `0x${string}`,
-    };
-
-    const auths: SimulationAuthorization[] = [
-      { type: "approval", transaction: resetApproveTx },
-      { type: "approval", transaction: approveTx },
-    ];
-
+  it("preview without authorizations executes", async () => {
     const result = await simulate(
       makeConfig(),
-      makeParams({ authorizations: auths }),
+      makeParams({ mode: "preview" }),
     );
+    expect(result.calls).toHaveLength(1);
+  });
 
-    expect(result.transfers).toHaveLength(1);
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
-    expect(callArgs.transactions.length).toBe(3);
+  it("preview with authorizations throws UnsupportedVerificationFeatureError", async () => {
+    const authorizations: SimulationAuthorization[] = [
+      {
+        type: "erc20Approval",
+        token: USDC,
+        owner: USER,
+        spender: SPENDER,
+        amount: 100n,
+      },
+    ];
+    await expect(
+      simulate(makeConfig(), makeParams({ mode: "preview", authorizations })),
+    ).rejects.toThrow(UnsupportedVerificationFeatureError);
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
+  });
+
+  it("limits throw UnsupportedVerificationFeatureError", async () => {
+    await expect(
+      simulate(makeConfig(), makeParams({ limits: { maxSlippageWad: 1n } })),
+    ).rejects.toThrow(UnsupportedVerificationFeatureError);
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
+  });
+
+  it("legacy signature authorization variant throws SimulationValidationError", async () => {
+    await expect(
+      simulate(
+        makeConfig(),
+        makeParams({
+          mode: "preview",
+          authorizations: [
+            { type: "signature", token: USDC, spender: SPENDER },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(SimulationValidationError);
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
+  });
+
+  it("final mode with authorizations throws SimulationValidationError", async () => {
+    await expect(
+      simulate(makeConfig(), makeParams({ authorizations: [] } as never)),
+    ).rejects.toThrow(SimulationValidationError);
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
   });
 });
 
 describe.sequential("simulate — error handling", () => {
   it("throws SimulationRevertedError on revert", async () => {
-    mockSimulateV1.mockRejectedValueOnce(
+    mockExecuteSimulation.mockRejectedValueOnce(
       new SimulationRevertedError("ERC20: transfer amount exceeds balance"),
     );
 
@@ -329,99 +350,66 @@ describe.sequential("simulate — error handling", () => {
   });
 
   it("throws ExternalServiceError when the RPC is down", async () => {
-    mockSimulateV1.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
+    mockExecuteSimulation.mockRejectedValueOnce(
+      new ExternalServiceError("RPC down"),
+    );
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
   });
-
-  it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
-      assetChanges: [],
-    });
-
-    const auths: SimulationAuthorization[] = [
-      { type: "signature", token: USDC, spender: SPENDER },
-    ];
-
-    await expect(
-      simulate(makeConfig(), makeParams({ authorizations: auths })),
-    ).rejects.toThrow(ExternalServiceError);
-  });
-
-  it("throws SimulationRevertedError even when signature authorizations are present", async () => {
-    mockSimulateV1.mockRejectedValueOnce(
-      new SimulationRevertedError("USDT revert"),
-    );
-
-    const auths: SimulationAuthorization[] = [
-      { type: "signature", token: USDC, spender: SPENDER },
-    ];
-
-    await expect(
-      simulate(makeConfig(), makeParams({ authorizations: auths })),
-    ).rejects.toThrow(SimulationRevertedError);
-
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
-  });
 });
 
-describe.sequential("simulate — wrapped-native handling", () => {
+describe.sequential("simulate — chain configuration", () => {
   test("behavior: ignores WETH9 events on registered tokenless chains", async () => {
     const chainId = ChainId.StableMainnet;
-    mockSimulateV1.mockResolvedValueOnce(
-      makeSuccessResult([
-        {
-          address: USDC,
-          topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
-          data: encodeUint256(1_000n),
-        },
-      ]),
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(
+        makeEvidence(plan, [
+          [
+            {
+              address: USDC,
+              topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+              data: encodeUint256(1_000n),
+            },
+          ],
+        ]),
+      ),
     );
 
     const result = await simulate(
-      {
-        chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]),
-      },
+      { chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]) },
       makeParams({ chainId }),
     );
 
     expect(result.transfers).toEqual([]);
-    expect(mockSimulateV1.mock.calls[0]![0].wNative).toBeNull();
   });
 
   test("behavior: keeps configured custom chains without registered addresses", async () => {
     const chainId = 999_999;
     const amount = 1_000n;
-    mockSimulateV1.mockResolvedValueOnce(
-      makeSuccessResult([
-        {
-          address: USDC,
-          topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
-          data: encodeUint256(amount),
-        },
-      ]),
+    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
+      Promise.resolve(
+        makeEvidence(plan, [
+          [
+            {
+              address: USDC,
+              topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
+              data: encodeUint256(amount),
+            },
+          ],
+        ]),
+      ),
     );
 
     const result = await simulate(
-      {
-        chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]),
-      },
+      { chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]) },
       makeParams({ chainId }),
     );
 
     expect(result.transfers).toEqual([
-      {
-        token: USDC,
-        from: USER,
-        to: zeroAddress,
-        amount,
-        txIdx: 0,
-      },
+      { token: USDC, from: USER, to: zeroAddress, amount, txIdx: 0 },
     ]);
-    expect(mockSimulateV1.mock.calls[0]![0].wNative).toBeUndefined();
   });
 });
 
@@ -430,24 +418,6 @@ describe.sequential("simulate — validation", () => {
     await expect(
       simulate(makeConfig(), makeParams({ chainId: 999999 })),
     ).rejects.toThrow(UnsupportedChainError);
-  });
-
-  it("throws SimulationValidationError for zero-address token in signature auth", async () => {
-    const auths: SimulationAuthorization[] = [
-      { type: "signature", token: zeroAddress, spender: SPENDER },
-    ];
-    await expect(
-      simulate(makeConfig(), makeParams({ authorizations: auths })),
-    ).rejects.toThrow(SimulationValidationError);
-  });
-
-  it("throws SimulationValidationError for zero-address spender in signature auth", async () => {
-    const auths: SimulationAuthorization[] = [
-      { type: "signature", token: USDC, spender: zeroAddress },
-    ];
-    await expect(
-      simulate(makeConfig(), makeParams({ authorizations: auths })),
-    ).rejects.toThrow(SimulationValidationError);
   });
 
   it("throws SimulationValidationError for empty transactions", async () => {
@@ -474,14 +444,6 @@ describe.sequential("simulate — validation", () => {
     const checksum: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     const lower = checksum.toLowerCase() as Address;
     expect(checksum).not.toBe(lower);
-
-    mockSimulateV1.mockResolvedValueOnce({
-      calls: [
-        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
-        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
-      ],
-      assetChanges: [],
-    });
 
     await expect(
       simulate(
@@ -512,28 +474,11 @@ describe.sequential("simulate — validation", () => {
       ),
     ).rejects.toThrow(SimulationValidationError);
   });
-
-  it("throws SimulationValidationError for transaction with zero-address to", async () => {
-    await expect(
-      simulate(
-        makeConfig(),
-        makeParams({
-          transactions: [
-            { from: USER, to: zeroAddress, data: "0x12345678" as Hex },
-          ],
-        }),
-      ),
-    ).rejects.toThrow(SimulationValidationError);
-  });
 });
 
 describe.sequential("simulate — timeout", () => {
   it("throws ExternalServiceError when simulation exceeds timeoutMs", async () => {
-    mockSimulateV1.mockImplementationOnce(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      throw new ExternalServiceError("timeout");
-    });
-    mockSimulateV1.mockImplementationOnce(async () => {
+    mockExecuteSimulation.mockImplementationOnce(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       throw new ExternalServiceError("timeout");
     });

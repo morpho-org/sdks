@@ -4,7 +4,15 @@ import type { SimulationCall, SimulationTransaction } from "../types.js";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type { MarketBinding, OperationIdentity } from "./operations.js";
 
-/** Resolved state anchor and execution metadata, including node block advancement. @internal */
+/**
+ * Resolved state anchor and execution metadata.
+ *
+ * `stateBlock*` is the pinned pre-state block resolved once at the boundary;
+ * `block*` is the block the node reported for the simulated execution. Block
+ * advancement is node-specific — geth-style nodes report `stateBlockNumber +
+ * 1` while Anvil reports the pinned block itself — so consumers must read
+ * {@link ExecutionContext.blockNumber} and never assume +1.
+ */
 export interface ExecutionContext {
   readonly chainId: number;
   readonly stateBlockNumber: bigint;
