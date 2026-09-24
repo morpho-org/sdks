@@ -27,6 +27,7 @@ import { fetchMarket } from "./Market.js";
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @returns The hydrated `Position` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { MarketId, Position } from "@morpho-org/blue-sdk";

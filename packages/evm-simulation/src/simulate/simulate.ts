@@ -54,7 +54,7 @@ import {
  * @throws {SimulationRevertedError} when the bundle reverts on either backend.
  * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
  *   the dust threshold by a `bundles` periphery contract (VaultExitBundlesV1,
- *   VaultBundlesV1, BlueBundlesV1). Never bypassable.
+ *   VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1). Never bypassable.
  * @throws {ExternalServiceError} (a) when both backends are unavailable within the
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched

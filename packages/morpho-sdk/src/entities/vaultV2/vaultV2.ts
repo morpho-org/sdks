@@ -88,14 +88,15 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 // accrual model stays well-defined inside it.
 const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
+/** Action surface for Vault V2 reads and writes routed through VaultBundlesV1 and VaultExitBundlesV1. */
 export interface VaultV2Actions {
   /**
-   * Fetches the latest vault data.
+   * Fetches the latest accrual snapshot of the vault.
    *
-   * This function fetches the latest vault data from the blockchain.
-   * @param {FetchParameters} [parameters] - The parameters for the fetch operation.
+   * Reads the Vault V2 state through `fetchAccrualVaultV2` on the entity's client.
    *
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>} The latest vault data.
+   * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
+   * @returns The hydrated `AccrualVaultV2` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
    */
   getData: (
@@ -572,13 +573,23 @@ export interface VaultV2Actions {
    * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
    * amounts to account for share-price drift between submission and execution.
    *
-   * @param {Object} params - The force redeem parameters.
-   * @param {readonly Deallocation[]} params.deallocations - The typed list of deallocations to perform.
-   * @param {Object} params.redeem - The redeem parameters applied after deallocations.
-   * @param {bigint} params.redeem.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.buildTx The prepared multicall transaction.
+   * @param params.deallocations - Typed list of `forceDeallocate` calls to perform before the redeem.
+   * @param params.redeem.shares - Amount of vault shares to redeem after the deallocations.
+   * @param params.userAddress - Account that pays the deallocation penalties and receives the redeemed assets.
+   * @returns An object whose `buildTx()` returns a deep-frozen `Transaction<VaultV2ForceRedeemAction>`
+   *   encoding the vault `multicall`.
+   * @example
+   * ```ts
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const tx = vault
+   *   .forceRedeem({
+   *     deallocations: [{ adapter, marketParams, amount: 1_000_000n }],
+   *     redeem: { shares: 500_000n },
+   *     userAddress,
+   *   })
+   *   .buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV2ForceRedeemAction>>
+   * ```
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];
@@ -589,6 +600,7 @@ export interface VaultV2Actions {
   };
 }
 
+/** Binds a viem client to a Vault V2 vault's action builders. */
 export class MorphoVaultV2 implements VaultV2Actions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
