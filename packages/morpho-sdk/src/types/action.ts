@@ -977,6 +977,16 @@ export function isRequirementSignature(requirement: unknown): boolean {
  *
  * @param signature - The signed requirement to test.
  * @returns `true` when `signature.action.type` is `"permit"`.
+ * @example
+ * ```ts
+ * import {
+ *   isPermitSignature,
+ *   type RequirementSignature,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const getPermitDeadline = (signature: RequirementSignature): bigint | undefined =>
+ *   isPermitSignature(signature) ? signature.args.deadline : undefined;
+ * ```
  */
 export function isPermitSignature(
   signature: RequirementSignature,

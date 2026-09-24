@@ -43,10 +43,11 @@ import { validateSlippageTolerance } from "./validate.js";
  * @example
  * ```ts
  * import { computeMinForceWithdrawSharePrice } from "@morpho-org/morpho-sdk";
+ * import { DEFAULT_SLIPPAGE_TOLERANCE } from "@morpho-org/morpho-sdk/constants";
  *
  * const minSharePriceE27 = computeMinForceWithdrawSharePrice({
- *   withdrawnAssets: plan.withdrawnAssets,
- *   sharesBurnt,
+ *   withdrawnAssets: 1_000_000n,
+ *   sharesBurnt: 900_000n,
  *   slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
  * });
  * ```

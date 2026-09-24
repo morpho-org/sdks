@@ -354,6 +354,31 @@ export const validateNativeVaultAsset = (
  * @param params.withdrawAmount - Amount of collateral being withdrawn.
  * @param params.lltv - The market's liquidation LTV.
  * @param params.marketId - The market identifier (for error messages).
+ * @returns `void` when the post-withdraw position stays within the safe LTV threshold.
+ * @throws {MarketIdMismatchError} when `positionData.marketId` differs from `marketId`.
+ * @throws {WithdrawExceedsCollateralError} when `withdrawAmount` exceeds the position's collateral.
+ * @throws {MissingMarketPriceError} when the position carries debt but the market has no oracle price.
+ * @throws {WithdrawMakesPositionUnhealthyError} when the remaining collateral cannot cover the debt
+ *   at LLTV minus `DEFAULT_LLTV_BUFFER`.
+ * @example
+ * ```ts
+ * import type { AccrualPosition, MarketId } from "@morpho-org/blue-sdk";
+ * import { validatePositionHealthAfterWithdraw } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertSafeWithdraw(
+ *   positionData: AccrualPosition,
+ *   withdrawAmount: bigint,
+ *   lltv: bigint,
+ *   marketId: MarketId,
+ * ): void {
+ *   validatePositionHealthAfterWithdraw({
+ *     positionData,
+ *     withdrawAmount,
+ *     lltv,
+ *     marketId,
+ *   });
+ * }
+ * ```
  */
 export const validatePositionHealthAfterWithdraw = (params: {
   positionData: AccrualPosition;
@@ -438,6 +463,21 @@ export const validateRepayAmount = (params: {
  * @param params.positionData - The current accrual position.
  * @param params.repayShares - The amount of shares to repay.
  * @param params.marketId - The market identifier (for error messages).
+ * @returns `void` when `repayShares` does not exceed the position's borrow shares.
+ * @throws {RepaySharesExceedDebtError} when `repayShares` exceeds the position's borrow shares.
+ * @example
+ * ```ts
+ * import type { AccrualPosition, MarketId } from "@morpho-org/blue-sdk";
+ * import { validateRepayShares } from "@morpho-org/morpho-sdk";
+ *
+ * export function assertRepayable(
+ *   positionData: AccrualPosition,
+ *   repayShares: bigint,
+ *   marketId: MarketId,
+ * ): void {
+ *   validateRepayShares({ positionData, repayShares, marketId });
+ * }
+ * ```
  */
 export const validateRepayShares = (params: {
   positionData: AccrualPosition;
