@@ -141,15 +141,17 @@ export async function executePlan(params: {
     if (error instanceof SimulationPackageError) throw error;
     // A node-level revert is a property of the bundle, not the backend. The
     // raw request surfaces it as a JSON-RPC error — code 3 for "execution
-    // reverted", code -32003 for "insufficient funds" (an unfundable `value`
-    // transfer under real native funding) — rather than viem's
+    // reverted", plus an "insufficient funds" failure for an unfundable
+    // `value` transfer under real native funding (the code varies by node:
+    // -32003 on geth-flavored Anvil, -32000 on others) — rather than viem's
     // ExecutionRevertedError.
     if (
       error instanceof ExecutionRevertedError ||
       (error instanceof Error &&
         "code" in error &&
         ((error as { code: unknown }).code === 3 ||
-          (error as { code: unknown }).code === -32003))
+          (error as { code: unknown }).code === -32003 ||
+          /insufficient funds/i.test(error.message)))
     ) {
       throw new SimulationRevertedError(
         error instanceof ExecutionRevertedError

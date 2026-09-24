@@ -329,24 +329,31 @@ describe.sequential("executePlan", () => {
     );
   });
 
-  test("error: SimulationRevertedError for a node-level insufficient-funds revert", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(
-        Response.json({
-          jsonrpc: "2.0",
-          id: 1,
-          error: {
-            code: -32003,
-            message: "Insufficient funds for gas * price + value",
-          },
-        }),
+  test.each([
+    {
+      name: "geth code -32003",
+      code: -32003,
+      message: "Insufficient funds for gas * price + value",
+    },
+    {
+      name: "message-only code -32000",
+      code: -32000,
+      message: "insufficient funds for transfer",
+    },
+  ])(
+    "error: SimulationRevertedError for a node-level insufficient-funds revert ($name)",
+    async ({ code, message }) => {
+      fetchMock
+        .mockResolvedValueOnce(rpc("0x1"))
+        .mockResolvedValueOnce(rpc(blockResult()))
+        .mockResolvedValueOnce(
+          Response.json({ jsonrpc: "2.0", id: 1, error: { code, message } }),
+        );
+      await expect(executePlan(params)).rejects.toBeInstanceOf(
+        SimulationRevertedError,
       );
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      SimulationRevertedError,
-    );
-  });
+    },
+  );
 
   test("error: ExternalServiceError for an aborted/timeout fetch", async () => {
     fetchMock.mockRejectedValueOnce(
