@@ -1,26 +1,26 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
-/** Raw token amount; native currency uses viem's ethAddress. @internal */
+/** Raw token amount; native currency uses viem's ethAddress. */
 export interface TokenAmount {
   readonly token: Address;
   readonly amount: bigint;
 }
 
-/** Ordered adapter deallocation pin; marketId identifies a Blue-market adapter leg. @internal */
+/** Ordered adapter deallocation pin; marketId identifies a Blue-market adapter leg. */
 export interface SimulationDeallocation {
   readonly adapter: Address;
   readonly marketId?: MarketId;
   readonly amount: bigint;
 }
 
-/** Minimum verified supply credit for one selected in-kind market, in loan assets. @internal */
+/** Minimum verified supply credit for one selected in-kind market, in loan assets. */
 export interface MarketSupplyMinimum {
   readonly marketId: MarketId;
   readonly minAssets: bigint;
 }
 
-/** Per-operation fields from the TIB; fixed names encode units and binding subjects. @internal */
+/** Per-operation fields from the TIB; fixed names encode units and binding subjects. */
 export interface OperationLimitFields {
   readonly blueSupply: {
     readonly marketId: MarketId;
@@ -171,7 +171,7 @@ export interface OperationLimitFields {
   );
 }
 
-/** Inclusive constraints bound to exactly one operation; consumers may only tighten. @internal */
+/** Inclusive constraints bound to exactly one operation; consumers may only tighten. */
 export type OperationLimit = {
   [Type in keyof OperationLimitFields]: {
     readonly type: Type;
@@ -180,7 +180,7 @@ export type OperationLimit = {
   } & OperationLimitFields[Type];
 }[keyof OperationLimitFields];
 
-/** Optional consumer constraints; amounts use raw units and ratios/APYs use WAD. @internal */
+/** Optional consumer constraints; amounts use raw units and ratios/APYs use WAD. */
 export interface SimulationLimits {
   /** Defaults to DEFAULT_SLIPPAGE_TOLERANCE (0.03%); may only decrease. */
   readonly maxSlippageWad?: bigint;
@@ -196,7 +196,7 @@ export interface SimulationLimits {
   readonly operations?: readonly OperationLimit[];
 }
 
-/** Fully resolved defaults and supplied constraints, without claiming they passed. @internal */
+/** Fully resolved defaults and supplied constraints, without claiming they passed. */
 export interface EffectiveSimulationLimits {
   readonly maxSlippageWad: bigint;
   readonly minLltvBufferWad: bigint;

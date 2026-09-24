@@ -1,142 +1,155 @@
-import type { Address, Hex } from "viem";
+import { type Address, getAddress, numberToHex } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
   SimulationRevertedError,
   UnsupportedChainError,
 } from "../../errors.js";
-import type {
-  RawSimulationResult,
-  SimulationConfig,
-  SimulationTransaction,
-} from "../../types.js";
-import type { simulateV1 } from "../backends/eth-simulate-v1.js";
+import { encodeUint256 } from "../../test-helpers/index.js";
+import type { SimulationConfig } from "../../types.js";
+import { planExecution } from "../plan/plan-execution.js";
+import { parseRequest } from "../request/index.js";
 import { executeSimulation } from "./execute-simulation.js";
 
-const mockSimulateV1 = vi.fn<typeof simulateV1>();
+const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
+const VAULT: Address = getAddress("0x2222222222222222222222222222222222222222");
+const config: SimulationConfig = {
+  chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
+};
+const fetchMock = vi.fn<typeof fetch>();
 
-vi.mock("../backends/eth-simulate-v1", () => ({
-  simulateV1: (
-    ...args: Parameters<typeof simulateV1>
-  ): Promise<RawSimulationResult> => mockSimulateV1(...args),
-}));
+const rpc = (result: unknown) =>
+  Response.json({ jsonrpc: "2.0", id: 1, result });
 
-const USER: Address = "0x1111111111111111111111111111111111111111";
-const VAULT: Address = "0x2222222222222222222222222222222222222222";
-const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-
-const txs: SimulationTransaction[] = [
-  { from: USER, to: VAULT, data: "0x12" as Hex },
-];
-
-function makeConfig(timeoutMs?: number): SimulationConfig {
-  return {
-    chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
-    timeoutMs,
-  };
+function respondHappy(callCount = 3) {
+  fetchMock
+    .mockResolvedValueOnce(rpc("0x1"))
+    .mockResolvedValueOnce(
+      rpc({
+        number: numberToHex(20_000_000n),
+        hash: `0x${"ab".repeat(32)}`,
+        timestamp: numberToHex(1_700_000_000n),
+      }),
+    )
+    .mockResolvedValueOnce(
+      rpc([
+        {
+          number: numberToHex(20_000_001n),
+          timestamp: numberToHex(1_700_000_012n),
+          hash: `0x${"cd".repeat(32)}`,
+          calls: Array.from({ length: callCount }, (_, i) => ({
+            status: "0x1",
+            gasUsed: "0x0",
+            returnData: i % 2 === 0 ? encodeUint256(0n) : "0x",
+            logs: [],
+          })),
+        },
+      ]),
+    );
 }
 
-beforeEach(() => vi.clearAllMocks());
+const makePlan = () =>
+  planExecution(
+    parseRequest({
+      chainId: 1,
+      transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+    }),
+  );
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe.sequential("executeSimulation", () => {
-  it("runs the bundle through simulateV1 with the chain URL and forwarded args", async () => {
-    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
+  test.each([undefined, 10_000, 1])(
+    "behavior: uses the full timeout budget %s across all three RPC steps",
+    async (timeoutMs) => {
+      const timeout = vi.spyOn(AbortSignal, "timeout");
+      respondHappy();
+      await executeSimulation({
+        config: { ...config, timeoutMs },
+        plan: makePlan(),
+      });
+      expect(timeout).toHaveBeenCalledWith(timeoutMs ?? 5000);
+      // One shared signal across chainId, getBlock and eth_simulateV1.
+      const signals = fetchMock.mock.calls.map((call) => call[1]?.signal);
+      expect(signals).toHaveLength(3);
+      expect(new Set(signals).size).toBe(1);
+    },
+  );
 
-    await executeSimulation({
-      config: makeConfig(),
-      chainId: 1,
-      transactions: txs,
-      blockNumber: 123n,
-      wNative: WETH,
+  test("default: returns evidence from the boundary", async () => {
+    respondHappy();
+    const evidence = await executeSimulation({
+      config,
+      plan: makePlan(),
+      blockNumber: 20_000_000n,
     });
-
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
-    const args = mockSimulateV1.mock.calls[0]![0];
-    expect(args.rpcUrl).toBe("http://rpc.local");
-    expect(args.chainId).toBe(1);
-    expect(args.transactions).toBe(txs);
-    expect(args.blockNumber).toBe(123n);
-    expect(args.wNative).toBe(WETH);
+    expect(evidence.calls).toHaveLength(3);
+    expect(evidence.snapshots).toHaveLength(2);
   });
 
-  it("gives simulateV1 the full configured timeout", async () => {
-    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
-    try {
-      mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
+  test("error: UnsupportedChainError without an endpoint", async () => {
+    await expect(
+      executeSimulation({ config: { chains: new Map() }, plan: makePlan() }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-      await executeSimulation({
-        config: makeConfig(3000),
-        chainId: 1,
-        transactions: txs,
-      });
-
-      expect(timeoutSpy).toHaveBeenCalledTimes(1);
-      expect(timeoutSpy).toHaveBeenCalledWith(3000);
-      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
-        timeoutSpy.mock.results[0]!.value,
+  test("error: propagates SimulationRevertedError from the boundary", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        rpc({
+          number: numberToHex(20_000_000n),
+          hash: `0x${"ab".repeat(32)}`,
+          timestamp: numberToHex(1_700_000_000n),
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpc([
+          {
+            number: numberToHex(20_000_001n),
+            timestamp: numberToHex(1_700_000_012n),
+            hash: `0x${"cd".repeat(32)}`,
+            calls: [
+              {
+                status: "0x1",
+                gasUsed: "0x0",
+                returnData: encodeUint256(0n),
+                logs: [],
+              },
+              {
+                status: "0x0",
+                gasUsed: "0x0",
+                returnData: "0x",
+                logs: [],
+                error: { code: 3, message: "reverted" },
+              },
+              {
+                status: "0x1",
+                gasUsed: "0x0",
+                returnData: encodeUint256(0n),
+                logs: [],
+              },
+            ],
+          },
+        ]),
       );
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-  });
-
-  it("uses the default timeout when timeoutMs is omitted", async () => {
-    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
-    try {
-      mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-      await executeSimulation({
-        config: makeConfig(),
-        chainId: 1,
-        transactions: txs,
-      });
-
-      expect(timeoutSpy).toHaveBeenCalledWith(5000);
-      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
-        timeoutSpy.mock.results[0]!.value,
-      );
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-  });
-
-  it("propagates ExternalServiceError without retrying", async () => {
-    mockSimulateV1.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
-
     await expect(
-      executeSimulation({
-        config: makeConfig(),
-        chainId: 1,
-        transactions: txs,
-      }),
-    ).rejects.toThrow(ExternalServiceError);
-
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+      executeSimulation({ config, plan: makePlan() }),
+    ).rejects.toBeInstanceOf(SimulationRevertedError);
   });
 
-  it("propagates SimulationRevertedError", async () => {
-    mockSimulateV1.mockRejectedValueOnce(
-      new SimulationRevertedError("revert", 0),
-    );
-
+  test("error: ExternalServiceError when the transport fails", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network refused"));
     await expect(
-      executeSimulation({
-        config: makeConfig(),
-        chainId: 1,
-        transactions: txs,
-      }),
-    ).rejects.toThrow(SimulationRevertedError);
-  });
-
-  it("throws UnsupportedChainError when the chain is not configured", async () => {
-    await expect(
-      executeSimulation({
-        config: { chains: new Map() },
-        chainId: 1,
-        transactions: txs,
-      }),
-    ).rejects.toThrow(UnsupportedChainError);
-
-    expect(mockSimulateV1).not.toHaveBeenCalled();
+      executeSimulation({ config, plan: makePlan() }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
   });
 });

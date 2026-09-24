@@ -4,7 +4,7 @@ import type { RiskMetric } from "./evidence.js";
 import type { OperationLimitFields, SimulationDeallocation } from "./limits.js";
 import type { DecodedOperation, OperationIdentity } from "./operations.js";
 
-/** Existing and planned class/code identities; this PR implements no new errors. @internal */
+/** Canonical error class/code identities implemented by this package's public error classes. */
 export interface SimulationErrorCodes {
   readonly SimulationValidationError: "VALIDATION_ERROR";
   readonly UnsupportedChainError: "UNSUPPORTED_CHAIN";
@@ -27,7 +27,7 @@ export interface SimulationErrorCodes {
   readonly UnexpectedSimulationError: "UNEXPECTED_SIMULATION_ERROR";
 }
 
-/** Named stage at which failure occurred; not a transport/provider classification. @internal */
+/** Named stage at which failure occurred; not a transport/provider classification. */
 export type SimulationStage =
   | "validation"
   | "decoding"
@@ -39,7 +39,7 @@ export type SimulationStage =
   | "verification"
   | "limits";
 
-/** Typed affected subject, including compound refinance and migration bindings. @internal */
+/** Typed affected subject, including compound refinance and migration bindings. */
 export type SimulationSubject =
   | {
       readonly type: "wallet";
@@ -76,7 +76,7 @@ export type SimulationSubject =
     }
   | { readonly type: "deployment"; readonly address: Address };
 
-/** Safe, fixed-unit expected/observed comparison, never raw causes or signature payloads. @internal */
+/** Safe, fixed-unit expected/observed comparison, never raw causes or signature payloads. */
 export type SimulationComparison =
   | {
       readonly unit:
@@ -125,7 +125,7 @@ export type SimulationComparison =
       readonly observed: number;
     };
 
-/** Diagnostic location; preparation and probes cannot carry the legacy user txIdx. @internal */
+/** Diagnostic location; preparation and probes cannot carry the legacy user txIdx. */
 export type SimulationErrorLocation =
   | {
       readonly type: "transaction";
@@ -139,7 +139,7 @@ export type SimulationErrorLocation =
     }
   | { readonly type: "probe"; readonly probeId: string };
 
-/** Readonly context added beside preserved legacy error fields and constructors. @internal */
+/** Readonly context added beside preserved legacy error fields and constructors. */
 export interface SimulationErrorContext {
   readonly mode?: "preview" | "final";
   readonly stage: SimulationStage;
@@ -158,7 +158,7 @@ type ConstraintField<T> = Extract<
   `expected${string}` | `min${string}` | `max${string}`
 >;
 
-/** Consumer constraint context relates the operation tag to its applicable field. @internal */
+/** Consumer constraint context relates the operation tag to its applicable field. */
 export type ConsumerConstraintContext =
   | {
       [Type in keyof OperationLimitFields]: OperationIdentity & {
