@@ -102,6 +102,10 @@ export interface VaultV2Actions {
    * @returns The hydrated `AccrualVaultV2` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
+   * @throws {UnknownOfFactory} when the vault is not a VaultV2 from the configured factory.
+   * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
+   *   unsupported adapter class.
    */
   getData: (
     parameters?: FetchParameters,
