@@ -1,5 +1,175 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.0
+
+### Major Changes
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route Blue collateral supply, borrow, repay, and collateral withdrawal flows through the compatible
+  BlueBundlesV1 combined entrypoints. Preserve established names and migrate the WDK adapter.
+
+  Normalize token addresses to their EIP-55 checksum before resolving the per-token approval cap, so a
+  differently-cased loan token still caps the `MAX_TOKEN_APPROVALS` tokens (UNI/ONDO/COMP/FLUID) at
+  `uint96` instead of emitting a `maxUint256` approval those tokens reject. Reject oversized (`> uint256`)
+  and inconsistent withdrawal-only funding inputs in the combined builders with the SDK's typed
+  `InputExceedsMaxError`. Forward a caller-supplied reusable `approvalAmount` from
+  `getRequirements(...)` on the Blue collateral-supply and repay prerequisite paths (previously
+  dropped), while keeping the saturated-repay token cap. Mark the new Blue action argument shapes, the
+  combined-builder parameter interfaces, the `BlueActions` entity write-method parameter shapes (and
+  the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` and
+  `GetBlueBundlesV1TokenRequirementsParams` prerequisite options, the `Erc2612RequirementSignature`
+  and `Permit2AllowanceRequirementSignature` signed-requirement shapes, and the WDK Blue-write option
+  types `readonly`.
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
+  Remove Vault V1 shared-liquidity planners, data, inputs, validation, and explicit low-level Bundler3
+  composition from morpho-sdk v6. Update the WDK borrow input for the next major. Direct Vault V1
+  flows remain; Vault V1 PublicAllocator ABI, address, fetch, and config exports are removed.
+
+  Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
+  `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
+  native allocator fees, which high-level writes no longer emit; V2 penalties are reported via
+  `reallocationPenaltyAssets`). Remove the now-unused `BlueReallocationPlan` type.
+
+  Remove morpho-sdk's previously deprecated compatibility exports, including ambiguous unprefixed
+  Blue and Midnight facade aliases, operation-specific scalar/native/refinance error aliases, and
+  deprecated upstream ABI, constant, typed-data helper, and utility-type aliases. Canonical qualified
+  facade names, generic errors, and canonical raw protocol exports remain.
+
+  Remove `InvalidReallocationShapeError`; malformed Vault V2 entries now throw
+  `InvalidVaultV2BlueReallocationShapeError`.
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
+  blue-sdk-viem, and WDK. This includes Vault V1 PublicAllocator addresses, ABIs, models, fetchers,
+  augmentation, planners, action inputs, and compatibility aliases; deprecated utility, URL, permit,
+  deployless-fetch, capacity, adapter-id, error, signature, and facade aliases; and the deprecated WDK
+  requirement type. Use Vault V2 BluePublicAllocator APIs and each symbol's canonical replacement.
+
+  Remove morpho-sdk's low-level Bundler3 composition surface and the residual Bundler3 executor,
+  adapter, migration-adapter, address, deployment, action, requirement, ABI, and error exports from
+  morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk and blue-sdk-viem.
+  This completes removal of the old migration-sdk-viem implementation, including its Aave and
+  Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
+  entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
+  supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+  Bundler3 and adapter addresses are no longer guarded.
+
+  Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
+  Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop
+  reading those contracts. These fields and the low-level Bundler3 surfaces were stable APIs without
+  a published deprecation.
+
+  Some removals did not receive a published deprecation window: the stable low-level Bundler3 and
+  migration-adapter surfaces (including registry and ABI re-exports), compatibility errors, signature
+  helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
+  five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
+  consumers must migrate to the standalone bundle actions and canonical exports or stay on the
+  previous major versions. The deviation and its symbol scope are recorded in
+  `docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+  AGENTS.md release exception.
+
+  Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+  v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+  and blue-sdk-viem majors.
+
+  Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
+
+- [#998](https://github.com/morpho-org/sdks/pull/998) [`1c3be9a`](https://github.com/morpho-org/sdks/commit/1c3be9a4c696c63e3a011801864abd1ccc1d6a59) Thanks [@jinmel](https://github.com/jinmel)! - Route Vault V1 and Vault V2 deposits through VaultBundlesV1, including exclusive ERC-20/native funding, referral fees, prepared requirement handles, and fixed-bundle token signatures.
+
+  Native vault deposits reject token permits with `UnexpectedRequirementSignatureError`. WDK
+  collateral supply, requirement, and quote methods consistently reject mixed funding with
+  `MixedBlueCollateralFundingError`.
+
+  Refresh prepared vault requirements after each settled read while deduplicating concurrent calls.
+  WDK prepared supplies revalidate the live provider chain before resolving requirements, quoting,
+  or submitting, and expose the shared `ChainIdMismatchError` for chain mismatches.
+
+  Remove the WDK Bundler3 vault-supply compatibility route, `getSupplyRequirements`, and
+  the `MorphoSupplyOptions`,
+  `MorphoErc20SupplyOptions`, `MorphoNativeSupplyOptions`, and `ApprovalOrSignatureRequirement`
+  exports. The standard WDK `supply` and `quoteSupply` methods now use VaultBundlesV1 with
+  exclusive funding and existing approvals. Use `MorphoExclusiveSupplyOptions` with
+  `prepareSupply` and its `getRequirements`,
+  `submit`, and `quote` methods. Existing GeneralAdapter1 approvals, additive ERC-20/native funding,
+  and Permit2 AllowanceTransfer signatures are no longer supported for vault deposits.
+
+  Reject vault deposit funding and share-price bounds above uint256 with `InputExceedsMaxError`.
+  Prepared Vault V1/V2 deposits reject oversized native amounts before returning requirements.
+
+  WDK prepared supplies reject zero ERC-20/native funding with `NonPositiveInputError` and negative
+  funding with `NegativeInputError` before fetching vault data or constructing the deposit.
+
+  WDK `prepareSupply` throws `VaultAssetMismatchError` when the supplied token differs from the
+  configured vault asset.
+
+- [#997](https://github.com/morpho-org/sdks/pull/997) [`c58f155`](https://github.com/morpho-org/sdks/commit/c58f155d46c89338727c7783bfbeec4ed255f23e) Thanks [@jinmel](https://github.com/jinmel)! - Generalize the fixed-bundles token requirement surface shared by BlueBundlesV1 and VaultBundlesV1,
+  including the distinct Permit2 SignatureTransfer discriminator, explicit unordered nonces, canonical
+  Permit2 approvals, referral-fee math, vault bounds, and registered-spender validation.
+
+  Reject out-of-range uint256 pull amounts in the standalone requirement resolver. Expose the
+  canonical `BundleSharesPermit` tuple as the single shares-permit shape (no compatibility aliases).
+
+  Update the WDK's public token requirement signatures to `BundlesTokenRequirementSignature` from
+  the new morpho-sdk major.
+
+- [#999](https://github.com/morpho-org/sdks/pull/999) [`daf9eeb`](https://github.com/morpho-org/sdks/commit/daf9eebf1f01e2509fba9f41cf1b5f69461cc57c) Thanks [@jinmel](https://github.com/jinmel)! - Route Vault V1 and Vault V2 asset withdrawals through VaultBundlesV1 with exact share-allowance requirements, deadline-aware share caps, referral fees, and reusable prepared withdrawal handles. The share allowance is the only onchain cap on the burn, so an allowance that does not equal the derived cap — including a larger leftover approval — is replaced instead of reused, and `getRequirements()` re-reads the live share allowance and re-validates the deadline on every call, so an approval executed between calls is no longer reported as outstanding. The WDK adapter forwards its configured `slippageTolerance` to vault withdrawals, and its immediate `withdraw(options)` now resolves that requirement before submitting, throwing the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
+
+  WDK prepared withdrawals recheck the live provider chain before resolving requirements, quoting, or submitting. Unsigned withdrawal quotes validate the exact share allowance before estimating gas and throw `UnresolvedVaultWithdrawRequirementsError` when it is missing or oversized. Satisfy the requirements and quote through the same prepared handle, passing its signed share permit when using signatures.
+
+  Prepared withdrawal requirements expose only approvals or ERC-2612 permits, so signed requirements can be passed directly to `submit` and `quote` without narrowing a legacy Permit2 union.
+
+  Withdrawal builders reject asset amounts above uint256 with `InputExceedsMaxError` before encoding. WDK withdrawal options are readonly, including their inherited fields.
+
+  Vault withdrawal entities also reject amounts above uint256 before creating a handle or reading requirements. Each handle captures the requested amount and share owner at creation, so later mutation of the caller's options cannot change the approved cap, permit owner, or encoded withdrawal.
+
+  WDK withdrawal requirements expose the named `VaultSharesApprovalOrSignatureRequirement` type. Recipient and vault-asset mismatches throw the existing `AddressMismatchError` and `VaultAssetMismatchError` classes, respectively; both are re-exported from the WDK adapter for typed error handling.
+
+### Minor Changes
+
+- [#1158](https://github.com/morpho-org/sdks/pull/1158) [`b52411c`](https://github.com/morpho-org/sdks/commit/b52411c837d15f576eb653d8ed84cabb6c6800d9) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reject caller-supplied `requirementSignature` deadlines beyond the adapter's bounded execution
+  window. When `signature.args.deadline` exceeds `now + BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS`
+  (2h) plus a 300-second clock-skew allowance (`now + 2h + 300s`), borrow, repay, collateral-supply,
+  and collateral-withdraw flows (and their `quote*` / `get*Requirements` counterparts) now throw the
+  exported `BlueBundlesV1DeadlineExceedsWindowError` instead of building a bundle with an effectively
+  unbounded onchain execution window.
+
+- [#1072](https://github.com/morpho-org/sdks/pull/1072) [`c053164`](https://github.com/morpho-org/sdks/commit/c053164cdeae02a5e63ef0972898c4f0f32ab3ca) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Max repay requirements keep a reusable approval default for stateless adapter flows, with `requirementOptions.approvalAmount` available for explicit approval control.
+
+### Patch Changes
+
+- [#1064](https://github.com/morpho-org/sdks/pull/1064) [`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Resolve the Permit2 SignatureTransfer nonce automatically in `getBundlesTokenRequirements` (and every entity `getRequirements()`) when no `permit2Nonce` is passed, using the lowest unused nonce from `getUnusedPermit2Nonce`. `getRequirements()` now throws `NoUnusedPermit2NonceError` (when every nonce is consumed) instead of the removed `MissingPermit2SignatureTransferNonceError` / `MissingPermit2TransferFromNonceError`.
+
+  The WDK adapter's `get*Requirements` and `prepareSupply(...).getRequirements` inherit the default nonce resolution; `permit2Nonce` in `RequirementOptions` is now optional and its docs are updated accordingly.
+
+- [#1120](https://github.com/morpho-org/sdks/pull/1120) [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarket` and `fetchAccrualVaultV2` now detect the Adaptive Curve IRM case-insensitively, so `rateAtTarget` is populated on deployments whose registry entry is not checksummed.
+
+  `MidnightApi.fetchBook` / `fetchBooks` now return `collaterals` in the protocol's canonical order, so the array index matches the onchain `collateralIndex` used by Midnight actions.
+
+- [#1061](https://github.com/morpho-org/sdks/pull/1061) [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350) Thanks [@jinmel](https://github.com/jinmel)! - Reject in-kind exit and permit deadlines outside uint256 before encoding or exposing approval requirements. Validate Vault V1 withdrawal utilization defaults and per-market overrides between zero and WAD. Pass market tick spacing in fixed-rate offer-chain examples.
+
+- [#1054](https://github.com/morpho-org/sdks/pull/1054) [`91a6e29`](https://github.com/morpho-org/sdks/commit/91a6e291c8bf7d1c919436eba7bede023cabe8aa) Thanks [@jinmel](https://github.com/jinmel)! - Reuse the shared bundles permit converter for VaultExitBundlesV1 in-kind redemptions with strict
+  permit validation.
+
+  Use `computeVaultMaxShareAllowance` for VaultV1 in-kind redemption requirements. The cap rounds
+  shares up, includes pending performance-fee dilution, and adds the default 0.03% loss buffer for
+  MetaMorpho 1.0 while preserving MetaMorpho 1.1's lost-assets clamp. Both approval and permit
+  requirements use this cap. In-kind redemptions continue to call VaultExitBundlesV1.
+
+- [#1148](https://github.com/morpho-org/sdks/pull/1148) [`f100c95`](https://github.com/morpho-org/sdks/commit/f100c95cffbd51e1a4c00e8e840d5d894b487f0b) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - VaultV1/VaultV2 `deposit`, `withdraw`, `redeem` and `migrateToV2` handles no longer share state between `getRequirements()` and `buildTx()`: `buildTx()` validates the supplied signature against the handle's immutable spender/amount/deadline and the data carried on the signature, so a requirement prepared on one handle can be finalized on another (or after serialize/resume). The permit2 nonce is no longer cross-checked against the last `getRequirements()` call; Permit2 verifies it onchain. `withdraw()` now requires a `vaultData` snapshot (like `deposit()`), from which the share cap is derived at handle creation and enforced in `buildTx()`. An ERC-2612 permit whose nonce was consumed no longer fails to encode — the spender skips it onchain and proceeds under the live allowance (a consumed Permit2 SignatureTransfer nonce reverts onchain), so callers must execute every requirement returned by the latest `getRequirements()` (including allowance resets) before submitting. The WDK adapter now forwards its fetched vault snapshot as `vaultData` to Vault V1/V2 withdrawals so the share cap is fixed at handle creation.
+
+- [#911](https://github.com/morpho-org/sdks/pull/911) [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Forward `AccrualVaultV2.accrueInterest` now also accrues contributing nested adapters, markets, and positions, using an optional backward-compatible `accrueInterest(timestamp)` method on `IAccrualVaultV2Adapter` implemented by built-in adapters. Adapters without it, zero-share or zero-allocation nested state, and markets already ahead of the timestamp keep their snapshots. Vault-level totals and fee shares are computed exactly as before.
+
+  Accrual at or before the vault's `lastUpdate` returns an unchanged copy without touching nested adapters.
+
+- [#1153](https://github.com/morpho-org/sdks/pull/1153) [`8af3ac1`](https://github.com/morpho-org/sdks/commit/8af3ac1c3c96d4236f8a5e0c5df42e4b06414679) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Consolidate the collateral supply, withdraw collateral, and repay option normalizers into one shared requirement-signature snapshot helper without type assertions.
+
+- Updated dependencies [[`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`1ee9b2a`](https://github.com/morpho-org/sdks/commit/1ee9b2a9ed6ad7727a1683a7573548f190424027), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`b8c944c`](https://github.com/morpho-org/sdks/commit/b8c944c44251c48985cb7411310884eb2548208c), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8), [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1), [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f), [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a), [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac), [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`f5f0acb`](https://github.com/morpho-org/sdks/commit/f5f0acbb5c9d05dd08f64e411884d1b89f5c876e), [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec), [`7991d97`](https://github.com/morpho-org/sdks/commit/7991d979c98d77d306338eeae7342f3abb3fbbfa), [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350), [`1c3be9a`](https://github.com/morpho-org/sdks/commit/1c3be9a4c696c63e3a011801864abd1ccc1d6a59), [`ab2bc02`](https://github.com/morpho-org/sdks/commit/ab2bc0254a56f8c9084c2a5bccdc5d50d2e1743d), [`c58f155`](https://github.com/morpho-org/sdks/commit/c58f155d46c89338727c7783bfbeec4ed255f23e), [`5b2009e`](https://github.com/morpho-org/sdks/commit/5b2009eb27dbe6bed0b1a10dacb3715b3ac64c91), [`daf9eeb`](https://github.com/morpho-org/sdks/commit/daf9eebf1f01e2509fba9f41cf1b5f69461cc57c), [`91a6e29`](https://github.com/morpho-org/sdks/commit/91a6e291c8bf7d1c919436eba7bede023cabe8aa), [`b52411c`](https://github.com/morpho-org/sdks/commit/b52411c837d15f576eb653d8ed84cabb6c6800d9), [`f100c95`](https://github.com/morpho-org/sdks/commit/f100c95cffbd51e1a4c00e8e840d5d894b487f0b), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e), [`e2a5a40`](https://github.com/morpho-org/sdks/commit/e2a5a409f1aecf05a5ebe992f6ecaf6dfd65bbbf), [`8bfc8b3`](https://github.com/morpho-org/sdks/commit/8bfc8b38b641ec2b21ceb2e6f3533ffbc8166bc7)]:
+  - @morpho-org/morpho-sdk@6.0.0
+  - @morpho-org/blue-sdk-viem@6.0.0
+  - @morpho-org/blue-sdk@7.0.0
+
 ## 2.0.0-next.4
 
 ### Patch Changes
