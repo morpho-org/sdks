@@ -8,6 +8,7 @@ import {
   type Hex,
   keccak256,
   zeroAddress,
+  zeroHash,
 } from "viem";
 import { priceRatifierV1Abi } from "../abis.js";
 import { PRICE_RATIFIER_V1_OFFER_TYPEHASH } from "../constants.js";
@@ -19,6 +20,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import {
   EMPTY_OFFER_STRUCT,
   isEmptyOfferStruct,
@@ -239,12 +241,121 @@ export namespace PriceRatifierV1 {
   }
 
   /**
+   * Zero-group member hash of one leaf, as consumed by `GroupUtils.hashMembers`.
+   *
+   * This is what the router recomputes for its `group_identity` check: the
+   * PriceRatifierV1 leaf hash with `group = 0`, so the id also commits to
+   * `allowedTaker`.
+   *
+   * @param leaf - Price-committed offer leaf.
+   * @returns Zero-group PriceRatifierV1 leaf hash.
+   * @example
+   * ```ts
+   * import { Offer, PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   *
+   * console.log(PriceRatifierV1.memberHash({ offer }));
+   * ```
+   */
+  export function memberHash(leaf: PriceRatifierV1Leaf): Hash {
+    return hashLeaf({
+      offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
+      allowedTaker: leaf.allowedTaker ?? zeroAddress,
+    });
+  }
+
+  /**
+   * Content-addressed consumption group id for PriceRatifierV1 leaves.
+   *
+   * Mirrors `GroupUtils.hash` with the PriceRatifierV1 {@link memberHash}, so
+   * it matches the router-derived group. Use it to share one group across
+   * several leaves; single leaves get this id by default in
+   * {@link buildDescriptor}. Leaves sharing a group must satisfy the same
+   * constraints as `Group.create` (one maker, side, and cap mode/value); this
+   * helper only derives the id and does not check them.
+   *
+   * @param leaves - Leaves sharing one consumption group.
+   * @returns Content-addressed group id.
+   * @throws {InvalidOfferGroupError} when `leaves` is empty.
+   * @example
+   * ```ts
+   * import { Offer, PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const leaves = [{ offer }, { offer: Offer.from({ ...offer, tick: 5_004n }) }];
+   *
+   * const group = PriceRatifierV1.groupId(leaves);
+   * const grouped = leaves.map((leaf) => ({
+   *   ...leaf,
+   *   offer: Offer.from({ ...leaf.offer, group }),
+   * }));
+   * ```
+   */
+  export function groupId(leaves: Iterable<PriceRatifierV1Leaf>): Hash {
+    return GroupUtils.hashMembers(Array.from(leaves, memberHash));
+  }
+
+  /**
    * Builds a PriceRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. An explicit `group` is committed as-is; only an
-   * omitted `group` defaults to the offer's content-addressed singleton group
-   * id derived by `Offer.from`.
+   * highest leaf indices. An explicit `group` is committed as-is; an omitted
+   * `group` defaults to the leaf's content-addressed singleton
+   * {@link groupId}, which commits to `allowedTaker` like the router does.
+   * Explicit groups must come from {@link groupId}; ids from `Group.create` /
+   * `GroupUtils.hash` use the protocol offer hash and are rejected by the
+   * router's `group_identity` rule.
    *
    * @param leaves - Price-bounded offer leaves in leaf order.
    * @returns PriceRatifierV1 tree descriptor.
@@ -263,13 +374,17 @@ export namespace PriceRatifierV1 {
   ): PriceRatifierV1TreeDescriptor {
     const offers: Offer[] = [];
     const structs = leaves.map((leaf) => {
-      const offer = Offer.from(leaf.offer);
+      const allowedTaker = leaf.allowedTaker ?? zeroAddress;
+      const input = Offer.from(leaf.offer);
+      const offer = input.hasExplicitGroup
+        ? input
+        : Offer.from({
+            ...input,
+            group: groupId([{ offer: input, allowedTaker }]),
+          });
       offers.push(offer);
 
-      return {
-        offer: OfferUtils.toStruct({ offer }),
-        allowedTaker: leaf.allowedTaker ?? zeroAddress,
-      };
+      return { offer: OfferUtils.toStruct({ offer }), allowedTaker };
     });
 
     const descriptor = buildRatifierV1Descriptor({

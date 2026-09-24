@@ -8,11 +8,13 @@ import {
   type Hex,
   keccak256,
   zeroAddress,
+  zeroHash,
 } from "viem";
 import { rateRatifierV1Abi } from "../abis.js";
 import { RATE_RATIFIER_V1_OFFER_TYPEHASH } from "../constants.js";
 import {
   InvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidTreeError,
 } from "../errors.js";
@@ -24,6 +26,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import {
   EMPTY_OFFER_STRUCT,
   isEmptyOfferStruct,
@@ -215,6 +218,23 @@ export type RateRatifierV1TreeInput =
  */
 export namespace RateRatifierV1 {
   /**
+   * Lowest nominal `offer.tick` the router accepts for a RateRatifierV1 leaf
+   * (tick 3372, price >= 0.5 WAD).
+   *
+   * The router prices RateRatifierV1 offers from `rate`, but its gatekeeper
+   * still validates the committed `offer.tick`; ticks below this are rejected
+   * as `min_tick`.
+   *
+   * @example
+   * ```ts
+   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(RateRatifierV1.MIN_TICK); // 3372n
+   * ```
+   */
+  export const MIN_TICK = TickLib.priceToTick(MathLib.WAD / 2n, 1n);
+
+  /**
    * Computes the RateRatifierV1 EIP-712 leaf hash for one leaf struct.
    *
    * This is the SDK port of `HashLib.hashRateRatifierV1Offer`: the offer's
@@ -262,17 +282,136 @@ export namespace RateRatifierV1 {
   }
 
   /**
+   * Zero-group member hash of one leaf, as consumed by `GroupUtils.hashMembers`.
+   *
+   * This is what the router recomputes for its `group_identity` check: the
+   * RateRatifierV1 leaf hash with `group = 0`, so the id commits to `rate`
+   * and `allowedTaker` rather than to `tick`.
+   *
+   * @param leaf - Rate-bounded offer leaf.
+   * @returns Zero-group RateRatifierV1 leaf hash.
+   * @throws {InvalidRateRatifierV1RateError} when `leaf.rate` is negative.
+   * @example
+   * ```ts
+   * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   *
+   * console.log(RateRatifierV1.memberHash({ offer, rate: 0n }));
+   * ```
+   */
+  export function memberHash(leaf: RateRatifierV1Leaf): Hash {
+    const rate = BigInt(leaf.rate);
+    if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
+
+    return hashLeaf({
+      offer: OfferUtils.toStruct({ offer: leaf.offer, group: zeroHash }),
+      rate,
+      allowedTaker: leaf.allowedTaker ?? zeroAddress,
+    });
+  }
+
+  /**
+   * Content-addressed consumption group id for RateRatifierV1 leaves.
+   *
+   * Mirrors `GroupUtils.hash` with the RateRatifierV1 {@link memberHash}, so
+   * it matches the router-derived group. Use it to share one group across
+   * several leaves; single leaves get this id by default in
+   * {@link buildDescriptor}. Leaves sharing a group must satisfy the same
+   * constraints as `Group.create` (one maker, side, and cap mode/value); this
+   * helper only derives the id and does not check them.
+   *
+   * @param leaves - Leaves sharing one consumption group.
+   * @returns Content-addressed group id.
+   * @throws {InvalidOfferGroupError} when `leaves` is empty.
+   * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
+   * @example
+   * ```ts
+   * import { Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const leaves = [
+   *   { offer, rate: 50_000_000_000_000_000n },
+   *   { offer: Offer.from({ ...offer, tick: 5_004n }), rate: 60_000_000_000_000_000n },
+   * ];
+   *
+   * const group = RateRatifierV1.groupId(leaves);
+   * const grouped = leaves.map((leaf) => ({
+   *   ...leaf,
+   *   offer: Offer.from({ ...leaf.offer, group }),
+   * }));
+   * ```
+   */
+  export function groupId(leaves: Iterable<RateRatifierV1Leaf>): Hash {
+    return GroupUtils.hashMembers(Array.from(leaves, memberHash));
+  }
+
+  /**
    * Builds a RateRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. An explicit `group` is committed as-is; only an
-   * omitted `group` defaults to the offer's content-addressed singleton group
-   * id derived by `Offer.from`.
+   * highest leaf indices. An explicit `group` is committed as-is; an omitted
+   * `group` defaults to the leaf's content-addressed singleton
+   * {@link groupId}, which commits to `rate` and `allowedTaker` like the
+   * router does. Explicit groups must come from {@link groupId}; ids from
+   * `Group.create` / `GroupUtils.hash` use the protocol offer hash and are
+   * rejected by the router's `group_identity` rule.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
    * @throws {InvalidTreeError} when the leaf list is empty, contains duplicate leaf hashes, or mixes ratifier addresses.
    * @throws {InvalidRateRatifierV1RateError} when a leaf rate is negative.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
@@ -292,14 +431,20 @@ export namespace RateRatifierV1 {
       const rate = BigInt(leaf.rate);
       if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
 
-      const offer = Offer.from(leaf.offer);
+      const allowedTaker = leaf.allowedTaker ?? zeroAddress;
+      const input = Offer.from(leaf.offer);
+      if (input.tick < MIN_TICK)
+        throw new InvalidRateRatifierV1TickError(input.tick, MIN_TICK);
+
+      const offer = input.hasExplicitGroup
+        ? input
+        : Offer.from({
+            ...input,
+            group: groupId([{ offer: input, rate, allowedTaker }]),
+          });
       offers.push(offer);
 
-      return {
-        offer: OfferUtils.toStruct({ offer }),
-        rate,
-        allowedTaker: leaf.allowedTaker ?? zeroAddress,
-      };
+      return { offer: OfferUtils.toStruct({ offer }), rate, allowedTaker };
     });
 
     const descriptor = buildRatifierV1Descriptor({
@@ -342,6 +487,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -514,6 +660,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -555,6 +702,7 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";

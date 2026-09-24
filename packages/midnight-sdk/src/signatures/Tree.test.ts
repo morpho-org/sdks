@@ -2,7 +2,11 @@ import { zeroAddress, zeroHash } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidRateRatifierV1TickError,
+  InvalidTreeError,
+  InvalidTreeHeightError,
+} from "../errors.js";
 import { Offer, type OfferStruct } from "../offers/index.js";
 import {
   EcrecoverRatifier,
@@ -35,7 +39,7 @@ const { baseOffer, baseMarketParamsInput } = createFixtures({
   midnight: "0x0000000000000000000000000000000000001000",
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000",
 });
-const offers = [1n, 2n, 3n].map((tick) =>
+const offers = [5_000n, 5_004n, 5_008n].map((tick) =>
   baseOffer({
     tick,
     maxAssets: 0n,
@@ -46,7 +50,10 @@ const priceLeaves = offers.map((offer) => ({
   offer,
   allowedTaker: zeroAddress,
 }));
-const rateLeaves = offers.map((offer) => ({ offer, rate: 100n }));
+const rateLeaves = offers.map((offer, index) => ({
+  offer,
+  rate: 100n + BigInt(index),
+}));
 
 const trees = () =>
   [
@@ -191,6 +198,20 @@ describe("Tree.create", () => {
         }),
       ).toThrow(InvalidTreeError);
     }
+  });
+
+  test("error: InvalidRateRatifierV1TickError on a rateV1 tick below MIN_TICK", () => {
+    expect(() =>
+      Tree.create({
+        type: "rateV1",
+        entries: [
+          {
+            offer: { ...offers[0]!, tick: RateRatifierV1.MIN_TICK - 1n },
+            rate: 100n,
+          },
+        ],
+      }),
+    ).toThrow(InvalidRateRatifierV1TickError);
   });
 });
 
