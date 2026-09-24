@@ -66,7 +66,10 @@ import {
   zeroAddress,
 } from "viem";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
-import { MissingWalletProviderError } from "./errors.js";
+import {
+  BlueBundlesV1DeadlineExceedsWindowError,
+  MissingWalletProviderError,
+} from "./errors.js";
 import {
   type MarketPresetKey,
   MORPHO_MARKET_PRESETS,
@@ -664,17 +667,28 @@ const SUPPORTED_CHAINS: Record<number, Chain> = {
 
 const MARKET_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
 const BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS = 7_200n;
+const BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS = 300n;
 
 function getBlueBundlesV1Deadline(
   signature?:
     | BundlesTokenRequirementSignature
     | AuthorizationRequirementSignature,
 ): bigint {
-  return (
-    signature?.args.deadline ??
+  const maxDeadline =
     BigInt(Math.floor(Date.now() / 1_000)) +
-      BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS
-  );
+    BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS;
+  const deadline = signature?.args.deadline;
+  if (
+    deadline != null &&
+    deadline > maxDeadline + BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS
+  ) {
+    throw new BlueBundlesV1DeadlineExceedsWindowError(
+      deadline,
+      maxDeadline + BLUE_BUNDLES_V1_DEADLINE_SKEW_ALLOWANCE_SECONDS,
+    );
+  }
+
+  return deadline ?? maxDeadline;
 }
 
 function isNonZeroAddress(address: string): address is Address {
@@ -964,7 +978,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * Use {@link prepareSupply} to discover requirements or sign a token permit before submission.
    *
-   * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
+   * @param options.token - Address of the configured vault's asset.
+   * @param options.amount - ERC-20 amount to deposit, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native amount to wrap and deposit, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The submitted deposit hash and fee.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
@@ -1002,7 +1020,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * Use {@link prepareSupply} and its `quote` method when the deposit needs a signed token permit.
    *
-   * @param options - Vault asset, exclusive ERC-20 or native funding, and optional slippage tolerance.
+   * @param options.token - Address of the configured vault's asset.
+   * @param options.amount - ERC-20 amount to deposit, exclusive with `nativeAmount`.
+   * @param options.nativeAmount - Native amount to wrap and deposit, exclusive with `amount`.
+   * @param options.onBehalfOf - Optional position owner; when set, it must equal the wallet address.
+   * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The deposit fee quote.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
@@ -1228,7 +1250,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
    * prepared-operation handle.
    *
-   * @param options - The withdraw options.
+   * @param options.token - Address of the configured vault's underlying asset.
+   * @param options.amount - Asset amount to withdraw, in base units.
+   * @param options.to - Optional asset recipient; when set, it must equal the wallet account address.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
@@ -1255,7 +1279,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * If an approval or permit is needed, use {@link prepareWithdraw}, satisfy its requirements,
    * and call that same handle's `quote()` or `quote(signedPermit)` to retain its share cap.
    *
-   * @param options - The withdraw options.
+   * @param options.token - Address of the configured vault's underlying asset.
+   * @param options.amount - Asset amount to withdraw, in base units.
+   * @param options.to - Optional asset recipient; when set, it must equal the wallet account address.
    * @param config - ERC-4337 transaction config override.
    * @returns The fee quote.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
@@ -1316,7 +1342,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Prepares a vault withdrawal once for requirement discovery, signing, quoting, and submission.
    *
-   * @param options - Vault withdrawal options.
+   * @param options.token - Address of the configured vault's underlying asset.
+   * @param options.amount - Asset amount to withdraw, in base units.
+   * @param options.to - Optional asset recipient; when set, it must equal the wallet account address.
    * @returns An immutable operation handle that retains the exact derived vault-share cap.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
@@ -1441,6 +1469,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -1489,6 +1518,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
    * @throws {viem.BaseError} when a market, position, or authorization read fails.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
    * ```ts
@@ -1537,6 +1567,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The WDK borrow fee quote without a transaction hash.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts
@@ -1637,6 +1668,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1707,6 +1739,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {viem.BaseError} when a position, allowance, or nonce read fails.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
    * ```ts
@@ -1776,6 +1809,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts
@@ -1878,6 +1912,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1952,6 +1987,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {ApprovalAmountLessThanSpendAmountError} when a classic `approvalAmount` is below the
    *   funded amount.
    * @throws {viem.BaseError} when an allowance, nonce, or token-metadata read fails.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
    * ```ts
@@ -2011,6 +2047,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The WDK collateral-supply fee quote without a transaction hash.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts
@@ -2117,6 +2154,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -2174,6 +2212,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
    * @throws {viem.BaseError} when a position or authorization read fails.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, or account configuration is invalid.
    * @example
    * ```ts
@@ -2227,6 +2266,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
+   * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
    * @throws {Error} when an address, target token, account, or quote request is invalid.
    * @example
    * ```ts

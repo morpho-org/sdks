@@ -20,7 +20,10 @@ export type {
   WithdrawOptions,
   WithdrawResult,
 } from "@tetherto/wdk-wallet/protocols";
-export { MissingWalletProviderError } from "./errors.js";
+export {
+  BlueBundlesV1DeadlineExceedsWindowError,
+  MissingWalletProviderError,
+} from "./errors.js";
 export {
   type Market,
   type MarketPresetKey,

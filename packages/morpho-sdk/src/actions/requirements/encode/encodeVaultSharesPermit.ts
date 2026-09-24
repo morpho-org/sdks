@@ -1,14 +1,18 @@
 import { type Address, Eip5267Domain, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type WalletClient, zeroHash } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
-import { validateUserAddress } from "../../../helpers/validate.js";
+import {
+  validateDeadline,
+  validateUserAddress,
+} from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
-import type {
-  Erc2612RequirementSignature,
-  PermitRequirementSignature,
-  Requirement,
+import {
+  type Erc2612RequirementSignature,
+  ExpiredDeadlineError,
+  type PermitRequirementSignature,
+  type Requirement,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeVaultSharesPermit}. */
@@ -50,6 +54,9 @@ export interface EncodeVaultSharesPermitParams {
  *   can be embedded in fixed vault-bundles calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a registered fixed vault-bundles contract.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds uint256.
+ * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet has no account.
  * @throws {AddressMismatchError} from `sign()` when `userAddress` differs from `owner`, or when the
  *   wallet account differs from `userAddress`.
@@ -124,6 +131,15 @@ export const encodeVaultSharesPermit = (
     spender,
     allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
+
+  const now = Time.timestamp();
+  // Validate the explicit deadline: this exported encoder can be called independently of the
+  // guarded resolvers, and an out-of-range or already-expired deadline otherwise surfaces only as
+  // a downstream wallet typed-data error or an on-chain revert.
+  validateDeadline(deadline);
+  if (deadline <= now) {
+    throw new ExpiredDeadlineError(deadline, now);
+  }
 
   const permitTypedData = getPermitTypedData(
     {

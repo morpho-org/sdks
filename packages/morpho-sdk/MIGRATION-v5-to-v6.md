@@ -196,8 +196,9 @@ their `args` objects as follows. `metadata` is unchanged.
 
 The transaction metadata exports and discriminator strings stay stable; their argument fields change
 as below. The table lists only the delta: unchanged fields are retained and omitted. In particular
-every Blue action keeps its `market` (`Hex` market id) field, so a strict decoder must keep matching
-it alongside the added fields.
+every Blue action except `blueRefinance` keeps its `market` (`Hex` market id) field, so a strict
+decoder must keep matching it alongside the added fields; `blueRefinance` uses
+`sourceMarket`/`destinationMarket` instead.
 
 | Stable action type / discriminator | Removed v5 `action.args` fields | Changed / added v6 `action.args` fields |
 | --- | --- | --- |
