@@ -351,11 +351,14 @@ export namespace SetterRatifierUtils {
       label: "Setter",
     });
 
+    const proofs = TreeUtils.buildProofs({
+      tree,
+      count: tree.offers.length,
+    });
+
     return tree.offers.map((offer, leafIndex) => ({
       offer,
-      ratifierData: encodeRatifierData(
-        TreeUtils.buildProof({ tree, leafIndex }),
-      ),
+      ratifierData: encodeRatifierData(proofs[leafIndex]!),
     }));
   }
 }

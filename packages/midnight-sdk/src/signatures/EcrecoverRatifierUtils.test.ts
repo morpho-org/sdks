@@ -109,6 +109,38 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ).toBe(true);
   });
 
+  test("behavior: ratifies a padded multi-offer tree", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create(
+      [1n, 2n, 3n].map((maxUnits) =>
+        baseOffer({ maker: account.address, maxAssets: 0n, maxUnits }),
+      ),
+    );
+    const signature = await signTree(tree, account);
+
+    const items = await EcrecoverRatifierUtils.ratify({
+      tree,
+      account,
+      signature,
+    });
+
+    expect(items).toHaveLength(3);
+    for (const [index, item] of items.entries()) {
+      const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+        item.ratifierData,
+      );
+      expect(decoded.leafIndex).toBe(BigInt(index));
+      expect(
+        TreeUtils.verifyProof({
+          offer: item.offer,
+          root: decoded.root,
+          leafIndex: decoded.leafIndex,
+          proof: decoded.proof,
+        }),
+      ).toBe(true);
+    }
+  });
+
   test("behavior: accepts plain tree input", async () => {
     const account = privateKeyToAccount(privateKey);
     const offer = baseOffer({ maker: account.address, maxAssets: 0n });
