@@ -262,6 +262,7 @@ describe("parseRequest", () => {
   test.each([
     ["expectedAssets only", { expectedAssets: 1n }],
     ["expectedShares only", { expectedShares: 1n }],
+    ["neither", {}],
   ])(
     "behavior: accepts a vaultV1MigrateToV2 limit with %s",
     (_name, fields) => {
@@ -288,7 +289,6 @@ describe("parseRequest", () => {
       "both expectedAssets and expectedShares",
       { expectedAssets: 1n, expectedShares: 1n },
     ],
-    ["neither", {}],
   ])(
     "error: SimulationValidationError for a vaultV1MigrateToV2 limit with %s",
     (_name, fields) => {

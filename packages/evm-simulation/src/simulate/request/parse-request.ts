@@ -400,10 +400,10 @@ const operationLimitSchema = z.union([
     maxResidualShareAllowance: uint256Schema.optional(),
     ...transactionIndexField,
   }),
-  // Exactly one expected quantity: `neither` would be a vacuous limit.
+  // At most one expected quantity, mirroring the domain union.
   z.strictObject({
     ...migrateToV2Base,
-    expectedAssets: uint256Schema,
+    expectedAssets: uint256Schema.optional(),
     expectedShares: z.undefined().optional(),
   }),
   z.strictObject({
