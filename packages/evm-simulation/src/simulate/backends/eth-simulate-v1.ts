@@ -1,9 +1,11 @@
 import {
   type Address,
+  BaseError,
   type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
   getAddress,
+  HttpRequestError,
   http,
   maxUint256,
 } from "viem";
@@ -169,8 +171,19 @@ export async function simulateV1(params: {
     if (error instanceof ExecutionRevertedError)
       throw new SimulationRevertedError(error.shortMessage, error);
     throw new ExternalServiceError(
-      `eth_simulateV1 error: ${error instanceof Error ? error.message : String(error)}`,
+      `eth_simulateV1 error: ${describeTransportError(error)}`,
       { cause: error },
     );
   }
+}
+
+// viem embeds the request URL (which may carry an access key) in `message`;
+// `shortMessage` and the HTTP status do not.
+function describeTransportError(error: unknown): string {
+  if (error instanceof HttpRequestError)
+    return error.status
+      ? `${error.shortMessage} (status ${error.status})`
+      : error.shortMessage;
+  if (error instanceof BaseError) return error.shortMessage;
+  return error instanceof Error ? error.message : String(error);
 }

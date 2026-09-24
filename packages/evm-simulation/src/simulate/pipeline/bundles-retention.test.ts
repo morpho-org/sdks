@@ -436,8 +436,8 @@ describe("assertNoBundlesRetention", () => {
   });
 
   // ─── Native ETH ──────────────────────────────────────────────────────────
-  // Native ETH emits no event log, so it never reaches `transfers` on the
-  // aggregate result — it must be read from `assetChanges`. Regression
+  // These cases exercise the `assetChanges`-only evidence path independently
+  // of transfer logs (no synthetic native sentinel logs present). Regression
   // suite for Cantina finding 1440 (retained native ETH silently passing the guard).
   const ONE_ETH = 1_000000000000000000n;
 

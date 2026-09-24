@@ -194,6 +194,57 @@ describe.sequential("simulateV1", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  test("behavior: redacts the RPC endpoint from transport error messages", async () => {
+    const rpcUrl = "https://rpc.example/v1/secret-access-key";
+    fetchMock.mockResolvedValueOnce(
+      new Response("unavailable", { status: 503 }),
+    );
+    const error = await simulateV1({ ...params, rpcUrl }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(ExternalServiceError);
+    if (error instanceof ExternalServiceError) {
+      expect(error.message).not.toContain("secret-access-key");
+      expect(error.message).toContain("status 503");
+      expect(error.cause).toBeInstanceOf(Error);
+    }
+  });
+
+  test("behavior: defaults missing logs, log data and returnData", async () => {
+    // Not a transfer-like event: only the raw call shape is under test.
+    const topics = [`0x${"ab".repeat(32)}`, padAddress(USER)] as const;
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        jsonrpc: "2.0",
+        id: 1,
+        result: [
+          {
+            calls: [
+              { status: "0x1", gasUsed: "0x5208" },
+              {
+                status: "0x1",
+                gasUsed: "0x5208",
+                returnData: "0x",
+                logs: [{ address: USDC, topics }],
+              },
+              { status: "0x1", gasUsed: "0x0", returnData: "0x", logs: [] },
+            ],
+          },
+        ],
+      }),
+    );
+    const result = await simulateV1({
+      ...params,
+      transactions: [BASIC_TX, BASIC_TX],
+    });
+    expect(result.calls[0]).toMatchObject({ returnData: "0x", logs: [] });
+    expect(result.calls[1]?.logs[0]).toMatchObject({
+      address: USDC,
+      topics,
+      data: "0x",
+    });
+  });
+
   test.each([null, {}, [{ calls: null }]])(
     "error: ExternalServiceError for malformed RPC result %j",
     async (result) => {

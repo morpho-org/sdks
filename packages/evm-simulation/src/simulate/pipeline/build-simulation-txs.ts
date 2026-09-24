@@ -15,7 +15,7 @@ import { resolveAuthorizations } from "../authorizations/index.js";
  * caller-provided `transaction.from` does not match the bundle sender — the
  * `approval` variant otherwise passes through without validation. Rejecting here
  * keeps the "all simulationTxs share one `from`" invariant the downstream
- * the `eth_simulateV1` backend assumes, and prevents a malicious or buggy caller
+ * `eth_simulateV1` backend assumes, and prevents a malicious or buggy caller
  * from prepending a tx on behalf of an unexpected address.
  */
 export function buildSimulationTxs(

@@ -115,6 +115,44 @@ describe.sequential("executeSimulation", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
   });
 
+  test("behavior: a budget above viem's 10s default is honored in full", async () => {
+    // `AbortSignal.timeout` is not driven by fake timers, so the deadline is
+    // controlled by hand; only viem's own request timer runs on fake time.
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(deadline.signal);
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce(
+        (_url, options) =>
+          new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => reject(options.signal?.reason),
+              { once: true },
+            );
+          }),
+      );
+      const settled = vi.fn();
+      const pending = executeSimulation({
+        config: { ...config, timeoutMs: 30_000 },
+        chainId: 1,
+        transactions,
+      }).then(settled, settled);
+
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(settled).not.toHaveBeenCalled();
+      expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+
+      deadline.abort(new DOMException("deadline", "TimeoutError"));
+      await pending;
+      expect(settled).toHaveBeenCalledOnce();
+      expect(settled.mock.calls[0]?.[0]).toBeInstanceOf(ExternalServiceError);
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("error: UnsupportedChainError before contacting a provider", async () => {
     await expect(
       executeSimulation({ config, chainId: 42, transactions }),
