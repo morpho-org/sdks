@@ -13,9 +13,10 @@ const DEFAULT_TIMEOUT_MS = 5000;
 /**
  * Stage 4 of the simulate() pipeline.
  *
- * Runs the bundle once through `eth_simulateV1` with the full `timeoutMs`
- * budget. Every failure — RPC error, timeout, or `SimulationRevertedError` —
- * propagates as-is; there is no second provider and no retry.
+ * Runs the bundle through `eth_simulateV1` with the full `timeoutMs` budget.
+ * Every failure — RPC error, timeout, or `SimulationRevertedError` — propagates
+ * as-is; there is no second provider. Transport-level retries (viem's `http`
+ * defaults) stay within the same `AbortSignal` budget.
  */
 export async function executeSimulation(params: {
   config: SimulationConfig;
