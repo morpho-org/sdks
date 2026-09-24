@@ -230,6 +230,38 @@ descriptors; it does not establish that the requests are safe for the decoded op
 3. Fulfill those same wallet requests, then pass their signatures to `buildTx(signatures)`.
 4. After prerequisite approvals are confirmed, run `final` with no pending `authorizations`.
 
+```mermaid
+sequenceDiagram
+    actor Consumer as App / agent
+    participant SDK as Morpho SDK action
+    participant Simulation as evm-simulation
+    participant Wallet
+
+    Consumer->>SDK: Create action (e.g. vault.deposit(params))
+    SDK-->>Consumer: getRequirements, buildTx
+    Consumer->>SDK: getRequirements(permit preference)
+    SDK-->>Consumer: Ordered approval transactions / signing requirements
+    Consumer->>Simulation: toSimulationAuthorizations({ owner, requirements })
+    Simulation-->>Consumer: Pending authorizations
+    Consumer->>SDK: buildTx()
+    SDK-->>Consumer: Unsigned transaction (no-permit path)
+    Consumer->>Simulation: simulate(config, { mode: "preview", transactions, authorizations, limits, chainId })
+    Note over Simulation: Validate requests, model authority,<br/>execute at one block, verify effects and limits
+    Simulation-->>Consumer: VerifiedSimulationResult or typed error
+
+    opt Preview succeeds and consumer proceeds
+        Consumer->>Wallet: Fulfill the same requirements in order
+        Note over Consumer,Wallet: Confirm approval transactions;<br/>sign exact requirement typed data
+        Wallet-->>Consumer: Confirmed approvals and requirement signatures
+        Consumer->>SDK: buildTx(signatures)
+        SDK-->>Consumer: Final transaction with selected permit kind
+        Consumer->>Simulation: simulate(config, { mode: "final", transactions, limits, chainId })
+        Note over Simulation: Execute actual signed calldata;<br/>verify effects and limits without permission preparation
+        Simulation-->>Consumer: VerifiedSimulationResult or typed error
+        Note over Consumer: Result includes calls, transfers, asset changes<br/>and verification evidence; any error blocks submission
+    end
+```
+
 A Permit2 deposit may require both approval **to Permit2** and a transfer signature naming
 **VaultBundlesV1 as spender**. Preserve both requests. If the permit preference changes or a
 nonce/deadline becomes stale, regenerate requirements and preview again before signing. No shared
