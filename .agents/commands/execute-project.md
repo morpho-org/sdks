@@ -49,7 +49,7 @@ Read everything the project points at, in parallel, before looking at a single i
 3. **Project comments and status updates** — `list_comments` with `projectId` (the tool accepts exactly one of `issueId` / `projectId`; `save_comment` takes the same parents). Later comments override earlier decisions in the overview when they clearly settle a question.
 4. **Repo conventions** — root `AGENTS.md` (`CLAUDE.md` is a symlink to it), `MISSION.md`, `docs/DEVELOPMENT-LIFECYCLE.md`, `docs/jsdoc-style.md`, and the scoped `AGENTS.md` of every package the project touches (identify them from the overview and the issues' scopes). The root `AGENTS.md` §2 forbidden-patterns list and §7 release rules are binding on every child.
 
-Write the result to a **context pack** at `.context/execute-project/<project-slug>/context.md` (`.context/` is the gitignored workspace scratchpad): project summary, requirements, assumptions, out-of-scope, open questions, decisions found in comments, one paragraph per resource with its URL, the unread-source list, and the repo conventions that apply. Every child brief links to this file. Keep it current when the user answers a go/no-go.
+Write the result to a **context pack** at `.context/execute-project/<project-slug>/context.md` (`.context/` is the workspace scratchpad, ignored by the root `.gitignore` so it can never be staged by `/create-pr`'s `git add -A`): project summary, requirements, assumptions, out-of-scope, open questions, decisions found in comments, one paragraph per resource with its URL, the unread-source list, and the repo conventions that apply. Every child brief links to this file. Keep it current when the user answers a go/no-go.
 
 ### Step 3: Build the issue graph
 
@@ -143,7 +143,7 @@ For each issue in the wave, before dispatch:
 **The child brief is self-contained** — the child sees none of this conversation. It contains:
 
 - The issue identifier, title, full description, and every relevant comment, verbatim.
-- The path (or full text, for a remote child) of the context pack, and the sentence "The project overview and its Decisions section override the issue description where they disagree."
+- The **absolute** path of the context pack (a local child may run in a separate worktree, where a relative `.context/...` path resolves to nothing) or its full text for a remote child, and the sentence "The project overview and its Decisions section override the issue description where they disagree."
 - The exact **base ref** (`origin/main` or the resolved default branch, or `origin/<parent-branch>` for a child PR) and the exact **branch name** to create. For a child PR: "Your diff is reviewed against `<parent-branch>`; do not re-implement anything already on that branch, and do not merge the default branch into your branch."
 - The repo rules that apply to every change: root `AGENTS.md` (the §1 layering rules, the §2 forbidden-patterns list, §3 type discipline, §6 JSDoc-on-every-export), the scoped `AGENTS.md` for the package, `docs/jsdoc-style.md`.
 - **Changeset**: if the change touches published package source in a semver-relevant way, add a Changeset (`pnpm changeset`) with the correct bump per §7 — and audit direct runtime/peer dependents (e.g. a `blue-sdk` ABI/address/constant change must patch `morpho-sdk`). Do **not** add a changeset for docs-only, tests-only, fixture-only, generated-output-only, or repo-metadata changes.
@@ -158,7 +158,7 @@ Dispatch the whole wave at once. Do not dispatch wave N+1 until every issue in w
 
 For every report:
 
-1. Read the child's full diff (`git fetch origin <branch>` then `git diff origin/<base>...origin/<branch>`), not its prose. Check it against the issue, the context pack, and the root `AGENTS.md`. Run `/review-pr-gh <pr-number>` for a full persona pass on the child's PR (or `/review-pr-local <base>` on a locally-checked-out child branch). A report is a claim; the diff and the validation output are the evidence.
+1. Read the child's full diff (`git fetch origin <branch>` then `git diff <base>...origin/<branch>` — `<base>` is the ref from the brief and already carries its `origin/` prefix), not its prose. Check it against the issue, the context pack, and the root `AGENTS.md`. Run `/review-pr-gh <pr-number>` for a full persona pass on the child's PR (or `/review-pr-local <base>` on a locally-checked-out child branch). A report is a claim; the diff and the validation output are the evidence.
 2. `DONE` with a clean diff: comment the PR URL on the Linear issue (skip when a Linear-triggered Devin session already attached it) and move it to **In Review** (or the team's equivalent). Its branch becomes a valid base for the next wave.
 3. `DONE_WITH_CONCERNS`: decide. If the concern is scope (the child did more or less than the issue), send one consolidated correction brief to the same child. If the concern needs the user, it is a go/no-go and the issue's dependents wait.
 4. `BLOCKED` / `NEEDS_CONTEXT`: answer from the context pack if you can, in one re-brief. Otherwise raise a go/no-go with the child's question verbatim and the options you see. Dependents of a blocked issue are **held**, never re-parented onto the default branch silently — re-parenting changes the plan the user approved.
