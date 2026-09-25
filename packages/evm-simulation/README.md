@@ -46,7 +46,11 @@ try {
 }
 ```
 
-Each chain entry declares the `eth_simulateV1` JSON-RPC URL used to simulate bundles on that chain. `timeoutMs` (default 5000) is the budget for that single request; there is no fallback provider.
+Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+
+Native balances are observed through a synthetic probe contract injected via `stateOverrides` at the reserved address `0x000000000000000000000000000000000000Ba1a`; transactions targeting that address are rejected with `SimulationValidationError`.
+
+This is the unreleased v5 integration stack. See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover and remaining release gates.
 
 ### API surface
 

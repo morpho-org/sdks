@@ -25,7 +25,8 @@ import {
  * Probe calls are sent `from` the zero address against
  * {@link NATIVE_BALANCE_PROBE_ADDRESS}, whose minimal `BALANCE`-reading
  * bytecode is injected through `stateOverrides`, so the plan depends on no
- * deployed helper contract.
+ * deployed helper contract. The parser rejects transactions targeting the
+ * probe address — it is reserved for injected code, not real calls.
  *
  * @param request - The branded, normalized request produced by `parseRequest`.
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
