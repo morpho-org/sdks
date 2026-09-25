@@ -1,0 +1,19 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@morpho-org/blue-sdk": "7.0.0",
+    "@morpho-org/blue-sdk-viem": "6.0.0",
+    "@morpho-org/evm-simulation": "4.2.0",
+    "@morpho-org/liquidity-sdk-viem": "4.2.1",
+    "@morpho-org/midnight-sdk": "1.7.0",
+    "@morpho-org/morpho-sdk": "6.0.0",
+    "@morpho-org/morpho-test": "4.0.4",
+    "@morpho-org/morpho-ts": "3.0.0",
+    "@morpho-org/test": "2.10.0",
+    "@morpho-org/wdk-protocol-lending-morpho-evm": "2.0.0"
+  },
+  "changesets": [
+    "sdk-1262-reuse-tree-layers"
+  ]
+}
