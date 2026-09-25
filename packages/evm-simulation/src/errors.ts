@@ -33,12 +33,17 @@ interface RetainedAsset {
   netRetained: string;
 }
 
-/** Funds would flow to restricted standalone bundles contract addresses. Never bypassable. */
+/**
+ * Thrown when net value above the dust threshold is retained by a restricted bundles contract
+ * (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1 or MidnightBundlesV1) after simulation;
+ * pass-through flows and net outflows are allowed. Never bypassable.
+ */
 export class BlacklistViolationError extends SimulationPackageError {
   readonly code = "BLACKLIST_ERROR";
 
   constructor(
     message: string,
+    /** Per-asset net retained amounts keyed by restricted contract and token. */
     public readonly assetChanges?: RetainedAsset[],
   ) {
     super(message);

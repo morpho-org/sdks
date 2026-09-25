@@ -81,12 +81,23 @@ export interface VaultV2ForceWithdrawParams {
  * @example
  * ```ts
  * import { vaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const tx = vaultV2ForceWithdraw({
- *   vault: { chainId: 1, address: vault },
- *   args: { adapter, exitAssets: 1_000_000n, minSharePriceE27, userAddress, deadline },
- * });
- * // tx satisfies Readonly<Transaction<VaultV2ForceWithdrawAction>>
+ * export function buildForceWithdraw(
+ *   vault: Address,
+ *   adapter: Address,
+ *   minSharePriceE27: bigint,
+ *   userAddress: Address,
+ *   deadline: bigint,
+ * ) {
+ *   const tx = vaultV2ForceWithdraw({
+ *     vault: { chainId: mainnet.id, address: vault },
+ *     args: { adapter, exitAssets: 1_000_000n, minSharePriceE27, userAddress, deadline },
+ *   });
+ *   // tx satisfies Readonly<Transaction<VaultV2ForceWithdrawAction>>
+ *   return tx;
+ * }
  * ```
  */
 export const vaultV2ForceWithdraw = ({

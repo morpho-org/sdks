@@ -106,6 +106,19 @@ export interface BlueActions {
    *
    * @param parameters - Optional fetch parameters (block number, state overrides).
    * @returns Market state including total supply/borrow assets and shares.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const marketData = await market.getMarketData();
+   * ```
    */
   getMarketData: (parameters?: FetchParameters) => Promise<Market>;
 
@@ -115,6 +128,19 @@ export interface BlueActions {
    * @param userAddress - The user whose position to fetch.
    * @param parameters - Optional fetch parameters (block number, state overrides).
    * @returns Accrual position with health metrics (maxBorrowAssets, ltv, isHealthy).
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const position = await market.getPositionData(zeroAddress);
+   * ```
    */
   getPositionData: (
     userAddress: Address,

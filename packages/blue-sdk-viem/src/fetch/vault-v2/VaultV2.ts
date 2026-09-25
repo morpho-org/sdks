@@ -79,6 +79,7 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2` entity. `liquidityAllocations` is undefined when no liquidity
  *   adapter is configured or when the configured liquidity adapter is unsupported.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when a recognized liquidity adapter is configured with
@@ -423,6 +424,7 @@ export async function fetchVaultV2(
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrual adapters, and
  *   force-deallocate penalties.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an

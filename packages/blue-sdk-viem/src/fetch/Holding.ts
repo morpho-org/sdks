@@ -46,7 +46,7 @@ export const optionalBoolean = [undefined, false, true] as const;
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Holding` entity for `user` and `token`.
- * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  *   (any ERC-20 token; native-asset reads skip the registry lookup).
  * @example
  * ```ts
