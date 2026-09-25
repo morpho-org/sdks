@@ -50,8 +50,8 @@ acceptance criteria, dates other than the header, and links to anything that cha
 belongs in the Technical Project Plan in Linear. The plan links its ADRs; an ADR never links a plan.
 
 TIBs are retired, and the existing records were migrated into `docs/adrs/` under the ADR name:
-each kept its sections and implementation-time examples, gained a normalized Status, and lost
-planning content and links to anything that changes (Linear). `docs/tibs/` no longer exists.
+each kept its sections and implementation-time examples, gained a normalized Status, and moved
+its Supersedes / Superseded-by rows into Status and References. `docs/tibs/` no longer exists.
 Records dated before this one are migrated legacy records: they keep their implementation-time
 sections — including sequencing, test plans, open questions and the retired editing instructions —
 as a historical snapshot and are maintained only through their Status row. A decision recorded in
