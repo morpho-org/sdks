@@ -396,7 +396,7 @@ describe("Tree.mempoolValidate", () => {
     }
   });
 
-  test("behavior: V1 routes without ratification post empty ratifier data", async () => {
+  test("behavior: V1 routes always post encoded ratifier data", async () => {
     for (const tree of [trees()[2], trees()[3]]) {
       const fetch = vi.fn(
         async (_url: string | URL | Request, _init?: RequestInit) =>
@@ -406,12 +406,20 @@ describe("Tree.mempoolValidate", () => {
       );
       const result = await tree.mempoolValidate({ chainId: 8453, fetch });
       expect(result).toEqual({ valid: true, issues: [] });
+      const expected =
+        tree.type === "rateV1"
+          ? RateRatifierV1.ratify({ tree })
+          : PriceRatifierV1.ratify({ tree });
+      expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toEqual({
+        chain_id: 8453,
+        payload: await Payload.encode(expected),
+      });
       const decoded = await Payload.decode(
         JSON.parse(String(fetch.mock.calls[0]![1]!.body)).payload,
       );
       expect(decoded).toHaveLength(3);
       for (const item of decoded) {
-        expect(item.ratifierData).toBe("0x");
+        expect(item.ratifierData).not.toBe("0x");
       }
     }
   });

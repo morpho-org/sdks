@@ -417,7 +417,9 @@ export type RatifierTreeInput = TreeLike | TreeInput;
  * Omit this when validating offer policy before the maker signs or approves a
  * tree. Provide it when validating the final payload shape, including real
  * `ratifierData`, after the Ecrecover signature and signer address exist or the
- * Setter root is ready for publication.
+ * Setter root is ready for publication. Price/Rate V1 routes always post real
+ * ratifier data because the router identifies each offer from its decoded
+ * leaf fields; their `ratification` is only a route assertion.
  *
  * @example
  * ```ts
@@ -458,11 +460,11 @@ export type TreeMempoolValidateRatification =
       readonly type: "setter";
     }
   | {
-      /** PriceRatifierV1 route; the root must already be ratified onchain. */
+      /** PriceRatifierV1 route assertion; validation always encodes its ratifier data. */
       readonly type: "priceV1";
     }
   | {
-      /** RateRatifierV1 route; the root must already be ratified onchain. */
+      /** RateRatifierV1 route assertion; validation always encodes its ratifier data. */
       readonly type: "rateV1";
     };
 
@@ -470,9 +472,12 @@ export type TreeMempoolValidateRatification =
  * Parameters for {@link Tree.mempoolValidate}.
  *
  * Use this when an already-created tree should be validated by the Midnight
- * API. By default it validates the pre-ratification tree with empty
- * `ratifierData`; pass `ratification` to validate the final payload shape with
- * real ratifier data.
+ * API. Standard routes validate the pre-ratification tree with empty
+ * `ratifierData` by default; pass `ratification` to validate the final
+ * payload shape with real ratifier data. Price/Rate V1 routes always encode
+ * real ratifier data (root, leaf index, proof, rate or price bound, allowed
+ * taker) because the router identifies each offer by decoding it; their
+ * `ratification` only asserts the route.
  *
  * @example
  * ```ts
@@ -582,9 +587,10 @@ export namespace TreeUtils {
    * with empty `ratifierData`, then sends the temporary payload to the Midnight
    * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
    * Setter root preparation to validate final payload bytes with real
-   * `ratifierData`. Price/Rate V1 tree snapshots are supported directly:
-   * without `ratification` their offers validate with empty `ratifierData`,
-   * and a route-matching `ratification` runs the corresponding V1 `ratify`.
+   * `ratifierData`. Price/Rate V1 tree snapshots are supported directly and
+   * always post the corresponding V1 `ratify` output — there is no empty
+   * ratifier-data shape because the router decodes the leaf fields to identify
+   * each offer. A V1 `ratification` only asserts the matching route.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
    * @param params.tree - Offer tree or route-typed tree snapshot to validate. Serialized standard snapshots resume without rewriting committed groups.
@@ -666,15 +672,9 @@ export namespace TreeUtils {
         );
       }
       items =
-        params.ratification == null
-          ? // Re-validate the caller-supplied snapshot (hashes, padding, leaf gates) before posting.
-            Tree.fromDescriptor(tree).offers.map((offer) => ({
-              offer,
-              ratifierData: "0x" as const,
-            }))
-          : tree.type === "priceV1"
-            ? PriceRatifierV1.ratify({ tree })
-            : RateRatifierV1.ratify({ tree });
+        tree.type === "priceV1"
+          ? PriceRatifierV1.ratify({ tree })
+          : RateRatifierV1.ratify({ tree });
     } else {
       // Only standard Ecrecover/Setter inputs remain beyond this point.
       // Serialized standard snapshots resume through descriptor validation so committed groups are kept.

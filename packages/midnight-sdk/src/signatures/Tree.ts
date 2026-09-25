@@ -394,7 +394,9 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * with empty `ratifierData`, then sends the temporary payload to the Midnight
    * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
    * Setter root preparation to validate final payload bytes with real
-   * `ratifierData`.
+   * `ratifierData`. Price/Rate V1 routes always post their real ratifier data
+   * because the router decodes it to identify each offer; their
+   * `ratification` only asserts the route.
    *
    * @param params.chainId - Chain id whose API policy should validate this tree.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
