@@ -33,6 +33,7 @@ import { fetchAccrualVault } from "../Vault.js";
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2MorphoVaultV1Adapter` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example
@@ -155,6 +156,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualVaultV2MorphoVaultV1Adapter` with adapter shares and nested Vault
  *   V1 allocation state for later projection.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no MorphoVaultV1Adapter factory.
  * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
  * @example

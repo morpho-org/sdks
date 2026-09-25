@@ -51,7 +51,6 @@ import {
   AmountAndSharesExclusiveError,
   type BundlesFundingArgs,
   type BundlesTokenRequirementsOptions,
-  ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
@@ -74,12 +73,19 @@ import {
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
+/** Action surface for Vault V1 reads and writes; writes route through VaultBundlesV1 and VaultExitBundlesV1. */
 export interface VaultV1Actions {
   /**
    * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
-   * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
+   * Reads the Vault V1 state through `fetchAccrualVault` on the entity's client.
+   *
+   * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
+   * @returns The hydrated `AccrualVault` snapshot.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownBlueFactory} when the configured chain has no MetaMorpho factory.
+   * @throws {UnknownBlueOfFactory} when the vault is not a MetaMorpho vault from the configured factory.
    */
   getData: (
     parameters?: FetchParameters,
@@ -269,6 +275,7 @@ export interface VaultV1Actions {
    * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
@@ -443,6 +450,7 @@ export interface VaultV1Actions {
    * @throws {NegativeInputError} when slippage tolerance or `referralFeePct` is negative.
    * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
    * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {InputExceedsMaxError} when the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -509,6 +517,7 @@ export interface VaultV1Actions {
   >;
 }
 
+/** Binds a viem client to a Vault V1 (MetaMorpho) vault's action builders. */
 export class MorphoVaultV1 implements VaultV1Actions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
@@ -518,15 +527,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,

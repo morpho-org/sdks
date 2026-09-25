@@ -35,7 +35,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 #### WDK (Tether Wallet Development Kit)
 
-- [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral) with matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
+- [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral): supply and withdraw use `prepareSupply` / `prepareWithdraw` prepared-operation handles, while borrow, repay, and collateral flows keep matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
 
 #### Development
 

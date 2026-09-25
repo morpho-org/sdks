@@ -53,7 +53,6 @@ import {
   AdapterNotPartOfVaultError,
   type BundlesFundingArgs,
   type BundlesTokenRequirementsOptions,
-  ChainIdMismatchError,
   type Deallocation,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
@@ -89,14 +88,24 @@ import { getBundlesTokenRequirements } from "../requirements/index.js";
 // accrual model stays well-defined inside it.
 const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
 
+/**
+ * Action surface for Vault V2 reads and writes; writes route through VaultBundlesV1 and
+ * VaultExitBundlesV1, except `forceRedeem`, which uses the vault's native multicall.
+ */
 export interface VaultV2Actions {
   /**
-   * Fetches the latest vault data.
+   * Fetches the latest accrual snapshot of the vault.
    *
-   * This function fetches the latest vault data from the blockchain.
-   * @param {FetchParameters} [parameters] - The parameters for the fetch operation.
+   * Reads the Vault V2 state through `fetchAccrualVaultV2` on the entity's client.
    *
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>} The latest vault data.
+   * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
+   * @returns The hydrated `AccrualVaultV2` snapshot.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownBlueFactory} when the configured chain has no VaultV2 factory.
+   * @throws {UnknownBlueOfFactory} when the vault is not a VaultV2 from the configured factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when the vault or one of its adapters uses an
+   *   unsupported adapter class.
    */
   getData: (
     parameters?: FetchParameters,
@@ -275,17 +284,18 @@ export interface VaultV2Actions {
    * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
    * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
    *
-   * @param {Object} params - The redeem parameters.
-   * @param {bigint} params.shares - Exact vault shares to burn.
-   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
-   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
-   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
-   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @param params - The redeem parameters.
+   * @param params.shares - Exact vault shares to burn.
+   * @param params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
+   * @param [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {NonPositiveInputError} when `shares` is not positive.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
    * @throws {NegativeInputError} when `referralFeePct` is negative.
    * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
    * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
@@ -571,13 +581,27 @@ export interface VaultV2Actions {
    * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
    * amounts to account for share-price drift between submission and execution.
    *
-   * @param {Object} params - The force redeem parameters.
-   * @param {readonly Deallocation[]} params.deallocations - The typed list of deallocations to perform.
-   * @param {Object} params.redeem - The redeem parameters applied after deallocations.
-   * @param {bigint} params.redeem.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.buildTx The prepared multicall transaction.
+   * @param params.deallocations - Typed list of `forceDeallocate` calls to perform before the redeem.
+   * @param params.redeem.shares - Amount of vault shares to redeem after the deallocations.
+   * @param params.userAddress - Account that pays the deallocation penalties and receives the redeemed assets.
+   * @returns An object whose `buildTx()` returns a deep-frozen `Transaction<VaultV2ForceRedeemAction>`
+   *   encoding the vault `multicall`.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {EmptyDeallocationsError} from `buildTx()` when `deallocations` is empty.
+   * @throws {NonPositiveInputError} from `buildTx()` when `redeem.shares <= 0n` or any deallocation
+   *   amount is non-positive.
+   * @example
+   * ```ts
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const tx = vault
+   *   .forceRedeem({
+   *     deallocations: [{ adapter, marketParams, amount: 1_000_000n }],
+   *     redeem: { shares: 500_000n },
+   *     userAddress,
+   *   })
+   *   .buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV2ForceRedeemAction>>
+   * ```
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];
@@ -588,6 +612,7 @@ export interface VaultV2Actions {
   };
 }
 
+/** Binds a viem client to a Vault V2 vault's action builders. */
 export class MorphoVaultV2 implements VaultV2Actions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
@@ -597,15 +622,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
       ...parameters,

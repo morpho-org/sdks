@@ -27,6 +27,7 @@ import { fetchMarket } from "./Market.js";
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @returns The hydrated `Position` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { MarketId, Position } from "@morpho-org/blue-sdk";
@@ -134,6 +135,7 @@ export async function fetchPreLiquidationParams(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualPosition` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { AccrualPosition, MarketId } from "@morpho-org/blue-sdk";
@@ -181,6 +183,7 @@ export async function fetchAccrualPosition(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `PreLiquidationPosition` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
