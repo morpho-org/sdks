@@ -1,3 +1,4 @@
+import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import type {
   ActionRequirement,
   AuthorizationAction,
@@ -13,6 +14,8 @@ import {
   isRequirementSignature,
 } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
+import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
+import { _try } from "@morpho-org/morpho-ts";
 import {
   type Address,
   decodeFunctionData,
@@ -35,14 +38,17 @@ import type {
 } from "../domain/diagnostics.js";
 import {
   AuthorizationRequestMismatchError,
+  UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
 
-type Fail = (message: string) => never;
+type Fail = (message: string, options?: ErrorOptions) => never;
 
 interface Ctx {
+  readonly chainId: number;
   readonly owner: Address;
   readonly index: number;
+  readonly addresses: ReturnType<typeof getChainAddresses>;
 }
 
 const authorizationContext = (
@@ -56,19 +62,21 @@ const authorizationContext = (
 
 const mismatch =
   (index: number, subject?: SimulationSubject): Fail =>
-  (message) => {
+  (message, options) => {
     throw new AuthorizationRequestMismatchError(
       `${message}. Rebuild the wallet request from getRequirements()`,
       authorizationContext(index, subject),
+      options,
     );
   };
 
 const unsupported =
   (index: number, subject?: SimulationSubject): Fail =>
-  (message) => {
+  (message, options) => {
     throw new UnsupportedOperationError(
       message,
       authorizationContext(index, subject),
+      options,
     );
   };
 
@@ -184,6 +192,25 @@ const validators = (fail: Fail) => ({
       );
     }
   },
+  exactTypes(
+    types: Record<string, unknown>,
+    expected: readonly string[],
+  ): void {
+    const keys = Object.keys(types);
+    if (
+      keys.length !== expected.length ||
+      !expected.every((name) => keys.includes(name))
+    ) {
+      fail(
+        `Typed data types expected exactly "${expected.join('", "')}", got "${keys.join('", "')}"`,
+      );
+    }
+  },
+  domainChainId(actual: number | bigint, expected: number): void {
+    if (Number(actual) !== expected) {
+      fail(`Typed data domain.chainId expected "${expected}", got "${actual}"`);
+    }
+  },
   primaryType(actual: unknown, expected: string): void {
     if (actual !== expected) {
       fail(
@@ -267,10 +294,12 @@ const toErc2612Permit = (
     spender: action.args.spender,
   });
   const v = validators(fail);
+  v.domainChainId(domain.chainId, ctx.chainId);
 
   const typedData = action.typedData;
   v.primaryType(typedData?.primaryType, "Permit");
   const types = v.record(typedData?.types, "types");
+  v.exactTypes(types, ["Permit"]);
   v.typesTuple(types.Permit, {
     field: "types.Permit",
     expected: ERC2612_PERMIT_FIELDS,
@@ -328,6 +357,7 @@ const toPermit2SignatureTransfer = (
   const typedData = action.typedData;
   shape.primaryType(typedData?.primaryType, "PermitTransferFrom");
   const types = shape.record(typedData?.types, "types");
+  shape.exactTypes(types, ["PermitTransferFrom", "TokenPermissions"]);
   shape.typesTuple(types.PermitTransferFrom, {
     field: "types.PermitTransferFrom",
     expected: PERMIT2_TRANSFER_FROM_FIELDS,
@@ -337,6 +367,13 @@ const toPermit2SignatureTransfer = (
     expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
   });
   const domain = parseDomain(typedData?.domain, shapeFail);
+  shape.domainChainId(domain.chainId, ctx.chainId);
+  const permit2 = ctx.addresses.permit2;
+  if (permit2 == null || !isAddressEqual(domain.verifyingContract, permit2)) {
+    shapeFail(
+      `Typed data domain.verifyingContract expected the chain's canonical Permit2 "${permit2 ?? "unregistered"}", got "${domain.verifyingContract}"`,
+    );
+  }
   const message = shape.record(typedData?.message, "message");
   const permitted = shape.record(message.permitted, "message.permitted");
   const token = shape.address(permitted.token, "message.permitted.token");
@@ -400,11 +437,17 @@ const toBlueAuthorizationSignature = (
   const typedData = action.typedData;
   v.primaryType(typedData?.primaryType, "Authorization");
   const types = v.record(typedData?.types, "types");
+  v.exactTypes(types, ["Authorization"]);
   v.typesTuple(types.Authorization, {
     field: "types.Authorization",
     expected: BLUE_AUTHORIZATION_FIELDS,
   });
   const domain = parseDomain(typedData?.domain, fail);
+  v.domainChainId(domain.chainId, ctx.chainId);
+  v.equalAddress(domain.verifyingContract, {
+    expected: ctx.addresses.blue,
+    field: "domain.verifyingContract",
+  });
   const message = v.record(typedData?.message, "message");
 
   const authorizer = v.address(message.authorizer, "message.authorizer");
@@ -446,9 +489,10 @@ const decodeErc20Approve = (
     const decoded = decodeFunctionData({ abi: erc20Abi, data });
     functionName = decoded.functionName;
     args = decoded.args;
-  } catch {
+  } catch (cause) {
     return failUnsupported(
       "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
+      { cause },
     );
   }
   if (functionName !== "approve") {
@@ -469,9 +513,10 @@ const decodeSetAuthorization = (
     const decoded = decodeFunctionData({ abi: blueAbi, data });
     functionName = decoded.functionName;
     args = decoded.args;
-  } catch {
+  } catch (cause) {
     return failUnsupported(
       "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
+      { cause },
     );
   }
   if (functionName !== "setAuthorization") {
@@ -523,7 +568,7 @@ const toBlueAuthorization = (
   ctx: Ctx,
 ): SimulationAuthorization => {
   const { owner, index } = ctx;
-  const { data, value, action } = requirement;
+  const { to, data, value, action } = requirement;
   const subject: SimulationSubject = {
     type: "operator",
     authorizer: owner,
@@ -531,6 +576,11 @@ const toBlueAuthorization = (
   };
   const fail = mismatch(index, subject);
 
+  if (!isAddressEqual(to, ctx.addresses.blue)) {
+    fail(
+      `Blue authorization transaction target expected Morpho "${ctx.addresses.blue}", got "${to}". Rebuild the request against the chain registry`,
+    );
+  }
   if (value !== 0n) {
     fail(
       `Blue authorization transaction value expected "0", got "${value}". Authorization calls must not carry native value`,
@@ -571,23 +621,47 @@ const toBlueAuthorization = (
  * The function is pure and synchronous: no RPC reads, no clock, no signing.
  *
  * @param params - Conversion parameters.
+ * @param params.chainId - The chain the requirements were resolved on; binds `blueAuthorization`
+ *   targets and every typed-data domain to the chain registry.
  * @param params.owner - The account the requirements were resolved for (transaction sender).
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
+ * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {AuthorizationRequestMismatchError} when decoded calldata or typed data disagrees with the
  *   requirement's action metadata, or when the payload is malformed.
  * @throws {UnsupportedOperationError} when a requirement targets an operation the simulator does not
  *   support (Midnight calls, Midnight offer-root signatures, unknown action types, or call data that
  *   does not decode to the expected function).
+ * @example
+ * ```ts
+ * import { toSimulationAuthorizations } from "@morpho-org/evm-simulation";
+ *
+ * const requirements = await vaultV1.deposit({ amount: 1_000_000n }).getRequirements();
+ * const authorizations = toSimulationAuthorizations({
+ *   chainId: 1,
+ *   owner: userAddress,
+ *   requirements,
+ * });
+ * // authorizations satisfies readonly SimulationAuthorization[], one entry per requirement
+ * ```
  */
 export function toSimulationAuthorizations(params: {
+  readonly chainId: number;
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];
 }): readonly SimulationAuthorization[] {
-  const { owner, requirements } = params;
+  const { chainId, owner, requirements } = params;
+
+  const addresses = _try(
+    () => getChainAddresses(chainId),
+    UnsupportedChainIdError,
+  );
+  if (addresses == null) {
+    throw new UnsupportedChainError(chainId);
+  }
 
   return requirements.map((requirement, index) => {
-    const ctx: Ctx = { owner, index };
+    const ctx: Ctx = { chainId, owner, index, addresses };
 
     if (isRequirementApproval(requirement)) {
       return toErc20Approval(requirement, ctx);

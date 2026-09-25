@@ -128,6 +128,7 @@ describe("toSimulationAuthorizations", () => {
   test("default", () => {
     expect(
       toSimulationAuthorizations({
+        chainId: CHAIN_ID,
         owner: OWNER,
         requirements: [permitRequirement({})],
       }),
@@ -165,7 +166,11 @@ describe("toSimulationAuthorizations", () => {
 
   test("default: empty input", () => {
     expect(
-      toSimulationAuthorizations({ owner: OWNER, requirements: [] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [],
+      }),
     ).toEqual([]);
   });
 
@@ -178,7 +183,11 @@ describe("toSimulationAuthorizations", () => {
     });
 
     expect(
-      toSimulationAuthorizations({ owner: OWNER, requirements: [approval] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [approval],
+      }),
     ).toEqual([
       {
         type: "erc20Approval",
@@ -193,6 +202,7 @@ describe("toSimulationAuthorizations", () => {
   test("behavior: blueAuthorization call requirement maps from decoded calldata", () => {
     expect(
       toSimulationAuthorizations({
+        chainId: CHAIN_ID,
         owner: OWNER,
         requirements: [blueAuthorizationCall({ authorized: blueBundlesV1 })],
       }),
@@ -217,11 +227,13 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const [authorization] = toSimulationAuthorizations({
+      chainId: CHAIN_ID,
       owner: OWNER,
       requirements: [requirement],
     });
 
     const [permitAuthorization] = toSimulationAuthorizations({
+      chainId: CHAIN_ID,
       owner: OWNER,
       requirements: [permitRequirement({})],
     });
@@ -255,6 +267,7 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const [authorization] = toSimulationAuthorizations({
+      chainId: CHAIN_ID,
       owner: OWNER,
       requirements: [requirement],
     });
@@ -290,6 +303,7 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const authorizations = toSimulationAuthorizations({
+      chainId: CHAIN_ID,
       owner: OWNER,
       requirements: [reset, grant, permitRequirement({})],
     });
@@ -320,6 +334,7 @@ describe("toSimulationAuthorizations", () => {
     });
 
     const authorizations = toSimulationAuthorizations({
+      chainId: CHAIN_ID,
       owner: OWNER,
       requirements: [approval, transfer],
     });
@@ -334,6 +349,7 @@ describe("toSimulationAuthorizations", () => {
   test("error: AuthorizationRequestMismatchError on permit owner mismatch", () => {
     expect(() =>
       toSimulationAuthorizations({
+        chainId: CHAIN_ID,
         owner: OTHER,
         requirements: [permitRequirement({})],
       }),
@@ -350,7 +366,11 @@ describe("toSimulationAuthorizations", () => {
       },
     };
     expect(() =>
-      toSimulationAuthorizations({ owner: OWNER, requirements: [tampered] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
@@ -373,7 +393,11 @@ describe("toSimulationAuthorizations", () => {
       },
     };
     expect(() =>
-      toSimulationAuthorizations({ owner: OWNER, requirements: [tampered] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
@@ -393,7 +417,11 @@ describe("toSimulationAuthorizations", () => {
     };
 
     expect(() =>
-      toSimulationAuthorizations({ owner: OWNER, requirements: [approval] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [approval],
+      }),
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
@@ -413,7 +441,11 @@ describe("toSimulationAuthorizations", () => {
     };
 
     expect(() =>
-      toSimulationAuthorizations({ owner: OWNER, requirements: [approval] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [approval],
+      }),
     ).toThrowError(UnsupportedOperationError);
   });
 
@@ -429,7 +461,11 @@ describe("toSimulationAuthorizations", () => {
     };
 
     expect(() =>
-      toSimulationAuthorizations({ owner: OWNER, requirements: [midnight] }),
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [midnight],
+      }),
     ).toThrowError(UnsupportedOperationError);
   });
 
@@ -454,6 +490,7 @@ describe("toSimulationAuthorizations", () => {
 
     expect(() =>
       toSimulationAuthorizations({
+        chainId: CHAIN_ID,
         owner: OWNER,
         requirements: [midnightSignature],
       }),
@@ -478,6 +515,7 @@ describe("toSimulationAuthorizations", () => {
         ),
         ([owner, token, spender, amount, nonce, deadline]) => {
           const authorizations = toSimulationAuthorizations({
+            chainId: CHAIN_ID,
             owner,
             requirements: [
               permitRequirement({
@@ -510,5 +548,376 @@ describe("toSimulationAuthorizations", () => {
         },
       ),
     );
+  });
+
+  test("error: AuthorizationRequestMismatchError on native value in approval or authorization calls", () => {
+    const approval = encodeErc20Approval({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 42n,
+      chainId: CHAIN_ID,
+    });
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [{ ...approval, value: 1n }],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [{ ...blueAuthorizationCall({}), value: 1n }],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on permit nonce disagreement", () => {
+    const requirement = permitRequirement({});
+    const tampered: ActionRequirement = {
+      ...requirement,
+      action: {
+        ...requirement.action,
+        typedData: {
+          ...requirement.action.typedData,
+          message: {
+            ...(requirement.action.typedData.message as Record<
+              string,
+              unknown
+            >),
+            nonce: NONCE + 1n,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("behavior: permit requirement without args.nonce is accepted", () => {
+    const base = permitRequirement({});
+    const requirement: ActionRequirement = {
+      ...base,
+      action: {
+        ...base.action,
+        args: {
+          spender: vaultBundlesV1,
+          amount: 1_000_000n,
+          deadline: DEADLINE,
+        },
+      },
+    };
+    expect(
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [requirement],
+      })[0]?.type,
+    ).toBe("erc2612Permit");
+  });
+
+  test("error: UnsupportedOperationError when blueAuthorization data encodes another Morpho function", () => {
+    const requirement = blueAuthorizationCall({
+      data: encodeFunctionData({
+        abi: blueAbi,
+        functionName: "supply",
+        args: [
+          {
+            loanToken: TOKEN,
+            collateralToken: OTHER,
+            oracle: OTHER,
+            irm: OTHER,
+            lltv: 860_000000000000000n,
+          },
+          0n,
+          0n,
+          OTHER,
+          "0x",
+        ],
+      }),
+    });
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [requirement],
+      }),
+    ).toThrowError(UnsupportedOperationError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on wrong blueAuthorization target", () => {
+    const requirement = {
+      ...blueAuthorizationCall({}),
+      to: OTHER,
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [requirement],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on permit2 spender tampering", () => {
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const tampered: ActionRequirement = {
+      ...requirement,
+      action: {
+        ...requirement.action,
+        typedData: {
+          ...requirement.action.typedData,
+          message: {
+            ...(requirement.action.typedData.message as Record<
+              string,
+              unknown
+            >),
+            spender: OTHER,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on authorization authorized tampering", async () => {
+    const requirement = await blueAuthorizationSignatureRequirement({});
+    const tampered: ActionRequirement = {
+      ...requirement,
+      action: {
+        ...requirement.action,
+        typedData: {
+          ...requirement.action.typedData,
+          message: {
+            ...(requirement.action.typedData.message as Record<
+              string,
+              unknown
+            >),
+            authorized: OTHER,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on typed-data domain chainId", async () => {
+    const permit = permitRequirement({});
+    const tamperedPermit: ActionRequirement = {
+      ...permit,
+      action: {
+        ...permit.action,
+        typedData: {
+          ...permit.action.typedData,
+          domain: {
+            ...(permit.action.typedData.domain as Record<string, unknown>),
+            chainId: CHAIN_ID + 1,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tamperedPermit],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const permit2Req = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const tamperedPermit2: ActionRequirement = {
+      ...permit2Req,
+      action: {
+        ...permit2Req.action,
+        typedData: {
+          ...permit2Req.action.typedData,
+          domain: {
+            ...(permit2Req.action.typedData.domain as Record<string, unknown>),
+            chainId: CHAIN_ID + 1,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tamperedPermit2],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const authorization = await blueAuthorizationSignatureRequirement({});
+    const tamperedAuth: ActionRequirement = {
+      ...authorization,
+      action: {
+        ...authorization.action,
+        typedData: {
+          ...authorization.action.typedData,
+          domain: {
+            ...(authorization.action.typedData.domain as Record<
+              string,
+              unknown
+            >),
+            chainId: CHAIN_ID + 1,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tamperedAuth],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on wrong verifyingContract", async () => {
+    const permit2Req = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const tamperedPermit2: ActionRequirement = {
+      ...permit2Req,
+      action: {
+        ...permit2Req.action,
+        typedData: {
+          ...permit2Req.action.typedData,
+          domain: {
+            ...(permit2Req.action.typedData.domain as Record<string, unknown>),
+            verifyingContract: OTHER,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tamperedPermit2],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const authorization = await blueAuthorizationSignatureRequirement({});
+    const tamperedAuth: ActionRequirement = {
+      ...authorization,
+      action: {
+        ...authorization.action,
+        typedData: {
+          ...authorization.action.typedData,
+          domain: {
+            ...(authorization.action.typedData.domain as Record<
+              string,
+              unknown
+            >),
+            verifyingContract: OTHER,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        owner: OWNER,
+        requirements: [tamperedAuth],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on sibling types keys", async () => {
+    const withExtraType = (
+      requirement: ActionRequirement,
+      extra: Record<string, unknown>,
+    ): ActionRequirement => {
+      const typedData = (
+        requirement.action as { readonly typedData: RequirementTypedData }
+      ).typedData;
+      return {
+        ...requirement,
+        action: {
+          ...requirement.action,
+          typedData: {
+            ...typedData,
+            types: { ...typedData.types, ...extra },
+          },
+        },
+      } as ActionRequirement;
+    };
+
+    const eip712Domain = {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+    };
+
+    for (const requirement of [
+      permitRequirement({}),
+      encodeErc20Permit2SignatureTransfer({
+        token: TOKEN,
+        spender: vaultBundlesV1,
+        amount: 123n,
+        chainId: CHAIN_ID,
+        nonce: NONCE,
+        deadline: DEADLINE,
+      }),
+      await blueAuthorizationSignatureRequirement({}),
+    ]) {
+      expect(() =>
+        toSimulationAuthorizations({
+          chainId: CHAIN_ID,
+          owner: OWNER,
+          requirements: [withExtraType(requirement, eip712Domain)],
+        }),
+      ).toThrowError(AuthorizationRequestMismatchError);
+      expect(() =>
+        toSimulationAuthorizations({
+          chainId: CHAIN_ID,
+          owner: OWNER,
+          requirements: [
+            withExtraType(requirement, {
+              Extra: [{ name: "x", type: "uint256" }],
+            }),
+          ],
+        }),
+      ).toThrowError(AuthorizationRequestMismatchError);
+    }
   });
 });

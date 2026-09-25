@@ -1,4 +1,8 @@
-import { type MarketId, MarketUtils } from "@morpho-org/blue-sdk";
+import {
+  type MarketId,
+  MarketUtils,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import {
   blueAbi,
   blueBundlesV1Abi,
@@ -8,6 +12,7 @@ import {
   vaultV2Abi,
 } from "@morpho-org/morpho-sdk/abis";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
+import { _try } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type DecodeFunctionDataReturnType,
@@ -485,6 +490,11 @@ const decodeBlueBundles = (
           `blueBundlesV1Withdraw expected exactly one of withdrawAssets/withdrawShares, got assets "${withdrawAssets}", shares "${withdrawShares}"`,
         );
       }
+      if (withdrawShares === maxUint256) {
+        f.unsupported(
+          "blueBundlesV1Withdraw withdrawShares expected an exact share amount, got maxUint256. Shares mode has no saturated full-close sentinel; full close is resolved against pinned state",
+        );
+      }
       const authorizationSignature =
         decodeSignedAuthorization(signedAuthorization);
       checkPreview(f, authorizationSignature);
@@ -497,7 +507,7 @@ const decodeBlueBundles = (
         amount: hasAssets
           ? { type: "assets", assets: withdrawAssets }
           : { type: "shares", shares: withdrawShares },
-        fullClose: withdrawShares === maxUint256,
+        fullClose: false,
         reallocations: decodeReallocations(f, {
           reallocations,
           targetMarket: market,
@@ -538,6 +548,11 @@ const decodeBlueBundles = (
       if (operation === undefined) {
         f.unsupported(
           "blueBundlesV1SupplyCollateralAndBorrow expected a non-zero collateral or borrow leg, got both zero",
+        );
+      }
+      if (hasCollateral && !hasBorrow && reallocations.length > 0) {
+        f.unsupported(
+          `blueBundlesV1SupplyCollateralAndBorrow expected no reallocations without a borrow leg, got "${reallocations.length}". Reallocations only fund borrowing`,
         );
       }
       const tokenSignature = decodeTokenPermit(collateralPermit, f);
@@ -1044,13 +1059,11 @@ const decodeVaultV2Multicall = (
     try {
       return decodeFunctionData({ abi: vaultV2Abi, data });
     } catch {
-      return fails(base.env, {
-        index: base.loc.index,
-        callPath: [callIndex],
-        operation: "vaultV2ForceRedeem",
-      }).unsupported(
-        `VaultV2 multicall inner call "${callIndex}" does not decode. Only forceDeallocate legs then a final redeem are supported`,
-      );
+      return f
+        .with({ callPath: [callIndex] })
+        .unsupported(
+          `VaultV2 multicall inner call "${callIndex}" does not decode. Only forceDeallocate legs then a final redeem are supported`,
+        );
     }
   });
 
@@ -1062,11 +1075,7 @@ const decodeVaultV2Multicall = (
   }
 
   const deallocations = inner.slice(0, -1).map((call, callIndex) => {
-    const innerFails = fails(base.env, {
-      index: base.loc.index,
-      callPath: [callIndex],
-      operation: "vaultV2ForceRedeem",
-    });
+    const innerFails = f.with({ callPath: [callIndex] });
     if (call.functionName !== "forceDeallocate") {
       return innerFails.unsupported(
         `VaultV2 multicall inner call "${callIndex}" decoded to "${call.functionName}", expected "forceDeallocate". Only forceDeallocate legs then a final redeem are supported`,
@@ -1097,11 +1106,7 @@ const decodeVaultV2Multicall = (
     };
   });
 
-  const lastFails = fails(base.env, {
-    index: base.loc.index,
-    callPath: [inner.length - 1],
-    operation: "vaultV2ForceRedeem",
-  });
+  const lastFails = f.with({ callPath: [inner.length - 1] });
   if (last.functionName !== "redeem") {
     return lastFails.unsupported(
       `VaultV2 multicall final inner call decoded to "${last.functionName}", expected "redeem". A forceRedeem multicall ends with redeem`,
@@ -1257,16 +1262,35 @@ const decodeTransaction = (
  *   value/operator/market bindings violate the route's contract.
  * @throws {UnsupportedOperationError} when a transaction targets an unsupported deployment,
  *   function, permit kind, leg combination, or consumes a signature in preview mode.
+ * @example
+ * ```ts
+ * import { decodeOperations } from "@morpho-org/evm-simulation";
+ * import { blueSupply } from "@morpho-org/morpho-sdk";
+ * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
+ *
+ * const tx = blueSupply({
+ *   market: { chainId: 1, marketParams },
+ *   args: { userAddress: owner, assets: 1_000_000n, deadline: 1_900_000_000n },
+ * });
+ * const { operations } = decodeOperations({
+ *   chainId: 1,
+ *   mode: "final",
+ *   transactions: [{ from: owner, to: tx.to, data: tx.data, value: tx.value }],
+ * });
+ * // operations[0] satisfies DecodedOperation with type "blueSupply",
+ * // route "blueBundlesV1", transactionIndex 0, and the market binding recovered from calldata.
+ * ```
  */
 export function decodeOperations(
   params: DecodeOperationsParams,
 ): DecodedOperations {
   const { chainId, mode, transactions } = params;
 
-  let addresses: ReturnType<typeof getChainAddresses>;
-  try {
-    addresses = getChainAddresses(chainId);
-  } catch {
+  const addresses = _try(
+    () => getChainAddresses(chainId),
+    UnsupportedChainIdError,
+  );
+  if (addresses == null) {
     throw new UnsupportedChainError(chainId);
   }
 

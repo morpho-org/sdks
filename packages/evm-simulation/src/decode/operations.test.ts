@@ -22,7 +22,12 @@ import {
   vaultV2InKindRedeem,
   vaultV2Redeem,
 } from "@morpho-org/morpho-sdk";
-import { blueAbi, blueMarketParamsAbi } from "@morpho-org/morpho-sdk/abis";
+import {
+  blueAbi,
+  blueBundlesV1Abi,
+  blueMarketParamsAbi,
+  vaultV2Abi,
+} from "@morpho-org/morpho-sdk/abis";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import fc from "fast-check";
 import {
@@ -33,6 +38,7 @@ import {
   type Hex,
   maxUint256,
   zeroAddress,
+  zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -272,7 +278,7 @@ describe("decodeOperations", () => {
     );
   });
 
-  test("behavior: blueWithdraw by assets, shares, and full close", () => {
+  test("behavior: blueWithdraw by assets and shares", () => {
     const txAssets = blueWithdraw({
       market: { chainId, marketParams: marketParamsClass },
       args: {
@@ -291,15 +297,6 @@ describe("decodeOperations", () => {
         deadline: DEADLINE,
       },
     });
-    const txFull = blueWithdraw({
-      market: { chainId, marketParams: marketParamsClass },
-      args: {
-        userAddress: owner,
-        withdrawAssets: 0n,
-        withdrawShares: maxUint256,
-        deadline: DEADLINE,
-      },
-    });
     const common = {
       ...base,
       type: "blueWithdraw",
@@ -313,9 +310,7 @@ describe("decodeOperations", () => {
       deadline: DEADLINE,
       referralFee: ZERO_FEE,
     };
-    expect(
-      decode([toTx(txAssets), toTx(txShares), toTx(txFull)]).operations,
-    ).toStrictEqual([
+    expect(decode([toTx(txAssets), toTx(txShares)]).operations).toStrictEqual([
       {
         ...common,
         transactionIndex: 0,
@@ -330,14 +325,37 @@ describe("decodeOperations", () => {
         fullClose: false,
         authorizationSignature: { type: "none" },
       },
-      {
-        ...common,
-        transactionIndex: 2,
-        amount: { type: "shares", shares: maxUint256 },
-        fullClose: true,
-        authorizationSignature: { type: "none" },
-      },
     ]);
+  });
+
+  test("error: UnsupportedOperationError when withdrawShares is maxUint256", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1Withdraw",
+      args: [
+        {
+          loanToken: marketParams.loanToken,
+          collateralToken: marketParams.collateralToken,
+          oracle: marketParams.oracle,
+          irm: marketParams.irm,
+          lltv: marketParams.lltv,
+        },
+        0n,
+        maxUint256,
+        {
+          signature: { v: 0, r: zeroHash, s: zeroHash },
+          nonce: 0n,
+          deadline: 0n,
+        },
+        [],
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      UnsupportedOperationError,
+    );
   });
 
   test("behavior: blueWithdraw with signed authorization", () => {
@@ -961,7 +979,7 @@ describe("decodeOperations", () => {
     );
   });
 
-  test("error: preview rejects signed authorization and shares permit too", () => {
+  test("error: preview rejects a signed authorization", () => {
     const authorizationSignature: AuthorizationRequirementSignature = {
       args: {
         owner,
@@ -1154,6 +1172,329 @@ describe("decodeOperations", () => {
         },
       ),
       { numRuns: 20 },
+    );
+  });
+
+  test("error: UnsupportedOperationError / ProtocolBindingMismatchError on malformed token permits", () => {
+    const supply = (permit: { kind: number; data: `0x${string}` }) =>
+      toTx({
+        to: blueBundlesV1,
+        data: encodeFunctionData({
+          abi: blueBundlesV1Abi,
+          functionName: "blueBundlesV1Supply",
+          args: [marketParams, 1_000_000n, permit, 0n, zeroAddress, DEADLINE],
+        }),
+      });
+
+    // kind 0 must carry empty data
+    expect(() => decode([supply({ kind: 0, data: "0x1234" })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+    // kind 1/2 must carry their payloads
+    expect(() => decode([supply({ kind: 1, data: "0x" })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+    expect(() => decode([supply({ kind: 2, data: "0x" })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+    // kind 1 payload must decode to (deadline, v, r, s)
+    expect(() => decode([supply({ kind: 1, data: "0x1234" })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+    // unknown kind
+    expect(() => decode([supply({ kind: 3, data: "0x1234" })])).toThrow(
+      UnsupportedOperationError,
+    );
+  });
+
+  test("error: UnsupportedOperationError on garbage calldata to bundles deployments", () => {
+    expect(() =>
+      decode([toTx({ to: blueBundlesV1, data: "0xdeadbeef" })]),
+    ).toThrow(UnsupportedOperationError);
+    expect(() =>
+      decode([toTx({ to: vaultBundlesV1, data: "0xdeadbeef" })]),
+    ).toThrow(UnsupportedOperationError);
+  });
+
+  test("error: ProtocolBindingMismatchError on reallocation targeting another market", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+      args: [
+        marketParams,
+        0n,
+        400_000n,
+        maxUint256,
+        { kind: 0, data: "0x" },
+        {
+          signature: { v: 0, r: zeroHash, s: zeroHash },
+          nonce: 0n,
+          deadline: 0n,
+        },
+        [
+          {
+            vault: VAULT_V2,
+            adapter: ADAPTER,
+            marketParams: marketB,
+            fromIdle: false,
+            sourceAdapter: ADAPTER,
+            sourceMarketParams: marketB,
+            assets: 100_000n,
+            penalty: 0n,
+          },
+        ],
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+  });
+
+  test("error: UnsupportedOperationError on reallocations without a borrow leg", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+      args: [
+        marketParams,
+        10n ** 18n,
+        0n,
+        maxUint256,
+        { kind: 0, data: "0x" },
+        {
+          signature: { v: 0, r: zeroHash, s: zeroHash },
+          nonce: 0n,
+          deadline: 0n,
+        },
+        [
+          {
+            vault: VAULT_V2,
+            adapter: ADAPTER,
+            marketParams,
+            fromIdle: true,
+            sourceAdapter: zeroAddress,
+            sourceMarketParams: marketParams,
+            assets: 100_000n,
+            penalty: 0n,
+          },
+        ],
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      UnsupportedOperationError,
+    );
+  });
+
+  test("error: ProtocolBindingMismatchError on refinance to the same market", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1MigrateBorrowPosition",
+      args: [
+        marketParams,
+        marketParams,
+        maxUint256,
+        {
+          signature: { v: 0, r: zeroHash, s: zeroHash },
+          nonce: 0n,
+          deadline: 0n,
+        },
+        [],
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+  });
+
+  test("error: UnsupportedOperationError on repay with both assets and shares", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1RepayAndWithdrawCollateral",
+      args: [
+        marketParams,
+        600_000n,
+        700n,
+        600_000n,
+        0n,
+        maxUint256,
+        { kind: 0, data: "0x" },
+        {
+          signature: { v: 0, r: zeroHash, s: zeroHash },
+          nonce: 0n,
+          deadline: 0n,
+        },
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      UnsupportedOperationError,
+    );
+  });
+
+  test("error: VaultV2 multicall guards carry inner callPath", () => {
+    const multicall = (calls: `0x${string}`[]) =>
+      toTx({
+        to: VAULT_V2,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "multicall",
+          args: [calls],
+        }),
+      });
+    const deallocate = (onBehalf: Address, data = "0x" as `0x${string}`) =>
+      encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "forceDeallocate",
+        args: [ADAPTER, data, 1n, onBehalf],
+      });
+    const redeem = (receiver: Address, onBehalf: Address) =>
+      encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "redeem",
+        args: [1n, receiver, onBehalf],
+      });
+    const other = getAddress("0x9999999999999999999999999999999999999999");
+
+    const expectCallPath = (spec: {
+      readonly call: () => unknown;
+      readonly error: new (...args: never[]) => Error;
+      readonly callPath: readonly number[];
+    }) => {
+      const { call, error, callPath } = spec;
+      try {
+        call();
+      } catch (caught) {
+        expect(caught).toBeInstanceOf(error);
+        expect(
+          (caught as { context: { location: { callPath: readonly number[] } } })
+            .context.location.callPath,
+        ).toStrictEqual(callPath);
+        return;
+      }
+      throw new Error("expected decodeOperations to throw");
+    };
+
+    expectCallPath({
+      call: () =>
+        decode([multicall([deallocate(other), redeem(owner, owner)])]),
+      error: ProtocolBindingMismatchError,
+      callPath: [0],
+    });
+    expectCallPath({
+      call: () =>
+        decode([multicall([deallocate(owner), redeem(other, owner)])]),
+      error: ProtocolBindingMismatchError,
+      callPath: [1],
+    });
+    expectCallPath({
+      call: () =>
+        decode([multicall([deallocate(owner), redeem(owner, other)])]),
+      error: ProtocolBindingMismatchError,
+      callPath: [1],
+    });
+    expectCallPath({
+      call: () => decode([multicall([])]),
+      error: UnsupportedOperationError,
+      callPath: [],
+    });
+    expectCallPath({
+      call: () => decode([multicall(["0xdeadbeef", redeem(owner, owner)])]),
+      error: UnsupportedOperationError,
+      callPath: [0],
+    });
+    expectCallPath({
+      call: () =>
+        decode([
+          multicall([deallocate(owner, "0x1234"), redeem(owner, owner)]),
+        ]),
+      error: ProtocolBindingMismatchError,
+      callPath: [0],
+    });
+    // A vault bound as V1 cannot receive a VaultV2 multicall.
+    expect(() =>
+      decode([multicall([redeem(owner, owner)])], {
+        vaults: [{ address: VAULT_V2, kind: "vaultV1", asset: USDC }],
+      }),
+    ).toThrow(UnsupportedOperationError);
+  });
+
+  test("error: preview rejects a non-empty shares permit on vault redeem", () => {
+    const redeemShares = 700n;
+    const permit: Erc2612RequirementSignature = {
+      args: {
+        owner,
+        nonce: 9n,
+        asset: VAULT_V2,
+        signature,
+        amount: redeemShares,
+        deadline: DEADLINE,
+      },
+      action: {
+        type: "permit",
+        args: {
+          spender: vaultBundlesV1,
+          amount: redeemShares,
+          deadline: DEADLINE,
+        },
+      },
+    };
+    const tx = vaultV2Redeem({
+      vault: { chainId, address: VAULT_V2 },
+      args: {
+        shares: redeemShares,
+        userAddress: owner,
+        deadline: DEADLINE,
+        requirementSignature: permit,
+      },
+    });
+    expect(() => decode([toTx(tx)], { mode: "preview" })).toThrow(
+      UnsupportedOperationError,
+    );
+  });
+
+  test("behavior: fast-check vaultV2Deposit round-trips funding, bound, and deadline", () => {
+    fc.assert(
+      fc.property(
+        fc.tuple(
+          fc.bigInt({ min: 1n, max: 10n ** 30n }),
+          fc.bigInt({ min: 1n, max: 10n ** 30n }),
+          fc.bigInt({ min: 1n, max: 2n ** 32n }),
+        ),
+        ([assets, maxSharePrice, deadline]) => {
+          const tx = vaultV2Deposit({
+            vault: { chainId, address: VAULT_V2, asset: USDC },
+            args: {
+              amount: assets,
+              maxSharePrice,
+              userAddress: owner,
+              deadline,
+            },
+          });
+          expect(decode([toTx(tx)]).operations[0]).toStrictEqual(
+            expect.objectContaining({
+              type: "vaultV2Deposit",
+              route: "vaultBundlesV1",
+              vault: VAULT_V2,
+              asset: USDC,
+              funding: { type: "erc20", token: USDC, assets },
+              maxSharePriceE27: maxSharePrice,
+              deadline,
+              tokenSignature: { type: "none" },
+            }),
+          );
+        },
+      ),
+      { numRuns: 30 },
     );
   });
 });
