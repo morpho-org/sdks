@@ -80,7 +80,7 @@ The plan links any ADR it produced. An ADR never links the plan.
 The structural rules ADRs follow are executable. From the repository root:
 
 ```sh
-records() { git ls-files 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
+records() { git ls-files --cached --others --exclude-standard 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
 new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
 prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fence in " FILENAME > "/dev/stderr"}}' "$1" | sed 's/`[^`]*`//g'; }
 
@@ -91,7 +91,7 @@ for f in $(new_records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' 
 for f in $(records); do prose "$f" | grep -q 'linear\.app' && echo "$f"; done
 
 # The retired TIB convention is gone — prints nothing
-git ls-files ':(top)*TIB-*.md' ':(top)*/tibs/*'
+git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)*/tibs/*'
 
 # Every record has a Status row — prints nothing
 for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' || echo "$f"; done

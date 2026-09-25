@@ -65,7 +65,7 @@ Every check runs from the repository root over the set of records, which is ever
 its own definition.
 
 ````sh
-records() { git ls-files 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
+records() { git ls-files --cached --others --exclude-standard 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
 new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
 prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fence in " FILENAME > "/dev/stderr"}}' "$1" | sed 's/`[^`]*`//g'; }
 ````
@@ -88,7 +88,7 @@ prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fe
 - No record uses the retired convention → this check prints nothing:
 
   ```sh
-  git ls-files ':(top)*TIB-*.md' ':(top)*/tibs/*'
+  git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)*/tibs/*'
   ```
 
 - Every record has a Status row → this check prints nothing:
