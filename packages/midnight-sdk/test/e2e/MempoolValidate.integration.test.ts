@@ -21,7 +21,6 @@ import { SetterRatifier } from "../../src/signatures/SetterRatifier.js";
 import { Tree } from "../../src/signatures/Tree.js";
 
 const chainId = ChainId.BaseMainnet;
-const API_TIMEOUT = 30_000;
 
 const account = privateKeyToAccount(generatePrivateKey());
 
@@ -91,142 +90,126 @@ beforeAll(async () => {
   const now = BigInt(Math.floor(Date.now() / 1000));
   start = now;
   expiry = now + 3_600n;
-}, API_TIMEOUT);
+});
 
 describe("Tree.mempoolValidate against the Midnight API", () => {
-  test(
-    "validates an Ecrecover ratified offer",
-    async () => {
-      const tree = Tree.create({
-        type: "ecrecover",
-        entries: [offer(ecrecoverRatifier)],
-      });
-      const client = createWalletClient({
-        account,
-        chain: base,
-        transport: custom({
-          request: () => Promise.reject(new Error("No transport in test.")),
-        }),
-      });
-      const signature = await EcrecoverRatifier.sign({
-        tree: tree.toDescriptor(),
-        client,
-        account,
-      });
+  test("validates an Ecrecover ratified offer", async () => {
+    const tree = Tree.create({
+      type: "ecrecover",
+      entries: [offer(ecrecoverRatifier)],
+    });
+    const client = createWalletClient({
+      account,
+      chain: base,
+      transport: custom({
+        request: () => Promise.reject(new Error("No transport in test.")),
+      }),
+    });
+    const signature = await EcrecoverRatifier.sign({
+      tree: tree.toDescriptor(),
+      client,
+      account,
+    });
 
-      const items = await EcrecoverRatifier.ratify({
-        tree: tree.toDescriptor(),
-        account,
-        signature,
-      });
-      expect(items).toHaveLength(1);
-      expect(items[0]!.ratifierData).not.toBe("0x");
+    const items = await EcrecoverRatifier.ratify({
+      tree: tree.toDescriptor(),
+      account,
+      signature,
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.ratifierData).not.toBe("0x");
 
-      const result = await MidnightApi.validateMempoolPayload({
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId,
+      payload: await Payload.encode(items),
+    });
+    expect(result).toEqual({ valid: true, issues: [] });
+
+    const treeResult = await tree.mempoolValidate({
+      chainId,
+      ratification: { type: "ecrecover", account, signature },
+    });
+    expect(treeResult).toEqual({ valid: true, issues: [] });
+  });
+
+  test("validates a Setter ratified offer", async () => {
+    const tree = Tree.create({
+      type: "setter",
+      entries: [offer(setterRatifier)],
+    });
+
+    const items = SetterRatifier.ratify({ tree: tree.toDescriptor() });
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId,
+      payload: await Payload.encode(items),
+    });
+    expect(result).toEqual({ valid: true, issues: [] });
+
+    const treeResult = await tree.mempoolValidate({
+      chainId,
+      ratification: { type: "setter" },
+    });
+    expect(treeResult).toEqual({ valid: true, issues: [] });
+  });
+
+  test("rejects a RateRatifierV1 offer whose ratifier is not registered", async () => {
+    const tree = Tree.create({
+      type: "rateV1",
+      entries: [
+        {
+          offer: offer("0x00000000000000000000000000000000000000A1"),
+          rate: 1_000_000_000n,
+          allowedTaker: zeroAddress,
+        },
+      ],
+    });
+
+    const error = await tree
+      .mempoolValidate({
         chainId,
-        payload: await Payload.encode(items),
-      });
-      expect(result).toEqual({ valid: true, issues: [] });
+        ratification: { type: "rateV1" },
+      })
+      .then(
+        () => {
+          throw new Error("Expected mempoolValidate to reject.");
+        },
+        (caught: unknown) => caught,
+      );
 
-      const treeResult = await tree.mempoolValidate({
+    expect(error).toBeInstanceOf(MidnightMempoolValidationError);
+    expect(error).toMatchObject({
+      issues: [{ rule: MempoolPayloadValidationRule.Ratifier }],
+    });
+  });
+
+  test("rejects a PriceRatifierV1 offer whose ratifier is not registered", async () => {
+    const tree = Tree.create({
+      type: "priceV1",
+      entries: [
+        {
+          offer: offer("0x00000000000000000000000000000000000000A1"),
+          allowedTaker: zeroAddress,
+        },
+      ],
+    });
+
+    const error = await tree
+      .mempoolValidate({
         chainId,
-        ratification: { type: "ecrecover", account, signature },
-      });
-      expect(treeResult).toEqual({ valid: true, issues: [] });
-    },
-    API_TIMEOUT,
-  );
+        ratification: { type: "priceV1" },
+      })
+      .then(
+        () => {
+          throw new Error("Expected mempoolValidate to reject.");
+        },
+        (caught: unknown) => caught,
+      );
 
-  test(
-    "validates a Setter ratified offer",
-    async () => {
-      const tree = Tree.create({
-        type: "setter",
-        entries: [offer(setterRatifier)],
-      });
-
-      const items = SetterRatifier.ratify({ tree: tree.toDescriptor() });
-      const result = await MidnightApi.validateMempoolPayload({
-        chainId,
-        payload: await Payload.encode(items),
-      });
-      expect(result).toEqual({ valid: true, issues: [] });
-
-      const treeResult = await tree.mempoolValidate({
-        chainId,
-        ratification: { type: "setter" },
-      });
-      expect(treeResult).toEqual({ valid: true, issues: [] });
-    },
-    API_TIMEOUT,
-  );
-
-  test(
-    "rejects a RateRatifierV1 offer whose ratifier is not registered",
-    async () => {
-      const tree = Tree.create({
-        type: "rateV1",
-        entries: [
-          {
-            offer: offer("0x00000000000000000000000000000000000000A1"),
-            rate: 1_000_000_000n,
-            allowedTaker: zeroAddress,
-          },
-        ],
-      });
-
-      const error = await tree
-        .mempoolValidate({
-          chainId,
-          ratification: { type: "rateV1" },
-        })
-        .then(
-          () => {
-            throw new Error("Expected mempoolValidate to reject.");
-          },
-          (caught: unknown) => caught,
-        );
-
-      expect(error).toBeInstanceOf(MidnightMempoolValidationError);
-      expect(error).toMatchObject({
-        issues: [{ rule: MempoolPayloadValidationRule.Ratifier }],
-      });
-    },
-    API_TIMEOUT,
-  );
-
-  test(
-    "rejects a PriceRatifierV1 offer whose ratifier is not registered",
-    async () => {
-      const tree = Tree.create({
-        type: "priceV1",
-        entries: [
-          {
-            offer: offer("0x00000000000000000000000000000000000000A1"),
-            allowedTaker: zeroAddress,
-          },
-        ],
-      });
-
-      const error = await tree
-        .mempoolValidate({
-          chainId,
-          ratification: { type: "priceV1" },
-        })
-        .then(
-          () => {
-            throw new Error("Expected mempoolValidate to reject.");
-          },
-          (caught: unknown) => caught,
-        );
-
-      expect(error).toBeInstanceOf(MidnightMempoolValidationError);
-      expect(error).toMatchObject({
-        issues: [{ rule: MempoolPayloadValidationRule.Ratifier }],
-      });
-    },
-    API_TIMEOUT,
-  );
+    expect(error).toBeInstanceOf(MidnightMempoolValidationError);
+    expect(error).toMatchObject({
+      issues: [{ rule: MempoolPayloadValidationRule.Ratifier }],
+    });
+  });
 
   test.skipIf(baseAddresses.rateRatifierV1 == null)(
     "validates a RateRatifierV1 ratified offer",
@@ -248,7 +231,6 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
       });
       expect(result).toEqual({ valid: true, issues: [] });
     },
-    API_TIMEOUT,
   );
 
   test.skipIf(baseAddresses.priceRatifierV1 == null)(
@@ -270,6 +252,5 @@ describe("Tree.mempoolValidate against the Midnight API", () => {
       });
       expect(result).toEqual({ valid: true, issues: [] });
     },
-    API_TIMEOUT,
   );
 });
