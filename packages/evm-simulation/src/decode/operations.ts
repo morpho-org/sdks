@@ -1067,10 +1067,15 @@ const decodeVaultV2Multicall = (
     }
   });
 
+  if (inner.length < 2) {
+    return f.unsupported(
+      `Vault "${vault.address}" multicall expected at least one forceDeallocate before redeem, got "${inner.length}" inner call(s). A forceRedeem multicall is forceDeallocate legs then a final redeem`,
+    );
+  }
   const last = inner.at(-1);
   if (last == null) {
     return f.unsupported(
-      `Vault "${vault.address}" multicall expected at least one inner call, got "0". A forceRedeem multicall ends with redeem`,
+      `Vault "${vault.address}" multicall expected at least one forceDeallocate before redeem, got "${inner.length}" inner call(s). A forceRedeem multicall is forceDeallocate legs then a final redeem`,
     );
   }
 

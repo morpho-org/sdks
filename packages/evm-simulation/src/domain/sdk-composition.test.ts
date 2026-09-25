@@ -29,7 +29,7 @@ describe("released SDK composition", () => {
         useSimplePermit: true,
       });
       const authorizations = toSimulationAuthorizations({
-        chainId: 1,
+        chainId: params.chainId,
         owner: params.owner,
         requirements,
       });

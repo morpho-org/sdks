@@ -1407,6 +1407,12 @@ describe("decodeOperations", () => {
       error: UnsupportedOperationError,
       callPath: [],
     });
+    // A lone redeem without any forceDeallocate leg is not a forceRedeem.
+    expectCallPath({
+      call: () => decode([multicall([redeem(owner, owner)])]),
+      error: UnsupportedOperationError,
+      callPath: [],
+    });
     expectCallPath({
       call: () => decode([multicall(["0xdeadbeef", redeem(owner, owner)])]),
       error: UnsupportedOperationError,
