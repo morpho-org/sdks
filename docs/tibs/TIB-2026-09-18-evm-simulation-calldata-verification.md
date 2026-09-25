@@ -4,7 +4,7 @@
 | --- | --- |
 | **Date** | 2026-09-18; revised 2026-09-24 |
 | **Author** | @foulques, @jinmel |
-| **Scope** | `evm-simulation` 5.0.0, following a deprecation minor; consumers: Vaults frontend and write API |
+| **Scope** | `evm-simulation` 6.0.0; consumers: Vaults frontend and write API |
 | **SDK baseline** | `morpho-sdk` **6.0.0**, released 2026-09-24; pinned version for routes, ABIs, addresses and behavior |
 
 ## Context and decision
@@ -95,7 +95,7 @@ Bounds are inclusive. There is no free-form metric, subject or time-basis field.
 | --- | --- |
 | `maxSlippageWad?` | Conversion slippage bound; default `DEFAULT_SLIPPAGE_TOLERANCE` (`3_00000000000000n`, 0.03%) |
 | `minLltvBufferWad?` | Distance below LLTV (or active `preLltv`) a risk-increasing action must keep; default `DEFAULT_LLTV_BUFFER` (`WAD / 200n`, 0.5%) |
-| `maxSignatureLifetimeSeconds?` | Upper bound on `deadline − blockTimestamp` for every typed-data request; default `7_200n` |
+| `maxSignatureLifetimeSeconds?` | Upper bound on `deadline − simulationStartTimestamp` for every typed-data request; default `7_200n` |
 | `wallet?` | `{ maxDebit?: TokenAmount[], minCredit?: TokenAmount[] }` where `TokenAmount = { token, amount }` and native uses viem's `ethAddress` |
 | `operations?` | `readonly OperationLimit[]`; see [appendix](#operation-limits) |
 
@@ -156,6 +156,13 @@ and available diagnostic context without being mislabeled as a known Morpho cond
 failures and missing verification evidence remain separate from contract execution failures.
 
 ## Simulation limits are result constraints
+
+At entry, `simulate()` captures `simulationStartTimestamp` once from the current wall clock in Unix
+seconds, rounded up consistently with the SDK. Before RPC simulation, reject any decoded transaction
+or pending authorization deadline at or before that timestamp with `SimulationValidationError`,
+identifying the expired request or transaction and asking the caller to rebuild it. Measure remaining
+signature lifetime from this same timestamp, including when simulating a historical block. Block time
+still governs simulated contract execution and accounting; it does not determine request freshness.
 
 Limits define which decoded parameters and verified outcomes the consumer will accept. A transaction
 can execute successfully and still fail these constraints. Such a failure must never be reported as
@@ -277,12 +284,16 @@ calldata in preview instead of attempting to bypass signature verification.
 
 ## Migration
 
-Ship a deprecation minor for the Tenderly configuration and legacy `approval` / `signature`
-authorization variants before `evm-simulation` 5.0.0 removes them. The major requires
+**Decision (2026-09-25):** target `evm-simulation` 6.0.0 and accept the breaking replacement of the
+legacy authorization inputs in that major. This explicitly approved exception skips the prior
+successor-introduction and one-minor coexistence steps for this authorization-input change only.
+Consumers migrate to the exact-wallet-request interface; `morpho-sdk` 6.0.0's action API is unchanged.
+
+Ship a deprecation minor for the Tenderly configuration before its removal. The major requires
 `simulateV1Url`, introduces the typed authorization requests and verification output, and makes
 `txIdx` index only caller transactions. The SDK baseline remains pinned to `morpho-sdk` 6.0.0.
 
-Version 5.0.0 rejects legacy Bundler3/GeneralAdapter1 transactions, arbitrary call compositions,
+Version 6.0.0 rejects legacy Bundler3/GeneralAdapter1 transactions, arbitrary call compositions,
 partial refinance and Midnight operations with `UnsupportedOperationError`. Consumers must rebuild
 transactions using the supported `morpho-sdk` 6.0.0 routes; operations outside that scope have no
 replacement in this simulator. Document these restrictions in the deprecation minor's release notes
@@ -308,7 +319,9 @@ failures and constraint violations while blocking acceptance on all three.
       successful final execution consumes it. Invalid signatures fail in final.
 - [ ] Missing evidence, unsupported routes and unknown failures fail explicitly. Existing error
       compatibility is preserved, and consumers block every failure category.
-- [ ] Repeated inputs at the same pinned block produce identical verification output; migration
+- [ ] Deadline checks fail before RPC simulation for expired inputs and accept SDK-default two-hour
+      requests despite block lag. Tests fix the call-time clock, including for historical blocks.
+- [ ] Repeated inputs at the same pinned block and call-time clock produce identical verification output; migration
       documentation and package rules match the shipped interface.
 
 ## References
