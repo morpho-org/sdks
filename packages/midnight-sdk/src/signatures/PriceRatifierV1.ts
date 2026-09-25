@@ -81,7 +81,6 @@ const isPaddingEntry = (entry: {
  * function leaf(offer: IOffer): PriceRatifierV1Leaf {
  *   return { offer };
  * }
- * console.log(leaf(offer).offer);
  * ```
  */
 export interface PriceRatifierV1Leaf {
@@ -102,7 +101,6 @@ export interface PriceRatifierV1Leaf {
  * function leaf(offer: OfferStruct): PriceRatifierV1LeafStruct {
  *   return { offer, allowedTaker: zeroAddress };
  * }
- * console.log(leaf(offer).allowedTaker);
  * ```
  */
 export interface PriceRatifierV1LeafStruct {
@@ -125,7 +123,6 @@ export interface PriceRatifierV1LeafStruct {
  * function build(offer: IOffer): PriceRatifierV1TreeDescriptor {
  *   return PriceRatifierV1.buildDescriptor([{ offer }]);
  * }
- * console.log(build(offer).root);
  * ```
  */
 export interface PriceRatifierV1TreeDescriptor
@@ -173,7 +170,6 @@ export interface DecodedPriceRatifierV1Data extends TreeProof {
  * function input(offer: IOffer): PriceRatifierV1TreeInput {
  *   return [{ offer }];
  * }
- * console.log(input(offer));
  * ```
  */
 export type PriceRatifierV1TreeInput =
@@ -217,7 +213,6 @@ export namespace PriceRatifierV1 {
    *     allowedTaker: zeroAddress,
    *   });
    * }
-   * console.log(hash(offer));
    * ```
    */
   export function hashLeaf(leaf: PriceRatifierV1LeafStruct): Hash {
@@ -374,7 +369,6 @@ export namespace PriceRatifierV1 {
    * function build(offer: IOffer) {
    *   return PriceRatifierV1.buildDescriptor([{ offer }]);
    * }
-   * console.log(build(offer).height);
    * ```
    */
   export function buildDescriptor(
@@ -440,7 +434,6 @@ export namespace PriceRatifierV1 {
    *     leafIndex: 0n,
    *   });
    * }
-   * console.log(build(offer).proof.length);
    * ```
    */
   export function buildProof(params: {
@@ -547,7 +540,6 @@ export namespace PriceRatifierV1 {
    * function check(offer: IOffer, ratifierData: Hex) {
    *   return PriceRatifierV1.verifyRatifierData({ offer, ratifierData });
    * }
-   * console.log(check(offer, ratifierData).root);
    * ```
    */
   export function verifyRatifierData(params: {
@@ -600,7 +592,6 @@ export namespace PriceRatifierV1 {
    *     leafIndex: 0n,
    *   });
    * }
-   * console.log(build(offer));
    * ```
    */
   export function ratifierData(params: {
@@ -640,7 +631,6 @@ export namespace PriceRatifierV1 {
    *     tree: [{ offer }],
    *   });
    * }
-   * console.log(build(offer).length);
    * ```
    */
   export function ratify(params: {

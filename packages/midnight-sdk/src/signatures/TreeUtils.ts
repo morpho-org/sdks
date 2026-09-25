@@ -42,9 +42,10 @@ import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
 import { Ratifier } from "./Ratifier.js";
 import { SetterRatifierUtils } from "./SetterRatifier.js";
-import type { Tree } from "./Tree.js";
+import { Tree } from "./Tree.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 import type {
+  AnyTree,
   AnyTreeSnapshot,
   EcrecoverTreeCreateRequest,
   TreeCreateRequest,
@@ -585,7 +586,7 @@ export namespace TreeUtils {
    * and a route-matching `ratification` runs the corresponding V1 `ratify`.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree or V1 route-typed tree snapshot to validate.
+   * @param params.tree - Offer tree or route-typed tree snapshot to validate. Serialized standard snapshots resume without rewriting committed groups.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
@@ -641,6 +642,8 @@ export namespace TreeUtils {
     > & {
       readonly tree:
         | TreeInput
+        | TreeSnapshot<"ecrecover">
+        | TreeSnapshot<"setter">
         | TreeSnapshot<"priceV1">
         | TreeSnapshot<"rateV1">;
       readonly ratification?: TreeMempoolValidateRatification;
@@ -663,7 +666,8 @@ export namespace TreeUtils {
       }
       items =
         params.ratification == null
-          ? tree.offers.map((offer) => ({
+          ? // Re-validate the caller-supplied snapshot (hashes, padding, leaf gates) before posting.
+            Tree.fromDescriptor(tree).offers.map((offer) => ({
               offer,
               ratifierData: "0x" as const,
             }))
@@ -672,19 +676,30 @@ export namespace TreeUtils {
             : RateRatifierV1.ratify({ tree });
     } else {
       // Only standard Ecrecover/Setter inputs remain beyond this point.
-      const tree = params.tree as TreeInput;
+      // Serialized standard snapshots resume through descriptor validation so committed groups are kept.
+      const rawTree = params.tree as TreeInput | AnyTreeSnapshot;
+      const tree: TreeInput | AnyTree =
+        !(rawTree instanceof Tree) &&
+        !Array.isArray(rawTree) &&
+        "entries" in rawTree &&
+        "offers" in rawTree &&
+        "leaves" in rawTree &&
+        "root" in rawTree &&
+        "height" in rawTree
+          ? Tree.fromDescriptor(rawTree)
+          : rawTree;
       if (params.ratification == null) {
-        if ("paddedOffers" in tree) {
-          items = tree.offers.map((offer) => ({
-            offer,
-            ratifierData: "0x" as const,
-          }));
-        } else {
-          const entries = Array.isArray(tree) ? tree : [tree];
+        if (Array.isArray(tree) || !("paddedOffers" in tree)) {
+          const entries = Array.isArray(tree) ? tree : [tree as GroupInput];
           const offers = normalizeEntries(entries);
 
           buildDescriptor(entries);
           items = offers.map((offer) => ({
+            offer,
+            ratifierData: "0x" as const,
+          }));
+        } else {
+          items = (tree as TreeLike).offers.map((offer) => ({
             offer,
             ratifierData: "0x" as const,
           }));
@@ -798,7 +813,7 @@ export namespace TreeUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const tree = TreeUtils.buildDescriptor([offer]);
+   * const tree = TreeUtils.buildDescriptor({ type: "ecrecover", entries: [offer] });
    * console.log(tree.root);
    * ```
    */

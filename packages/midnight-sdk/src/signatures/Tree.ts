@@ -183,7 +183,12 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
   ): AnyTree | Tree {
     if (tree instanceof Tree) return tree;
     // Portable snapshots resume through descriptor validation instead of rebuilding.
-    if (!Array.isArray(tree) && "leaves" in tree && "root" in tree) {
+    if (
+      !Array.isArray(tree) &&
+      "entries" in tree &&
+      "leaves" in tree &&
+      "root" in tree
+    ) {
       return "type" in tree && tree.type != null
         ? Tree.fromDescriptor(tree as AnyTreeSnapshot)
         : Tree.fromDescriptor(tree as TreeSnapshot<undefined>);

@@ -251,6 +251,13 @@ describe("Tree.from", () => {
     expect(rate.root).toBe(trees()[3].root);
     expect(rate.entries).toEqual(trees()[3].entries);
   });
+
+  test("behavior: untagged descriptors keep the legacy normalization path", () => {
+    const descriptor = TreeUtils.buildDescriptor([offers[0]!]);
+    const resumed = Tree.from(descriptor);
+    expect(resumed).toBeInstanceOf(Tree);
+    expect(resumed.root).toBe(descriptor.root);
+  });
 });
 
 describe("Tree.fromDescriptor", () => {

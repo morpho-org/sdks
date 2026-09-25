@@ -542,6 +542,142 @@ describe("TreeUtils.mempoolValidate", () => {
     expect(decoded[0]!.ratifierData).toBe("0x");
   });
 
+  test("behavior: standard snapshots resume without rewriting committed groups", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const group = Group.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+      baseOffer({
+        tick: 5_004n,
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+    const snapshot = Tree.create({
+      type: "setter",
+      entries: [group],
+    }).toDescriptor();
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: snapshot,
+      fetch,
+      ratification: { type: "setter" },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = SetterRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded).toHaveLength(2);
+    for (const item of decoded) {
+      expect(item.offer.group).toBe(group.id);
+    }
+    expect(ratifierData.root).toBe(snapshot.root);
+  });
+
+  test("error: InvalidTreeError for a V1 snapshot with a tampered root", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = {
+      ...Tree.create({
+        type: "rateV1",
+        entries: [
+          {
+            offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+            rate: 100n,
+            allowedTaker: zeroAddress,
+          },
+        ],
+      }).toDescriptor(),
+      root: zeroHash,
+    };
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification does not match the snapshot route", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = Tree.create({
+      type: "rateV1",
+      entries: [
+        {
+          offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+          rate: 100n,
+          allowedTaker: zeroAddress,
+        },
+      ],
+    }).toDescriptor();
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+        ratification: { type: "priceV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification is used with a standard tree", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [offer],
+        fetch,
+        ratification: { type: "rateV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("error: InvalidTreeError for empty plain input before API validation", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];

@@ -93,7 +93,6 @@ const isPaddingEntry = (entry: {
  * function leaf(offer: IOffer): RateRatifierV1Leaf {
  *   return { offer, rate: 1_0000000000000000n };
  * }
- * console.log(leaf(offer).rate);
  * ```
  */
 export interface RateRatifierV1Leaf {
@@ -116,7 +115,6 @@ export interface RateRatifierV1Leaf {
  * function leaf(offer: OfferStruct): RateRatifierV1LeafStruct {
  *   return { offer, rate: 0n, allowedTaker: zeroAddress };
  * }
- * console.log(leaf(offer).allowedTaker);
  * ```
  */
 export interface RateRatifierV1LeafStruct {
@@ -141,7 +139,6 @@ export interface RateRatifierV1LeafStruct {
  * function build(offer: IOffer): RateRatifierV1TreeDescriptor {
  *   return RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
  * }
- * console.log(build(offer).root);
  * ```
  */
 export interface RateRatifierV1TreeDescriptor
@@ -192,7 +189,6 @@ export interface DecodedRateRatifierV1Data extends TreeProof {
  * function input(offer: IOffer): RateRatifierV1TreeInput {
  *   return [{ offer, rate: 0n }];
  * }
- * console.log(input(offer));
  * ```
  */
 export type RateRatifierV1TreeInput =
@@ -254,7 +250,6 @@ export namespace RateRatifierV1 {
    *     allowedTaker: zeroAddress,
    *   });
    * }
-   * console.log(hash(offer));
    * ```
    */
   export function hashLeaf(leaf: RateRatifierV1LeafStruct): Hash {
@@ -422,7 +417,6 @@ export namespace RateRatifierV1 {
    * function build(offer: IOffer) {
    *   return RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
    * }
-   * console.log(build(offer).height);
    * ```
    */
   export function buildDescriptor(
@@ -504,7 +498,6 @@ export namespace RateRatifierV1 {
    *     leafIndex: 0n,
    *   });
    * }
-   * console.log(build(offer).proof.length);
    * ```
    */
   export function buildProof(params: {
@@ -623,7 +616,6 @@ export namespace RateRatifierV1 {
    * function check(offer: IOffer, ratifierData: Hex) {
    *   return RateRatifierV1.verifyRatifierData({ offer, ratifierData });
    * }
-   * console.log(check(offer, ratifierData).root);
    * ```
    */
   export function verifyRatifierData(params: {
@@ -679,7 +671,6 @@ export namespace RateRatifierV1 {
    *     leafIndex: 0n,
    *   });
    * }
-   * console.log(build(offer));
    * ```
    */
   export function ratifierData(params: {
@@ -722,7 +713,6 @@ export namespace RateRatifierV1 {
    *     tree: [{ offer, rate: 0n }],
    *   });
    * }
-   * console.log(build(offer).length);
    * ```
    */
   export function ratify(params: {
@@ -826,7 +816,6 @@ export namespace RateRatifierV1 {
    *     timestamp: 0n,
    *   });
    * }
-   * console.log(check(offer));
    * ```
    */
   export function isPriceAcceptable(params: {
