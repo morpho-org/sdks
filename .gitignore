@@ -80,3 +80,5 @@ local_*
 .netlify
 
 !.vscode
+# Agent workspace scratchpad (context packs written by /execute-project)
+.context/
