@@ -32,9 +32,10 @@ Technical decisions are recorded as Architectural Decision Records (ADRs), one d
 accepted through their own PR and frozen after merge.
 
 An ADR has a four-field header — **Status**, **Date**, **Author**, **Scope** — and five sections:
-Context, Decision, Invariants, Rejected alternatives (optional), References. Status is `accepted`
-or `superseded by <ADR stem>`; it is the only field that changes after acceptance. Scope names the
-packages and target versions the decision binds, or `Repo-wide`.
+Context, Decision, Invariants, Rejected alternatives (optional), References. Status is `accepted`,
+`superseded by <ADR stem>`, or — when a later record replaces only part of the decision —
+`accepted; <part> superseded by <ADR stem>`; it is the only field that changes after acceptance.
+Scope names the packages and target versions the decision binds, or `Repo-wide`.
 
 All ADRs live in a single directory, `docs/adrs/`, named `ADR-YYYY-MM-DD-short-slug.md`. There is
 no per-package ADR location: the packages version independently through Changesets but ship from
@@ -50,9 +51,12 @@ belongs in the Technical Project Plan in Linear. The plan links its ADRs; an ADR
 
 TIBs are retired, and the existing records were migrated into `docs/adrs/` under the ADR name:
 each kept its sections and implementation-time examples, gained a normalized Status, and lost
-planning content and links to anything that changes (Linear). `docs/tibs/` no longer exists. A
-decision recorded in a migrated record is changed by a new ADR that lists the old record in its
-References, not by editing the old record.
+planning content and links to anything that changes (Linear). `docs/tibs/` no longer exists.
+Records dated before this one are migrated legacy records: they keep their implementation-time
+sections — including sequencing, test plans, open questions and the retired editing instructions —
+as a historical snapshot and are maintained only through their Status row. A decision recorded in
+a migrated record is changed by a new ADR that lists the old record in its References, not by
+editing the old record.
 
 ## Invariants
 
@@ -62,15 +66,17 @@ its own definition.
 
 ````sh
 records() { git ls-files 'docs/adrs/*.md'; }
+new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
 prose() { sed -e '/^ *```/,/^ *```/d' -e 's/`[^`]*`//g' "$1"; }
 ````
 
 - One decision per record; a PR that adds an ADR changes no published package source and ships no
   changeset → PR review.
-- No planning content lives in an ADR → this check prints nothing:
+- No planning content lives in a record dated on or after this one (legacy migrated records are
+  exempt) → this check prints nothing:
 
   ```sh
-  for f in $(records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' && echo "$f"; done
+  for f in $(new_records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' && echo "$f"; done
   ```
 
 - An ADR never links a Linear project or issue → this check prints nothing:

@@ -7,6 +7,8 @@
 | **Author** | @foulques |
 | **Scope**  | Package: `morpho-sdk` |
 
+_Migrated from ADR-2026-07-02-blue-repay-native-wrapping. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 > This record retrospectively records the design shipped in PR
@@ -168,16 +170,16 @@ may exceed the accrued borrow assets and the residual is returned to the receive
 
 ### Implementation phases
 
-- **Step 1 — Types + errors.** Flat `RepayActionAmountArgs`; redefine `RepayAmountArgs`;
+- **Phase 1 — Types + errors.** Flat `RepayActionAmountArgs`; redefine `RepayAmountArgs`;
   `nativeAmount?` on both action output types; deprecate `NonPositiveTransferAmountError`; repurpose
   `TransferAmountNotEqualToAssetsError` as the assets-mode action funding guard.
-- **Step 2 — Actions.** Native wrap block + arithmetic-free reconstruction + guards in `repay.ts`
+- **Phase 2 — Actions.** Native wrap block + arithmetic-free reconstruction + guards in `repay.ts`
   and `repayWithdrawCollateral.ts`; remove `validateRepayParams` and its barrel exports.
-- **Step 3 — Entity.** Inline amount resolution + guards in `MorphoBlue.repay` /
+- **Phase 3 — Entity.** Inline amount resolution + guards in `MorphoBlue.repay` /
   `repayWithdrawCollateral`; `getRequirements` approves the ERC-20 portion only.
-- **Step 4 — Tests.** Colocated unit tests (assets/shares × ERC-20/native/fully-native, error
+- **Phase 4 — Tests.** Colocated unit tests (assets/shares × ERC-20/native/fully-native, error
   paths); entity tests for both methods; Anvil fork round-trips for native repay on `WstethWethBlue`.
-- **Step 5 — Docs + consumer + changeset.** JSDoc, sub-folder `AGENTS.md`, README; adapt
+- **Phase 5 — Docs + consumer + changeset.** JSDoc, sub-folder `AGENTS.md`, README; adapt
   `wdk-protocol-lending-morpho-evm` (`assets → amount`); major changeset for `morpho-sdk`, patch for
   the wdk dependent.
 

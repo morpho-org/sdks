@@ -2,10 +2,12 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; V2 naming, entrypoints, and validator boundary superseded by ADR-2026-08-18-vault-v2-blue-reallocation-api |
 | **Date**   | 2026-07-29 |
 | **Author** | @foulques |
 | **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
+
+_Migrated from ADR-2026-07-29-vault-v2-public-allocator-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ## Context
 

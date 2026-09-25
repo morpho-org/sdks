@@ -2,10 +2,12 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted  |
+| **Status** | accepted; Vault V1 planning and composition retention only superseded by ADR-2026-08-28-retire-vault-v1-shared-liquidity |
 | **Date**   | 2026-08-25 |
 | **Author** | @Rubilmax / Carapulse draft |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
+
+_Migrated from ADR-2026-08-25-blue-bundles-v1-sdk-actions. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

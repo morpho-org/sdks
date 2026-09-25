@@ -7,6 +7,8 @@
 | **Author** | @rubilmax |
 | **Scope**  | Repo-wide |
 
+_Migrated from ADR-2026-05-12-release-pr-publish-on-push. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context

@@ -7,6 +7,8 @@
 | **Author** | Romain / Carapulse draft |
 | **Scope**  | Package: `morpho-sdk` / Midnight SDK |
 
+_Migrated from ADR-2026-06-03-midnight-action-output-interface. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
@@ -909,12 +911,12 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 
 ## Implementation phases
 
-- **Step 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
-- **Step 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight approval, authorization, and ratifier helpers.
-- **Step 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
-- **Step 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
-- **Step 5 — Integration tests.** Fork-test each flow shape: no requirement, approval reset, missing authorization, EOA root signature, contract-wallet ratify-root, mandatory prelude txs, and cancel offer.
-- **Step 6 — Docs / changeset.** Update package `AGENTS.md`, generated docs/JSDoc, README snippets, and add a minor changeset when code lands.
+- **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
+- **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight approval, authorization, and ratifier helpers.
+- **Phase 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
+- **Phase 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
+- **Phase 5 — Integration tests.** Fork-test each flow shape: no requirement, approval reset, missing authorization, EOA root signature, contract-wallet ratify-root, mandatory prelude txs, and cancel offer.
+- **Phase 6 — Docs / changeset.** Update package `AGENTS.md`, generated docs/JSDoc, README snippets, and add a minor changeset when code lands.
 
 ## Security
 

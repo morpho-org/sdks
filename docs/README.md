@@ -34,7 +34,9 @@ next year? If not, it belongs in the Technical Project Plan.
 
 ADRs are small and focused — one decision per ADR. An ADR is accepted through its own PR, needs
 at least one developer review, ships no changeset, and is never edited after merge. Status is the
-only field that changes. A changed decision gets a new ADR that supersedes the old one.
+only field that changes, and takes one of three forms: `accepted`, `superseded by <ADR stem>`, or
+— when a later record replaces only part of the decision — `accepted; <part> superseded by <ADR
+stem>`. A changed decision gets a new ADR that supersedes the old one.
 
 > **Before writing an ADR**, read [`DEVELOPMENT-LIFECYCLE.md`](./DEVELOPMENT-LIFECYCLE.md) and the
 > preamble of [`templates/ADR.md`](./templates/ADR.md). Agents must follow these rules when
@@ -79,10 +81,11 @@ The structural rules ADRs follow are executable. From the repository root:
 
 ```sh
 records() { git ls-files 'docs/adrs/*.md'; }
+new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
 prose() { sed -e '/^ *```/,/^ *```/d' -e 's/`[^`]*`//g' "$1"; }
 
-# No planning content in an ADR — prints nothing
-for f in $(records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' && echo "$f"; done
+# No planning content in a record dated on or after ADR-2026-09-23 — prints nothing
+for f in $(new_records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' && echo "$f"; done
 
 # An ADR never links Linear — prints nothing
 for f in $(records); do prose "$f" | grep -q 'linear\.app' && echo "$f"; done

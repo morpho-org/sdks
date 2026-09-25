@@ -7,6 +7,8 @@
 | **Author** | @Rubilmax |
 | **Scope**  | Repo-wide |
 
+_Migrated from record-0003-sdk-package-deprecation-lifecycle. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
@@ -37,7 +39,7 @@ override it, but should do so explicitly.
 
 ## Lifecycle
 
-### Step 1 -- Extract Features
+### Phase 1 -- Extract Features
 
 Before deprecating a package, move any still-supported public features into their replacement
 package or document that the feature has no replacement.
@@ -52,7 +54,7 @@ The extraction phase should include:
 
 Do not publish the npm deprecation notice until this phase is complete.
 
-### Step 2 -- Communicate with Integrators
+### Phase 2 -- Communicate with Integrators
 
 Before npm deprecation, communicate the upcoming package status to known integrators and update
 public documentation.
@@ -65,7 +67,7 @@ Communication should include:
 - the expected source-code removal timing;
 - any migration notes needed to avoid accidental dependency or import-path breakage.
 
-### Step 3 -- Deprecate npm Package
+### Phase 3 -- Deprecate npm Package
 
 After extraction and communication, mark the package as deprecated on npm with a clear message.
 
@@ -76,7 +78,7 @@ The npm deprecation message must tell consumers either:
 
 Deprecation is an npm metadata change only. Do not unpublish historical versions.
 
-### Step 4 -- Delete Source Code After 3 Months
+### Phase 4 -- Delete Source Code After 3 Months
 
 Three months after npm deprecation, delete the deprecated package source code from this monorepo.
 

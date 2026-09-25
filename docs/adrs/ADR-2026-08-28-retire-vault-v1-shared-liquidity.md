@@ -7,6 +7,8 @@
 | **Author** | @Rubilmax |
 | **Scope**  | Packages: `morpho-sdk`, `wdk-protocol-lending-morpho-evm` |
 
+_Migrated from ADR-2026-08-28-retire-vault-v1-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context

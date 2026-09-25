@@ -7,6 +7,8 @@
 | **Author** | @0xbulma  |
 | **Scope**  | Repo-wide |
 
+_Migrated from ADR-2026-06-19-adopt-latest-facets-review-mechanism. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
@@ -91,18 +93,18 @@ Repo-specific adaptations from the upstream copy:
 
 ### Implementation Phases (all landed in this PR)
 
-- **Step 1 — Scripts.** Ported the four `.ts` + their `.test.ts` + `list-fix-rubric-agents.sh`;
+- **Phase 1 — Scripts.** Ported the four `.ts` + their `.test.ts` + `list-fix-rubric-agents.sh`;
   reformatted to Biome 2-space; added a `agents-engine` Vitest project; added a strict
   `tsconfig.json`. Gates: Biome clean, 124 tests pass, `tsc --noEmit` clean.
-- **Step 2 — Engine.** `pr-review-engine/SKILL.md` with the full Steps 3–6 contract + Morpho
+- **Phase 2 — Engine.** `pr-review-engine/SKILL.md` with the full Steps 3–6 contract + Morpho
   protocol-context retention.
-- **Step 3 — Agents + references.** Moved + relinked the 9 personas; added `skill-authoring`;
+- **Phase 3 — Agents + references.** Moved + relinked the 9 personas; added `skill-authoring`;
   ported the reference subset (adapting `skill-authoring.md`).
-- **Step 4 — Callers.** Repointed all callers; `pr-review-local` gained Step 2c cache + Step 6b
+- **Phase 4 — Callers.** Repointed all callers; `pr-review-local` gained Step 2c cache + Step 6b
   ledger + commit-message intent + SSH→HTTPS fetch fallback; `pr-review-gh` gained PR-title/body
   intent + PR-keyed ledger + audit trail; `pr-review-ci` adopted the new contract; `pr-fix`
   repointed + wired Fix-rubric discovery.
-- **Step 5 — Docs.** Rewrote `AGENTS.md` §10 (orchestration table, persona inventory, backlinks).
+- **Phase 5 — Docs.** Rewrote `AGENTS.md` §10 (orchestration table, persona inventory, backlinks).
 
 ## Considered Alternatives
 

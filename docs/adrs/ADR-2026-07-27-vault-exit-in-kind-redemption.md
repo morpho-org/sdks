@@ -7,6 +7,8 @@
 | **Author** | @foulques |
 | **Scope**  | Packages: `morpho-sdk`, `morpho-ts` |
 
+_Migrated from ADR-2026-07-27-vault-exit-in-kind-redemption. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
@@ -489,7 +491,7 @@ new shares permit does not route through it.
 and following the established `getTokenRequirementActions` convention. It rejects
 Permit2, checks that the signed asset is the vault, then parses
 the signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple
-uses the signed requirement's nonce and deadline. owner, spender, duplicated action metadata, and
+uses the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and
 the signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification,
 which hardcodes `owner = msg.sender` and `spender = address(this)`.
 
@@ -549,14 +551,14 @@ now registered, the fork suite exercises the live Ethereum bytecode, and the tem
 artifact and deployment helper have been removed. The verified selectors and `BLUE` immutable match
 the vendored ABI.
 
-- **Step 0 — Prerequisite:** establish predeployment fork coverage (completed by PR #907 and now
+- **Phase 0 — Prerequisite:** establish predeployment fork coverage (completed by PR #907 and now
   superseded by the canonical deployment).
-- **Step 1 — Plumbing:** promote the ABI into `src/abis.ts` and add the
+- **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` and add the
   `bundles.vaultExitBundlesV1` address slot.
-- **Step 2 — Actions:** both pure builders, the new error classes, the action-union members,
+- **Phase 2 — Actions:** both pure builders, the new error classes, the action-union members,
   colocated unit and property tests.
-- **Step 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
-- **Step 4 — Fork tests and release:** end-to-end coverage against the canonical deployment,
+- **Phase 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
+- **Phase 4 — Fork tests and release:** end-to-end coverage against the canonical deployment,
   JSDoc `@example` blocks, and changeset.
 
 ## Considered Alternatives
@@ -747,6 +749,6 @@ record conventions:
 - record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
 - A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
   record decides on is codified in the relevant section of `AGENTS.md`; the record stays as
-  the dated record of how the decision was reached. Records feed `AGENTS.md` — they do
+  the dated record of how the decision was reached. records feed `AGENTS.md` — they do
   not override it.
 -->

@@ -31,7 +31,7 @@ Conventions:
 
 | Field      | Value                                                     |
 | ---------- | --------------------------------------------------------- |
-| **Status** | accepted · superseded by ADR-X                            |
+| **Status** | accepted · superseded by ADR-X · accepted; <part> superseded by ADR-X |
 | **Date**   | YYYY-MM-DD                                                |
 | **Author** | @username                                                 |
 | **Scope**  | Repo-wide · Packages and target versions: [pkg x.y.z, …] |

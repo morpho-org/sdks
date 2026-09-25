@@ -7,6 +7,8 @@
 | **Author** | @0xbulma  |
 | **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
 
+_Migrated from ADR-2026-05-20-midnight-sdk-utilities. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
@@ -599,13 +601,13 @@ Status as of the 2026-06-08 implementation review:
   compatibility matters, while `@morpho-org/midnight-sdk` imports shared primitives directly from
   `@morpho-org/morpho-ts` and exposes only Midnight-specific utility APIs.
 
-- **Step 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
-- **Step 2 - Contract surface: completed with address deployment deferred and shared registry ownership.** Midnight-specific ABI literals live in `@morpho-org/midnight-sdk`; Midnight addresses and deployment blocks are fields in the unified `@morpho-org/morpho-ts` registries. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
-- **Step 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
-- **Step 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
-- **Step 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
-- **Step 6 - Signatures, validation, payloads, and MidnightApi: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
-- **Step 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
+- **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
+- **Phase 2 - Contract surface: completed with address deployment deferred and shared registry ownership.** Midnight-specific ABI literals live in `@morpho-org/midnight-sdk`; Midnight addresses and deployment blocks are fields in the unified `@morpho-org/morpho-ts` registries. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
+- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
+- **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
+- **Phase 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
+- **Phase 6 - Signatures, validation, payloads, and MidnightApi: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
+- **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
 
@@ -706,6 +708,6 @@ record conventions:
 - A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
   record decides on is codified in the relevant section of your project's central
   conventions doc (e.g., AGENTS.md or CLAUDE.md); the record stays as the dated record
-  of how the decision was reached. Records feed the conventions doc - they do not
+  of how the decision was reached. records feed the conventions doc - they do not
   override it.
 -->

@@ -7,6 +7,8 @@
 | **Author** | @Rubilmax |
 | **Scope**  | Package: `morpho-sdk` |
 
+_Migrated from ADR-2026-08-18-vault-v2-blue-reallocation-api. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+
 ---
 
 ## Context
