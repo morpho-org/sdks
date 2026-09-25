@@ -7,8 +7,11 @@ import type { SimulationLimits } from "./limits.js";
 export interface SimulationBaseParams {
   readonly chainId: number;
   readonly transactions: readonly Readonly<SimulationTransaction>[];
-  /** Resolved once; defaults to latest. */
-  readonly blockNumber?: bigint | BlockTag;
+  /**
+   * Resolved once; defaults to latest. Only canonical (mined) blocks can be
+   * pinned — `pending` has no stable hash and is rejected at the boundary.
+   */
+  readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly limits?: SimulationLimits;
 }
 

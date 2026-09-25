@@ -8,6 +8,7 @@ import type {
 import type { ParsedRequest } from "../../domain/stages.js";
 import { SimulationValidationError } from "../../errors.js";
 import type { SimulationTransaction } from "../../types.js";
+import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import { parseRequest } from "./parse-request.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -310,6 +311,40 @@ describe("parseRequest", () => {
       ).toThrow(SimulationValidationError);
     },
   );
+
+  test("error: SimulationValidationError for blockNumber 'pending'", () => {
+    const error = (() => {
+      try {
+        parse({ chainId: 1, transactions: [tx()], blockNumber: "pending" });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors?.some((field) =>
+        field.includes("blockNumber"),
+      ),
+    ).toBe(true);
+  });
+
+  test("behavior: accepts blockNumber 'finalized'", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      blockNumber: "finalized",
+    });
+    expect(request.blockNumber).toBe("finalized");
+  });
+
+  test("error: SimulationValidationError for a transaction targeting the probe address", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx({ to: NATIVE_BALANCE_PROBE_ADDRESS })],
+      }),
+    ).toThrow(SimulationValidationError);
+  });
 
   test("behavior: accepts limits within bounds", () => {
     const request = parse({

@@ -13,6 +13,7 @@ import type { SimulationAuthorization } from "../../domain/authorizations.js";
 import type { NormalizedSimulateParams } from "../../domain/request.js";
 import { brandParsed, type ParsedRequest } from "../../domain/stages.js";
 import { SimulationValidationError } from "../../errors.js";
+import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import { resolveEffectiveLimits } from "./effective-limits.js";
 
 // ─── Scalars ──────────────────────────────────────────────────────────────────
@@ -39,13 +40,8 @@ const uint256Schema = z
   .min(0n, { error: "must be non-negative" })
   .max(maxUint256, { error: "exceeds uint256" });
 
-const blockTagSchema = z.enum([
-  "latest",
-  "earliest",
-  "pending",
-  "safe",
-  "finalized",
-]);
+// "pending" is rejected: only canonical (mined) blocks can be pinned.
+const blockTagSchema = z.enum(["latest", "earliest", "safe", "finalized"]);
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
@@ -501,6 +497,11 @@ export function parseRequest(input: unknown): ParsedRequest {
     if (tx.from !== owner) {
       fieldErrors.push(
         `transactions[${i}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
+      );
+    }
+    if (tx.to === NATIVE_BALANCE_PROBE_ADDRESS) {
+      fieldErrors.push(
+        `transactions[${i}].to: ${NATIVE_BALANCE_PROBE_ADDRESS} is reserved for the native-balance probe whose code is injected into the simulation; it cannot be a transaction target`,
       );
     }
   }
