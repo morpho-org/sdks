@@ -282,6 +282,12 @@ authorization variants before `evm-simulation` 5.0.0 removes them. The major req
 `simulateV1Url`, introduces the typed authorization requests and verification output, and makes
 `txIdx` index only caller transactions. The SDK baseline remains pinned to `morpho-sdk` 6.0.0.
 
+Version 5.0.0 rejects legacy Bundler3/GeneralAdapter1 transactions, arbitrary call compositions,
+partial refinance and Midnight operations with `UnsupportedOperationError`. Consumers must rebuild
+transactions using the supported `morpho-sdk` 6.0.0 routes; operations outside that scope have no
+replacement in this simulator. Document these restrictions in the deprecation minor's release notes
+and the major's migration guide; the minor keeps existing route behavior without runtime warnings.
+
 Provide a migration guide for these changes, update `packages/evm-simulation/AGENTS.md` to match,
 and remove consumer error bypasses. Consumers must distinguish execution failures, verification
 failures and constraint violations while blocking acceptance on all three.
