@@ -15,6 +15,7 @@ import type {
   MidnightApiFetch,
   MidnightApiRequestOptions,
 } from "../api/types.js";
+import { MAX_TREE_HEIGHT } from "../constants.js";
 import {
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -29,7 +30,7 @@ import {
 import {
   EcrecoverRatifierUtils,
   type EcrecoverSignatureInput,
-} from "./EcrecoverRatifierUtils.js";
+} from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import {
@@ -37,16 +38,19 @@ import {
   isEmptyOfferStruct,
 } from "./offerStructInternal.js";
 import { Payload } from "./Payload.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
-import type { Tree } from "./Tree.js";
-
-function isPowerOfTwo(value: number): boolean {
-  return value > 0 && (value & (value - 1)) === 0;
-}
-
-function nextPowerOfTwo(value: number): number {
-  return 2 ** Math.ceil(Math.log2(value));
-}
+import { PriceRatifierV1 } from "./PriceRatifierV1.js";
+import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
+import { Tree } from "./Tree.js";
+import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
+import type {
+  AnyTree,
+  AnyTreeSnapshot,
+  EcrecoverTreeCreateRequest,
+  TreeCreateRequest,
+  TreeSnapshot,
+} from "./treeTypes.js";
 
 function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   if (isPowerOfTwo(offers.length)) return [...offers];
@@ -104,9 +108,19 @@ function assertProvableLeaves(leaves: readonly Hash[]): number {
     );
   }
   const height = Math.log2(leaves.length);
-  if (height > 20) throw new InvalidTreeHeightError(height);
+  if (height > MAX_TREE_HEIGHT) throw new InvalidTreeHeightError(height);
 
   return height;
+}
+
+function computeRootFromLeaves(leaves: readonly Hash[]): {
+  readonly root: Hash;
+  readonly height: number;
+} {
+  const height = assertProvableLeaves(leaves);
+  const layers = buildLayers(leaves);
+
+  return { root: layers[height]![0]!, height };
 }
 
 /**
@@ -211,7 +225,9 @@ export interface TreeProof {
 }
 
 /**
- * Entries accepted by {@link Tree.create}.
+ * Legacy untagged entries accepted by {@link Tree.create}.
+ *
+ * @deprecated Use EcrecoverTreeCreateRequest or SetterTreeCreateRequest with an explicit type and entries.
  *
  * Entries are either explicit groups or standalone offers. Explicit groups are
  * flattened, and standalone offers are hashed with their own group ids.
@@ -252,7 +268,7 @@ export interface TreeProof {
  * console.log(tree.root);
  * ```
  */
-export type TreeCreateParams = readonly GroupInput[];
+export type TreeCreateParams = EcrecoverTreeCreateRequest["entries"];
 
 /**
  * Plain creation input or class tree accepted by {@link Tree.from}.
@@ -401,7 +417,9 @@ export type RatifierTreeInput = TreeLike | TreeInput;
  * Omit this when validating offer policy before the maker signs or approves a
  * tree. Provide it when validating the final payload shape, including real
  * `ratifierData`, after the Ecrecover signature and signer address exist or the
- * Setter root is ready for publication.
+ * Setter root is ready for publication. Price/Rate V1 routes always post real
+ * ratifier data because the router identifies each offer from its decoded
+ * leaf fields; their `ratification` is only a route assertion.
  *
  * @example
  * ```ts
@@ -440,15 +458,26 @@ export type TreeMempoolValidateRatification =
   | {
       /** Setter ratifier route. */
       readonly type: "setter";
+    }
+  | {
+      /** PriceRatifierV1 route assertion; validation always encodes its ratifier data. */
+      readonly type: "priceV1";
+    }
+  | {
+      /** RateRatifierV1 route assertion; validation always encodes its ratifier data. */
+      readonly type: "rateV1";
     };
 
 /**
  * Parameters for {@link Tree.mempoolValidate}.
  *
  * Use this when an already-created tree should be validated by the Midnight
- * API. By default it validates the pre-ratification tree with empty
- * `ratifierData`; pass `ratification` to validate the final payload shape with
- * real ratifier data.
+ * API. Standard routes validate the pre-ratification tree with empty
+ * `ratifierData` by default; pass `ratification` to validate the final
+ * payload shape with real ratifier data. Price/Rate V1 routes always encode
+ * real ratifier data (root, leaf index, proof, allowed taker, and the rate for
+ * RateRatifierV1) because the router identifies each offer by decoding it; their
+ * `ratification` only asserts the route.
  *
  * @example
  * ```ts
@@ -517,23 +546,61 @@ export interface TreeMempoolValidateParams {
  */
 export namespace TreeUtils {
   /**
+   * Normalizes legacy standard tree entries into grouped offers.
+   *
+   * Explicit groups are flattened into their member offers, and every
+   * standalone offer is normalized as a singleton group using the
+   * router-compatible `GroupUtils.hash` group id. Use this when you need the
+   * exact offer list a standard Ecrecover/Setter tree commits to.
+   *
+   * @param entries - Groups or standalone offers in leaf order.
+   * @returns Offers in leaf order with their committed group ids.
+   * @throws {InvalidOfferGroupError} when an explicit group entry violates group mechanics.
+   * @example
+   * ```ts
+   * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
+   *
+   * function normalize(entries: TreeCreateParams) {
+   *   return TreeUtils.normalizeEntries(entries);
+   * }
+   * ```
+   */
+  export function normalizeEntries(
+    entries: TreeCreateParams,
+  ): readonly Offer[] {
+    return entries.flatMap((entry) =>
+      GroupUtils.isGroupInput(entry)
+        ? Group.from(entry).offers
+        : [
+            new Offer({
+              ...Offer.from(entry as IOffer),
+              group: GroupUtils.hash([entry as IOffer]),
+            }),
+          ],
+    );
+  }
+
+  /**
    * Validates a tree against Midnight mempool API policy.
    *
    * This is an API-backed convenience: by default it encodes each tree leaf
    * with empty `ratifierData`, then sends the temporary payload to the Midnight
    * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
    * Setter root preparation to validate final payload bytes with real
-   * `ratifierData`.
+   * `ratifierData`. Price/Rate V1 tree snapshots are supported directly and
+   * always post the corresponding V1 `ratify` output — there is no empty
+   * ratifier-data shape because the router decodes the leaf fields to identify
+   * each offer. A V1 `ratification` only asserts the matching route.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree to validate.
+   * @param params.tree - Offer tree or route-typed tree snapshot to validate. Serialized standard snapshots resume without rewriting committed groups.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
    * @param params.request - Optional fetch options forwarded to the API request.
-   * @param params.ratification - Optional ratification inputs used to validate final payload bytes with real ratifier data.
+   * @param params.ratification - Optional route-matching ratification inputs used to validate final payload bytes with real ratifier data.
    * @returns Successful API validation result with `valid: true`.
-   * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
+   * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated, or when `ratification` does not match the tree route.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
    * @throws {PayloadDecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -580,54 +647,85 @@ export namespace TreeUtils {
       TreeMempoolValidateParams,
       "chainId" | "apiUrl" | "timestamp" | "fetch" | "request"
     > & {
-      readonly tree: TreeInput;
+      readonly tree:
+        | TreeInput
+        | TreeSnapshot<"ecrecover">
+        | TreeSnapshot<"setter">
+        | TreeSnapshot<"priceV1">
+        | TreeSnapshot<"rateV1">;
       readonly ratification?: TreeMempoolValidateRatification;
     },
   ): Promise<MempoolPayloadValidationSuccess> {
     let items: readonly Payload.Item[];
-    if (params.ratification == null) {
-      if ("paddedOffers" in params.tree) {
-        items = params.tree.offers.map((offer) => ({
-          offer,
-          ratifierData: "0x" as const,
-        }));
-      } else {
-        const entries = Array.isArray(params.tree)
-          ? params.tree
-          : [params.tree];
-        const offers = entries.flatMap((entry) =>
-          GroupUtils.isGroupInput(entry)
-            ? Group.from(entry).offers
-            : [
-                new Offer({
-                  ...Offer.from(entry),
-                  group: GroupUtils.hash([entry]),
-                }),
-              ],
+    if (
+      !Array.isArray(params.tree) &&
+      "type" in params.tree &&
+      (params.tree.type === "priceV1" || params.tree.type === "rateV1")
+    ) {
+      const tree = params.tree;
+      if (
+        params.ratification != null &&
+        params.ratification.type !== tree.type
+      ) {
+        throw new InvalidTreeError(
+          "Ratification route does not match the tree route.",
         );
-
-        buildDescriptor(entries);
-        items = offers.map((offer) => ({
-          offer,
-          ratifierData: "0x" as const,
-        }));
       }
-    } else if (params.ratification.type === "ecrecover") {
-      if (params.ratification.signature != null) {
-        items = await EcrecoverRatifierUtils.ratify({
-          tree: params.tree,
-          signature: params.ratification.signature,
-          account: params.ratification.account,
-        });
-      } else {
-        items = await EcrecoverRatifierUtils.ratify({
-          tree: params.tree,
-          client: params.ratification.client,
-          account: params.ratification.account,
-        });
-      }
+      items =
+        tree.type === "priceV1"
+          ? PriceRatifierV1.ratify({ tree })
+          : RateRatifierV1.ratify({ tree });
     } else {
-      items = SetterRatifierUtils.ratify({ tree: params.tree });
+      // Only standard Ecrecover/Setter inputs remain beyond this point.
+      // Serialized standard snapshots resume through descriptor validation so committed groups are kept.
+      const rawTree = params.tree as TreeInput | AnyTreeSnapshot;
+      const tree: TreeInput | AnyTree =
+        !(rawTree instanceof Tree) &&
+        !Array.isArray(rawTree) &&
+        "entries" in rawTree &&
+        "offers" in rawTree &&
+        "leaves" in rawTree &&
+        "root" in rawTree &&
+        "height" in rawTree
+          ? Tree.fromDescriptor(rawTree)
+          : rawTree;
+      if (params.ratification == null) {
+        if (Array.isArray(tree) || !("paddedOffers" in tree)) {
+          const entries = Array.isArray(tree) ? tree : [tree as GroupInput];
+          const offers = normalizeEntries(entries);
+
+          buildDescriptor(entries);
+          items = offers.map((offer) => ({
+            offer,
+            ratifierData: "0x" as const,
+          }));
+        } else {
+          items = (tree as TreeLike).offers.map((offer) => ({
+            offer,
+            ratifierData: "0x" as const,
+          }));
+        }
+      } else if (params.ratification.type === "ecrecover") {
+        if (params.ratification.signature != null) {
+          items = await EcrecoverRatifierUtils.ratify({
+            tree,
+            signature: params.ratification.signature,
+            account: params.ratification.account,
+          });
+        } else {
+          items = await EcrecoverRatifierUtils.ratify({
+            tree,
+            client: params.ratification.client,
+            account: params.ratification.account,
+          });
+        }
+      } else if (params.ratification.type === "setter") {
+        items = SetterRatifierUtils.ratify({ tree });
+      } else {
+        throw new InvalidTreeError(
+          "Ratification route does not match the tree route.",
+        );
+      }
     }
 
     const payload = await Payload.encode(items);
@@ -680,10 +778,12 @@ export namespace TreeUtils {
    * `Tree.create` calls this internally and is the simpler API for most
    * make-side code.
    *
-   * @param entries - Groups or standalone offers in leaf order.
+   * @param entries - Tagged route and leaf inputs in leaf order.
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
+   * @throws {InvalidRateRatifierV1RateError} when a Rate leaf has a negative rate.
+   * @throws {InvalidRateRatifierV1TickError} when a Rate leaf offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
    * ```ts
    * import { Offer, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -714,11 +814,73 @@ export namespace TreeUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const tree = TreeUtils.buildDescriptor([offer]);
+   * const tree = TreeUtils.buildDescriptor({ type: "ecrecover", entries: [offer] });
    * console.log(tree.root);
    * ```
    */
-  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
+  export function buildDescriptor<R extends TreeCreateRequest>(
+    entries: R,
+  ): Extract<AnyTreeSnapshot, { readonly type: R["type"] }>;
+  /**
+   * Builds a descriptor using the legacy standard-offer input.
+   * @deprecated Pass a TreeCreateRequest with an explicit ratifier type instead.
+   * @param entries - Untagged offers or groups in leaf order.
+   * @returns Legacy padded standard-offer descriptor.
+   * @throws {InvalidTreeError} When entries are empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} When the tree height is unsupported.
+   * @example
+   * ```ts
+   * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
+   * function legacyDescriptor(entries: TreeCreateParams) {
+   *   return TreeUtils.buildDescriptor(entries);
+   * }
+   * ```
+   */
+  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor;
+  export function buildDescriptor(
+    entries: TreeCreateParams | TreeCreateRequest,
+  ): TreeDescriptor | AnyTreeSnapshot {
+    if ("type" in entries) {
+      switch (entries.type) {
+        case "priceV1": {
+          const descriptor = PriceRatifierV1.buildDescriptor(entries.entries);
+          return deepFreeze({
+            ...descriptor,
+            type: "priceV1",
+            offers: descriptor.entries
+              .slice(0, descriptor.offers.length)
+              .map((entry) => entry.offer),
+          });
+        }
+        case "rateV1": {
+          const descriptor = RateRatifierV1.buildDescriptor(entries.entries);
+          return deepFreeze({
+            ...descriptor,
+            type: "rateV1",
+            offers: descriptor.entries
+              .slice(0, descriptor.offers.length)
+              .map((entry) => entry.offer),
+          });
+        }
+        case "ecrecover":
+        case "setter": {
+          const { tree } = Ratifier.normalizeRatifierTree({
+            tree: entries.entries,
+            label: entries.type === "ecrecover" ? "Ecrecover" : "Setter",
+          });
+          return deepFreeze({
+            type: entries.type,
+            entries: tree.paddedOffers,
+            offers: tree.paddedOffers.slice(0, tree.offers.length),
+            leaves: tree.leaves,
+            root: tree.root,
+            height: tree.height,
+          });
+        }
+        default:
+          throw new InvalidTreeError("Unsupported tree ratifier route.");
+      }
+    }
     const structs = entries.flatMap((entry) =>
       GroupUtils.isGroupInput(entry)
         ? GroupUtils.toStructs(entry)
@@ -737,13 +899,12 @@ export namespace TreeUtils {
     const leaves = offerStructs.map(OfferUtils.hashStruct);
     assertLeafOffers(offerStructs, leaves);
 
-    const height = assertProvableLeaves(leaves);
-    const layers = buildLayers(leaves);
+    const { root, height } = computeRootFromLeaves(leaves);
 
     return deepFreeze({
       offers: offerStructs,
       leaves,
-      root: layers[height]![0]!,
+      root,
       height,
     });
   }
@@ -793,8 +954,35 @@ export namespace TreeUtils {
    * console.log(root);
    * ```
    */
-  export function buildRoot(entries: TreeCreateParams) {
+  export function buildRoot(entries: TreeCreateParams): Hash {
     return buildDescriptor(entries).root;
+  }
+
+  /**
+   * Builds a Merkle root from already-hashed leaves.
+   *
+   * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
+   * offer hashes, for example `RateRatifierV1.hashLeaf` outputs. The leaf
+   * count must be a power of two; pad non-power-of-two lists beforehand.
+   *
+   * @param leaves - Leaf hashes in leaf order; length must be a power of two.
+   * @returns Merkle root and tree height.
+   * @throws {InvalidTreeError} when the leaf count is not a power of two.
+   * @throws {InvalidTreeHeightError} when the tree exceeds supported ratifier typehashes.
+   * @example
+   * ```ts
+   * import { TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
+   *
+   * const { root, height } = TreeUtils.buildRootFromLeaves([zeroHash]);
+   * console.log(height);
+   * ```
+   */
+  export function buildRootFromLeaves(leaves: readonly Hash[]): {
+    readonly root: Hash;
+    readonly height: number;
+  } {
+    return computeRootFromLeaves(leaves);
   }
 
   /**
@@ -1007,8 +1195,48 @@ export namespace TreeUtils {
     readonly leafIndex: BigIntish;
     readonly proof: readonly Hash[];
   }) {
-    const offer = Offer.from(params.offer);
-    let node = OfferUtils.hash(offer);
+    return verifyLeafProof({
+      leaf: OfferUtils.hash(Offer.from(params.offer)),
+      root: params.root,
+      leafIndex: params.leafIndex,
+      proof: params.proof,
+    });
+  }
+
+  /**
+   * Verifies a local Merkle proof for an already-hashed leaf against a root.
+   *
+   * Use this leaf-hash-agnostic form when a ratifier's leaves are not plain
+   * offer hashes, for example `RateRatifierV1.hashLeaf` outputs. The leaf
+   * index determines each sibling's left/right position, matching
+   * `HashLib.isLeaf` onchain.
+   *
+   * @param params.leaf - Leaf hash that starts proof reconstruction.
+   * @param params.root - Expected Merkle root.
+   * @param params.leafIndex - Leaf index proven by `params.proof`.
+   * @param params.proof - Merkle proof siblings for the leaf.
+   * @returns Whether the proof reconstructs the supplied root.
+   * @example
+   * ```ts
+   * import { TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
+   *
+   * const valid = TreeUtils.verifyLeafProof({
+   *   leaf: zeroHash,
+   *   root: zeroHash,
+   *   leafIndex: 0n,
+   *   proof: [],
+   * });
+   * console.log(valid);
+   * ```
+   */
+  export function verifyLeafProof(params: {
+    readonly leaf: Hash;
+    readonly root: Hash;
+    readonly leafIndex: BigIntish;
+    readonly proof: readonly Hash[];
+  }) {
+    let node = params.leaf;
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
       return false;

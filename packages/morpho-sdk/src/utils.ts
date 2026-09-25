@@ -29,6 +29,8 @@ export {
   safeParseUnits,
 } from "@morpho-org/blue-sdk-viem";
 export {
+  EcrecoverRatifier as MidnightEcrecoverRatifier,
+  /** @deprecated Use MidnightEcrecoverRatifier with a tagged tree. */
   EcrecoverRatifierUtils as MidnightEcrecoverRatifierUtils,
   eip712Digest,
   GroupUtils as MidnightGroupUtils,
@@ -37,7 +39,17 @@ export {
   OfferUtils as MidnightOfferUtils,
   Payload as MidnightPayload,
   PositionUtils as MidnightPositionUtils,
+  PriceRatifierV1 as MidnightPriceRatifierV1,
+  /** @deprecated Use MidnightPriceRatifierV1. */
+  PriceRatifierV1Utils as MidnightPriceRatifierV1Utils,
+  RateRatifierV1 as MidnightRateRatifierV1,
+  /** @deprecated Use MidnightRateRatifierV1. */
+  RateRatifierV1Utils as MidnightRateRatifierV1Utils,
+  Ratifier as MidnightRatifier,
+  /** @deprecated Use MidnightRatifier. */
   RatifierUtils as MidnightRatifierUtils,
+  SetterRatifier as MidnightSetterRatifier,
+  /** @deprecated Use MidnightSetterRatifier with a tagged tree. */
   SetterRatifierUtils as MidnightSetterRatifierUtils,
   TakeAmountsLib as MidnightTakeAmountsLib,
   TickLib as MidnightTickLib,

@@ -1,10 +1,7 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import { getBytecode } from "viem/actions";
-import {
-  type RatifierInfo,
-  RatifierUtils,
-} from "../signatures/RatifierUtils.js";
+import { Ratifier, type RatifierInfo } from "../signatures/Ratifier.js";
 import type { MidnightCallParameters } from "./types.js";
 import { resolveChainId } from "./utils.js";
 
@@ -16,7 +13,7 @@ import { resolveChainId } from "./utils.js";
  * the maker is an EOA or EIP-7702 account that can use Ecrecover signatures, or
  * a deployed-code account that should use Setter root approval. Put the returned
  * `ratifier` address on `Offer.create`, then use the returned `type` to choose
- * `EcrecoverRatifierUtils.ratify` or `SetterRatifierUtils.ratify` after the tree
+ * `EcrecoverRatifier.ratify` or `SetterRatifier.ratify` after the tree
  * has been built.
  *
  * Reads `eth_chainId` only when the viem client has no configured chain id,
@@ -36,7 +33,8 @@ import { resolveChainId } from "./utils.js";
  * const maker = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
  * const info = await fetchRatifierInfo(client, { maker });
  * // Pass info.ratifier to Offer.create(...), then use info.type after
- * // Tree.create([...]) to choose the Ecrecover or Setter ratifier flow.
+ * // Tree.create({ type: info.type, entries: [...] }) to choose the Ecrecover
+ * // or Setter ratifier flow.
  * console.log(info.type, info.ratifier);
  * ```
  */
@@ -58,7 +56,7 @@ export async function fetchRatifierInfo(
     address: params.maker,
   });
 
-  return RatifierUtils.getRatifierInfo({
+  return Ratifier.getRatifierInfo({
     bytecode,
     ecrecoverRatifier,
     setterRatifier,

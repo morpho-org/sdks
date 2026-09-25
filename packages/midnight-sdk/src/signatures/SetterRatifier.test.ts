@@ -3,8 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { GroupUtils } from "./GroupUtils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -100,7 +100,7 @@ describe("SetterRatifierUtils.ratify", () => {
       baseOffer({ maxAssets: 0n, maxUnits: 1n, ratifier: setterRatifier }),
       baseOffer({ maxAssets: 0n, maxUnits: 2n, ratifier: setterRatifier }),
     ]);
-    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+    const normalize = vi.spyOn(Ratifier, "normalizeRatifierTree");
 
     try {
       SetterRatifierUtils.ratify({ tree });

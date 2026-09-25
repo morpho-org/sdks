@@ -2,12 +2,12 @@ import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
-import { RatifierUtils as RootRatifierUtils } from "../index.js";
+import { Ratifier as RootRatifier } from "../index.js";
 import { OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -21,10 +21,10 @@ const { baseOffer } = createFixtures({
   ecrecoverRatifier,
 });
 
-describe("RatifierUtils.getRatifierInfo", () => {
+describe("Ratifier.getRatifierInfo", () => {
   test("default", () => {
     expect(
-      RatifierUtils.getRatifierInfo({
+      Ratifier.getRatifierInfo({
         bytecode: "0x",
         ecrecoverRatifier,
         setterRatifier,
@@ -32,7 +32,7 @@ describe("RatifierUtils.getRatifierInfo", () => {
     ).toEqual({ type: "ecrecover", ratifier: ecrecoverRatifier });
 
     expect(
-      RatifierUtils.getRatifierInfo({
+      Ratifier.getRatifierInfo({
         bytecode: "0x6000",
         ecrecoverRatifier,
         setterRatifier,
@@ -41,10 +41,10 @@ describe("RatifierUtils.getRatifierInfo", () => {
   });
 });
 
-describe("RatifierUtils.normalizeRatifierTree", () => {
+describe("Ratifier.normalizeRatifierTree", () => {
   test("behavior: exported from package root", () => {
-    expect(RootRatifierUtils.normalizeRatifierTree).toBe(
-      RatifierUtils.normalizeRatifierTree,
+    expect(RootRatifier.normalizeRatifierTree).toBe(
+      Ratifier.normalizeRatifierTree,
     );
   });
 
@@ -56,7 +56,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const tree = Tree.create([offer]);
 
     expect(
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree,
         label: "Ecrecover",
       }),
@@ -72,7 +72,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
       ratifier: setterRatifier,
     });
 
-    const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
+    const { tree, ratifier } = Ratifier.normalizeRatifierTree({
       tree: [offer],
       label: "Setter",
     });
@@ -88,7 +88,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const second = baseOffer({ maxAssets: 0n, tick: 5_000n });
     const groupedTree = Tree.create([Group.create([first, second])]);
 
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: groupedTree,
       label: "Ecrecover",
     });
@@ -105,23 +105,26 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
         maxAssets: 0n,
         ratifier: ecrecoverRatifier,
       }),
+      baseOffer({
+        tick: 5_004n,
+        maxAssets: 0n,
+        ratifier: ecrecoverRatifier,
+      }),
     ]);
-    const offer = group.offers[0]!;
-    const paddedOffers = [
+    const paddedOffers = group.offers.map((offer) =>
       OfferUtils.toStruct({ offer }),
-      EMPTY_OFFER_STRUCT,
-    ] as const;
+    );
     const leaves = paddedOffers.map(OfferUtils.hashStruct);
     const root = TreeUtils.hashNode(leaves[0]!, leaves[1]!);
     const treeLike = {
-      offers: [offer],
+      offers: group.offers,
       paddedOffers,
       leaves,
       root,
       height: 1,
     } as const;
 
-    const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
+    const { tree, ratifier } = Ratifier.normalizeRatifierTree({
       tree: treeLike,
       label: "Ecrecover",
     });
@@ -144,7 +147,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const leaves = paddedOffers.map(OfferUtils.hashStruct);
 
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: {
           offers: [visible],
           paddedOffers,
@@ -166,7 +169,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const leaf = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
 
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: {
           offers: [visible],
           paddedOffers: [EMPTY_OFFER_STRUCT],
@@ -187,7 +190,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
     expect(visible.group).not.toBe(group);
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: visible,
         label: "Ecrecover",
       }),
@@ -211,7 +214,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
       };
 
       expect(() =>
-        RatifierUtils.normalizeRatifierTree({
+        Ratifier.normalizeRatifierTree({
           tree: altered,
           label: "Ecrecover",
         }),
@@ -223,7 +226,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
 
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: { ...tree, height: 21 },
         label: "Ecrecover",
       }),
@@ -234,7 +237,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
     const expectedGroup = GroupUtils.hash([offer]);
 
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: [offer],
       label: "Ecrecover",
     });
@@ -257,7 +260,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     ]);
 
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree,
         label: "Ecrecover",
       }),

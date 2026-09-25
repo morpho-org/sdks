@@ -24,12 +24,12 @@ import {
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifierUtils } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -155,6 +155,19 @@ describe("Tree.create", () => {
     expect(tree.offers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).not.toBe(staleGroup);
+  });
+});
+
+describe("TreeUtils.normalizeEntries", () => {
+  test("default: flattens groups and assigns singleton group ids", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([baseOffer({ maxAssets: 0n, maxUnits: 7n })]);
+    const normalized = TreeUtils.normalizeEntries([group, offer]);
+
+    expect(normalized).toHaveLength(2);
+    expect(normalized[0]).toBe(group.offers[0]);
+    expect(normalized[0]!.group).toBe(group.id);
+    expect(normalized[1]!.group).toBe(GroupUtils.hash([offer]));
   });
 });
 
@@ -527,6 +540,142 @@ describe("TreeUtils.mempoolValidate", () => {
 
     expect(decoded[0]!.offer.maker).toBe(offer.maker);
     expect(decoded[0]!.ratifierData).toBe("0x");
+  });
+
+  test("behavior: standard snapshots resume without rewriting committed groups", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const group = Group.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+      baseOffer({
+        tick: 5_004n,
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+    const snapshot = Tree.create({
+      type: "setter",
+      entries: [group],
+    }).toDescriptor();
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: snapshot,
+      fetch,
+      ratification: { type: "setter" },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = SetterRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded).toHaveLength(2);
+    for (const item of decoded) {
+      expect(item.offer.group).toBe(group.id);
+    }
+    expect(ratifierData.root).toBe(snapshot.root);
+  });
+
+  test("error: InvalidTreeError for a V1 snapshot with a tampered root", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = {
+      ...Tree.create({
+        type: "rateV1",
+        entries: [
+          {
+            offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+            rate: 100n,
+            allowedTaker: zeroAddress,
+          },
+        ],
+      }).toDescriptor(),
+      root: zeroHash,
+    };
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification does not match the snapshot route", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = Tree.create({
+      type: "rateV1",
+      entries: [
+        {
+          offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+          rate: 100n,
+          allowedTaker: zeroAddress,
+        },
+      ],
+    }).toDescriptor();
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+        ratification: { type: "priceV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification is used with a standard tree", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [offer],
+        fetch,
+        ratification: { type: "rateV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test("error: InvalidTreeError for empty plain input before API validation", async () => {
@@ -995,13 +1144,13 @@ describe("TreeUtils.buildProofs", () => {
   });
 });
 
-describe("RatifierUtils.normalizeRatifierTree", () => {
+describe("Ratifier.normalizeRatifierTree", () => {
   test("behavior: accepts grouped offer input", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
 
     expect(
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: [group],
         label: "Ecrecover",
       }).ratifier,
@@ -1010,7 +1159,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
   test("error: InvalidTreeError for malformed empty tree-like input", () => {
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: {
           offers: [],
           paddedOffers: [],
@@ -1092,6 +1241,43 @@ describe("TreeUtils.verifyProof", () => {
         proof: [],
       }),
     ).toBe(false);
+  });
+
+  test("behavior: builds a root from leaf hashes", () => {
+    const left =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const right =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const result = TreeUtils.buildRootFromLeaves([left, right]);
+
+    expect(result.height).toBe(1);
+    expect(result.root).toBe(TreeUtils.hashNode(left, right));
+  });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+
+    expect(() => TreeUtils.buildRootFromLeaves([leaf, leaf, leaf])).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("behavior: verifies a proof from a leaf hash", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const sibling =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const proofRoot = TreeUtils.hashNode(leaf, sibling);
+
+    expect(
+      TreeUtils.verifyLeafProof({
+        leaf,
+        root: proofRoot,
+        leafIndex: 0n,
+        proof: [sibling],
+      }),
+    ).toBe(true);
   });
 
   test("behavior: verifies proofs for plain offer objects", () => {
