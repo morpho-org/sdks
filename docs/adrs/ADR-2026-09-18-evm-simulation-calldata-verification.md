@@ -1,22 +1,28 @@
-# TIB-2026-09-18: EVM simulation — calldata verification and result constraints
+# ADR-2026-09-18: EVM simulation — calldata verification and result constraints
 
 | Field | Value |
 | --- | --- |
+| **Status** | accepted |
 | **Date** | 2026-09-18; revised 2026-09-24 |
 | **Author** | @foulques, @jinmel |
-| **Scope** | `evm-simulation` 6.0.0; consumers: Vaults frontend and write API |
-| **SDK baseline** | `morpho-sdk` **6.0.0**, released 2026-09-24; pinned version for routes, ABIs, addresses and behavior |
+| **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
 
-## Context and decision
+_Status is the only field that changes after acceptance._
 
-The Vaults frontend and independent write API need the same answer: does this transaction execute,
-produce the intended Morpho effects, and satisfy the user's constraints? Asset changes alone cannot
-prove that a deposit credited the right position, a repayment reduced debt, or a permission is safe.
+## Context
 
-An integration goal is to preserve the usual SDK action-creation flow (`getRequirements()` and
-`buildTx()`) and connect its outputs directly to `simulate()`. Agents should reuse the action's
-transactions and requirements with minimal glue code, without duplicating permit selection,
-authorization payloads or operation descriptions for simulation.
+The Vaults frontend and independent write API needed the same answer: did a transaction execute,
+produce the intended Morpho effects, and satisfy the user's constraints? Asset changes alone could
+not prove that a deposit credited the right position, a repayment reduced debt, or a permission was
+safe. Integrations also needed to reuse the SDK action-creation flow (`getRequirements()` and
+`buildTx()`) without duplicating permit selection, authorization payloads or operation descriptions
+for simulation.
+
+## Decision
+
+Pin routes, ABIs, addresses and behavior to the released `morpho-sdk` 6.0.0 baseline.
+Connect SDK action transactions and requirements directly to `simulate()` through the public
+adapter below. This decision defines the `evm-simulation` 6.0.0 contract and its breaking changes.
 
 Keep `simulate(config, params)` and extend its existing public interface below. Decode operations
 from calldata, verify their effects, and apply typed simulation limits. Use `eth_simulateV1` only;
@@ -29,7 +35,7 @@ include Morpho authorization for the supported bundle operators and the SDK's V2
 Reject legacy Bundler3 routes, arbitrary call composition, partial refinance, pre-liquidation
 authorization and execution, and Midnight operations. Pre-liquidation risk modeling is out of scope.
 
-## Verification contract
+### Verification contract
 
 - Verify wallet debits, receipts and refunds; position and market accounting; vault shares and
   allocations; permissions; fees and penalties; liquidity, slippage and liquidation risk.
@@ -40,7 +46,7 @@ authorization and execution, and Midnight operations. Pre-liquidation risk model
 - Resolve one block for execution and verification. Missing evidence or unsupported behavior fails
   explicitly; a partial check never counts as successful verification.
 
-### Preview and final
+#### Preview and final
 
 `preview` checks the SDK's no-signature transaction and the exact pending wallet requests. It may
 prepare only the requested authority, reports preparation separately, and verifies that authority
@@ -51,7 +57,7 @@ and uses no synthetic permission preparation. Both modes enforce the same effect
 The write API uses `preview`; the frontend independently previews, checks wallet requests and runs
 `final` before submission. A successful preview cannot replace final simulation.
 
-## Public Interface
+### Public Interface
 
 `simulate(config, params)` keeps `config.chains`, `simulateV1Url`, `logger`, `timeoutMs`, and every
 existing `SimulateParams` field. `simulateV1Url` becomes required per chain. Two optional fields are
@@ -65,7 +71,7 @@ added and `authorizations` is retyped.
 | `mode?` (new) | `"final"` (default) or `"preview"` |
 | `limits?` (new) | `SimulationLimits` below; omitted values use SDK defaults |
 
-### `SimulationAuthorization`
+#### `SimulationAuthorization`
 
 A discriminated union of wallet requests. Every variant names the owner; the owner must equal the
 transactions' common `from`. Typed-data variants carry the exact EIP-712 payload
@@ -86,7 +92,7 @@ supported by the migrated routes.
 
 The legacy `approval` and `signature` variants are removed in the major (see Migration).
 
-### `SimulationLimits`
+#### `SimulationLimits`
 
 Consumers may only tighten. Every ratio is a WAD-scaled `bigint`; every amount is a raw `bigint` in
 the token's or share's smallest unit; every address is an `Address`; every market is a `MarketId`.
@@ -98,9 +104,9 @@ Bounds are inclusive. There is no free-form metric, subject or time-basis field.
 | `minLltvBufferWad?` | Distance below LLTV a risk-increasing action must keep; default `DEFAULT_LLTV_BUFFER` (`WAD / 200n`, 0.5%) |
 | `maxSignatureLifetimeSeconds?` | Upper bound on `deadline − simulationStartTimestamp` for every typed-data request; default `7_200n` |
 | `wallet?` | `{ maxDebit?: TokenAmount[], minCredit?: TokenAmount[] }` where `TokenAmount = { token, amount }` and native uses viem's `ethAddress` |
-| `operations?` | `readonly OperationLimit[]`; see [appendix](#operation-limits) |
+| `operations?` | `readonly OperationLimit[]`; see [operation limits](#operation-limits) |
 
-### Output
+#### Output
 
 `VerifiedSimulationResult extends SimulationResult` preserves `simulationTxs`, `calls`, `transfers`
 and `assetChanges`. `simulationTxs` equals the caller's `transactions`; all user transaction indices
@@ -117,11 +123,11 @@ The added `verification` field contains:
   markets, plus conversions and fees. Only `actionDiff` excludes modeled accrual; unchanged values
   are included.
 
-### Errors
+#### Errors
 
 Preserve `SimulationPackageError` and existing error names, codes, constructors, fields and
 `instanceof` behavior. Additions extend the base directly. See the [error catalog](#error-catalog)
-in the appendix for classes, codes and failure conditions.
+for classes, codes and failure conditions.
 
 Errors preserve `txIdx`, `fieldErrors`, `reason`, `details` and retention's
 `{ address, token, netRetained }` string amounts. Readonly context identifies the mode, stage, chain,
@@ -129,7 +135,7 @@ block, operation, transaction or authorization, affected subject, and expected/o
 units, where available. Consumers branch on class or code; messages explain the failure and remedy.
 Do not expose signatures, credentials or raw causes in consumer-facing output.
 
-## Morpho-specific failure messages
+### Morpho-specific failure messages
 
 Execution errors must explain **which Morpho operation failed, what contract condition caused it,
 and what the user can change**. A raw revert selector or “simulation failed” is insufficient for a
@@ -156,7 +162,7 @@ These examples do not limit coverage. Unknown reverts retain their execution-fai
 and available diagnostic context without being mislabeled as a known Morpho condition. Transport
 failures and missing verification evidence remain separate from contract execution failures.
 
-## Simulation limits are result constraints
+### Simulation limits are result constraints
 
 At entry, `simulate()` captures `simulationStartTimestamp` once from the current wall clock in Unix
 seconds, rounded up consistently with the SDK. Before RPC simulation, reject any decoded transaction
@@ -187,13 +193,13 @@ cap is a limit violation; an incorrectly charged penalty is `FeeMismatchError`. 
 slippage bound that reverts is an execution failure; a successful conversion outside a verification
 bound is a constraint violation.
 
-# Proposed design
+### SDK action integration
 
 Use the SDK action's `getRequirements()` as the single source of truth for permit selection and
 pending simulation authorizations. The simulator independently checks those requests against
 calldata and state.
 
-### Vault bundle permit selection
+#### Vault bundle permit selection
 
 Resolve requirements using the caller's signature capabilities and permit preference:
 
@@ -213,9 +219,9 @@ an approval transaction. Other exit routes retain their own allowance rules.
 The final builder derives the encoded permit kind from the supplied requirement signature. Without
 a signature, it uses the no-permit path. Consumers do not select the encoded kind independently.
 
-### Deriving simulation authorizations
+#### Deriving simulation authorizations
 
-Add a pure adapter in `evm-simulation`, provisionally
+Expose a pure adapter in `evm-simulation`:
 `toSimulationAuthorizations({ owner, requirements }): readonly SimulationAuthorization[]`.
 It converts pending action requirements into the existing authorization union:
 
@@ -231,7 +237,7 @@ Preserve request order, including zero-reset approvals. Never widen amounts, inv
 reconstruct typed data from summaries. Unsupported requirements fail explicitly. Conversion creates
 descriptors; it does not establish that the requests are safe for the decoded operation.
 
-### Consumer flow
+#### Consumer flow
 
 1. Create the vault action and resolve its requirements.
 2. Convert pending requirements into authorizations and preview the no-signature `buildTx()` output.
@@ -262,7 +268,7 @@ A Permit2 deposit may require both approval **to Permit2** and a transfer signat
 nonce/deadline becomes stale, regenerate requirements and preview again before signing. No shared
 mutable state connects preparation, signing and transaction building.
 
-### Permit2 preview compatibility
+#### Permit2 preview compatibility
 
 The unsigned `buildTx()` encodes `PermitKind.None` and pulls tokens directly through the vault
 bundle. Approval to canonical Permit2 alone cannot fund this path. For each validated
@@ -283,7 +289,7 @@ consumption; preview does not prove that the signed transfer will execute. Final
 Permit2 signature and verifies its execution and nonce consumption. Reject signature-consuming
 calldata in preview instead of attempting to bypass signature verification.
 
-## Migration
+### Migration
 
 `evm-simulation` 6.0.0 replaces the legacy authorization inputs with the exact-wallet-request
 interface directly, without a prior coexistence minor for those inputs. Consumers migrate their
@@ -299,38 +305,9 @@ Consumers must rebuild transactions using the supported `morpho-sdk` 6.0.0 route
 replacement in this simulator. Document these restrictions in the deprecation minor's release notes
 and the major's migration guide; the minor keeps existing route behavior without runtime warnings.
 
-Provide a migration guide for these changes, update `packages/evm-simulation/AGENTS.md` to match,
-and remove consumer error bypasses. Consumers must distinguish execution failures, verification
-failures and constraint violations while blocking acceptance on all three.
-
-## Acceptance criteria
-
-- [ ] Pinned-block contract tests cover every supported v6 operation and its asset, permission,
-      position, market, fee and safety checks in both modes.
-- [ ] Every documented contract failure reachable through those routes has a tested typed mapping
-      and meaningful Morpho-context message; excluded cases have a scope rationale.
-- [ ] Every limit field has enforcement coverage, including successful execution that violates a
-      constraint, invalid limit bindings, and attempts to weaken SDK defaults.
-- [ ] Preview validates exact wallet requests without widening authority; final verifies real signed
-      execution. Preparation never changes public transaction indices or hides unrelated effects.
-- [ ] Permit2 fork tests cover zero initial bundle allowance, existing or pending approval to Permit2,
-      missing Permit2 approval, stale/reused nonces, wrong spender or amount, reset-required tokens,
-      and rejection of signature-consuming preview calldata. Preview leaves the nonce unchanged;
-      successful final execution consumes it. Invalid signatures fail in final.
-- [ ] Missing evidence, unsupported routes and unknown failures fail explicitly. Existing error
-      compatibility is preserved, and consumers block every failure category.
-- [ ] Deadline checks fail before RPC simulation for expired inputs and accept SDK-default two-hour
-      requests despite block lag. Tests fix the call-time clock, including for historical blocks.
-- [ ] Repeated inputs at the same pinned block and call-time clock produce identical verification output; migration
-      documentation and package rules match the shipped interface.
-
-## References
-
-- [SDK v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/2e2595d59e9db8e3d7533b54d6fbffcf8107c274/packages/morpho-sdk/MIGRATION-v5-to-v6.md)
-- [BlueBundlesV1 route decision](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
-- [Vault exit in-kind redemption](./TIB-2026-07-27-vault-exit-in-kind-redemption.md)
-
-## Appendix
+The major includes a migration guide. Consumers must distinguish execution failures, verification
+failures and constraint violations while blocking acceptance on all three; consumer error bypasses
+are incompatible with this contract.
 
 ### Operation limits
 
@@ -395,3 +372,36 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 | `FeeMismatchError` / `FEE_MISMATCH` | Wrong fee or penalty amount, recipient or schedule; forbidden discretionary fee |
 | `ConsumerLimitViolationError` / `CONSUMER_LIMIT_VIOLATION` | A decoded parameter differs from an `expected*` pin, or a verified value violates an outcome bound or wallet limit |
 | `UnexpectedSimulationError` / `UNEXPECTED_SIMULATION_ERROR` | Unclassified local SDK or dependency failure |
+
+## Invariants
+
+- Supported routes must reconcile wallet assets, permissions, positions, market and vault accounting,
+  fees and safety at one resolved block in both modes → pinned-block contract tests for each
+  supported operation, including full closes and partial remainders.
+- Every documented contract failure reachable through a supported route must have a typed mapping
+  and meaningful Morpho-context message; excluded cases need a scope rationale → error-inventory
+  review and mapping tests.
+- Consumers may only tighten SDK protections, and successful execution does not imply constraint
+  satisfaction → tests for every limit field, invalid bindings, widening attempts and successful
+  executions that breach a constraint.
+- Preview must validate exact wallet requests without widening authority; final must verify real
+  signed execution. Preparation must preserve public transaction indices and expose its effects
+  → preview/final contract tests and transaction-index assertions.
+- Permit2 preview must require real or requested approval to canonical Permit2, validate the signed
+  transfer, and leave its nonce unchanged; final must verify the signature and consume the nonce
+  → fork tests for absent allowances, pending approvals, stale/reused nonces, wrong spender or
+  amount, reset-required tokens, invalid signatures and signature-consuming preview calldata.
+- Missing evidence, unsupported routes and unknown failures must fail explicitly, with existing
+  error compatibility preserved and every failure category blocking acceptance → negative-path
+  and error-compatibility tests.
+- Request freshness must use one call-time clock, independently of block time → fixed-clock tests
+  reject expired inputs before RPC simulation, accept SDK-default two-hour requests despite block
+  lag, and cover historical blocks.
+- Identical inputs at the same pinned block and call-time clock must produce identical verification
+  output → deterministic replay tests.
+
+## References
+
+- [SDK v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/2e2595d59e9db8e3d7533b54d6fbffcf8107c274/packages/morpho-sdk/MIGRATION-v5-to-v6.md)
+- [BlueBundlesV1 route decision](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md)
+- [Vault exit in-kind redemption](./ADR-2026-07-27-vault-exit-in-kind-redemption.md)
