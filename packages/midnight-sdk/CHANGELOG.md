@@ -1,5 +1,11 @@
 # @morpho-org/midnight-sdk
 
+## 1.8.0-next.0
+
+### Minor Changes
+
+- [#1114](https://github.com/morpho-org/sdks/pull/1114) [`b7c60ed`](https://github.com/morpho-org/sdks/commit/b7c60ed7c7b278caed30c13ec57eedc28d63380f) Thanks [@jinmel](https://github.com/jinmel)! - Reuse Merkle tree layers across proofs in `ratify()`; add `TreeUtils.buildProofs`. `TreeUtils.buildProof` and `TreeUtils.buildProofs` now throw `InvalidTreeError` for non-power-of-two leaf sets and `InvalidTreeHeightError` for trees above height 20.
+
 ## 1.7.0
 
 ### Minor Changes

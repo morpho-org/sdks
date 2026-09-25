@@ -1,5 +1,12 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.1-next.0
+
+### Patch Changes
+
+- Updated dependencies [[`b7c60ed`](https://github.com/morpho-org/sdks/commit/b7c60ed7c7b278caed30c13ec57eedc28d63380f)]:
+  - @morpho-org/morpho-sdk@6.1.0-next.0
+
 ## 2.0.0
 
 ### Major Changes
