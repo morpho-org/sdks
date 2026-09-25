@@ -2,7 +2,7 @@
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | accepted; Vault V1 planning and composition retention only superseded by ADR-2026-08-28-retire-vault-v1-shared-liquidity |
+| **Status** | accepted; Vault V1 planning and composition retention superseded by ADR-2026-08-28-retire-vault-v1-shared-liquidity; Bundler3-primitive retention superseded by ADR-2026-09-17-remove-bundler3-primitives-without-deprecation |
 | **Date**   | 2026-08-25 |
 | **Author** | @Rubilmax / Carapulse draft |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |

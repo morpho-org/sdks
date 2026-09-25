@@ -695,8 +695,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `ConsumableUnitsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/ConsumableUnitsLib.sol>
 - Markets-v2 app order actions: <https://github.com/morpho-org/morpho-apps/tree/main/apps/markets-v2-app/lib/modules/order/actions>
 - AGENTS.md section 1 (layering), section 2 (forbidden patterns), section 3 (type discipline), section 5 (testing), section 6 (JSDoc)
-- record-2026-04-27 (mock-transport unit-test boundary)
-- record-2026-05-04 (JSDoc coverage on exported symbols)
+- TIB-2026-04-27 (mock-transport unit-test boundary)
+- TIB-2026-05-04 (JSDoc coverage on exported symbols)
 
 <!--
 record conventions:

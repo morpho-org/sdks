@@ -10,7 +10,9 @@ export {
   fetchMarket,
   fetchMarketParams,
   fetchPosition,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationParams,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   fetchPreLiquidationPosition,
   fetchToken,
   fetchUser,
@@ -18,8 +20,6 @@ export {
   fetchVaultConfig,
   fetchVaultMarketAllocation,
   fetchVaultMarketConfig,
-  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `fetchVaultV2BlueMarketPublicAllocatorConfig`. */
-  fetchVaultMarketPublicAllocatorConfig,
   fetchVaultUser,
   fetchVaultV2,
   fetchVaultV2Adapter,

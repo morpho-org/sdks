@@ -657,6 +657,13 @@ canonical deployment became available.
 - **The pinned fork block includes the Osaka-compiled canonical deployment**, so the suite validates
   the exact live bytecode rather than a locally compiled artifact.
 
+### Addendum (2026-09-17): `BUNDLER3.md` removed
+
+`BUNDLER3.md` was removed with the low-level Bundler3 surface in `morpho-sdk` v6. The referenced
+caveat is now recorded in `packages/morpho-sdk/AGENTS.md` (VaultBundlesV1 glossary entry:
+withdrawals and redemptions burn the transaction sender's shares, so `userAddress` must be the
+sending account).
+
 ## Dependencies
 
 - [`morpho-org/bundles`](https://github.com/morpho-org/bundles) `VaultExitBundlesV1`, at deployed

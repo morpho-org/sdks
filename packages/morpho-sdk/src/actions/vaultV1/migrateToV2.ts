@@ -1,199 +1,220 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, maxUint256 } from "viem";
-import { type Action, BundlerAction } from "../../bundler/index.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData, isAddressEqual } from "viem";
+import { vaultBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
+  AmountAndSharesExclusiveError,
+  type Erc2612RequirementSignature,
   type Metadata,
-  NegativeInputError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
+  SameVaultMigrationError,
   type Transaction,
   VaultAssetMismatchError,
   type VaultV1MigrateToV2Action,
+  type VaultV1MigrateToV2AmountArgs,
 } from "../../types/index.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import {
+  finalizeVaultBundlesV1Transaction,
+  getBundlesReferralFeeAssets,
+  getBundlesSharesPermit,
+  normalizeBundlesCommonParams,
+} from "../bundles/common.js";
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
 export interface VaultV1MigrateToV2Params {
-  vault: {
-    chainId: number;
-    address: Address;
-    /** Underlying asset of the source V1 vault. */
-    asset: Address;
+  readonly vault: {
+    /** Chain containing the vaults and their registered VaultBundlesV1 contract. */
+    readonly chainId: number;
+    /** Source Vault V1 address whose shares are burned. */
+    readonly address: Address;
+    /** Source vault's underlying ERC-20 asset; must equal `args.targetAsset`. */
+    readonly asset: Address;
   };
-  args: {
-    targetVault: Address;
-    /** Underlying asset of the target V2 vault. */
-    targetAsset: Address;
-    /** Number of V1 shares to migrate. */
-    shares: bigint;
-    /** Minimum acceptable share price for V1 redeem (slippage protection, in RAY). */
-    minSharePriceVaultV1: bigint;
-    /** Maximum acceptable share price for V2 deposit (inflation protection, in RAY). */
-    maxSharePriceVaultV2: bigint;
-    /** Receives the V2 vault shares. */
-    recipient: Address;
-    /** Pre-signed permit/permit2 approval for V1 share transfer. */
-    requirementSignature?: PermitRequirementSignature;
+  readonly args: VaultV1MigrateToV2AmountArgs & {
+    /** Destination Vault V2 contract receiving the net migrated assets. */
+    readonly targetVault: Address;
+    /** Destination vault's underlying ERC-20 asset; must equal `vault.asset`. */
+    readonly targetAsset: Address;
+    /** Maximum accepted destination share price, scaled by RAY (1e27). */
+    readonly maxSharePriceVaultV2: bigint;
+    /** Share owner and transaction sender; VaultBundlesV1 mints shares to this account. */
+    readonly userAddress: Address;
+    /** Unsupported; shares are always minted to the transaction sender. */
+    readonly recipient?: never;
+    /** Unsupported; the source Vault V1 withdrawal carries no share-price bound. */
+    readonly minSharePriceVaultV1?: never;
+    /** Optional ERC-2612 vault-share permit for the migrated source shares. */
+    readonly requirementSignature?: Erc2612RequirementSignature;
+    /** Optional WAD-scaled fee in [0, 1e18), defaulting to zero. */
+    readonly referralFeePct?: bigint;
+    /** Optional fee recipient; a nonzero address is required when `referralFeePct > 0n`. */
+    readonly referralFeeRecipient?: Address;
+    /** Positive uint256 Unix timestamp in seconds after which execution reverts. */
+    readonly deadline: bigint;
   };
-  metadata?: Metadata;
+  /** Optional analytics metadata appended to the transaction calldata. */
+  readonly metadata?: Metadata;
 }
 
 /**
- * Prepares an atomic full-migration transaction from VaultV1 to VaultV2.
+ * Encodes an assets-or-shares Vault V1 to Vault V2 migration through VaultBundlesV1.
  *
- * Routed through bundler3: transfers V1 shares to `GeneralAdapter1` (via `erc20TransferFrom` or
- * permit/permit2), redeems them via `erc4626Redeem` (GA1 redeems its own shares — no allowance
- * check), then deposits the resulting assets into V2 via `erc4626Deposit`. All operations
- * execute atomically in a single transaction.
- *
- * Prerequisite: the user must either approve `GeneralAdapter1` to spend their V1 vault shares
- * (classic approve) or provide a pre-signed permit/permit2 via `requirementSignature`. Use
- * `getRequirements()` on the entity to resolve the appropriate approval.
- *
- * @param params.vault.chainId - The chain the source vault lives on (used to resolve bundler
- *   addresses).
- * @param params.vault.address - The source VaultV1 (MetaMorpho) address.
- * @param params.vault.asset - The underlying asset of the source V1 vault.
- * @param params.args.targetVault - The target VaultV2 address.
- * @param params.args.targetAsset - The underlying asset of the target V2 vault. Must equal
- *   `vault.asset`.
- * @param params.args.shares - Number of V1 shares to migrate.
- * @param params.args.minSharePriceVaultV1 - Minimum V1 share price in RAY (slippage protection
- *   for the redeem leg).
- * @param params.args.maxSharePriceVaultV2 - Maximum V2 share price in RAY (inflation protection
- *   for the deposit leg).
- * @param params.args.recipient - Address that receives the V2 vault shares.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 for the V1 share
- *   transfer.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<VaultV1MigrateToV2Action>` with `to`, `value`, `data`, and
- *   the typed `action` discriminator the simulation layer consumes.
- * @throws {VaultAssetMismatchError} when `targetAsset` differs from `vault.asset`.
- * @throws {NonPositiveInputError} when `shares <= 0n` or `maxSharePriceVaultV2 <= 0n`.
- * @throws {NegativeInputError} when `minSharePriceVaultV1 < 0n`.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed asset differs from `vault.address` (the V1 share token).
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed amount differs from `args.shares`.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
- *   signature is missing its expiration.
+ * @param params.vault.chainId - Chain containing the vaults and their registered VaultBundlesV1 contract.
+ * @param params.vault.address - Source Vault V1 address whose shares are burned.
+ * @param params.vault.asset - Source vault's underlying ERC-20 asset; must equal `args.targetAsset`.
+ * @param params.args.assets - Gross migrated amount in asset base units, exclusive with `shares`.
+ * @param params.args.shares - Source vault shares to burn for the migration, exclusive with `assets`.
+ * @param params.args.targetVault - Destination Vault V2 contract receiving the net migrated assets.
+ * @param params.args.targetAsset - Destination vault's underlying ERC-20 asset; must equal `vault.asset`.
+ * @param params.args.maxSharePriceVaultV2 - Positive maximum asset base units per share base unit
+ *   on the destination Vault V2 deposit, scaled by RAY (1e27).
+ * @param params.args.userAddress - Share owner and transaction sender; VaultBundlesV1 mints shares to this account.
+ * @param params.args.recipient - Unsupported; shares are always minted to the transaction sender.
+ * @param params.args.minSharePriceVaultV1 - Unsupported; the source Vault V1 withdrawal carries no
+ *   share-price bound.
+ * @param params.args.requirementSignature - Optional ERC-2612 vault-share permit for `userAddress`
+ *   and the registered VaultBundlesV1 spender. Omit when the share allowance is already set.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero.
+ *   The fee is rounded down and deducted from gross assets before depositing.
+ * @param params.args.referralFeeRecipient - Optional fee recipient; a nonzero address is required
+ *   when `referralFeePct > 0n`.
+ * @param params.args.deadline - Required positive uint256 Unix timestamp in seconds after which
+ *   execution reverts. This pure builder does not check the current time.
+ * @param params.metadata - Optional analytics metadata appended to the transaction calldata.
+ * @param params.metadata.origin - Hex origin identifier of at most four bytes, with an optional `0x` prefix.
+ * @param params.metadata.timestamp - Optional flag to append the current timestamp; defaults to false.
+ * @returns A deep-frozen VaultBundlesV1 migration transaction.
+ * @throws {VaultAssetMismatchError} when source and destination assets differ.
+ * @throws {SameVaultMigrationError} when source and destination vaults are identical.
+ * @throws {AmountAndSharesExclusiveError} when both amount modes or neither are supplied.
+ * @throws {NonPositiveInputError} when the selected amount, destination share-price bound, or deadline is not positive.
+ * @throws {InputExceedsMaxError} when the selected amount, `maxSharePriceVaultV2`, or `deadline` exceeds uint256.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+ * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no non-zero recipient.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+ * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
+ * import { vaults } from "@morpho-org/morpho-test";
  * import { vaultV1MigrateToV2 } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const tx = vaultV1MigrateToV2({
- *   vault: { chainId: 1, address: sourceVault, asset: USDC },
- *   args: {
- *     targetVault,
- *     targetAsset: USDC,
- *     shares: 1_000_000n,
- *     minSharePriceVaultV1: 0n, // disables redeem-leg slippage protection — production code should compute from source vault state + slippage tolerance
- *     maxSharePriceVaultV2: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
- *     recipient,
- *   },
- * });
- * // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
+ * export function buildSteakUsdcMigration(
+ *   targetVault: Address,
+ *   userAddress: Address,
+ *   maxSharePriceVaultV2: bigint,
+ *   deadline: bigint,
+ * ) {
+ *   const vault = vaults[mainnet.id].steakUsdc;
+ *   const tx = vaultV1MigrateToV2({
+ *     vault: { chainId: mainnet.id, address: vault.address, asset: vault.asset },
+ *     args: {
+ *       shares: 1_000_000n,
+ *       targetVault,
+ *       targetAsset: vault.asset,
+ *       maxSharePriceVaultV2,
+ *       userAddress,
+ *       deadline,
+ *     },
+ *   });
+ *   // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
+ *   return tx;
+ * }
  * ```
  */
-export const vaultV1MigrateToV2 = ({
-  vault: { chainId, address: sourceVault, asset: sourceAsset },
-  args: {
-    targetVault,
-    targetAsset,
-    shares,
-    minSharePriceVaultV1,
-    maxSharePriceVaultV2,
-    recipient,
-    requirementSignature,
-  },
-  metadata,
-}: VaultV1MigrateToV2Params): Readonly<
-  Transaction<VaultV1MigrateToV2Action>
-> => {
-  // Both bundle legs use maxUint256: an asset mismatch leaves the redeemed
-  // source asset stranded on GA1 while the user receives only dust shares.
-  if (!isAddressEqual(sourceAsset, targetAsset)) {
-    throw new VaultAssetMismatchError(sourceAsset, targetAsset);
-  }
-
-  if (shares <= 0n) {
-    throw new NonPositiveInputError("shares", shares);
-  }
-
-  if (minSharePriceVaultV1 < 0n) {
-    throw new NegativeInputError("minSharePriceVaultV1", minSharePriceVaultV1);
-  }
-
-  if (maxSharePriceVaultV2 <= 0n) {
-    throw new NonPositiveInputError(
-      "maxSharePriceVaultV2",
-      maxSharePriceVaultV2,
+export const vaultV1MigrateToV2 = (
+  params: VaultV1MigrateToV2Params,
+): Readonly<Transaction<VaultV1MigrateToV2Action>> => {
+  if (!isAddressEqual(params.vault.asset, params.args.targetAsset)) {
+    throw new VaultAssetMismatchError(
+      params.vault.asset,
+      params.args.targetAsset,
     );
   }
-
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-
-  const actions: Action[] = [];
-
-  // Transfer V1 shares from user to GA1.
-  // With a signature: permit/permit2 + transferFrom for the signed amount.
-  // Without a signature: use ERC-20 transferFrom for the specified shares amount.
-  actions.push(
-    ...getTokenRequirementActions({
-      asset: sourceVault,
-      amount: shares,
-      recipient: generalAdapter1,
-      requirementSignature,
-    }),
-  );
-
-  // GA1 redeems its own shares (owner = GA1, no allowance check).
-  actions.push({
-    type: "erc4626Redeem",
-    args: [
-      sourceVault,
-      maxUint256,
-      minSharePriceVaultV1,
-      generalAdapter1,
-      generalAdapter1,
-      false /* skipRevert */,
-    ],
-  });
-
-  // Deposit all resulting assets into V2.
-  actions.push({
-    type: "erc4626Deposit",
-    args: [
-      targetVault,
-      maxUint256,
-      maxSharePriceVaultV2,
-      recipient,
-      false /* skipRevert */,
-    ],
-  });
-
-  let tx = BundlerAction.encodeBundle(chainId, actions);
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
+  if (isAddressEqual(params.vault.address, params.args.targetVault)) {
+    throw new SameVaultMigrationError(params.vault.address);
   }
-
-  return deepFreeze({
-    ...tx,
+  const assets = "assets" in params.args ? params.args.assets : undefined;
+  const shares = "shares" in params.args ? params.args.shares : undefined;
+  if ((assets == null) === (shares == null)) {
+    throw new AmountAndSharesExclusiveError();
+  }
+  const selectedAmount = assets ?? shares ?? 0n;
+  if (selectedAmount <= 0n) {
+    throw new NonPositiveInputError(
+      assets != null ? "assets" : "shares",
+      selectedAmount,
+    );
+  }
+  if (params.args.maxSharePriceVaultV2 <= 0n) {
+    throw new NonPositiveInputError(
+      "maxSharePriceVaultV2",
+      params.args.maxSharePriceVaultV2,
+    );
+  }
+  // Reject ABI overflow with SDK errors before calldata encoding.
+  validateUint256Field(assets != null ? "assets" : "shares", selectedAmount);
+  validateUint256Field(
+    "maxSharePriceVaultV2",
+    params.args.maxSharePriceVaultV2,
+  );
+  const common = normalizeBundlesCommonParams(params.args);
+  const spender = getChainAddress(
+    params.vault.chainId,
+    "bundles.vaultBundlesV1",
+  );
+  const sharesPermit = getBundlesSharesPermit({
+    vault: params.vault.address,
+    deadline: common.deadline,
+    owner: params.args.userAddress,
+    spender,
+    amount: shares,
+    requirementSignature: params.args.requirementSignature,
+  });
+  const referralFeeAssets =
+    assets == null
+      ? undefined
+      : getBundlesReferralFeeAssets(assets, common.referralFeePct);
+  return finalizeVaultBundlesV1Transaction({
+    chainId: params.vault.chainId,
+    value: 0n,
+    data: encodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      functionName: "vaultBundlesV1Migrate",
+      args: [
+        params.vault.address,
+        params.args.targetVault,
+        assets ?? 0n,
+        shares ?? 0n,
+        params.args.maxSharePriceVaultV2,
+        sharesPermit,
+        common.referralFeePct,
+        common.referralFeeRecipient,
+        common.deadline,
+      ],
+    }),
     action: {
       type: "vaultV1MigrateToV2",
       args: {
-        sourceVault,
-        targetVault,
-        shares,
-        minSharePriceVaultV1,
-        maxSharePriceVaultV2,
-        recipient,
+        sourceVault: params.vault.address,
+        targetVault: params.args.targetVault,
+        assets: assets ?? 0n,
+        shares: shares ?? 0n,
+        maxSharePriceVaultV2: params.args.maxSharePriceVaultV2,
+        referralFeePct: common.referralFeePct,
+        referralFeeRecipient: common.referralFeeRecipient,
+        ...(assets != null && referralFeeAssets != null
+          ? {
+              referralFeeAssets,
+              netAssets: assets - referralFeeAssets,
+            }
+          : {}),
+        deadline: common.deadline,
       },
     },
+    metadata: params.metadata,
   });
 };

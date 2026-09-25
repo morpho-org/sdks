@@ -2,12 +2,13 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermitSignature,
   isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Permit", () => {
   test("should deposit USDC with permit version 2", async ({ client }) => {
@@ -51,6 +52,10 @@ describe("Permit", () => {
           client,
           client.account.address,
         );
+
+        if (!isPermitSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);

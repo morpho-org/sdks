@@ -75,6 +75,7 @@ async function main() {
   const withdraw = vault.withdraw({
     amount: withdrawAmount,
     userAddress: USER_ADDRESS,
+    vaultData,
   });
   const withdrawTx = withdraw.buildTx();
 

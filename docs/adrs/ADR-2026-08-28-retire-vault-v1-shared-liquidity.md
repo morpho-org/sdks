@@ -94,5 +94,7 @@ follow the repository's published deprecation lifecycle.
 
 - Supersedes [ADR-2026-08-25-blue-bundles-v1-sdk-actions](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) for Vault V1 planning and composition retention only.
 
+- Supersedes [ADR-2026-08-25-blue-bundles-v1-sdk-actions](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) for Vault V1 planning and composition retention only.
+
 - [ADR-2026-08-25: Route Blue actions through BlueBundlesV1](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md)
 - [ADR-2026-08-18: Vault V2 Blue reallocation API](./ADR-2026-08-18-vault-v2-blue-reallocation-api.md)

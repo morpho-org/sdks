@@ -216,13 +216,13 @@ describe.sequential("simulate — success", () => {
     expect(result.calls[1]!.gasUsed).toBe(42_000n);
   });
 
-  it("throws BlacklistViolationError end-to-end when backend logs show bundler retention", async () => {
-    const BUNDLER = getChainAddresses(1).bundler3.bundler3;
+  it("throws BlacklistViolationError end-to-end when backend logs show bundles retention", async () => {
+    const bundles = getChainAddresses(1).bundles!.vaultExitBundlesV1;
     const logs = [
       makeTransferLog({
         token: USDC,
         from: USER,
-        to: BUNDLER,
+        to: bundles,
         amount: 1_000_000n,
       }),
     ];
@@ -237,10 +237,10 @@ describe.sequential("simulate — success", () => {
     // Tenderly derives native ETH into assetChanges and emits no transfer log.
     // With logs empty, only assetChanges carries the retained ETH — the guard
     // must still fire. Before the fix, simulate() resolved instead of throwing.
-    const BUNDLER = getChainAddresses(1).bundler3.bundler3;
+    const bundles = getChainAddresses(1).bundles!.vaultExitBundlesV1;
     const assetChanges: AccountAssetChanges[] = [
       {
-        account: BUNDLER,
+        account: bundles,
         changes: [{ token: ethAddress, diff: 1_000000000000000000n }],
       },
     ];

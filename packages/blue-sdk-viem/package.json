@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
   "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
-  "version": "5.7.0",
+  "version": "6.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -16,8 +16,28 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./augment": "./src/augment/index.ts",
+    "./augment/*": "./src/augment/*.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "augment": [
+        "src/augment/index.ts"
+      ],
+      "augment/*": [
+        "src/augment/*.ts"
+      ]
+    }
+  },
+  "sideEffects": [
+    "./src/augment/*.ts",
+    "./lib/*/augment/*.js"
+  ],
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v5-to-v6.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -27,8 +47,8 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.8.0",
-    "@morpho-org/morpho-ts": "^2.10.0",
+    "@morpho-org/blue-sdk": "^7.0.0",
+    "@morpho-org/morpho-ts": "^3.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
@@ -48,6 +68,26 @@
         "types": "./lib/esm/index.d.ts",
         "import": "./lib/esm/index.js",
         "require": "./lib/cjs/index.js"
+      },
+      "./augment": {
+        "types": "./lib/esm/augment/index.d.ts",
+        "import": "./lib/esm/augment/index.js",
+        "require": "./lib/cjs/augment/index.js"
+      },
+      "./augment/*": {
+        "types": "./lib/esm/augment/*.d.ts",
+        "import": "./lib/esm/augment/*.js",
+        "require": "./lib/cjs/augment/*.js"
+      }
+    },
+    "typesVersions": {
+      "*": {
+        "augment": [
+          "lib/esm/augment/index.d.ts"
+        ],
+        "augment/*": [
+          "lib/esm/augment/*.d.ts"
+        ]
       }
     }
   }

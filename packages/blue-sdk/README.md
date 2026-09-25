@@ -34,6 +34,8 @@ Framework-agnostic package that defines Morpho-related entity classes:
 - [**`VaultUser`**](./src/vault/VaultUser.ts): represents the state of a user on a Morpho Vault
 - [**`VaultMarketAllocation`**](./src/vault/VaultMarketAllocation.ts): represents the allocation (and configuration) of a Morpho Vault on a Morpho market
 
+Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md).
+
 ## Installation
 
 ```bash
@@ -201,11 +203,7 @@ registerCustomAddresses({
   addresses: {
     8453: { stEth: "0xabc..." }, // provide stEth address on base
     31337: {
-      morpho: "0x123...",
-      bundler3: {
-        bundler3: "0x456...",
-        ...
-      },
+      blue: "0x123...",
       ...
     }, // registers a new local test chain
   },

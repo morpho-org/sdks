@@ -1,5 +1,13 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { createWalletClient, type Hex, http, zeroAddress } from "viem";
+import * as fc from "fast-check";
+import {
+  bytesToHex,
+  createWalletClient,
+  type Hex,
+  http,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
@@ -11,6 +19,7 @@ import type { MidnightApiFetch } from "../api/index.js";
 import {
   InvalidMarketParameterError,
   InvalidTreeError,
+  InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
@@ -825,6 +834,163 @@ describe("TreeUtils.buildProof", () => {
 
     expect(() => TreeUtils.buildProof({ tree, leafIndex: 1n })).toThrow(
       InvalidTreeError,
+    );
+  });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaves = [
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "0x4444444444444444444444444444444444444444444444444444444444444444",
+    ] as const;
+
+    expect(() =>
+      TreeUtils.buildProof({
+        tree: { leaves, root: zeroHash },
+        leafIndex: 0n,
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProof({
+        tree: { leaves, root: zeroHash },
+        leafIndex: 0n,
+      }),
+    ).toThrow(InvalidTreeHeightError);
+  });
+});
+
+describe("TreeUtils.buildProofs", () => {
+  test("default: equals buildProof for each leaf index", () => {
+    const tree = Tree.create(
+      Array.from({ length: 5 }, (_, i) =>
+        baseOffer({ maxAssets: 0n, maxUnits: BigInt(i + 1) }),
+      ),
+    );
+
+    const proofs = TreeUtils.buildProofs({ tree });
+    expect(proofs).toHaveLength(8);
+    for (let leafIndex = 0; leafIndex < tree.leaves.length; leafIndex++) {
+      expect(proofs[leafIndex]).toEqual(
+        TreeUtils.buildProof({ tree, leafIndex: BigInt(leafIndex) }),
+      );
+    }
+  });
+
+  test("behavior: count defaults to leaves.length", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(TreeUtils.buildProofs({ tree })).toHaveLength(tree.leaves.length);
+  });
+
+  test("behavior: count 0 returns an empty array", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(TreeUtils.buildProofs({ tree, count: 0 })).toEqual([]);
+  });
+
+  test("behavior: count below leaves.length returns only leading proofs", () => {
+    const tree = Tree.create(
+      Array.from({ length: 5 }, (_, i) =>
+        baseOffer({ maxAssets: 0n, maxUnits: BigInt(i + 1) }),
+      ),
+    );
+
+    const proofs = TreeUtils.buildProofs({ tree, count: tree.offers.length });
+    expect(proofs).toHaveLength(5);
+    for (let i = 0; i < 5; i++) {
+      expect(proofs[i]).toEqual(
+        TreeUtils.buildProof({ tree, leafIndex: BigInt(i) }),
+      );
+    }
+  });
+
+  test("behavior: height-0 tree returns one empty proof", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const proofs = TreeUtils.buildProofs({
+      tree: { leaves: [leaf], root: leaf },
+    });
+
+    expect(proofs).toEqual([{ root: leaf, leafIndex: 0n, proof: [] }]);
+  });
+
+  test("error: InvalidTreeError for a count above the leaf count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() =>
+      TreeUtils.buildProofs({ tree, count: tree.leaves.length + 1 }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a negative count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() => TreeUtils.buildProofs({ tree, count: -1 })).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("error: InvalidTreeError for a non-integer count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() => TreeUtils.buildProofs({ tree, count: 1.5 })).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaves = [
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "0x4444444444444444444444444444444444444444444444444444444444444444",
+    ] as const;
+
+    expect(() =>
+      TreeUtils.buildProofs({ tree: { leaves, root: zeroHash } }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProofs({
+        tree: { leaves, root: zeroHash },
+        count: 1,
+      }),
+    ).toThrow(InvalidTreeHeightError);
+  });
+
+  test("behavior: random leaf lists produce proofs identical to buildProof", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.uint8Array({ minLength: 32, maxLength: 32 }).map(bytesToHex),
+          { minLength: 1, maxLength: 64 },
+        ),
+        (rawLeaves) => {
+          const leafCount = 2 ** Math.ceil(Math.log2(rawLeaves.length));
+          const leaves = [
+            ...rawLeaves,
+            ...Array.from(
+              { length: leafCount - rawLeaves.length },
+              () => zeroHash,
+            ),
+          ];
+          const tree = { leaves, root: zeroHash };
+
+          expect(TreeUtils.buildProofs({ tree })).toEqual(
+            leaves.map((_, leafIndex) =>
+              TreeUtils.buildProof({ tree, leafIndex }),
+            ),
+          );
+        },
+      ),
     );
   });
 });

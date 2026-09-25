@@ -11,9 +11,9 @@ import { getRequirementsApproval } from "./getRequirementsApproval.js";
 const usdc = getChainAddress(ChainId.EthMainnet, "usdc");
 const usdt = getChainAddress(ChainId.EthMainnet, "usdt");
 const lowercaseUsdt = usdt.toLowerCase() as Address;
-const generalAdapter1 = getChainAddress(
+const blueBundlesV1 = getChainAddress(
   ChainId.EthMainnet,
-  "bundler3.generalAdapter1",
+  "bundles.blueBundlesV1",
 );
 
 describe("getRequirementsApproval", () => {
@@ -24,7 +24,7 @@ describe("getRequirementsApproval", () => {
       args: {
         spendAmount: 1_000n,
         approvalAmount: 1_000n,
-        spender: generalAdapter1,
+        spender: blueBundlesV1,
       },
       allowances: 0n,
     });
@@ -41,7 +41,7 @@ describe("getRequirementsApproval", () => {
         args: {
           spendAmount: 1_000n,
           approvalAmount: 1_000n,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
         },
         allowances: 1_000n,
       }),
@@ -60,7 +60,7 @@ describe("getRequirementsApproval", () => {
         args: {
           spendAmount: 1_000n,
           approvalAmount: 2_000n,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
         },
         allowances: 1n,
       });
@@ -79,7 +79,7 @@ describe("getRequirementsApproval", () => {
         args: {
           spendAmount: 1_000n,
           approvalAmount: 999n,
-          spender: generalAdapter1,
+          spender: blueBundlesV1,
         },
         allowances: 0n,
       }),

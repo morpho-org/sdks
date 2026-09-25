@@ -1,8 +1,10 @@
 import { Eip5267Domain, getChainAddress, Token } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   createWalletClient,
   custom,
+  maxUint256,
   verifyTypedData,
   zeroHash,
 } from "viem";
@@ -11,14 +13,19 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   AddressMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
+import { selectBundlesSharesPermitSignature } from "../../bundles/common.js";
 import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 
 const vault = "0x0000000000000000000000000000000000002001" as const;
 const spender = getChainAddress(mainnet.id, "bundles.vaultExitBundlesV1");
 const otherSpender = "0x0000000000000000000000000000000000002999" as const;
 const amount = 500n;
+const deadline = Time.timestamp() + 3_600n;
 const permitTypes = {
   Permit: [
     { name: "owner", type: "address" },
@@ -51,22 +58,123 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     const signed = await requirement.sign(walletClient, account.address);
 
-    expect(signed.action).toEqual({
+    expect(signed.action).toMatchObject({
       type: "permit",
-      args: { spender, amount, deadline: 1_900_000_000n },
+      args: { spender, amount, deadline: deadline, nonce: 9n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
       asset: vault,
       amount,
       nonce: 9n,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     expect(signed.args.signature).toMatch(/^0x[0-9a-f]{130}$/);
+  });
+
+  test("behavior: the signed permit is consumable by the bundles shares selector", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: deadline,
+    });
+    const signed = await requirement.sign(walletClient, account.address);
+    const { action } = signed;
+    if (action.type !== "permit") {
+      throw new Error(`expected an ERC-2612 permit action, got ${action.type}`);
+    }
+
+    expect(
+      selectBundlesSharesPermitSignature([signed], {
+        spender,
+        amount,
+        deadline: deadline,
+      }),
+    ).toEqual(signed);
+  });
+
+  test("action.typedData carries the Vault V2 shares-permit payload", () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: deadline,
+    });
+
+    const typedData = requirement.action.typedData;
+
+    expect(typedData.primaryType).toBe("Permit");
+    expect(typedData.types).toEqual(permitTypes);
+    expect(typedData.domain).toMatchObject({
+      chainId: mainnet.id,
+      verifyingContract: vault,
+    });
+    expect(typedData.message).toMatchObject({
+      owner: account.address,
+      spender,
+      value: amount,
+      nonce: 9n,
+      deadline: deadline,
+    });
+  });
+
+  test("error: sign throws AddressMismatchError when signer differs from owner", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: deadline,
+    });
+
+    await expect(
+      requirement.sign(
+        walletClient,
+        "0x1111111111111111111111111111111111111111",
+      ),
+    ).rejects.toBeInstanceOf(AddressMismatchError);
+  });
+
+  test("behavior: signing action.typedData externally matches sign()", async () => {
+    const requirement = encodeVaultSharesPermit({
+      vault: new Token({ address: vault, name: "Vault V2" }),
+      version: "vaultV2",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 9n,
+      amount,
+      deadline: deadline,
+    });
+
+    const typedData = requirement.action.typedData;
+    const externalSignature = await account.signTypedData(typedData);
+    const signed = await requirement.sign(walletClient, account.address);
+
+    expect(externalSignature).toEqual(signed.args.signature);
+    await expect(
+      verifyTypedData({
+        ...typedData,
+        address: account.address,
+        signature: externalSignature,
+      }),
+    ).resolves.toBe(true);
   });
 
   test("behavior: signs a standard Vault V1 permit", async () => {
@@ -78,12 +186,32 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 3n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     await expect(
       requirement.sign(walletClient, account.address),
     ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
+  });
+
+  test("behavior: accepts the VaultBundlesV1 spender", () => {
+    const vaultBundlesV1 = getChainAddress(
+      mainnet.id,
+      "bundles.vaultBundlesV1",
+    );
+
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V1" }),
+        version: "vaultV1",
+        spender: vaultBundlesV1,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 3n,
+        amount,
+        deadline: deadline,
+      }),
+    ).not.toThrow();
   });
 
   test("behavior: snapshots permit inputs before signing", async () => {
@@ -95,7 +223,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 9n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     };
     const requirement = encodeVaultSharesPermit(params);
     params.spender = otherSpender;
@@ -112,12 +240,43 @@ describe("encodeVaultSharesPermit", () => {
         spender,
         value: amount,
         nonce: 9n,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       },
     });
 
     expect(signatureMatchesPreparedSpender).toBe(true);
     expect(signed.action.args.spender).toBe(spender);
+  });
+
+  test("behavior: does not freeze the caller's Vault V1 EIP-5267 domain", () => {
+    const token = new Token({
+      address: vault,
+      name: "Vault V1",
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "Frozen Vault V1",
+        version: "1",
+        chainId: BigInt(mainnet.id),
+        verifyingContract: vault,
+        salt: zeroHash,
+        extensions: [],
+      }),
+    });
+
+    const requirement = encodeVaultSharesPermit({
+      vault: token,
+      version: "vaultV1",
+      spender,
+      owner: account.address,
+      chainId: mainnet.id,
+      nonce: 3n,
+      amount,
+      deadline: deadline,
+    });
+
+    expect(Object.isFrozen(requirement.action.typedData.domain)).toBe(true);
+    expect(Object.isFrozen(token.eip5267Domain?.eip712Domain)).toBe(false);
+    expect(Object.isFrozen(token.eip5267Domain)).toBe(false);
   });
 
   test("behavior: snapshots the Vault V1 permit domain before signing", async () => {
@@ -142,7 +301,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 3n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
     extensions.push(1n);
 
@@ -163,7 +322,7 @@ describe("encodeVaultSharesPermit", () => {
         spender,
         value: amount,
         nonce: 3n,
-        deadline: 1_900_000_000n,
+        deadline: deadline,
       },
     });
 
@@ -179,7 +338,7 @@ describe("encodeVaultSharesPermit", () => {
       chainId: mainnet.id,
       nonce: 0n,
       amount,
-      deadline: 1_900_000_000n,
+      deadline: deadline,
     });
 
     await expect(
@@ -187,22 +346,62 @@ describe("encodeVaultSharesPermit", () => {
     ).rejects.toBeInstanceOf(AddressMismatchError);
   });
 
-  test("error: UnsupportedErc20ApprovalSpenderError", () => {
-    const generalAdapter1 = getChainAddress(
-      mainnet.id,
-      "bundler3.generalAdapter1",
-    );
-
+  test("error: ExpiredDeadlineError when deadline is not in the future", () => {
     expect(() =>
       encodeVaultSharesPermit({
         vault: new Token({ address: vault, name: "Vault V2" }),
         version: "vaultV2",
-        spender: generalAdapter1,
+        spender,
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
         amount,
-        deadline: 1_900_000_000n,
+        deadline: 1n,
+      }),
+    ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("error: NonPositiveInputError when deadline is not positive", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: 0n,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError when deadline exceeds uint256", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: UnsupportedErc20ApprovalSpenderError", () => {
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V2" }),
+        version: "vaultV2",
+        spender: "0x1111111111111111111111111111111111111111",
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 0n,
+        amount,
+        deadline: deadline,
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);
   });

@@ -1,0 +1,1942 @@
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
+import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
+import { createMockClient } from "@morpho-org/test/mock";
+import {
+  type Address,
+  erc20Abi,
+  maxUint256,
+  serializeSignature,
+  toHex,
+  zeroAddress,
+} from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import {
+  encodeReadResult,
+  IN_KIND_ADAPTER,
+  IN_KIND_BUNDLER,
+  IN_KIND_FOREIGN_ADAPTER,
+  IN_KIND_USER,
+  IN_KIND_VAULT,
+  mockMulticallResults,
+  vaultV2ExitData,
+} from "../../../test/fixtures/inKindRedeem.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
+import { morphoViemExtension } from "../../client/index.js";
+import {
+  computeMinForceWithdrawSharePrice,
+  computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
+  computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
+  MAX_SLIPPAGE_TOLERANCE,
+  resolveVaultV2ForceWithdrawEligibility,
+} from "../../helpers/index.js";
+import {
+  AdapterNotPartOfVaultError,
+  ChainIdMismatchError,
+  type Erc2612RequirementSignature,
+  ExcessiveSlippageToleranceError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  isRequirementApproval,
+  isRequirementSignature,
+  NegativeInputError,
+  NonPositiveInputError,
+  ReferralFeeRecipientMissingError,
+  VaultAddressMismatchError,
+  VaultV2ForceWithdrawCoverageError,
+  VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
+  VaultV2ForceWithdrawZeroWithdrawalError,
+  VaultV2SingleAdapterRequiredError,
+  VaultV2UndecodableLiquidityDataError,
+  VaultV2UnsupportedExitAdapterError,
+  VaultV2UnsupportedLiquidityAdapterError,
+} from "../../types/index.js";
+
+const TWO_PERCENT = 20_000_000_000_000_000n;
+
+const mockRequirements = (
+  handle: ReturnType<typeof createMockClient>,
+  params: { allowance?: bigint; nonce?: bigint } = {},
+) => {
+  mockMulticallResults(handle, [
+    encodeReadResult({
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: params.allowance ?? 0n,
+    }),
+    encodeReadResult({
+      abi: erc2612Abi,
+      functionName: "nonces",
+      result: params.nonce ?? 9n,
+    }),
+  ]);
+};
+
+const vaultFor = (
+  handle: ReturnType<typeof createMockClient>,
+  options?: { supportSignature?: boolean },
+) =>
+  handle.client
+    .extend(morphoViemExtension(options))
+    .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+/** Recomputes the entity's expected share bound from the same pure helpers. */
+const expectedSharesBurnt = (params: {
+  readonly vaultData: ReturnType<typeof vaultV2ExitData>;
+  readonly exitAssets: bigint;
+  readonly timestamp: bigint;
+  readonly owner?: Address;
+}) => {
+  const { vaultData } = params;
+  const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+  if (eligibility.type !== "eligible") {
+    throw new Error(`Expected an eligible fixture, got "${eligibility.type}"`);
+  }
+  const plan = computeVaultV2ForceWithdrawPlan({
+    vaultData,
+    adapter: eligibility.adapter,
+    liquidityMarketId: eligibility.liquidityMarketId,
+    exitAssets: params.exitAssets,
+    timestamp: params.timestamp,
+  });
+  const { vault: nowVaultData } = vaultData.accrueInterest(
+    MathLib.max(params.timestamp, vaultData.lastUpdate),
+  );
+  const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData,
+    deadlineVaultData: vaultData,
+    plan,
+  });
+  const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+    vaultData: nowVaultData,
+    deadlineVaultData: nowVaultData,
+    plan,
+  });
+  const feeSharesNow = params.owner
+    ? computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: params.owner,
+        timestamp: params.timestamp,
+      })
+    : 0n;
+
+  return {
+    plan,
+    sharesBurntRaw,
+    sharesBurntNow,
+    // Mirror the entity's price-floor denominator: the larger of the raw snapshot burn (no fee
+    // mint) and the `now`-accrued (execution-time) burn net of the fee shares minted to `owner`.
+    sharesBurnt: MathLib.max(sharesBurntRaw, sharesBurntNow - feeSharesNow),
+  };
+};
+
+// The allowance the entity approves: the share burn `exitAssets` costs at a price one
+// `slippageTolerance` step (at minimum one RAY price unit) below the floor and, in any case, one
+// share above the burn at the floor, so a below-floor price reverts on the contract's
+// `minSharePriceE27` check rather than on the allowance.
+const priceFloorCeiling = (params: {
+  exitAssets: bigint;
+  minSharePriceE27: bigint;
+  slippageTolerance?: bigint;
+}) => {
+  const slippageTolerance =
+    params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
+
+  return MathLib.max(
+    MathLib.mulDivUp(
+      params.exitAssets,
+      MathLib.RAY,
+      MathLib.max(
+        MathLib.min(
+          MathLib.mulDivDown(
+            params.minSharePriceE27,
+            MathLib.WAD - slippageTolerance,
+            MathLib.WAD,
+          ),
+          params.minSharePriceE27 - 1n,
+        ),
+        1n,
+      ),
+    ),
+    MathLib.mulDivUp(params.exitAssets, MathLib.RAY, params.minSharePriceE27) +
+      1n,
+  );
+};
+
+describe("MorphoVaultV2.forceWithdraw", () => {
+  test("default", () => {
+    const handle = createMockClient(mainnet);
+    const exit = vaultFor(handle).forceWithdraw({
+      exitAssets: 51n,
+      vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+      userAddress: IN_KIND_USER,
+    });
+    const tx = exit.buildTx();
+
+    expect(tx.to).toBe(IN_KIND_BUNDLER);
+    expect(tx.action.type).toBe("vaultV2ForceWithdraw");
+    expect(tx.action.args).toMatchObject({
+      vault: IN_KIND_VAULT,
+      adapter: IN_KIND_ADAPTER,
+      exitAssets: 51n,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
+      onBehalf: IN_KIND_USER,
+    });
+  });
+
+  test("behavior: derives a non-zero minSharePriceE27 by default", () => {
+    const handle = createMockClient(mainnet);
+    const tx = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+      })
+      .buildTx();
+
+    expect(tx.action.args.minSharePriceE27).toBeGreaterThan(0n);
+  });
+
+  test("behavior: the derived bound accepts the snapshot's own realized price", () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const handle = createMockClient(mainnet);
+    const tx = withChainTimestamp(now, () =>
+      vaultFor(handle)
+        .forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        })
+        .buildTx(),
+    );
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+
+    // The on-chain check is `mulDivDown(withdrawn, RAY, sharesBurnt) >= minSharePriceE27`.
+    expect(
+      MathLib.mulDivDown(plan.withdrawnAssets, MathLib.RAY, sharesBurnt),
+    ).toBeGreaterThanOrEqual(tx.action.args.minSharePriceE27);
+  });
+
+  test("behavior: a looser slippage tolerance lowers the bound", () => {
+    const handle = createMockClient(mainnet);
+    const build = (slippageTolerance: bigint) =>
+      vaultFor(handle)
+        .forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          slippageTolerance,
+        })
+        .buildTx().action.args.minSharePriceE27;
+
+    expect(build(MathLib.WAD / 100n)).toBeLessThan(build(0n));
+  });
+
+  test("behavior: a zero slippage tolerance still leaves allowance headroom above the floor", async () => {
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = vaultFor(handle, { supportSignature: true }).forceWithdraw({
+      exitAssets: 51n,
+      // A dust-priced vault (share price far below 1 asset) keeps the E27 floor small enough that
+      // the one-price-unit headroom survives share rounding: at ~1e27-scale prices
+      // `ceil(exitAssets·RAY / (floor - 1))` collides with `ceil(exitAssets·RAY / floor)`.
+      vaultData: vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        assetBalance: 1_000n,
+        totalAssets: 1_000n,
+        totalSupply: 100_000_000_000_000_000n,
+      }),
+      userAddress: IN_KIND_USER,
+      slippageTolerance: 0n,
+    });
+    const [requirement] = await exit.getRequirements();
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (requirement?.action.type !== "permit") {
+      throw new Error("Expected a permit requirement");
+    }
+    const allowance = requirement.action.args.amount;
+    const sharesAtFloor = MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27);
+
+    // At zero tolerance the `minSharePriceE27 - 1` branch binds: the denominator sits exactly one
+    // RAY price unit below the floor, so the allowance still covers a below-floor burn and the
+    // miss surfaces as the bundle's `SlippageExceeded`, not an `_spendAllowance` underflow.
+    expect(allowance).toBe(
+      priceFloorCeiling({
+        exitAssets: 51n,
+        minSharePriceE27,
+        slippageTolerance: 0n,
+      }),
+    );
+    expect(allowance).toBeGreaterThan(sharesAtFloor);
+    expect(allowance).toBe(
+      MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27 - 1n),
+    );
+  });
+
+  test("behavior: a zero slippage tolerance leaves one share of headroom at a realistic share price", async () => {
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = vaultFor(handle, { supportSignature: true }).forceWithdraw({
+      exitAssets: 51n,
+      // A ~1:1 share price puts the E27 floor near 1e27, where the one-price-unit denominator
+      // step rounds to the same share count as the at-floor burn; the share-space branch is what
+      // keeps the headroom on realistic vaults.
+      vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+      userAddress: IN_KIND_USER,
+      slippageTolerance: 0n,
+    });
+    const [requirement] = await exit.getRequirements();
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (requirement?.action.type !== "permit") {
+      throw new Error("Expected a permit requirement");
+    }
+    const allowance = requirement.action.args.amount;
+    const sharesAtFloor = MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27);
+
+    // Price-space headroom rounds away here: `mulDivUp(51, RAY, floor - 1)` collides with the
+    // at-floor burn, so the guarantee comes from `atFloor + 1` shares.
+    expect(MathLib.mulDivUp(51n, MathLib.RAY, minSharePriceE27 - 1n)).toBe(
+      sharesAtFloor,
+    );
+    expect(allowance).toBe(sharesAtFloor + 1n);
+    expect(allowance).toBe(
+      priceFloorCeiling({
+        exitAssets: 51n,
+        minSharePriceE27,
+        slippageTolerance: 0n,
+      }),
+    );
+  });
+
+  test("error: VaultV2ForceWithdrawSharePriceBelowFloorError", () => {
+    const handle = createMockClient(mainnet);
+    expect(() =>
+      vaultFor(handle).forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: 1n,
+      }),
+    ).toThrow(VaultV2ForceWithdrawSharePriceBelowFloorError);
+
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    let caught: unknown;
+    try {
+      withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet)).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: floorE27 - 1n,
+        }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(
+      VaultV2ForceWithdrawSharePriceBelowFloorError,
+    );
+    if (!(caught instanceof VaultV2ForceWithdrawSharePriceBelowFloorError)) {
+      throw caught;
+    }
+    expect(caught.floorE27).toBe(floorE27);
+    expect(caught.minSharePriceE27).toBe(floorE27 - 1n);
+  });
+
+  test("behavior: override at or above the max-slippage floor is accepted and encoded", async () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 51n,
+      timestamp: now,
+    });
+    const floorE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: plan.withdrawnAssets,
+      sharesBurnt,
+      slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+    });
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now, () =>
+      vaultFor(handle, { supportSignature: false }).forceWithdraw({
+        exitAssets: 51n,
+        vaultData,
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: floorE27,
+      }),
+    );
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+
+    expect(exit.buildTx().action.args.minSharePriceE27).toBe(floorE27);
+    if (!approval || !isRequirementApproval(approval)) {
+      throw new Error("Expected an ERC-20 approval requirement");
+    }
+    expect(approval.action.args.amount).toBeLessThan(maxUint256);
+  });
+
+  test("behavior: override above the default floor tightens the bound", () => {
+    const handle = createMockClient(mainnet);
+    const defaultFloor = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+      })
+      .buildTx().action.args.minSharePriceE27;
+    const override = defaultFloor + 1n;
+    const tx = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        minSharePriceE27: override,
+      })
+      .buildTx();
+
+    expect(tx.action.args.minSharePriceE27).toBe(override);
+  });
+
+  test("behavior: a positive floor remains valid when the max-slippage threshold rounds to zero", () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 0n,
+      totalSupply: 950_000_000_000_000_000_000_000_000n,
+    });
+    const { plan, sharesBurnt } = expectedSharesBurnt({
+      vaultData,
+      exitAssets: 1n,
+      timestamp: now,
+    });
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      }),
+    ).toThrow(VaultV2ForceWithdrawZeroSharePriceError);
+    const build = (minSharePriceE27?: bigint) =>
+      vaultFor(createMockClient(mainnet))
+        .forceWithdraw({
+          exitAssets: 1n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          minSharePriceE27,
+        })
+        .buildTx();
+
+    expect(build().action.args.minSharePriceE27).toBe(1n);
+    expect(build(1n).action.args.minSharePriceE27).toBe(1n);
+    expect(() => build(0n)).toThrow(NonPositiveInputError);
+  });
+
+  test("behavior: the allowance denominator clamps to 1 when the headroom step rounds the floor to zero", async () => {
+    const now = 1_800_000_000n;
+    const vaultData = vaultV2ExitData({
+      assetBalance: 1n,
+      totalAssets: 0n,
+      totalSupply: 950_000_000_000_000_000_000_000_000n,
+    });
+    const handle = createMockClient(mainnet);
+    mockRequirements(handle);
+    const exit = withChainTimestamp(now, () =>
+      vaultFor(handle, { supportSignature: false }).forceWithdraw({
+        exitAssets: 1n,
+        vaultData,
+        userAddress: IN_KIND_USER,
+      }),
+    );
+    const [approval] = await withChainTimestamp(now, () =>
+      exit.getRequirements(),
+    );
+    const { minSharePriceE27 } = exit.buildTx().action.args;
+    if (approval?.action.type !== "erc20Approval") {
+      throw new Error("Expected an erc20Approval requirement");
+    }
+
+    expect(minSharePriceE27).toBe(1n);
+    expect(
+      MathLib.mulDivDown(
+        minSharePriceE27,
+        MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+        MathLib.WAD,
+      ),
+    ).toBe(0n);
+    expect(approval.action.args.amount).toBe(
+      MathLib.min(MathLib.mulDivUp(1n, MathLib.RAY, 1n) + 1n, maxUint256),
+    );
+  });
+
+  // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
+  // must never be able to silently disable the guard this path exists to add.
+  test.each([0n, -1n])(
+    "error: NonPositiveInputError for a minSharePriceE27 override of %s",
+    (minSharePriceE27) => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          minSharePriceE27,
+        }),
+      ).toThrow(NonPositiveInputError);
+    },
+  );
+
+  test("behavior: forwards the referral fee split", () => {
+    const handle = createMockClient(mainnet);
+    const tx = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        referralFeePct: TWO_PERCENT,
+        referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+      })
+      .buildTx();
+
+    expect(tx.action.args).toMatchObject({
+      referralFeePct: TWO_PERCENT,
+      referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+    });
+  });
+
+  test("behavior: resolves the vault's sole adapter without an override", () => {
+    const handle = createMockClient(mainnet);
+    const tx = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+        userAddress: IN_KIND_USER,
+        adapter: IN_KIND_ADAPTER,
+      })
+      .buildTx();
+
+    expect(tx.action.args.adapter).toBe(IN_KIND_ADAPTER);
+  });
+
+  test("behavior: accepts a liquidity adapter routed through the sole adapter", () => {
+    const handle = createMockClient(mainnet);
+    const tx = vaultFor(handle)
+      .forceWithdraw({
+        exitAssets: 51n,
+        vaultData: vaultV2ExitData({
+          liquidityAdapter: "sole",
+          penalty: TWO_PERCENT,
+        }),
+        userAddress: IN_KIND_USER,
+      })
+      .buildTx();
+
+    expect(tx.action.args.exitAssets).toBe(51n);
+  });
+
+  test("behavior: defaults the deadline to two hours out", () => {
+    const now = 1_800_000_000n;
+    const handle = createMockClient(mainnet);
+    const tx = withChainTimestamp(now, () =>
+      vaultFor(handle)
+        .forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+        })
+        .buildTx(),
+    );
+
+    expect(tx.action.args.deadline).toBe(now + Time.s.from.h(2n));
+  });
+
+  test("behavior: buildTx is synchronous and needs no requirement resolution", () => {
+    const handle = createMockClient(mainnet);
+    const exit = vaultFor(handle).forceWithdraw({
+      exitAssets: 51n,
+      vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+      userAddress: IN_KIND_USER,
+    });
+
+    // No mocked reads are registered, so any RPC here would throw.
+    expect(exit.buildTx().data).toMatch(/^0x/);
+  });
+
+  describe("getRequirements", () => {
+    test("default: approve path uses the price-floor share-burn ceiling", async () => {
+      const now = 1_800_000_000n;
+      const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const [approval] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+
+      // The allowance exceeds the largest burn the on-chain price check accepts for `exitAssets`,
+      // so a price drop reverts on the price check, never on allowance.
+      expect(approval?.action).toEqual({
+        type: "erc20Approval",
+        args: {
+          spender: IN_KIND_BUNDLER,
+          amount: priceFloorCeiling({
+            exitAssets: 51n,
+            minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+          }),
+        },
+      });
+    });
+
+    test("behavior: signature path emits a bounded V2 permit", async () => {
+      const now = 1_800_000_000n;
+      const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const [requirement] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+
+      expect(requirement?.action).toMatchObject({
+        type: "permit",
+        args: {
+          spender: IN_KIND_BUNDLER,
+          amount: priceFloorCeiling({
+            exitAssets: 51n,
+            minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+          }),
+        },
+      });
+    });
+
+    test("behavior: a sufficient allowance needs no authorization", async () => {
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { allowance: MathLib.MAX_UINT_256 });
+
+      await expect(
+        vaultFor(handle, { supportSignature: false })
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+            userAddress: IN_KIND_USER,
+          })
+          .getRequirements(),
+      ).resolves.toEqual([]);
+    });
+
+    test("behavior: the bound covers the penalty legs on top of the asset legs", async () => {
+      const now = 1_800_000_000n;
+      const vaultData = vaultV2ExitData({
+        additionalMarket: true,
+        marketTotalBorrowAssets: 0n,
+        secondMarketTotalBorrowAssets: 0n,
+        penalty: TWO_PERCENT,
+      });
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false }).forceWithdraw({
+          exitAssets: 1_400n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const [approval] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const { plan, sharesBurnt } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 1_400n,
+        timestamp: now,
+      });
+      const ceiling = priceFloorCeiling({
+        exitAssets: 1_400n,
+        minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+      });
+
+      expect(plan.penaltyLegs).toBe(2);
+      expect(approval?.action.args).toMatchObject({ amount: ceiling });
+      // The penalty legs push the faithful-price burn above the naive single conversion, and the
+      // price-floor ceiling then covers that burn in full.
+      expect(sharesBurnt).toBeGreaterThan(
+        vaultData.toShares(plan.withdrawnAssets, "Up"),
+      );
+      expect(ceiling).toBeGreaterThanOrEqual(sharesBurnt);
+    });
+
+    test("error: ExpiredDeadlineError when the handle goes stale before the reads", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          deadline: now + 1n,
+        }),
+      );
+
+      await expect(
+        withChainTimestamp(now + 2n, () => exit.getRequirements()),
+      ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+    });
+  });
+
+  describe("validation", () => {
+    test("error: ChainIdMismatchError on a client targeting another chain", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        handle.client
+          .extend(morphoViemExtension())
+          .morpho.vaultV2(IN_KIND_VAULT, 8453)
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: vaultV2ExitData(),
+            userAddress: IN_KIND_USER,
+          }),
+      ).toThrow(ChainIdMismatchError);
+    });
+
+    test("error: VaultAddressMismatchError on a snapshot from another vault", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ address: IN_KIND_FOREIGN_ADAPTER }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultAddressMismatchError);
+    });
+
+    test.each([0n, -1n])(
+      "error: NonPositiveInputError for exitAssets %s",
+      (exitAssets) => {
+        const handle = createMockClient(mainnet);
+
+        expect(() =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets,
+            vaultData: vaultV2ExitData(),
+            userAddress: IN_KIND_USER,
+          }),
+        ).toThrow(NonPositiveInputError);
+      },
+    );
+
+    test("error: ExcessiveSlippageToleranceError above the SDK maximum", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          slippageTolerance: MathLib.WAD / 2n,
+        }),
+      ).toThrow(ExcessiveSlippageToleranceError);
+    });
+
+    test("error: ExpiredDeadlineError for a deadline in the past", () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData: vaultV2ExitData(),
+            userAddress: IN_KIND_USER,
+            deadline: now - 1n,
+          }),
+        ),
+      ).toThrow(ExpiredDeadlineError);
+    });
+
+    // The action rejects an out-of-`uint256` deadline, so the handle must too — otherwise
+    // `getRequirements()` walks the caller through an approval or permit that `buildTx()` cannot
+    // encode.
+    test("error: InputExceedsMaxError for a deadline above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          deadline: maxUint256 + 1n,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
+    // Same eager-rejection reason as the deadline: the action bounds the override, so the handle
+    // must too, or `getRequirements()` asks for an approval against an unencodable floor.
+    test("error: InputExceedsMaxError for a minSharePriceE27 override above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          minSharePriceE27: maxUint256 + 1n,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
+    test("error: InputExceedsMaxError for exitAssets above uint256", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: maxUint256 + 1n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
+    // The fixture's 2:1 share-to-asset ratio makes the uncapped allowance exceed the uint256 ABI slot.
+    test("behavior: saturates the derived share allowance at uint256", async () => {
+      const handle = createMockClient(mainnet);
+      const exitAssets = maxUint256;
+      const vaultData = vaultV2ExitData({
+        assetBalance: exitAssets * 2n,
+        totalSupply: 2_000n,
+      });
+      mockRequirements(handle, { allowance: maxUint256 - 1n });
+
+      const requirements = await vaultFor(handle, {
+        supportSignature: false,
+      })
+        .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+        .getRequirements();
+
+      expect(requirements).toHaveLength(1);
+      const [approval] = requirements;
+      if (!approval || !isRequirementApproval(approval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+      expect(approval.action.args.amount).toBe(maxUint256);
+
+      mockRequirements(handle, { allowance: maxUint256 });
+      expect(
+        await vaultFor(handle, { supportSignature: false })
+          .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+          .getRequirements(),
+      ).toHaveLength(0);
+    });
+
+    test("error: VaultV2SingleAdapterRequiredError without exactly one adapter", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ adapters: "empty" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2SingleAdapterRequiredError);
+    });
+
+    test("error: AdapterNotPartOfVaultError for a foreign adapter override", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+          adapter: IN_KIND_FOREIGN_ADAPTER,
+        }),
+      ).toThrow(AdapterNotPartOfVaultError);
+    });
+
+    test("error: VaultV2UnsupportedExitAdapterError for a legacy adapter", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ adapters: "legacy" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2UnsupportedExitAdapterError);
+    });
+
+    test("error: VaultV2UnsupportedLiquidityAdapterError for a foreign liquidity adapter", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ liquidityAdapter: "foreign" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2UnsupportedLiquidityAdapterError);
+    });
+
+    test("error: VaultV2UndecodableLiquidityDataError preserves the decode cause", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ liquidityAdapter: "undecodable" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2UndecodableLiquidityDataError);
+    });
+
+    test("error: VaultV2ForceWithdrawZeroWithdrawalError on a dust exit", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 1n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2ForceWithdrawZeroWithdrawalError);
+    });
+
+    test("error: InputExceedsMaxError for a referral fee at or above WAD", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: MathLib.WAD,
+          referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+        }),
+      ).toThrow(InputExceedsMaxError);
+    });
+
+    test("error: NegativeInputError for a negative referral fee", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: -1n,
+        }),
+      ).toThrow(NegativeInputError);
+    });
+
+    test("error: ReferralFeeRecipientMissingError for a fee without a recipient", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: 1n,
+        }),
+      ).toThrow(ReferralFeeRecipientMissingError);
+    });
+
+    test("error: ReferralFeeRecipientMissingError for a zero-address recipient", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: 1n,
+          referralFeeRecipient: zeroAddress,
+        }),
+      ).toThrow(ReferralFeeRecipientMissingError);
+    });
+  });
+
+  describe("security invariants", () => {
+    // A caller-chosen `deadline` must not be able to weaken the price floor. The allowance is an
+    // upper bound so it legitimately grows with the accrual window, but feeding that same inflated
+    // number in as the bound's denominator would only lower the floor.
+    test("behavior: the derived minSharePriceE27 does not depend on the deadline", () => {
+      const handle = createMockClient(mainnet);
+      // A management fee mints shares over time, so a longer window burns more shares.
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000_000n,
+      });
+      const boundFor = (deadline: bigint) =>
+        vaultFor(handle)
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          })
+          .buildTx().action.args.minSharePriceE27;
+
+      const now = Number(Time.timestamp());
+      expect(boundFor(BigInt(now) + Time.s.from.d(365n))).toBe(
+        boundFor(BigInt(now) + Time.s.from.h(2n)),
+      );
+    });
+
+    // A stale, fee-bearing vault accrues pending management fees on the first on-chain withdrawal,
+    // minting shares before the burn. Deriving the floor from the raw `lastUpdate` snapshot ignores
+    // that, lifting the floor above the faithful execution price and reverting a valid exit with
+    // `SlippageExceeded`. Accruing the denominator to `now` tracks execution and prevents it.
+    test("behavior: the derived bound accepts a stale fee-bearing vault's accrued price", () => {
+      // Fixture `lastUpdate` is the wall clock; exit 30 days later so pending fees are material.
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 40_000_000_000n,
+        feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+      });
+      const now = vaultData.lastUpdate + Time.s.from.d(30n);
+      const handle = createMockClient(mainnet);
+      const minSharePriceE27 = withChainTimestamp(now, () =>
+        vaultFor(handle)
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+
+      const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+      if (eligibility.type !== "eligible") {
+        throw new Error(
+          `Expected an eligible fixture, got "${eligibility.type}"`,
+        );
+      }
+      const plan = computeVaultV2ForceWithdrawPlan({
+        vaultData,
+        adapter: eligibility.adapter,
+        liquidityMarketId: eligibility.liquidityMarketId,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const { vault: nowVaultData } = vaultData.accrueInterest(now);
+      const faithfulSharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData: nowVaultData,
+        deadlineVaultData: nowVaultData,
+        plan,
+      });
+      const staleSharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData: vaultData,
+        plan,
+      });
+      const staleFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: staleSharesBurnt,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      const faithfulPrice = MathLib.mulDivDown(
+        plan.withdrawnAssets,
+        MathLib.RAY,
+        faithfulSharesBurnt,
+      );
+
+      // Pending fees make the real burn exceed the stale snapshot's.
+      expect(faithfulSharesBurnt).toBeGreaterThan(staleSharesBurnt);
+      // The derived floor clears the faithful price (the on-chain check passes)...
+      expect(faithfulPrice).toBeGreaterThanOrEqual(minSharePriceE27);
+      // ...whereas the old snapshot-based floor would have rejected that same faithful price.
+      expect(faithfulPrice).toBeLessThan(staleFloor);
+    });
+
+    // Regression: Galaxy USDC Enhanced Vault V2 (mainnet block 25_958_945), exited ~10 days after
+    // its `lastUpdate` pin. Accruing the snapshot to `now` projects the share price *up* (market
+    // interest outpaces the management-fee mint), yet the chain realized a price *below* the pin.
+    // A floor derived from the projection alone (1.01135e-12 vs a 1.01061e-12 pin) sat above the
+    // realized price, and an allowance coupled exactly to it underflowed `_spendAllowance`
+    // (panic 0x11) on the final `withdraw` leg instead of reverting on the price check.
+    describe("long-window management-fee vault", () => {
+      const totalAssets = 8_056_178_807_926n;
+      const totalSupply = 7_971_579_390_105_755_281_093_585n;
+      const exitAssets = 3_905_489_130_811n;
+      // Blue supply shares carry a 1e6 virtual-share scale; hold the whole market so the vault's
+      // real assets track the market's projected supply.
+      const marketTotalSupplyShares = totalAssets * 1_000_000n;
+      const galaxyVaultData = () =>
+        vaultV2ExitData({
+          totalAssets,
+          totalSupply,
+          marketTotalAssets: totalAssets,
+          marketTotalBorrowAssets: totalAssets / 2n,
+          marketTotalSupplyShares,
+          supplyShares: marketTotalSupplyShares,
+          // ~5% APR so ten days of interest (~0.14%) dwarfs the fee mint (~0.011%).
+          rateAtTarget: 1_585_489_599n,
+          maxRate: MathLib.WAD,
+          managementFee: 126_839_167n,
+          feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+        });
+      const sharePrice = (vaultData: ReturnType<typeof vaultV2ExitData>) =>
+        MathLib.mulDivDown(
+          vaultData._totalAssets,
+          MathLib.RAY,
+          vaultData.totalSupply,
+        );
+      // The snapshot's own conversion price for `withdrawnAssets` (aggregate `toShares(_, "Up")`,
+      // no per-leg dust), one tolerance step down: the ceiling a true floor must respect.
+      const tolerancePrice = (
+        vaultData: ReturnType<typeof vaultV2ExitData>,
+        withdrawnAssets: bigint,
+      ) =>
+        computeMinForceWithdrawSharePrice({
+          withdrawnAssets,
+          sharesBurnt: vaultData.toShares(withdrawnAssets, "Up"),
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        });
+
+      test("behavior: the floor never exceeds the un-projected price after tolerance", () => {
+        const vaultData = galaxyVaultData();
+        const now = vaultData.lastUpdate + Time.s.from.d(10n);
+        const { vault: nowVaultData } = vaultData.accrueInterest(now);
+        const minSharePriceE27 = withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet))
+            .forceWithdraw({ exitAssets, vaultData, userAddress: IN_KIND_USER })
+            .buildTx(),
+        ).action.args.minSharePriceE27;
+        const { plan } = expectedSharesBurnt({
+          vaultData,
+          exitAssets,
+          timestamp: now,
+        });
+        const projectedOnlyFloor = computeMinForceWithdrawSharePrice({
+          withdrawnAssets: plan.withdrawnAssets,
+          sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
+            vaultData: nowVaultData,
+            deadlineVaultData: nowVaultData,
+            plan,
+          }),
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        });
+
+        const pinFloor = tolerancePrice(vaultData, plan.withdrawnAssets);
+        const projectedFloor = tolerancePrice(
+          nowVaultData,
+          plan.withdrawnAssets,
+        );
+
+        // Precondition: the `now` projection lifts the price above the pin.
+        expect(sharePrice(nowVaultData)).toBeGreaterThan(sharePrice(vaultData));
+        expect(projectedFloor).toBeGreaterThan(pinFloor);
+        // A projection-only floor would reject the pin price itself...
+        expect(projectedOnlyFloor).toBeGreaterThan(pinFloor);
+        // ...whereas the derived floor stays at or below both the pin and the projection.
+        expect(minSharePriceE27).toBeLessThanOrEqual(pinFloor);
+        expect(minSharePriceE27).toBeLessThanOrEqual(projectedFloor);
+        expect(minSharePriceE27).toBeGreaterThan(0n);
+      });
+
+      test("behavior: the allowance covers the burn at the floor with slippage headroom", async () => {
+        const vaultData = galaxyVaultData();
+        const now = vaultData.lastUpdate + Time.s.from.d(10n);
+        const handle = createMockClient(mainnet);
+        mockRequirements(handle);
+        const exit = withChainTimestamp(now, () =>
+          vaultFor(handle, { supportSignature: true }).forceWithdraw({
+            exitAssets,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        );
+        const [requirement] = await withChainTimestamp(now, () =>
+          exit.getRequirements(),
+        );
+        const { minSharePriceE27 } = exit.buildTx().action.args;
+        if (requirement?.action.type !== "permit") {
+          throw new Error("Expected a permit requirement");
+        }
+        const allowance = requirement.action.args.amount;
+        const sharesAtFloor = MathLib.mulDivUp(
+          exitAssets,
+          MathLib.RAY,
+          minSharePriceE27,
+        );
+
+        expect(allowance).toBe(
+          priceFloorCeiling({ exitAssets, minSharePriceE27 }),
+        );
+        expect(allowance).toBeGreaterThan(sharesAtFloor);
+        // Any price the contract's floor check accepts fits inside the allowance with a full
+        // tolerance step to spare, so a price just under the floor burns within the allowance and
+        // surfaces as the bundle's own price-check revert, not an `_spendAllowance` underflow.
+        expect(allowance).toBeGreaterThanOrEqual(
+          MathLib.mulDivUp(
+            sharesAtFloor,
+            MathLib.WAD,
+            MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+          ),
+        );
+        expect(allowance).toBeLessThan(maxUint256);
+      });
+    });
+
+    test("behavior: fee-recipient floors use the net burn after management fee mints", () => {
+      const now = 1_800_000_000n;
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const nonRecipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+      });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const { plan, sharesBurnt, sharesBurntRaw, sharesBurntNow } =
+        expectedSharesBurnt({
+          vaultData: recipientVaultData,
+          exitAssets: 51n,
+          timestamp: now,
+          owner: IN_KIND_USER,
+        });
+      const recipientFloor = withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet))
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: recipientVaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+      const nonRecipientFloor = withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet))
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: nonRecipientVaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(sharesBurnt).toBe(
+        MathLib.max(sharesBurntRaw, sharesBurntNow - feeSharesNow),
+      );
+      expect(recipientFloor).toBe(
+        computeMinForceWithdrawSharePrice({
+          withdrawnAssets: plan.withdrawnAssets,
+          sharesBurnt,
+          slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+        }),
+      );
+      // Netting the fee credit can only raise the floor relative to a non-recipient's gross burn.
+      expect(recipientFloor).toBeGreaterThanOrEqual(nonRecipientFloor);
+    });
+
+    test("behavior: fee-recipient floor never exceeds the raw-snapshot floor when the fee credit outweighs the accrued burn growth", () => {
+      // A large management fee paid to the user over a long window: the `now` accrual's net burn
+      // (gross minus the user's own fee mint) falls below the raw snapshot burn, which the chain
+      // realizes if it accrues to an earlier timestamp than `now`. Netting each endpoint before the
+      // max keeps the floor at the raw burn instead of `grossMax - feeSharesNow`.
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const now = recipientVaultData.lastUpdate + Time.s.from.d(365n);
+      const { plan, sharesBurnt, sharesBurntRaw, sharesBurntNow } =
+        expectedSharesBurnt({
+          vaultData: recipientVaultData,
+          exitAssets: 51n,
+          timestamp: now,
+          owner: IN_KIND_USER,
+        });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const floor = withChainTimestamp(now, () =>
+        vaultFor(createMockClient(mainnet))
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData: recipientVaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+      const rawFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: sharesBurntRaw,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      const grossMaxNetFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: MathLib.max(sharesBurntRaw, sharesBurntNow) - feeSharesNow,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(sharesBurntNow - feeSharesNow).toBeLessThan(sharesBurntRaw);
+      expect(sharesBurnt).toBe(sharesBurntRaw);
+      expect(floor).toBe(rawFloor);
+      expect(floor).toBeLessThan(grossMaxNetFloor);
+    });
+
+    test("error: VaultV2ForceWithdrawSharePriceBelowFloorError for a fee-recipient override between the gross-burn and net-burn floors", () => {
+      const now = 1_800_000_000n;
+      const recipientVaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData: recipientVaultData,
+        owner: IN_KIND_USER,
+        timestamp: now,
+      });
+      const { plan, sharesBurnt } = expectedSharesBurnt({
+        vaultData: recipientVaultData,
+        exitAssets: 51n,
+        timestamp: now,
+        owner: IN_KIND_USER,
+      });
+      const { sharesBurnt: grossSharesBurnt } = expectedSharesBurnt({
+        vaultData: recipientVaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const netFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+      const grossFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: grossSharesBurnt,
+        slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(feeSharesNow).toBeGreaterThan(0n);
+      expect(grossFloor).toBeLessThan(netFloor);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet))
+            .forceWithdraw({
+              exitAssets: 51n,
+              minSharePriceE27: netFloor - 1n,
+              vaultData: recipientVaultData,
+              userAddress: IN_KIND_USER,
+            })
+            .buildTx(),
+        ),
+      ).toThrow(
+        new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          floorE27: netFloor,
+          minSharePriceE27: netFloor - 1n,
+        }),
+      );
+    });
+
+    test("behavior: a zero fee mint never trips the fee guard on a dust exit", () => {
+      const vaultData = vaultV2ExitData({
+        assetBalance: 1n,
+        totalAssets: 1_000n,
+        totalSupply: 1n,
+      });
+      const now = vaultData.lastUpdate + 1n;
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 1n,
+        timestamp: now,
+      });
+
+      expect(
+        computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan }),
+      ).toBe(0n);
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
+            exitAssets: 1n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    test("behavior: fee-recipient allowance includes fee shares through the deadline", async () => {
+      const now = 1_800_000_000n;
+      const deadline = now + Time.s.from.d(30n);
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+          deadline,
+        }),
+      );
+      const [approval] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const feeSharesDeadline = computeVaultV2ForceWithdrawFeeSharesMinted({
+        vaultData,
+        owner: IN_KIND_USER,
+        timestamp: deadline,
+      });
+      if (!isRequirementApproval(approval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+      const recipientAllowance = approval.action.args.amount;
+      expect(recipientAllowance).toBe(
+        priceFloorCeiling({
+          exitAssets: 51n,
+          minSharePriceE27: exit.buildTx().action.args.minSharePriceE27,
+        }) + feeSharesDeadline,
+      );
+
+      const nonRecipientHandle = createMockClient(mainnet);
+      mockRequirements(nonRecipientHandle);
+      const nonRecipientExit = withChainTimestamp(now, () =>
+        vaultFor(nonRecipientHandle, { supportSignature: false }).forceWithdraw(
+          {
+            exitAssets: 51n,
+            vaultData: vaultV2ExitData({
+              penalty: TWO_PERCENT,
+              managementFee: 1_000_000_000n,
+              feeRecipient: IN_KIND_FOREIGN_ADAPTER,
+            }),
+            userAddress: IN_KIND_USER,
+            deadline,
+          },
+        ),
+      );
+      const [nonRecipientApproval] = await withChainTimestamp(now, () =>
+        nonRecipientExit.getRequirements(),
+      );
+      if (!isRequirementApproval(nonRecipientApproval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+      expect(recipientAllowance).toBeGreaterThan(
+        nonRecipientApproval.action.args.amount,
+      );
+    });
+
+    test("error: InputExceedsMaxError for a deadline beyond the fee projection horizon", () => {
+      const now = 1_800_000_000n;
+      const horizon = Time.s.from.d(365n);
+      const horizonDeadline = now + horizon;
+      const distantDeadline = horizonDeadline + 1n;
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: horizonDeadline,
+          }),
+        ),
+      ).not.toThrow();
+
+      let caught: unknown;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(createMockClient(mainnet)).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: distantDeadline,
+          }),
+        );
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(InputExceedsMaxError);
+      if (!(caught instanceof InputExceedsMaxError)) {
+        throw caught;
+      }
+      expect(caught.field).toBe("deadline");
+      expect(caught.value).toBe(distantDeadline);
+      expect(caught.max).toBe(horizonDeadline);
+    });
+
+    test("error: VaultV2ForceWithdrawFeeSharesExceedBurnError when fee mints reach the burn bound", () => {
+      const vaultData = vaultV2ExitData({
+        managementFee: 40_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const now = vaultData.lastUpdate + Time.s.from.d(30n);
+      const deadline = now + Time.s.from.h(2n);
+      const handle = createMockClient(mainnet);
+      let caught: unknown;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          }),
+        );
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(
+        VaultV2ForceWithdrawFeeSharesExceedBurnError,
+      );
+      if (!(caught instanceof VaultV2ForceWithdrawFeeSharesExceedBurnError)) {
+        throw caught;
+      }
+      expect(caught.vault).toBe(IN_KIND_VAULT);
+      expect(caught.userAddress).toBe(IN_KIND_USER);
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const projectionTimestamp = MathLib.min(
+        deadline,
+        now + Time.s.from.d(365n),
+      );
+      const { vault: projectedVaultData } =
+        vaultData.accrueInterest(projectionTimestamp);
+      expect(caught.sharesBurnt).toBe(
+        computeVaultV2ForceWithdrawMinSharesBurnt({
+          vaultData: projectedVaultData,
+          plan,
+        }),
+      );
+      expect(caught.feeShares).toBe(
+        computeVaultV2ForceWithdrawFeeSharesMinted({
+          vaultData,
+          owner: IN_KIND_USER,
+          timestamp: projectionTimestamp,
+        }),
+      );
+    });
+
+    test("error: projects fee mints through the deadline", () => {
+      const vaultData = vaultV2ExitData({
+        managementFee: 10_000_000_000_000n,
+        feeRecipient: IN_KIND_USER,
+      });
+      const now = vaultData.lastUpdate + 1n;
+      const shortDeadline = now + 1n;
+      const deadline = now + Time.s.from.h(2n);
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline: shortDeadline,
+          }),
+        ),
+      ).not.toThrow();
+
+      let caught: unknown;
+      try {
+        withChainTimestamp(now, () =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          }),
+        );
+      } catch (error) {
+        caught = error;
+      }
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const { vault: projectedVaultData } = vaultData.accrueInterest(deadline);
+      expect(caught).toBeInstanceOf(
+        VaultV2ForceWithdrawFeeSharesExceedBurnError,
+      );
+      if (!(caught instanceof VaultV2ForceWithdrawFeeSharesExceedBurnError)) {
+        throw caught;
+      }
+      expect(caught.feeShares).toBe(
+        computeVaultV2ForceWithdrawFeeSharesMinted({
+          vaultData,
+          owner: IN_KIND_USER,
+          timestamp: deadline,
+        }),
+      );
+      expect(caught.sharesBurnt).toBe(
+        computeVaultV2ForceWithdrawMinSharesBurnt({
+          vaultData: projectedVaultData,
+          plan,
+        }),
+      );
+    });
+
+    test("behavior: an equivalent handle builds the same signed transaction without getRequirements()", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { nonce: 0n });
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const requirements = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const requirement = requirements.find(isRequirementSignature);
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const signature = {
+        action: requirement.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: requirement.action.args.amount,
+          nonce: 0n,
+          deadline: requirement.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+      expect(() => exit.buildTx([signature])).not.toThrow();
+
+      const freshExit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const tx = exit.buildTx([signature]);
+      const freshTx = freshExit.buildTx([signature]);
+      expect({
+        data: freshTx.data,
+        to: freshTx.to,
+        value: freshTx.value,
+      }).toEqual({
+        data: tx.data,
+        to: tx.to,
+        value: tx.value,
+      });
+    });
+
+    test("error: BundlesPermitMismatchError for a permit with a different amount, deadline or spender", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { nonce: 0n });
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const requirements = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const requirement = requirements.find(isRequirementSignature);
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const signature = {
+        action: requirement.action,
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: requirement.action.args.amount,
+          nonce: 0n,
+          deadline: requirement.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            args: {
+              ...signature.args,
+              amount: signature.args.amount + 1n,
+            },
+            action: {
+              ...signature.action,
+              args: {
+                ...signature.action.args,
+                amount: signature.action.args.amount + 1n,
+              },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "amount",
+        }),
+      );
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            args: {
+              ...signature.args,
+              deadline: signature.args.deadline + 1n,
+            },
+            action: {
+              ...signature.action,
+              args: {
+                ...signature.action.args,
+                deadline: signature.action.args.deadline + 1n,
+              },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "deadline",
+        }),
+      );
+      expect(() =>
+        exit.buildTx([
+          {
+            ...signature,
+            action: {
+              ...signature.action,
+              args: { ...signature.action.args, spender: IN_KIND_USER },
+            },
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({
+          name: "BundlesPermitMismatchError",
+          field: "spender",
+        }),
+      );
+    });
+
+    test("behavior: does not reject a permit whose nonce differs from the live nonce", async () => {
+      const now = 1_800_000_000n;
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle, { nonce: 0n });
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData(),
+          userAddress: IN_KIND_USER,
+        }),
+      );
+      const requirements = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
+      const requirement = requirements.find(isRequirementSignature);
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const signature = {
+        action: {
+          ...requirement.action,
+          args: { ...requirement.action.args, nonce: 1n },
+        },
+        args: {
+          owner: IN_KIND_USER,
+          asset: IN_KIND_VAULT,
+          amount: requirement.action.args.amount,
+          nonce: 1n,
+          deadline: requirement.action.args.deadline,
+          signature: serializeSignature({
+            r: toHex(1n, { size: 32 }),
+            s: toHex(2n, { size: 32 }),
+            yParity: 0,
+          }),
+        },
+      } satisfies Erc2612RequirementSignature;
+
+      expect(() => exit.buildTx([signature])).not.toThrow();
+    });
+
+    test("behavior: rejects an exit the adapter's markets cannot cover", () => {
+      const handle = createMockClient(mainnet);
+      const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 1n,
+        timestamp: 0n,
+      });
+
+      // Above `maxExitAssets` the contract's unbounded loop would panic with `0x32`.
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: plan.maxExitAssets + 1n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2ForceWithdrawCoverageError);
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: plan.maxExitAssets,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ).not.toThrow();
+    });
+
+    test("behavior: the coverage error reports an exit that does succeed", () => {
+      const handle = createMockClient(mainnet);
+      const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
+      let reported: bigint | undefined;
+      try {
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 10_000n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        });
+      } catch (error) {
+        if (!(error instanceof VaultV2ForceWithdrawCoverageError)) throw error;
+        reported = error.maxExitAssets;
+      }
+
+      expect(reported).toBeDefined();
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: reported ?? 0n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      ).not.toThrow();
+    });
+
+    test("behavior: the approved allowance covers the exit's full share burn", async () => {
+      const now = 1_800_000_000n;
+      // A non-unit share price is load-bearing: at ~1:1 the sum of the per-leg ceilings equals the
+      // aggregate ceiling exactly, so the per-leg dust term would go unexercised and this
+      // assertion would still hold with it removed. `additionalMarket` puts total assets at 1500
+      // against a 1000 share supply, which makes each leg's `toShares(_, "Up")` round up.
+      const vaultData = vaultV2ExitData({
+        assetBalance: 10n,
+        penalty: TWO_PERCENT,
+        additionalMarket: true,
+        totalSupply: 1_000n,
+      });
+      const handle = createMockClient(mainnet);
+      mockRequirements(handle);
+      const [approval] = await withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false })
+          .forceWithdraw({
+            exitAssets: 61n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .getRequirements(),
+      );
+      const { plan } = expectedSharesBurnt({
+        vaultData,
+        exitAssets: 61n,
+        timestamp: now,
+      });
+      if (!isRequirementApproval(approval)) {
+        throw new Error("Expected an ERC-20 approval requirement");
+      }
+
+      // Every leg the contract burns must fit inside the authorized amount.
+      expect(approval.action.args.amount).toBeGreaterThanOrEqual(
+        vaultData.toShares(plan.assetsToWithdraw, "Up") +
+          vaultData.toShares(plan.assetsToDeallocate, "Up") +
+          vaultData.toShares(plan.penaltyAssets, "Up"),
+      );
+    });
+
+    test("behavior: the user is never quoted more assets than exitAssets", () => {
+      const handle = createMockClient(mainnet);
+      const vaultData = vaultV2ExitData({
+        assetBalance: 10n,
+        penalty: TWO_PERCENT,
+      });
+
+      for (let exitAssets = 20n; exitAssets <= 100n; exitAssets += 7n) {
+        const { plan } = expectedSharesBurnt({
+          vaultData,
+          exitAssets,
+          timestamp: 0n,
+        });
+        expect(plan.withdrawnAssets).toBeLessThanOrEqual(exitAssets);
+        expect(() =>
+          vaultFor(handle).forceWithdraw({
+            exitAssets,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          }),
+        ).not.toThrow();
+      }
+    });
+  });
+});

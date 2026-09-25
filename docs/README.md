@@ -80,7 +80,7 @@ The plan links any ADR it produced. An ADR never links the plan.
 The structural rules ADRs follow are executable. From the repository root:
 
 ```sh
-records() { git ls-files 'docs/adrs/*.md'; }
+records() { git ls-files 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
 new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
 prose() { sed -e '/^ *```/,/^ *```/d' -e 's/`[^`]*`//g' "$1"; }
 

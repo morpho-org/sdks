@@ -7,7 +7,7 @@ import {
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi } from "viem";
+import { type Address, erc20Abi, maxUint256, serializeSignature } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -24,16 +24,20 @@ import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   AdapterNotPartOfVaultError,
+  BundlesPermitMismatchError,
   ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
-  InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
+  isRequirementApproval,
   NonPositiveInputError,
-  UnsupportedInKindAdapterError,
+  type PermitRequirementSignature,
   VaultAddressMismatchError,
+  VaultV2SingleAdapterRequiredError,
+  VaultV2UnsupportedExitAdapterError,
 } from "../../types/index.js";
 
 const mockV2Requirements = (
@@ -63,6 +67,22 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
+  test("error: InputExceedsMaxError before exposing requirements", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("default", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
@@ -224,7 +244,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     },
   );
 
-  test("error: InKindRedeemRequiresSingleAdapterError", () => {
+  test("error: VaultV2SingleAdapterRequiredError", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
@@ -237,7 +257,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data({ adapters: "empty" }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedeemRequiresSingleAdapterError);
+    ).toThrow(VaultV2SingleAdapterRequiredError);
   });
 
   test("error: validates chain and vault snapshot address", () => {
@@ -301,6 +321,45 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     ).toThrow(ExpiredDeadlineError);
   });
 
+  // Security invariant (root AGENTS.md §5): the action rejects an out-of-`uint256` deadline, so the
+  // handle must too. Without this the documented `getRequirements()`-before-`buildTx()` flow could
+  // walk a caller through a vault-share approval or permit for a deadline `buildTx()` cannot encode.
+  test("error: InputExceedsMaxError for a deadline above uint256", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: maxUint256 + 1n,
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NonPositiveInputError for a zero deadline", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    // The contracts read `0` as "unset" rather than "expired", so the shared guard classifies it as
+    // a non-positive input instead of reaching the `ExpiredDeadlineError` staleness check.
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: 0n,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
   test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
     const now = 1_800_000_000n;
     const handle = createMockClient(mainnet);
@@ -361,7 +420,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data({ adapters: "legacy" }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(UnsupportedInKindAdapterError);
+    ).toThrow(VaultV2UnsupportedExitAdapterError);
   });
 
   test("behavior: treats markets absent from the adapter snapshot as zero", () => {
@@ -414,13 +473,13 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     });
   });
 
-  test("behavior: a greater bounded allowance needs no authorization", async () => {
+  test("behavior: oversized allowance is replaced by an exact approval", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const requirements = await vault
+    const [approval] = await vault
       .inKindRedeem({
         amount: 500n,
         marketParamsList: [inKindMarketParams],
@@ -429,8 +488,103 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(requirements).toEqual([]);
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
+    });
   });
+
+  test("behavior: resets an oversized allowance with an onchain approval even when signatures are supported", async () => {
+    const handle = createMockClient(mainnet);
+    mockV2Requirements(handle, { allowance: 1_000n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const [requirement] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    if (!requirement || !isRequirementApproval(requirement)) {
+      throw new Error("Expected an ERC-20 approval requirement");
+    }
+    expect(requirement.action.args).toEqual({
+      spender: IN_KIND_BUNDLER,
+      amount: 501n,
+    });
+  });
+
+  test.each(["spender", "amount", "deadline"] as const)(
+    "error: BundlesPermitMismatchError for a different %s",
+    async (field) => {
+      const handle = createMockClient(mainnet);
+      mockV2Requirements(handle);
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      const exit = vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: 1_900_000_000n,
+      });
+      const [requirement] = await exit.getRequirements();
+      if (requirement?.action.type !== "permit") {
+        throw new Error("Expected a permit requirement");
+      }
+      const permit: PermitRequirementSignature = {
+        args: {
+          owner: IN_KIND_USER,
+          nonce: 9n,
+          asset: IN_KIND_VAULT,
+          signature: serializeSignature({
+            r: `0x${"11".repeat(32)}`,
+            s: `0x${"22".repeat(32)}`,
+            yParity: 1,
+          }),
+          amount: requirement.action.args.amount,
+          deadline: requirement.action.args.deadline,
+        },
+        action: requirement.action,
+      };
+      const mismatchedPermit: PermitRequirementSignature = {
+        ...permit,
+        args: {
+          ...permit.args,
+          amount: field === "amount" ? 502n : permit.args.amount,
+          deadline:
+            field === "deadline" ? 1_900_000_001n : permit.args.deadline,
+        },
+        action: {
+          ...permit.action,
+          args: {
+            ...permit.action.args,
+            spender:
+              field === "spender" ? IN_KIND_USER : permit.action.args.spender,
+            amount: field === "amount" ? 502n : permit.action.args.amount,
+            deadline:
+              field === "deadline"
+                ? 1_900_000_001n
+                : permit.action.args.deadline,
+          },
+        },
+      };
+
+      let thrown: unknown;
+      try {
+        exit.buildTx([mismatchedPermit]);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(BundlesPermitMismatchError);
+      expect(thrown).toMatchObject({ field });
+    },
+  );
 
   test("behavior: allows an idle-only exit without markets or Blue callbacks", async () => {
     const handle = createMockClient(mainnet);

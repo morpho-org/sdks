@@ -1,5 +1,142 @@
 # @morpho-org/evm-simulation
 
+## 4.2.0
+
+### Minor Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
+  blue-sdk-viem, and WDK. This includes Vault V1 PublicAllocator addresses, ABIs, models, fetchers,
+  augmentation, planners, action inputs, and compatibility aliases; deprecated utility, URL, permit,
+  deployless-fetch, capacity, adapter-id, error, signature, and facade aliases; and the deprecated WDK
+  requirement type. Use Vault V2 BluePublicAllocator APIs and each symbol's canonical replacement.
+
+  Remove morpho-sdk's low-level Bundler3 composition surface and the residual Bundler3 executor,
+  adapter, migration-adapter, address, deployment, action, requirement, ABI, and error exports from
+  morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk and blue-sdk-viem.
+  This completes removal of the old migration-sdk-viem implementation, including its Aave and
+  Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
+  entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
+  supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+  Bundler3 and adapter addresses are no longer guarded.
+
+  Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
+  Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop
+  reading those contracts. These fields and the low-level Bundler3 surfaces were stable APIs without
+  a published deprecation.
+
+  Some removals did not receive a published deprecation window: the stable low-level Bundler3 and
+  migration-adapter surfaces (including registry and ABI re-exports), compatibility errors, signature
+  helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
+  five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
+  consumers must migrate to the standalone bundle actions and canonical exports or stay on the
+  previous major versions. The deviation and its symbol scope are recorded in
+  `docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+  AGENTS.md release exception.
+
+  Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+  v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+  and blue-sdk-viem majors.
+
+  Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
+
+### Patch Changes
+
+- [#1128](https://github.com/morpho-org/sdks/pull/1128) [`1d32278`](https://github.com/morpho-org/sdks/commit/1d322787b8ca26d7012835e69e0730ec78e7a97d) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Guard `MidnightBundlesV1` with the simulation retention check so bundles that leave token value on the transient router fail closed with `BlacklistViolationError`.
+
+- [#1123](https://github.com/morpho-org/sdks/pull/1123) [`35f6ea6`](https://github.com/morpho-org/sdks/commit/35f6ea603c7aecff3d4d962c098bddaa80cb1985) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `parseTransfers` now lowercases log `topics` and `data` before signature dispatch and WETH9 pair matching, so mixed-case hex from a backend can no longer drop a transfer from the parsed output or the retention check.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0
+  - @morpho-org/blue-sdk@7.0.0
+
+## 4.2.0-next.2
+
+### Patch Changes
+
+- [#1128](https://github.com/morpho-org/sdks/pull/1128) [`1d32278`](https://github.com/morpho-org/sdks/commit/1d322787b8ca26d7012835e69e0730ec78e7a97d) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Guard `MidnightBundlesV1` with the simulation retention check so bundles that leave token value on the transient router fail closed with `BlacklistViolationError`.
+
+- [#1123](https://github.com/morpho-org/sdks/pull/1123) [`35f6ea6`](https://github.com/morpho-org/sdks/commit/35f6ea603c7aecff3d4d962c098bddaa80cb1985) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `parseTransfers` now lowercases log `topics` and `data` before signature dispatch and WETH9 pair matching, so mixed-case hex from a backend can no longer drop a transfer from the parsed output or the retention check.
+
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.1
+  - @morpho-org/blue-sdk@7.0.0-next.2
+
+## 4.2.0-next.1
+
+### Minor Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove all deprecated public symbols from the next majors of morpho-sdk, morpho-ts, blue-sdk,
+  blue-sdk-viem, and WDK. This includes Vault V1 PublicAllocator addresses, ABIs, models, fetchers,
+  augmentation, planners, action inputs, and compatibility aliases; deprecated utility, URL, permit,
+  deployless-fetch, capacity, adapter-id, error, signature, and facade aliases; and the deprecated WDK
+  requirement type. Use Vault V2 BluePublicAllocator APIs and each symbol's canonical replacement.
+
+  Remove morpho-sdk's low-level Bundler3 composition surface and the residual Bundler3 executor,
+  adapter, migration-adapter, address, deployment, action, requirement, ABI, and error exports from
+  morpho-sdk and morpho-ts, including the registry and ABI re-exports in blue-sdk and blue-sdk-viem.
+  This completes removal of the old migration-sdk-viem implementation, including its Aave and
+  Compound migration adapters. Remove the legacy MORPHO token/wrapper addresses and wrapper ABI
+  entries. The standalone BlueBundlesV1, VaultBundlesV1, and VaultExitBundlesV1 routes remain
+  supported. evm-simulation now checks retention only on those standalone bundle contracts; legacy
+  Bundler3 and adapter addresses are no longer guarded.
+
+  Remove Bundler3-specific Blue state too: `Holding` no longer exposes the GeneralAdapter ERC-20 or
+  Permit2 allowance, and `User` no longer exposes `isBundlerAuthorized`; their viem fetchers stop
+  reading those contracts. These fields and the low-level Bundler3 surfaces were stable APIs without
+  a published deprecation.
+
+  Some removals did not receive a published deprecation window: the stable low-level Bundler3 and
+  migration-adapter surfaces (including registry and ABI re-exports), compatibility errors, signature
+  helpers, types, and the WDK requirement alias first deprecated only during the v6 prerelease, and the
+  five v5 partial-refinance error classes. This is an intentional one-time lifecycle deviation;
+  consumers must migrate to the standalone bundle actions and canonical exports or stay on the
+  previous major versions. The deviation and its symbol scope are recorded in
+  `docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md` and the matching
+  AGENTS.md release exception.
+
+  Keep liquidity-sdk-viem on its final Vault V1 PublicAllocator release, tested against morpho-sdk
+  v5.9.0. Patch maintained dependents and update internal peer ranges for the new morpho-ts, blue-sdk,
+  and blue-sdk-viem majors.
+
+  Add `UnsupportedRequirementSignatureError`, thrown by `selectRequirementSignatures` and
+  `getBundlesTokenPermit` when a requirement signature carries an action type the v6 flows do not
+  support (e.g. a stale v5 `permit2` signature). `getBundlesTokenPermit` previously threw
+  `UnexpectedRequirementSignatureError("permit")` for that case.
+
+### Patch Changes
+
+- Updated dependencies [[`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e)]:
+  - @morpho-org/morpho-ts@3.0.0-next.0
+  - @morpho-org/blue-sdk@7.0.0-next.1
+
+## 4.1.9-next.0
+
+### Patch Changes
+
+- [#1078](https://github.com/morpho-org/sdks/pull/1078) [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fail closed when positive debt requires an unsupported nonzero interest-rate model, while preserving exact zero-interest and zero-exposure calculations.
+
+  Treat accrual timestamps at or before a Blue market or Vault V2 snapshot's last update as a no-op: preserve its state and timestamp without projecting its IRM or charging new fees. Positions and Vault V1 allocations inherit the market behavior, while Vault V1 retains its existing loss and fee reconciliation. Rate and APY helpers evaluate earlier timestamps at the snapshot's last update.
+
+  Skip Vault V1 sources with zero allocator withdrawal capacity and Vault V1/V2 destinations with no remaining deposit capacity before projecting source interest.
+
+  Check Vault V2 minimum share minting requirements, supply-share limits, and every target absolute or zero relative cap before source projection when the candidate withdrawal cannot reduce that cap. Preserve shared-cap withdrawals and deposits whose allocation does not increase after rounding.
+
+- Updated dependencies [[`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1)]:
+  - @morpho-org/blue-sdk@6.10.0-next.0
+
+## 4.1.6-next.0
+
+### Patch Changes
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Extend the simulation retention check to also guard the standalone `bundles` periphery contracts (`VaultExitBundlesV1`, `VaultBundlesV1`, `BlueBundlesV1`) from the blue-sdk address registry, alongside the existing `bundler3` executor and adapters. Net `(address, token)` retention above `DUST_THRESHOLD` in any of these restricted contracts now raises `BlacklistViolationError`. Chains are skipped only when blue-sdk catalogs neither a `bundler3` nor a `bundles` config.
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Normalize the native-ETH sentinel case-insensitively when mapping Tenderly asset changes. A sentinel carried (checksummed or otherwise non-lowercase) in `assetInfo.contractAddress` was previously `getAddress`-checksummed and no longer matched the lowercase `ethAddress` key used by `assertNoBundlerRetention`, so a retained Bundler3 native residual could escape the retention gate and return a false-safe simulation. The transfer-log parser and the Tenderly asset-change mapper now share a single `normalizeAssetToken` helper, removing the drift between the two normalization paths.
+
+- [#1056](https://github.com/morpho-org/sdks/pull/1056) [`c4b4467`](https://github.com/morpho-org/sdks/commit/c4b44677e7a6881072eca0fe5eba54c3d9761b60) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Use chain registry metadata when parsing WETH9 `Deposit` and `Withdrawal` logs: accept only the registered wrapped-native token, reject them on known tokenless chains, and retain legacy signature-based parsing on unknown custom chains.
+
 ## 4.1.10
 
 ### Patch Changes

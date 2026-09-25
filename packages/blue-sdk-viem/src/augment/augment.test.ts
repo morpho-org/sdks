@@ -11,7 +11,6 @@ import {
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
@@ -29,7 +28,6 @@ import {
   fetchVaultConfig,
   fetchVaultMarketAllocation,
   fetchVaultMarketConfig,
-  fetchVaultMarketPublicAllocatorConfig,
   fetchVaultUser,
 } from "../fetch/index.js";
 
@@ -85,11 +83,6 @@ describe("blue-sdk augmentations", () => {
       expected: fetchVaultMarketConfig,
     },
     {
-      label: "VaultMarketPublicAllocatorConfig.fetch",
-      get: () => VaultMarketPublicAllocatorConfig.fetch,
-      expected: fetchVaultMarketPublicAllocatorConfig,
-    },
-    {
       label: "VaultUser.fetch",
       get: () => VaultUser.fetch,
       expected: fetchVaultUser,
@@ -117,4 +110,13 @@ describe("blue-sdk augmentations", () => {
       expect(get()).toBe(expected);
     },
   );
+
+  test("behavior: augment subpaths resolve through the package exports map", async () => {
+    const mod = await import("@morpho-org/blue-sdk-viem/augment/Market");
+    expect(mod.Market.fetch).toBe(fetchMarket);
+
+    await expect(
+      import("@morpho-org/blue-sdk-viem/augment"),
+    ).resolves.toBeDefined();
+  });
 });

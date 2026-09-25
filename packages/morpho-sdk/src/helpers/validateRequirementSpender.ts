@@ -4,11 +4,12 @@ import { UnsupportedErc20ApprovalSpenderError } from "../types/index.js";
 
 /** Supported spender slots that can be validated against the chain address registry. */
 export type RequirementSpenderKey =
-  | "generalAdapter1"
   | "permit2"
   | "midnight"
   | "midnightBundles"
-  | "vaultExitBundlesV1";
+  | "vaultExitBundlesV1"
+  | "vaultBundlesV1"
+  | "blueBundlesV1";
 
 /**
  * Validates that a requirement encoder spender matches one of the allowed chain addresses.
@@ -18,6 +19,7 @@ export type RequirementSpenderKey =
  * @param params.spender - Spender address to validate.
  * @param params.allowed - Allowed registry slots for this requirement.
  * @returns Nothing after the spender matches an allowed chain address.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` does not match any allowed slot.
  * @example
  * ```ts
@@ -36,19 +38,16 @@ export const validateRequirementSpender = (params: {
   readonly spender: Address;
   readonly allowed: readonly RequirementSpenderKey[];
 }): void => {
-  const {
-    permit2,
-    midnight,
-    midnightBundles,
-    bundler3: { generalAdapter1 },
-    bundles,
-  } = getChainAddresses(params.chainId);
+  const { permit2, midnight, midnightBundles, bundles } = getChainAddresses(
+    params.chainId,
+  );
   const addresses = {
-    generalAdapter1,
     permit2,
     midnight,
     midnightBundles,
     vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
+    vaultBundlesV1: bundles?.vaultBundlesV1,
+    blueBundlesV1: bundles?.blueBundlesV1,
   } satisfies Record<RequirementSpenderKey, Address | undefined>;
   const supportedSpenders = params.allowed.map((key) => addresses[key]);
 
@@ -61,7 +60,6 @@ export const validateRequirementSpender = (params: {
     throw new UnsupportedErc20ApprovalSpenderError({
       spender: params.spender,
       chainId: params.chainId,
-      generalAdapter1,
       permit2,
       midnight,
       midnightBundles,
