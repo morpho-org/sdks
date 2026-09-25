@@ -221,6 +221,17 @@ describe("toSimulationAuthorizations", () => {
       requirements: [requirement],
     });
 
+    const [permitAuthorization] = toSimulationAuthorizations({
+      owner: OWNER,
+      requirements: [permitRequirement({})],
+    });
+    if (permitAuthorization?.type !== "erc2612Permit") {
+      throw new Error("expected erc2612Permit");
+    }
+    expect(Object.values(permitAuthorization.typedData.domain)).not.toContain(
+      undefined,
+    );
+
     expect(authorization?.type).toBe("permit2SignatureTransfer");
     if (authorization?.type !== "permit2SignatureTransfer") return;
     expect(authorization.owner).toBe(OWNER);

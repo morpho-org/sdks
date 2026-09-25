@@ -13,6 +13,7 @@
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
 - Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
+- `src/decode/` holds pure calldata/requirement adapters (`toSimulationAuthorizations`, `decodeOperations`) that turn morpho-sdk inputs into domain types without touching RPC or pipeline state; they are exported but not wired into the simulation pipeline.
 
 - The unreleased v5 stack follows the narrow lifecycle exception in root `AGENTS.md` §7. SDK-1291 retires the backend; SDK-1293 replaced the legacy authorization variants and cut the runtime over to the domain types.
 

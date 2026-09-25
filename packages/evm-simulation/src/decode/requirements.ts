@@ -197,15 +197,18 @@ const parseDomain = (value: unknown, fail: Fail): AuthorizationDomain => {
     fail(`Typed data domain.salt expected a hex string, got ${describe(salt)}`);
   }
 
+  const name = v.optionalString(domain.name, "domain.name");
+  const version = v.optionalString(domain.version, "domain.version");
+
   return {
-    name: v.optionalString(domain.name, "domain.name"),
-    version: v.optionalString(domain.version, "domain.version"),
+    ...(name === undefined ? {} : { name }),
+    ...(version === undefined ? {} : { version }),
     chainId,
     verifyingContract: v.address(
       domain.verifyingContract,
       "domain.verifyingContract",
     ),
-    salt,
+    ...(salt === undefined ? {} : { salt }),
   };
 };
 

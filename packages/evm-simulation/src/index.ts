@@ -1,6 +1,15 @@
 // Public fns (via feature-folder barrels)
-export { toSimulationAuthorizations } from "./decode/index.js";
 
+export type {
+  DecodedOperations,
+  DecodeOperationsParams,
+  PreLiquidationBinding,
+  VaultBinding,
+} from "./decode/index.js";
+export {
+  decodeOperations,
+  toSimulationAuthorizations,
+} from "./decode/index.js";
 // Types
 export type {
   AuthorizationDomain,
@@ -27,6 +36,17 @@ export type {
   SimulationLimits,
   TokenAmount,
 } from "./domain/limits.js";
+export type {
+  DecodedOperation,
+  DecodedOperationFields,
+  MarketBinding,
+  OperationAmount,
+  OperationFunding,
+  OperationIdentity,
+  OperationReallocation,
+  OperationSignature,
+  ReferralFee,
+} from "./domain/operations.js";
 export type {
   FinalSimulateParams,
   PreviewSimulateParams,
