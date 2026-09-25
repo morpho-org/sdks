@@ -51,25 +51,6 @@ export class VaultV2MorphoVaultV1Adapter
     );
   }
 
-  /**
-   * Returns the adapter-wide allocation-cap id.
-   *
-   * @param address - Adapter address.
-   * @returns The adapter-wide allocation-cap id.
-   * @deprecated Use {@link VaultV2MorphoVaultV1Adapter.adapterCapId}.
-   * @example
-   * ```ts
-   * import { VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
-   *
-   * const adapterAddress = "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
-   * const id = VaultV2MorphoVaultV1Adapter.adapterId(adapterAddress);
-   * // id satisfies Hash
-   * ```
-   */
-  static adapterId(address: Address) {
-    return VaultV2MorphoVaultV1Adapter.adapterCapId(address);
-  }
-
   public readonly morphoVaultV1: Address;
   /**
    * Parent Vault V2 allocation for this adapter, when available.
@@ -127,15 +108,13 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   extends VaultV2MorphoVaultV1Adapter
   implements IAccrualVaultV2MorphoVaultV1Adapter, IAccrualVaultV2Adapter
 {
-  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+  // biome-ignore lint/complexity/useMaxParams: preserves the canonical public constructor
   constructor(
     adapter: IAccrualVaultV2MorphoVaultV1Adapter,
     public accrualVaultV1: AccrualVault,
     public shares: bigint,
-    /** @deprecated Set `adapter.parentAllocation` instead. This parameter will be removed in the next major. */
-    parentAllocation: bigint | undefined = adapter.parentAllocation,
   ) {
-    super({ ...adapter, parentAllocation });
+    super(adapter);
   }
 
   /**

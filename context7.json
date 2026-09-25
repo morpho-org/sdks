@@ -6,7 +6,7 @@
   "description": "TypeScript SDKs for Morpho Blue, Vault V1, Vault V2, and Midnight. Use @morpho-org/morpho-sdk with viem for reads and transaction building.",
   "folders": ["packages", "docs"],
   "excludeFolders": [
-    "docs/tibs",
+    "docs/adrs",
     "packages/morpho-test",
     "test",
     "tests",

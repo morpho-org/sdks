@@ -25,6 +25,8 @@
 
 TypeScript package to handle all things time & format-related.
 
+Upgrading from v2? Read the [v2 → v3 migration guide](./MIGRATION-v2-to-v3.md).
+
 ## Installation
 
 ```bash

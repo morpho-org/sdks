@@ -59,7 +59,11 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
   constructor(
     public client: Client<Transport, chain>,
-    /** Shared-liquidity source-market withdrawal tuning. */
+    /**
+     * Shared-liquidity source-market withdrawal tuning.
+     *
+     * @deprecated Vault V1 PublicAllocator planning will be removed in the next major.
+     */
     public readonly parameters: LiquidityParameters = {},
   ) {
     this.dataLoader = new DataLoader(
@@ -254,6 +258,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
    * // withdrawals: readonly PublicReallocation[]
    * // endState: ReallocationData
    * ```
+   * @deprecated Vault V1 PublicAllocator planning will be removed in the next major. Migrate to
+   * `MorphoBlue.getVaultV2BlueReallocationData` and `MorphoBlue.getVaultV2BlueReallocations`.
    */
   public fetch(marketId: MarketId) {
     return this.dataLoader.load(marketId);

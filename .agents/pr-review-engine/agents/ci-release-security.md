@@ -31,7 +31,7 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 
 ### Untested inline CI logic (HIGH)
 
-- A `run:` block that derives a decision or a value from data — parses API responses, filters or counts records, computes step outputs, or decides pass/fail — via inline `jq`/`awk`/shell. Not in scope: linear setup sequences (install, `sysctl`, `cp`), a single command with a static error message on failure, or marshalling static workflow inputs into command arguments. Per AGENTS.md §10 that logic belongs in a TypeScript script under `scripts/ci/` (run as `node <script>.ts`) with colocated `*.test.ts` in the `scripts` project (pattern: `scripts/ci/claude-review-gate.ts`); the step only invokes it. Also flag a new or changed script under `scripts/ci/` or `scripts/release/` that lands without a matching `*.test.ts`/`*.test.js` change, a new CI script written as `.mjs`/`.js` instead of `.ts` (**medium**), and a step that runs the workspace copy of such a script after the workspace has been switched to the PR head instead of the trusted default-branch copy.
+- A `run:` block that derives a decision or a value from data — parses API responses, filters or counts records, computes step outputs, or decides pass/fail — via inline `jq`/`awk`/shell. Not in scope: linear setup sequences (install, `sysctl`, `cp`), a single command with a static error message on failure, or marshalling static workflow inputs into command arguments. Per AGENTS.md §10 that logic belongs in a TypeScript script under `scripts/ci/` (run as `node <script>.ts`) with colocated `*.test.ts` in the `scripts` project (pattern: `scripts/ci/claude-review-gate.ts`); the step only invokes it. Also flag a new or changed script under `scripts/ci/` or `scripts/release/` that lands without a matching `*.test.ts` change, a new CI script written as `.mjs`/`.js` instead of `.ts` (**medium**), and a step that runs the workspace copy of such a script after the workspace has been switched to the PR head instead of the trusted default-branch copy.
 
 ### Action pinning (HIGH)
 
@@ -59,6 +59,15 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 - Tag scope: a workflow that previously only published to `next` now publishing to `latest` (or vice-versa) — surface as a release-flow change for human sign-off.
 - New workflows that publish — require explicit dry-run path and a maintainer-approval gate (`environment:` with required reviewers) before the publish step.
 - Provenance/SBOM toggles: any change that disables `--provenance` or removes a SLSA/SBOM emit step → **medium** finding minimum, **high** if the package is in the runtime/peer surface.
+
+### Artifact identity / path injection (HIGH → CRITICAL)
+
+Per AGENTS.md §10 — a privileged job validating an artifact from an unprivileged job must read the checked value through the consumer's own code path (for npm tarballs: bundled `pacote.manifest`, via `scripts/ci/read-tarball-identity.ts`). Flag any diff that:
+
+- Derives the published name/version from a literal `tar -x <path>` / `tar -t | grep` / `node -p require(...)` on an extracted file instead of the pacote read. **High**. Validating the extracted `package/package.json` (the `publishConfig` allowlist in `scripts/ci/verify-tarball-manifest.ts`) is fine only while the workflow asserts its `name@version` equals the pacote identity; dropping that equality check is **high**.
+- Adds or extends hand-rolled tar/PAX/ustar/path-normalization logic under `scripts/ci/` to predict node-tar behaviour. **High** — the fix is reusing the toolchain's reader, not more emulation.
+- Removes the pacote read or demotes it below a GNU-tar structural check as the identity source of truth. **Critical**.
+- Changes to `scripts/ci/verify-tarball-collisions.ts` that loosen a segment rule or drop `strict: true` — **high**; the script may model consumer filesystem folding and pacote's `.gitignore` → `.npmignore` extraction rename, but must not parse archive bytes itself.
 
 ### Release-commit signing & write-token hardening (HIGH → CRITICAL)
 

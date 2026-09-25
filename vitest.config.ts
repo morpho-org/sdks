@@ -19,7 +19,7 @@ export default defineConfig({
       include: [
         "packages/**/src/**/*.{ts,tsx}",
         "scripts/ci/**/*.ts",
-        "scripts/release/**/*.{js,mjs}",
+        "scripts/release/**/*.ts",
       ],
       exclude: [
         "packages/test/**",
@@ -35,7 +35,7 @@ export default defineConfig({
         "packages/**/src/**/abis.ts",
         "packages/**/src/api/sdk.ts",
         "packages/**/src/api/types.ts",
-        "scripts/**/*.test.{js,mjs,ts}",
+        "scripts/**/*.test.ts",
       ],
     },
     sequence: {
@@ -55,7 +55,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "scripts",
-          include: ["scripts/**/*.test.{js,mjs,ts}"],
+          include: ["scripts/**/*.test.ts"],
           environment: "node",
         },
       },
@@ -168,6 +168,11 @@ export default defineConfig({
         test: {
           name: "liquidity-sdk-viem",
           include: ["packages/liquidity-sdk-viem/src/**/*.test.ts"],
+          server: {
+            deps: {
+              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
+            },
+          },
         },
       },
       {
@@ -177,6 +182,11 @@ export default defineConfig({
           include: [
             "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
           ],
+          server: {
+            deps: {
+              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
+            },
+          },
           ...forkTestConfig,
         },
       },

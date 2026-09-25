@@ -1,5 +1,49 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 4.2.1
+
+### Patch Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Publish the final liquidity-sdk-viem release with `DEPRECATED.md`. The package remains on Vault V1
+  PublicAllocator and is tested against morpho-sdk v5.9.0; use Vault V2 BluePublicAllocator APIs for
+  new integrations.
+- Updated dependencies [[`800f2e1`](https://github.com/morpho-org/sdks/commit/800f2e1f0523de39fe9055b2f077ebf5f72e5d57), [`6fa3c54`](https://github.com/morpho-org/sdks/commit/6fa3c54245c3c762d6df0bc74028cc9a4630afeb), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`1ee9b2a`](https://github.com/morpho-org/sdks/commit/1ee9b2a9ed6ad7727a1683a7573548f190424027), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`b8c944c`](https://github.com/morpho-org/sdks/commit/b8c944c44251c48985cb7411310884eb2548208c), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8), [`8cdfa51`](https://github.com/morpho-org/sdks/commit/8cdfa51ceee5b08314aec136072d2202a8be35a8), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`c9c8fbd`](https://github.com/morpho-org/sdks/commit/c9c8fbdcb4683e902a2c484efb52e1f58cb2cfcc), [`a8167e7`](https://github.com/morpho-org/sdks/commit/a8167e7505cc6ca1baa789e239e0f944d5a6e47c), [`d3b43f3`](https://github.com/morpho-org/sdks/commit/d3b43f36464ee09d985e327037d4ca0f321f36c1), [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f), [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a), [`3939507`](https://github.com/morpho-org/sdks/commit/39395072170d111956914669720e46e593f5b9ac), [`4ea5fe9`](https://github.com/morpho-org/sdks/commit/4ea5fe9845d9b9f1e736a33d37cd8aa4c045cb47), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`f5f0acb`](https://github.com/morpho-org/sdks/commit/f5f0acbb5c9d05dd08f64e411884d1b89f5c876e), [`a953009`](https://github.com/morpho-org/sdks/commit/a953009d2821bfcc036b391439e9180408852cec), [`7991d97`](https://github.com/morpho-org/sdks/commit/7991d979c98d77d306338eeae7342f3abb3fbbfa), [`e3e5893`](https://github.com/morpho-org/sdks/commit/e3e5893e0b90db7963d24176165ac82d5f79e7b8), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350), [`1c3be9a`](https://github.com/morpho-org/sdks/commit/1c3be9a4c696c63e3a011801864abd1ccc1d6a59), [`ab2bc02`](https://github.com/morpho-org/sdks/commit/ab2bc0254a56f8c9084c2a5bccdc5d50d2e1743d), [`c58f155`](https://github.com/morpho-org/sdks/commit/c58f155d46c89338727c7783bfbeec4ed255f23e), [`5b2009e`](https://github.com/morpho-org/sdks/commit/5b2009eb27dbe6bed0b1a10dacb3715b3ac64c91), [`daf9eeb`](https://github.com/morpho-org/sdks/commit/daf9eebf1f01e2509fba9f41cf1b5f69461cc57c), [`91a6e29`](https://github.com/morpho-org/sdks/commit/91a6e291c8bf7d1c919436eba7bede023cabe8aa), [`b52411c`](https://github.com/morpho-org/sdks/commit/b52411c837d15f576eb653d8ed84cabb6c6800d9), [`f100c95`](https://github.com/morpho-org/sdks/commit/f100c95cffbd51e1a4c00e8e840d5d894b487f0b), [`468422d`](https://github.com/morpho-org/sdks/commit/468422d90019029b3d18ac239bf6fbb19748c22e), [`e2a5a40`](https://github.com/morpho-org/sdks/commit/e2a5a409f1aecf05a5ebe992f6ecaf6dfd65bbbf), [`8bfc8b3`](https://github.com/morpho-org/sdks/commit/8bfc8b38b641ec2b21ceb2e6f3533ffbc8166bc7)]:
+  - @morpho-org/morpho-ts@3.0.0
+  - @morpho-org/morpho-sdk@6.0.0
+  - @morpho-org/blue-sdk-viem@6.0.0
+  - @morpho-org/blue-sdk@7.0.0
+
+## 4.2.1-next.0
+
+### Patch Changes
+
+- [#1015](https://github.com/morpho-org/sdks/pull/1015) [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Publish the final liquidity-sdk-viem release with `DEPRECATED.md`. The package remains on Vault V1
+  PublicAllocator and is tested against morpho-sdk v5.9.0; use Vault V2 BluePublicAllocator APIs for
+  new integrations.
+- Updated dependencies [[`000afdd`](https://github.com/morpho-org/sdks/commit/000afddd06a2bd55d22b452985975d4b02a541e8), [`21e557c`](https://github.com/morpho-org/sdks/commit/21e557cc81ba1a7d638975010c1bb74e75943f5f), [`85a0932`](https://github.com/morpho-org/sdks/commit/85a09327c5a269153bbda94b83f30efd4493c45a), [`0e72b04`](https://github.com/morpho-org/sdks/commit/0e72b0439aa46c7a7d6b4e6fad6d2d9c79c2e45e), [`8d74feb`](https://github.com/morpho-org/sdks/commit/8d74feb2ca41210d70fb0a593641da4a4994e350)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.3
+  - @morpho-org/morpho-ts@3.0.0-next.0
+  - @morpho-org/blue-sdk@7.0.0-next.1
+  - @morpho-org/blue-sdk-viem@6.0.0-next.0
+
+## 4.2.0-next.0
+
+### Minor Changes
+
+- [#988](https://github.com/morpho-org/sdks/pull/988) [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
+  Vault V1 planners and explicit low-level Bundler3 composition remain available. Update the WDK
+  borrow input and widen liquidity-sdk-viem's morpho-sdk peer range for the next major.
+
+  Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
+  `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
+  native allocator fees, which high-level writes no longer emit; V2 penalties are reported via
+  `reallocationPenaltyAssets`). Remove the now-unused `BlueReallocationPlan` type.
+
+### Patch Changes
+
+- Updated dependencies [[`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`b8c944c`](https://github.com/morpho-org/sdks/commit/b8c944c44251c48985cb7411310884eb2548208c), [`9687977`](https://github.com/morpho-org/sdks/commit/9687977607b85c4db8a2a91e61e50facb6f30cc9), [`76762e3`](https://github.com/morpho-org/sdks/commit/76762e3f54831ff9a65d09567c213defced97903), [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab)]:
+  - @morpho-org/morpho-sdk@6.0.0-next.0
+
 ## 4.2.0
 
 ### Minor Changes

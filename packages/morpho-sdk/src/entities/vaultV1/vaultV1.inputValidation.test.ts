@@ -1,11 +1,57 @@
-import { createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
+import { getChainAddress, UnknownAddressError } from "@morpho-org/morpho-ts";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import {
+  createPublicClient,
+  createWalletClient,
+  erc20Abi,
+  http,
+  maxUint256,
+} from "viem";
+import { fraxtal, mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { inKindVaultV1Data } from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import {
+  BundlesPermitMismatchError,
+  type Erc2612RequirementSignature,
+  ExcessiveSlippageToleranceError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NegativeInputError,
+  NonPositiveInputError,
+  VaultAddressMismatchError,
+} from "../../types/index.js";
 
 describe("MorphoVaultV1 deposit input validation", () => {
+  test.each(["amount", "nativeAmount"] as const)(
+    "error: InputExceedsMaxError before preparing requirements for oversized %s",
+    (field) => {
+      const client = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      }).extend(morphoViemExtension());
+      const vault = client.morpho.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const value = maxUint256 + 1n;
+      const funding =
+        field === "nativeAmount" ? { nativeAmount: value } : { amount: value };
+      expect(() =>
+        vault.deposit({
+          ...funding,
+          userAddress: SteakhouseUsdcVaultV1.address,
+          vaultData: inKindVaultV1Data({
+            address: SteakhouseUsdcVaultV1.address,
+          }),
+        }),
+      ).toThrow(InputExceedsMaxError);
+    },
+  );
+
   test("error: NonPositiveInputError for zero total assets", () => {
     const client = createPublicClient({
       chain: mainnet,
@@ -28,6 +74,285 @@ describe("MorphoVaultV1 deposit input validation", () => {
     }
 
     expect(error).toBeInstanceOf(NonPositiveInputError);
-    expect(error).toMatchObject({ field: "totalAssets", value: 0n });
+    expect(error).toMatchObject({ field: "amount", value: 0n });
+  });
+
+  test("behavior: a connected builder can prepare for a different submitter", () => {
+    const builder = "0x0000000000000000000000000000000000000001";
+    const submitter = "0x0000000000000000000000000000000000000002";
+    const client = createWalletClient({
+      account: builder,
+      chain: mainnet,
+      transport: http("https://rpc.example"),
+    }).extend(morphoViemExtension());
+    const vault = client.morpho.vaultV1(
+      SteakhouseUsdcVaultV1.address,
+      mainnet.id,
+    );
+
+    const action = vault.deposit({
+      amount: 1n,
+      userAddress: submitter,
+      vaultData: {
+        address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
+        toShares: () => 1n,
+        accrueInterest: () => ({ toShares: () => 1n }),
+      } as never,
+    });
+
+    expect(action).toBeDefined();
+  });
+});
+
+describe("MorphoVaultV1 asset exit permit validation", () => {
+  const owner = "0x0000000000000000000000000000000000000001" as const;
+  const targetVault = "0x0000000000000000000000000000000000000002" as const;
+  const spender = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
+
+  test("error: BundlesPermitMismatchError for a withdrawal permit above the share cap", async () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const vaultData = {
+      address: SteakhouseUsdcVaultV1.address,
+      asset: SteakhouseUsdcVaultV1.asset,
+      toShares: () => 10n,
+      accrueInterest: () => ({ toShares: () => 10n }),
+    } as never;
+    mockRead(handle, {
+      address: SteakhouseUsdcVaultV1.address,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const withdrawal = vault.withdraw({
+      amount: 100n,
+      userAddress: owner,
+      vaultData,
+      slippageTolerance: 0n,
+      deadline: maxUint256,
+    });
+    const oversizedPermit = {
+      args: {
+        owner,
+        asset: SteakhouseUsdcVaultV1.address,
+        amount: 11n,
+        nonce: 0n,
+        deadline: maxUint256,
+        signature: "0x",
+      },
+      action: {
+        type: "permit",
+        args: { spender, amount: 11n, deadline: maxUint256 },
+      },
+    } satisfies Erc2612RequirementSignature;
+
+    const requirements = await withdrawal.getRequirements();
+
+    // Re-resolution re-reads the live allowance, so the array is rebuilt rather than memoized;
+    // the cap it reports must still be the one this handle already committed to.
+    expect(await withdrawal.getRequirements()).toStrictEqual(requirements);
+
+    expect(() => withdrawal.buildTx([oversizedPermit])).toThrowError(
+      expect.objectContaining({
+        name: "BundlesPermitMismatchError",
+        field: "amount",
+      }),
+    );
+  });
+
+  test("error: BundlesPermitMismatchError for an asset migration permit above the computed share cap", () => {
+    const vault = createMockClient(mainnet)
+      .client.extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const sourceVault = {
+      address: SteakhouseUsdcVaultV1.address,
+      asset: SteakhouseUsdcVaultV1.asset,
+      toShares: () => 10n,
+      accrueInterest: () => ({ toShares: () => 10n }),
+    } as never;
+    const destinationVault = {
+      address: targetVault,
+      asset: SteakhouseUsdcVaultV1.asset,
+      toShares: () => 100n,
+      accrueInterest: () => ({ toShares: () => 100n }),
+    } as never;
+    const migration = vault.migrateToV2({
+      assets: 100n,
+      userAddress: owner,
+      sourceVault,
+      targetVault: destinationVault,
+      slippageTolerance: 0n,
+      deadline: maxUint256,
+    });
+    const oversizedPermit = {
+      args: {
+        owner,
+        asset: SteakhouseUsdcVaultV1.address,
+        amount: 11n,
+        nonce: 0n,
+        deadline: maxUint256,
+        signature: "0x",
+      },
+      action: {
+        type: "permit",
+        args: { spender, amount: 11n, deadline: maxUint256 },
+      },
+    } satisfies Erc2612RequirementSignature;
+
+    expect(() => migration.buildTx([oversizedPermit])).toThrow(
+      BundlesPermitMismatchError,
+    );
+  });
+});
+
+describe("MorphoVaultV1 withdraw input validation", () => {
+  const now = 1_900_000_000n;
+
+  test.each([
+    {
+      label: "zero amount",
+      params: { amount: 0n },
+      error: NonPositiveInputError,
+    },
+    {
+      label: "negative amount",
+      params: { amount: -1n },
+      error: NonPositiveInputError,
+    },
+    {
+      label: "oversized amount",
+      params: { amount: maxUint256 + 1n },
+      error: InputExceedsMaxError,
+    },
+    {
+      label: "deadline at creation",
+      params: { deadline: now },
+      error: ExpiredDeadlineError,
+    },
+    {
+      label: "past deadline",
+      params: { deadline: now - 1n },
+      error: ExpiredDeadlineError,
+    },
+    {
+      label: "oversized deadline",
+      params: { deadline: maxUint256 + 1n },
+      error: InputExceedsMaxError,
+    },
+    {
+      label: "negative slippage",
+      params: { slippageTolerance: -1n },
+      error: NegativeInputError,
+    },
+    {
+      label: "excessive slippage",
+      params: { slippageTolerance: MAX_SLIPPAGE_TOLERANCE + 1n },
+      error: ExcessiveSlippageToleranceError,
+    },
+  ])(
+    "error: $error.name for $label before any RPC read",
+    ({ params, error }) => {
+      const handle = createMockClient(mainnet);
+      const vault = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+      expect(() =>
+        withChainTimestamp(now, () =>
+          vault.withdraw({
+            amount: 1n,
+            userAddress: SteakhouseUsdcVaultV1.address,
+            vaultData: {
+              address: SteakhouseUsdcVaultV1.address,
+              asset: SteakhouseUsdcVaultV1.asset,
+              toShares: () => 1n,
+              accrueInterest: () => ({ toShares: () => 1n }),
+            } as never,
+            ...params,
+          }),
+        ),
+      ).toThrow(error);
+      expect(handle.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test("error: UnknownAddressError when VaultBundlesV1 is unregistered", () => {
+    const handle = createMockClient(fraxtal);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, fraxtal.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: { address: SteakhouseUsdcVaultV1.address } as never,
+      }),
+    ).toThrow(UnknownAddressError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: VaultAddressMismatchError when vaultData belongs to another vault", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: inKindVaultV1Data(),
+      }),
+    ).toThrow(VaultAddressMismatchError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: NonPositiveInputError when vaultData yields a zero share cap", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+
+    expect(() =>
+      vault.withdraw({
+        amount: 1n,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: {
+          address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
+          toShares: () => 0n,
+          accrueInterest: () => ({ toShares: () => 0n }),
+        } as never,
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("behavior: accepts uint256 and slippage boundaries without RPC reads", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const vaultData = {
+      address: SteakhouseUsdcVaultV1.address,
+      asset: SteakhouseUsdcVaultV1.asset,
+      toShares: () => 10n,
+      accrueInterest: () => ({ toShares: () => 10n }),
+    } as never;
+
+    for (const slippageTolerance of [0n, MAX_SLIPPAGE_TOLERANCE]) {
+      const action = vault.withdraw({
+        amount: maxUint256,
+        userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData,
+        slippageTolerance,
+      });
+      expect(action.buildTx().action.args.amount).toBe(maxUint256);
+    }
+    expect(handle.request).not.toHaveBeenCalled();
   });
 });

@@ -11,10 +11,6 @@ export {
   morphoVaultV1AdapterFactoryAbi,
   permissionedErc20WrapperAbi,
   permit2Abi,
-  publicAllocatorAbi,
-  vaultV1AdapterAbi,
-  vaultV1AdapterFactoryAbi,
-  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,
@@ -1806,7 +1802,11 @@ export const blueOracleAbi = [
   },
 ] as const;
 
-/** Pre-liquidation factory ABI used to verify pre-liquidation factory membership. */
+/**
+ * Pre-liquidation factory ABI used to verify pre-liquidation factory membership.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export const preLiquidationFactoryAbi = [
   {
     type: "constructor",
@@ -1899,7 +1899,11 @@ export const preLiquidationFactoryAbi = [
   { type: "error", name: "ZeroAddress", inputs: [] },
 ] as const;
 
-/** Pre-liquidation ABI used to read pre-liquidation parameters. */
+/**
+ * Pre-liquidation ABI used to read pre-liquidation parameters.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export const preLiquidationAbi = [
   {
     type: "constructor",

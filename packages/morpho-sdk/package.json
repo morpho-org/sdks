@@ -1,11 +1,8 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "5.13.0",
+  "version": "6.0.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Foulks-Plb <https://x.com/FoulkPlb>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",
@@ -26,7 +23,6 @@
     "./augment": "./src/augment.ts",
     "./augment/*": "./src/augment/*.ts",
     "./blue/*": "./src/blue/*.ts",
-    "./bundler": "./src/bundler/index.ts",
     "./constants": "./src/constants.ts",
     "./entities": "./src/entities/index.ts",
     "./errors": "./src/errors.ts",
@@ -53,9 +49,6 @@
       ],
       "blue/*": [
         "src/blue/*.ts"
-      ],
-      "bundler": [
-        "src/bundler/index.ts"
       ],
       "constants": [
         "src/constants.ts"
@@ -93,7 +86,8 @@
     "./lib/*/augment/*.js"
   ],
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v5-to-v6.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -151,11 +145,6 @@
         "types": "./lib/esm/blue/*.d.ts",
         "import": "./lib/esm/blue/*.js",
         "require": "./lib/cjs/blue/*.js"
-      },
-      "./bundler": {
-        "types": "./lib/esm/bundler/index.d.ts",
-        "import": "./lib/esm/bundler/index.js",
-        "require": "./lib/cjs/bundler/index.js"
       },
       "./constants": {
         "types": "./lib/esm/constants.d.ts",
@@ -221,9 +210,6 @@
         ],
         "blue/*": [
           "lib/esm/blue/*.d.ts"
-        ],
-        "bundler": [
-          "lib/esm/bundler/index.d.ts"
         ],
         "constants": [
           "lib/esm/constants.d.ts"

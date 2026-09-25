@@ -197,7 +197,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
-          amount: 0n,
           nativeAmount: -1n,
           userAddress: client.account.address,
           vaultData,
@@ -221,7 +220,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
-          amount: 0n,
           nativeAmount: parseUnits("1", 18),
           userAddress: client.account.address,
           vaultData,
@@ -240,7 +238,6 @@ describe("MorphoVaultV1 entity tests", () => {
 
       expect(() =>
         vault.deposit({
-          amount: 1n,
           nativeAmount: 1n,
           userAddress: SteakhouseUsdcVaultV1.address,
           vaultData: {
@@ -326,7 +323,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       expect(() =>
@@ -355,7 +351,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       expect(() =>
@@ -414,7 +409,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const result = vault.migrateToV2({
@@ -431,7 +425,6 @@ describe("MorphoVaultV1 entity tests", () => {
       expect(tx.action.type).toBe("vaultV1MigrateToV2");
       expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
       expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
-      expect(tx.action.args.recipient).toBe(client.account.address);
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -453,7 +446,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       expect(() =>
@@ -484,7 +476,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       expect(() =>
@@ -515,7 +506,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KpkWETHVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       expect(() =>
@@ -545,7 +535,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const result = vault.migrateToV2({
@@ -578,7 +567,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const result = vault.migrateToV2({
@@ -617,7 +605,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const { getRequirements } = vault.migrateToV2({
@@ -660,7 +647,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const { getRequirements } = vault.migrateToV2({
@@ -676,13 +662,10 @@ describe("MorphoVaultV1 entity tests", () => {
     });
   });
 
-  // Regression: migrateToV2 previously called validateUserAddress; the SDK no
-  // longer enforces builder = signer, so a divergent userAddress and a
-  // public client with no connected account must still produce a valid tx.
-  describe("migrateToV2 builder = signer freedom", () => {
+  describe("migrateToV2 submitter independence", () => {
     const OTHER_USER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-    test("builds tx with userAddress different from client.account", async ({
+    test("builds for a userAddress different from client.account", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -699,7 +682,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         client,
-        { chainId: mainnet.id },
       );
 
       const result = vault.migrateToV2({
@@ -709,8 +691,9 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = result.buildTx();
-      expect(tx.action.args.recipient).toBe(OTHER_USER);
+      expect(result.buildTx().action.args.sourceVault).toBe(
+        SteakhouseUsdcVaultV1.address,
+      );
     });
 
     test("builds tx with public client (no account)", async ({ client }) => {
@@ -732,7 +715,6 @@ describe("MorphoVaultV1 entity tests", () => {
       const targetVault = await fetchAccrualVaultV2(
         KeyrockUsdcVaultV2.address,
         publicClient,
-        { chainId: mainnet.id },
       );
 
       const result = vault.migrateToV2({
@@ -743,7 +725,7 @@ describe("MorphoVaultV1 entity tests", () => {
       });
 
       const tx = result.buildTx();
-      expect(tx.action.args.recipient).toBe(OTHER_USER);
+      expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
     });
   });
 });
