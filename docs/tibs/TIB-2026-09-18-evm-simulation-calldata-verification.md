@@ -284,10 +284,9 @@ calldata in preview instead of attempting to bypass signature verification.
 
 ## Migration
 
-**Decision (2026-09-25):** target `evm-simulation` 6.0.0 and accept the breaking replacement of the
-legacy authorization inputs in that major. This explicitly approved exception skips the prior
-successor-introduction and one-minor coexistence steps for this authorization-input change only.
-Consumers migrate to the exact-wallet-request interface; `morpho-sdk` 6.0.0's action API is unchanged.
+`evm-simulation` 6.0.0 replaces the legacy authorization inputs with the exact-wallet-request
+interface directly, without a prior coexistence minor for those inputs. Consumers migrate their
+simulation inputs; `morpho-sdk` 6.0.0's action API is unchanged.
 
 Ship a deprecation minor for the Tenderly configuration before its removal. The major requires
 `simulateV1Url`, introduces the typed authorization requests and verification output, and makes
