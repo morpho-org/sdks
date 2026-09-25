@@ -698,6 +698,18 @@ describe("RateRatifierV1.ratifierData", () => {
     ).toThrow(InvalidRateRatifierV1TickError);
   });
 
+  test("error: InvalidRateRatifierV1RateError for a descriptor rate below zero", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
+    const tampered = {
+      ...descriptor,
+      entries: [{ ...descriptor.entries[0]!, rate: -1n }],
+    };
+
+    expect(() =>
+      RateRatifierV1.buildProof({ tree: tampered, leafIndex: 0n }),
+    ).toThrow(InvalidRateRatifierV1RateError);
+  });
+
   test("error: InvalidTreeError for an empty descriptor offer list", () => {
     const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
 

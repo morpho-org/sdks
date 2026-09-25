@@ -471,6 +471,7 @@ export namespace RateRatifierV1 {
     ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
       leafStruct.offer.ratifier,
     validateEntry: (entry: RateRatifierV1LeafStruct) => {
+      if (entry.rate < 0n) throw new InvalidRateRatifierV1RateError(entry.rate);
       if (entry.offer.tick < MIN_TICK)
         throw new InvalidRateRatifierV1TickError(entry.offer.tick, MIN_TICK);
     },

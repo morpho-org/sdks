@@ -83,8 +83,8 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
  * hashes, visible-offer correspondence, padding placement, and the Merkle
  * root must all agree, mirroring `Ratifier.normalizeTree`. An optional
  * `validateEntry` hook runs ratifier-specific checks on each visible
- * (non-padding) entry, so descriptor input is held to the same bounds as
- * `buildDescriptor`.
+ * (non-padding) entry before leaf hashes are recomputed, so descriptor input
+ * is held to the same bounds as `buildDescriptor`.
  */
 export function resolveRatifierV1Tree<
   TStruct extends { readonly offer: OfferStruct },
@@ -149,16 +149,20 @@ export function resolveRatifierV1Tree<
     }
   }
 
-  const computedLeaves = descriptor.entries.map((entry) => hashLeaf(entry));
-  const seen = new Set<string>();
-  for (const [index, offer] of descriptor.offers.entries()) {
-    const entry = descriptor.entries[index]!;
+  // Ratifier-specific entry gates run before any leaf hashing.
+  for (const entry of visibleEntries) {
     if (isPadding(entry)) {
       throw new InvalidTreeError(
         "Visible offers must not contain tree padding.",
       );
     }
     helpers.validateEntry?.(entry);
+  }
+
+  const computedLeaves = descriptor.entries.map((entry) => hashLeaf(entry));
+  const seen = new Set<string>();
+  for (const [index, offer] of descriptor.offers.entries()) {
+    const entry = descriptor.entries[index]!;
     if (
       OfferUtils.hashStruct(
         OfferUtils.toStruct({ offer: Offer.from(offer) }),

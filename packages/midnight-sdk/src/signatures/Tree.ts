@@ -317,6 +317,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    * @returns A new tree with the descriptor's route.
    * @throws {InvalidTreeError} When entries, offers, padding, hashes or root disagree.
    * @throws {InvalidTreeHeightError} When height is unsupported.
+   * @throws {InvalidRateRatifierV1TickError} when a rateV1 snapshot entry's offer tick is below `RateRatifierV1.MIN_TICK`.
    * @example
    * ```ts
    * import { Tree, type TreeSnapshot } from "@morpho-org/midnight-sdk";

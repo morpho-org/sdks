@@ -550,6 +550,7 @@ export namespace TreeUtils {
    *
    * @param entries - Groups or standalone offers in leaf order.
    * @returns Offers in leaf order with their committed group ids.
+   * @throws {InvalidOfferGroupError} when an explicit group entry violates group mechanics.
    * @example
    * ```ts
    * import { TreeUtils, type TreeCreateParams } from "@morpho-org/midnight-sdk";
