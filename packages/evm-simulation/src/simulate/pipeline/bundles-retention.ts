@@ -50,14 +50,11 @@ interface AssertNoBundlesRetentionParams {
  * violation.
  *
  * **Two flow sources, one per asset class.** ERC20 / WETH9 retention is read
- * from parsed `transfers` (log-derived, identical across backends). Native ETH
- * emits no event log, so it can never appear in `transfers` on the Tenderly
- * primary backend — Tenderly derives native moves into `assetChanges` instead.
- * Native ETH is therefore read from `assetChanges`, the cross-backend source of
- * truth for native value: Tenderly derives it from its trace, and
- * `eth_simulateV1` derives it from the synthetic `traceTransfers` logs. Without
- * this, native ETH stuck in a bundles contract would pass the guard undetected
- * on the Tenderly path (Cantina finding 1440).
+ * from parsed `transfers` (log-derived). Native ETH emits no event log of its
+ * own, so it is read from `assetChanges`, the source of truth for native value,
+ * which `eth_simulateV1` derives from the synthetic `traceTransfers` logs.
+ * Without this, native ETH stuck in a bundles contract would pass the guard
+ * undetected (Cantina finding 1440).
  *
  * To avoid double-counting native ETH on `eth_simulateV1` — where the same
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
@@ -71,8 +68,8 @@ interface AssertNoBundlesRetentionParams {
  *   neither are skipped (a `logger.warn` records the skip).
  * @param params.transfers - Parsed ERC20 / WETH9 transfer flows (plus the
  *   `eth_simulateV1` synthetic native sentinel) scanned for net retention.
- * @param params.assetChanges - Per-account native-ETH deltas, the cross-backend
- *   source of truth for native value stuck in a restricted contract.
+ * @param params.assetChanges - Per-account native-ETH deltas, the source of
+ *   truth for native value stuck in a restricted contract.
  * @param params.logger - Optional logger. Receives retention-check skip warnings
  *   and pre-existing-balance sweep telemetry (net-negative flow).
  * @returns Nothing. Returns silently when no restricted contract retains value
@@ -139,9 +136,9 @@ export function assertNoBundlesRetention(
     }
   };
 
-  // Native ETH from `assetChanges` (authoritative, cross-backend). Track which
-  // restricted contracts already have a native entry here so the transfer-log
-  // pass below does not re-add the same native move on `eth_simulateV1`.
+  // Native ETH from `assetChanges` (authoritative). Track which restricted
+  // contracts already have a native entry here so the transfer-log pass below
+  // does not re-add the same native move on `eth_simulateV1`.
   const nativeFromAssetChanges = new Set<string>();
   for (const { account, changes } of assetChanges) {
     if (!restrictedAddresses.has(account)) continue;

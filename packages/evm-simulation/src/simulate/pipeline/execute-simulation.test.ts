@@ -11,17 +11,9 @@ import type {
   SimulationTransaction,
 } from "../../types.js";
 import type { simulateV1 } from "../backends/eth-simulate-v1.js";
-import type { simulateTenderlyRpc } from "../backends/tenderly-rpc.js";
 import { executeSimulation } from "./execute-simulation.js";
 
-const mockTenderlyRpc = vi.fn<typeof simulateTenderlyRpc>();
 const mockSimulateV1 = vi.fn<typeof simulateV1>();
-
-vi.mock("../backends/tenderly-rpc", () => ({
-  simulateTenderlyRpc: (
-    ...args: Parameters<typeof simulateTenderlyRpc>
-  ): Promise<RawSimulationResult> => mockTenderlyRpc(...args),
-}));
 
 vi.mock("../backends/eth-simulate-v1", () => ({
   simulateV1: (
@@ -37,187 +29,55 @@ const txs: SimulationTransaction[] = [
   { from: USER, to: VAULT, data: "0x12" as Hex },
 ];
 
-function bothBackends(timeoutMs = 5000): SimulationConfig {
+function makeConfig(timeoutMs?: number): SimulationConfig {
   return {
-    chains: new Map([
-      [
-        1,
-        {
-          tenderlyRpc: { rpcUrl: "https://mainnet.gateway.tenderly.co/key" },
-          simulateV1Url: "http://rpc.local",
-        },
-      ],
-    ]),
+    chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
     timeoutMs,
   };
 }
 
 beforeEach(() => vi.clearAllMocks());
 
-describe.sequential("executeSimulation — Tenderly + simulateV1 configured", () => {
-  it("calls Tenderly first and returns its result on success", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-    await executeSimulation({
-      config: bothBackends(),
-      chainId: 1,
-      transactions: txs,
-    });
-
-    expect(mockTenderlyRpc).toHaveBeenCalledTimes(1);
-    expect(mockSimulateV1).not.toHaveBeenCalled();
-  });
-
-  it("passes the chain's tenderlyRpc config to the backend", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-    await executeSimulation({
-      config: bothBackends(),
-      chainId: 1,
-      transactions: txs,
-    });
-
-    expect(mockTenderlyRpc.mock.calls[0]![0].config.rpcUrl).toBe(
-      "https://mainnet.gateway.tenderly.co/key",
-    );
-  });
-
-  it("allocates 60% of timeoutMs to Tenderly (budget-ratio pin)", async () => {
-    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
-    try {
-      mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-      await executeSimulation({
-        config: bothBackends(10_000),
-        chainId: 1,
-        transactions: txs,
-      });
-
-      expect(timeoutSpy).toHaveBeenCalledWith(6000);
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-  });
-
-  it("falls back to simulateV1 when Tenderly throws ExternalServiceError", async () => {
-    mockTenderlyRpc.mockRejectedValueOnce(
-      new ExternalServiceError("Tenderly 502"),
-    );
+describe.sequential("executeSimulation", () => {
+  it("runs the bundle through simulateV1 with the chain URL and forwarded args", async () => {
     mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
-      config: bothBackends(),
+      config: makeConfig(),
       chainId: 1,
       transactions: txs,
+      blockNumber: 123n,
       wNative: WETH,
     });
 
     expect(mockSimulateV1).toHaveBeenCalledTimes(1);
-    expect(mockSimulateV1).toHaveBeenCalledWith(
-      expect.objectContaining({ wNative: WETH }),
-    );
+    const args = mockSimulateV1.mock.calls[0]![0];
+    expect(args.rpcUrl).toBe("http://rpc.local");
+    expect(args.chainId).toBe(1);
+    expect(args.transactions).toBe(txs);
+    expect(args.blockNumber).toBe(123n);
+    expect(args.wNative).toBe(WETH);
   });
 
-  it("does NOT fall back when Tenderly throws SimulationRevertedError", async () => {
-    mockTenderlyRpc.mockRejectedValueOnce(
-      new SimulationRevertedError("reverted"),
-    );
+  it("gives simulateV1 the full configured timeout", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    try {
+      mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
-    await expect(
-      executeSimulation({
-        config: bothBackends(),
+      await executeSimulation({
+        config: makeConfig(3000),
         chainId: 1,
         transactions: txs,
-      }),
-    ).rejects.toThrow(SimulationRevertedError);
+      });
 
-    expect(mockSimulateV1).not.toHaveBeenCalled();
-  });
-
-  it("throws when both backends are unavailable", async () => {
-    mockTenderlyRpc.mockRejectedValueOnce(
-      new ExternalServiceError("Tenderly down"),
-    );
-    mockSimulateV1.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
-
-    await expect(
-      executeSimulation({
-        config: bothBackends(),
-        chainId: 1,
-        transactions: txs,
-      }),
-    ).rejects.toThrow(ExternalServiceError);
-  });
-
-  it("still attempts fallback with a minimum budget when Tenderly ate the whole timeout", async () => {
-    mockTenderlyRpc.mockRejectedValueOnce(
-      new ExternalServiceError("Tenderly timeout"),
-    );
-    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-    const result = await executeSimulation({
-      config: bothBackends(1),
-      chainId: 1,
-      transactions: txs,
-    });
-
-    expect(result).toBeDefined();
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe.sequential("executeSimulation — Tenderly only", () => {
-  const tenderlyOnly: SimulationConfig = {
-    chains: new Map([
-      [1, { tenderlyRpc: { rpcUrl: "https://gateway.tenderly.co/key" } }],
-    ]),
-  };
-
-  it("returns Tenderly result on success", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-    await executeSimulation({
-      config: tenderlyOnly,
-      chainId: 1,
-      transactions: txs,
-    });
-
-    expect(mockSimulateV1).not.toHaveBeenCalled();
-  });
-
-  it("does NOT fall back when Tenderly fails and no fallback configured", async () => {
-    mockTenderlyRpc.mockRejectedValueOnce(
-      new ExternalServiceError("Tenderly down"),
-    );
-
-    await expect(
-      executeSimulation({
-        config: tenderlyOnly,
-        chainId: 1,
-        transactions: txs,
-      }),
-    ).rejects.toThrow(ExternalServiceError);
-
-    expect(mockSimulateV1).not.toHaveBeenCalled();
-  });
-});
-
-describe.sequential("executeSimulation — simulateV1 only", () => {
-  const simV1Only: SimulationConfig = {
-    chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
-  };
-
-  it("uses simulateV1 directly without touching Tenderly", async () => {
-    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
-
-    await executeSimulation({
-      config: simV1Only,
-      chainId: 1,
-      transactions: txs,
-    });
-
-    expect(mockTenderlyRpc).not.toHaveBeenCalled();
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+      expect(timeoutSpy).toHaveBeenCalledTimes(1);
+      expect(timeoutSpy).toHaveBeenCalledWith(3000);
+      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
+        timeoutSpy.mock.results[0]!.value,
+      );
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 
   it("uses the default timeout when timeoutMs is omitted", async () => {
@@ -226,20 +86,49 @@ describe.sequential("executeSimulation — simulateV1 only", () => {
       mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
       await executeSimulation({
-        config: simV1Only,
+        config: makeConfig(),
         chainId: 1,
         transactions: txs,
       });
 
       expect(timeoutSpy).toHaveBeenCalledWith(5000);
+      expect(mockSimulateV1.mock.calls[0]![0].signal).toBe(
+        timeoutSpy.mock.results[0]!.value,
+      );
     } finally {
       timeoutSpy.mockRestore();
     }
   });
-});
 
-describe.sequential("executeSimulation — no backend available", () => {
-  it("throws UnsupportedChainError", async () => {
+  it("propagates ExternalServiceError without retrying", async () => {
+    mockSimulateV1.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
+
+    await expect(
+      executeSimulation({
+        config: makeConfig(),
+        chainId: 1,
+        transactions: txs,
+      }),
+    ).rejects.toThrow(ExternalServiceError);
+
+    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates SimulationRevertedError", async () => {
+    mockSimulateV1.mockRejectedValueOnce(
+      new SimulationRevertedError("revert", 0),
+    );
+
+    await expect(
+      executeSimulation({
+        config: makeConfig(),
+        chainId: 1,
+        transactions: txs,
+      }),
+    ).rejects.toThrow(SimulationRevertedError);
+  });
+
+  it("throws UnsupportedChainError when the chain is not configured", async () => {
     await expect(
       executeSimulation({
         config: { chains: new Map() },
@@ -247,5 +136,7 @@ describe.sequential("executeSimulation — no backend available", () => {
         transactions: txs,
       }),
     ).rejects.toThrow(UnsupportedChainError);
+
+    expect(mockSimulateV1).not.toHaveBeenCalled();
   });
 });
