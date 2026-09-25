@@ -36,6 +36,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/morpho-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "typescript": "catalog:",
     "viem": "^2.55.10",

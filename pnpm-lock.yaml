@@ -143,6 +143,9 @@ importers:
         specifier: workspace:^
         version: link:../morpho-ts
     devDependencies:
+      '@morpho-org/morpho-sdk':
+        specifier: workspace:^
+        version: link:../morpho-sdk
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
