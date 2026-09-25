@@ -1,7 +1,7 @@
 ---
 name: test-coverage
 kind: baseline
-applies: AGENTS.md §5 Testing, §2 Forbidden patterns (rule 6 — mocked viem clients on RPC paths)
+applies: AGENTS.md §5 Testing, §2 Forbidden patterns (rule 6 — mocked viem clients on RPC paths), §1 Stateless entity flows (cross-handle tests)
 out-of-scope:
   - Correctness of the test assertions themselves — see code-quality.
   - Missing tests for CI workflows — see ci-release-security.
@@ -33,6 +33,7 @@ Per AGENTS.md §5, every package uses the same layout:
 - Removed or modified public exports without their tests updated (e.g. signature change, behavior change).
 - Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, contract round-trips and paths whose correctness depends on real onchain state use Anvil forks via `@morpho-org/test` at pinned blocks. Unit tests for code that calls `viem/actions` but does not depend on real onchain state may use `createMockClient` from `@morpho-org/test/mock`, which mocks the `client.transport` surface those actions use. Do not recommend `vi.mock` / `vi.spyOn` of viem actions for RPC paths. Fork-bound tests belong under the package's `test/` directory with `*.integration.test.ts` names.
 - Snapshot or schema tests not updated when generated outputs (GraphQL types, ABIs) change.
+- A new or changed entity flow that consumes a `RequirementSignature` without a cross-handle test: prepare on handle A, sign, then assert `buildTx(signatures)` on a fresh handle B built from the same inputs equals A's. Per [`ADR-2026-09-23-stateless-entity-flows`](../../../docs/adrs/ADR-2026-09-23-stateless-entity-flows.md) this test must fail if `buildTx` starts reading closure state written by `getRequirements()`/`sign()`. Flag as **high** when the flow derives an encoded value (funding cap, payload) from the signature.
 
 ### Wrong-place findings (the colocation enforcer)
 
