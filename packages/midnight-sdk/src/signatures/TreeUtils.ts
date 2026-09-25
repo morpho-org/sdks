@@ -475,8 +475,8 @@ export type TreeMempoolValidateRatification =
  * API. Standard routes validate the pre-ratification tree with empty
  * `ratifierData` by default; pass `ratification` to validate the final
  * payload shape with real ratifier data. Price/Rate V1 routes always encode
- * real ratifier data (root, leaf index, proof, rate or price bound, allowed
- * taker) because the router identifies each offer by decoding it; their
+ * real ratifier data (root, leaf index, proof, allowed taker, and the rate for
+ * RateRatifierV1) because the router identifies each offer by decoding it; their
  * `ratification` only asserts the route.
  *
  * @example
