@@ -1,8 +1,4 @@
-import {
-  type InputMarketParams,
-  type MarketId,
-  MarketUtils,
-} from "@morpho-org/blue-sdk";
+import { type MarketId, MarketUtils } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
   blueBundlesV1Abi,
@@ -19,7 +15,7 @@ import {
   decodeFunctionData,
   type Hex,
   isAddressEqual,
-  zeroAddress,
+  maxUint256,
   zeroHash,
 } from "viem";
 import type {
@@ -36,6 +32,7 @@ import type {
 } from "../domain/operations.js";
 import {
   ProtocolBindingMismatchError,
+  SimulationValidationError,
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
@@ -176,7 +173,7 @@ const fails = (env: Env, loc: Loc): Fails => ({
   },
 });
 
-const marketBinding = (params: InputMarketParams): MarketBinding => ({
+const marketBinding = (params: DecodedMarketParams): MarketBinding => ({
   marketId: MarketUtils.getMarketId(params),
   params,
 });
@@ -386,6 +383,29 @@ const rejectValue = (
   }
 };
 
+/** Resolves a calldata vault address against the caller-supplied bindings, checking the expected kind. */
+const boundVault = (
+  f: Fails,
+  spec: {
+    readonly address: Address;
+    readonly kind?: VaultBinding["kind"];
+  },
+): VaultBinding => {
+  const { address, kind } = spec;
+  const vault = findVault(f.env, address);
+  if (vault == null) {
+    return f.mismatch(
+      `Vault "${address}" is not bound in decodeOperations params. Pass a VaultBinding resolved from pinned state`,
+    );
+  }
+  if (kind != null && vault.kind !== kind) {
+    return f.mismatch(
+      `Vault "${address}" expected kind "${kind}", got "${vault.kind}". Check the VaultBinding from pinned state`,
+    );
+  }
+  return vault;
+};
+
 const referralFee = (
   referralFeePct: bigint,
   referralFeeRecipient: Address,
@@ -457,7 +477,7 @@ const decodeBlueBundles = (
         operation: "blueWithdraw",
         subject: { type: "market", marketId: market.marketId },
       });
-      rejectValue(f, { value: value, name: "blueBundlesV1Withdraw" });
+      rejectValue(f, { value, name: "blueBundlesV1Withdraw" });
       const hasAssets = withdrawAssets > 0n;
       const hasShares = withdrawShares > 0n;
       if (hasAssets === hasShares) {
@@ -564,7 +584,7 @@ const decodeBlueBundles = (
             };
       }
       rejectValue(f, {
-        value: value,
+        value,
         name: "blueBundlesV1SupplyCollateralAndBorrow",
       });
       return {
@@ -633,7 +653,7 @@ const decodeBlueBundles = (
       };
       if (!hasRepay) {
         rejectValue(f, {
-          value: value,
+          value,
           name: "blueBundlesV1RepayAndWithdrawCollateral",
         });
         return {
@@ -689,7 +709,7 @@ const decodeBlueBundles = (
         },
       });
       rejectValue(f, {
-        value: value,
+        value,
         name: "blueBundlesV1MigrateBorrowPosition",
       });
       if (sourceMarket.marketId === targetMarket.marketId) {
@@ -738,28 +758,6 @@ const decodeVaultBundles = (
   }
   const value = tx.value ?? 0n;
 
-  const boundVault = (
-    f: Fails,
-    spec: {
-      readonly address: Address;
-      readonly kind: VaultBinding["kind"] | undefined;
-    },
-  ): VaultBinding => {
-    const { address, kind } = spec;
-    const vault = findVault(f.env, address);
-    if (vault == null) {
-      return f.mismatch(
-        `Vault "${address}" is not bound in decodeOperations params. Pass a VaultBinding resolved from pinned state`,
-      );
-    }
-    if (kind != null && vault.kind !== kind) {
-      return f.mismatch(
-        `Vault "${address}" expected kind "${kind}", got "${vault.kind}". Check the VaultBinding from pinned state`,
-      );
-    }
-    return vault;
-  };
-
   switch (decoded.functionName) {
     case "vaultBundlesV1Deposit": {
       const [
@@ -774,7 +772,7 @@ const decodeVaultBundles = (
       const f = base.with({
         subject: { type: "vault", vault: vaultAddress },
       });
-      const vault = boundVault(f, { address: vaultAddress, kind: undefined });
+      const vault = boundVault(f, { address: vaultAddress });
       const tokenSignature = decodeTokenPermit(assetPermit, f);
       checkPreview(f, tokenSignature);
       return {
@@ -808,8 +806,8 @@ const decodeVaultBundles = (
       const f = base.with({
         subject: { type: "vault", vault: vaultAddress },
       });
-      const vault = boundVault(f, { address: vaultAddress, kind: undefined });
-      rejectValue(f, { value: value, name: "vaultBundlesV1Withdraw" });
+      const vault = boundVault(f, { address: vaultAddress });
+      rejectValue(f, { value, name: "vaultBundlesV1Withdraw" });
       const hasAssets = assets > 0n;
       const hasShares = shares > 0n;
       if (hasAssets === hasShares) {
@@ -869,7 +867,7 @@ const decodeVaultBundles = (
         address: destVaultAddress,
         kind: "vaultV2",
       });
-      rejectValue(f, { value: value, name: "vaultBundlesV1Migrate" });
+      rejectValue(f, { value, name: "vaultBundlesV1Migrate" });
       if (!isAddressEqual(sourceVault.asset, destVault.asset)) {
         f.mismatch(
           `Migration destination asset expected "${sourceVault.asset}", got "${destVault.asset}". Source and destination vaults must share an asset`,
@@ -921,25 +919,7 @@ const decodeVaultExitBundles = (
   }
   const value = tx.value ?? 0n;
   const f = base;
-  rejectValue(f, { value: value, name: "VaultExitBundlesV1" });
-
-  const boundVault = (
-    address: Address,
-    kind: VaultBinding["kind"],
-  ): VaultBinding => {
-    const vault = findVault(f.env, address);
-    if (vault == null) {
-      return f.mismatch(
-        `Vault "${address}" is not bound in decodeOperations params. Pass a VaultBinding resolved from pinned state`,
-      );
-    }
-    if (vault.kind !== kind) {
-      return f.mismatch(
-        `Vault "${address}" expected kind "${kind}", got "${vault.kind}". Check the VaultBinding from pinned state`,
-      );
-    }
-    return vault;
-  };
+  rejectValue(f, { value, name: "VaultExitBundlesV1" });
 
   switch (decoded.functionName) {
     case "vaultExitBundlesV1ForceWithdrawVaultV2": {
@@ -953,7 +933,7 @@ const decodeVaultExitBundles = (
         recipient,
         deadline,
       ] = decoded.args;
-      const vault = boundVault(vaultAddress, "vaultV2");
+      const vault = boundVault(f, { address: vaultAddress, kind: "vaultV2" });
       const tokenSignature = decodeSharesPermit(sharesPermit);
       checkPreview(f, tokenSignature);
       return {
@@ -979,7 +959,7 @@ const decodeVaultExitBundles = (
         sharesPermit,
         deadline,
       ] = decoded.args;
-      const vault = boundVault(vaultAddress, "vaultV1");
+      const vault = boundVault(f, { address: vaultAddress, kind: "vaultV1" });
       const tokenSignature = decodeSharesPermit(sharesPermit);
       checkPreview(f, tokenSignature);
       return {
@@ -1003,7 +983,7 @@ const decodeVaultExitBundles = (
         sharesPermit,
         deadline,
       ] = decoded.args;
-      const vault = boundVault(vaultAddress, "vaultV2");
+      const vault = boundVault(f, { address: vaultAddress, kind: "vaultV2" });
       const tokenSignature = decodeSharesPermit(sharesPermit);
       checkPreview(f, tokenSignature);
       return {
@@ -1059,11 +1039,6 @@ const decodeVaultV2Multicall = (
     );
   }
   const [calls] = decoded.args;
-  if (calls.length === 0) {
-    return f.unsupported(
-      `Vault "${vault.address}" multicall expected at least one inner call, got "0". A forceRedeem multicall ends with redeem`,
-    );
-  }
 
   const inner = calls.map((data, callIndex) => {
     try {
@@ -1079,6 +1054,13 @@ const decodeVaultV2Multicall = (
     }
   });
 
+  const last = inner.at(-1);
+  if (last == null) {
+    return f.unsupported(
+      `Vault "${vault.address}" multicall expected at least one inner call, got "0". A forceRedeem multicall ends with redeem`,
+    );
+  }
+
   const deallocations = inner.slice(0, -1).map((call, callIndex) => {
     const innerFails = fails(base.env, {
       index: base.loc.index,
@@ -1086,16 +1068,11 @@ const decodeVaultV2Multicall = (
       operation: "vaultV2ForceRedeem",
     });
     if (call.functionName !== "forceDeallocate") {
-      innerFails.unsupported(
+      return innerFails.unsupported(
         `VaultV2 multicall inner call "${callIndex}" decoded to "${call.functionName}", expected "forceDeallocate". Only forceDeallocate legs then a final redeem are supported`,
       );
     }
-    const [adapter, data, assets, onBehalf] = call.args as readonly [
-      Address,
-      Hex,
-      bigint,
-      Address,
-    ];
+    const [adapter, data, assets, onBehalf] = call.args;
     if (!isAddressEqual(onBehalf, base.env.owner)) {
       innerFails.mismatch(
         `VaultV2 forceDeallocate onBehalf expected "${base.env.owner}", got "${onBehalf}". Deallocations must act on the transaction sender`,
@@ -1105,7 +1082,7 @@ const decodeVaultV2Multicall = (
     if (data !== "0x") {
       try {
         const [params] = decodeAbiParameters([blueMarketParamsAbi], data);
-        marketId = marketBinding(params as DecodedMarketParams).marketId;
+        marketId = marketBinding(params).marketId;
       } catch {
         return innerFails.mismatch(
           `VaultV2 forceDeallocate data does not decode as market params. Rebuild the deallocation`,
@@ -1120,27 +1097,17 @@ const decodeVaultV2Multicall = (
     };
   });
 
-  const last = inner[inner.length - 1];
-  if (last == null) {
-    return base.unsupported(
-      `Vault "${vault.address}" multicall expected at least one inner call, got "0". A forceRedeem multicall ends with redeem`,
-    );
-  }
   const lastFails = fails(base.env, {
     index: base.loc.index,
     callPath: [inner.length - 1],
     operation: "vaultV2ForceRedeem",
   });
   if (last.functionName !== "redeem") {
-    lastFails.unsupported(
+    return lastFails.unsupported(
       `VaultV2 multicall final inner call decoded to "${last.functionName}", expected "redeem". A forceRedeem multicall ends with redeem`,
     );
   }
-  const [shares, receiver, onBehalf] = last.args as readonly [
-    bigint,
-    Address,
-    Address,
-  ];
+  const [shares, receiver, onBehalf] = last.args;
   if (!isAddressEqual(receiver, base.env.owner)) {
     lastFails.mismatch(
       `VaultV2 redeem receiver expected "${base.env.owner}", got "${receiver}". The redeem must pay the transaction sender`,
@@ -1262,8 +1229,6 @@ const decodeTransaction = (
   );
 };
 
-const maxUint256 = 2n ** 256n - 1n;
-
 /**
  * Decodes fixed-bundles v6 calldata into ordered {@link DecodedOperation} entries, one per
  * top-level transaction.
@@ -1286,6 +1251,7 @@ const maxUint256 = 2n ** 256n - 1n;
  * @param params.vaults - Vault bindings resolved from pinned state.
  * @param params.preLiquidations - Bound pre-liquidation contracts for direct authorizations.
  * @returns The shared owner and one decoded operation per transaction, in input order.
+ * @throws {SimulationValidationError} when `transactions` is empty.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {ProtocolBindingMismatchError} when senders differ, bindings disagree with calldata, or
  *   value/operator/market bindings violate the route's contract.
@@ -1306,7 +1272,10 @@ export function decodeOperations(
 
   const first = transactions[0];
   if (first == null) {
-    return { owner: zeroAddress, operations: [] };
+    throw new SimulationValidationError(
+      "transactions: expected at least one transaction, got 0",
+      ["transactions"],
+    );
   }
   const owner = first.from;
   for (const [index, transaction] of transactions.entries()) {
@@ -1318,11 +1287,6 @@ export function decodeOperations(
           chainId,
           mode,
           location: { type: "transaction", txIdx: index, callPath: [] },
-          subject: {
-            type: "wallet",
-            account: transaction.from,
-            token: zeroAddress,
-          },
         },
       );
     }

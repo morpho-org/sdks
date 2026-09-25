@@ -72,7 +72,7 @@ const unsupported =
     );
   };
 
-const describe = (value: unknown): string =>
+const describeValue = (value: unknown): string =>
   typeof value === "bigint"
     ? `"${value}"`
     : typeof value === "string"
@@ -85,32 +85,42 @@ const describe = (value: unknown): string =>
 const validators = (fail: Fail) => ({
   record(value: unknown, field: string): Record<string, unknown> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      fail(`Typed data ${field} expected an object, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected an object, got ${describeValue(value)}`,
+      );
     }
     return value as Record<string, unknown>;
   },
   address(value: unknown, field: string): Address {
     if (typeof value !== "string" || !isAddress(value)) {
-      fail(`Typed data ${field} expected an address, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected an address, got ${describeValue(value)}`,
+      );
     }
     return getAddress(value);
   },
   bigint(value: unknown, field: string): bigint {
     if (typeof value !== "bigint") {
-      fail(`Typed data ${field} expected a bigint, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected a bigint, got ${describeValue(value)}`,
+      );
     }
     return value;
   },
   boolean(value: unknown, field: string): boolean {
     if (typeof value !== "boolean") {
-      fail(`Typed data ${field} expected a boolean, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected a boolean, got ${describeValue(value)}`,
+      );
     }
     return value;
   },
   optionalString(value: unknown, field: string): string | undefined {
     if (value === undefined) return undefined;
     if (typeof value !== "string") {
-      fail(`Typed data ${field} expected a string, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected a string, got ${describeValue(value)}`,
+      );
     }
     return value;
   },
@@ -126,7 +136,9 @@ const validators = (fail: Fail) => ({
   ): void {
     const { field, expected } = spec;
     if (!Array.isArray(value)) {
-      fail(`Typed data ${field} expected an array, got ${describe(value)}`);
+      fail(
+        `Typed data ${field} expected an array, got ${describeValue(value)}`,
+      );
     }
     if (value.length !== expected.length) {
       fail(
@@ -137,7 +149,7 @@ const validators = (fail: Fail) => ({
       const entry = this.record(value[index], `${field}[${index}]`);
       if (entry.name !== field_.name || entry.type !== field_.type) {
         fail(
-          `Typed data ${field}[${index}] expected "${field_.name} ${field_.type}", got "${describe(entry.name)} ${describe(entry.type)}"`,
+          `Typed data ${field}[${index}] expected "${field_.name} ${field_.type}", got "${describeValue(entry.name)} ${describeValue(entry.type)}"`,
         );
       }
     }
@@ -175,7 +187,7 @@ const validators = (fail: Fail) => ({
   primaryType(actual: unknown, expected: string): void {
     if (actual !== expected) {
       fail(
-        `Typed data primaryType expected "${expected}", got ${describe(actual)}`,
+        `Typed data primaryType expected "${expected}", got ${describeValue(actual)}`,
       );
     }
   },
@@ -188,13 +200,15 @@ const parseDomain = (value: unknown, fail: Fail): AuthorizationDomain => {
   const chainId = domain.chainId;
   if (typeof chainId !== "number" && typeof chainId !== "bigint") {
     fail(
-      `Typed data domain.chainId expected a number or bigint, got ${describe(chainId)}`,
+      `Typed data domain.chainId expected a number or bigint, got ${describeValue(chainId)}`,
     );
   }
 
   const salt = domain.salt;
   if (salt !== undefined && (typeof salt !== "string" || !isHex(salt))) {
-    fail(`Typed data domain.salt expected a hex string, got ${describe(salt)}`);
+    fail(
+      `Typed data domain.salt expected a hex string, got ${describeValue(salt)}`,
+    );
   }
 
   const name = v.optionalString(domain.name, "domain.name");

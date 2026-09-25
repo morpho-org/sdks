@@ -37,6 +37,7 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   ProtocolBindingMismatchError,
+  SimulationValidationError,
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
@@ -564,6 +565,55 @@ describe("decodeOperations", () => {
         fullClose: false,
       }),
     );
+  });
+
+  test("behavior: blueRepay with native funding equals maxRepayAssets", () => {
+    const nativeMarket = { ...marketParams, loanToken: wNative };
+    const maxRepayAssets = 5n * 10n ** 17n;
+    const tx = blueRepay({
+      market: { chainId, marketParams: new MarketParams(nativeMarket) },
+      args: {
+        userAddress: owner,
+        repayAssets: 4n * 10n ** 17n,
+        repayShares: 0n,
+        maxRepayAssets,
+        nativeAmount: maxRepayAssets,
+        deadline: DEADLINE,
+      },
+    });
+    expect(decode([toTx(tx)]).operations[0]).toStrictEqual(
+      expect.objectContaining({
+        type: "blueRepay",
+        maxRepayAssets,
+        funding: {
+          type: "native",
+          wrappedToken: wNative,
+          assets: maxRepayAssets,
+        },
+      }),
+    );
+  });
+
+  test("error: ProtocolBindingMismatchError when native repay value differs from maxRepayAssets", () => {
+    const nativeMarket = { ...marketParams, loanToken: wNative };
+    const tx = blueRepay({
+      market: { chainId, marketParams: new MarketParams(nativeMarket) },
+      args: {
+        userAddress: owner,
+        repayAssets: 4n * 10n ** 17n,
+        repayShares: 0n,
+        maxRepayAssets: 5n * 10n ** 17n,
+        nativeAmount: 5n * 10n ** 17n,
+        deadline: DEADLINE,
+      },
+    });
+    expect(() => decode([{ ...toTx(tx), value: 1n }])).toThrow(
+      ProtocolBindingMismatchError,
+    );
+  });
+
+  test("error: SimulationValidationError on empty transactions", () => {
+    expect(() => decode([])).toThrow(SimulationValidationError);
   });
 
   test("behavior: blueRefinance maps source and target markets", () => {
