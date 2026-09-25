@@ -91,9 +91,9 @@ export interface ChainAddresses {
   ecrecoverAuthorizer?: `0x${string}`;
   /** SetterRatifier contract that validates Midnight offer Merkle roots ratified onchain by the maker or delegate. */
   setterRatifier?: `0x${string}`;
-  /** PriceRatifierV1 contract that validates Merkle roots of price-bounded Midnight offers ratified onchain by the maker or delegate. Not yet deployed: the key stays absent until deployment. */
+  /** PriceRatifierV1 contract that validates Merkle roots of price-bounded Midnight offers ratified onchain by the maker or delegate. */
   priceRatifierV1?: `0x${string}`;
-  /** RateRatifierV1 contract that validates Merkle roots of rate-bounded Midnight offers ratified onchain by the maker or delegate. Not yet deployed: the key stays absent until deployment. */
+  /** RateRatifierV1 contract that validates Merkle roots of rate-bounded Midnight offers ratified onchain by the maker or delegate. */
   rateRatifierV1?: `0x${string}`;
 }
 
@@ -191,6 +191,8 @@ const _addressesRegistry = {
     ecrecoverRatifier: "0xAC439c81CAA6ef4C7B7E8F0110F8CE63A4b6D43e",
     ecrecoverAuthorizer: "0xfC3303119E46AF831CacdBDB6e1A04C9C369ffF7",
     setterRatifier: "0xb72c416382c8A6399D0765CebfB032F040B00B3c",
+    priceRatifierV1: "0x5A7CbC4458344fd11E1ED81D7834082a1138f975",
+    rateRatifierV1: "0x14A4cd3D7a28d90D37fd0917EDeaa496E5931095",
   },
   [ChainId.BaseMainnet]: {
     blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
@@ -231,6 +233,8 @@ const _addressesRegistry = {
     ecrecoverRatifier: "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E",
     ecrecoverAuthorizer: "0x292bEa9f1443d54E0E509120c919106765c6a493",
     setterRatifier: "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63",
+    priceRatifierV1: "0x08a0e69772315652165921D722B3caAea4C326e6",
+    rateRatifierV1: "0x3B2FbA901C88f026BF50A12c8B28484Cd81F9526",
   },
   [ChainId.PolygonMainnet]: {
     blue: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
@@ -897,6 +901,8 @@ const _addressesRegistry = {
     ecrecoverRatifier: "0xA3B53aDe6668b6ceC03a9E56a993B47034F43715",
     ecrecoverAuthorizer: "0xe1dccAdc10c35AE9e2207059B233fE5c634CF20f",
     setterRatifier: "0x3915156EBFC246Ee9aC3236af561546B7D9D924c",
+    priceRatifierV1: "0x55163660Ff35955712339d465dc6D9D583dA8ac2",
+    rateRatifierV1: "0x9b11e691E79d6978c78BF8de8B898CDeb89bEADf",
   },
   [ChainId.MorphMainnet]: {
     blue: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
@@ -952,6 +958,8 @@ const _addressesRegistry = {
     ecrecoverRatifier: "0x90B800999e4ACd1bD20283BD450bBd2e06D91F7C",
     ecrecoverAuthorizer: "0x75FCdD113fe33a8bEd3CD3C35955DE094Bd2bdf8",
     setterRatifier: "0x708d6Bf6F847202a0755bb5636bE663B174242ea",
+    priceRatifierV1: "0xF65E0be166AAF2F8993e617189beFB452bf38DB1",
+    rateRatifierV1: "0xDd0588d7D3Aaa76a33A7d054B0b107eB3bCD3F11",
     wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
   },
 } as const;
@@ -987,6 +995,8 @@ const _deployments = {
     ecrecoverRatifier: 25_798_183n,
     ecrecoverAuthorizer: 25_798_183n,
     setterRatifier: 25_798_183n,
+    priceRatifierV1: 26_046_045n,
+    rateRatifierV1: 26_046_045n,
   },
   [ChainId.BaseMainnet]: {
     blue: 13977148n,
@@ -1011,6 +1021,8 @@ const _deployments = {
     ecrecoverRatifier: 48286884n,
     ecrecoverAuthorizer: 48286884n,
     setterRatifier: 48286884n,
+    priceRatifierV1: 51_724_088n,
+    rateRatifierV1: 51_724_088n,
   },
   [ChainId.PolygonMainnet]: {
     blue: 66931042n,
@@ -1517,6 +1529,8 @@ const _deployments = {
     ecrecoverRatifier: 20_320_779n,
     ecrecoverAuthorizer: 20_320_779n,
     setterRatifier: 20_320_779n,
+    priceRatifierV1: 22_490_623n,
+    rateRatifierV1: 22_490_623n,
   },
   [ChainId.MorphMainnet]: {
     blue: 23180020n,
@@ -1564,6 +1578,8 @@ const _deployments = {
     ecrecoverRatifier: 65_366_296n,
     ecrecoverAuthorizer: 65_366_296n,
     setterRatifier: 65_366_296n,
+    priceRatifierV1: 71_228_891n,
+    rateRatifierV1: 71_228_891n,
     wNative: 2n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
