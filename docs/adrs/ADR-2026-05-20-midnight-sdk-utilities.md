@@ -1,10 +1,10 @@
-# TIB-2026-05-20: Create a Midnight SDK utility package
+# ADR-2026-05-20: Create a Midnight SDK utility package
 
-| Field      | Value                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| **Status** | Accepted                                                                                   |
-| **Date**   | 2026-05-20 (updated 2026-06-08)                                                            |
-| **Author** | @0xbulma                                                                                   |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-20 |
+| **Author** | @0xbulma  |
 | **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
 
 ---
@@ -20,7 +20,7 @@ The current app implementation in `morpho-org/morpho-apps` builds Midnight order
 - supply-only collateral calls `Midnight.supplyCollateral` directly because the periphery bundler indexes `takes[0]` and cannot handle an empty take list;
 - limit-order flows use public API payload validation, Ecrecover-vs-Setter ratifier selection, `setIsAuthorized`, offer-root signing or root approval, and mempool submission.
 
-Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. A high-level `@morpho-org/morpho-sdk` Midnight client is still too premature: the action/entity shape, Blue-parity naming, and release contract need more product and protocol mileage. This TIB creates a dedicated `@morpho-org/midnight-sdk` package for Midnight protocol utilities while extracting shared Blue/Midnight address and deployment registries to `@morpho-org/morpho-ts`.
+Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. A high-level `@morpho-org/morpho-sdk` Midnight client is still too premature: the action/entity shape, Blue-parity naming, and release contract need more product and protocol mileage. This record creates a dedicated `@morpho-org/midnight-sdk` package for Midnight protocol utilities while extracting shared Blue/Midnight address and deployment registries to `@morpho-org/morpho-ts`.
 
 ## Goals / Non-Goals
 
@@ -41,8 +41,8 @@ Keeping those details only in app code makes every downstream integration re-lea
 
 **Non-Goals**
 
-- No `@morpho-org/morpho-sdk` Midnight action, entity, client namespace, workflow-helper, ABI, or address changes in this TIB.
-- No Blue-style `client.midnight.market(...)` instance in this TIB.
+- No `@morpho-org/morpho-sdk` Midnight action, entity, client namespace, workflow-helper, ABI, or address changes in this record.
+- No Blue-style `client.midnight.market(...)` instance in this record.
 - No Blue protocol-surface behavior changes. Blue edits are limited to shared primitive compatibility, such as re-exporting extracted math, constants, errors, and address registries from their old `blue-sdk` paths.
 - No Blue-specific ABI ownership changes. `blueAbi`, `adaptiveCurveIrmAbi`, `blueOracleAbi`, `preLiquidationFactoryAbi`, and `preLiquidationAbi` stay in `@morpho-org/blue-sdk-viem`; descriptors such as `marketParamsAbi` stay in `@morpho-org/blue-sdk`.
 - No `midnight-sdk` compatibility facade for generic `morpho-ts` utilities. `midnight-sdk` is not published yet, so its own source, docs, and downstream app rewires should import shared primitives directly from `@morpho-org/morpho-ts` instead of preserving temporary `midnight-sdk` re-export paths. This includes symbols that already exist in `morpho-ts`, plus future shared non-protocol symbols that should be added to `morpho-ts` before Midnight consumes them.
@@ -599,13 +599,13 @@ Status as of the 2026-06-08 implementation review:
   compatibility matters, while `@morpho-org/midnight-sdk` imports shared primitives directly from
   `@morpho-org/morpho-ts` and exposes only Midnight-specific utility APIs.
 
-- **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
-- **Phase 2 - Contract surface: completed with address deployment deferred and shared registry ownership.** Midnight-specific ABI literals live in `@morpho-org/midnight-sdk`; Midnight addresses and deployment blocks are fields in the unified `@morpho-org/morpho-ts` registries. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
-- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
-- **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
-- **Phase 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
-- **Phase 6 - Signatures, validation, payloads, and MidnightApi: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
-- **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
+- **Step 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
+- **Step 2 - Contract surface: completed with address deployment deferred and shared registry ownership.** Midnight-specific ABI literals live in `@morpho-org/midnight-sdk`; Midnight addresses and deployment blocks are fields in the unified `@morpho-org/morpho-ts` registries. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
+- **Step 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
+- **Step 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
+- **Step 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
+- **Step 6 - Signatures, validation, payloads, and MidnightApi: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
+- **Step 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
 
@@ -631,7 +631,7 @@ Extend `@morpho-org/blue-sdk` with Midnight addresses, constants, structs, and m
 
 Mirror the Blue split from day one with both `@morpho-org/midnight-sdk` and `@morpho-org/midnight-sdk-viem`.
 
-**Why rejected:** a second package may become right later, but it is premature before the utility surface stabilizes. This TIB keeps I/O in explicit boundary modules and allows a later extraction if the viem surface grows.
+**Why rejected:** a second package may become right later, but it is premature before the utility surface stabilizes. This record keeps I/O in explicit boundary modules and allows a later extraction if the viem surface grows.
 
 ### Alternative 5: Wrap the app `ActionFlow` API
 
@@ -693,19 +693,19 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `ConsumableUnitsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/ConsumableUnitsLib.sol>
 - Markets-v2 app order actions: <https://github.com/morpho-org/morpho-apps/tree/main/apps/markets-v2-app/lib/modules/order/actions>
 - AGENTS.md section 1 (layering), section 2 (forbidden patterns), section 3 (type discipline), section 5 (testing), section 6 (JSDoc)
-- [TIB-2026-04-27](./TIB-2026-04-27-maximize-unit-test-coverage.md) (mock-transport unit-test boundary)
-- [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) (JSDoc coverage on exported symbols)
+- record-2026-04-27 (mock-transport unit-test boundary)
+- record-2026-05-04 (JSDoc coverage on exported symbols)
 
 <!--
-TIB conventions:
-- Once accepted, do not substantively edit this TIB. If the decision needs to change,
-  create a new TIB that supersedes this one and update the Status/Superseded by fields.
+record conventions:
+- Once accepted, do not substantively edit this record. If the decision needs to change,
+  create a new record that supersedes this one and update the Status/Superseded by fields.
 - Addenda may be appended to record operational updates that affect
-  how the TIB is applied without changing the decision itself.
-- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
-- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  TIB decides on is codified in the relevant section of your project's central
-  conventions doc (e.g., AGENTS.md or CLAUDE.md); the TIB stays as the dated record
-  of how the decision was reached. TIBs feed the conventions doc - they do not
+  how the record is applied without changing the decision itself.
+- record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
+- A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  record decides on is codified in the relevant section of your project's central
+  conventions doc (e.g., AGENTS.md or CLAUDE.md); the record stays as the dated record
+  of how the decision was reached. Records feed the conventions doc - they do not
   override it.
 -->

@@ -1,10 +1,10 @@
-# TIB-2026-07-29: Vault V2 public-allocator shared liquidity
+# ADR-2026-07-29: Vault V2 public-allocator shared liquidity
 
-| Field      | Value                                                            |
-| ---------- | ---------------------------------------------------------------- |
-| **Status** | Accepted                                                         |
-| **Date**   | 2026-07-29                                                       |
-| **Author** | @foulques                                                        |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-07-29 |
+| **Author** | @foulques |
 | **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
 
 ## Context
@@ -31,7 +31,7 @@ accounting model is different enough that it needs a separate state simulator,
 but the resulting calls can use the Blue action and Bundler3 integration that
 already exists in this branch.
 
-This TIB freezes that Vault V2 design.
+This record freezes that Vault V2 design.
 
 ## Goals
 
@@ -454,7 +454,7 @@ source and target thresholds plus an internal 100% fallback.
 - [`VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol)
 - [`MorphoMarketV1AdapterV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/adapters/MorphoMarketV1AdapterV2.sol)
 - [BluePublicAllocator deployments](https://github.com/morpho-org/deployments/pull/233)
-- [TIB-2026-06-16 shared-liquidity target-utilization metric](./TIB-2026-06-16-shared-liquidity-target-utilization-metric.md)
+- [ADR-2026-06-16 shared-liquidity target-utilization metric](./ADR-2026-06-16-shared-liquidity-target-utilization-metric.md)
 - `packages/morpho-sdk/src/entities/vaultV1ReallocationData.ts`
 - `packages/morpho-sdk/src/entities/vaultV2BlueReallocationData.ts`
 - `packages/morpho-sdk/src/helpers/computeVaultV1Reallocations.ts`

@@ -1,11 +1,11 @@
-# TIB-2026-07-27: VaultExitBundlesV1 in-kind redemption for Vault V1 and Vault V2
+# ADR-2026-07-27: VaultExitBundlesV1 in-kind redemption for Vault V1 and Vault V2
 
-| Field      | Value                                                            |
-| ---------- | ---------------------------------------------------------------- |
-| **Status** | Accepted                                                          |
-| **Date**   | 2026-07-27                                                        |
-| **Author** | @foulques                                                         |
-| **Scope**  | Packages: `morpho-sdk`, `morpho-ts`                              |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-07-27 |
+| **Author** | @foulques |
+| **Scope**  | Packages: `morpho-sdk`, `morpho-ts` |
 
 ---
 
@@ -48,7 +48,7 @@ is momentarily short, a vault gate rejecting the bundler as an asset recipient, 
 underflow because the penalty leg consumed more than the caller sized for. None of these are
 guessable from the revert data.
 
-This TIB freezes the decision for integrating the two **in-kind redemption** entry points, and for
+This record freezes the decision for integrating the two **in-kind redemption** entry points, and for
 the pre-flight validation that turns those opaque failures into named SDK errors.
 
 ## Goals / Non-Goals
@@ -78,7 +78,7 @@ the pre-flight validation that turns those opaque failures into named SDK errors
 
 **Non-Goals**
 
-- **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own TIB.
+- **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own record.
   `MorphoVaultV2.forceWithdraw` and `forceRedeem` are untouched and undeprecated by this decision.
 - No market-list planning. The caller supplies `marketParamsList` and its order; the SDK validates
   it and never reorders or synthesizes it. Ordering determines which Blue markets the user ends up
@@ -489,7 +489,7 @@ new shares permit does not route through it.
 and following the established `getTokenRequirementActions` convention. It rejects
 Permit2, checks that the signed asset is the vault, then parses
 the signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple
-uses the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and
+uses the signed requirement's nonce and deadline. owner, spender, duplicated action metadata, and
 the signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification,
 which hardcodes `owner = msg.sender` and `spender = address(this)`.
 
@@ -549,14 +549,14 @@ now registered, the fork suite exercises the live Ethereum bytecode, and the tem
 artifact and deployment helper have been removed. The verified selectors and `BLUE` immutable match
 the vendored ABI.
 
-- **Phase 0 — Prerequisite:** establish predeployment fork coverage (completed by PR #907 and now
+- **Step 0 — Prerequisite:** establish predeployment fork coverage (completed by PR #907 and now
   superseded by the canonical deployment).
-- **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` and add the
+- **Step 1 — Plumbing:** promote the ABI into `src/abis.ts` and add the
   `bundles.vaultExitBundlesV1` address slot.
-- **Phase 2 — Actions:** both pure builders, the new error classes, the action-union members,
+- **Step 2 — Actions:** both pure builders, the new error classes, the action-union members,
   colocated unit and property tests.
-- **Phase 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
-- **Phase 4 — Fork tests and release:** end-to-end coverage against the canonical deployment,
+- **Step 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
+- **Step 4 — Fork tests and release:** end-to-end coverage against the canonical deployment,
   JSDoc `@example` blocks, and changeset.
 
 ## Considered Alternatives
@@ -700,7 +700,7 @@ canonical deployment became available.
   unsafe direction: a lower idle balance or penalty *raises* the on-chain `assetsToDeallocate`, and
   a reallocation or a third-party
   `forceDeallocate` *shrinks* the adapter's position on a listed market — either can make a list that
-  passed pre-flight fall short and revert with the very `panic 0x32` this TIB set out to eliminate.
+  passed pre-flight fall short and revert with the very `panic 0x32` this record set out to eliminate.
   **There is no SDK-side defence, and we do not pretend otherwise.** The SDK cannot pin on-chain
   state. Re-reading only `assetBalance` at `getRequirements()` time would mix that fresh value with
   stale penalty and adapter-position values; refetching the complete snapshot would only narrow the
@@ -723,9 +723,9 @@ canonical deployment became available.
 ## Future Considerations
 
 - **`vaultExitBundlesV1ForceWithdrawVaultV2`** — the third entry point, deliberately deferred to its
-  own TIB. It would give the SDK a force-withdraw that computes its own deallocations, unlike
+  own record. It would give the SDK a force-withdraw that computes its own deallocations, unlike
   today's `forceWithdraw` / `forceRedeem`, and it carries extra surface (`minSharePriceE27`,
-  referral fee and recipient) worth deciding on separately. This TIB neither deprecates nor changes
+  referral fee and recipient) worth deciding on separately. This record neither deprecates nor changes
   the existing force paths.
 
 ## References
@@ -735,18 +735,18 @@ canonical deployment became available.
 - [morpho-org/bundles README](https://github.com/morpho-org/bundles) — the bundles design rationale and audits
 - [PR #907 — `test(morpho-sdk): deploy VaultExitBundlesV1 onto a fork`](https://github.com/morpho-org/sdks/pull/907) — historical predeployment fork setup
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `DOMAIN_SEPARATOR`, `exit`, `forceDeallocate`, `permit`
-- [`TIB-2026-06-03`](./TIB-2026-06-03-midnight-action-output-interface.md) — the `ActionOutput` direction these handles should converge on
-- [`TIB-2026-07-02`](./TIB-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action
+- [`ADR-2026-06-03`](./ADR-2026-06-03-midnight-action-output-interface.md) — the `ActionOutput` direction these handles should converge on
+- [`ADR-2026-07-02`](./ADR-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action
 
 <!--
-TIB conventions:
-- Once accepted, do not substantively edit this TIB. If the decision needs to change,
-  create a new TIB that supersedes this one and update the Status/Superseded by fields.
+record conventions:
+- Once accepted, do not substantively edit this record. If the decision needs to change,
+  create a new record that supersedes this one and update the Status/Superseded by fields.
 - Addenda may be appended to record operational updates that affect
-  how the TIB is applied without changing the decision itself.
-- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
-- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
-  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
+  how the record is applied without changing the decision itself.
+- record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
+- A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  record decides on is codified in the relevant section of `AGENTS.md`; the record stays as
+  the dated record of how the decision was reached. Records feed `AGENTS.md` — they do
   not override it.
 -->

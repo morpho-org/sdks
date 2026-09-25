@@ -1,17 +1,17 @@
-# TIB-2026-06-03: Midnight action flow implementation
+# ADR-2026-06-03: Midnight action flow implementation
 
-| Field      | Value                                |
-| ---------- | ------------------------------------ |
-| **Status** | Proposed                             |
-| **Date**   | 2026-06-03                           |
-| **Author** | Romain / Carapulse draft             |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-06-03 |
+| **Author** | Romain / Carapulse draft |
 | **Scope**  | Package: `morpho-sdk` / Midnight SDK |
 
 ---
 
 ## Context
 
-This TIB specifies the implementation of Midnight action flows in `morpho-sdk`. The source behavior is the markets app (`morpho-apps/apps/markets-app`): its home-made action builders already encode the protocol paths, requirement ordering, token-pull policy, ratifier selection, and mempool submission behavior future integrators need. The SDK should lift that protocol logic into reusable Midnight entity / action flows, while keeping the markets app migration as close as possible to an adapter swap.
+This record specifies the implementation of Midnight action flows in `morpho-sdk`. The source behavior is the markets app (`morpho-apps/apps/markets-app`): its home-made action builders already encode the protocol paths, requirement ordering, token-pull policy, ratifier selection, and mempool submission behavior future integrators need. The SDK should lift that protocol logic into reusable Midnight entity / action flows, while keeping the markets app migration as close as possible to an adapter swap.
 
 The markets app is also the compatibility target. To minimize its diff, the SDK keeps the lazy action output shape already used by existing `morpho-sdk` action flows and widens only the requirement list and maker-offer signature arguments needed by the current app flows:
 
@@ -42,7 +42,7 @@ The markets app (`morpho-apps/apps/markets-app`) already implements the Midnight
 - repay / withdraw collateral already goes through `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)`, so the app sees one final bundled tx plus optional pre-execution approval / authorization items;
 - none of the current markets app builders use `ActionFlow` `before` / `after` callbacks.
 
-This TIB freezes the minimal SDK output-shape change needed before migrating those Midnight action builders into `morpho-sdk`.
+This record freezes the minimal SDK output-shape change needed before migrating those Midnight action builders into `morpho-sdk`.
 
 That minimal change still touches shared `morpho-sdk` action-flow types and interfaces. `Requirement` can no longer mean only "signature requirement", transaction requirements can no longer mean only optional approval / authorization prerequisites, and `buildTx(...)` must accept the collected signature list the markets app already passes through its `ActionFlow` engine. Existing Blue / MarketV1 / vault methods may keep their narrower concrete return types, but the shared interfaces need to become compatible with the markets app's current execution model so the Midnight implementation does not force a bespoke integrator migration.
 
@@ -159,7 +159,7 @@ The markets app can adapt SDK output once and reuse the adapter across every scr
 - collected maker signatures are passed back to the final `buildTx` call;
 - labels, token roles, display copy, and success behavior stay in the app.
 
-The adapter preserves the current markets app UX where maker signature prompts are collected before transactions are sent. EOA maker offer-tree signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible for the flows covered by this TIB. If a future Midnight flow introduces a signature that depends on a mined prerequisite transaction, the app adapter should gain an explicit dependency concept then.
+The adapter preserves the current markets app UX where maker signature prompts are collected before transactions are sent. EOA maker offer-tree signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible for the flows covered by this record. If a future Midnight flow introduces a signature that depends on a mined prerequisite transaction, the app adapter should gain an explicit dependency concept then.
 
 The label mapper stays in the markets app. It can map requirement types such as offer-tree signatures, ERC20 approvals, Midnight authorizations, ratify-root transactions, and collateral-supply transactions to screen-specific copy. This remains app-side because it depends on display concepts (`loan token`, `collateral token`, token symbols, and screen-specific final labels) that do not belong in `morpho-sdk`.
 
@@ -909,12 +909,12 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 
 ## Implementation phases
 
-- **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
-- **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight approval, authorization, and ratifier helpers.
-- **Phase 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
-- **Phase 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
-- **Phase 5 — Integration tests.** Fork-test each flow shape: no requirement, approval reset, missing authorization, EOA root signature, contract-wallet ratify-root, mandatory prelude txs, and cancel offer.
-- **Phase 6 — Docs / changeset.** Update package `AGENTS.md`, generated docs/JSDoc, README snippets, and add a minor changeset when code lands.
+- **Step 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
+- **Step 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight approval, authorization, and ratifier helpers.
+- **Step 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
+- **Step 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
+- **Step 5 — Integration tests.** Fork-test each flow shape: no requirement, approval reset, missing authorization, EOA root signature, contract-wallet ratify-root, mandatory prelude txs, and cancel offer.
+- **Step 6 — Docs / changeset.** Update package `AGENTS.md`, generated docs/JSDoc, README snippets, and add a minor changeset when code lands.
 
 ## Security
 

@@ -41,7 +41,7 @@ Files in scope (read each one whose content is in the diff OR which references s
 - `README.md` (root and per-package).
 - `AGENTS.md` (root and per-package). `CLAUDE.md` is a symlink to `AGENTS.md` — don't double-check.
 - `MISSION.md`, `CONTRIBUTING.md`, `SECURITY.md`.
-- `docs/**/*.md` (style guides, architecture deep-dives, TIBs, templates).
+- `docs/**/*.md` (style guides, architecture deep-dives, ADRs, templates).
 - `.agents/pr-review-engine/SKILL.md`, `.agents/pr-review-engine/agents/*.md`, `.agents/pr-review-engine/references/*.md`, `.agents/commands/*.md`.
 - Any `*.md` colocated with a package (`packages/<pkg>/*.md`).
 
@@ -50,7 +50,7 @@ For each Markdown file affected, flag:
 - **Stale prose.** A statement that no longer matches the code after the diff — e.g. README documents a function that was removed/renamed; AGENTS.md lists a rule the code change just violated; an example that no longer compiles.
 - **Out-of-sync inventories.** A file enumerating personas, packages, slash commands, scripts, supported chains, etc. that no longer matches reality after the diff. E.g. a README that lists "supported chains: mainnet, base" while the diff just added arbitrum.
 - **Cross-doc consistency.** When the diff changes a rule in `AGENTS.md`, every persona that enforces it (per the backlink `> Applied by personas: …`) should reflect the new rule. When the diff renames a section heading in `AGENTS.md`, every doc that references that section by title needs an update.
-- **Implemented TIB rewrites.** Treat a TIB already present on the target branch as a historical record. Flag edits that update its implementation-time names or examples; changed decisions require a superseding TIB, while operational clarifications require a dated addendum. A TIB introduced on the current branch may stay in sync with its implementation before landing.
+- **Accepted ADR rewrites.** Treat an ADR already present on the target branch as a historical record. Flag edits that update its implementation-time names or examples; the only permitted edit to an accepted ADR is flipping its Status row to `superseded by`. Changed decisions require a new superseding ADR under `docs/adrs/` that lists the old record in its References. Flag any new `docs/tibs/` file or `TIB-*` filename: TIBs are retired and `docs/tibs/` no longer exists. An ADR introduced on the current branch may stay in sync with its implementation before landing.
 - **Code blocks that drift from the code.** A bash snippet in a `.md` that uses a flag the script no longer supports; a TypeScript snippet whose imports no longer resolve.
 
 ## 3. Pointer / link integrity

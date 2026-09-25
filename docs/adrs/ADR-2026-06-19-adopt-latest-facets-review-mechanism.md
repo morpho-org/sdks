@@ -1,11 +1,11 @@
-# TIB-2026-06-19: Adopt the latest facets review mechanism in the in-repo agentic system
+# ADR-2026-06-19: Adopt the latest facets review mechanism in the in-repo agentic system
 
-| Field             | Value                                              |
-| ----------------- | -------------------------------------------------- |
-| **Status**        | Proposed                                           |
-| **Date**          | 2026-06-19                                         |
-| **Author**        | @0xbulma                                           |
-| **Scope**         | Repo-wide                                          |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-06-19 |
+| **Author** | @0xbulma  |
+| **Scope**  | Repo-wide |
 
 ---
 
@@ -91,18 +91,18 @@ Repo-specific adaptations from the upstream copy:
 
 ### Implementation Phases (all landed in this PR)
 
-- **Phase 1 — Scripts.** Ported the four `.ts` + their `.test.ts` + `list-fix-rubric-agents.sh`;
+- **Step 1 — Scripts.** Ported the four `.ts` + their `.test.ts` + `list-fix-rubric-agents.sh`;
   reformatted to Biome 2-space; added a `agents-engine` Vitest project; added a strict
   `tsconfig.json`. Gates: Biome clean, 124 tests pass, `tsc --noEmit` clean.
-- **Phase 2 — Engine.** `pr-review-engine/SKILL.md` with the full Steps 3–6 contract + Morpho
+- **Step 2 — Engine.** `pr-review-engine/SKILL.md` with the full Steps 3–6 contract + Morpho
   protocol-context retention.
-- **Phase 3 — Agents + references.** Moved + relinked the 9 personas; added `skill-authoring`;
+- **Step 3 — Agents + references.** Moved + relinked the 9 personas; added `skill-authoring`;
   ported the reference subset (adapting `skill-authoring.md`).
-- **Phase 4 — Callers.** Repointed all callers; `pr-review-local` gained Step 2c cache + Step 6b
+- **Step 4 — Callers.** Repointed all callers; `pr-review-local` gained Step 2c cache + Step 6b
   ledger + commit-message intent + SSH→HTTPS fetch fallback; `pr-review-gh` gained PR-title/body
   intent + PR-keyed ledger + audit trail; `pr-review-ci` adopted the new contract; `pr-fix`
   repointed + wired Fix-rubric discovery.
-- **Phase 5 — Docs.** Rewrote `AGENTS.md` §10 (orchestration table, persona inventory, backlinks).
+- **Step 5 — Docs.** Rewrote `AGENTS.md` §10 (orchestration table, persona inventory, backlinks).
 
 ## Considered Alternatives
 
@@ -157,4 +157,4 @@ so they add no statefulness to the reviewed tree — low cost for high value.
 ## References
 
 - [facets upstream](https://github.com/0xbulma/facets) — `plugins/facets/skills/pr-review-engine/`.
-- [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) — the review-system inventory this TIB restructures.
+- [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) — the review-system inventory this record restructures.

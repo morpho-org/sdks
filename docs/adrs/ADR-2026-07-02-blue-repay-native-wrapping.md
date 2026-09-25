@@ -1,15 +1,15 @@
-# TIB-2026-07-02: Native ETH wrapping in Blue repay, with entity-resolved flat action args
+# ADR-2026-07-02: Native ETH wrapping in Blue repay, with entity-resolved flat action args
 
-| Field      | Value                 |
-| ---------- | --------------------- |
-| **Status** | Accepted              |
-| **Date**   | 2026-07-02            |
-| **Author** | @foulques             |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-07-02 |
+| **Author** | @foulques |
 | **Scope**  | Package: `morpho-sdk` |
 
 ---
 
-> This TIB retrospectively records the design shipped in PR
+> This record retrospectively records the design shipped in PR
 > [#840](https://github.com/morpho-org/sdks/pull/840); the rule it decides is codified in
 > [`packages/morpho-sdk/AGENTS.md`](../../packages/morpho-sdk/AGENTS.md) (routing summary) and the
 > `actions/blue` / `entities/blue` / `types` sub-folder `AGENTS.md` files.
@@ -29,7 +29,7 @@ The repay action args were also shaped around a `transferAmount` field with a he
 `amount + nativeAmount`, so the ERC-20 pulled (`amount`) no longer equals the total routed. Bolting
 native onto the old shape would have meant a more complex resolver, not a simpler one.
 
-This TIB freezes the decision for both the native-wrapping feature and the accompanying args
+This record freezes the decision for both the native-wrapping feature and the accompanying args
 reshape.
 
 ## Goals / Non-Goals
@@ -168,16 +168,16 @@ may exceed the accrued borrow assets and the residual is returned to the receive
 
 ### Implementation phases
 
-- **Phase 1 — Types + errors.** Flat `RepayActionAmountArgs`; redefine `RepayAmountArgs`;
+- **Step 1 — Types + errors.** Flat `RepayActionAmountArgs`; redefine `RepayAmountArgs`;
   `nativeAmount?` on both action output types; deprecate `NonPositiveTransferAmountError`; repurpose
   `TransferAmountNotEqualToAssetsError` as the assets-mode action funding guard.
-- **Phase 2 — Actions.** Native wrap block + arithmetic-free reconstruction + guards in `repay.ts`
+- **Step 2 — Actions.** Native wrap block + arithmetic-free reconstruction + guards in `repay.ts`
   and `repayWithdrawCollateral.ts`; remove `validateRepayParams` and its barrel exports.
-- **Phase 3 — Entity.** Inline amount resolution + guards in `MorphoBlue.repay` /
+- **Step 3 — Entity.** Inline amount resolution + guards in `MorphoBlue.repay` /
   `repayWithdrawCollateral`; `getRequirements` approves the ERC-20 portion only.
-- **Phase 4 — Tests.** Colocated unit tests (assets/shares × ERC-20/native/fully-native, error
+- **Step 4 — Tests.** Colocated unit tests (assets/shares × ERC-20/native/fully-native, error
   paths); entity tests for both methods; Anvil fork round-trips for native repay on `WstethWethBlue`.
-- **Phase 5 — Docs + consumer + changeset.** JSDoc, sub-folder `AGENTS.md`, README; adapt
+- **Step 5 — Docs + consumer + changeset.** JSDoc, sub-folder `AGENTS.md`, README; adapt
   `wdk-protocol-lending-morpho-evm` (`assets → amount`); major changeset for `morpho-sdk`, patch for
   the wdk dependent.
 
@@ -223,7 +223,7 @@ Auto-unwrap the withdrawn asset to native ETH.
 
 **Why rejected:** the withdrawn asset is the **collateral** token, not the loan/wNative token; there
 is nothing to unwrap on the repay leg. A native-out withdraw is a separate concern (see the MarketV1
-supply/withdraw TIB's `WithdrawNative` note).
+supply/withdraw record's `WithdrawNative` note).
 
 ## Assumptions & Constraints
 
@@ -271,7 +271,7 @@ supply/withdraw TIB's `WithdrawNative` note).
 - `packages/morpho-sdk/src/actions/blue/repay.ts` / `repayWithdrawCollateral.ts` — the reshaped
   builders.
 - `packages/morpho-sdk/src/entities/blue/blue.ts` — `repay` / `repayWithdrawCollateral` resolution.
-- [`TIB-2026-05-19`](./TIB-2026-05-19-marketv1-supply-withdraw-loan-asset.md) — sibling loan-asset
+- [`ADR-2026-05-19`](./ADR-2026-05-19-marketv1-supply-withdraw-loan-asset.md) — sibling loan-asset
   supply/withdraw decision (native-wrap + slippage precedent).
 - [`Morpho.sol`](https://github.com/morpho-org/morpho-blue/blob/main/src/Morpho.sol) — `repay`
   reference.

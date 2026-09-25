@@ -1,11 +1,11 @@
-# TIB-2026-05-19: MarketV1 supply / withdraw of the loan asset
+# ADR-2026-05-19: MarketV1 supply / withdraw of the loan asset
 
-| Field      | Value                  |
-| ---------- | ---------------------- |
-| **Status** | Proposed               |
-| **Date**   | 2026-05-19             |
-| **Author** | @foulques              |
-| **Scope**  | Package: `morpho-sdk`  |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-19 |
+| **Author** | @foulques |
+| **Scope**  | Package: `morpho-sdk` |
 
 ---
 
@@ -18,7 +18,7 @@ Two consequences:
 - Liquidity providers cannot participate in a Morpho market through the SDK without leaving the typed surface (no `Transaction<TAction>`, no `getRequirements`, no PublicAllocator reallocation help).
 - Suppliers who hit on-market illiquidity on a withdraw cannot reuse the SDK's shared-liquidity machinery (`getReallocationData` / `getReallocations` / `computeReallocations`) — that machinery is hard-coded to borrow semantics today.
 
-This TIB freezes the design decision for the missing pair before the implementation lands.
+This record freezes the design decision for the missing pair before the implementation lands.
 
 ## Goals / Non-Goals
 
@@ -133,13 +133,13 @@ Messages follow the canonical `"<what> <values>. <Imperative remediation>."` sha
 
 ### Implementation phases
 
-- **Phase 1 — Types + errors.** Extend `src/types/action.ts` (action interfaces + `AssetsOrSharesArgs`) and `src/types/error.ts`. Unblocks barrel re-exports for the rest of the work.
-- **Phase 2 — Helpers.** Add `computeMaxSupplySharePrice` and `computeMinWithdrawSharePrice` in `src/helpers/slippage.ts`; `validateWithdrawAmount`, `validateWithdrawShares`, and the unified `validateNativeAsset` in `src/helpers/validate.ts`. Unit tests colocated.
-- **Phase 3 — `computeReallocations` extension.** Add the `operation` discriminator; update the borrow caller to pass `"borrow"`; cover the withdraw branch with new tests.
-- **Phase 4 — Action builders.** `src/actions/marketV1/supply.ts` and `src/actions/marketV1/withdraw.ts` + colocated unit tests + barrel update.
-- **Phase 5 — Entity wiring.** Two new methods on `MorphoMarketV1` (`supply`, `withdraw`); generalize `getReallocations` to take `{ amount, operation }`.
-- **Phase 6 — Fork tests.** Anvil mainnet at the pinned block; reuse `CbbtcUsdcMarketV1`, `SteakhouseUsdcVaultV1`, `WbtcUsdcSourceMarket`, `WstethUsdcSourceMarket` from existing fixtures. Cover happy paths, modes, native, permit2, reallocation single/multi/fee, `InsufficientSharedLiquidityError`, missing `setAuthorization`.
-- **Phase 7 — Docs + changeset.** Update package and sub-folder `CLAUDE.md` routing tables; add a minor changeset.
+- **Step 1 — Types + errors.** Extend `src/types/action.ts` (action interfaces + `AssetsOrSharesArgs`) and `src/types/error.ts`. Unblocks barrel re-exports for the rest of the work.
+- **Step 2 — Helpers.** Add `computeMaxSupplySharePrice` and `computeMinWithdrawSharePrice` in `src/helpers/slippage.ts`; `validateWithdrawAmount`, `validateWithdrawShares`, and the unified `validateNativeAsset` in `src/helpers/validate.ts`. Unit tests colocated.
+- **Step 3 — `computeReallocations` extension.** Add the `operation` discriminator; update the borrow caller to pass `"borrow"`; cover the withdraw branch with new tests.
+- **Step 4 — Action builders.** `src/actions/marketV1/supply.ts` and `src/actions/marketV1/withdraw.ts` + colocated unit tests + barrel update.
+- **Step 5 — Entity wiring.** Two new methods on `MorphoMarketV1` (`supply`, `withdraw`); generalize `getReallocations` to take `{ amount, operation }`.
+- **Step 6 — Fork tests.** Anvil mainnet at the pinned block; reuse `CbbtcUsdcMarketV1`, `SteakhouseUsdcVaultV1`, `WbtcUsdcSourceMarket`, `WstethUsdcSourceMarket` from existing fixtures. Cover happy paths, modes, native, permit2, reallocation single/multi/fee, `InsufficientSharedLiquidityError`, missing `setAuthorization`.
+- **Step 7 — Docs + changeset.** Update package and sub-folder `CLAUDE.md` routing tables; add a minor changeset.
 
 ## Considered Alternatives
 
@@ -165,7 +165,7 @@ Add an `erc20Transfer` skim like `marketV1Repay`'s shares-mode bundle.
 
 Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 
-**Why rejected:** Larger surface for a feature with no immediate demand; would expand the bundle from one action to three plus a re-routing of `receiver=generalAdapter1` and an extra ERC-20 → native skim consideration. Better as a follow-up TIB once an integrator asks for it.
+**Why rejected:** Larger surface for a feature with no immediate demand; would expand the bundle from one action to three plus a re-routing of `receiver=generalAdapter1` and an extra ERC-20 → native skim consideration. Better as a follow-up record once an integrator asks for it.
 
 ## Assumptions & Constraints
 
@@ -194,8 +194,8 @@ Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 - `packages/morpho-sdk/src/actions/marketV1/borrow.ts` — closest existing template (slippage + reallocation).
 - `packages/morpho-sdk/src/actions/marketV1/repay.ts` — assets/shares mode reference.
 - `packages/morpho-sdk/src/actions/marketV1/supplyCollateral.ts` — native wrap reference.
-- `packages/morpho-sdk/src/helpers/computeReallocations.ts` — extended in Phase 3.
-- `packages/morpho-sdk/src/helpers/slippage.ts` — extended in Phase 2.
+- `packages/morpho-sdk/src/helpers/computeReallocations.ts` — extended in Step 3.
+- `packages/morpho-sdk/src/helpers/slippage.ts` — extended in Step 2.
 - [`Morpho.sol`](https://github.com/morpho-org/morpho-blue/blob/main/src/Morpho.sol) — `supply` / `withdraw` reference.
 - [`GeneralAdapter1.sol`](https://github.com/morpho-org/bundler3/blob/main/src/adapters/GeneralAdapter1.sol) — `morphoSupply` / `morphoWithdraw` reference.
 - Root [`AGENTS.md`](../../AGENTS.md) §1 (layering), §3 (types), §5 (testing), §6 (JSDoc), §7 (release).

@@ -1,13 +1,11 @@
-# TIB-0003: SDK Package Deprecation Lifecycle
+# ADR-2026-05-13: SDK Package Deprecation Lifecycle
 
-| Field             | Value       |
-| ----------------- | ----------- |
-| **Status**        | Proposed    |
-| **Date**          | 2026-05-13  |
-| **Author**        | @Rubilmax   |
-| **Scope**         | Repo-wide   |
-| **Supersedes**    | N/A         |
-| **Superseded by** | N/A         |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-13 |
+| **Author** | @Rubilmax |
+| **Scope**  | Repo-wide |
 
 ---
 
@@ -18,7 +16,7 @@ moved into another package or have been explicitly discontinued. Deprecation sho
 for integrators and maintainers: consumers need time to react, while the monorepo should not keep
 obsolete source code indefinitely.
 
-This TIB defines the default lifecycle for SDK package deprecations. Package-specific TIBs can
+This record defines the default lifecycle for SDK package deprecations. Package-specific records can
 override it, but should do so explicitly.
 
 ## Goals / Non-Goals
@@ -39,7 +37,7 @@ override it, but should do so explicitly.
 
 ## Lifecycle
 
-### Phase 1 -- Extract Features
+### Step 1 -- Extract Features
 
 Before deprecating a package, move any still-supported public features into their replacement
 package or document that the feature has no replacement.
@@ -54,7 +52,7 @@ The extraction phase should include:
 
 Do not publish the npm deprecation notice until this phase is complete.
 
-### Phase 2 -- Communicate with Integrators
+### Step 2 -- Communicate with Integrators
 
 Before npm deprecation, communicate the upcoming package status to known integrators and update
 public documentation.
@@ -67,7 +65,7 @@ Communication should include:
 - the expected source-code removal timing;
 - any migration notes needed to avoid accidental dependency or import-path breakage.
 
-### Phase 3 -- Deprecate npm Package
+### Step 3 -- Deprecate npm Package
 
 After extraction and communication, mark the package as deprecated on npm with a clear message.
 
@@ -78,7 +76,7 @@ The npm deprecation message must tell consumers either:
 
 Deprecation is an npm metadata change only. Do not unpublish historical versions.
 
-### Phase 4 -- Delete Source Code After 3 Months
+### Step 4 -- Delete Source Code After 3 Months
 
 Three months after npm deprecation, delete the deprecated package source code from this monorepo.
 
@@ -95,7 +93,7 @@ Maintained replacement APIs must remain in their owning packages.
 
 - The three-month delay starts on the date the npm deprecation notice is published.
 - Deprecated packages are not unpublished from npm.
-- Package-specific TIBs may choose a longer delay, but should not choose a shorter one without
+- Package-specific records may choose a longer delay, but should not choose a shorter one without
   documenting the reason.
 - Source deletion should not happen while a maintained package still imports the deprecated
   package.

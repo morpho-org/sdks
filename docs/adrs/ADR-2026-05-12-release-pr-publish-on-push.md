@@ -1,8 +1,8 @@
-# TIB-2026-05-12: Release PR publish on push
+# ADR-2026-05-12: Release PR publish on push
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | Proposed  |
+| **Status** | accepted  |
 | **Date**   | 2026-05-12 |
 | **Author** | @rubilmax |
 | **Scope**  | Repo-wide |

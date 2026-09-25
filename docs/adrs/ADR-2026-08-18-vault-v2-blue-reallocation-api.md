@@ -1,18 +1,17 @@
-# TIB-2026-08-18: Vault V2 Blue reallocation API
+# ADR-2026-08-18: Vault V2 Blue reallocation API
 
-| Field          | Value                                                     |
-| -------------- | --------------------------------------------------------- |
-| **Status**     | Accepted                                                  |
-| **Date**       | 2026-08-18                                                |
-| **Author**     | @Rubilmax                                                 |
-| **Scope**      | Package: `morpho-sdk`                                     |
-| **Supersedes** | TIB-2026-07-29 V2 naming, entrypoints, and validator boundary |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-08-18 |
+| **Author** | @Rubilmax |
+| **Scope**  | Package: `morpho-sdk` |
 
 ---
 
 ## Context
 
-TIB-2026-07-29 named the state `VaultV2ReallocationData` and exposed both an
+ADR-2026-07-29 named the state `VaultV2ReallocationData` and exposed both an
 operation-aware entity method and a standalone function delegating to that
 method. The generic Vault V2 name is ambiguous because Vault V2 can allocate
 through Morpho Blue and Midnight adapters. The standalone function adds no
@@ -80,7 +79,7 @@ own source shape.
 `validateVaultV2BlueReallocations(...)` validates V2. The action boundary keeps
 one entry point: `validateAndNormalizeReallocations(...)` rejects mixed plans,
 dispatches homogeneous plans, and returns the tagged version. This supersedes
-the July TIB goal to reuse one combined validator and its rejected “Add a V2
+the July record goal to reuse one combined validator and its rejected “Add a V2
 validator” alternative.
 
 ### Post-implementation addendum (2026-08-25): shared-cap candidate selection
@@ -101,3 +100,7 @@ rounding-only liquidity that can exist in already-at-or-over-cap snapshots.
 - No V2 compatibility aliases are needed because the renamed surface was
   unreleased.
 - Published V1 names continue through the existing deprecation policy.
+
+## References
+
+- Supersedes [ADR-2026-07-29-vault-v2-public-allocator-shared-liquidity](./ADR-2026-07-29-vault-v2-public-allocator-shared-liquidity.md) for V2 naming, entrypoints, and validator boundary.

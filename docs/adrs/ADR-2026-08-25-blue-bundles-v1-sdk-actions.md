@@ -1,10 +1,10 @@
-# TIB-2026-08-25: Route Blue actions through BlueBundlesV1
+# ADR-2026-08-25: Route Blue actions through BlueBundlesV1
 
-| Field      | Value                                      |
-| ---------- | ------------------------------------------ |
-| **Status** | Proposed                                   |
-| **Date**   | 2026-08-25                                 |
-| **Author** | @Rubilmax / Carapulse draft                |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-08-25 |
+| **Author** | @Rubilmax / Carapulse draft |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
 
 ---
