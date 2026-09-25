@@ -1290,6 +1290,36 @@ describe("decodeOperations", () => {
     );
   });
 
+  test("error: UnsupportedOperationError on a Morpho authorization without a borrow leg", () => {
+    const data = encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+      args: [
+        marketParams,
+        10n ** 18n,
+        0n,
+        maxUint256,
+        { kind: 0, data: "0x" },
+        {
+          signature: {
+            v: 27,
+            r: `0x${"11".repeat(32)}`,
+            s: `0x${"22".repeat(32)}`,
+          },
+          nonce: 2n,
+          deadline: DEADLINE,
+        },
+        [],
+        0n,
+        zeroAddress,
+        DEADLINE,
+      ],
+    });
+    expect(() => decode([toTx({ to: blueBundlesV1, data })])).toThrow(
+      UnsupportedOperationError,
+    );
+  });
+
   test("error: ProtocolBindingMismatchError on refinance to the same market", () => {
     const data = encodeFunctionData({
       abi: blueBundlesV1Abi,

@@ -309,6 +309,28 @@ const decodeSignedAuthorization = (
   return { type: "blueAuthorizationSignature", nonce, deadline };
 };
 
+/**
+ * Narrows a decoded signature to the no-signature sentinel for a leg that
+ * cannot carry one (a zero funded leg has no token permit; a zero protected
+ * leg has no Morpho authorization), mirroring the builders' rejections.
+ */
+const requireNoSignature = (
+  f: Fails,
+  spec: {
+    readonly signature: OperationSignature;
+    readonly entrypoint: string;
+    readonly leg: string;
+  },
+): Extract<OperationSignature, { readonly type: "none" }> => {
+  const { signature, entrypoint, leg } = spec;
+  if (signature.type !== "none") {
+    return f.unsupported(
+      `${entrypoint} expected no ${leg} without its leg, got "${signature.type}"`,
+    );
+  }
+  return signature;
+};
+
 /** Maps decoded `PublicAllocations` reallocation tuples onto domain entries. */
 const decodeReallocations = (
   f: Fails,
@@ -593,6 +615,11 @@ const decodeBlueBundles = (
           : {
               type: "blueSupplyCollateral",
               ...common,
+              authorizationSignature: requireNoSignature(f, {
+                signature: authorizationSignature,
+                entrypoint: "blueBundlesV1SupplyCollateralAndBorrow",
+                leg: "Morpho authorization",
+              }),
               collateralAssets,
               maxLtvWad: maxLtv,
               funding,
@@ -605,6 +632,11 @@ const decodeBlueBundles = (
       return {
         type: "blueBorrow",
         ...common,
+        tokenSignature: requireNoSignature(f, {
+          signature: tokenSignature,
+          entrypoint: "blueBundlesV1SupplyCollateralAndBorrow",
+          leg: "collateral permit",
+        }),
         borrowAssets,
         maxLtvWad: maxLtv,
         reallocations: decodeReallocations(f, {
@@ -674,6 +706,11 @@ const decodeBlueBundles = (
         return {
           type: "blueWithdrawCollateral",
           ...common,
+          tokenSignature: requireNoSignature(f, {
+            signature: tokenSignature,
+            entrypoint: "blueBundlesV1RepayAndWithdrawCollateral",
+            leg: "loan token permit",
+          }),
           collateralAssets,
           maxLtvWad: maxLtv,
         };
@@ -700,7 +737,16 @@ const decodeBlueBundles = (
             collateralAssets,
             maxLtvWad: maxLtv,
           }
-        : { type: "blueRepay", ...common, ...repay };
+        : {
+            type: "blueRepay",
+            ...common,
+            authorizationSignature: requireNoSignature(f, {
+              signature: authorizationSignature,
+              entrypoint: "blueBundlesV1RepayAndWithdrawCollateral",
+              leg: "Morpho authorization",
+            }),
+            ...repay,
+          };
     }
     case "blueBundlesV1MigrateBorrowPosition": {
       const [
