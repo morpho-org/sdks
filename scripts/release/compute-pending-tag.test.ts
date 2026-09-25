@@ -15,9 +15,9 @@ import {
   main,
   readPackageManifest,
   readPreviousPackageManifest,
-} from "./compute-pending-tag.mjs";
+} from "./compute-pending-tag.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 const manifestPath = "packages/alpha/package.json";
 
 afterEach(() => {
@@ -295,7 +295,7 @@ describe("main", () => {
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
-      "Usage: node scripts/release/compute-pending-tag.mjs <manifest-path>",
+      "Usage: node scripts/release/compute-pending-tag.ts <manifest-path>",
     );
   });
 
@@ -323,7 +323,7 @@ function createTempDir() {
   return tempDir;
 }
 
-function createGitRepo(manifest) {
+function createGitRepo(manifest: Record<string, unknown>) {
   const root = createTempDir();
   mkdirSync(join(root, "packages/alpha"), { recursive: true });
   writeManifest(join(root, manifestPath), manifest);
@@ -333,11 +333,11 @@ function createGitRepo(manifest) {
   return root;
 }
 
-function writeManifest(path, manifest) {
+function writeManifest(path: string, manifest: unknown) {
   writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-function commitAll(root, message) {
+function commitAll(root: string, message: string) {
   runGit(["add", "."], root);
   runGit(
     [
@@ -355,6 +355,6 @@ function commitAll(root, message) {
   );
 }
 
-function runGit(args, cwd) {
+function runGit(args: string[], cwd: string) {
   return execFileSync("git", args, { cwd });
 }

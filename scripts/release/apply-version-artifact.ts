@@ -14,17 +14,34 @@ import { pathToFileURL } from "node:url";
 import {
   collectVersionChanges,
   isAllowedVersionPath,
-} from "./create-version-commit.mjs";
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
+} from "./create-version-commit.ts";
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
 
-export function applyVersionArtifact(options = {}) {
+interface RawVersionArtifact {
+  additions?: unknown;
+  deletions?: unknown;
+  schemaVersion: unknown;
+}
+
+interface VersionArtifactEntry {
+  contents?: string;
+  path: string;
+}
+
+interface VersionArtifactAddition extends VersionArtifactEntry {
+  contents: string;
+}
+
+export function applyVersionArtifact(
+  options: { artifactSource?: unknown; cwd?: string } = {},
+): RawVersionArtifact {
   const cwd = options.cwd ?? process.cwd();
   const artifact = readVersionArtifact(options.artifactSource);
   const additions = readArtifactEntries(artifact.additions, "additions");
   const deletions = readArtifactEntries(artifact.deletions, "deletions");
-  const seenPaths = new Set();
+  const seenPaths = new Set<string>();
 
   for (const entry of [...additions, ...deletions]) {
     if (seenPaths.has(entry.path)) {
@@ -65,7 +82,10 @@ export function applyVersionArtifact(options = {}) {
   return artifact;
 }
 
-export function main(args = process.argv.slice(2), options = {}) {
+export function main(
+  args: string[] = process.argv.slice(2),
+  options: { artifactSource?: unknown; cwd?: string } = {},
+): RawVersionArtifact {
   if (args.length > 0) {
     throw new Error("Version artifact path arguments are not supported.");
   }
@@ -76,12 +96,12 @@ export function main(args = process.argv.slice(2), options = {}) {
   });
 }
 
-function readVersionArtifact(artifactSource) {
+function readVersionArtifact(artifactSource: unknown): RawVersionArtifact {
   if (typeof artifactSource !== "string" || artifactSource === "") {
     throw new Error("Version artifact source is required.");
   }
 
-  const artifact = JSON.parse(artifactSource);
+  const artifact = JSON.parse(artifactSource) as unknown;
 
   if (
     artifact == null ||
@@ -91,16 +111,29 @@ function readVersionArtifact(artifactSource) {
     throw new Error("Version artifact must be a JSON object.");
   }
 
-  if (artifact.schemaVersion !== VERSION_ARTIFACT_SCHEMA_VERSION) {
+  const record = artifact as RawVersionArtifact;
+
+  if (record.schemaVersion !== VERSION_ARTIFACT_SCHEMA_VERSION) {
     throw new Error(
-      `Unsupported version artifact schema "${String(artifact.schemaVersion)}".`,
+      `Unsupported version artifact schema "${String(record.schemaVersion)}".`,
     );
   }
 
-  return artifact;
+  return record;
 }
 
-function readArtifactEntries(entries, field) {
+function readArtifactEntries(
+  entries: unknown,
+  field: "additions",
+): VersionArtifactAddition[];
+function readArtifactEntries(
+  entries: unknown,
+  field: "deletions",
+): VersionArtifactEntry[];
+function readArtifactEntries(
+  entries: unknown,
+  field: string,
+): VersionArtifactEntry[] {
   if (!Array.isArray(entries)) {
     throw new Error(`Version artifact field "${field}" must be an array.`);
   }
@@ -110,25 +143,31 @@ function readArtifactEntries(entries, field) {
       throw new Error(`Version artifact field "${field}" contains non-object.`);
     }
 
-    if (typeof entry.path !== "string") {
+    const record = entry as { contents?: unknown; path?: unknown };
+
+    if (typeof record.path !== "string") {
       throw new Error(
         `Version artifact field "${field}" contains invalid path.`,
       );
     }
 
-    validateArtifactPath(entry.path);
+    validateArtifactPath(record.path);
 
-    if (field === "additions" && typeof entry.contents !== "string") {
+    if (field === "additions" && typeof record.contents !== "string") {
       throw new Error(
-        `Version artifact addition "${entry.path}" contains invalid contents.`,
+        `Version artifact addition "${record.path}" contains invalid contents.`,
       );
     }
 
-    return entry;
+    return {
+      contents:
+        typeof record.contents === "string" ? record.contents : undefined,
+      path: record.path,
+    };
   });
 }
 
-function validateArtifactPath(path) {
+function validateArtifactPath(path: string): void {
   if (
     hasControlCharacter(path) ||
     path.split("/").includes("..") ||
@@ -140,7 +179,7 @@ function validateArtifactPath(path) {
   }
 }
 
-function resolveArtifactTarget(options) {
+function resolveArtifactTarget(options: { cwd: string; path: string }): string {
   const basePath = realpathSync(options.cwd);
   const absolutePath = resolve(basePath, options.path);
 
@@ -151,7 +190,7 @@ function resolveArtifactTarget(options) {
   return absolutePath;
 }
 
-function decodeBase64(options) {
+function decodeBase64(options: { contents: string; path: string }): Buffer {
   const buffer = Buffer.from(options.contents, "base64");
   if (buffer.toString("base64") !== options.contents) {
     throw new Error(
@@ -162,7 +201,7 @@ function decodeBase64(options) {
   return buffer;
 }
 
-function hasControlCharacter(value) {
+function hasControlCharacter(value: string): boolean {
   for (const character of value) {
     const codePoint = character.codePointAt(0);
     if (codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)) {
@@ -173,7 +212,7 @@ function hasControlCharacter(value) {
   return false;
 }
 
-function formatIndentedList(paths) {
+function formatIndentedList(paths: readonly string[]): string {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 
@@ -191,7 +230,7 @@ if (
   }
 }
 
-function sanitizeAnnotation(message) {
+function sanitizeAnnotation(message: string): string {
   return message
     .replaceAll("%", "%25")
     .replaceAll("\r", "%0D")

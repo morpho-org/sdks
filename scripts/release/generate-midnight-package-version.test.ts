@@ -14,9 +14,9 @@ import {
   generateMidnightPackageVersion,
   MIDNIGHT_VERSION_SOURCE_PATH,
   renderMidnightPackageVersionSource,
-} from "./generate-midnight-package-version.mjs";
+} from "./generate-midnight-package-version.ts";
 
-const tempDirs = [];
+const tempDirs: string[] = [];
 
 afterEach(() => {
   for (const tempDir of tempDirs.splice(0)) {
@@ -97,7 +97,7 @@ describe("generateMidnightPackageVersion", () => {
   });
 });
 
-function createFixture(version) {
+function createFixture(version: string | undefined) {
   const root = mkdtempSync(join(tmpdir(), "midnight-package-version-"));
   tempDirs.push(root);
   mkdirSync(join(root, "packages/midnight-sdk/src/api"), { recursive: true });

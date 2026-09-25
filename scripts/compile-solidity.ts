@@ -15,7 +15,7 @@ import solc from "solc";
 const packageName = process.argv[2];
 
 if (!packageName) {
-  console.error("Usage: node scripts/compile-solidity.js <package-name>");
+  console.error("Usage: node scripts/compile-solidity.ts <package-name>");
   process.exit(1);
 }
 
@@ -23,7 +23,13 @@ const workspaceRoot = join(import.meta.dirname, "..");
 const packageDir = join(workspaceRoot, "packages", packageName);
 const contractsDir = join(packageDir, "contracts");
 
-const packageConfigs = {
+interface PackageConfig {
+  bytecodeExportName: string;
+  describeArtifact(contractName: string): string;
+  resolveOutputPath(sourceName: string): string | null;
+}
+
+const packageConfigs: Record<string, PackageConfig> = {
   "blue-sdk-viem": {
     bytecodeExportName: "code",
     describeArtifact(contractName) {
@@ -67,9 +73,9 @@ if (!config) {
   process.exit(1);
 }
 
-const collectSoliditySources = (dir) => {
+const collectSoliditySources = (dir: string): string[] => {
   const entries = readdirSync(dir, { withFileTypes: true });
-  const files = [];
+  const files: string[] = [];
 
   for (const entry of entries) {
     const entryPath = join(dir, entry.name);
@@ -111,7 +117,26 @@ const input = {
   },
 };
 
-const output = JSON.parse(solc.compile(JSON.stringify(input)));
+interface SolcError {
+  formattedMessage?: string;
+  severity?: string;
+}
+
+interface SolcContractArtifact {
+  abi: unknown;
+  evm: {
+    bytecode: {
+      object: string;
+    };
+  };
+}
+
+interface SolcOutput {
+  contracts: Record<string, Record<string, SolcContractArtifact | undefined>>;
+  errors?: SolcError[];
+}
+
+const output = JSON.parse(solc.compile(JSON.stringify(input))) as SolcOutput;
 const errors = output.errors ?? [];
 const compilerErrors = errors.filter((error) => error.severity === "error");
 
@@ -122,7 +147,7 @@ if (errors.length > 0) {
 
 if (compilerErrors.length > 0) process.exit(1);
 
-const writtenFiles = [];
+const writtenFiles: string[] = [];
 
 for (const [sourceName, contracts] of Object.entries(output.contracts)) {
   const outputPath = config.resolveOutputPath(sourceName);
