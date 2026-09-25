@@ -25,8 +25,9 @@ remove Tenderly and provider fallback. Every verification failure blocks accepta
 Support the released v6 routes: `BlueBundlesV1` for Blue actions and full-position refinance,
 `VaultBundlesV1` for Vault V1/V2 deposits and exits and V1 → V2 migration, and
 `VaultExitBundlesV1` for in-kind redemption and V2 force withdrawal. Supported direct operations
-include Morpho authorization, pre-liquidation authorization and the SDK's V2 force-redemption recipe.
-Reject legacy Bundler3 routes, arbitrary call composition, partial refinance and Midnight operations.
+include Morpho authorization for the supported bundle operators and the SDK's V2 force-redemption recipe.
+Reject legacy Bundler3 routes, arbitrary call composition, partial refinance, pre-liquidation
+authorization and execution, and Midnight operations. Pre-liquidation risk modeling is out of scope.
 
 ## Verification contract
 
@@ -94,7 +95,7 @@ Bounds are inclusive. There is no free-form metric, subject or time-basis field.
 | Field | Meaning / default |
 | --- | --- |
 | `maxSlippageWad?` | Conversion slippage bound; default `DEFAULT_SLIPPAGE_TOLERANCE` (`3_00000000000000n`, 0.03%) |
-| `minLltvBufferWad?` | Distance below LLTV (or active `preLltv`) a risk-increasing action must keep; default `DEFAULT_LLTV_BUFFER` (`WAD / 200n`, 0.5%) |
+| `minLltvBufferWad?` | Distance below LLTV a risk-increasing action must keep; default `DEFAULT_LLTV_BUFFER` (`WAD / 200n`, 0.5%) |
 | `maxSignatureLifetimeSeconds?` | Upper bound on `deadline − simulationStartTimestamp` for every typed-data request; default `7_200n` |
 | `wallet?` | `{ maxDebit?: TokenAmount[], minCredit?: TokenAmount[] }` where `TokenAmount = { token, amount }` and native uses viem's `ethAddress` |
 | `operations?` | `readonly OperationLimit[]`; see [appendix](#operation-limits) |
@@ -174,7 +175,7 @@ can execute successfully and still fail these constraints. Such a failure must n
   `transactionIndex`. Unknown, ambiguous, inapplicable or widening limits are validation errors.
 - Compare `expected*` pins with calldata or entrypoint-defined bindings. Compare outcome bounds with
   verified state or action effects; wallet limits apply to net balances, excluding gas.
-- Risk-increasing actions must respect the LLTV or active pre-liquidation threshold minus the buffer.
+- Risk-increasing actions must respect the LLTV minus the buffer.
   Repayments and collateral top-ups may leave a position unhealthy if they do not worsen risk.
 - Report a consumer constraint breach as `ConsumerLimitViolationError`, with the violated field,
   subject, bound and observed value in its fixed unit. Preserve `MarketConstraintViolationError`
@@ -293,8 +294,8 @@ Ship a deprecation minor for the Tenderly configuration before its removal. The 
 `txIdx` index only caller transactions. The SDK baseline remains pinned to `morpho-sdk` 6.0.0.
 
 Version 6.0.0 rejects legacy Bundler3/GeneralAdapter1 transactions, arbitrary call compositions,
-partial refinance and Midnight operations with `UnsupportedOperationError`. Consumers must rebuild
-transactions using the supported `morpho-sdk` 6.0.0 routes; operations outside that scope have no
+partial refinance, pre-liquidation operations and Midnight operations with `UnsupportedOperationError`.
+Consumers must rebuild transactions using the supported `morpho-sdk` 6.0.0 routes; operations outside that scope have no
 replacement in this simulator. Document these restrictions in the deprecation minor's release notes
 and the major's migration guide; the minor keeps existing route behavior without runtime warnings.
 
@@ -389,7 +390,7 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 | `AssetChangeMismatchError` / `ASSET_CHANGE_MISMATCH` | Wrong debit, receipt or refund; double funding; native funding not covered by the real balance; unexplained balance change |
 | `PermissionChangeMismatchError` / `PERMISSION_CHANGE_MISMATCH` | Any ERC-20, Permit2, in-kind-redemption, lasting or temporary approval, or Morpho operator invariant fails |
 | `StateChangeMismatchError` / `STATE_CHANGE_MISMATCH` | Position, market or vault accounting, accrual, full-close or configuration mismatch |
-| `MarketConstraintViolationError` / `MARKET_CONSTRAINT_VIOLATION` | Verified state violates health or buffer, rescue, pre-liquidation or liquidity and capacity policy |
+| `MarketConstraintViolationError` / `MARKET_CONSTRAINT_VIOLATION` | Verified state violates health or buffer, rescue, or liquidity and capacity policy |
 | `SlippageLimitExceededError` / `SLIPPAGE_LIMIT_EXCEEDED` | Conversion violates quote, calldata or SDK slippage bound |
 | `FeeMismatchError` / `FEE_MISMATCH` | Wrong fee or penalty amount, recipient or schedule; forbidden discretionary fee |
 | `ConsumerLimitViolationError` / `CONSUMER_LIMIT_VIOLATION` | A decoded parameter differs from an `expected*` pin, or a verified value violates an outcome bound or wallet limit |
