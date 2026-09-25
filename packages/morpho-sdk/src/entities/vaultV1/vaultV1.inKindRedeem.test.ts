@@ -532,6 +532,44 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     });
   });
 
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, { allowance: 0n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const params = {
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV1Data(),
+      userAddress: IN_KIND_USER,
+      deadline: 1_900_000_000n,
+    };
+    const exitA = vault.inKindRedeem(params);
+    const [requirement] = await exitA.getRequirements();
+    if (requirement?.action.type !== "permit") {
+      throw new Error("Expected a permit requirement");
+    }
+    const permit: PermitRequirementSignature = {
+      args: {
+        owner: IN_KIND_USER,
+        nonce: 7n,
+        asset: IN_KIND_VAULT,
+        signature: serializeSignature({
+          r: `0x${"11".repeat(32)}`,
+          s: `0x${"22".repeat(32)}`,
+          yParity: 1,
+        }),
+        amount: requirement.action.args.amount,
+        deadline: requirement.action.args.deadline,
+      },
+      action: requirement.action,
+    };
+
+    const exitB = vault.inKindRedeem(params);
+    expect(exitB.buildTx([permit])).toEqual(exitA.buildTx([permit]));
+  });
+
   test("behavior: an exact bounded allowance needs no authorization", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 501n });
