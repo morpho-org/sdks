@@ -307,7 +307,7 @@ failures and constraint violations while blocking acceptance on all three.
 
 ## References
 
-- [SDK v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/9e0aedeabe9e6b7e9925d21a2c8a5d05dd2690e1/packages/morpho-sdk/MIGRATION-v5-to-v6.md)
+- [SDK v5 → v6 migration guide](https://github.com/morpho-org/sdks/blob/2e2595d59e9db8e3d7533b54d6fbffcf8107c274/packages/morpho-sdk/MIGRATION-v5-to-v6.md)
 - [BlueBundlesV1 route decision](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
 - [Vault exit in-kind redemption](./TIB-2026-07-27-vault-exit-in-kind-redemption.md)
 
