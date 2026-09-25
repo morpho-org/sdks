@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { MidnightApi } from "../../src/api/MidnightApi.js";
 import type { MidnightApiBookMarket } from "../../src/api/types.js";
 import { MempoolPayloadValidationRule } from "../../src/api/types.js";
+import { DEFAULT_TICK_SPACING } from "../../src/constants.js";
 import { MidnightMempoolValidationError } from "../../src/errors.js";
 import type { IMarketParams } from "../../src/market/Market.js";
 import { Offer } from "../../src/offers/Offer.js";
@@ -58,13 +59,17 @@ beforeAll(async () => {
   let level: MidnightApiBookMarket["bids"][number] | undefined;
   const candidate = books.find(
     (entry) =>
-      (level = entry.bids.find(
-        (bid) => BigInt(bid.tick) >= RateRatifierV1.MIN_TICK,
-      )) != null,
+      (level = entry.bids.find((bid) => {
+        const bidTick = BigInt(bid.tick);
+        return (
+          bidTick >= RateRatifierV1.MIN_TICK &&
+          bidTick % DEFAULT_TICK_SPACING === 0n
+        );
+      })) != null,
   );
   if (candidate == null || level == null)
     throw new Error(
-      `No Midnight book on Base with a bid at or above RateRatifierV1.MIN_TICK (${RateRatifierV1.MIN_TICK}) for the test fixture.`,
+      `No Midnight book on Base with a bid at or above RateRatifierV1.MIN_TICK (${RateRatifierV1.MIN_TICK}) aligned to DEFAULT_TICK_SPACING (${DEFAULT_TICK_SPACING}) for the test fixture.`,
     );
 
   book = candidate;
