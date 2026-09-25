@@ -67,7 +67,7 @@ its own definition.
 ````sh
 records() { git ls-files 'docs/adrs/*.md' | grep . || echo 'ERROR: no ADR records found; run from the repository root' >&2; }
 new_records() { records | awk -F/ '$NF >= "ADR-2026-09-23"'; }
-prose() { sed -e '/^ *```/,/^ *```/d' -e 's/`[^`]*`//g' "$1"; }
+prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fence in " FILENAME > "/dev/stderr"}}' "$1" | sed 's/`[^`]*`//g'; }
 ````
 
 - One decision per record; a PR that adds an ADR changes no published package source and ships no

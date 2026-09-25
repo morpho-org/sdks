@@ -24,7 +24,7 @@ Conventions:
 - Context is written in the past tense; the Decision is the rule, not the story of reaching it.
   When revising in response to a PR comment, fix the rule — do not narrate the back-and-forth.
 - No changeset: an ADR is documentation, not a change to published package source.
-- Delete this comment block and every italic guidance line before opening the PR.
+- Delete this comment block and every italic section-guidance line below (keep the `_Status is the only field that changes after acceptance._` notice) before opening the PR.
 -->
 
 # ADR-YYYY-MM-DD: [Decision title]
