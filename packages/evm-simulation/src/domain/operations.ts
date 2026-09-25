@@ -142,19 +142,44 @@ export interface DecodedOperationFields {
     readonly fullClose: boolean;
     readonly reallocations: readonly OperationReallocation[];
   };
-  readonly blueSupplyCollateral: BlueOperation & {
+  readonly blueSupplyCollateral: Omit<
+    BlueOperation,
+    "authorizationSignature"
+  > & {
+    /** A zero protected leg carries no Morpho authorization. */
+    readonly authorizationSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
     readonly collateralAssets: bigint;
     readonly funding: OperationFunding;
     readonly maxLtvWad: bigint;
   };
-  readonly blueBorrow: BlueOperation & BorrowFields;
+  readonly blueBorrow: Omit<BlueOperation, "tokenSignature"> & {
+    /** A zero funded leg carries no token permit. */
+    readonly tokenSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
+  } & BorrowFields;
   readonly blueSupplyCollateralBorrow: BlueOperation &
     BorrowFields & {
       readonly collateralAssets: bigint;
       readonly funding: OperationFunding;
     };
-  readonly blueRepay: BlueOperation & RepayFields;
-  readonly blueWithdrawCollateral: BlueOperation & {
+  readonly blueRepay: Omit<BlueOperation, "authorizationSignature"> & {
+    /** A zero protected leg carries no Morpho authorization. */
+    readonly authorizationSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
+  } & RepayFields;
+  readonly blueWithdrawCollateral: Omit<BlueOperation, "tokenSignature"> & {
+    /** A zero funded leg carries no token permit. */
+    readonly tokenSignature: Extract<
+      OperationSignature,
+      { readonly type: "none" }
+    >;
     readonly collateralAssets: bigint;
     readonly maxLtvWad: bigint;
   };
