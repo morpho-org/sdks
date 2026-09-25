@@ -73,13 +73,19 @@ import {
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
+/** Action surface for Vault V1 reads and writes; writes route through VaultBundlesV1 and VaultExitBundlesV1. */
 export interface VaultV1Actions {
   /**
    * Fetches direct onchain vault and allocation state without applying virtual interest.
    *
-   * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The requested vault state.
+   * Reads the Vault V1 state through `fetchAccrualVault` on the entity's client.
+   *
+   * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
+   * @returns The hydrated `AccrualVault` snapshot.
    * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownBlueFactory} when the configured chain has no MetaMorpho factory.
+   * @throws {UnknownBlueOfFactory} when the vault is not a MetaMorpho vault from the configured factory.
    */
   getData: (
     parameters?: FetchParameters,
@@ -511,6 +517,7 @@ export interface VaultV1Actions {
   >;
 }
 
+/** Binds a viem client to a Vault V1 (MetaMorpho) vault's action builders. */
 export class MorphoVaultV1 implements VaultV1Actions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

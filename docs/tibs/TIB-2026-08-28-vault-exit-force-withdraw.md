@@ -628,6 +628,17 @@ The three deprecated aliases recorded in the validation matrix —
 canonical names (`VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
 `ReferralFeeRecipientMissingError`) are unchanged; only the `export const X = Y;` aliases are gone.
 
+### 2026-09-24 — Two validation-matrix rows added during implementation
+
+**Author:** @foulques
+
+The implementation guards two failure modes the validation matrix above did not list:
+
+| Failure mode | Guard | Error |
+|---|---|---|
+| a zero `minSharePriceE27` floor means "no bound", so a dust exit whose derived floor rounds to `0n` would run unprotected | the default derived share-price floor is `> 0` | `VaultV2ForceWithdrawZeroSharePriceError` *(raised by `computeMinForceWithdrawSharePrice`)* |
+| the fee recipient is minted more shares than the burn produced | projected `feeShares(deadline) < minSharesBurnt(accrue(deadline))` | `VaultV2ForceWithdrawFeeSharesExceedBurnError` |
+
 <!--
 TIB conventions:
 - Once accepted, do not substantively edit this TIB. If the decision needs to change,

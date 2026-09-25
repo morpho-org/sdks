@@ -58,11 +58,15 @@ export type VaultV2ForceWithdrawEligibility =
  *   describing which precondition failed.
  * @example
  * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import { resolveVaultV2ForceWithdrawEligibility } from "@morpho-org/morpho-sdk";
  *
- * const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
- * if (eligibility.type === "eligible") {
- *   console.log(eligibility.adapter.address, eligibility.liquidityMarketId);
+ * export function checkEligibility(vaultData: AccrualVaultV2) {
+ *   const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+ *   if (eligibility.type === "eligible") {
+ *     console.log(eligibility.adapter.address, eligibility.liquidityMarketId);
+ *   }
+ *   return eligibility;
  * }
  * ```
  */
@@ -128,13 +132,21 @@ export function resolveVaultV2ForceWithdrawEligibility(
  *   owner is not a fee recipient.
  * @example
  * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import { computeVaultV2ForceWithdrawFeeSharesMinted } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
  *
- * const feeShares = computeVaultV2ForceWithdrawFeeSharesMinted({
- *   vaultData,
- *   owner,
- *   timestamp,
- * });
+ * export function feeShares(
+ *   vaultData: AccrualVaultV2,
+ *   owner: Address,
+ *   timestamp: bigint,
+ * ) {
+ *   return computeVaultV2ForceWithdrawFeeSharesMinted({
+ *     vaultData,
+ *     owner,
+ *     timestamp,
+ *   });
+ * }
  * ```
  */
 export function computeVaultV2ForceWithdrawFeeSharesMinted(params: {
@@ -226,21 +238,24 @@ export interface VaultV2ForceWithdrawPlan {
  * @throws {NonPositiveInputError} when `exitAssets` is not positive.
  * @example
  * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import {
  *   computeVaultV2ForceWithdrawPlan,
  *   resolveVaultV2ForceWithdrawEligibility,
  * } from "@morpho-org/morpho-sdk";
  *
- * const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
- * if (eligibility.type === "eligible") {
+ * export function planExit(vaultData: AccrualVaultV2, timestamp: bigint) {
+ *   const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+ *   if (eligibility.type !== "eligible") return undefined;
  *   const plan = computeVaultV2ForceWithdrawPlan({
  *     vaultData,
  *     adapter: eligibility.adapter,
  *     liquidityMarketId: eligibility.liquidityMarketId,
  *     exitAssets: 1_000_000n,
- *     timestamp: 1_800_000_000n,
+ *     timestamp,
  *   });
  *   // plan.withdrawnAssets is what the user receives before the referral fee
+ *   return plan;
  * }
  * ```
  */
@@ -424,55 +439,69 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example
  * ```ts
- * import { MathLib } from "@morpho-org/blue-sdk";
+ * import { MathLib, type AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import {
  *   computeVaultV2ForceWithdrawFeeSharesMinted,
  *   computeVaultV2ForceWithdrawSharesBurnt,
+ *   type VaultV2ForceWithdrawPlan,
  * } from "@morpho-org/morpho-sdk";
+ * import { type Address, maxUint256 } from "viem";
  *
- * const { vault: nowVaultData } = vaultData.accrueInterest(now);
- * const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
- *   vaultData,
- *   deadlineVaultData: vaultData,
- *   plan,
- * });
- * const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
- *   vaultData: nowVaultData,
- *   deadlineVaultData: nowVaultData,
- *   plan,
- * });
- * const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
- *   vaultData,
- *   owner,
- *   timestamp: now,
- * });
- * const sharesBurntForFloor = MathLib.max(
- *   sharesBurntRaw,
- *   sharesBurntNow - feeSharesNow,
- * );
- * const allowanceSharePriceE27 = MathLib.max(
- *   MathLib.min(
- *     MathLib.mulDivDown(
- *       minSharePriceE27,
- *       MathLib.WAD - slippageTolerance,
- *       MathLib.WAD,
+ * export function requiredShareAllowance(
+ *   vaultData: AccrualVaultV2,
+ *   plan: VaultV2ForceWithdrawPlan,
+ *   owner: Address,
+ *   now: bigint,
+ *   deadline: bigint,
+ *   exitAssets: bigint,
+ *   minSharePriceE27: bigint,
+ *   slippageTolerance: bigint,
+ * ) {
+ *   const { vault: nowVaultData } = vaultData.accrueInterest(now);
+ *   const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+ *     vaultData,
+ *     deadlineVaultData: vaultData,
+ *     plan,
+ *   });
+ *   const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+ *     vaultData: nowVaultData,
+ *     deadlineVaultData: nowVaultData,
+ *     plan,
+ *   });
+ *   const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+ *     vaultData,
+ *     owner,
+ *     timestamp: now,
+ *   });
+ *   const sharesBurntForFloor = MathLib.max(
+ *     sharesBurntRaw,
+ *     sharesBurntNow - feeSharesNow,
+ *   );
+ *   const allowanceSharePriceE27 = MathLib.max(
+ *     MathLib.min(
+ *       MathLib.mulDivDown(
+ *         minSharePriceE27,
+ *         MathLib.WAD - slippageTolerance,
+ *         MathLib.WAD,
+ *       ),
+ *       minSharePriceE27 - 1n,
  *     ),
- *     minSharePriceE27 - 1n,
- *   ),
- *   1n,
- * );
- * const requiredShareAllowance = MathLib.min(
- *   MathLib.max(
- *     MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
- *     MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
- *   ) +
- *     computeVaultV2ForceWithdrawFeeSharesMinted({
- *       vaultData,
- *       owner,
- *       timestamp: deadline,
- *     }),
- *   maxUint256,
- * );
+ *     1n,
+ *   );
+ *   const requiredShareAllowance = MathLib.min(
+ *     MathLib.max(
+ *       MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+ *       MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+ *     ) +
+ *       computeVaultV2ForceWithdrawFeeSharesMinted({
+ *         vaultData,
+ *         owner,
+ *         timestamp: deadline,
+ *       }),
+ *     maxUint256,
+ *   );
+ *   return requiredShareAllowance;
+ * }
  * ```
  */
 export function computeVaultV2ForceWithdrawSharesBurnt(params: {
@@ -521,12 +550,18 @@ export function computeVaultV2ForceWithdrawSharesBurnt(params: {
  * @returns A lower bound, in vault shares, of the burn measured by the contract.
  * @example
  * ```ts
- * import { computeVaultV2ForceWithdrawMinSharesBurnt } from "@morpho-org/morpho-sdk";
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
+ * import {
+ *   computeVaultV2ForceWithdrawMinSharesBurnt,
+ *   type VaultV2ForceWithdrawPlan,
+ * } from "@morpho-org/morpho-sdk";
  *
- * const minSharesBurnt = computeVaultV2ForceWithdrawMinSharesBurnt({
- *   vaultData,
- *   plan,
- * });
+ * export function minSharesBurnt(
+ *   vaultData: AccrualVaultV2,
+ *   plan: VaultV2ForceWithdrawPlan,
+ * ) {
+ *   return computeVaultV2ForceWithdrawMinSharesBurnt({ vaultData, plan });
+ * }
  * ```
  */
 export function computeVaultV2ForceWithdrawMinSharesBurnt(params: {

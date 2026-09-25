@@ -16,6 +16,7 @@ import type { FetchParameters } from "../types.js";
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @returns The hydrated `User` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { User } from "@morpho-org/blue-sdk";

@@ -110,14 +110,18 @@ export interface VaultV2ForceWithdrawPreview {
  *   floor cannot fit `uint256`.
  * @example
  * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
  *
- * const preview = previewVaultV2ForceWithdraw(vaultData, {
- *   requestedExitAssets: 1_000_000n,
- *   timestamp: block.timestamp,
- * });
- * // preview?.exitAssets is ready to pass to vault.forceWithdraw(...)
- * // preview?.netAssets is what the user receives
+ * export function preview(vaultData: AccrualVaultV2, timestamp: bigint) {
+ *   const preview = previewVaultV2ForceWithdraw(vaultData, {
+ *     requestedExitAssets: 1_000_000n,
+ *     timestamp,
+ *   });
+ *   // preview?.exitAssets is ready to pass to vault.forceWithdraw(...)
+ *   // preview?.netAssets is what the user receives
+ *   return preview;
+ * }
  * ```
  */
 export function previewVaultV2ForceWithdraw(

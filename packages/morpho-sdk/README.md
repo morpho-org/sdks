@@ -42,7 +42,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
-| | `makeLend`, `makeBorrow` | Midnight mempool |
+| | `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,

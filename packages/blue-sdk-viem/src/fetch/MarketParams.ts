@@ -19,6 +19,8 @@ import { readContractRestructured } from "../utils.js";
  * @param id - Market id whose params should be resolved.
  * @param client - Viem client used for the fallback on-chain read.
  * @returns The resolved `MarketParams` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry
+ * (on-chain fallback only; ids found in the local `MarketParams` registry skip the lookup).
  * @example
  * ```ts
  * import type { MarketId, MarketParams } from "@morpho-org/blue-sdk";

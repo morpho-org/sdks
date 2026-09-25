@@ -269,6 +269,11 @@ jobs:
               echo "::error::Tarball ${tgz##*/} must contain exactly one package/package.json (found ${pj_count}); refusing to publish."
               exit 1
             fi
+            pj_children="$(printf '%s\n' "$entries" | grep -cE '^package/package\.json/' || true)"
+            if [ "$pj_children" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${pj_children} entr(y/ies) below package/package.json (manifest must be a regular file); refusing to publish."
+              exit 1
+            fi
             irregular="$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)"
             if [ "$irregular" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} contains ${irregular} non-regular entr(y/ies) (symlink/hardlink/device); refusing to publish."
@@ -283,6 +288,23 @@ jobs:
             # against the source allowlist is the identity npm will publish.
             identity="$(node scripts/ci/read-tarball-identity.ts "$tgz")"
             IFS=$'\t' read -r name version <<<"$identity"
+
+            # npm flattens every publishConfig key from the packed manifest
+            # into the publish options (including transport keys such as
+            # proxy, https-proxy, strict-ssl, ca) BEFORE the OIDC exchange,
+            # so only `access`/`registry` pinned to npmjs are allowed (SDK-664).
+            # The validator reads the stored package/package.json (a regular
+            # file, parsed not require()d — SDK-637); its name@version must
+            # match what pacote resolved, proving the allowlisted manifest is
+            # the one npm will publish.
+            tmpd="$(mktemp -d)"
+            tar -xzf "$tgz" -C "$tmpd" package/package.json
+            manifest_identity="$(node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
+            rm -rf "$tmpd"
+            if [ "$manifest_identity" != "${name}@${version}" ]; then
+              echo "::error::Tarball ${tgz##*/}: stored package/package.json identity '${manifest_identity}' differs from the identity npm would publish '${name}@${version}'; refusing to publish."
+              exit 1
+            fi
 
             if [ -n "${received_version[$name]:-}" ]; then
               echo "::error::Duplicate tarball for ${name} in the artifact."
@@ -324,9 +346,12 @@ jobs:
             fi
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
-            # publishes explicit and future-proof; `--registry` overrides any
-            # `publishConfig.registry` in the packed manifest so a tampered pack
-            # job cannot redirect the OIDC audience away from npmjs.
+            # publishes explicit and future-proof; `--registry` pins the registry
+            # endpoint, and the per-tarball manifest check above (which runs
+            # before the OIDC token exchange inside `npm publish`, the first
+            # npm-credentialed operation) guarantees no other publishConfig
+            # key can redirect the OIDC exchange or the package PUT away from
+            # npmjs.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \

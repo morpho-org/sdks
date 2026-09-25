@@ -77,6 +77,7 @@ import {
   type VaultPresetKey,
 } from "./morpho-presets.js";
 
+/** An EVM wallet account (read-only, signer, or ERC-4337) usable with the Morpho protocol methods. */
 export type MorphoEvmAccount =
   | WalletAccountReadOnlyEvm
   | WalletAccountReadOnlyEvmErc4337
@@ -107,6 +108,7 @@ type WdkProvider = {
 type ViemPublicClient = Client<Transport, Chain> &
   PublicActions<Transport, Chain>;
 
+/** Optional ERC-4337 (account abstraction) transaction configuration overrides per call. */
 export type Erc4337TransactionConfig = Partial<
   | EvmErc4337WalletPaymasterTokenConfig
   | EvmErc4337WalletSponsorshipPolicyConfig
@@ -551,6 +553,7 @@ export interface PreparedMorphoWithdraw {
   ) => Promise<Omit<WithdrawResult, "hash">>;
 }
 
+/** Curated Morpho vault and market preset keys selecting the instance's earn and borrow targets. */
 export interface Presets {
   /** Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`. */
   earn?: VaultPresetKey | string;
@@ -558,6 +561,7 @@ export interface Presets {
   borrow?: MarketPresetKey | string;
 }
 
+/** The account's position in the configured Morpho vault. */
 export interface VaultPosition {
   /** The account's vault share balance. */
   shares: bigint;
@@ -567,6 +571,7 @@ export interface VaultPosition {
   vaultAddress: Address;
 }
 
+/** The account's position in the configured Morpho Blue market. */
 export interface MarketPosition {
   /** The account's Morpho market supply shares. */
   supplyShares: bigint;
@@ -580,6 +585,7 @@ export interface MarketPosition {
   marketId: string;
 }
 
+/** Aggregated vault and market positions for the account. */
 export interface AccountData {
   /** The account's configured vault share balance. */
   vaultShares: bigint;
@@ -599,6 +605,7 @@ export interface AccountData {
   marketId: string;
 }
 
+/** Constructor options for {@link MorphoProtocolEvm}. */
 export interface MorphoProtocolOptions {
   /** Explicit Morpho vault address. Takes priority over `presets.earn`. */
   earnVaultAddress?: string;
@@ -1260,6 +1267,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
    *   already in place, so the withdrawal must go through {@link prepareWithdraw}.
    * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm, { type WithdrawResult } from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import type { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
+   * async function withdrawUsdt(account: WalletAccountEvm): Promise<WithdrawResult> {
+   *   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+   *   const morpho = new MorphoProtocolEvm(account, { presets: { earn: "sky-money-usdt-savings" } });
+   *   // Requires an exact VaultBundlesV1 share allowance; use prepareWithdraw() otherwise.
+   *   return morpho.withdraw({ token: USDT, amount: 1_000_000n });
+   * }
+   * ```
    */
   async withdraw(
     options: MorphoWithdrawOptions,
@@ -2366,6 +2384,23 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *
    * @param account - If set, returns the vault position for the given address.
    * @returns The vault position.
+   * @throws {ChainIdMismatchError} when provider chain context changes mid-operation or conflicts
+   *   with configured target or cached ERC-4337 account context.
+   * @example
+   * ```ts
+   * import MorphoProtocolEvm from "@morpho-org/wdk-protocol-lending-morpho-evm";
+   * import { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
+   *
+   * const account = new WalletAccountReadOnlyEvm(
+   *   "0x405005C7c4422390F4B334F64Cf20E0b767131d0",
+   *   { provider: process.env.MAINNET_RPC_URL! },
+   * );
+   * const morpho = new MorphoProtocolEvm(account, {
+   *   presets: { earn: "sky-money-usdt-savings" },
+   * });
+   * const position = await morpho.getVaultPosition();
+   * // position satisfies VaultPosition
+   * ```
    */
   async getVaultPosition(account?: string): Promise<VaultPosition> {
     const context = await this._getVaultContext();

@@ -248,7 +248,8 @@ export class AccrualVault extends Vault implements IAccrualVault {
   public readonly allocations: Map<MarketId, VaultMarketAllocation>;
 
   /**
-   * The proportion of assets of the vault supplied to markets collateralized by each collateral asset.
+   * The aggregated allocation exposure (markets, LLTVs, oracles) per collateral asset.
+   * Per-market proportions come from `getAllocationProportion(marketId)`.
    */
   public readonly collateralAllocations: Map<Address, CollateralAllocation>;
 
