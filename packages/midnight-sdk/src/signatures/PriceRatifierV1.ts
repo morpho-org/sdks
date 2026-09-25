@@ -76,10 +76,12 @@ const isPaddingEntry = (entry: {
  *
  * @example
  * ```ts
- * import type { PriceRatifierV1Leaf } from "@morpho-org/midnight-sdk";
+ * import type { IOffer, PriceRatifierV1Leaf } from "@morpho-org/midnight-sdk";
  *
- * const leaf: PriceRatifierV1Leaf = { offer };
- * console.log(leaf.offer);
+ * function leaf(offer: IOffer): PriceRatifierV1Leaf {
+ *   return { offer };
+ * }
+ * console.log(leaf(offer).offer);
  * ```
  */
 export interface PriceRatifierV1Leaf {
@@ -94,14 +96,13 @@ export interface PriceRatifierV1Leaf {
  *
  * @example
  * ```ts
- * import type { PriceRatifierV1LeafStruct } from "@morpho-org/midnight-sdk";
+ * import type { OfferStruct, PriceRatifierV1LeafStruct } from "@morpho-org/midnight-sdk";
  * import { zeroAddress } from "viem";
  *
- * const leaf: PriceRatifierV1LeafStruct = {
- *   offer,
- *   allowedTaker: zeroAddress,
- * };
- * console.log(leaf.allowedTaker);
+ * function leaf(offer: OfferStruct): PriceRatifierV1LeafStruct {
+ *   return { offer, allowedTaker: zeroAddress };
+ * }
+ * console.log(leaf(offer).allowedTaker);
  * ```
  */
 export interface PriceRatifierV1LeafStruct {
@@ -119,11 +120,12 @@ export interface PriceRatifierV1LeafStruct {
  *
  * @example
  * ```ts
- * import { PriceRatifierV1, type PriceRatifierV1TreeDescriptor } from "@morpho-org/midnight-sdk";
+ * import { PriceRatifierV1, type IOffer, type PriceRatifierV1TreeDescriptor } from "@morpho-org/midnight-sdk";
  *
- * const descriptor: PriceRatifierV1TreeDescriptor =
- *   PriceRatifierV1.buildDescriptor([{ offer }]);
- * console.log(descriptor.root);
+ * function build(offer: IOffer): PriceRatifierV1TreeDescriptor {
+ *   return PriceRatifierV1.buildDescriptor([{ offer }]);
+ * }
+ * console.log(build(offer).root);
  * ```
  */
 export interface PriceRatifierV1TreeDescriptor
@@ -166,10 +168,12 @@ export interface DecodedPriceRatifierV1Data extends TreeProof {
  *
  * @example
  * ```ts
- * import type { PriceRatifierV1TreeInput } from "@morpho-org/midnight-sdk";
+ * import type { IOffer, PriceRatifierV1TreeInput } from "@morpho-org/midnight-sdk";
  *
- * const input: PriceRatifierV1TreeInput = [{ offer }];
- * console.log(input);
+ * function input(offer: IOffer): PriceRatifierV1TreeInput {
+ *   return [{ offer }];
+ * }
+ * console.log(input(offer));
  * ```
  */
 export type PriceRatifierV1TreeInput =
@@ -204,14 +208,16 @@ export namespace PriceRatifierV1 {
    * @returns Leaf hash used in the ratified Merkle tree.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type OfferStruct } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
-   * const leaf = PriceRatifierV1.hashLeaf({
-   *   offer,
-   *   allowedTaker: zeroAddress,
-   * });
-   * console.log(leaf);
+   * function hash(offer: OfferStruct) {
+   *   return PriceRatifierV1.hashLeaf({
+   *     offer,
+   *     allowedTaker: zeroAddress,
+   *   });
+   * }
+   * console.log(hash(offer));
    * ```
    */
   export function hashLeaf(leaf: PriceRatifierV1LeafStruct): Hash {
@@ -363,10 +369,12 @@ export namespace PriceRatifierV1 {
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const descriptor = PriceRatifierV1.buildDescriptor([{ offer }]);
-   * console.log(descriptor.height);
+   * function build(offer: IOffer) {
+   *   return PriceRatifierV1.buildDescriptor([{ offer }]);
+   * }
+   * console.log(build(offer).height);
    * ```
    */
   export function buildDescriptor(
@@ -424,13 +432,15 @@ export namespace PriceRatifierV1 {
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const proof = PriceRatifierV1.buildProof({
-   *   tree: PriceRatifierV1.buildDescriptor([{ offer }]),
-   *   leafIndex: 0n,
-   * });
-   * console.log(proof.proof.length);
+   * function build(offer: IOffer) {
+   *   return PriceRatifierV1.buildProof({
+   *     tree: PriceRatifierV1.buildDescriptor([{ offer }]),
+   *     leafIndex: 0n,
+   *   });
+   * }
+   * console.log(build(offer).proof.length);
    * ```
    */
   export function buildProof(params: {
@@ -531,13 +541,13 @@ export namespace PriceRatifierV1 {
    * @throws {RatifierV1TakerNotAllowedError} when `taker` is not the leaf's allowed taker.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
+   * import type { Hex } from "viem";
    *
-   * const decoded = PriceRatifierV1.verifyRatifierData({
-   *   offer,
-   *   ratifierData,
-   * });
-   * console.log(decoded.root);
+   * function check(offer: IOffer, ratifierData: Hex) {
+   *   return PriceRatifierV1.verifyRatifierData({ offer, ratifierData });
+   * }
+   * console.log(check(offer, ratifierData).root);
    * ```
    */
   export function verifyRatifierData(params: {
@@ -582,13 +592,15 @@ export namespace PriceRatifierV1 {
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const data = PriceRatifierV1.ratifierData({
-   *   tree: [{ offer }],
-   *   leafIndex: 0n,
-   * });
-   * console.log(data);
+   * function build(offer: IOffer) {
+   *   return PriceRatifierV1.ratifierData({
+   *     tree: [{ offer }],
+   *     leafIndex: 0n,
+   *   });
+   * }
+   * console.log(build(offer));
    * ```
    */
   export function ratifierData(params: {
@@ -621,12 +633,14 @@ export namespace PriceRatifierV1 {
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @example
    * ```ts
-   * import { PriceRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { PriceRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const items = PriceRatifierV1.ratify({
-   *   tree: [{ offer }],
-   * });
-   * console.log(items.length);
+   * function build(offer: IOffer) {
+   *   return PriceRatifierV1.ratify({
+   *     tree: [{ offer }],
+   *   });
+   * }
+   * console.log(build(offer).length);
    * ```
    */
   export function ratify(params: {

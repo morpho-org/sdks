@@ -158,6 +158,19 @@ describe("Tree.create", () => {
   });
 });
 
+describe("TreeUtils.normalizeEntries", () => {
+  test("default: flattens groups and assigns singleton group ids", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([baseOffer({ maxAssets: 0n, maxUnits: 7n })]);
+    const normalized = TreeUtils.normalizeEntries([group, offer]);
+
+    expect(normalized).toHaveLength(2);
+    expect(normalized[0]).toBe(group.offers[0]);
+    expect(normalized[0]!.group).toBe(group.id);
+    expect(normalized[1]!.group).toBe(GroupUtils.hash([offer]));
+  });
+});
+
 describe("Tree.mempoolValidate", () => {
   test("default", async () => {
     const calls: {

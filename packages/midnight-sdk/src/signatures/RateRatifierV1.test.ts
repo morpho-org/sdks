@@ -30,6 +30,7 @@ import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { TreeUtils } from "./TreeUtils.js";
 
 const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
 const otherRatifier = "0x000000000000000000000000000000000000A222" as const;
@@ -633,6 +634,68 @@ describe("RateRatifierV1.ratifierData", () => {
         },
       }),
     ).toThrow(InvalidTreeError);
+  });
+
+  test("behavior: proves and encodes every leaf of a padded descriptor", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([
+      leaf({}, 1n),
+      leaf({ maxUnits: 7n }, 2n),
+      leaf({ maxUnits: 8n }, 3n),
+    ]);
+    expect(descriptor.entries).toHaveLength(4);
+
+    const items = RateRatifierV1.ratify({ tree: descriptor });
+    expect(items).toHaveLength(3);
+    for (const [index, item] of items.entries()) {
+      const decoded = RateRatifierV1.verifyRatifierData({
+        offer: item.offer,
+        ratifierData: item.ratifierData,
+      });
+      expect(decoded.rate).toBe(descriptor.entries[index]!.rate);
+      expect(decoded.leafIndex).toBe(BigInt(index));
+    }
+
+    expect(
+      RateRatifierV1.buildProof({ tree: descriptor, leafIndex: 2n }).leafIndex,
+    ).toBe(2n);
+    const data = RateRatifierV1.ratifierData({
+      tree: descriptor,
+      leafIndex: 0n,
+    });
+    expect(
+      RateRatifierV1.verifyRatifierData({
+        offer: descriptor.offers[0]!,
+        ratifierData: data,
+      }).rate,
+    ).toBe(1n);
+  });
+
+  test("error: InvalidRateRatifierV1TickError for a descriptor tick below MIN_TICK", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
+    const entry = {
+      ...descriptor.entries[0]!,
+      offer: { ...descriptor.entries[0]!.offer, tick: 100n },
+    };
+    const leaves = descriptor.entries.map((candidate, index) =>
+      RateRatifierV1.hashLeaf(index === 0 ? entry : candidate),
+    );
+    const tampered = {
+      ...descriptor,
+      entries: [entry],
+      offers: [Offer.from({ ...descriptor.offers[0]!, tick: 100n })],
+      leaves,
+      root: TreeUtils.buildRootFromLeaves(leaves).root,
+    };
+
+    expect(() => RateRatifierV1.ratify({ tree: tampered })).toThrow(
+      InvalidRateRatifierV1TickError,
+    );
+    expect(() =>
+      RateRatifierV1.buildProof({ tree: tampered, leafIndex: 0n }),
+    ).toThrow(InvalidRateRatifierV1TickError);
+    expect(() =>
+      RateRatifierV1.ratifierData({ tree: tampered, leafIndex: 0n }),
+    ).toThrow(InvalidRateRatifierV1TickError);
   });
 
   test("error: InvalidTreeError for an empty descriptor offer list", () => {

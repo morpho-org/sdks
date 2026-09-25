@@ -20,6 +20,21 @@ describe("ratifier namespace compatibility", () => {
     expect(EcrecoverRatifierUtils.decodeRatifierData).toBe(
       EcrecoverRatifier.decodeRatifierData,
     );
+    expect(EcrecoverRatifierUtils.treeTypeHash).toBe(
+      EcrecoverRatifier.treeTypeHash,
+    );
+    expect(EcrecoverRatifierUtils.digestForRoot).toBe(
+      EcrecoverRatifier.digestForRoot,
+    );
+    expect(EcrecoverRatifierUtils.digestRatifierData).toBe(
+      EcrecoverRatifier.digestRatifierData,
+    );
+    expect(EcrecoverRatifierUtils.verifyRatifierData).toBe(
+      EcrecoverRatifier.verifyRatifierData,
+    );
+    expect(EcrecoverRatifierUtils.toSignature).toBe(
+      EcrecoverRatifier.toSignature,
+    );
   });
   test("behavior: SetterRatifier shares codecs with its legacy API", () => {
     expect(SetterRatifierUtils.encodeRatifierData).toBe(
@@ -27,6 +42,9 @@ describe("ratifier namespace compatibility", () => {
     );
     expect(SetterRatifierUtils.decodeRatifierData).toBe(
       SetterRatifier.decodeRatifierData,
+    );
+    expect(SetterRatifierUtils.verifyRatifierData).toBe(
+      SetterRatifier.verifyRatifierData,
     );
   });
   test("behavior: PriceRatifierV1Utils remains an alias", () => {

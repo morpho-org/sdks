@@ -233,6 +233,24 @@ describe("Tree.from", () => {
     expect(Tree.from(rate)).toBe(rate);
     expect(Tree.from(offers).root).toBe(Tree.create(offers).root);
   });
+
+  test("behavior: resumes a serialized snapshot instead of rebuilding", () => {
+    const ecrecover = Tree.create({ type: "ecrecover", entries: offers });
+    const descriptor = ecrecover.toDescriptor();
+    const resumed = Tree.from(descriptor);
+    expectTypeOf(resumed).toEqualTypeOf<Tree<"ecrecover">>();
+    expect(resumed).toBeInstanceOf(Tree);
+    expect(resumed.root).toBe(ecrecover.root);
+    expect(resumed.leaves).toEqual(ecrecover.leaves);
+    expect(resumed.entries).toEqual(ecrecover.entries);
+    expect(resumed.offers).toEqual(ecrecover.offers);
+
+    const rate = Tree.from(trees()[3].toDescriptor());
+    expectTypeOf(rate).toEqualTypeOf<Tree<"rateV1">>();
+    expect(rate).toBeInstanceOf(Tree);
+    expect(rate.root).toBe(trees()[3].root);
+    expect(rate.entries).toEqual(trees()[3].entries);
+  });
 });
 
 describe("Tree.fromDescriptor", () => {
@@ -351,6 +369,46 @@ describe("Tree.mempoolValidate", () => {
     }
   });
 
+  test("behavior: standard routes post offers with empty ratifier data", async () => {
+    for (const tree of [trees()[0], trees()[1]]) {
+      const fetch = vi.fn(
+        async (_url: string | URL | Request, _init?: RequestInit) =>
+          new Response(JSON.stringify({ data: { valid: true, issues: [] } }), {
+            status: 200,
+          }),
+      );
+      const result = await tree.mempoolValidate({ chainId: 8453, fetch });
+      expect(result).toEqual({ valid: true, issues: [] });
+      const decoded = await Payload.decode(
+        JSON.parse(String(fetch.mock.calls[0]![1]!.body)).payload,
+      );
+      expect(decoded).toHaveLength(3);
+      for (const item of decoded) {
+        expect(item.ratifierData).toBe("0x");
+      }
+    }
+  });
+
+  test("behavior: V1 routes without ratification post empty ratifier data", async () => {
+    for (const tree of [trees()[2], trees()[3]]) {
+      const fetch = vi.fn(
+        async (_url: string | URL | Request, _init?: RequestInit) =>
+          new Response(JSON.stringify({ data: { valid: true, issues: [] } }), {
+            status: 200,
+          }),
+      );
+      const result = await tree.mempoolValidate({ chainId: 8453, fetch });
+      expect(result).toEqual({ valid: true, issues: [] });
+      const decoded = await Payload.decode(
+        JSON.parse(String(fetch.mock.calls[0]![1]!.body)).payload,
+      );
+      expect(decoded).toHaveLength(3);
+      for (const item of decoded) {
+        expect(item.ratifierData).toBe("0x");
+      }
+    }
+  });
+
   test("error: InvalidTreeError on mismatched authorization", async () => {
     const fetch = vi.fn();
     const rate = trees()[3];
@@ -360,6 +418,17 @@ describe("Tree.mempoolValidate", () => {
       ratification: { type: "setter" },
     } as unknown as TypedTreeMempoolValidateParams<"rateV1">;
     await expect(rate.mempoolValidate(params)).rejects.toBeInstanceOf(
+      InvalidTreeError,
+    );
+    expect(fetch).not.toHaveBeenCalled();
+
+    const ecrecover = trees()[0];
+    const mismatched = {
+      chainId: 8453,
+      fetch,
+      ratification: { type: "setter" },
+    } as unknown as TypedTreeMempoolValidateParams<"ecrecover">;
+    await expect(ecrecover.mempoolValidate(mismatched)).rejects.toBeInstanceOf(
       InvalidTreeError,
     );
     expect(fetch).not.toHaveBeenCalled();

@@ -111,7 +111,7 @@ The old array-based `TreeCreateParams`, `Tree.create(entries)`,
 `Tree.from(legacyInput)`, and `TreeUtils.buildDescriptor(entries)` are deprecated
 but remain available. Existing Ecrecover and Setter integrations can keep using
 them without changing their roots, proofs, or payloads. Their removal requires a
-future major release after the deprecation period; they are not removed in this PR.
+future major release after the deprecation period.
 
 An untagged `Tree<undefined>` is still accepted by both deprecated `*Utils` APIs.
 The original `TreeLike`, `TreeInput`, and `RatifierTreeInput` types retain their

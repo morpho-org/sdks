@@ -1,9 +1,7 @@
 import type { Address, Hex } from "viem";
 import { MAX_TREE_HEIGHT } from "../constants.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
-import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
-import { Group } from "./Group.js";
-import { GroupUtils } from "./GroupUtils.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { isEmptyOfferStruct } from "./offerStructInternal.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -99,16 +97,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
   }
 
   const entries = Array.isArray(tree) ? tree : [tree];
-  const offers: readonly IOffer[] = entries.flatMap((entry) =>
-    GroupUtils.isGroupInput(entry)
-      ? Group.from(entry).offers
-      : [
-          new Offer({
-            ...Offer.from(entry as IOffer),
-            group: GroupUtils.hash([entry as IOffer]),
-          }),
-        ],
-  );
+  const offers: readonly IOffer[] = TreeUtils.normalizeEntries(entries);
   const descriptor = TreeUtils.buildDescriptor(entries);
 
   return {

@@ -88,13 +88,12 @@ const isPaddingEntry = (entry: {
  *
  * @example
  * ```ts
- * import type { RateRatifierV1Leaf } from "@morpho-org/midnight-sdk";
+ * import type { IOffer, RateRatifierV1Leaf } from "@morpho-org/midnight-sdk";
  *
- * const leaf: RateRatifierV1Leaf = {
- *   offer,
- *   rate: 1_0000000000000000n,
- * };
- * console.log(leaf.rate);
+ * function leaf(offer: IOffer): RateRatifierV1Leaf {
+ *   return { offer, rate: 1_0000000000000000n };
+ * }
+ * console.log(leaf(offer).rate);
  * ```
  */
 export interface RateRatifierV1Leaf {
@@ -111,15 +110,13 @@ export interface RateRatifierV1Leaf {
  *
  * @example
  * ```ts
- * import type { RateRatifierV1LeafStruct } from "@morpho-org/midnight-sdk";
+ * import type { OfferStruct, RateRatifierV1LeafStruct } from "@morpho-org/midnight-sdk";
  * import { zeroAddress } from "viem";
  *
- * const leaf: RateRatifierV1LeafStruct = {
- *   offer,
- *   rate: 0n,
- *   allowedTaker: zeroAddress,
- * };
- * console.log(leaf.allowedTaker);
+ * function leaf(offer: OfferStruct): RateRatifierV1LeafStruct {
+ *   return { offer, rate: 0n, allowedTaker: zeroAddress };
+ * }
+ * console.log(leaf(offer).allowedTaker);
  * ```
  */
 export interface RateRatifierV1LeafStruct {
@@ -139,11 +136,12 @@ export interface RateRatifierV1LeafStruct {
  *
  * @example
  * ```ts
- * import { RateRatifierV1, type RateRatifierV1TreeDescriptor } from "@morpho-org/midnight-sdk";
+ * import { RateRatifierV1, type IOffer, type RateRatifierV1TreeDescriptor } from "@morpho-org/midnight-sdk";
  *
- * const descriptor: RateRatifierV1TreeDescriptor =
- *   RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
- * console.log(descriptor.root);
+ * function build(offer: IOffer): RateRatifierV1TreeDescriptor {
+ *   return RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
+ * }
+ * console.log(build(offer).root);
  * ```
  */
 export interface RateRatifierV1TreeDescriptor
@@ -189,10 +187,12 @@ export interface DecodedRateRatifierV1Data extends TreeProof {
  *
  * @example
  * ```ts
- * import type { RateRatifierV1TreeInput } from "@morpho-org/midnight-sdk";
+ * import type { IOffer, RateRatifierV1TreeInput } from "@morpho-org/midnight-sdk";
  *
- * const input: RateRatifierV1TreeInput = [{ offer, rate: 0n }];
- * console.log(input);
+ * function input(offer: IOffer): RateRatifierV1TreeInput {
+ *   return [{ offer, rate: 0n }];
+ * }
+ * console.log(input(offer));
  * ```
  */
 export type RateRatifierV1TreeInput =
@@ -244,15 +244,17 @@ export namespace RateRatifierV1 {
    * @returns Leaf hash used in the ratified Merkle tree.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type OfferStruct } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
-   * const leaf = RateRatifierV1.hashLeaf({
-   *   offer,
-   *   rate: 0n,
-   *   allowedTaker: zeroAddress,
-   * });
-   * console.log(leaf);
+   * function hash(offer: OfferStruct) {
+   *   return RateRatifierV1.hashLeaf({
+   *     offer,
+   *     rate: 0n,
+   *     allowedTaker: zeroAddress,
+   *   });
+   * }
+   * console.log(hash(offer));
    * ```
    */
   export function hashLeaf(leaf: RateRatifierV1LeafStruct): Hash {
@@ -415,12 +417,12 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const descriptor = RateRatifierV1.buildDescriptor([
-   *   { offer, rate: 0n },
-   * ]);
-   * console.log(descriptor.height);
+   * function build(offer: IOffer) {
+   *   return RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]);
+   * }
+   * console.log(build(offer).height);
    * ```
    */
   export function buildDescriptor(
@@ -474,6 +476,10 @@ export namespace RateRatifierV1 {
     isPadding: isPaddingEntry,
     ratifierOf: (leafStruct: RateRatifierV1LeafStruct) =>
       leafStruct.offer.ratifier,
+    validateEntry: (entry: RateRatifierV1LeafStruct) => {
+      if (entry.offer.tick < MIN_TICK)
+        throw new InvalidRateRatifierV1TickError(entry.offer.tick, MIN_TICK);
+    },
     label: "RateRatifierV1",
     type: "rateV1",
   } as const;
@@ -487,16 +493,18 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or the leaf index is out of range.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const proof = RateRatifierV1.buildProof({
-   *   tree: RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]),
-   *   leafIndex: 0n,
-   * });
-   * console.log(proof.proof.length);
+   * function build(offer: IOffer) {
+   *   return RateRatifierV1.buildProof({
+   *     tree: RateRatifierV1.buildDescriptor([{ offer, rate: 0n }]),
+   *     leafIndex: 0n,
+   *   });
+   * }
+   * console.log(build(offer).proof.length);
    * ```
    */
   export function buildProof(params: {
@@ -609,13 +617,13 @@ export namespace RateRatifierV1 {
    * @throws {RatifierV1TakerNotAllowedError} when `taker` is not the leaf's allowed taker.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
+   * import type { Hex } from "viem";
    *
-   * const decoded = RateRatifierV1.verifyRatifierData({
-   *   offer,
-   *   ratifierData,
-   * });
-   * console.log(decoded.root);
+   * function check(offer: IOffer, ratifierData: Hex) {
+   *   return RateRatifierV1.verifyRatifierData({ offer, ratifierData });
+   * }
+   * console.log(check(offer, ratifierData).root);
    * ```
    */
   export function verifyRatifierData(params: {
@@ -660,16 +668,18 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid, the leaf index is outside the tree, or the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const data = RateRatifierV1.ratifierData({
-   *   tree: [{ offer, rate: 0n }],
-   *   leafIndex: 0n,
-   * });
-   * console.log(data);
+   * function build(offer: IOffer) {
+   *   return RateRatifierV1.ratifierData({
+   *     tree: [{ offer, rate: 0n }],
+   *     leafIndex: 0n,
+   *   });
+   * }
+   * console.log(build(offer));
    * ```
    */
   export function ratifierData(params: {
@@ -702,15 +712,17 @@ export namespace RateRatifierV1 {
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree exceeds the supported height.
    * @throws {InvalidRateRatifierV1RateError} when a raw leaf carries a negative rate.
-   * @throws {InvalidRateRatifierV1TickError} when a raw leaf offer tick is below {@link MIN_TICK}.
+   * @throws {InvalidRateRatifierV1TickError} when a leaf offer tick is below {@link MIN_TICK}, including inside a caller-supplied descriptor.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const items = RateRatifierV1.ratify({
-   *   tree: [{ offer, rate: 0n }],
-   * });
-   * console.log(items.length);
+   * function build(offer: IOffer) {
+   *   return RateRatifierV1.ratify({
+   *     tree: [{ offer, rate: 0n }],
+   *   });
+   * }
+   * console.log(build(offer).length);
    * ```
    */
   export function ratify(params: {
@@ -805,14 +817,16 @@ export namespace RateRatifierV1 {
    * @throws {TickOutOfRangeError} when `offer.tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
-   * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { RateRatifierV1, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const acceptable = RateRatifierV1.isPriceAcceptable({
-   *   offer,
-   *   rate: 0n,
-   *   timestamp: 0n,
-   * });
-   * console.log(acceptable);
+   * function check(offer: IOffer) {
+   *   return RateRatifierV1.isPriceAcceptable({
+   *     offer,
+   *     rate: 0n,
+   *     timestamp: 0n,
+   *   });
+   * }
+   * console.log(check(offer));
    * ```
    */
   export function isPriceAcceptable(params: {

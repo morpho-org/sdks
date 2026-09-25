@@ -305,6 +305,30 @@ describe("PriceRatifierV1 ratifier data", () => {
     }
   });
 
+  test("behavior: proves and encodes leaves of a padded descriptor", () => {
+    const descriptor = PriceRatifierV1.buildDescriptor([
+      { offer: offer({ maxUnits: 1n }) },
+      { offer: offer({ maxUnits: 2n }), allowedTaker },
+      { offer: offer({ maxUnits: 3n }) },
+    ]);
+    expect(descriptor.entries).toHaveLength(4);
+
+    expect(
+      PriceRatifierV1.buildProof({ tree: descriptor, leafIndex: 2n }).leafIndex,
+    ).toBe(2n);
+    const data = PriceRatifierV1.ratifierData({
+      tree: descriptor,
+      leafIndex: 0n,
+    });
+    expect(
+      PriceRatifierV1.verifyRatifierData({
+        offer: descriptor.offers[0]!,
+        ratifierData: data,
+        taker: allowedTaker,
+      }).leafIndex,
+    ).toBe(0n);
+  });
+
   test("behavior: zero taker restriction accepts any taker", () => {
     const [item] = PriceRatifierV1.ratify({ tree: [{ offer: offer() }] });
     expect(

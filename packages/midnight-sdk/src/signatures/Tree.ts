@@ -1,17 +1,8 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
-import { MidnightApi } from "../api/MidnightApi.js";
 import type { MempoolPayloadValidationSuccess } from "../api/types.js";
-import { InvalidTreeError, MidnightMempoolValidationError } from "../errors.js";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
-import { Group } from "./Group.js";
-import { GroupUtils } from "./GroupUtils.js";
-import { Payload } from "./Payload.js";
+import { InvalidTreeError } from "../errors.js";
+import { Offer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
 import { Ratifier } from "./Ratifier.js";
@@ -82,7 +73,7 @@ export type {
  *   ratifier: "0x0000000000000000000000000000000000004000",
  *   maxUnits: 100n,
  * });
- * const tree = Tree.create([offer]);
+ * const tree = Tree.create({ type: "ecrecover", entries: [offer] });
  * console.log(tree.root);
  * ```
  */
@@ -166,11 +157,11 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const tree = Tree.from([offer]);
+   * const tree = Tree.from({ type: "ecrecover", entries: [offer] });
    * console.log(tree.root);
    * ```
    */
-  public static from<T extends AnyTree | TreeCreateRequest>(
+  public static from<T extends AnyTree | AnyTreeSnapshot | TreeCreateRequest>(
     tree: T,
   ): Extract<AnyTree, { readonly type: T["type"] }>;
   /**
@@ -188,9 +179,15 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    */
   public static from(tree: TreeInput): Tree;
   public static from(
-    tree: AnyTree | TreeCreateRequest | TreeInput,
+    tree: AnyTree | AnyTreeSnapshot | TreeCreateRequest | TreeInput,
   ): AnyTree | Tree {
     if (tree instanceof Tree) return tree;
+    // Portable snapshots resume through descriptor validation instead of rebuilding.
+    if (!Array.isArray(tree) && "leaves" in tree && "root" in tree) {
+      return "type" in tree && tree.type != null
+        ? Tree.fromDescriptor(tree as AnyTreeSnapshot)
+        : Tree.fromDescriptor(tree as TreeSnapshot<undefined>);
+    }
     if ("type" in tree && tree.type != null) return Tree.create(tree);
     return Tree.create(Array.isArray(tree) ? tree : [tree]);
   }
@@ -278,16 +275,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
           return new Tree("rateV1", descriptor);
       }
     }
-    const offers = params.flatMap((entry) =>
-      GroupUtils.isGroupInput(entry)
-        ? Group.from(entry).offers
-        : [
-            new Offer({
-              ...Offer.from(entry as IOffer),
-              group: GroupUtils.hash([entry as IOffer]),
-            }),
-          ],
-    );
+    const offers = TreeUtils.normalizeEntries(params);
     const descriptor = TreeUtils.buildDescriptor(params);
     return new Tree(undefined, {
       ...descriptor,
@@ -444,7 +432,7 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * await Tree.create([offer]).mempoolValidate({
+   * await Tree.create({ type: "ecrecover", entries: [offer] }).mempoolValidate({
    *   chainId: 8453,
    * });
    * ```
@@ -464,38 +452,22 @@ export class Tree<K extends RatifierKind | undefined = undefined> {
         "Ratification route does not match the tree route.",
       );
     }
-    if (this.type !== "priceV1" && this.type !== "rateV1") {
+    if (this.type === "priceV1" || this.type === "rateV1") {
       return TreeUtils.mempoolValidate({
         ...params,
-        ratification:
-          params.ratification as TreeMempoolValidateParams["ratification"],
-        tree: Tree.fromDescriptor({
-          ...descriptor,
-          type: undefined,
-          entries: this.paddedOffers,
-        }),
+        tree: descriptor,
       });
     }
-    const items =
-      params.ratification == null
-        ? this.offers.map((offer) => ({ offer, ratifierData: "0x" as const }))
-        : this.type === "priceV1"
-          ? PriceRatifierV1.ratify({
-              tree: descriptor as TreeSnapshot<"priceV1">,
-            })
-          : RateRatifierV1.ratify({
-              tree: descriptor as TreeSnapshot<"rateV1">,
-            });
-    const result = await MidnightApi.validateMempoolPayload({
-      baseUrl: params.apiUrl,
-      fetch: params.fetch,
-      request: params.request,
-      chainId: params.chainId,
-      timestamp: params.timestamp,
-      payload: await Payload.encode(items),
+    return TreeUtils.mempoolValidate({
+      ...params,
+      ratification:
+        params.ratification as TreeMempoolValidateParams["ratification"],
+      tree: Tree.fromDescriptor({
+        ...descriptor,
+        type: undefined,
+        entries: this.paddedOffers,
+      }),
     });
-    if (!result.valid) throw new MidnightMempoolValidationError(result.issues);
-    return { valid: true, issues: result.issues };
   }
 
   /**

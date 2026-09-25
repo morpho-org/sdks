@@ -81,7 +81,10 @@ export function buildRatifierV1Descriptor<TStruct>(params: {
  *
  * Caller-provided descriptors are fully re-validated: height, lengths, leaf
  * hashes, visible-offer correspondence, padding placement, and the Merkle
- * root must all agree, mirroring `Ratifier.normalizeTree`.
+ * root must all agree, mirroring `Ratifier.normalizeTree`. An optional
+ * `validateEntry` hook runs ratifier-specific checks on each visible
+ * (non-padding) entry, so descriptor input is held to the same bounds as
+ * `buildDescriptor`.
  */
 export function resolveRatifierV1Tree<
   TStruct extends { readonly offer: OfferStruct },
@@ -96,6 +99,7 @@ export function resolveRatifierV1Tree<
     readonly hashLeaf: (entry: TStruct) => Hash;
     readonly isPadding: (entry: TStruct) => boolean;
     readonly ratifierOf: (entry: TStruct) => Address;
+    readonly validateEntry?: (entry: TStruct) => void;
     readonly label: string;
     readonly type: "priceV1" | "rateV1";
   },
@@ -154,6 +158,7 @@ export function resolveRatifierV1Tree<
         "Visible offers must not contain tree padding.",
       );
     }
+    helpers.validateEntry?.(entry);
     if (
       OfferUtils.hashStruct(
         OfferUtils.toStruct({ offer: Offer.from(offer) }),
