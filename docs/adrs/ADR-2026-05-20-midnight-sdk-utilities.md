@@ -1,11 +1,13 @@
-# TIB-2026-05-20: Create a Midnight SDK utility package
+# ADR-2026-05-20: Create a Midnight SDK utility package
 
-| Field      | Value                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| **Status** | Accepted                                                                                   |
-| **Date**   | 2026-05-20 (updated 2026-06-08)                                                            |
-| **Author** | @0xbulma                                                                                   |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-20 |
+| **Author** | @0xbulma  |
 | **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
+
+_Migrated from TIB-2026-05-20-midnight-sdk-utilities. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
@@ -693,8 +695,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `ConsumableUnitsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/ConsumableUnitsLib.sol>
 - Markets-v2 app order actions: <https://github.com/morpho-org/morpho-apps/tree/main/apps/markets-v2-app/lib/modules/order/actions>
 - AGENTS.md section 1 (layering), section 2 (forbidden patterns), section 3 (type discipline), section 5 (testing), section 6 (JSDoc)
-- [TIB-2026-04-27](./TIB-2026-04-27-maximize-unit-test-coverage.md) (mock-transport unit-test boundary)
-- [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) (JSDoc coverage on exported symbols)
+- TIB-2026-04-27 (mock-transport unit-test boundary)
+- TIB-2026-05-04 (JSDoc coverage on exported symbols)
 
 <!--
 TIB conventions:

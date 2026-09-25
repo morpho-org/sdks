@@ -1,11 +1,13 @@
-# TIB-2026-06-19: Adopt the latest facets review mechanism in the in-repo agentic system
+# ADR-2026-06-19: Adopt the latest facets review mechanism in the in-repo agentic system
 
-| Field             | Value                                              |
-| ----------------- | -------------------------------------------------- |
-| **Status**        | Proposed                                           |
-| **Date**          | 2026-06-19                                         |
-| **Author**        | @0xbulma                                           |
-| **Scope**         | Repo-wide                                          |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-06-19 |
+| **Author** | @0xbulma  |
+| **Scope**  | Repo-wide |
+
+_Migrated from TIB-2026-06-19-adopt-latest-facets-review-mechanism. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

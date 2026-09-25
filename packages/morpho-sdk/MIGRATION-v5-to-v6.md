@@ -491,7 +491,7 @@ Migration steps:
 - Replace `InKindRedeemRequiresSingleAdapterError` and `UnsupportedInKindAdapterError` with
   `VaultV2SingleAdapterRequiredError` and `VaultV2UnsupportedExitAdapterError`.
 
-See the [`TIB-2026-08-28-vault-exit-force-withdraw`](https://github.com/morpho-org/sdks/blob/main/docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md)
+See the [`ADR-2026-08-28-vault-exit-force-withdraw`](https://github.com/morpho-org/sdks/blob/main/docs/adrs/ADR-2026-08-28-vault-exit-force-withdraw.md)
 decision record for the full rationale.
 
 ## Update Vault V1 and Vault V2 writes

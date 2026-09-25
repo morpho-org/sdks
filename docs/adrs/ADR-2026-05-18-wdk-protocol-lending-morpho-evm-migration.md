@@ -1,11 +1,13 @@
-# TIB-2026-05-18: Migrate `wdk-protocol-lending-morpho-evm` into the SDK monorepo
+# ADR-2026-05-18: Migrate `wdk-protocol-lending-morpho-evm` into the SDK monorepo
 
-| Field      | Value                                                  |
-| ---------- | ------------------------------------------------------ |
-| **Status** | Accepted                                               |
-| **Date**   | 2026-05-18 (updated 2026-05-19)                        |
-| **Author** | @foulques                                              |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-18 |
+| **Author** | @foulques |
 | **Scope**  | Repo-wide / Package: `wdk-protocol-lending-morpho-evm` |
+
+_Migrated from TIB-2026-05-18-wdk-protocol-lending-morpho-evm-migration. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
@@ -22,7 +24,7 @@ Morpho Labs has agreed to take ownership of the module — maintenance, security
 **Goals**
 
 - Move `wdk-protocol-lending-morpho-evm` source, tests, and Bare entrypoint into `packages/wdk-protocol-lending-morpho-evm` in this monorepo, **keeping the published name `@morpho-org/wdk-protocol-lending-morpho-evm`** to avoid breaking existing WDK consumers.
-- Inherit the monorepo release flow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)) and security review cadence ([`AGENTS.md`](../../AGENTS.md) §7 Cantina audit) from day one.
+- Inherit the monorepo release flow ([ADR-2026-05-12](./ADR-2026-05-12-release-pr-publish-on-push.md)) and security review cadence ([`AGENTS.md`](../../AGENTS.md) §7 Cantina audit) from day one.
 - Replace pinned `^x.y.z` ranges to `morpho-sdk` / `blue-sdk*` with `workspace:^`.
 - Preserve the existing WDK-facing public API (method names, requirement-based flow, preset names, return shapes) so existing consumers see only an org/maintenance change.
 - Preserve the Bare runtime entry (`bare` export condition).
@@ -115,7 +117,7 @@ This keeps the adapter free of the cross-layer leaks §1 forbids. The WDK module
   - `@morpho-org/blue-sdk-viem: workspace:^`
 - `viem` moves from a direct dependency to a peer dependency (matches the rest of the monorepo's framework adapters).
 - `@tetherto/wdk-wallet*` stay as direct runtime dependencies. WDK is the package's reason to exist; it is not a peer.
-- The published package inherits the monorepo's Changesets-driven release flow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)) automatically — it is added to `pnpm-workspace.yaml`'s `packages/*` glob, is not `private: true`, and ships under the `@morpho-org` scope, so the `Version PR` and `Publish` workflows pick it up with no extra wiring. The Phase 1 PR includes a `patch` changeset documenting the org/maintenance change so the first monorepo release publishes a version under the same `@morpho-org/wdk-protocol-lending-morpho-evm` name.
+- The published package inherits the monorepo's Changesets-driven release flow ([ADR-2026-05-12](./ADR-2026-05-12-release-pr-publish-on-push.md)) automatically — it is added to `pnpm-workspace.yaml`'s `packages/*` glob, is not `private: true`, and ships under the `@morpho-org` scope, so the `Version PR` and `Publish` workflows pick it up with no extra wiring. The Phase 1 PR includes a `patch` changeset documenting the org/maintenance change so the first monorepo release publishes a version under the same `@morpho-org/wdk-protocol-lending-morpho-evm` name.
 
 ### Tooling migration
 
@@ -161,7 +163,7 @@ The exported WDK adapter surface is preserved one-for-one so external consumers 
 
 Leave the codebase in `morpho-org/wdk-protocol-lending-morpho-evm` and replicate the monorepo's Biome / Vitest / Changesets / Cantina pipeline there.
 
-**Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade handles automatically.
+**Why rejected:** Duplicates every release-flow concern, every CI investment from [ADR-2026-05-12](./ADR-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade handles automatically.
 
 ### Alternative 2: Rename to `@morpho-org/morpho-sdk-wdk`
 
@@ -204,7 +206,7 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 - Cantina audit scope expands to include `wdk-protocol-lending-morpho-evm` at the next major release per §7.
 - The package never re-encodes Morpho calldata; it forwards `morpho-sdk` action outputs. Reviewers must enforce that no encoded calldata, permit signature, or authorization is constructed inside `wdk-protocol-lending-morpho-evm` — only translated to the WDK account API.
 - Bare runtime entry must not bypass approval, signature, or authorization requirement objects. The Bare and Node paths share the same requirement flow.
-- npm trusted publishing applies as soon as the package is published from this monorepo's release workflow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)).
+- npm trusted publishing applies as soon as the package is published from this monorepo's release workflow ([ADR-2026-05-12](./ADR-2026-05-12-release-pr-publish-on-push.md)).
 
 ## Observability
 
@@ -222,4 +224,4 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 - Source repo: [morpho-org/wdk-protocol-lending-morpho-evm](https://github.com/morpho-org/wdk-protocol-lending-morpho-evm)
 - Tether WDK: [tetherto/wdk](https://github.com/tetherto/wdk)
 - Monorepo engineering rules: [`AGENTS.md`](../../AGENTS.md)
-- Release flow: [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)
+- Release flow: [ADR-2026-05-12](./ADR-2026-05-12-release-pr-publish-on-push.md)
