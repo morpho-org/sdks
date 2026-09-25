@@ -113,7 +113,7 @@ LTV, utilization and health outcomes use explicit risk states, not numeric infin
 | Debt-free/unbounded metrics | RiskMetric: finite valueWad, debtFree, or unbounded with zeroCollateral/zeroLiquidity reason. Complete results cannot contain missing evidence or fabricated zero defaults. |
 | Internal call identity | ExecutionIdentity distinguishes transactionIndex, authorizationIndex/preparationCallIndex and probeId/phase (before/prepared/intermediate/after). ObservedSnapshot carries identity, checked context and complete snapshot. |
 
-Array completeness, same-subject transitions, read-back equality, safe authorization amounts, final signature execution, real native funding, accrual, fees and accounting are **runtime obligations**, not claims proven by structural types. No evidence producer or verifier is implemented here.
+Array completeness, same-subject transitions, read-back equality, safe authorization amounts, final signature execution, real native funding, accrual, fees and accounting are **runtime obligations**, not claims proven by structural types. VaultBundlesV1 withdraw/redeem calldata carries no recipient: the parser must populate `receiver` from the transaction sender before `expectedReceiver` is checked. Combined Blue operations keep both signature slots; the parser must reject a token permit on a zero funded leg and a Morpho authorization on a zero protected leg. No evidence producer or verifier is implemented here.
 
 ## Error and stage coverage
 
