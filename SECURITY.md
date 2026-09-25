@@ -49,6 +49,10 @@ Consumers still resolve dependencies through their own lockfile, so caret ranges
 - Run `npm audit signatures` after installs to verify provenance.
 - If you require stricter isolation, pin `@morpho-org/*` to exact versions in your own manifest, or use `overrides` or `resolutions` to pin transitive versions.
 
+## Release Pipeline Hardening
+
+Packages are packed in an unprivileged CI job and published from a separate privileged job that treats the packed tarballs as untrusted input. Before publishing, the privileged job checks that each tarball's `name`/`version` matches the source tree allowlist. That identity is read through npm's own manifest reader (`pacote.manifest`, the same call `npm publish` makes, via `scripts/ci/read-tarball-identity.ts`) rather than by listing or extracting the archive with a different tool. In addition, each tarball is rejected if npm's bundled node-tar reports entries that would collide after consumer-filesystem normalization (`scripts/ci/verify-tarball-collisions.ts`). Tar entries such as `package/\./package.json` or a second archive root are normalized differently by GNU tar and node-tar, so a check that uses a different reader than npm can be fooled into approving a tarball that npm would publish under another identity. GNU tar structural checks remain as defense in depth only. The full rule set lives in `AGENTS.md` §10 ("Artifact identity: ask the consumer, don't emulate it").
+
 ## Verification
 
 Releases published by official CI use npm provenance through Sigstore where package publishing supports it. Consumers can verify provenance with:
