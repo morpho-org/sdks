@@ -50,7 +50,7 @@ is momentarily short, a vault gate rejecting the bundler as an asset recipient, 
 underflow because the penalty leg consumed more than the caller sized for. None of these are
 guessable from the revert data.
 
-This record freezes the decision for integrating the two **in-kind redemption** entry points, and for
+This TIB freezes the decision for integrating the two **in-kind redemption** entry points, and for
 the pre-flight validation that turns those opaque failures into named SDK errors.
 
 ## Goals / Non-Goals
@@ -80,7 +80,7 @@ the pre-flight validation that turns those opaque failures into named SDK errors
 
 **Non-Goals**
 
-- **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own record.
+- **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own TIB.
   `MorphoVaultV2.forceWithdraw` and `forceRedeem` are untouched and undeprecated by this decision.
 - No market-list planning. The caller supplies `marketParamsList` and its order; the SDK validates
   it and never reorders or synthesizes it. Ordering determines which Blue markets the user ends up
@@ -709,7 +709,7 @@ sending account).
   unsafe direction: a lower idle balance or penalty *raises* the on-chain `assetsToDeallocate`, and
   a reallocation or a third-party
   `forceDeallocate` *shrinks* the adapter's position on a listed market — either can make a list that
-  passed pre-flight fall short and revert with the very `panic 0x32` this record set out to eliminate.
+  passed pre-flight fall short and revert with the very `panic 0x32` this TIB set out to eliminate.
   **There is no SDK-side defence, and we do not pretend otherwise.** The SDK cannot pin on-chain
   state. Re-reading only `assetBalance` at `getRequirements()` time would mix that fresh value with
   stale penalty and adapter-position values; refetching the complete snapshot would only narrow the
@@ -732,9 +732,9 @@ sending account).
 ## Future Considerations
 
 - **`vaultExitBundlesV1ForceWithdrawVaultV2`** — the third entry point, deliberately deferred to its
-  own record. It would give the SDK a force-withdraw that computes its own deallocations, unlike
+  own TIB. It would give the SDK a force-withdraw that computes its own deallocations, unlike
   today's `forceWithdraw` / `forceRedeem`, and it carries extra surface (`minSharePriceE27`,
-  referral fee and recipient) worth deciding on separately. This record neither deprecates nor changes
+  referral fee and recipient) worth deciding on separately. This TIB neither deprecates nor changes
   the existing force paths.
 
 ## References
@@ -748,14 +748,14 @@ sending account).
 - [`ADR-2026-07-02`](./ADR-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action
 
 <!--
-record conventions:
-- Once accepted, do not substantively edit this record. If the decision needs to change,
-  create a new record that supersedes this one and update the Status/Superseded by fields.
+TIB conventions:
+- Once accepted, do not substantively edit this TIB. If the decision needs to change,
+  create a new TIB that supersedes this one and update the Status/Superseded by fields.
 - Addenda may be appended to record operational updates that affect
-  how the record is applied without changing the decision itself.
-- record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
-- A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  record decides on is codified in the relevant section of `AGENTS.md`; the record stays as
-  the dated record of how the decision was reached. records feed `AGENTS.md` — they do
+  how the TIB is applied without changing the decision itself.
+- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
+- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
+  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
   not override it.
 -->

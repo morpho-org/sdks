@@ -20,7 +20,7 @@ Two consequences:
 - Liquidity providers cannot participate in a Morpho market through the SDK without leaving the typed surface (no `Transaction<TAction>`, no `getRequirements`, no PublicAllocator reallocation help).
 - Suppliers who hit on-market illiquidity on a withdraw cannot reuse the SDK's shared-liquidity machinery (`getReallocationData` / `getReallocations` / `computeReallocations`) — that machinery is hard-coded to borrow semantics today.
 
-This record freezes the design decision for the missing pair before the implementation lands.
+This TIB freezes the design decision for the missing pair before the implementation lands.
 
 ## Goals / Non-Goals
 
@@ -167,7 +167,7 @@ Add an `erc20Transfer` skim like `marketV1Repay`'s shares-mode bundle.
 
 Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 
-**Why rejected:** Larger surface for a feature with no immediate demand; would expand the bundle from one action to three plus a re-routing of `receiver=generalAdapter1` and an extra ERC-20 → native skim consideration. Better as a follow-up record once an integrator asks for it.
+**Why rejected:** Larger surface for a feature with no immediate demand; would expand the bundle from one action to three plus a re-routing of `receiver=generalAdapter1` and an extra ERC-20 → native skim consideration. Better as a follow-up TIB once an integrator asks for it.
 
 ## Assumptions & Constraints
 

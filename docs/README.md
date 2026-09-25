@@ -94,7 +94,7 @@ for f in $(records); do prose "$f" | grep -q 'linear\.app' && echo "$f"; done
 git ls-files ':(top)*TIB-*.md' ':(top)*/tibs/*'
 
 # Every record has a Status row — prints nothing
-for f in $(records); do grep -q '| \*\*Status\*\*' "$f" || echo "$f"; done
+for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' || echo "$f"; done
 
 # Every record filename matches the convention — prints nothing
 for f in $(records); do basename "$f" | grep -vqE '^ADR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+\.md$' && echo "$f"; done

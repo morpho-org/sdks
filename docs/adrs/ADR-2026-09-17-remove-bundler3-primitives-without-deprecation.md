@@ -19,7 +19,7 @@ advanced composition" as a non-goal, so the low-level Bundler3 surface (`Bundler
 `./bundler` subpath, executor and adapter ABIs, the `bundler3` registry tree, GeneralAdapter
 requirement helpers, and the Bundler3-specific `Holding`/`User` state) stayed public and stable.
 [`ADR-2026-08-28-retire-vault-v1-shared-liquidity`](./ADR-2026-08-28-retire-vault-v1-shared-liquidity.md)
-superseded that record for Vault V1 planning only and kept the same non-goal.
+superseded that TIB for Vault V1 planning only and kept the same non-goal.
 
 Once every high-level route in the pending majors is served by the standalone `BlueBundlesV1`,
 `VaultBundlesV1`, and `VaultExitBundlesV1` contracts, no SDK product composes Bundler3 calls. The
@@ -45,7 +45,7 @@ needs its own recorded decision.
 - Removing raw Blue, Vault V1, or Vault V2 protocol ABI, address, or fetch exports unrelated to
   Bundler3.
 - Widening the deviation to any symbol not listed below. Later removals follow §7 or get their own
-  record.
+  TIB.
 
 ## Current Solution
 
@@ -128,7 +128,7 @@ contracts independently.
 - [ ] Every symbol listed under Decision is absent from the pending majors' public barrels and
       facade subpaths; a repo-wide search finds no consumer.
 - [ ] No removal outside that list skips the §7 flow.
-- [ ] AGENTS.md §7 carries an exception bullet pointing to this record, phrased like the two existing
+- [ ] AGENTS.md §7 carries an exception bullet pointing to this TIB, phrased like the two existing
       route exceptions and ending with the "no break outside this scope inherits this exception"
       clause.
 - [ ] Each affected package's migration guide states that the removal did not receive a published

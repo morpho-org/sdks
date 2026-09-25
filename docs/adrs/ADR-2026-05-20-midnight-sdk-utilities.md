@@ -22,7 +22,7 @@ The current app implementation in `morpho-org/morpho-apps` builds Midnight order
 - supply-only collateral calls `Midnight.supplyCollateral` directly because the periphery bundler indexes `takes[0]` and cannot handle an empty take list;
 - limit-order flows use public API payload validation, Ecrecover-vs-Setter ratifier selection, `setIsAuthorized`, offer-root signing or root approval, and mempool submission.
 
-Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. A high-level `@morpho-org/morpho-sdk` Midnight client is still too premature: the action/entity shape, Blue-parity naming, and release contract need more product and protocol mileage. This record creates a dedicated `@morpho-org/midnight-sdk` package for Midnight protocol utilities while extracting shared Blue/Midnight address and deployment registries to `@morpho-org/morpho-ts`.
+Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. A high-level `@morpho-org/morpho-sdk` Midnight client is still too premature: the action/entity shape, Blue-parity naming, and release contract need more product and protocol mileage. This TIB creates a dedicated `@morpho-org/midnight-sdk` package for Midnight protocol utilities while extracting shared Blue/Midnight address and deployment registries to `@morpho-org/morpho-ts`.
 
 ## Goals / Non-Goals
 
@@ -43,8 +43,8 @@ Keeping those details only in app code makes every downstream integration re-lea
 
 **Non-Goals**
 
-- No `@morpho-org/morpho-sdk` Midnight action, entity, client namespace, workflow-helper, ABI, or address changes in this record.
-- No Blue-style `client.midnight.market(...)` instance in this record.
+- No `@morpho-org/morpho-sdk` Midnight action, entity, client namespace, workflow-helper, ABI, or address changes in this TIB.
+- No Blue-style `client.midnight.market(...)` instance in this TIB.
 - No Blue protocol-surface behavior changes. Blue edits are limited to shared primitive compatibility, such as re-exporting extracted math, constants, errors, and address registries from their old `blue-sdk` paths.
 - No Blue-specific ABI ownership changes. `blueAbi`, `adaptiveCurveIrmAbi`, `blueOracleAbi`, `preLiquidationFactoryAbi`, and `preLiquidationAbi` stay in `@morpho-org/blue-sdk-viem`; descriptors such as `marketParamsAbi` stay in `@morpho-org/blue-sdk`.
 - No `midnight-sdk` compatibility facade for generic `morpho-ts` utilities. `midnight-sdk` is not published yet, so its own source, docs, and downstream app rewires should import shared primitives directly from `@morpho-org/morpho-ts` instead of preserving temporary `midnight-sdk` re-export paths. This includes symbols that already exist in `morpho-ts`, plus future shared non-protocol symbols that should be added to `morpho-ts` before Midnight consumes them.
@@ -633,7 +633,7 @@ Extend `@morpho-org/blue-sdk` with Midnight addresses, constants, structs, and m
 
 Mirror the Blue split from day one with both `@morpho-org/midnight-sdk` and `@morpho-org/midnight-sdk-viem`.
 
-**Why rejected:** a second package may become right later, but it is premature before the utility surface stabilizes. This record keeps I/O in explicit boundary modules and allows a later extraction if the viem surface grows.
+**Why rejected:** a second package may become right later, but it is premature before the utility surface stabilizes. This TIB keeps I/O in explicit boundary modules and allows a later extraction if the viem surface grows.
 
 ### Alternative 5: Wrap the app `ActionFlow` API
 
@@ -699,15 +699,15 @@ Expose app-style labels, call requests, signature requests, and success callback
 - TIB-2026-05-04 (JSDoc coverage on exported symbols)
 
 <!--
-record conventions:
-- Once accepted, do not substantively edit this record. If the decision needs to change,
-  create a new record that supersedes this one and update the Status/Superseded by fields.
+TIB conventions:
+- Once accepted, do not substantively edit this TIB. If the decision needs to change,
+  create a new TIB that supersedes this one and update the Status/Superseded by fields.
 - Addenda may be appended to record operational updates that affect
-  how the record is applied without changing the decision itself.
-- record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
-- A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  record decides on is codified in the relevant section of your project's central
-  conventions doc (e.g., AGENTS.md or CLAUDE.md); the record stays as the dated record
-  of how the decision was reached. records feed the conventions doc - they do not
+  how the TIB is applied without changing the decision itself.
+- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
+- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  TIB decides on is codified in the relevant section of your project's central
+  conventions doc (e.g., AGENTS.md or CLAUDE.md); the TIB stays as the dated record
+  of how the decision was reached. TIBs feed the conventions doc - they do not
   override it.
 -->

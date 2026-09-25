@@ -159,4 +159,4 @@ so they add no statefulness to the reviewed tree — low cost for high value.
 ## References
 
 - [facets upstream](https://github.com/0xbulma/facets) — `plugins/facets/skills/pr-review-engine/`.
-- [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) — the review-system inventory this record restructures.
+- [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) — the review-system inventory this TIB restructures.

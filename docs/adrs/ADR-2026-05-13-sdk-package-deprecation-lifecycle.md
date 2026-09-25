@@ -18,7 +18,7 @@ moved into another package or have been explicitly discontinued. Deprecation sho
 for integrators and maintainers: consumers need time to react, while the monorepo should not keep
 obsolete source code indefinitely.
 
-This record defines the default lifecycle for SDK package deprecations. Package-specific records can
+This TIB defines the default lifecycle for SDK package deprecations. Package-specific TIBs can
 override it, but should do so explicitly.
 
 ## Goals / Non-Goals
@@ -95,7 +95,7 @@ Maintained replacement APIs must remain in their owning packages.
 
 - The three-month delay starts on the date the npm deprecation notice is published.
 - Deprecated packages are not unpublished from npm.
-- Package-specific records may choose a longer delay, but should not choose a shorter one without
+- Package-specific TIBs may choose a longer delay, but should not choose a shorter one without
   documenting the reason.
 - Source deletion should not happen while a maintained package still imports the deprecated
   package.

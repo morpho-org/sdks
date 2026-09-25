@@ -11,7 +11,7 @@ _Migrated from TIB-2026-07-02-blue-repay-native-wrapping. Historical record: its
 
 ---
 
-> This record retrospectively records the design shipped in PR
+> This TIB retrospectively records the design shipped in PR
 > [#840](https://github.com/morpho-org/sdks/pull/840); the rule it decides is codified in
 > [`packages/morpho-sdk/AGENTS.md`](../../packages/morpho-sdk/AGENTS.md) (routing summary) and the
 > `actions/blue` / `entities/blue` / `types` sub-folder `AGENTS.md` files.
@@ -31,7 +31,7 @@ The repay action args were also shaped around a `transferAmount` field with a he
 `amount + nativeAmount`, so the ERC-20 pulled (`amount`) no longer equals the total routed. Bolting
 native onto the old shape would have meant a more complex resolver, not a simpler one.
 
-This record freezes the decision for both the native-wrapping feature and the accompanying args
+This TIB freezes the decision for both the native-wrapping feature and the accompanying args
 reshape.
 
 ## Goals / Non-Goals
@@ -225,7 +225,7 @@ Auto-unwrap the withdrawn asset to native ETH.
 
 **Why rejected:** the withdrawn asset is the **collateral** token, not the loan/wNative token; there
 is nothing to unwrap on the repay leg. A native-out withdraw is a separate concern (see the MarketV1
-supply/withdraw record's `WithdrawNative` note).
+supply/withdraw TIB's `WithdrawNative` note).
 
 ## Assumptions & Constraints
 

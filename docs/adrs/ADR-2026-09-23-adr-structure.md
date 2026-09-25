@@ -94,7 +94,7 @@ prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fe
 - Every record has a Status row → this check prints nothing:
 
   ```sh
-  for f in $(records); do grep -q '| \*\*Status\*\*' "$f" || echo "$f"; done
+  for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' || echo "$f"; done
   ```
 
 - Every record filename matches the convention → this check prints nothing:

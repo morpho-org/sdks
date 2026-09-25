@@ -81,7 +81,7 @@ own source shape.
 `validateVaultV2BlueReallocations(...)` validates V2. The action boundary keeps
 one entry point: `validateAndNormalizeReallocations(...)` rejects mixed plans,
 dispatches homogeneous plans, and returns the tagged version. This supersedes
-the July record goal to reuse one combined validator and its rejected “Add a V2
+the July TIB goal to reuse one combined validator and its rejected “Add a V2
 validator” alternative.
 
 ### Post-implementation addendum (2026-08-25): shared-cap candidate selection

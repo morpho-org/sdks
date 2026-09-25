@@ -33,7 +33,7 @@ accounting model is different enough that it needs a separate state simulator,
 but the resulting calls can use the Blue action and Bundler3 integration that
 already exists in this branch.
 
-This record freezes that Vault V2 design.
+This TIB freezes that Vault V2 design.
 
 ## Goals
 

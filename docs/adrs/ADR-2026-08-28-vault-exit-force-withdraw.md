@@ -16,9 +16,9 @@ _Migrated from TIB-2026-08-28-vault-exit-force-withdraw. Historical record: its 
 [`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) integrated two of
 `VaultExitBundlesV1`'s three entry points and explicitly deferred the third:
 
-> **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own record.
+> **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own TIB.
 
-This is that record. It also records why the SDK's existing `MorphoVaultV2.forceWithdraw` — a
+This is that TIB. It also records why the SDK's existing `MorphoVaultV2.forceWithdraw` — a
 `VaultV2.multicall` of caller-supplied `forceDeallocate` calls followed by a `withdraw` — is replaced
 rather than kept alongside.
 
@@ -67,16 +67,16 @@ registered.
 - **`forceRedeem` is untouched.** It stays on `VaultV2.multicall`. The contract has no shares mode
   and no `max` mode, and a full exit is naturally share-denominated — inverting the share price *and*
   the penalty to reach an `exitAssets` that redeems exactly the user's balance is the kind of
-  arithmetic this record is trying to remove, not add. `encodeForceDeallocateCall`, the `Deallocation`
+  arithmetic this TIB is trying to remove, not add. `encodeForceDeallocateCall`, the `Deallocation`
   type, and `EmptyDeallocationsError` therefore all stay.
 - **No net-denominated amount mode.** See [Rejected alternatives §1](#alternative-1-keep-the-net-denominated-amount-and-invert-it-in-the-sdk).
-- **No share-sufficiency validation.** Carried over from the in-kind record: a sufficient allowance
+- **No share-sufficiency validation.** Carried over from the in-kind TIB: a sufficient allowance
   settles *authorization*, not *balance*. Sizing `exitAssets` against
   `vault.previewRedeem(sharesHeld)` — with a small buffer, since per-leg penalty and share rounding
   can burn marginally more than a boundary-exact `exitAssets` implies — is the caller's job.
 - **No gate preflighting.** Also carried over, with one addition specific to this entry point: the
   vault's `receiveAssetsGate` must now allow VaultExitBundlesV1, which it did not have to before.
-- No new runtime dependencies, no new ABI, no new address slot — the in-kind record shipped all three.
+- No new runtime dependencies, no new ABI, no new address slot — the in-kind TIB shipped all three.
 
 ## Current Solution
 
@@ -85,7 +85,7 @@ from a caller-supplied `readonly Deallocation[]`. `MorphoVaultV2.forceWithdraw` 
 `{ buildTx }` handle that validates only the chain id. `tx.to` is the vault, and no allowance is
 needed because the vault burns `msg.sender`'s own shares.
 
-The plumbing this record needs already exists, all of it from the in-kind work:
+The plumbing this TIB needs already exists, all of it from the in-kind work:
 
 | Already in place                                              | Location                                                  |
 | ------------------------------------------------------------- | --------------------------------------------------------- |
@@ -372,7 +372,7 @@ the snapshot, and Blue always holds at least `Σ (supply − borrow)`.
   transient `initiator`, unset during a standalone read; the send gate is arbitrary code re-evaluated
   after every penalty burn. Neither is execution-equivalent from one read. Simulate the finalized
   transaction when gate compatibility must be known before submission.
-- **Share sufficiency** — by decision, unchanged from the in-kind record.
+- **Share sufficiency** — by decision, unchanged from the in-kind TIB.
 - `AlreadyInitiated` — unreachable from a single EOA call, but it does mean **two bundle calls cannot
   share a transaction**: `initiator` is transient and never cleared.
 - Idle balance, penalty, adapter position, and market liquidity drift — unclosable, bounded by
@@ -405,7 +405,7 @@ forceWithdraw({
 })
 ```
 
-`buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind record's
+`buildTx` stays synchronous, per root `AGENTS.md` §1 and the precedent set by the in-kind TIB's
 Considered Alternatives §5. Only `getRequirements()` is async.
 
 **Helpers** — five new pure exports, deliberately split so the numeric core has exactly one
@@ -477,7 +477,7 @@ matches `inKindRedeem`, so the two exit paths do not disagree about what their a
 Ship the bundle path under a new name and deprecate the old builder over a minor.
 
 **Why rejected:** two force-withdraw surfaces means two planners, and the multicall one is precisely
-the unvalidated, unbounded planner this record exists to remove. Leaving it exported invites new call
+the unvalidated, unbounded planner this TIB exists to remove. Leaving it exported invites new call
 sites onto it. The capability it uniquely had — force-deallocating from a `MorphoVaultV1Adapter` or a
 multi-adapter vault — is retained by `forceRedeem`, which still covers those shapes on the multicall
 and keeps its fork coverage for them.
@@ -526,7 +526,7 @@ instead of `VaultV2.multicall` — a public-surface break that rides the AGENTS.
 `Vault V2 forceWithdraw` route exception: the successor-introduction, `@deprecated`, and one-minor
 coexistence steps are skipped because the prior multicall path carried no slippage bound at all,
 so a coexistence minor would keep that fund-loss surface exported (rejected Alternative 2). The
-exception does not waive the major changeset, this record's migration guidance, the
+exception does not waive the major changeset, this TIB's migration guidance, the
 maintained-dependent audit, or continued availability of the previous major. `forceRedeem` keeps
 the multicall path for multi-adapter and legacy-adapter vaults, which lose `forceWithdraw`
 entirely. Callers migrate by replacing their deallocation plan with a penalty-inclusive
@@ -575,7 +575,7 @@ aliases while the deprecated names last.
 
 [`morpho-org/bundles`](https://github.com/morpho-org/bundles) `VaultExitBundlesV1`, already vendored
 and deployed. No package bump beyond `morpho-sdk` itself: the ABI and the address slot shipped with
-the in-kind record, so no downstream peer-range audit is required.
+the in-kind TIB, so no downstream peer-range audit is required.
 
 ## Security
 
@@ -599,12 +599,12 @@ the in-kind record, so no downstream peer-range audit is required.
 - **Nothing can strand in the periphery**: the contract transfers the payout and the fee in the same
   call, and the fork suite asserts a zero periphery balance afterwards.
 - **Residuals, all documented and none defended against**: vault-state drift between snapshot and
-  inclusion, share sufficiency, and both Vault V2 gate families. Same list as the in-kind record, for
+  inclusion, share sufficiency, and both Vault V2 gate families. Same list as the in-kind TIB, for
   the same reasons.
 
 ## Future Considerations
 
-- A `max`-mode force withdraw would need the shares→assets→penalty inversion this record declined. If
+- A `max`-mode force withdraw would need the shares→assets→penalty inversion this TIB declined. If
   it is ever wanted, `forceRedeem` is the natural home, since a full exit is share-denominated.
 - `previewVaultV2ForceWithdraw` currently caps at `maxExitAssets` and re-plans; a multi-tier preview
   (like `previewVaultV2InKindRedeem`'s per-market choices) would let a UI show penalty-free versus
@@ -615,7 +615,7 @@ the in-kind record, so no downstream peer-range audit is required.
 - [`VaultExitBundlesV1.sol`](https://github.com/morpho-org/bundles/blob/main/src/vault-exit/VaultExitBundlesV1.sol) — the contract
 - [`VaultV2ExitBundlesTest.sol`](https://github.com/morpho-org/bundles/blob/main/test/VaultV2ExitBundlesTest.sol) — `testForceWithdrawTightPriceBound` is the source of the dust term
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `exit`, `forceDeallocate`, `previewWithdraw`, the gates
-- [`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this record extends, and the source of the permit, allowance, and gate reasoning
+- [`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
 
 ## Addenda
 
@@ -642,14 +642,14 @@ The implementation guards two failure modes the validation matrix above did not 
 | the fee recipient is minted more shares than the burn produced | projected `feeShares(deadline) < minSharesBurnt(accrue(deadline))` | `VaultV2ForceWithdrawFeeSharesExceedBurnError` |
 
 <!--
-record conventions:
-- Once accepted, do not substantively edit this record. If the decision needs to change,
-  create a new record that supersedes this one and update the Status/Superseded by fields.
+TIB conventions:
+- Once accepted, do not substantively edit this TIB. If the decision needs to change,
+  create a new TIB that supersedes this one and update the Status/Superseded by fields.
 - Addenda may be appended to record operational updates that affect
-  how the record is applied without changing the decision itself.
-- record identifiers use CalVer (YYYY-MM-DD) based on the date the record was first drafted.
-- A record is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
-  record decides on is codified in the relevant section of `AGENTS.md`; the record stays as
-  the dated record of how the decision was reached. records feed `AGENTS.md` — they do
+  how the TIB is applied without changing the decision itself.
+- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
+- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
+  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
   not override it.
 -->

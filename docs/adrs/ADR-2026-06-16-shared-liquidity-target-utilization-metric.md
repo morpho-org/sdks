@@ -21,7 +21,7 @@ Integrators (frontends, allocators, risk dashboards) repeatedly ask one question
 - It throws on insufficiency, so callers must wrap it in try/catch just to read a number.
 - It returns calldata, not a quantity.
 
-This record freezes the design of two read-only metrics that answer the question directly, exposed as methods on the `ReallocationData` entity the caller already holds.
+This TIB freezes the design of two read-only metrics that answer the question directly, exposed as methods on the `ReallocationData` entity the caller already holds.
 
 ## Goals / Non-Goals
 
