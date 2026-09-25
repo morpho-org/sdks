@@ -1,11 +1,11 @@
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 import type { SimulationCall, SimulationTransaction } from "../types.js";
 import type {
   AuthorizationEvidence,
-  AuthorizationPreparation,
   EvidenceRead,
   ExecutionContext,
   ExecutionIdentity,
+  ProbeIdentity,
   VerificationSnapshot,
 } from "./evidence.js";
 import type { EffectiveSimulationLimits, OperationLimit } from "./limits.js";
@@ -22,6 +22,38 @@ declare const stage: unique symbol;
 export type ParsedRequest = NormalizedSimulateParams & {
   readonly [stage]: "parsed";
 };
+
+/**
+ * Stamp a normalized request with the `parsed` refinement. Only callable from
+ * inside the request pipeline — the brand keeps unvalidated input out of the
+ * planning and boundary stages.
+ * @internal
+ */
+export function brandParsed(request: NormalizedSimulateParams): ParsedRequest {
+  return request as ParsedRequest;
+}
+
+/**
+ * Stamp a planner output with the `planned` refinement. The brand keeps
+ * unplanned call lists out of the execution boundary.
+ * @internal
+ */
+export function brandPlanned(
+  plan: Omit<ExecutionPlan, typeof stage>,
+): ExecutionPlan {
+  return plan as ExecutionPlan;
+}
+
+/**
+ * Stamp parsed boundary output with the `executed` refinement. The brand keeps
+ * unverified responses out of authorization proof and effect verification.
+ * @internal
+ */
+export function brandExecuted(
+  evidence: Omit<ExecutionEvidence, typeof stage>,
+): ExecutionEvidence {
+  return evidence as ExecutionEvidence;
+}
 
 /** Decoded and deployment-bound request; still makes no financial verification claim. @internal */
 export interface DecodedBundle {
@@ -46,23 +78,36 @@ export interface ValidatedAuthorizations {
   readonly limits: EffectiveSimulationLimits;
 }
 
-/** One planned call whose identity is independent of its backend array offset. @internal */
-export interface PlannedCall {
-  readonly identity: ExecutionIdentity;
-  readonly transaction: Required<Readonly<SimulationTransaction>>;
-}
+/** Probe read resolved into a snapshot subject; a union later stages can extend. @internal */
+export type ProbeRead = {
+  readonly type: "nativeBalance";
+  readonly account: Address;
+};
 
-/** Explicit permission preparation and ordered probes/user calls for a single execution. @internal */
+/** One planned call whose identity is independent of its backend array offset. @internal */
+export type PlannedCall =
+  | {
+      readonly identity: Extract<
+        ExecutionIdentity,
+        { readonly type: "transaction" }
+      >;
+      readonly transaction: Required<Readonly<SimulationTransaction>>;
+    }
+  | {
+      readonly identity: ProbeIdentity;
+      readonly transaction: Required<Readonly<SimulationTransaction>>;
+      readonly read: ProbeRead;
+    };
+
+/** Ordered probes and user calls for a single execution; context is resolved at the boundary. @internal */
 export interface ExecutionPlan {
   readonly [stage]: "planned";
-  readonly authorizations: ValidatedAuthorizations;
+  readonly request: ParsedRequest;
+  readonly owner: Address;
   readonly calls: readonly PlannedCall[];
-  readonly overrides: readonly {
-    readonly authorizationIndex: number;
-    readonly override: Extract<
-      AuthorizationPreparation,
-      { readonly type: "stateOverride" }
-    >;
+  readonly stateOverrides: readonly {
+    readonly address: Address;
+    readonly code: Hex;
   }[];
 }
 
@@ -78,17 +123,23 @@ export interface PendingEvidence {
   readonly snapshots: readonly EvidenceRead<ObservedSnapshot>[];
 }
 
-/** Complete evidence after response counts, references, statuses and probe results pass. @internal */
-export interface CompleteEvidence {
-  readonly [stage]: "complete";
+/** Evidence collected at the boundary before authorization proof. @internal */
+export interface ExecutionEvidence {
+  readonly [stage]: "executed";
   readonly plan: ExecutionPlan;
+  readonly context: ExecutionContext;
   readonly calls: readonly {
     readonly identity: ExecutionIdentity;
     readonly result: SimulationCall;
   }[];
   readonly snapshots: readonly ObservedSnapshot[];
-  readonly authorizations: readonly AuthorizationEvidence[];
 }
+
+/** Complete evidence after response counts, references, statuses and probe results pass. @internal */
+export type CompleteEvidence = Omit<ExecutionEvidence, typeof stage> & {
+  readonly [stage]: "complete";
+  readonly authorizations: readonly AuthorizationEvidence[];
+};
 
 /** Policy-verified effects remain distinct from effects satisfying consumer constraints. @internal */
 export interface VerifiedEffects {
@@ -125,13 +176,14 @@ export interface SimulationStageContracts {
     inputs: PinnedInputs,
     limits: EffectiveSimulationLimits,
   ) => ValidatedAuthorizations;
-  readonly planExecution: (
-    authorizations: ValidatedAuthorizations,
-  ) => ExecutionPlan;
+  readonly planExecution: (request: ParsedRequest) => ExecutionPlan;
   readonly executePlan: (plan: ExecutionPlan) => Promise<unknown>;
   readonly parseEvidence: (
     plan: ExecutionPlan,
     response: unknown,
+  ) => ExecutionEvidence;
+  readonly proveAuthorizations: (
+    evidence: ExecutionEvidence,
   ) => CompleteEvidence;
   readonly verifyEffects: (evidence: CompleteEvidence) => VerifiedEffects;
   /** Binds the effective limits carried inside the effects; no external list is accepted. */

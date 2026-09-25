@@ -32,8 +32,10 @@ try {
     config,
     {
       chainId: 1,
+      // mode: "final" (default) executes the signed calldata against actual
+      // permissions; mode: "preview" accepts typed authorization descriptors.
       transactions: [{ from: user, to: vault, data: encodedDeposit }],
-      authorizations: [{ type: "signature", token: usdc, spender: vault }],
+      // limits: { maxSlippageWad: 1_00000000000000n },
     },
   );
 } catch (err) {
@@ -44,7 +46,11 @@ try {
 }
 ```
 
-Each chain entry declares the `eth_simulateV1` JSON-RPC URL used to simulate bundles on that chain. `timeoutMs` (default 5000) is the budget for that single request; there is no fallback provider.
+Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
+
+Native balances are observed through a synthetic probe contract injected via `stateOverrides` at the reserved address `0x000000000000000000000000000000000000Ba1a`; transactions targeting that address are rejected with `SimulationValidationError`.
+
+This is the unreleased v5 integration stack. See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover and remaining release gates.
 
 ### API surface
 
@@ -52,9 +58,13 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams`, `SimulationTransaction`, `SimulationAuthorization`.
-- Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
+- Input types: `SimulateParams` (`PreviewSimulateParams` | `FinalSimulateParams`), `SimulationTransaction`, `SimulationAuthorization` (typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes), `AuthorizationDomain`, `SimulationLimits`, `OperationLimit`, `OperationLimitFields`, `EffectiveSimulationLimits`, `TokenAmount`, `SimulationDeallocation`, `MarketSupplyMinimum`.
+- Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`, `ExecutionContext`.
+- Error context types (carried by every new error class): `SimulationErrorContext`, `ConsumerConstraintContext`, `SimulationStage`, `SimulationSubject`, `SimulationComparison`, `SimulationErrorLocation`.
+- Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+
+Until the authorization-verification release, preview `authorizations` and `limits` are rejected with `UnsupportedVerificationFeatureError` rather than silently ignored.
 
 ### Deeper docs
 
