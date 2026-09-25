@@ -182,6 +182,15 @@ export type RiskMetricChange =
       readonly after: RiskMetric;
     };
 
+/** WAD difference when applicable at both ends; otherwise the states explain the transition. @internal */
+export type ApplicableChange<T> =
+  | { readonly type: "finite"; readonly diffWad: bigint }
+  | {
+      readonly type: "transition";
+      readonly before: Applicable<T>;
+      readonly after: Applicable<T>;
+    };
+
 /** Signed changes; actionDiff uses these shapes after modeled accrual is removed. @internal */
 export interface VerificationDiff {
   readonly wallet: readonly WalletBalance[];
@@ -218,7 +227,7 @@ export interface VerificationDiff {
     readonly totalBorrowShares: bigint;
     readonly liquidityAssets: bigint;
     readonly utilizationWad: RiskMetricChange;
-    readonly borrowApyWad: Applicable<bigint>;
+    readonly borrowApyWad: ApplicableChange<bigint>;
   }[];
 }
 
