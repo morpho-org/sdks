@@ -74,6 +74,15 @@ export namespace OfferUtils {
    * This is the bridge from SDK/domain objects
    * into Merkle leaf hashing, payload items, and take calldata encoding.
    *
+   * The returned struct carries a materialized `group`: when the offer omits
+   * one, the generic (Ecrecover/Setter) default is filled in. RateRatifierV1
+   * and PriceRatifierV1 derive their default group from the V1 leaf hash
+   * instead, and `Tree.create` preserves any explicit group it is given — so
+   * for V1 offers build the tree from the `Offer` first and convert
+   * `tree.offers[i]` (or transport `tree.toDescriptor()`) afterwards. Feeding
+   * `toStruct` output into a V1 tree yields a router `group_identity`
+   * rejection.
+   *
    * @param params.offer - Offer class or plain offer input to encode.
    * @param params.group - Optional protocol group id override encoded into the ABI offer.
    * @returns ABI-compatible offer.
