@@ -88,7 +88,7 @@ prose() { awk '/^ *```/{f=!f;next} !f{print} END{if(f){print "ERROR: unclosed fe
 - No record uses the retired convention → this check prints nothing:
 
   ```sh
-  git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)*/tibs/*'
+  git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)tibs/*' ':(top)*/tibs/*'
   ```
 
 - Every record has a Status row → this check prints nothing:

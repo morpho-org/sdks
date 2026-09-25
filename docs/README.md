@@ -91,7 +91,7 @@ for f in $(new_records); do prose "$f" | grep -qE 'Phase [0-9]|Milestone|Owner' 
 for f in $(records); do prose "$f" | grep -q 'linear\.app' && echo "$f"; done
 
 # The retired TIB convention is gone — prints nothing
-git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)*/tibs/*'
+git ls-files --cached --others --exclude-standard ':(top)*TIB-*.md' ':(top)tibs/*' ':(top)*/tibs/*'
 
 # Every record has a Status row — prints nothing
 for f in $(records); do prose "$f" | grep -q '| \*\*Status\*\*' || echo "$f"; done
