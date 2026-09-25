@@ -57,6 +57,7 @@ This is the unreleased v5 integration stack. See the [v4 → v5 migration guide]
 All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
+- `toSimulationAuthorizations({ chainId, owner, requirements })` — convert morpho-sdk `ActionRequirement[]` into `SimulationAuthorization[]`, and `decodeOperations(params)` — decode v6 fixed-bundles calldata into ordered `DecodedOperation` entries. Their types: `DecodeOperationsParams`, `DecodedOperations`, `VaultBinding`, `PreLiquidationBinding`, `DecodedOperation`, `DecodedOperationFields`, `OperationIdentity`, `MarketBinding`, `OperationAmount`, `OperationFunding`, `OperationSignature`, `OperationReallocation`, `ReferralFee`.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams` (`PreviewSimulateParams` | `FinalSimulateParams`), `SimulationTransaction`, `SimulationAuthorization` (typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes), `AuthorizationDomain`, `SimulationLimits`, `OperationLimit`, `OperationLimitFields`, `EffectiveSimulationLimits`, `TokenAmount`, `SimulationDeallocation`, `MarketSupplyMinimum`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`, `ExecutionContext`.

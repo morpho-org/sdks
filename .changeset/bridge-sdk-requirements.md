@@ -1,0 +1,7 @@
+---
+"@morpho-org/evm-simulation": minor
+---
+
+Add `toSimulationAuthorizations({ chainId, owner, requirements })`, a pure adapter that converts morpho-sdk `ActionRequirement[]` (from `ActionOutput.getRequirements()`) into ordered `SimulationAuthorization[]` descriptors. ERC-20 approval and Blue authorization call requirements are decoded from their calldata and cross-checked against the action metadata; `permit`, `permit2SignatureTransfer`, and `authorization` signature requirements are parsed field-by-field into the exact EIP-712 shapes the simulator expects. Malformed payloads and calldata/metadata disagreements throw `AuthorizationRequestMismatchError`; unsupported requirement types throw `UnsupportedOperationError`.
+
+Add `decodeOperations({ chainId, mode, transactions, vaults?, preLiquidations? })`, a pure decoder that maps v6 fixed-bundles calldata (BlueBundlesV1 writes, VaultBundlesV1 vault entrypoints, VaultExitBundlesV1 exits, bound VaultV2 `multicall` force-redeems, and direct Morpho `setAuthorization`) into ordered `DecodedOperation` entries, resolving `VaultBinding`/`PreLiquidationBinding` inputs supplied from pinned state. Unsupported routes and callbacks throw `UnsupportedOperationError`; binding disagreements throw `ProtocolBindingMismatchError`; preview mode rejects any signature-consuming calldata. `OperationSignature`'s `erc2612Permit` variant gains an optional `nonce`, present only for vault-share `SharesPermit` structs (bundles `Permit{kind,data}` payloads carry none).

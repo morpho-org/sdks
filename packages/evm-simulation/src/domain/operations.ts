@@ -2,19 +2,19 @@ import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 import type { SimulationDeallocation } from "./limits.js";
 
-/** Original user call and nested recipe path, never an execution-plan offset. @internal */
+/** Original user call index and nested recipe path; never an execution-plan offset. */
 export interface OperationIdentity {
   readonly transactionIndex: number;
   readonly callPath: readonly number[];
 }
 
-/** Concrete Blue market binding recovered from calldata. @internal */
+/** Concrete Blue market binding recovered from calldata. */
 export interface MarketBinding {
   readonly marketId: MarketId;
   readonly params: Readonly<InputMarketParams>;
 }
 
-/** Exclusive exact-assets or exact-shares amount; fullClose is resolved against pinned state. @internal */
+/** Exclusive exact-assets or exact-shares amount; fullClose is resolved against pinned state. */
 export type OperationAmount =
   | {
       readonly type: "assets";
@@ -27,7 +27,7 @@ export type OperationAmount =
       readonly assets?: never;
     };
 
-/** Exclusive funding source; native assets must bind to the registered wrapped token. @internal */
+/** Exclusive funding source; native assets must bind to the registered wrapped token. */
 export type OperationFunding =
   | { readonly type: "none" }
   | { readonly type: "erc20"; readonly token: Address; readonly assets: bigint }
@@ -37,12 +37,18 @@ export type OperationFunding =
       readonly assets: bigint;
     };
 
-/** Signature form decoded from calldata, without returning signature bytes. @internal */
+/**
+ * Signature form decoded from calldata, without returning signature bytes.
+ *
+ * Token permits encoded through the fixed bundles `Permit{kind,data}` parameter carry no nonce
+ * (kind 1 data is `abi.encode(deadline, v, r, s)`), so `nonce` is absent there; vault-share
+ * `SharesPermit{value,nonce,deadline,v,r,s}` structs do carry one.
+ */
 export type OperationSignature =
   | { readonly type: "none" }
   | {
       readonly type: "erc2612Permit";
-      readonly nonce: bigint;
+      readonly nonce?: bigint;
       readonly deadline: bigint;
     }
   | {
@@ -56,13 +62,13 @@ export type OperationSignature =
       readonly deadline: bigint;
     };
 
-/** Calldata referral fee; reconciliation does not imply discretionary fee consent. @internal */
+/** Calldata referral fee; reconciliation does not imply discretionary fee consent. */
 export interface ReferralFee {
   readonly rateWad: bigint;
   readonly recipient: Address;
 }
 
-/** Decoded Vault V2 public-allocation leg, preserving idle versus market sourcing. @internal */
+/** Decoded Vault V2 public-allocation leg, preserving idle versus market sourcing. */
 export interface OperationReallocation {
   readonly vault: Address;
   readonly from:
@@ -121,7 +127,7 @@ interface VaultOperation extends BundledOperation {
   readonly receiver: Address;
 }
 
-/** Operation-specific decoded v6 parameters; the parser independently verifies bindings. @internal */
+/** Operation-specific decoded v6 parameters; the parser independently verifies bindings. */
 export interface DecodedOperationFields {
   readonly blueSupply: Omit<BlueOperation, "authorizationSignature"> & {
     /** The supply entrypoint carries no Morpho authorization. */
@@ -268,7 +274,7 @@ export interface DecodedOperationFields {
   };
 }
 
-/** Supported operation, with original identity and the actual chain/deployment/sender. @internal */
+/** Supported operation, with original identity and the actual chain, deployment, and sender. */
 export type DecodedOperation = {
   [Type in keyof DecodedOperationFields]: OperationIdentity & {
     readonly type: Type;
