@@ -340,6 +340,32 @@ export class InvalidRateRatifierV1RateError extends Error {
 }
 
 /**
+ * Thrown when RateRatifierV1 price-bound arithmetic overflows uint256.
+ *
+ * @example
+ * ```ts
+ * import { RateRatifierV1BoundOverflowError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new RateRatifierV1BoundOverflowError(2n ** 255n, 10n);
+ * ```
+ */
+export class RateRatifierV1BoundOverflowError extends Error {
+  /** Rate whose bound arithmetic overflowed. */
+  public readonly rate: bigint;
+  /** Time to maturity used in the overflowing bound. */
+  public readonly timeToMaturity: bigint;
+
+  public constructor(rate: bigint, timeToMaturity: bigint) {
+    super(
+      `Rate bound arithmetic overflows uint256 for rate "${rate}" and timeToMaturity "${timeToMaturity}". Lower the rate or time to maturity.`,
+    );
+    this.name = "RateRatifierV1BoundOverflowError";
+    this.rate = rate;
+    this.timeToMaturity = timeToMaturity;
+  }
+}
+
+/**
  * Thrown when a RateRatifierV1 leaf offer commits a nominal tick below the
  * router's minimum takeable tick.
  *

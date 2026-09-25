@@ -105,16 +105,19 @@ describe("Ratifier.normalizeRatifierTree", () => {
         maxAssets: 0n,
         ratifier: ecrecoverRatifier,
       }),
+      baseOffer({
+        tick: 5_004n,
+        maxAssets: 0n,
+        ratifier: ecrecoverRatifier,
+      }),
     ]);
-    const offer = group.offers[0]!;
-    const paddedOffers = [
+    const paddedOffers = group.offers.map((offer) =>
       OfferUtils.toStruct({ offer }),
-      EMPTY_OFFER_STRUCT,
-    ] as const;
+    );
     const leaves = paddedOffers.map(OfferUtils.hashStruct);
     const root = TreeUtils.hashNode(leaves[0]!, leaves[1]!);
     const treeLike = {
-      offers: [offer],
+      offers: group.offers,
       paddedOffers,
       leaves,
       root,

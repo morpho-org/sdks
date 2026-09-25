@@ -7,12 +7,13 @@ import {
   InvalidTreeError,
   InvalidTreeHeightError,
 } from "../errors.js";
-import { Offer, type OfferStruct } from "../offers/index.js";
+import { Offer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import {
   EcrecoverRatifier,
   EcrecoverRatifierUtils,
 } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
+import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
 import { Payload } from "./Payload.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
@@ -326,6 +327,27 @@ describe("Tree.fromDescriptor", () => {
         InvalidTreeHeightError,
       );
     }
+  });
+
+  test("error: InvalidTreeError on snapshots with excess padding", () => {
+    const descriptor = Tree.create({
+      type: "setter",
+      entries: [offers[0]!],
+    }).toDescriptor();
+    const entry = descriptor.entries[0]!;
+    const leaves = [
+      OfferUtils.hashStruct(entry),
+      OfferUtils.hashStruct(EMPTY_OFFER_STRUCT),
+    ];
+    expect(() =>
+      Tree.fromDescriptor({
+        ...descriptor,
+        entries: [entry, EMPTY_OFFER_STRUCT],
+        leaves,
+        root: TreeUtils.buildRootFromLeaves(leaves).root,
+        height: 1,
+      }),
+    ).toThrow(InvalidTreeError);
   });
 
   test("error: InvalidTreeError on runtime cross-route use", () => {

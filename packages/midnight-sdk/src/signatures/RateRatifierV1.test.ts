@@ -9,6 +9,7 @@ import {
   hashStruct,
   isAddressEqual,
   keccak256,
+  maxUint256,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -23,6 +24,7 @@ import {
   InvalidRatifierV1AddressError,
   InvalidTreeError,
   InvalidTreeHeightError,
+  RateRatifierV1BoundOverflowError,
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { TickLib } from "../math/index.js";
@@ -30,6 +32,7 @@ import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { RateRatifierV1 } from "./RateRatifierV1.js";
+import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
 const rateRatifier = "0x000000000000000000000000000000000000a111" as const;
@@ -757,6 +760,32 @@ describe("RateRatifierV1.ratifierData", () => {
       }),
     ).toThrow(InvalidTreeError);
   });
+  test("error: InvalidTreeError on snapshots with excess padding", () => {
+    const descriptor = RateRatifierV1.buildDescriptor([leaf()]);
+    const padding = {
+      offer: EMPTY_OFFER_STRUCT,
+      rate: 0n,
+      allowedTaker: zeroAddress,
+    };
+    const leaves = [
+      RateRatifierV1.hashLeaf(descriptor.entries[0]!),
+      RateRatifierV1.hashLeaf(padding),
+    ];
+    const tampered = {
+      ...descriptor,
+      entries: [...descriptor.entries, padding],
+      leaves,
+      root: TreeUtils.buildRootFromLeaves(leaves).root,
+      height: 1,
+    };
+
+    expect(() => RateRatifierV1.ratify({ tree: tampered })).toThrow(
+      InvalidTreeError,
+    );
+    expect(() =>
+      Tree.fromDescriptor({ ...tampered, type: "rateV1" as const }),
+    ).toThrow(InvalidTreeError);
+  });
 });
 
 describe("RateRatifierV1.priceBound", () => {
@@ -815,6 +844,50 @@ describe("RateRatifierV1.priceBound", () => {
         buy: true,
       }),
     ).toThrow(InvalidRateRatifierV1TimeError);
+  });
+
+  test("error: RateRatifierV1BoundOverflowError when rate * time overflows uint256", () => {
+    for (const buy of [true, false]) {
+      expect(() =>
+        RateRatifierV1.priceBound({
+          rate: maxUint256,
+          timeToMaturity: 2n,
+          buy,
+        }),
+      ).toThrow(RateRatifierV1BoundOverflowError);
+    }
+  });
+
+  test("behavior: denominator at maxUint256 is a valid bound for buy offers", () => {
+    expect(
+      RateRatifierV1.priceBound({
+        rate: maxUint256 - MathLib.WAD,
+        timeToMaturity: 1n,
+        buy: true,
+      }),
+    ).toBe(MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, maxUint256));
+  });
+
+  test("error: RateRatifierV1BoundOverflowError on sell numerator overflow", () => {
+    expect(() =>
+      RateRatifierV1.priceBound({
+        rate: maxUint256 - MathLib.WAD,
+        timeToMaturity: 1n,
+        buy: false,
+      }),
+    ).toThrow(RateRatifierV1BoundOverflowError);
+  });
+
+  test("error: RateRatifierV1BoundOverflowError above the denominator bound", () => {
+    for (const buy of [true, false]) {
+      expect(() =>
+        RateRatifierV1.priceBound({
+          rate: maxUint256 - MathLib.WAD + 1n,
+          timeToMaturity: 1n,
+          buy,
+        }),
+      ).toThrow(RateRatifierV1BoundOverflowError);
+    }
   });
 });
 
@@ -892,6 +965,22 @@ describe("RateRatifierV1.isPriceAcceptable", () => {
         timestamp: -1n,
       }),
     ).toThrow(InvalidRateRatifierV1TimeError);
+  });
+
+  test("behavior: overflowing bounds are unacceptable", () => {
+    const sellOffer = leaf({
+      buy: false,
+      tick: 6744n,
+      market: { ...offer.market, maturity: 1793372400n },
+    }).offer;
+
+    expect(
+      RateRatifierV1.isPriceAcceptable({
+        offer: sellOffer,
+        rate: maxUint256,
+        timestamp: 1790345355n,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -75,6 +75,7 @@ import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isBlueUnknownOfFactoryError,
+  MidnightRateRatifierV1BoundOverflowError,
   MidnightRatifierV1TakerNotAllowedError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
@@ -111,6 +112,7 @@ import {
   InvalidRateRatifierV1TickError as RawMidnightInvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError as RawMidnightInvalidRateRatifierV1TimeError,
   InvalidRatifierV1AddressError as RawMidnightInvalidRatifierV1AddressError,
+  RateRatifierV1BoundOverflowError as RawMidnightRateRatifierV1BoundOverflowError,
   RatifierV1TakerNotAllowedError as RawMidnightRatifierV1TakerNotAllowedError,
 } from "@morpho-org/morpho-sdk/midnight/errors";
 import { fetchPosition as rawFetchMidnightPosition } from "@morpho-org/morpho-sdk/midnight/fetch";
@@ -253,6 +255,10 @@ describe("protocol facades", () => {
     [
       MidnightRatifierV1TakerNotAllowedError,
       RawMidnightRatifierV1TakerNotAllowedError,
+    ],
+    [
+      MidnightRateRatifierV1BoundOverflowError,
+      RawMidnightRateRatifierV1BoundOverflowError,
     ],
     [fetchMidnightPosition, rawFetchMidnightPosition],
     [MidnightMarketUtils, RawMidnightMarketUtils],

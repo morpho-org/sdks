@@ -49,6 +49,7 @@ export {
   MidnightMempoolValidationError,
   PayloadDecodeError as MidnightPayloadDecodeError,
   PriceGreaterThanOneError as MidnightPriceGreaterThanOneError,
+  RateRatifierV1BoundOverflowError as MidnightRateRatifierV1BoundOverflowError,
   RatifierV1TakerNotAllowedError as MidnightRatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError as MidnightSettlementFeeExceedsPriceError,
   TickOutOfRangeError as MidnightTickOutOfRangeError,

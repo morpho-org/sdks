@@ -131,7 +131,7 @@ export function resolveRatifierV1Tree<
   if (
     descriptor.entries.length !== expectedLength ||
     descriptor.leaves.length !== expectedLength ||
-    descriptor.offers.length > expectedLength
+    expectedLength !== nextPowerOfTwo(descriptor.offers.length)
   ) {
     throw new InvalidTreeError(
       "Tree entries, leaves, offers, and height describe different trees.",

@@ -22,8 +22,10 @@ import {
 } from "../errors.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
 import { GroupUtils } from "./GroupUtils.js";
-import { isZeroAddress } from "./offerStructInternal.js";
+import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
+import { Tree } from "./Tree.js";
+import { TreeUtils } from "./TreeUtils.js";
 
 const priceRatifier = "0x000000000000000000000000000000000000a111" as Address;
 const allowedTaker = "0x000000000000000000000000000000000000A000" as Address;
@@ -546,5 +548,32 @@ describe("PriceRatifierV1.encodeSetIsRootRatified", () => {
         isRatified: true,
       }),
     ).toThrow(InvalidRatifierV1AddressError);
+  });
+});
+
+describe("PriceRatifierV1 trees", () => {
+  test("error: InvalidTreeError on snapshots with excess padding", () => {
+    const descriptor = PriceRatifierV1.buildDescriptor([
+      { offer: offer(), allowedTaker },
+    ]);
+    const padding = { offer: EMPTY_OFFER_STRUCT, allowedTaker: zeroAddress };
+    const leaves = [
+      PriceRatifierV1.hashLeaf(descriptor.entries[0]!),
+      PriceRatifierV1.hashLeaf(padding),
+    ];
+    const tampered = {
+      ...descriptor,
+      entries: [...descriptor.entries, padding],
+      leaves,
+      root: TreeUtils.buildRootFromLeaves(leaves).root,
+      height: 1,
+    };
+
+    expect(() => PriceRatifierV1.ratify({ tree: tampered })).toThrow(
+      InvalidTreeError,
+    );
+    expect(() =>
+      Tree.fromDescriptor({ ...tampered, type: "priceV1" as const }),
+    ).toThrow(InvalidTreeError);
   });
 });

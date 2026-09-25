@@ -5,6 +5,7 @@ import { type IOffer, OfferUtils } from "../offers/index.js";
 import { isEmptyOfferStruct } from "./offerStructInternal.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
+import { nextPowerOfTwo } from "./treeMathInternal.js";
 
 function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
   return (
@@ -31,7 +32,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     if (
       tree.paddedOffers.length !== expectedLength ||
       tree.leaves.length !== expectedLength ||
-      tree.offers.length > expectedLength
+      expectedLength !== nextPowerOfTwo(tree.offers.length)
     ) {
       throw new InvalidTreeError(
         "Tree offers, leaves, and height describe different trees.",

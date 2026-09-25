@@ -7,6 +7,7 @@ import {
   type Hash,
   type Hex,
   keccak256,
+  maxUint256,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -17,6 +18,7 @@ import {
   InvalidRateRatifierV1TickError,
   InvalidRateRatifierV1TimeError,
   InvalidTreeError,
+  RateRatifierV1BoundOverflowError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
@@ -757,6 +759,7 @@ export namespace RateRatifierV1 {
    * @returns WAD-scaled price bound.
    * @throws {InvalidRateRatifierV1RateError} when `rate` is negative.
    * @throws {InvalidRateRatifierV1TimeError} when `timeToMaturity` is negative.
+   * @throws {RateRatifierV1BoundOverflowError} when the bound arithmetic exceeds uint256, matching the contract's checked math.
    * @example
    * ```ts
    * import { RateRatifierV1 } from "@morpho-org/midnight-sdk";
@@ -784,7 +787,20 @@ export namespace RateRatifierV1 {
       );
     }
 
-    const denominator = MathLib.WAD + rate * timeToMaturity;
+    const product = rate * timeToMaturity;
+    if (product > maxUint256) {
+      throw new RateRatifierV1BoundOverflowError(rate, timeToMaturity);
+    }
+    const denominator = MathLib.WAD + product;
+    if (denominator > maxUint256) {
+      throw new RateRatifierV1BoundOverflowError(rate, timeToMaturity);
+    }
+    if (
+      !params.buy &&
+      MathLib.WAD * MathLib.WAD + denominator - 1n > maxUint256
+    ) {
+      throw new RateRatifierV1BoundOverflowError(rate, timeToMaturity);
+    }
 
     return params.buy
       ? MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, denominator)
@@ -796,7 +812,8 @@ export namespace RateRatifierV1 {
    *
    * Mirrors `RateRatifierV1.isRatified`: the offer price must be at or below
    * the rate-implied bound for buy offers, and at or above it for sell
-   * offers. Time to maturity floors at zero.
+   * offers. Time to maturity floors at zero. Bounds that overflow uint256
+   * are unacceptable, matching the contract's revert.
    *
    * @param params.offer - Offer whose `tick`, `buy`, and `market.maturity` are checked.
    * @param params.rate - WAD-scaled per-second rate bound proven by the leaf.
@@ -834,11 +851,17 @@ export namespace RateRatifierV1 {
         : params.offer.market.maturity,
     );
     const timeToMaturity = maturity - timestamp;
-    const bound = priceBound({
-      rate: params.rate,
-      timeToMaturity: timeToMaturity > 0n ? timeToMaturity : 0n,
-      buy: params.offer.buy,
-    });
+    let bound: bigint;
+    try {
+      bound = priceBound({
+        rate: params.rate,
+        timeToMaturity: timeToMaturity > 0n ? timeToMaturity : 0n,
+        buy: params.offer.buy,
+      });
+    } catch (error) {
+      if (error instanceof RateRatifierV1BoundOverflowError) return false;
+      throw error;
+    }
     const offerPrice = TickLib.tickToPrice(params.offer.tick);
 
     return params.offer.buy ? offerPrice <= bound : offerPrice >= bound;

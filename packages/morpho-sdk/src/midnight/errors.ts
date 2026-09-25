@@ -21,6 +21,7 @@ export {
   MidnightMempoolValidationError,
   PayloadDecodeError,
   PriceGreaterThanOneError,
+  RateRatifierV1BoundOverflowError,
   RatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError,
   TickOutOfRangeError,
