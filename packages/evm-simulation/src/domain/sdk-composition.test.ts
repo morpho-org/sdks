@@ -1,23 +1,21 @@
 import type {
   ActionOutput,
-  ActionRequirement,
   RequirementSignature,
   RequirementTypedData,
   VaultV2DepositAction,
 } from "@morpho-org/morpho-sdk";
 import type { Address } from "viem";
 import { expectTypeOf } from "vitest";
+import { toSimulationAuthorizations } from "../decode/index.js";
 import type {
   BlueAuthorizationTypedData,
   Erc2612TypedData,
   Permit2SignatureTransferTypedData,
-  SimulationAuthorization,
 } from "./authorizations.js";
 import type { FinalSimulateParams, PreviewSimulateParams } from "./request.js";
 
 describe("released SDK composition", () => {
   test("behavior: getRequirements and unsigned/signed buildTx compose with preview/final", () => {
-    // The adapter is a contract here; its checked implementation belongs to SDK-1294.
     const compose = async (params: {
       readonly output: ActionOutput<
         VaultV2DepositAction,
@@ -26,15 +24,11 @@ describe("released SDK composition", () => {
       readonly owner: Address;
       readonly chainId: number;
       readonly signatures: readonly RequirementSignature[];
-      readonly toSimulationAuthorizations: (input: {
-        readonly owner: Address;
-        readonly requirements: readonly ActionRequirement[];
-      }) => readonly SimulationAuthorization[];
     }) => {
       const requirements = await params.output.getRequirements({
         useSimplePermit: true,
       });
-      const authorizations = params.toSimulationAuthorizations({
+      const authorizations = toSimulationAuthorizations({
         owner: params.owner,
         requirements,
       });

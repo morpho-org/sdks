@@ -1,4 +1,5 @@
 // Public fns (via feature-folder barrels)
+export { toSimulationAuthorizations } from "./decode/index.js";
 
 // Types
 export type {

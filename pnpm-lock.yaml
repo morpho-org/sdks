@@ -139,6 +139,9 @@ importers:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
+      '@morpho-org/morpho-sdk':
+        specifier: workspace:^
+        version: link:../morpho-sdk
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
@@ -146,12 +149,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@morpho-org/morpho-sdk':
-        specifier: workspace:^
-        version: link:../morpho-sdk
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
