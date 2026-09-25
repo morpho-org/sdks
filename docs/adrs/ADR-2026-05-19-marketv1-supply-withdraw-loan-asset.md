@@ -7,7 +7,7 @@
 | **Author** | @foulques |
 | **Scope**  | Package: `morpho-sdk` |
 
-_Migrated from ADR-2026-05-19-marketv1-supply-withdraw-loan-asset. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-05-19-marketv1-supply-withdraw-loan-asset. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

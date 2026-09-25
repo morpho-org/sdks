@@ -7,7 +7,7 @@
 | **Author** | @Rubilmax / Carapulse draft |
 | **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
 
-_Migrated from ADR-2026-08-25-blue-bundles-v1-sdk-actions. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-08-25-blue-bundles-v1-sdk-actions. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

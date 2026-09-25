@@ -7,7 +7,7 @@
 | **Author** | @Rubilmax |
 | **Scope**  | Repo-wide |
 
-_Migrated from record-0003-sdk-package-deprecation-lifecycle. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-0003-sdk-package-deprecation-lifecycle. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

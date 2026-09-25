@@ -7,7 +7,7 @@
 | **Author** | @0xbulma  |
 | **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
 
-_Migrated from ADR-2026-05-20-midnight-sdk-utilities. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-05-20-midnight-sdk-utilities. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

@@ -7,7 +7,7 @@
 | **Author** | @foulques |
 | **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
 
-_Migrated from ADR-2026-07-29-vault-v2-public-allocator-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
+_Migrated from TIB-2026-07-29-vault-v2-public-allocator-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ## Context
 
