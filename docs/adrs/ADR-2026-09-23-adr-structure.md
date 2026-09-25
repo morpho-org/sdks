@@ -88,7 +88,7 @@ prose() { sed -e '/^ *```/,/^ *```/d' -e 's/`[^`]*`//g' "$1"; }
 - No record uses the retired convention → this check prints nothing:
 
   ```sh
-  git ls-files '*TIB-*.md' '*/tibs/*'
+  git ls-files ':(top)*TIB-*.md' ':(top)*/tibs/*'
   ```
 
 - Every record has a Status row → this check prints nothing:
