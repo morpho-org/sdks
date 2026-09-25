@@ -369,7 +369,7 @@ declared a `blockedBy` / `blocks` on a ticket not yet created — so the author 
 remaining milestones are created.
 
 Then remind the author: the tickets are disposable and regenerable from the TIB — if the code drifts
-from a ticket, fix the ticket or re-run `/plan-tib`; the TIB stays frozen (`create-tib` Step 6.5).
+from a ticket, fix the ticket or re-run `/plan-tib`; the TIB stays frozen (see `create-tib`, "The one rule everything else follows from").
 
 ---
 
