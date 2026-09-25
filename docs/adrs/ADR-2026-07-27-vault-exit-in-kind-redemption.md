@@ -1,11 +1,13 @@
-# TIB-2026-07-27: VaultExitBundlesV1 in-kind redemption for Vault V1 and Vault V2
+# ADR-2026-07-27: VaultExitBundlesV1 in-kind redemption for Vault V1 and Vault V2
 
-| Field      | Value                                                            |
-| ---------- | ---------------------------------------------------------------- |
-| **Status** | Accepted                                                          |
-| **Date**   | 2026-07-27                                                        |
-| **Author** | @foulques                                                         |
-| **Scope**  | Packages: `morpho-sdk`, `morpho-ts`                              |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-07-27 |
+| **Author** | @foulques |
+| **Scope**  | Packages: `morpho-sdk`, `morpho-ts` |
+
+_Migrated from TIB-2026-07-27-vault-exit-in-kind-redemption. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
@@ -742,8 +744,8 @@ sending account).
 - [morpho-org/bundles README](https://github.com/morpho-org/bundles) — the bundles design rationale and audits
 - [PR #907 — `test(morpho-sdk): deploy VaultExitBundlesV1 onto a fork`](https://github.com/morpho-org/sdks/pull/907) — historical predeployment fork setup
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `DOMAIN_SEPARATOR`, `exit`, `forceDeallocate`, `permit`
-- [`TIB-2026-06-03`](./TIB-2026-06-03-midnight-action-output-interface.md) — the `ActionOutput` direction these handles should converge on
-- [`TIB-2026-07-02`](./TIB-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action
+- [`ADR-2026-06-03`](./ADR-2026-06-03-midnight-action-output-interface.md) — the `ActionOutput` direction these handles should converge on
+- [`ADR-2026-07-02`](./ADR-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action
 
 <!--
 TIB conventions:

@@ -1,11 +1,13 @@
-# TIB-2026-07-02: Native ETH wrapping in Blue repay, with entity-resolved flat action args
+# ADR-2026-07-02: Native ETH wrapping in Blue repay, with entity-resolved flat action args
 
-| Field      | Value                 |
-| ---------- | --------------------- |
-| **Status** | Accepted              |
-| **Date**   | 2026-07-02            |
-| **Author** | @foulques             |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-07-02 |
+| **Author** | @foulques |
 | **Scope**  | Package: `morpho-sdk` |
+
+_Migrated from TIB-2026-07-02-blue-repay-native-wrapping. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
@@ -271,7 +273,7 @@ supply/withdraw TIB's `WithdrawNative` note).
 - `packages/morpho-sdk/src/actions/blue/repay.ts` / `repayWithdrawCollateral.ts` — the reshaped
   builders.
 - `packages/morpho-sdk/src/entities/blue/blue.ts` — `repay` / `repayWithdrawCollateral` resolution.
-- [`TIB-2026-05-19`](./TIB-2026-05-19-marketv1-supply-withdraw-loan-asset.md) — sibling loan-asset
+- [`ADR-2026-05-19`](./ADR-2026-05-19-marketv1-supply-withdraw-loan-asset.md) — sibling loan-asset
   supply/withdraw decision (native-wrap + slippage precedent).
 - [`Morpho.sol`](https://github.com/morpho-org/morpho-blue/blob/main/src/Morpho.sol) — `repay`
   reference.

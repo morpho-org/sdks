@@ -1,11 +1,13 @@
-# TIB-2026-05-19: MarketV1 supply / withdraw of the loan asset
+# ADR-2026-05-19: MarketV1 supply / withdraw of the loan asset
 
-| Field      | Value                  |
-| ---------- | ---------------------- |
-| **Status** | Proposed               |
-| **Date**   | 2026-05-19             |
-| **Author** | @foulques              |
-| **Scope**  | Package: `morpho-sdk`  |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-05-19 |
+| **Author** | @foulques |
+| **Scope**  | Package: `morpho-sdk` |
+
+_Migrated from TIB-2026-05-19-marketv1-supply-withdraw-loan-asset. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

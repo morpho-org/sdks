@@ -1,11 +1,13 @@
-# TIB-2026-06-03: Midnight action flow implementation
+# ADR-2026-06-03: Midnight action flow implementation
 
-| Field      | Value                                |
-| ---------- | ------------------------------------ |
-| **Status** | Proposed                             |
-| **Date**   | 2026-06-03                           |
-| **Author** | Romain / Carapulse draft             |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-06-03 |
+| **Author** | Romain / Carapulse draft |
 | **Scope**  | Package: `morpho-sdk` / Midnight SDK |
+
+_Migrated from TIB-2026-06-03-midnight-action-output-interface. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

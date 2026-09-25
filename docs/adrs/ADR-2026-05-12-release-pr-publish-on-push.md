@@ -1,11 +1,13 @@
-# TIB-2026-05-12: Release PR publish on push
+# ADR-2026-05-12: Release PR publish on push
 
 | Field      | Value     |
 | ---------- | --------- |
-| **Status** | Proposed  |
+| **Status** | accepted  |
 | **Date**   | 2026-05-12 |
 | **Author** | @rubilmax |
 | **Scope**  | Repo-wide |
+
+_Migrated from TIB-2026-05-12-release-pr-publish-on-push. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

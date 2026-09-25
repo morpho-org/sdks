@@ -1,18 +1,19 @@
-# TIB-2026-08-28: Retire Vault V1 shared liquidity
+# ADR-2026-08-28: Retire Vault V1 shared liquidity
 
-| Field          | Value                                                            |
-| -------------- | ---------------------------------------------------------------- |
-| **Status**     | Proposed                                                         |
-| **Date**       | 2026-08-28                                                       |
-| **Author**     | @Rubilmax                                                        |
-| **Scope**      | Packages: `morpho-sdk`, `wdk-protocol-lending-morpho-evm`       |
-| **Supersedes** | TIB-2026-08-25 Vault V1 planning and composition retention only |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-08-28 |
+| **Author** | @Rubilmax |
+| **Scope**  | Packages: `morpho-sdk`, `wdk-protocol-lending-morpho-evm` |
+
+_Migrated from TIB-2026-08-28-retire-vault-v1-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
 ## Context
 
-[`TIB-2026-08-25`](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md) keeps Vault V1
+[`ADR-2026-08-25`](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) keeps Vault V1
 shared-liquidity planning data and low-level Bundler3 composition after high-level Blue writes move
 to BlueBundlesV1. That retention leaves two allocator models in the public SDK even though Vault V2
 BluePublicAllocator is the supported successor.
@@ -91,5 +92,7 @@ follow the repository's published deprecation lifecycle.
 
 ## References
 
-- [TIB-2026-08-25: Route Blue actions through BlueBundlesV1](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
-- [TIB-2026-08-18: Vault V2 Blue reallocation API](./TIB-2026-08-18-vault-v2-blue-reallocation-api.md)
+- Supersedes [ADR-2026-08-25-blue-bundles-v1-sdk-actions](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) for Vault V1 planning and composition retention only.
+
+- [ADR-2026-08-25: Route Blue actions through BlueBundlesV1](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md)
+- [ADR-2026-08-18: Vault V2 Blue reallocation API](./ADR-2026-08-18-vault-v2-blue-reallocation-api.md)
