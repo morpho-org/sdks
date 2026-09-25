@@ -61,6 +61,8 @@ const createMidnightDeployments = () => ({
   ecrecoverRatifier: 4n,
   ecrecoverAuthorizer: 5n,
   setterRatifier: 6n,
+  priceRatifierV1: 8n,
+  rateRatifierV1: 9n,
   permit2: 7n,
 });
 
@@ -497,6 +499,54 @@ describe("addressesRegistry", () => {
       "setterRatifier",
       "0x708d6Bf6F847202a0755bb5636bE663B174242ea",
       65_366_296n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "priceRatifierV1",
+      "0x5A7CbC4458344fd11E1ED81D7834082a1138f975",
+      26_046_045n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "rateRatifierV1",
+      "0x14A4cd3D7a28d90D37fd0917EDeaa496E5931095",
+      26_046_045n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "priceRatifierV1",
+      "0x08a0e69772315652165921D722B3caAea4C326e6",
+      51_724_088n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "rateRatifierV1",
+      "0x3B2FbA901C88f026BF50A12c8B28484Cd81F9526",
+      51_724_088n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "priceRatifierV1",
+      "0x55163660Ff35955712339d465dc6D9D583dA8ac2",
+      22_490_623n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "rateRatifierV1",
+      "0x9b11e691E79d6978c78BF8de8B898CDeb89bEADf",
+      22_490_623n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "priceRatifierV1",
+      "0xF65E0be166AAF2F8993e617189beFB452bf38DB1",
+      71_228_891n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "rateRatifierV1",
+      "0xDd0588d7D3Aaa76a33A7d054B0b107eB3bCD3F11",
+      71_228_891n,
     ],
     [
       ChainId.ScrollMainnet,
