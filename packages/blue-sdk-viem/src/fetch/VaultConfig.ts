@@ -1,6 +1,6 @@
 import { VaultConfig } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
-import { getChainId, readContract } from "viem/actions";
+import { readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { fetchToken } from "./Token.js";
@@ -16,9 +16,9 @@ import { fetchToken } from "./Token.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded to token metadata reads.
  * @returns The hydrated `VaultConfig` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { VaultConfig } from "@morpho-org/blue-sdk";
@@ -38,8 +38,6 @@ export async function fetchVaultConfig(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [token, asset, decimalsOffset] = await Promise.all([
     fetchToken(address, client, parameters), // TODO: avoid fetching decimals
     readContract(client, {

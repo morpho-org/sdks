@@ -483,3 +483,23 @@ export class InvalidMidnightApiResponseError extends Error {
     this.name = "InvalidMidnightApiResponseError";
   }
 }
+
+/**
+ * Thrown when a Midnight API quote request does not target exactly one of `units` or `assets`.
+ *
+ * @example
+ * ```ts
+ * import { InvalidMidnightApiQuoteTargetError } from "@morpho-org/midnight-sdk/api";
+ *
+ * throw new InvalidMidnightApiQuoteTargetError();
+ * ```
+ */
+export class InvalidMidnightApiQuoteTargetError extends Error {
+  public constructor(options?: ErrorOptions) {
+    super(
+      "Midnight API quote requires exactly one of `units` or `assets`. Provide a single target amount.",
+      options,
+    );
+    this.name = "InvalidMidnightApiQuoteTargetError";
+  }
+}

@@ -15,9 +15,11 @@
 
 **Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on any EVM-compatible chain.
 
-### Deprecated flows
+### Removed legacy flows
 
-Vault V1 PublicAllocator shared-liquidity APIs and legacy MORPHO token wrapping APIs are deprecated. Use Vault V2 BluePublicAllocator APIs for shared liquidity and the current MORPHO token directly. Deprecated entry points remain available for compatibility; removal follows the published deprecation lifecycle.
+Vault V1 PublicAllocator shared-liquidity APIs, low-level Bundler3 composition and migration adapters,
+and legacy MORPHO token wrapping are not part of the next major SDK surfaces. Use Vault V2
+BluePublicAllocator APIs, the standalone Blue/Vault bundle actions, and the current MORPHO token.
 
 ---
 
@@ -33,7 +35,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 #### WDK (Tether Wallet Development Kit)
 
-- [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral) with matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
+- [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral): supply and withdraw use `prepareSupply` / `prepareWithdraw` prepared-operation handles, while borrow, repay, and collateral flows keep matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
 
 #### Development
 
@@ -41,7 +43,7 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 - [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`)
 
-- [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, with Tenderly RPC and `eth_simulateV1` backends, signature authorization handling, and bundler retention checks
+- [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, with Tenderly RPC and `eth_simulateV1` backends, signature authorization handling, and bundle-periphery retention checks
 
 ### Testing
 

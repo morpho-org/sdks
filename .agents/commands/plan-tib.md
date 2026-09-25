@@ -191,8 +191,9 @@ package prefix, matching the PR that will implement it:
 
 ```
 feat(morpho-sdk): route Blue supply/withdraw through BlueBundlesV1
-fix(blue-sdk): pin BlueBundlesV1 ABI and registry address
-chore(liquidity-sdk-viem): widen morpho-sdk peer range to ^6.0.0
+fix(morpho-sdk): pin BlueBundlesV1 ABI
+fix(morpho-ts): register BlueBundlesV1 address
+chore(blue-sdk-viem): widen blue-sdk peer range
 ```
 
 Description — use this template. It is deliberately the **inverse of the TIB**: everything here is
@@ -277,7 +278,7 @@ Show the full plan and get explicit approval:
 ### Milestone 1 — <Train A: … (publishes first)>
 | # | Title                                                  | Pkg · Bump          | Pri | Est | Blocked by | Blocks |
 |---|--------------------------------------------------------|---------------------|-----|-----|-----------|--------|
-| 1 | fix(blue-sdk): pin BlueBundlesV1 ABI + address         | blue-sdk · patch    | 1   | 2   | —         | #3,#4  |
+| 1 | fix(morpho-sdk): pin BlueBundlesV1 ABI                 | morpho-sdk · patch  | 1   | 2   | —         | #3,#4  |
 | 2 | feat(morpho-sdk): deprecate V1 reallocation flows      | morpho-sdk · minor  | 1   | 2   | —         | #5     |
 
 ### Milestone 2 — <Train B: 6.0.0 major>
@@ -356,7 +357,7 @@ Summarize what landed:
 ### Tickets created (N)
 | ID        | Title                                             | Milestone | Blocked by |
 |-----------|---------------------------------------------------|-----------|-----------|
-| SDK-101   | fix(blue-sdk): pin BlueBundlesV1 ABI + address    | Train A   | —         |
+| SDK-101   | fix(morpho-sdk): pin BlueBundlesV1 ABI            | Train A   | —         |
 | SDK-103   | feat(morpho-sdk): route supply/withdraw           | Train B   | SDK-101   |
 
 ### Dependency chain

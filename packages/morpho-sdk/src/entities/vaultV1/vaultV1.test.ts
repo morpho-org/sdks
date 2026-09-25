@@ -1,7 +1,7 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   IN_KIND_USER,
   IN_KIND_VAULT,
@@ -9,7 +9,9 @@ import {
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { computeVaultMaxSharePrice } from "../../helpers/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
 
 describe("MorphoVaultV1 chain validation", () => {
@@ -21,6 +23,17 @@ describe("MorphoVaultV1 chain validation", () => {
     const vault = publicClient
       .extend(morphoViemExtension())
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
+
+    await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
+  });
+
+  test("error: ChainIdMismatchError when the client has no chain", async () => {
+    const publicClient = createPublicClient({
+      transport: http("https://rpc.example"),
+    });
+    const vault = publicClient
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
 
     await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
   });
@@ -56,6 +69,7 @@ describe("MorphoVaultV1 chain validation", () => {
       vault.withdraw({
         amount: 1n,
         userAddress: SteakhouseUsdcVaultV1.address,
+        vaultData: {} as never,
       }),
     ).toThrow(ChainIdMismatchError);
     expect(() =>
@@ -74,34 +88,50 @@ describe("MorphoVaultV1 chain validation", () => {
     const vault = publicClient
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const sourceVault = inKindVaultV1Data({
-      fee: MathLib.WAD / 5n,
-      lastTotalAssets: 900n,
-    });
-    const shares = sourceVault.totalSupply;
-    const expectedFloor = MathLib.mulDivDown(
-      sourceVault.accrueInterest().toAssets(shares),
-      MathLib.RAY,
-      shares,
+    const now = 1_800_000_000n;
+    const deadline = now + 7_200n;
+    const sourceVault = withChainTimestamp(now, () =>
+      inKindVaultV1Data({
+        fee: MathLib.WAD / 5n,
+        lastTotalAssets: 900n,
+      }),
     );
-    const accrueInterest = vi.spyOn(sourceVault, "accrueInterest");
+    const shares = sourceVault.totalSupply;
+    const targetVault = withChainTimestamp(now, () =>
+      inKindVaultV2Data({
+        address: "0x1111111111111111111111111111111111111111",
+      }),
+    );
+    const expectedAssets = sourceVault
+      .accrueInterest(now)
+      .toAssets(shares, "Down");
+    const expectedMaxSharePrice = computeVaultMaxSharePrice({
+      vaultData: targetVault,
+      deadline,
+      assets: expectedAssets,
+      slippageTolerance: 0n,
+    });
 
-    const tx = vault
-      .migrateToV2({
+    const tx = withChainTimestamp(now, () =>
+      vault.migrateToV2({
         userAddress: IN_KIND_USER,
         sourceVault,
-        targetVault: inKindVaultV2Data({
-          address: "0x1111111111111111111111111111111111111111",
-        }),
+        targetVault,
         shares,
+        deadline,
         slippageTolerance: 0n,
-      })
-      .buildTx();
+      }),
+    ).buildTx();
 
-    expect(tx.action.args.minSharePriceVaultV1).toBe(expectedFloor);
-    expect(accrueInterest).toHaveBeenCalledWith(expect.any(BigInt));
-    expect(expectedFloor).toBeLessThan(
-      MathLib.mulDivDown(sourceVault.toAssets(shares), MathLib.RAY, shares),
+    expect(tx.action.args.maxSharePriceVaultV2).toBe(expectedMaxSharePrice);
+    expect(expectedMaxSharePrice).not.toBe(
+      computeVaultMaxSharePrice({
+        vaultData: targetVault,
+        deadline,
+        assets: sourceVault.toAssets(shares, "Down"),
+        slippageTolerance: 0n,
+      }),
     );
+    expect(expectedAssets).toBeLessThan(sourceVault.toAssets(shares, "Down"));
   });
 });

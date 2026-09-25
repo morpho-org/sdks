@@ -20,13 +20,15 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
+  decodeFunctionData,
   type Hash,
   isAddressEqual,
   zeroAddress,
   zeroHash,
 } from "viem";
 import { describe, expect, test, vi } from "vitest";
-import { blueBorrow } from "../actions/index.js";
+import { blueBundlesV1Abi } from "../abis.js";
+import { blueSupplyCollateralBorrow } from "../actions/index.js";
 import { MAX_REALLOCATION_PENALTY } from "../helpers/constant.js";
 import {
   InputExceedsMaxError,
@@ -1467,11 +1469,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         supplyQueue: [targetMarket.id],
         totalSupply: 30n,
         lastTotalAssets: 30n,
-        publicAllocatorConfig: {
-          admin: VAULT,
-          fee: 1n,
-          accruedFee: 2n,
-        },
       },
       [
         {
@@ -1482,12 +1479,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
             pendingCap: { value: 2_000n, validAt: TIMESTAMP + 3n },
             removableAt: 0n,
             enabled: true,
-            publicAllocatorConfig: {
-              vault: NESTED_VAULT,
-              marketId: targetMarket.id,
-              maxIn: 100n,
-              maxOut: 200n,
-            },
           },
           position: nestedPosition,
         },
@@ -1499,12 +1490,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
             pendingCap: { value: 0n, validAt: 0n },
             removableAt: 0n,
             enabled: true,
-            publicAllocatorConfig: {
-              vault: NESTED_VAULT,
-              marketId: sourceMarket.id,
-              maxIn: 0n,
-              maxOut: 0n,
-            },
           },
           position: nestedSourcePosition,
         },
@@ -2510,22 +2495,32 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       },
     );
 
-    const tx = blueBorrow({
+    const tx = blueSupplyCollateralBorrow({
       market: {
         chainId: ChainId.EthMainnet,
         marketParams: targetParams,
       },
       args: {
-        amount: 1_100n,
-        receiver: VAULT,
-        minSharePrice: 0n,
+        userAddress: VAULT,
+        collateralAssets: 0n,
+        borrowAssets: 1_100n,
+        maxLtv: MathLib.MAX_UINT_256,
         reallocations,
+        deadline: 1_900_000_000n,
       },
     });
+    const decoded = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: tx.data,
+    });
+    if (decoded.functionName !== "blueBundlesV1SupplyCollateralAndBorrow") {
+      throw new Error(`Unexpected function ${decoded.functionName}`);
+    }
 
     expect(reallocations).toHaveLength(2);
     expect(tx.value).toBe(0n);
-    expect(tx.action.args.reallocationPenaltyAssets).toBe(2n);
+    expect(tx.action.args.reallocations).toBe(2);
+    expect(decoded.args[6].map(({ penalty }) => penalty)).toEqual([7n, 7n]);
   });
 
   test("behavior: excludes reallocations above the penalty threshold", () => {

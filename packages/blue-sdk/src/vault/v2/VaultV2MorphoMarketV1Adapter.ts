@@ -47,17 +47,6 @@ export class VaultV2MorphoMarketV1Adapter
   }
 
   /**
-   * Returns the adapter-wide allocation-cap id.
-   *
-   * @param address - Adapter address.
-   * @returns The adapter-wide allocation-cap id.
-   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterCapId}.
-   */
-  static adapterId(address: Address) {
-    return VaultV2MorphoMarketV1Adapter.adapterCapId(address);
-  }
-
-  /**
    * Returns the collateral-wide allocation-cap id.
    *
    * @param address - Collateral token address.
@@ -74,17 +63,6 @@ export class VaultV2MorphoMarketV1Adapter
         ["collateralToken", address],
       ),
     );
-  }
-
-  /**
-   * Returns the collateral-wide allocation-cap id.
-   *
-   * @param address - Collateral token address.
-   * @returns The collateral-wide allocation-cap id.
-   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.collateralCapId}.
-   */
-  static collateralId(address: Address) {
-    return VaultV2MorphoMarketV1Adapter.collateralCapId(address);
   }
 
   /**
@@ -108,18 +86,6 @@ export class VaultV2MorphoMarketV1Adapter
         ["this/marketParams", address, params],
       ),
     );
-  }
-
-  /**
-   * Returns the adapter-market allocation-cap id.
-   *
-   * @param address - Adapter address.
-   * @param params - Morpho Blue market parameters.
-   * @returns The adapter-market allocation-cap id.
-   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterMarketCapId}.
-   */
-  static marketParamsId(address: Address, params: MarketParams) {
-    return VaultV2MorphoMarketV1Adapter.adapterMarketCapId(address, params);
   }
 
   public marketParamsList: MarketParams[];

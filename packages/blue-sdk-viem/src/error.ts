@@ -1,6 +1,15 @@
 import type { Address, ChainId } from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 
+/** Thrown when a decimal string cannot be parsed into token units. */
+export class InvalidNumberError extends Error {
+  constructor(public readonly value: string) {
+    super(
+      `Invalid number "${value}": expected a decimal string such as "1.25" or "-0.5".`,
+    );
+  }
+}
+
 /** Thrown when a permit domain targets another chain; consumers should not sign it. */
 export class InvalidPermitDomainChainIdError extends Error {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params

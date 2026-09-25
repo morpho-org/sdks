@@ -3,7 +3,13 @@ import {
   type BigIntish,
   MathLib,
 } from "@morpho-org/morpho-ts";
-import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
+import {
+  type Address,
+  concat,
+  encodeAbiParameters,
+  encodePacked,
+  keccak256,
+} from "viem";
 import {
   CBP,
   COLLATERAL_PARAMS_TYPEHASH,
@@ -80,6 +86,24 @@ type CollateralParamsInput = ICollateralParams | CollateralParams;
  * ```
  */
 export namespace MarketUtils {
+  /**
+   * @internal Orders collaterals by token address, case-insensitively, matching the protocol's
+   * canonical `collateralIndex` order used by `MarketParams` and `MarketUtils.hash`.
+   *
+   * @param a - First collateral.
+   * @param b - Second collateral.
+   * @returns Negative when `a` sorts before `b`, positive when after, `0` when tokens are equal.
+   */
+  export function compareCollateralTokens(
+    a: { readonly token: Address },
+    b: { readonly token: Address },
+  ) {
+    const tokenA = a.token.toLowerCase();
+    const tokenB = b.token.toLowerCase();
+    if (tokenA === tokenB) return 0;
+    return tokenA < tokenB ? -1 : 1;
+  }
+
   /**
    * Converts collateral params from a plain input or ABI tuple.
    *
@@ -350,9 +374,7 @@ export namespace MarketUtils {
     const collateralParams =
       marketParams.collateralParams.length === 0
         ? marketParams.collateralParams
-        : [...marketParams.collateralParams].sort((a, b) =>
-            a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1,
-          );
+        : [...marketParams.collateralParams].sort(compareCollateralTokens);
     const collateralParamHashes = collateralParams.map((params) =>
       keccak256(
         encodeAbiParameters(collateralParamsHashParams, [

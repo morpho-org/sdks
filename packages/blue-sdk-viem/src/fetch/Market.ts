@@ -4,7 +4,7 @@ import {
   type MarketId,
   MarketParams,
 } from "@morpho-org/blue-sdk";
-import { type Client, zeroAddress } from "viem";
+import { type Client, isAddressEqual, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
@@ -25,9 +25,9 @@ import { readContractRestructured } from "../utils.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Market` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { Market, MarketId } from "@morpho-org/blue-sdk";
@@ -48,9 +48,9 @@ export async function fetchMarket(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
+  const { blue, adaptiveCurveIrm } = getChainAddresses(
+    await getChainId(client),
+  );
 
   /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
@@ -73,7 +73,7 @@ export async function fetchMarket(
         abi,
         code,
         functionName: "query",
-        args: [morpho, id, adaptiveCurveIrm],
+        args: [blue, id, adaptiveCurveIrm],
       });
 
       return new Market({
@@ -85,8 +85,9 @@ export async function fetchMarket(
         lastUpdate,
         fee,
         price: hasPrice ? price : undefined,
-        rateAtTarget:
-          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+        rateAtTarget: isAddressEqual(marketParams.irm, adaptiveCurveIrm)
+          ? rateAtTarget
+          : undefined,
       });
     } catch (error) {
       if (deployless === "force") throw error;
@@ -97,14 +98,14 @@ export async function fetchMarket(
   const [params, market] = await Promise.all([
     readContractRestructured(client, {
       ...parameters,
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
     }),
     readContractRestructured(client, {
       ...parameters,
-      address: morpho,
+      address: blue,
       abi: blueAbi,
       functionName: "market",
       args: [id],
@@ -120,7 +121,7 @@ export async function fetchMarket(
           functionName: "price",
         }).catch(() => undefined)
       : undefined,
-    params.irm === adaptiveCurveIrm
+    isAddressEqual(params.irm, adaptiveCurveIrm)
       ? readContract(client, {
           ...parameters,
           address: adaptiveCurveIrm,

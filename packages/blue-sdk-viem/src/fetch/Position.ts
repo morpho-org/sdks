@@ -26,8 +26,8 @@ import { fetchMarket } from "./Market.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The hydrated `Position` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { MarketId, Position } from "@morpho-org/blue-sdk";
@@ -50,12 +50,10 @@ export async function fetchPosition(
   client: Client,
   { ...parameters }: FetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { morpho } = getChainAddresses(parameters.chainId);
+  const { blue } = getChainAddresses(await getChainId(client));
   const position = await readContractRestructured(client, {
     ...parameters,
-    address: morpho,
+    address: blue,
     abi: blueAbi,
     functionName: "position",
     args: [marketId, user],
@@ -73,13 +71,13 @@ export async function fetchPosition(
  *
  * Reads `preLiquidationParams()` and wraps the result in `PreLiquidationParams`.
  *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
  * @param preLiquidation - Address of the pre-liquidation contract.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode forwarded by callers.
  * @returns The hydrated `PreLiquidationParams` entity.
  * @example
@@ -104,7 +102,6 @@ export async function fetchPreLiquidationParams(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
-  parameters.chainId ??= await getChainId(client);
   const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
     await readContract(client, {
       ...parameters,
@@ -136,9 +133,9 @@ export async function fetchPreLiquidationParams(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `AccrualPosition` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { AccrualPosition, MarketId } from "@morpho-org/blue-sdk";
@@ -161,8 +158,6 @@ export async function fetchAccrualPosition(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [position, market] = await Promise.all([
     fetchPosition(user, marketId, client, parameters),
     fetchMarket(marketId, client, parameters),
@@ -177,6 +172,7 @@ export async function fetchAccrualPosition(
  * Reads the raw user position, market state, pre-liquidation params, and pre-liquidation oracle price
  * when available.
  *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
  * @param user - Address whose position is fetched.
  * @param marketId - Market id of the position.
  * @param preLiquidation - Address of the pre-liquidation contract.
@@ -185,9 +181,9 @@ export async function fetchAccrualPosition(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
  * @returns The hydrated `PreLiquidationPosition` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @example
  * ```ts
  * import type { MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
@@ -217,8 +213,6 @@ export async function fetchPreLiquidationPosition(
   client: Client,
   { ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const [position, market, preLiquidationParams] = await Promise.all([
     fetchPosition(user, marketId, client, parameters),
     fetchMarket(marketId, client, parameters),

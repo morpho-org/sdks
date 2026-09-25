@@ -22,7 +22,6 @@ import {
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
@@ -32,7 +31,6 @@ import {
   erc20Abi_bytes32,
   maxUint256,
   stringToHex,
-  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -51,9 +49,7 @@ import {
   erc5267Abi,
   metaMorphoAbi,
   permissionedErc20WrapperAbi,
-  permit2Abi,
   preLiquidationAbi,
-  vaultV1PublicAllocatorAbi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
   wstEthAbi,
@@ -78,29 +74,22 @@ import { fetchAccrualVault, fetchVault } from "./Vault.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
-import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 import { fetchVaultUser } from "./VaultUser.js";
 
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
-const META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID = 9_101_001;
+const META_MORPHO_WITHOUT_LEGACY_FALLBACK_CHAIN_ID = 9_101_001;
+const LOWERCASE_IRM_CHAIN_ID = 9_101_004;
 
-if (
-  (addressesRegistry as Record<number, unknown>)[
-    META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID
-  ] == null
-) {
-  registerCustomAddresses({
-    addresses: {
-      [META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID]: {
-        morpho: ADDRESSES.morpho,
-        bundler3: ADDRESSES.bundler3,
-        adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
-        metaMorphoFactory: ADDRESSES.metaMorphoFactory,
-      } satisfies ChainAddresses,
-    },
-  });
-}
+registerCustomAddresses({
+  addresses: {
+    [META_MORPHO_WITHOUT_LEGACY_FALLBACK_CHAIN_ID]: {
+      blue: ADDRESSES.blue,
+      adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+      metaMorphoFactory: ADDRESSES.metaMorphoFactory,
+    } satisfies ChainAddresses,
+  },
+});
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const TOKEN: Address = "0x2222222222222222222222222222222222222222";
@@ -157,13 +146,13 @@ function mockMarketReads(
   params = MARKET_PARAMS,
 ) {
   mockRead(handle, {
-    address: ADDRESSES.morpho,
+    address: ADDRESSES.blue,
     abi: blueAbi,
     functionName: "idToMarketParams",
     result: marketParamsTuple(params),
   });
   mockRead(handle, {
-    address: ADDRESSES.morpho,
+    address: ADDRESSES.blue,
     abi: blueAbi,
     functionName: "market",
     result: marketTuple,
@@ -184,7 +173,7 @@ function mockMarketReads(
 
 function mockPositionReads(handle: ReturnType<typeof createMockClient>) {
   mockRead(handle, {
-    address: ADDRESSES.morpho,
+    address: ADDRESSES.blue,
     abi: blueAbi,
     functionName: "position",
     result: positionTuple,
@@ -222,23 +211,11 @@ function mockVaultMarketConfigReads(
     functionName: "pendingCap",
     result: [31n, 32n],
   });
-  mockRead(handle, {
-    address: ADDRESSES.publicAllocator,
-    abi: vaultV1PublicAllocatorAbi,
-    functionName: "flowCaps",
-    result: [33n, 34n],
-  });
 }
 
 function mockVaultMulticallReads(
   handle: ReturnType<typeof createMockClient>,
-  {
-    hasPublicAllocator = false,
-    isMetaMorphoV1_1 = true,
-  }: {
-    hasPublicAllocator?: boolean;
-    isMetaMorphoV1_1?: boolean;
-  } = {},
+  { isMetaMorphoV1_1 = true }: { isMetaMorphoV1_1?: boolean } = {},
 ) {
   mockVaultConfigReads(handle);
   for (const [functionName, result] of [
@@ -264,14 +241,6 @@ function mockVaultMulticallReads(
       abi: metaMorphoAbi,
       functionName,
       result,
-    });
-  }
-  if (ADDRESSES.publicAllocator != null) {
-    mockRead(handle, {
-      address: VAULT,
-      abi: metaMorphoAbi,
-      functionName: "isAllocator",
-      result: hasPublicAllocator,
     });
   }
   mockRead(handle, {
@@ -355,7 +324,7 @@ describe("fetchToken", () => {
       hasEip5267Domain: true,
     });
 
-    const token = await fetchToken(TOKEN, handle.client, { chainId: CHAIN_ID });
+    const token = await fetchToken(TOKEN, handle.client, {});
 
     expect(token).toBeInstanceOf(Token);
     expect(token.symbol).toBe("MOCK");
@@ -376,9 +345,7 @@ describe("fetchToken", () => {
       hasEip5267Domain: false,
     });
 
-    const token = await fetchToken(ADDRESSES.wstEth, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const token = await fetchToken(ADDRESSES.wstEth, handle.client, {});
 
     expect(token).toBeInstanceOf(ExchangeRateWrappedToken);
     expect((token as ExchangeRateWrappedToken).underlying).toBe(
@@ -424,7 +391,6 @@ describe("fetchToken", () => {
     });
 
     const token = await fetchToken(address, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -447,7 +413,6 @@ describe("fetchToken", () => {
     });
 
     const token = await fetchToken(ADDRESSES.wstEth, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -478,11 +443,9 @@ describe("fetchToken", () => {
 
     const [wstEthToken, wbIB01Token] = await Promise.all([
       fetchToken(wstEth, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       }),
       fetchToken(wbIB01, handle.client, {
-        chainId: CHAIN_ID,
         deployless: false,
       }),
     ]);
@@ -513,7 +476,6 @@ describe("fetchToken", () => {
     });
 
     const token = await fetchToken(TOKEN, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -535,18 +497,18 @@ describe("fetchToken", () => {
       hasEip5267Domain: false,
     });
 
-    const token = await fetchToken(ADDRESSES.wbIB01, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const token = await fetchToken(ADDRESSES.wbIB01, handle.client, {});
 
     expect(token).toBeInstanceOf(ConstantWrappedToken);
   });
 
   test("falls through when the chain has no wstETH unwrap token", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.ZeroGMainnet,
+    });
 
     const token = await fetchToken(undefined as unknown as Address, client, {
-      chainId: ChainId.ZeroGMainnet,
       deployless: false,
     });
 
@@ -559,7 +521,7 @@ describe("fetchToken", () => {
     mockDeploylessReads(handle, ["0x"]);
     mockTokenReads(handle, TOKEN, { symbol: "FALL", name: "Fallback Token" });
 
-    const token = await fetchToken(TOKEN, handle.client, { chainId: CHAIN_ID });
+    const token = await fetchToken(TOKEN, handle.client, {});
 
     expect(token.symbol).toBe("FALL");
     expect(token.name).toBe("Fallback Token");
@@ -571,7 +533,6 @@ describe("fetchToken", () => {
 
     await expect(
       fetchToken(TOKEN, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -608,12 +569,41 @@ describe("fetchMarket", () => {
       rateAtTarget: 0n,
     });
 
-    const market = await fetchMarket(idle.id, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const market = await fetchMarket(idle.id, handle.client, {});
 
     expect(market.price).toBeUndefined();
     expect(market.rateAtTarget).toBeUndefined();
+  });
+
+  test("behavior: detects the adaptive IRM case-insensitively", async () => {
+    const lowercaseIrm = ADDRESSES.adaptiveCurveIrm.toLowerCase() as Address;
+    registerCustomAddresses({
+      addresses: {
+        [LOWERCASE_IRM_CHAIN_ID]: {
+          blue: ADDRESSES.blue,
+          adaptiveCurveIrm: lowercaseIrm,
+        } satisfies ChainAddresses,
+      },
+    });
+
+    const lowercaseIrmChain = { ...mainnet, id: LOWERCASE_IRM_CHAIN_ID };
+    const deploylessHandle = createMockClient(lowercaseIrmChain);
+    mockDeploylessRead(deploylessHandle, marketQueryAbi, "query", {
+      marketParams: marketParamsTuple(),
+      market: marketTuple,
+      hasPrice: true,
+      price: 123n,
+      rateAtTarget: 456n,
+    });
+    const deploylessMarket = await fetchMarket(ID, deploylessHandle.client);
+    expect(deploylessMarket.rateAtTarget).toBe(456n);
+
+    const multicallHandle = createMockClient(lowercaseIrmChain);
+    mockMarketReads(multicallHandle);
+    const multicallMarket = await fetchMarket(ID, multicallHandle.client, {
+      deployless: false,
+    });
+    expect(multicallMarket.rateAtTarget).toBe(456n);
   });
 
   test("uses multicall when deployless is disabled", async () => {
@@ -621,7 +611,6 @@ describe("fetchMarket", () => {
     mockMarketReads(handle);
 
     const market = await fetchMarket(ID, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -639,7 +628,6 @@ describe("fetchMarket", () => {
     });
 
     const market = await fetchMarket(ID, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -652,9 +640,7 @@ describe("fetchMarket", () => {
     mockDeploylessReads(handle, ["0x"]);
     mockMarketReads(handle);
 
-    const market = await fetchMarket(ID, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const market = await fetchMarket(ID, handle.client, {});
 
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
@@ -666,7 +652,6 @@ describe("fetchMarket", () => {
 
     await expect(
       fetchMarket(ID, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -676,20 +661,19 @@ describe("fetchMarket", () => {
     const handle = createMockClient(mainnet);
     const idle = MarketParams.idle(TOKEN);
     mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "idToMarketParams",
       result: marketParamsTuple(idle),
     });
     mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "market",
       result: marketTuple,
     });
 
     const market = await fetchMarket(idle.id, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -735,7 +719,7 @@ describe("fetchPosition", () => {
       ID,
       PRE_LIQUIDATION,
       handle.client,
-      { chainId: CHAIN_ID, deployless: false },
+      { deployless: false },
     );
 
     expect(preLiquidationPosition).toBeInstanceOf(PreLiquidationPosition);
@@ -827,16 +811,16 @@ describe("fetchHolding", () => {
 
     expect(holding).toBeInstanceOf(Holding);
     expect(holding.balance).toBe(99n);
-    expect(holding.erc20Allowances.morpho).toBe(maxUint256);
-    expect(holding.permit2BundlerAllowance.amount).toBe(0n);
+    expect(holding.erc20Allowances.blue).toBe(maxUint256);
   });
 
   test("uses zero native balance on chains with unreliable native balances", async () => {
-    const { client } = createMockClient(mainnet);
-
-    const holding = await fetchHolding(USER, NATIVE_ADDRESS, client, {
-      chainId: ChainId.TempoMainnet,
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.TempoMainnet,
     });
+
+    const holding = await fetchHolding(USER, NATIVE_ADDRESS, client);
 
     expect(holding.balance).toBe(0n);
   });
@@ -846,26 +830,18 @@ describe("fetchHolding", () => {
     mockDeploylessRead(handle, holdingQueryAbi, "query", {
       balance: 10n,
       erc20Allowances: {
-        morpho: 11n,
+        blue: 11n,
         permit2: 12n,
-        generalAdapter1: 13n,
-      },
-      permit2BundlerAllowance: {
-        amount: 14n,
-        expiration: 15n,
-        nonce: 16n,
       },
       isErc2612: true,
       erc2612Nonce: 17n,
       canTransfer: 2,
     });
 
-    const holding = await fetchHolding(USER, TOKEN, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const holding = await fetchHolding(USER, TOKEN, handle.client);
 
     expect(holding.balance).toBe(10n);
-    expect(holding.erc20Allowances["bundler3.generalAdapter1"]).toBe(13n);
+    expect(holding.erc20Allowances.blue).toBe(11n);
     expect(holding.erc2612Nonce).toBe(17n);
     expect(holding.canTransfer).toBe(true);
   });
@@ -875,23 +851,15 @@ describe("fetchHolding", () => {
     mockDeploylessRead(handle, holdingQueryAbi, "query", {
       balance: 10n,
       erc20Allowances: {
-        morpho: 11n,
+        blue: 11n,
         permit2: 12n,
-        generalAdapter1: 13n,
-      },
-      permit2BundlerAllowance: {
-        amount: 14n,
-        expiration: 15n,
-        nonce: 16n,
       },
       isErc2612: false,
       erc2612Nonce: 17n,
       canTransfer: 1,
     });
 
-    const holding = await fetchHolding(USER, TOKEN, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const holding = await fetchHolding(USER, TOKEN, handle.client);
 
     expect(holding.erc2612Nonce).toBeUndefined();
     expect(holding.canTransfer).toBe(false);
@@ -913,12 +881,6 @@ describe("fetchHolding", () => {
       abi: erc20Abi,
       functionName: "allowance",
       result: 21n,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.permit2,
-      abi: permit2Abi,
-      functionName: "allowance",
-      result: [22n, 23, 24],
     });
     mockRead(handle, {
       address: token,
@@ -946,17 +908,11 @@ describe("fetchHolding", () => {
     });
 
     const holding = await fetchHolding(USER, token, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
     expect(holding.balance).toBe(20n);
-    expect(holding.erc20Allowances.morpho).toBe(21n);
-    expect(holding.permit2BundlerAllowance).toEqual({
-      amount: 22n,
-      expiration: 23n,
-      nonce: 24n,
-    });
+    expect(holding.erc20Allowances.blue).toBe(21n);
     expect(holding.erc2612Nonce).toBe(25n);
     expect(holding.canTransfer).toBe(false);
   });
@@ -977,12 +933,6 @@ describe("fetchHolding", () => {
       abi: erc20Abi,
       functionName: "allowance",
       result: 21n,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.permit2,
-      abi: permit2Abi,
-      functionName: "allowance",
-      result: [22n, 23, 24],
     });
     mockReadFailure(handle, {
       address: token,
@@ -1009,7 +959,6 @@ describe("fetchHolding", () => {
     });
 
     const holding = await fetchHolding(USER, token, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -1018,7 +967,10 @@ describe("fetchHolding", () => {
   });
 
   test("uses zero permit2 allowance when the chain has no Permit2 address", async () => {
-    const handle = createMockClient(mainnet);
+    const handle = createMockClient({
+      ...mainnet,
+      id: ChainId.ZeroGMainnet,
+    });
     const zeroGAddresses = addressesRegistry[ChainId.ZeroGMainnet];
 
     mockRead(handle, {
@@ -1046,18 +998,11 @@ describe("fetchHolding", () => {
     });
 
     const holding = await fetchHolding(USER, TOKEN, handle.client, {
-      chainId: ChainId.ZeroGMainnet,
       deployless: false,
     });
 
-    expect(holding.erc20Allowances.morpho).toBe(21n);
+    expect(holding.erc20Allowances.blue).toBe(21n);
     expect(holding.erc20Allowances.permit2).toBe(0n);
-    expect(holding.erc20Allowances["bundler3.generalAdapter1"]).toBe(21n);
-    expect(holding.permit2BundlerAllowance).toEqual({
-      amount: 0n,
-      expiration: 0n,
-      nonce: 0n,
-    });
     expect("permit2" in zeroGAddresses).toBe(false);
   });
 
@@ -1077,12 +1022,6 @@ describe("fetchHolding", () => {
       abi: erc20Abi,
       functionName: "allowance",
       result: 21n,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.permit2,
-      abi: permit2Abi,
-      functionName: "allowance",
-      result: [22n, 23, 24],
     });
     mockReadFailure(handle, {
       address: token,
@@ -1108,7 +1047,6 @@ describe("fetchHolding", () => {
     });
 
     const holding = await fetchHolding(USER, token, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -1130,12 +1068,6 @@ describe("fetchHolding", () => {
       functionName: "allowance",
       result: 21n,
     });
-    mockRead(handle, {
-      address: ADDRESSES.permit2,
-      abi: permit2Abi,
-      functionName: "allowance",
-      result: [22n, 23, 24],
-    });
     mockReadFailure(handle, {
       address: TOKEN,
       abi: erc2612Abi,
@@ -1147,9 +1079,7 @@ describe("fetchHolding", () => {
       functionName: "hasPermission",
     });
 
-    const holding = await fetchHolding(USER, TOKEN, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const holding = await fetchHolding(USER, TOKEN, handle.client);
 
     expect(holding.erc2612Nonce).toBeUndefined();
     expect(holding.canTransfer).toBe(true);
@@ -1161,7 +1091,6 @@ describe("fetchHolding", () => {
 
     await expect(
       fetchHolding(USER, TOKEN, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1172,7 +1101,7 @@ describe("fetchMarketParams", () => {
   test("returns known market params without reading RPC", async () => {
     const { client } = createMockClient(mainnet);
 
-    const params = await fetchMarketParams(ID, client, { chainId: CHAIN_ID });
+    const params = await fetchMarketParams(ID, client);
 
     expect(params.id).toBe(ID);
   });
@@ -1181,7 +1110,7 @@ describe("fetchMarketParams", () => {
     const handle = createMockClient(mainnet);
     const id = `0x${"12".repeat(32)}` as typeof ID;
     mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "idToMarketParams",
       result: marketParamsTuple(),
@@ -1194,38 +1123,25 @@ describe("fetchMarketParams", () => {
 });
 
 describe("fetchUser", () => {
-  test("fetches authorization and nonce", async () => {
+  test("fetches the Morpho nonce", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: ADDRESSES.morpho,
-      abi: blueAbi,
-      functionName: "isAuthorized",
-      result: true,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "nonce",
       result: 26n,
     });
 
-    const user = await fetchUser(USER, handle.client, { chainId: CHAIN_ID });
+    const user = await fetchUser(USER, handle.client, {});
 
     expect(user).toBeInstanceOf(User);
-    expect(user.isBundlerAuthorized).toBe(true);
     expect(user.morphoNonce).toBe(26n);
   });
 
   test("defaults chainId from the client", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
-      address: ADDRESSES.morpho,
-      abi: blueAbi,
-      functionName: "isAuthorized",
-      result: false,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.morpho,
+      address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "nonce",
       result: 0n,
@@ -1233,28 +1149,7 @@ describe("fetchUser", () => {
 
     const user = await fetchUser(USER, handle.client);
 
-    expect(user.isBundlerAuthorized).toBe(false);
-  });
-
-  test("behavior: does not write the resolved chainId into caller-owned parameters", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: ADDRESSES.morpho,
-      abi: blueAbi,
-      functionName: "isAuthorized",
-      result: false,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.morpho,
-      abi: blueAbi,
-      functionName: "nonce",
-      result: 0n,
-    });
-    const parameters = {};
-
-    await fetchUser(USER, handle.client, parameters);
-
-    expect(parameters).toStrictEqual({});
+    expect(user.morphoNonce).toBe(0n);
   });
 });
 
@@ -1272,39 +1167,7 @@ describe("vault fetchers", () => {
     expect(config.decimalsOffset).toBe(2n);
   });
 
-  test("fetchVaultMarketPublicAllocatorConfig returns undefined when the chain has no public allocator", async () => {
-    const { client } = createMockClient({
-      ...mainnet,
-      id: ChainId.TempoMainnet,
-    });
-
-    await expect(
-      fetchVaultMarketPublicAllocatorConfig(VAULT, ID, client),
-    ).resolves.toBeUndefined();
-  });
-
-  test("fetchVaultMarketPublicAllocatorConfig fetches flow caps", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: ADDRESSES.publicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "flowCaps",
-      result: [27n, 28n],
-    });
-
-    const config = await fetchVaultMarketPublicAllocatorConfig(
-      VAULT,
-      ID,
-      handle.client,
-      { chainId: CHAIN_ID },
-    );
-
-    expect(config).toBeInstanceOf(VaultMarketPublicAllocatorConfig);
-    expect(config?.maxIn).toBe(27n);
-    expect(config?.maxOut).toBe(28n);
-  });
-
-  test("fetchVaultMarketConfig composes vault cap data and public allocator caps", async () => {
+  test("fetchVaultMarketConfig composes vault cap data", async () => {
     const handle = createMockClient(mainnet);
     mockVaultMarketConfigReads(handle);
 
@@ -1313,7 +1176,6 @@ describe("vault fetchers", () => {
     expect(config).toBeInstanceOf(VaultMarketConfig);
     expect(config.cap).toBe(29n);
     expect(config.pendingCap).toEqual({ value: 31n, validAt: 32n });
-    expect(config.publicAllocatorConfig?.maxOut).toBe(34n);
   });
 
   test("fetchVaultUser uses the deployless vault-user query", async () => {
@@ -1347,9 +1209,7 @@ describe("vault fetchers", () => {
       result: false,
     });
 
-    const vaultUser = await fetchVaultUser(VAULT, USER, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const vaultUser = await fetchVaultUser(VAULT, USER, handle.client, {});
 
     expect(vaultUser.allowance).toBe(36n);
     expect(vaultUser.isAllocator).toBe(false);
@@ -1372,7 +1232,6 @@ describe("vault fetchers", () => {
     });
 
     const vaultUser = await fetchVaultUser(VAULT, USER, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -1386,7 +1245,6 @@ describe("vault fetchers", () => {
 
     await expect(
       fetchVaultUser(VAULT, USER, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1420,12 +1278,6 @@ describe("vault fetchers", () => {
       lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
-      hasPublicAllocator: true,
-      publicAllocatorConfig: {
-        admin: USER,
-        fee: 45n,
-        accruedFee: 46n,
-      },
     });
 
     const vault = await fetchVault(VAULT, handle.client);
@@ -1434,95 +1286,15 @@ describe("vault fetchers", () => {
     expect(vault.address).toBe(VAULT);
     expect(vault.withdrawQueue).toEqual([ID]);
     expect(vault.lostAssets).toBe(55n);
-    expect(vault.publicAllocatorConfig?.accruedFee).toBe(46n);
-  });
-
-  test("fetchVault omits deployless public allocator config when the chain has no public allocator", async () => {
-    const handle = createMockClient(mainnet);
-    mockDeploylessRead(handle, vaultQueryAbi, "query", {
-      config: {
-        asset: TOKEN,
-        symbol: "vMOCK",
-        name: "Vault Mock",
-        decimals: 18n,
-        decimalsOffset: 2n,
-        eip5267Domain: DOMAIN,
-      },
-      owner: USER,
-      curator: RECIPIENT,
-      guardian: COLLATERAL,
-      timelock: 37n,
-      pendingTimelock: { value: 38n, validAt: 39n },
-      pendingGuardian: { value: ORACLE, validAt: 40n },
-      pendingOwner: TOKEN,
-      fee: 41n,
-      feeRecipient: USER,
-      skimRecipient: RECIPIENT,
-      totalSupply: 42n,
-      totalAssets: 43n,
-      lastTotalAssets: 44n,
-      hasLostAssets: true,
-      lostAssets: 55n,
-      supplyQueue: [ID],
-      withdrawQueue: [ID],
-      hasPublicAllocator: false,
-      publicAllocatorConfig: {
-        admin: USER,
-        fee: 45n,
-        accruedFee: 46n,
-      },
-    });
-
-    const vault = await fetchVault(VAULT, handle.client, {
-      chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
-    });
-
-    expect(vault.publicAllocatorConfig).toBeUndefined();
-  });
-
-  test("fetchVault omits deployless public allocator config when the vault has not enabled the public allocator", async () => {
-    const handle = createMockClient(mainnet);
-    mockDeploylessRead(handle, vaultQueryAbi, "query", {
-      config: {
-        asset: TOKEN,
-        symbol: "vMOCK",
-        name: "Vault Mock",
-        decimals: 18n,
-        decimalsOffset: 2n,
-        eip5267Domain: DOMAIN,
-      },
-      owner: USER,
-      curator: RECIPIENT,
-      guardian: COLLATERAL,
-      timelock: 37n,
-      pendingTimelock: { value: 38n, validAt: 39n },
-      pendingGuardian: { value: ORACLE, validAt: 40n },
-      pendingOwner: TOKEN,
-      fee: 41n,
-      feeRecipient: USER,
-      skimRecipient: RECIPIENT,
-      totalSupply: 42n,
-      totalAssets: 43n,
-      lastTotalAssets: 44n,
-      hasLostAssets: false,
-      lostAssets: 0n,
-      supplyQueue: [ID],
-      withdrawQueue: [ID],
-      hasPublicAllocator: false,
-      publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
-    });
-
-    const vault = await fetchVault(VAULT, handle.client);
-
-    expect(vault.publicAllocatorConfig).toBeUndefined();
   });
 
   test("fetchVault throws UnknownFactory when the chain has no MetaMorpho factory", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.TempoMainnet,
+    });
 
-    await expect(
-      fetchVault(VAULT, client, { chainId: ChainId.TempoMainnet }),
-    ).rejects.toThrow(UnknownFactory);
+    await expect(fetchVault(VAULT, client)).rejects.toThrow(UnknownFactory);
   });
 
   test("fetchVault throws the deployless failure when forced", async () => {
@@ -1531,7 +1303,6 @@ describe("vault fetchers", () => {
 
     await expect(
       fetchVault(VAULT, handle.client, {
-        chainId: CHAIN_ID,
         deployless: "force",
       }),
     ).rejects.toThrow();
@@ -1543,7 +1314,6 @@ describe("vault fetchers", () => {
     mockVaultMulticallReads(handle);
 
     const vault = await fetchVault(VAULT, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
@@ -1551,13 +1321,15 @@ describe("vault fetchers", () => {
   });
 
   test("fetchVault does not use the legacy factory fallback on unsupported chains", async () => {
-    const handle = createMockClient(mainnet);
+    const handle = createMockClient({
+      ...mainnet,
+      id: META_MORPHO_WITHOUT_LEGACY_FALLBACK_CHAIN_ID,
+    });
     mockDeploylessReads(handle, ["0x"]);
     mockVaultMulticallReads(handle, { isMetaMorphoV1_1: false });
 
     await expect(
       fetchVault(VAULT, handle.client, {
-        chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
         deployless: false,
       }),
     ).rejects.toThrow(UnknownOfFactory);
@@ -1681,24 +1453,6 @@ describe("vault fetchers", () => {
       result: true,
     });
     mockRead(handle, {
-      address: ADDRESSES.publicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "admin",
-      result: USER,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.publicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "fee",
-      result: 56n,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.publicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "accruedFee",
-      result: 57n,
-    });
-    mockRead(handle, {
       address: VAULT,
       abi: metaMorphoAbi,
       functionName: "supplyQueue",
@@ -1712,14 +1466,12 @@ describe("vault fetchers", () => {
     });
 
     const vault = await fetchVault(VAULT, handle.client, {
-      chainId: CHAIN_ID,
       deployless: false,
     });
 
     expect(vault.totalAssets).toBe(53n);
     expect(vault.lostAssets).toBe(55n);
     expect(vault.supplyQueue).toEqual([ID]);
-    expect(vault.publicAllocatorConfig?.fee).toBe(56n);
   });
 
   test("fetchVault throws UnknownOfFactory when neither factory recognizes the vault", async () => {
@@ -1840,9 +1592,9 @@ describe("vault fetchers", () => {
       result: false,
     });
 
-    await expect(
-      fetchVault(VAULT, handle.client, { chainId: CHAIN_ID }),
-    ).rejects.toThrow(UnknownOfFactory);
+    await expect(fetchVault(VAULT, handle.client, {})).rejects.toThrow(
+      UnknownOfFactory,
+    );
   });
 
   test("fetchVaultMarketAllocation composes market config and accrual position", async () => {
@@ -1892,12 +1644,6 @@ describe("vault fetchers", () => {
         lostAssets: 55n,
         supplyQueue: [ID],
         withdrawQueue: [ID],
-        hasPublicAllocator: true,
-        publicAllocatorConfig: {
-          admin: USER,
-          fee: 45n,
-          accruedFee: 46n,
-        },
       }),
       encodeReadResult(marketQueryAbi, "query", {
         marketParams: marketParamsTuple(),

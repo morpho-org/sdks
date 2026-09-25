@@ -19,7 +19,6 @@ import {
   Vault,
   VaultConfig,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
   VaultV2,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
@@ -31,6 +30,7 @@ import {
   type ContractFunctionReturnType,
   erc20Abi,
   type Hash,
+  isAddressEqual,
   zeroAddress,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -76,10 +76,10 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `VaultV2` entity. `liquidityAllocations` is undefined when no liquidity
  *   adapter is configured or when the configured liquidity adapter is unsupported.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when a recognized liquidity adapter is configured with
@@ -103,13 +103,11 @@ export async function fetchVaultV2(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   const {
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
     vaultV2Factory,
-  } = getChainAddresses(parameters.chainId);
+  } = getChainAddresses(await getChainId(client));
 
   if (!vaultV2Factory) {
     throw new UnknownFactory();
@@ -423,10 +421,10 @@ export async function fetchVaultV2(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag; defaults to `"latest"` when `blockNumber` is omitted.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrual adapters, and
  *   force-deallocate penalties.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
  * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
@@ -450,17 +448,13 @@ export async function fetchVaultV2(
 export async function fetchAccrualVaultV2(
   address: Address,
   client: Client,
-  // Destructure so `parameters` is a fresh rest object we own — defaulting `chainId` below never
-  // mutates the caller's argument (§2).
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
-
   // The entire accrual tree can be read in a single deployless call. When it succeeds there is
   // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
   if (deployless) {
     try {
-      return await fetchAccrualVaultV2Deployless(address, client, parameters);
+      return await fetchAccrualVaultV2WithQuery(address, client, parameters);
     } catch (error) {
       if (deployless === "force") throw error;
       // Deterministic errors would be raised identically by the multicall path — do not retry.
@@ -554,19 +548,16 @@ function toMarket(
     params: new MarketParams(response.marketParams),
     ...response.market,
     price: response.hasPrice ? response.price : undefined,
-    rateAtTarget:
-      response.marketParams.irm === adaptiveCurveIrm
-        ? response.rateAtTarget
-        : undefined,
+    rateAtTarget: isAddressEqual(response.marketParams.irm, adaptiveCurveIrm)
+      ? response.rateAtTarget
+      : undefined,
   });
 }
 
 /** @internal Rebuilds one accrued adapter from a deployless `GetAccrualVaultV2` adapter response. */
-// biome-ignore lint/complexity/useMaxParams: internal decoder threading chain-resolved addresses
 function toAccrualAdapter(
   adapter: AccrualVaultV2QueryResponse["adapters"][number],
   adaptiveCurveIrm: Address,
-  publicAllocator: Address | undefined,
 ): IAccrualVaultV2Adapter {
   const base = {
     address: adapter.adapter,
@@ -613,16 +604,6 @@ function toAccrualAdapter(
         totalAssets: 0n,
         lastTotalAssets: vaultV1.lastTotalAssets,
         lostAssets: vaultV1.hasLostAssets ? vaultV1.lostAssets : undefined,
-        // Populated only when the vault set the chain's PublicAllocator as an allocator, matching
-        // `fetchVault`'s multicall gate (`undefined` otherwise, not a zeroed config).
-        publicAllocatorConfig:
-          publicAllocator != null && vaultV1.hasPublicAllocator
-            ? {
-                admin: vaultV1.publicAllocatorConfig.admin,
-                fee: vaultV1.publicAllocatorConfig.fee,
-                accruedFee: vaultV1.publicAllocatorConfig.accruedFee,
-              }
-            : undefined,
       });
 
       const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
@@ -640,17 +621,6 @@ function toAccrualAdapter(
             },
             removableAt: allocation.removableAt,
             enabled: allocation.enabled,
-            // Per-market flow caps are only read when a PublicAllocator is configured for the
-            // chain; otherwise the query leaves them zeroed and the field stays `undefined`.
-            publicAllocatorConfig:
-              publicAllocator != null
-                ? new VaultMarketPublicAllocatorConfig({
-                    vault: morphoVaultV1,
-                    marketId,
-                    maxIn: allocation.flowCapMaxIn,
-                    maxOut: allocation.flowCapMaxOut,
-                  })
-                : undefined,
           }),
           position: new AccrualPosition(
             new Position({
@@ -733,74 +703,23 @@ function toAccrualAdapter(
   }
 }
 
-/**
- * Fetches the full VaultV2 accrual tree in a single deployless call.
- *
- * {@link fetchAccrualVaultV2} defaults to this same single deployless call but transparently falls
- * back to sequential multicall reads (vault, then each adapter, then each adapter's markets or
- * wrapped MetaMorpho V1 vault) when the deployless read fails. This reader is deployless-only: it
- * always performs the single `eth_call`, never falls back, and throws if the deployless read fails
- * (equivalent to `deployless: "force"`). It requires every configured adapter factory to be deployed
- * at the queried block.
- *
- * At the same explicit `blockNumber`, the returned `AccrualVaultV2` is byte-for-byte identical to
- * `fetchAccrualVaultV2`'s output, including the nested MetaMorpho V1 vault of a
- * `MorphoVaultV1Adapter`: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config (both
- * vault-level and per-market `publicAllocatorConfig`) are read in the same single call, so no field
- * is dropped.
- *
- * @param address - Address of the VaultV2 to fetch.
- * @param client - Viem client used for the deployless read.
- * @param parameters.account - Optional account passed to the viem call.
- * @param parameters.blockNumber - Optional block number for a historical read.
- * @param parameters.blockTag - Optional block tag for a historical read.
- * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
- * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrued liquidity and regular
- *   adapters, and force-deallocate penalties.
- * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
- * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
- * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an unsupported
- *   adapter class.
- * @throws {viem.BaseError} when the deployless `eth_call` or response decoding fails (no fallback).
- * @deprecated Use {@link fetchAccrualVaultV2}, which is deployless-first with RPC fallback by
- *   default. Pass `deployless: "force"` to preserve this function's no-fallback behavior.
- * @example
- * ```ts
- * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
- * import { fetchAccrualVaultV2Deployless } from "@morpho-org/blue-sdk-viem";
- * import { createPublicClient, http } from "viem";
- * import { base } from "viem/chains";
- *
- * const client = createPublicClient({ chain: base, transport: http() });
- * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
- *
- * const vault: AccrualVaultV2 = await fetchAccrualVaultV2Deployless(
- *   vaultV2Address,
- *   client,
- * );
- * ```
- */
-// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-export async function fetchAccrualVaultV2Deployless(
+// biome-ignore lint/complexity/useMaxParams: internal query preserves the public fetch signature
+async function fetchAccrualVaultV2WithQuery(
   address: Address,
   client: Client,
   // This reader is deployless-only, so it takes `FetchParameters` (no `deployless` toggle): it
   // never falls back to multicall and always performs the single bytecode call.
   parameters: FetchParameters = {},
 ) {
-  // Do not mutate the caller's object (§2); copy it before defaulting `chainId`.
-  const chainId = parameters.chainId ?? (await getChainId(client));
-  const readParameters = { ...parameters, chainId };
+  const chainId = await getChainId(client);
 
   const {
-    morpho,
+    blue,
     adaptiveCurveIrm,
     vaultV2Factory,
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
-    publicAllocator,
   } = getChainAddresses(chainId);
 
   if (!vaultV2Factory) {
@@ -810,7 +729,7 @@ export async function fetchAccrualVaultV2Deployless(
   let response: AccrualVaultV2QueryResponse;
   try {
     response = await readContract(client, {
-      ...readParameters,
+      ...parameters,
       abi: getAccrualVaultV2Abi,
       code: getAccrualVaultV2Code,
       functionName: "query",
@@ -820,9 +739,8 @@ export async function fetchAccrualVaultV2Deployless(
         morphoVaultV1AdapterFactory ?? zeroAddress,
         morphoMarketV1AdapterFactory ?? zeroAddress,
         morphoMarketV1AdapterV2Factory ?? zeroAddress,
-        morpho,
+        blue,
         adaptiveCurveIrm,
-        publicAllocator ?? zeroAddress,
       ],
     });
   } catch (error) {
@@ -862,15 +780,11 @@ export async function fetchAccrualVaultV2Deployless(
   });
 
   const accrualLiquidityAdapter = response.hasLiquidityAdapter
-    ? toAccrualAdapter(
-        response.liquidityAdapterInfo,
-        adaptiveCurveIrm,
-        publicAllocator,
-      )
+    ? toAccrualAdapter(response.liquidityAdapterInfo, adaptiveCurveIrm)
     : undefined;
 
   const accrualAdapters = response.adapters.map((adapter) =>
-    toAccrualAdapter(adapter, adaptiveCurveIrm, publicAllocator),
+    toAccrualAdapter(adapter, adaptiveCurveIrm),
   );
 
   const forceDeallocatePenalties = Object.fromEntries(

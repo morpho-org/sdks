@@ -1,62 +1,84 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
-import { type Address, encodeFunctionData, publicActions } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  publicActions,
+} from "viem";
+import { validateDeadline } from "../../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
   type Requirement,
   type Transaction,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
 
 /**
- * Resolves whether `GeneralAdapter1` needs Blue authorization for the given user, and returns
+ * Resolves whether a supported operator needs Blue authorization for the given user, and returns
  * the requirement to satisfy it when it does.
  *
- * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
- * any bundled Blue path that operates on behalf of the user (`borrow`, `withdraw`,
- * `supplyCollateralBorrow`, `repayWithdrawCollateral`, `refinance`).
+ * Reads `Morpho.isAuthorized(userAddress, authorized)` on the target chain.
  *
  * - When `supportSignature` is falsy (default), returns the
- *   `setAuthorization(generalAdapter1, true)` transaction the user submits before the bundle.
+ *   `setAuthorization(authorized, true)` transaction the user submits before the operation.
  * - When `supportSignature` is `true`, reads the user's Morpho `nonce` and returns a signable
- *   `Requirement`; the signed authorization is folded into the bundle via
- *   `setAuthorizationWithSig`, removing the standalone transaction.
+ *   `Requirement` consumed by BlueBundlesV1.
  *
  * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
- * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
- * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
+ * @param params.chainId - Target chain id used to resolve Morpho and BlueBundlesV1.
+ * @param params.userAddress - The user granting authorization.
+ * @param params.authorized - Operator to authorize. Defaults to the chain's registered
+ *   BlueBundlesV1 deployment and must match it.
+ * @param params.deadline - Optional signature deadline forwarded to the authorization encoder.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
- *   transaction so authorization can be bundled via `setAuthorizationWithSig`.
+ *   transaction so the destination route can consume the signed authorization.
  * @returns A deep-frozen `Transaction<BlueAuthorizationAction>`, a signable authorization
  *   `Requirement` (when `supportSignature` is `true`), or `null` when authorization is already in
  *   place.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is not the chain's
+ *   BlueBundlesV1 operator.
+ * @throws {NonPositiveInputError} when a provided `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when a provided `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when a provided `deadline` is positive but not in the future.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+ * @throws {UnknownAddressError} when BlueBundlesV1 is not registered on the target chain.
+ * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example
  * ```ts
- * import { createPublicClient, http } from "viem";
+ * import { createPublicClient, http, zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
  * import { getBlueAuthorizationRequirement } from "@morpho-org/morpho-sdk";
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
  * const requirement = await getBlueAuthorizationRequirement({
  *   viemClient: client,
- *   chainId: 1,
- *   userAddress: borrower,
+ *   chainId: mainnet.id,
+ *   userAddress: zeroAddress,
  *   supportSignature: true,
+ *   authorized: blueBundlesV1,
+ *   deadline: 1_900_000_000n,
  * });
  * // requirement is null when already authorized, a Requirement when supportSignature is true,
  * // otherwise Readonly<Transaction<BlueAuthorizationAction>>
  * ```
  */
 export const getBlueAuthorizationRequirement = async (params: {
-  viemClient: Client;
-  chainId: number;
-  userAddress: Address;
-  supportSignature?: boolean;
+  readonly viemClient: Client;
+  readonly chainId: number;
+  readonly userAddress: Address;
+  readonly supportSignature?: boolean;
+  readonly authorized?: Address;
+  readonly deadline?: bigint;
 }): Promise<
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>
@@ -68,14 +90,29 @@ export const getBlueAuthorizationRequirement = async (params: {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
   }
 
-  const {
-    morpho,
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
+  const { blue: morpho } = getChainAddresses(chainId);
 
+  const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
+  const authorized = params.authorized ?? blueBundlesV1;
+  // The SDK only ever authorizes the chain's registered BlueBundlesV1 operator;
+  // reject any other override so a misconfigured `authorized` cannot grant an arbitrary address
+  // control over the user's Morpho positions.
+  if (!isAddressEqual(blueBundlesV1, authorized)) {
+    throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
+  }
   const pc = viemClient.extend(publicActions);
 
   if (supportSignature) {
+    // The forwarded deadline is only consumed on the signable path; reject an invalid or expired
+    // one before the RPC reads so the caller never signs an authorization that cannot be encoded
+    // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
+    if (params.deadline != null) {
+      validateDeadline(params.deadline);
+      const timestamp = Time.timestamp();
+      if (params.deadline <= timestamp) {
+        throw new ExpiredDeadlineError(params.deadline, timestamp);
+      }
+    }
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of
@@ -85,7 +122,7 @@ export const getBlueAuthorizationRequirement = async (params: {
         address: morpho,
         abi: blueAbi,
         functionName: "isAuthorized",
-        args: [userAddress, generalAdapter1],
+        args: [userAddress, authorized],
       }),
       pc.readContract({
         address: morpho,
@@ -100,9 +137,11 @@ export const getBlueAuthorizationRequirement = async (params: {
     }
 
     return encodeBlueSignatureAuthorization(viemClient, {
-      authorized: generalAdapter1,
+      owner: userAddress,
+      authorized,
       chainId,
       nonce,
+      deadline: params.deadline,
     });
   }
 
@@ -110,7 +149,7 @@ export const getBlueAuthorizationRequirement = async (params: {
     address: morpho,
     abi: blueAbi,
     functionName: "isAuthorized",
-    args: [userAddress, generalAdapter1],
+    args: [userAddress, authorized],
   });
 
   if (isAuthorized) {
@@ -122,13 +161,13 @@ export const getBlueAuthorizationRequirement = async (params: {
     data: encodeFunctionData({
       abi: blueAbi,
       functionName: "setAuthorization",
-      args: [generalAdapter1, true],
+      args: [authorized, true],
     }),
     value: 0n,
     action: {
       type: "blueAuthorization" as const,
       args: {
-        authorized: generalAdapter1,
+        authorized,
         isAuthorized: true,
       },
     },

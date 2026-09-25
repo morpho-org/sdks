@@ -594,7 +594,7 @@ export class Offer {
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
-   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `0n` (fail-closed: no market continuous fee accepted unless set explicitly).
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @param params.callback - Optional callback address; defaults to the zero address.

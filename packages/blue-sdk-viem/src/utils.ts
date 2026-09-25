@@ -16,6 +16,8 @@ import {
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
 
+import { InvalidNumberError } from "./error.js";
+
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>
   new Intl.NumberFormat("en-US", {
@@ -31,6 +33,7 @@ const toFixed = (x: number, decimals: number) =>
  * @param value - Decimal number to parse.
  * @param decimals - Optional token decimals; defaults to 18.
  * @returns The parsed bigint scaled by `decimals`.
+ * @throws {InvalidNumberError} When the formatted value is not a plain decimal string (e.g. `NaN`, `Infinity`).
  * @example
  * ```ts
  * import { safeParseNumber } from "@morpho-org/blue-sdk-viem";
@@ -47,6 +50,7 @@ export const safeParseNumber = (value: number, decimals = 18) =>
  * @param strValue - Decimal string to parse.
  * @param decimals - Optional token decimals; defaults to 18.
  * @returns The parsed bigint scaled by `decimals`.
+ * @throws {InvalidNumberError} When `strValue` is not a plain decimal string (e.g. `"100.00.999"`, `"1e5"`, `"abc1"`).
  * @example
  * ```ts
  * import { safeParseUnits } from "@morpho-org/blue-sdk-viem";
@@ -55,17 +59,22 @@ export const safeParseNumber = (value: number, decimals = 18) =>
  * ```
  */
 export const safeParseUnits = (strValue: string, decimals = 18) => {
-  if (!/[-+]?[0-9]*\.?[0-9]+/.test(strValue))
-    throw Error(`invalid number: ${strValue}`);
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(strValue))
+    throw new InvalidNumberError(strValue);
 
-  let [whole, dec = ""] = strValue.split(".");
+  const negative = strValue.startsWith("-");
+  const unsigned = strValue.replace(/^[-+]/, "");
+
+  let [whole, dec = ""] = unsigned.split(".");
 
   dec = dec.slice(0, decimals);
 
-  return parseUnits(
+  const parsed = parseUnits(
     [whole || "0", dec].filter((v) => v.length > 0).join("."),
     decimals,
   );
+
+  return negative ? -parsed : parsed;
 };
 
 /**

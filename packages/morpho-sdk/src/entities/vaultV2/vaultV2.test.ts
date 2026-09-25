@@ -18,6 +18,17 @@ describe("MorphoVaultV2 chain validation", () => {
     await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
   });
 
+  test("error: ChainIdMismatchError when the client has no chain", async () => {
+    const publicClient = createPublicClient({
+      transport: http("https://rpc.example"),
+    });
+    const vault = publicClient
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
+
+    await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
+  });
+
   test("deposit throws ChainIdMismatchError when client chain differs", () => {
     const publicClient = createPublicClient({
       chain: mainnet,
@@ -46,15 +57,19 @@ describe("MorphoVaultV2 chain validation", () => {
       .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
 
     expect(() =>
-      vault.withdraw({ amount: 1n, userAddress: KeyrockUsdcVaultV2.address }),
+      vault.withdraw({
+        amount: 1n,
+        userAddress: KeyrockUsdcVaultV2.address,
+        vaultData: {} as never,
+      }),
     ).toThrow(ChainIdMismatchError);
     expect(() =>
       vault.redeem({ shares: 1n, userAddress: KeyrockUsdcVaultV2.address }),
     ).toThrow(ChainIdMismatchError);
     expect(() =>
       vault.forceWithdraw({
-        deallocations: [],
-        withdraw: { amount: 1n },
+        exitAssets: 1n,
+        vaultData: {} as never,
         userAddress: KeyrockUsdcVaultV2.address,
       }),
     ).toThrow(ChainIdMismatchError);

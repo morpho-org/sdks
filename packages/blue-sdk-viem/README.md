@@ -25,6 +25,8 @@
 
 Viem-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) viem-based fetch methods.
 
+Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md).
+
 ## Installation
 
 ```bash
@@ -43,22 +45,21 @@ Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue 
 
 ```typescript
 // Granular, opt-in, per-entity class augmentation:
-import "@morpho-org/blue-sdk-viem/lib/augment/AccrualPosition";
-import "@morpho-org/blue-sdk-viem/lib/augment/Holding";
-import "@morpho-org/blue-sdk-viem/lib/augment/Market";
-import "@morpho-org/blue-sdk-viem/lib/augment/MarketParams";
-import "@morpho-org/blue-sdk-viem/lib/augment/Position";
-import "@morpho-org/blue-sdk-viem/lib/augment/Token";
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultConfig";
-import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultUser";
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketAllocation";
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketConfig";
-// Deprecated Vault V1 PublicAllocator fetcher; use fetchVaultV2BlueMarketPublicAllocatorConfig for Vault V2.
-import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketPublicAllocatorConfig";
+import "@morpho-org/blue-sdk-viem/augment/Holding";
+import "@morpho-org/blue-sdk-viem/augment/Market";
+import "@morpho-org/blue-sdk-viem/augment/MarketParams";
+// Also augments `AccrualPosition` (whose `fetchPreLiquidation` returns a `PreLiquidationPosition`).
+import "@morpho-org/blue-sdk-viem/augment/Position";
+import "@morpho-org/blue-sdk-viem/augment/Token";
+import "@morpho-org/blue-sdk-viem/augment/User";
+import "@morpho-org/blue-sdk-viem/augment/VaultConfig";
+import "@morpho-org/blue-sdk-viem/augment/Vault";
+import "@morpho-org/blue-sdk-viem/augment/VaultUser";
+import "@morpho-org/blue-sdk-viem/augment/VaultMarketAllocation";
+import "@morpho-org/blue-sdk-viem/augment/VaultMarketConfig";
 
 // Or full, opt-in class augmentation:
-import "@morpho-org/blue-sdk-viem/lib/augment";
+import "@morpho-org/blue-sdk-viem/augment";
 ```
 
 ### Fetch the config of a specific market
@@ -67,8 +68,8 @@ Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to fetch infor
 
 ```typescript
 import { MarketId } from "@morpho-org/blue-sdk";
-// /!\ Import AccrualPosition from the augmentation file (or simply import the file)
-import { MarketParams } from "@morpho-org/blue-sdk-viem/lib/augment/MarketParams";
+// /!\ Import MarketParams from the augmentation file (or simply import the file)
+import { MarketParams } from "@morpho-org/blue-sdk-viem/augment/MarketParams";
 
 const config = await MarketParams.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
@@ -85,8 +86,8 @@ Leverage the [`Market`](./src/market/Market.ts) class to fetch information on a 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
 import { MarketId } from "@morpho-org/blue-sdk";
-// /!\ Import AccrualPosition from the augmentation file (or simply import the file)
-import { Market } from "@morpho-org/blue-sdk-viem/lib/augment/Market";
+// /!\ Import Market from the augmentation file (or simply import the file)
+import { Market } from "@morpho-org/blue-sdk-viem/augment/Market";
 
 const market = await Market.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
@@ -111,7 +112,7 @@ Leverage the [`Position`](./src/position/Position.ts) class to fetch the positio
 import { Time } from "@morpho-org/morpho-ts";
 import { MarketId } from "@morpho-org/blue-sdk";
 // /!\ Import AccrualPosition from the augmentation file (or simply import the file)
-import { AccrualPosition } from "@morpho-org/blue-sdk-viem/lib/augment/Position";
+import { AccrualPosition } from "@morpho-org/blue-sdk-viem/augment/Position";
 
 const position = await AccrualPosition.fetch(
   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
