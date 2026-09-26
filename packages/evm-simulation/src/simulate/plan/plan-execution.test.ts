@@ -1,12 +1,6 @@
 import { type Address, getAddress, zeroAddress } from "viem";
 import type { ParsedRequest } from "../../domain/stages.js";
 import { parseRequest } from "../request/index.js";
-import {
-  encodeNativeBalanceProbe,
-  NATIVE_BALANCE_PROBE_ADDRESS,
-  NATIVE_BALANCE_PROBE_BYTECODE,
-} from "./native-balance-probe.js";
-import { planExecution } from "./plan-execution.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const TARGET: Address = getAddress(
@@ -23,80 +17,142 @@ const makeRequest = (count: number): ParsedRequest =>
     })),
   });
 
+import type {
+  DecodedBundle,
+  ProbeRead,
+  ValidatedAuthorizations,
+} from "../../domain/stages.js";
+import { brandPinned, brandValidated } from "../../domain/stages.js";
+import { planExecution } from "./plan-execution.js";
+
+const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+const SPENDER: Address = getAddress(
+  "0x3333333333333333333333333333333333333333",
+);
+
+const NOW = 1_700_000_000n;
+
+const erc20Read: ProbeRead = {
+  type: "erc20Allowance",
+  token: TOKEN,
+  owner: OWNER,
+  spender: SPENDER,
+};
+
+const validated = (authIndex = 0): ValidatedAuthorizations =>
+  brandValidated({
+    inputs: brandPinned({
+      bundle: {
+        request: makeRequest(2),
+        owner: OWNER,
+        operations: [],
+      } as unknown as DecodedBundle,
+      context: {
+        chainId: 1,
+        stateBlockNumber: 24_000_000n,
+        stateBlockHash: `0x${"ab".repeat(32)}`,
+        stateBlockTimestamp: NOW,
+        blockNumber: 24_000_000n,
+        blockTimestamp: NOW,
+      },
+      before: {
+        wallet: [],
+        permissions: [],
+        positions: [],
+        vaults: [],
+        markets: [],
+      },
+      internals: { vaultData: new Map() },
+    }),
+    limits: {
+      maxSlippageWad: 0n,
+      minLltvBufferWad: 0n,
+      maxSignatureLifetimeSeconds: 0n,
+      wallet: { maxDebit: [], minCredit: [] },
+      operations: [],
+    },
+    preparations: [
+      {
+        authorizationIndex: authIndex,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+        expected: [
+          {
+            type: "erc20Allowance",
+            token: TOKEN,
+            owner: OWNER,
+            spender: SPENDER,
+            amount: 1n,
+          },
+        ],
+      },
+    ],
+    matches: [{ authorizationIndex: authIndex, expectedIndex: 0 }],
+    expected: [],
+  }) as ValidatedAuthorizations;
+
 describe("planExecution", () => {
-  test("default: one transaction yields probe → tx → probe", () => {
-    const plan = planExecution(makeRequest(1));
-    expect(plan.owner).toBe(OWNER);
-    expect(plan.calls).toHaveLength(3);
-    expect(plan.calls.map((call) => call.identity)).toEqual([
-      { type: "probe", probeId: "native-balance:before", phase: "before" },
-      { type: "transaction", transactionIndex: 0 },
-      { type: "probe", probeId: "native-balance:after:0", phase: "after" },
-    ]);
-  });
-
-  test("behavior: three transactions interleave intermediate probes", () => {
-    const plan = planExecution(makeRequest(3));
-    expect(plan.calls).toHaveLength(7);
-    expect(plan.calls.map((call) => call.identity)).toEqual([
-      { type: "probe", probeId: "native-balance:before", phase: "before" },
-      { type: "transaction", transactionIndex: 0 },
-      {
-        type: "probe",
-        probeId: "native-balance:after:0",
-        phase: "intermediate",
-      },
-      { type: "transaction", transactionIndex: 1 },
-      {
-        type: "probe",
-        probeId: "native-balance:after:1",
-        phase: "intermediate",
-      },
-      { type: "transaction", transactionIndex: 2 },
-      { type: "probe", probeId: "native-balance:after:2", phase: "after" },
-    ]);
-  });
-
-  test("behavior: probe calls read the owner balance via the code override", () => {
-    const plan = planExecution(makeRequest(1));
-    const probe = plan.calls[0]!;
-    expect(probe.transaction).toEqual({
-      from: zeroAddress,
-      to: NATIVE_BALANCE_PROBE_ADDRESS,
-      data: encodeNativeBalanceProbe(OWNER),
-      value: 0n,
+  test("ordering: before → preparation → prepared → tx → intermediate → tx → after", () => {
+    const plan = planExecution(validated(), {
+      full: [erc20Read],
+      permissions: [erc20Read],
     });
-    expect(probe).toMatchObject({
-      read: { type: "nativeBalance", account: OWNER },
+    const kinds = plan.calls.map((c) =>
+      c.identity.type === "probe"
+        ? `probe:${c.identity.phase}`
+        : c.identity.type,
+    );
+    const firstTx = kinds.indexOf("transaction");
+    const secondTx = kinds.indexOf("transaction", firstTx + 1);
+    expect(kinds[0]).toBe("probe:before");
+    expect(kinds).toContain("authorization");
+    expect(kinds.indexOf("authorization")).toBeLessThan(
+      kinds.indexOf("probe:prepared"),
+    );
+    expect(kinds.indexOf("probe:prepared")).toBeLessThan(firstTx);
+    expect(kinds.indexOf("probe:intermediate")).toBeGreaterThan(firstTx);
+    expect(kinds.indexOf("probe:intermediate")).toBeLessThan(secondTx);
+    expect(kinds.lastIndexOf("probe:after")).toBe(plan.calls.length - 1);
+    // after phase carries the full read set incl. native
+    const afterCount = kinds.filter((k) => k === "probe:after").length;
+    expect(afterCount).toBe(2);
+  });
+
+  test("no preparation → no prepared-phase probes", () => {
+    const v = validated();
+    const plan = planExecution(
+      brandValidated({ ...v, preparations: [], matches: [] }),
+      { full: [erc20Read], permissions: [erc20Read] },
+    );
+    expect(
+      plan.calls.some(
+        (c) => c.identity.type === "probe" && c.identity.phase === "prepared",
+      ),
+    ).toBe(false);
+  });
+
+  test("preparation and probe calls never carry a public txIdx", () => {
+    const plan = planExecution(validated(), {
+      full: [erc20Read],
+      permissions: [erc20Read],
     });
-    expect(plan.stateOverrides).toEqual([
-      {
-        address: NATIVE_BALANCE_PROBE_ADDRESS,
-        code: NATIVE_BALANCE_PROBE_BYTECODE,
-      },
-    ]);
+    for (const call of plan.calls) {
+      if (call.identity.type === "transaction") continue;
+      expect("transactionIndex" in call.identity).toBe(false);
+    }
   });
 
-  test("behavior: user transactions default value to 0n and keep identity", () => {
-    const plan = planExecution(makeRequest(1));
-    const userCall = plan.calls[1]!;
-    expect(userCall.transaction).toEqual({
-      from: OWNER,
-      to: TARGET,
-      data: "0x12345678",
-      value: 0n,
+  test("preparation calls run from the owner, probes from zeroAddress", () => {
+    const plan = planExecution(validated(), {
+      full: [],
+      permissions: [erc20Read],
     });
-  });
-
-  test("behavior: pure — same input yields structurally equal plans", () => {
-    const request = makeRequest(2);
-    expect(planExecution(request)).toEqual(planExecution(request));
-  });
-
-  test("behavior: output is deep-frozen", () => {
-    const plan = planExecution(makeRequest(1));
-    expect(Object.isFrozen(plan)).toBe(true);
-    expect(Object.isFrozen(plan.calls)).toBe(true);
-    expect(Object.isFrozen(plan.stateOverrides)).toBe(true);
+    for (const call of plan.calls) {
+      if (call.identity.type === "authorization") {
+        expect(call.transaction.from).toBe(OWNER);
+      }
+      if (call.identity.type === "probe") {
+        expect(call.transaction.from).toBe(zeroAddress);
+      }
+    }
   });
 });

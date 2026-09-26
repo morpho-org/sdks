@@ -1,7 +1,9 @@
 import type { BlockTag } from "viem";
 import type { ExecutionEvidence, ExecutionPlan } from "../../domain/stages.js";
 import type { SimulationConfig } from "../../types.js";
+import { createSimulationClient } from "../backends/client.js";
 import { executePlan } from "../backends/index.js";
+import { resolvePinnedBlock } from "../backends/resolve-pinned-block.js";
 import { resolveChain } from "./resolve-chain.js";
 
 /** Total execution budget for a single `simulate()` call. */
@@ -31,11 +33,18 @@ export async function executeSimulation(params: {
 }): Promise<ExecutionEvidence> {
   const { config, plan, blockNumber } = params;
   const chain = resolveChain(config, plan.request.chainId);
+  const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const client = createSimulationClient(chain.simulateV1Url, signal);
+  const pinnedBlock = await resolvePinnedBlock({
+    client,
+    blockNumber,
+    signal,
+  });
 
   return executePlan({
     rpcUrl: chain.simulateV1Url,
     plan,
-    blockNumber,
-    signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    pinnedBlock,
+    signal,
   });
 }

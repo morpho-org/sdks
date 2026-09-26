@@ -40,7 +40,7 @@ describe("VerifiedSimulationResult", () => {
     expectTypeOf<SimulationResult>().not.toExtend<VerifiedSimulationResult>();
     expectTypeOf<
       Awaited<ReturnType<typeof simulate>>
-    >().toEqualTypeOf<SimulationResult>();
+    >().toEqualTypeOf<VerifiedSimulationResult>();
   });
 
   test("behavior: nested request and output fields are readonly", () => {

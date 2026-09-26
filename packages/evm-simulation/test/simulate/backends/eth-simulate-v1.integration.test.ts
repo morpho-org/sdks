@@ -1,9 +1,16 @@
-import { type Address, encodeFunctionData, ethAddress, parseEther } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  ethAddress,
+  getAddress,
+  parseEther,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
+import { makeValidated } from "../../../src/test-helpers/index.js";
 import { test } from "../../setup.js";
 
 const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -30,12 +37,14 @@ function planFor(
   transactions: readonly { to: Address; data: `0x${string}`; value?: bigint }[],
   owner: Address,
 ) {
-  return planExecution(
-    parseRequest({
-      chainId: mainnet.id,
-      transactions: transactions.map((tx) => ({ ...tx, from: owner })),
-    }),
-  );
+  const request = parseRequest({
+    chainId: mainnet.id,
+    transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+  });
+  return planExecution(makeValidated({ request, owner }), {
+    full: [],
+    permissions: [],
+  });
 }
 
 describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
@@ -52,7 +61,11 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
     const evidence = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
+      pinnedBlock: {
+        number: head,
+        hash: pinned.hash!,
+        timestamp: pinned.timestamp,
+      },
     });
 
     expect(evidence.context.chainId).toBe(mainnet.id);
@@ -67,18 +80,14 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
     const again = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
+      pinnedBlock: {
+        number: head,
+        hash: pinned.hash!,
+        timestamp: pinned.timestamp,
+      },
     });
     expect(again.context).toEqual(evidence.context);
     expect(again.snapshots).toEqual(evidence.snapshots);
-
-    // "latest" on the pinned fork resolves to the same pinned block.
-    const latest = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan,
-      blockNumber: "latest",
-    });
-    expect(latest.context.stateBlockNumber).toBe(head);
   });
 
   test("probe snapshots report the owner's real native balance", async ({
@@ -87,10 +96,15 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
     const balance = await client.getBalance({
       address: client.account.address,
     });
+    const head = await client.getBlock({ blockTag: "latest" });
     const evidence = await executePlan({
       rpcUrl: client.transport.url!,
       plan: planFor([{ to: RECIPIENT, data: "0x" }], client.account.address),
-      blockNumber: await client.getBlockNumber(),
+      pinnedBlock: {
+        number: head.number!,
+        hash: head.hash!,
+        timestamp: head.timestamp,
+      },
     });
 
     expect(evidence.snapshots).toHaveLength(2);
@@ -98,7 +112,7 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
       expect(snapshot.snapshot.wallet).toEqual([
         {
           account: client.account.address,
-          token: ethAddress,
+          token: getAddress(ethAddress),
           assets: balance,
         },
       ]);
@@ -136,7 +150,11 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
         ],
         client.account.address,
       ),
-      blockNumber: await client.getBlockNumber(),
+      pinnedBlock: {
+        number: (await client.getBlock({ blockTag: "latest" })).number!,
+        hash: (await client.getBlock({ blockTag: "latest" })).hash!,
+        timestamp: (await client.getBlock({ blockTag: "latest" })).timestamp,
+      },
     });
 
     const [before_, intermediate, after] = evidence.snapshots.map(

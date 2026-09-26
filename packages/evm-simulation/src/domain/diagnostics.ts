@@ -175,4 +175,13 @@ export type ConsumerConstraintContext =
       readonly token: Address;
       readonly boundAssets: bigint;
       readonly observedAssets: bigint;
+    }
+  | {
+      /** A bound limit matched no verified operation. */
+      readonly type: "operation";
+      readonly operationIndex: number;
+      /** The limit's `type` tag (the operation kind expected). */
+      readonly limit: string;
+      readonly expected: string;
+      readonly observed: string;
     };

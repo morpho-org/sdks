@@ -27,7 +27,7 @@ import { decodeOperations } from "./operations.js";
  * and direct Morpho `setAuthorization`. Everything else rejects typed.
  */
 const chainId = 1;
-const owner = getAddress("0x10000000000000000000000000000000000000aa");
+const owner = getAddress("0x10000000000000000000000000000000000000aA");
 const addresses = getChainAddresses(chainId);
 const morpho = addresses.blue as Address;
 const bundles = addresses.bundles;
@@ -54,7 +54,7 @@ const tx = (spec: {
 const marketTuple = {
   loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
   collateralToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-  oracle: getAddress("0xd48ae1c530183bcebc59a25924f09829fbd27bb1"),
+  oracle: getAddress("0xD48AE1C530183bcebc59A25924F09829Fbd27Bb1"),
   irm: addresses.adaptiveCurveIrm,
   lltv: 860_000000000000000n,
 };

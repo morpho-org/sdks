@@ -1,10 +1,4 @@
-import {
-  type BlockTag,
-  createPublicClient,
-  ExecutionRevertedError,
-  http,
-  numberToHex,
-} from "viem";
+import { ExecutionRevertedError, numberToHex } from "viem";
 import type { ExecutionEvidence, ExecutionPlan } from "../../domain/stages.js";
 import {
   ExternalServiceError,
@@ -12,7 +6,9 @@ import {
   SimulationPackageError,
   SimulationRevertedError,
 } from "../../errors.js";
+import { createSimulationClient } from "./client.js";
 import { parseSimulationResponse } from "./parse-response.js";
+import type { PinnedBlock } from "./resolve-pinned-block.js";
 
 /**
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
@@ -23,12 +19,10 @@ import { parseSimulationResponse } from "./parse-response.js";
  * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
  *    mismatch is an endpoint-configuration failure (`ExternalServiceError`),
  *    not a simulation failure.
- * 2. **Single block resolution + reorg check** — the requested
- *    `blockNumber`/tag/`latest` resolves to one concrete state block
- *    (`stateBlock*`). `latest` is therefore resolved exactly once; the
- *    simulation below pins that number so a drifting head cannot smear the
- *    evidence across blocks, and the state block is re-fetched after the
- *    simulation to detect a reorg that swapped its hash mid-flight.
+ * 2. **Pinned block + reorg check** — the state block was already resolved
+ *    once up front (`resolvePinnedBlock`) so `latest` cannot drift; the
+ *    simulation below pins that number and the state block is re-fetched
+ *    after the simulation to detect a reorg that swapped its hash mid-flight.
  * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from` (probes are sent from the zero address),
  *    the probe code override as `stateOverrides`, `traceTransfers: true` so
@@ -46,8 +40,8 @@ import { parseSimulationResponse } from "./parse-response.js";
  * The endpoint must support `eth_simulateV1` with `stateOverrides` code
  * injection and per-call `from`; there is no fallback backend.
  *
- * @param params - RPC endpoint, the plan to execute, an optional block pin and
- *   the pipeline's abort signal.
+ * @param params - RPC endpoint, the plan to execute, the already-resolved
+ *   pinned block, and the pipeline's abort signal.
  * @returns Deep-frozen {@link ExecutionEvidence} — tagged call results, the
  *   resolved {@link ExecutionContext}, and per-probe snapshots.
  * @throws {ExternalServiceError} For chain mismatch, transport failures,
@@ -63,20 +57,12 @@ import { parseSimulationResponse } from "./parse-response.js";
 export async function executePlan(params: {
   rpcUrl: string;
   plan: ExecutionPlan;
-  blockNumber?: bigint | BlockTag;
+  pinnedBlock: PinnedBlock;
   signal?: AbortSignal;
 }): Promise<ExecutionEvidence> {
-  const { rpcUrl, plan, blockNumber, signal } = params;
+  const { rpcUrl, plan, pinnedBlock, signal } = params;
 
-  const client = createPublicClient({
-    transport: http(rpcUrl, {
-      fetchOptions: signal ? { signal } : undefined,
-      // A failed request must not consume another attempt or a fresh budget.
-      retryCount: 0,
-      // The pipeline abort signal owns the overall execution deadline.
-      timeout: signal ? 0 : undefined,
-    }),
-  });
+  const client = createSimulationClient(rpcUrl, signal);
 
   let evidence: ExecutionEvidence;
   try {
@@ -88,22 +74,8 @@ export async function executePlan(params: {
       );
     }
 
-    // (b) Resolve the state block exactly once so `latest` cannot drift.
-    const stateBlock = await client.getBlock(
-      typeof blockNumber === "bigint"
-        ? { blockNumber }
-        : { blockTag: blockNumber ?? "latest" },
-    );
-    if (stateBlock.number === null || stateBlock.hash === null) {
-      throw new InvalidSimulationResponseError(
-        "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-        {
-          stage: "evidence",
-          chainId: plan.request.chainId,
-          mode: plan.request.mode,
-        },
-      );
-    }
+    // (b) The state block was resolved once up front; simulate pinned on it.
+    const stateBlock = pinnedBlock;
 
     // (c) Raw request: per-call `from` is honored and the response is parsed by
     // this package — not by viem's simulateCalls/simulateBlocks wrappers.
