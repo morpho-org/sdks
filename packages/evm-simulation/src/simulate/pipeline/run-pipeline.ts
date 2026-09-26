@@ -95,17 +95,14 @@ export async function runPipeline(params: {
 
   const complete = proveAuthorizations(evidence, validated);
 
-  const transfers = extractUserTransfers(complete, config.logger);
+  const transfers = extractUserTransfers(complete);
   const effects = verifyEffects(complete, validated, transfers, config.logger);
   const constrained = enforceLimits(effects);
   return assembleResult(constrained);
 }
 
 /** Parse transfers from user calls only; probes/preparations never surface. */
-function extractUserTransfers(
-  evidence: CompleteEvidence,
-  logger?: import("../../types.js").SimulationLogger,
-): readonly Transfer[] {
+function extractUserTransfers(evidence: CompleteEvidence): readonly Transfer[] {
   const userCalls = evidence.calls
     .filter(
       (
@@ -127,6 +124,5 @@ function extractUserTransfers(
       },
     );
   }
-  void logger;
   return parseTransfers(userCalls);
 }

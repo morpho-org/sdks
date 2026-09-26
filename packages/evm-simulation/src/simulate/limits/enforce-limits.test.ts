@@ -30,7 +30,6 @@ const emptyDiff: VerificationDiff = {
   markets: [],
   positions: [],
   vaults: [],
-  allocations: [],
   wallet: [],
 };
 
