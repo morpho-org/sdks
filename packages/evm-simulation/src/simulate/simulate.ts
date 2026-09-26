@@ -1,23 +1,7 @@
-import {
-  _try,
-  getChainAddresses,
-  UnsupportedChainIdError,
-} from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { SimulateParams } from "../domain/request.js";
-import {
-  InvalidSimulationResponseError,
-  UnsupportedVerificationFeatureError,
-} from "../errors.js";
-import type { SimulationConfig, SimulationResult } from "../types.js";
-
-import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
-import { parseTransfers } from "./parsing/index.js";
-import {
-  assertNoBundlesRetention,
-  executeSimulation,
-} from "./pipeline/index.js";
-import { planExecution } from "./plan/index.js";
+import type { VerifiedSimulationResult } from "../domain/result.js";
+import type { SimulationConfig } from "../types.js";
+import { runPipeline } from "./pipeline/run-pipeline.js";
 import { parseRequest } from "./request/index.js";
 
 /**
@@ -44,11 +28,10 @@ import { parseRequest } from "./request/index.js";
  *
  * **Modes.** `mode` defaults to `"final"`, which executes the signed calldata
  * against actual permissions and accepts no `authorizations`. `mode:
- * "preview"` accepts typed authorization descriptors, but authorization
- * preparation and verification are not implemented on this integration
- * branch: passing `authorizations` (or `limits`, which is enforced by the
- * verification release) throws `UnsupportedVerificationFeatureError` instead
- * of silently ignoring them.
+ * "preview"` accepts typed authorization descriptors, which the pipeline
+ * prepares as simulated approval calls and verifies via in-block read-back
+ * probes. `limits` are enforced as post-verification consumer constraints;
+ * violations throw `ConsumerLimitViolationError`.
  *
  * **Funding.** `value` transfers are funded by the sender's real native
  * balance — no balance inflation — so under-funded bundles revert exactly as
@@ -69,8 +52,8 @@ import { parseRequest } from "./request/index.js";
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
  *   authorizations, weakening limits).
- * @throws {UnsupportedVerificationFeatureError} when preview authorizations or
- *   limits are supplied before their verification release.
+ * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
+ *   violated by the verified effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
  * @throws {SimulationRevertedError} when a user transaction reverts.
@@ -114,83 +97,6 @@ import { parseRequest } from "./request/index.js";
 export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,
-): Promise<SimulationResult> {
-  const request = parseRequest(params);
-
-  if (request.authorizations.length > 0) {
-    throw new UnsupportedVerificationFeatureError(
-      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
-      {
-        mode: request.mode,
-        stage: "authorization",
-        chainId: request.chainId,
-      },
-    );
-  }
-  if (request.limits !== undefined) {
-    throw new UnsupportedVerificationFeatureError(
-      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
-      { mode: request.mode, stage: "limits", chainId: request.chainId },
-    );
-  }
-
-  const wNative = _try(
-    () => getChainAddresses(request.chainId).wNative ?? null,
-    UnsupportedChainIdError,
-  );
-
-  const plan = planExecution(request);
-  const evidence = await executeSimulation({
-    config,
-    plan,
-    blockNumber: request.blockNumber,
-  });
-
-  const userCalls = evidence.calls
-    .filter(
-      (
-        call,
-      ): call is typeof call & {
-        identity: { type: "transaction"; transactionIndex: number };
-      } => call.identity.type === "transaction",
-    )
-    .sort((a, b) => a.identity.transactionIndex - b.identity.transactionIndex)
-    .map((call) => call.result);
-  if (userCalls.length !== request.transactions.length) {
-    throw new InvalidSimulationResponseError(
-      `Evidence contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
-      {
-        stage: "evidence",
-        chainId: request.chainId,
-        mode: request.mode,
-      },
-    );
-  }
-
-  const transfers = parseTransfers(userCalls, {
-    wNative,
-    logger: config.logger,
-  });
-
-  const entries: AssetChangeEntry[] = [];
-  for (const { token, from, to, amount } of transfers) {
-    entries.push({ account: to, token, diff: amount });
-    entries.push({ account: from, token, diff: -amount });
-  }
-  const assetChanges = groupAssetChanges(entries);
-
-  // Reject retained funds before returning a successful simulation.
-  assertNoBundlesRetention({
-    chainId: request.chainId,
-    transfers,
-    assetChanges,
-    logger: config.logger,
-  });
-
-  return deepFreeze({
-    simulationTxs: request.transactions,
-    calls: userCalls,
-    transfers,
-    assetChanges,
-  });
+): Promise<VerifiedSimulationResult> {
+  return runPipeline({ config, request: parseRequest(params) });
 }
