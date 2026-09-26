@@ -1,10 +1,11 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, ethAddress, type Hex, isAddress, isHex } from "viem";
+import { type Address, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
 import type { SimulationErrorContext } from "../../domain/diagnostics.js";
 import type { ExecutionContext } from "../../domain/evidence.js";
 import {
   brandExecuted,
+  type DecodedProbeRead,
   type ExecutionEvidence,
   type ExecutionPlan,
   type ObservedSnapshot,
@@ -12,10 +13,11 @@ import {
 import {
   InvalidSimulationResponseError,
   MissingVerificationEvidenceError,
+  PermissionChangeMismatchError,
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import { decodeNativeBalanceProbe } from "../plan/native-balance-probe.js";
+import { decodeProbeResult } from "../plan/probes.js";
 
 // RPC quantities are never the empty "0x" — BigInt("0x") would throw.
 const quantity = z.string().regex(/^0x[0-9a-fA-F]+$/);
@@ -66,15 +68,20 @@ const responseSchema = z
  * rejects a block that lies *behind* the pinned state. Consumers must read
  * `context.blockNumber`/`context.blockTimestamp` and never assume +1.
  *
+ * Every planned probe call is decoded through {@link decodeProbeResult} and
+ * grouped by phase in `probeReads`; every preparation call's result is grouped
+ * by `authorizationIndex` in `preparations`. User `calls` keep the caller's
+ * `transactionIndex`.
+ *
  * @param params - The plan, the raw RPC `result`, and the resolved state block.
- * @returns Deep-frozen evidence: tagged calls plus one {@link ObservedSnapshot}
- *   per successful probe.
+ * @returns Deep-frozen evidence.
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
  *   mismatch, or a simulated block behind the pinned state block.
  * @throws {SimulationRevertedError} When a user-transaction call failed; the
  *   `details` payload carries the tagged user call results only.
  * @throws {MissingVerificationEvidenceError} When a probe call failed or its
  *   return data cannot be decoded.
+ * @throws {PermissionChangeMismatchError} When a preparation call reverted.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -167,25 +174,50 @@ export function parseSimulationResponse(params: {
     );
   }
 
+  const probeBuckets = {
+    before: [] as DecodedProbeRead[],
+    prepared: [] as DecodedProbeRead[],
+    intermediate: [] as DecodedProbeRead[],
+    after: [] as DecodedProbeRead[],
+  };
+  const preparations = new Map<number, SimulationCall[]>();
   const snapshots: ObservedSnapshot[] = [];
+
   for (const { planned, result, call } of calls) {
-    if (!("read" in planned)) continue;
+    if (planned.identity.type === "authorization") {
+      const { authorizationIndex } = planned.identity;
+      if (!result.status) {
+        throw new PermissionChangeMismatchError(
+          `Preparation call ${planned.identity.preparationCallIndex} for authorization ${authorizationIndex} reverted${call.error?.message !== undefined ? `: ${call.error.message}` : ""}`,
+          {
+            ...errorContext,
+            location: { type: "authorization", authorizationIndex },
+          },
+        );
+      }
+      const list = preparations.get(authorizationIndex) ?? [];
+      list.push(result);
+      preparations.set(authorizationIndex, list);
+      continue;
+    }
+    if (!("read" in planned) || planned.identity.type !== "probe") continue;
     const { identity } = planned;
+    if (identity.type !== "probe") continue;
     if (!result.status) {
       throw new MissingVerificationEvidenceError(
-        `Native balance probe "${identity.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
+        `Probe "${identity.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
         {
           ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
         },
       );
     }
-    let assets: bigint;
+    let decoded: DecodedProbeRead;
     try {
-      assets = decodeNativeBalanceProbe(call.returnData as Hex);
+      decoded = decodeProbeResult(planned.read, result.returnData);
     } catch (error) {
       throw new MissingVerificationEvidenceError(
-        `Native balance probe "${identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
+        `Probe "${identity.probeId}" returned undecodable data. Check that the endpoint returns valid contract views.`,
         {
           ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
@@ -193,18 +225,29 @@ export function parseSimulationResponse(params: {
         { cause: error },
       );
     }
-    snapshots.push({
-      identity,
-      context,
-      snapshot: {
-        wallet: [{ account: planned.read.account, token: ethAddress, assets }],
-        permissions: [],
-        positions: [],
-        vaults: [],
-        markets: [],
-      },
-    });
+    probeBuckets[identity.phase].push(decoded);
+    if (decoded.type === "nativeBalance") {
+      snapshots.push({
+        identity,
+        context,
+        snapshot: {
+          wallet: [
+            {
+              account: decoded.account,
+              token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address,
+              assets: decoded.value,
+            },
+          ],
+          permissions: [],
+          positions: [],
+          vaults: [],
+          markets: [],
+        },
+      });
+    }
   }
+
+  const probeReads: ExecutionEvidence["probeReads"] = probeBuckets;
 
   return brandExecuted(
     deepFreeze({
@@ -214,6 +257,13 @@ export function parseSimulationResponse(params: {
         identity: planned.identity,
         result,
       })),
+      probeReads,
+      preparations: [...preparations.entries()].map(
+        ([authorizationIndex, prepCalls]) => ({
+          authorizationIndex,
+          calls: prepCalls,
+        }),
+      ),
       snapshots,
     }),
   );

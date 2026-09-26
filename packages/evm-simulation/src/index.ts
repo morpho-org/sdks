@@ -52,6 +52,10 @@ export type {
   PreviewSimulateParams,
   SimulateParams,
 } from "./domain/request.js";
+export type {
+  VerifiedOperation,
+  VerifiedSimulationResult,
+} from "./domain/result.js";
 // Errors (for instanceof checks by consumers)
 export {
   AssetChangeMismatchError,

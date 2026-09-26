@@ -1,3 +1,5 @@
+export type { BindingCandidates } from "./bindings.js";
+export { collectBindingCandidates } from "./bindings.js";
 export type {
   DecodedOperations,
   DecodeOperationsParams,

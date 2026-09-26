@@ -51,7 +51,7 @@ import type { SimulationTransaction } from "../types.js";
 import { decodeOperations, type VaultBinding } from "./operations.js";
 
 const chainId = 1;
-const owner = getAddress("0x10000000000000000000000000000000000000aa");
+const owner = getAddress("0x10000000000000000000000000000000000000aA");
 const addresses = getChainAddresses(chainId);
 const bundles = addresses.bundles;
 if (bundles?.blueBundlesV1 == null || bundles.vaultBundlesV1 == null) {
@@ -65,7 +65,7 @@ const morpho = addresses.blue as Address;
 const adaptiveCurveIrm = addresses.adaptiveCurveIrm as Address;
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
-const ORACLE = getAddress("0xd48ae1c530183bcebc59a25924f09829fbd27bb1");
+const ORACLE = getAddress("0xD48AE1C530183bcebc59A25924F09829Fbd27Bb1");
 const VAULT_V1 = getAddress("0x1111111111111111111111111111111111111111");
 const VAULT_V2 = getAddress("0x2222222222222222222222222222222222222222");
 const ADAPTER = getAddress("0x3333333333333333333333333333333333333333");

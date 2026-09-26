@@ -5,7 +5,7 @@ import {
   SimulationRevertedError,
   UnsupportedChainError,
 } from "../../errors.js";
-import { encodeUint256 } from "../../test-helpers/index.js";
+import { encodeUint256, makeValidated } from "../../test-helpers/index.js";
 import type { SimulationConfig } from "../../types.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
@@ -23,7 +23,7 @@ const rpc = (result: unknown) =>
 
 function respondHappy(callCount = 3) {
   fetchMock
-    .mockResolvedValueOnce(rpc("0x1"))
+    // Pinned block resolution runs first, then the boundary's chain check.
     .mockResolvedValueOnce(
       rpc({
         number: numberToHex(20_000_000n),
@@ -31,6 +31,7 @@ function respondHappy(callCount = 3) {
         timestamp: numberToHex(1_700_000_000n),
       }),
     )
+    .mockResolvedValueOnce(rpc("0x1"))
     .mockResolvedValueOnce(
       rpc([
         {
@@ -56,13 +57,16 @@ function respondHappy(callCount = 3) {
     );
 }
 
-const makePlan = () =>
-  planExecution(
-    parseRequest({
-      chainId: 1,
-      transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
-    }),
-  );
+const makePlan = () => {
+  const request = parseRequest({
+    chainId: 1,
+    transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+  });
+  return planExecution(makeValidated({ request, owner: OWNER }), {
+    full: [],
+    permissions: [],
+  });
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -112,7 +116,6 @@ describe.sequential("executeSimulation", () => {
 
   test("error: propagates SimulationRevertedError from the boundary", async () => {
     fetchMock
-      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc({
           number: numberToHex(20_000_000n),
@@ -120,6 +123,7 @@ describe.sequential("executeSimulation", () => {
           timestamp: numberToHex(1_700_000_000n),
         }),
       )
+      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc([
           {

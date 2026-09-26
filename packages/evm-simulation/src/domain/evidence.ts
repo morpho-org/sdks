@@ -122,6 +122,8 @@ export interface MarketState {
     readonly scale: bigint;
   }>;
   readonly borrowRatePerSecondWad: Applicable<bigint>;
+  /** AdaptiveCurveIRM `rateAtTarget` — the accrual input Morpho stores per market. */
+  readonly rateAtTargetPerSecondWad: Applicable<bigint>;
   readonly preLiquidation: Applicable<{
     readonly address: Address;
     readonly preLltvWad: bigint;
@@ -153,7 +155,14 @@ export type VaultState = {
   readonly performanceFeeWad: bigint;
   readonly allocations: readonly VaultAllocation[];
 } & (
-  | { readonly type: "vaultV1"; readonly lastTotalAssets: bigint }
+  | {
+      readonly type: "vaultV1";
+      readonly lastTotalAssets: bigint;
+      /** MetaMorpho virtual-share decimals offset, needed to reproduce `toShares`/`toAssets`. */
+      readonly decimalsOffset: bigint;
+      /** Present only on MetaMorpho v1.1; distinguishes the allowance-cap formula. */
+      readonly lostAssets?: bigint;
+    }
   | {
       readonly type: "vaultV2";
       readonly managementFeeWad: bigint;
@@ -161,6 +170,10 @@ export type VaultState = {
       readonly maxRatePerSecondWad: bigint;
       readonly lastUpdate: bigint;
       readonly recordedTotalAssets: bigint;
+      /** VaultV2 virtual shares, needed to reproduce `toShares`/`toAssets`. */
+      readonly virtualShares: bigint;
+      /** Adapter holding unallocated assets; `zeroAddress` when unset. */
+      readonly liquidityAdapter: Address;
     }
 );
 
