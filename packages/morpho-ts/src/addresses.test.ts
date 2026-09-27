@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-
+import { getChecksumAddress } from "./address.js";
 import {
   addresses,
   addressesRegistry,
@@ -16,6 +16,7 @@ import {
 import { ChainId } from "./chain.js";
 import {
   IncompleteChainRegistryError,
+  InvalidAddressError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
@@ -28,7 +29,7 @@ const randomAddress = (): `0x${string}` => {
     `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as `0x${string}`;
   nextAddressIndex += 1n;
 
-  return address;
+  return getChecksumAddress(address);
 };
 
 const createMidnightAddresses = () => ({
@@ -1142,7 +1143,7 @@ describe("registerCustomAddresses", () => {
         }),
       ).not.toThrow();
       expect(Object.keys(unwrappedTokensMapping[chainId] ?? {})).toEqual([
-        first,
+        wrappedToken,
       ]);
       expect(getUnwrappedToken(second, chainId)).toBe(unwrappedToken);
 
@@ -1366,5 +1367,126 @@ describe("registerCustomAddresses", () => {
     expect(deployments[chainId]?.wNative).toBeUndefined();
     expect(blueDeployments[chainId]).toBe(deployments[chainId]);
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
+  });
+});
+
+describe("registerCustomAddresses EIP-55 canonicalisation", () => {
+  test("behavior: stores lowercase custom addresses in checksum form", () => {
+    const chainId = 31_337_100;
+    const blue = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+    const adaptiveCurveIrm = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359";
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          ...createMidnightAddresses(),
+          blue: blue.toLowerCase() as `0x${string}`,
+          adaptiveCurveIrm: adaptiveCurveIrm.toLowerCase() as `0x${string}`,
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.blue).toBe(blue);
+    expect(addressesRegistry[chainId]?.adaptiveCurveIrm).toBe(adaptiveCurveIrm);
+    expect(getChainAddress(chainId, "blue")).toBe(blue);
+  });
+
+  test("behavior: accepts a lowercase alias of a registered address", () => {
+    const chainId = 31_337_101;
+    const chainAddresses = createChainAddresses();
+
+    registerCustomAddresses({
+      addresses: { [chainId]: chainAddresses },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...chainAddresses,
+            blue: chainAddresses.blue.toLowerCase() as `0x${string}`,
+            adaptiveCurveIrm:
+              chainAddresses.adaptiveCurveIrm.toLowerCase() as `0x${string}`,
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: InvalidAddressError on malformed custom address leaves registry untouched", () => {
+    const chainId = 31_337_102;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: "0x12" as `0x${string}`,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on mis-checksummed address leaves registry untouched", () => {
+    const chainId = 31_337_103;
+    const misChecksummed =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: misChecksummed,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("behavior: stores lowercase unwrapped token entries in checksum form", () => {
+    const chainId = 31_337_104;
+    const wrapped = "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB";
+    const unwrapped = "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb";
+
+    registerCustomAddresses({
+      unwrappedTokens: {
+        [chainId]: {
+          [wrapped.toLowerCase()]: unwrapped.toLowerCase(),
+        } as Record<`0x${string}`, `0x${string}`>,
+      },
+    });
+
+    expect(unwrappedTokensMapping[chainId]).toEqual({ [wrapped]: unwrapped });
+    expect(getUnwrappedToken(wrapped, chainId)).toBe(unwrapped);
+  });
+
+  test("error: InvalidAddressError on malformed unwrapped token", () => {
+    const chainId = 31_337_105;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { "0x12": randomAddress() } as Record<
+            `0x${string}`,
+            `0x${string}`
+          >,
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("behavior: getChecksumAddress agrees with registry canonical form", () => {
+    const lower = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".toLowerCase();
+
+    expect(getChecksumAddress(lower)).toBe(
+      "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+    );
   });
 });
