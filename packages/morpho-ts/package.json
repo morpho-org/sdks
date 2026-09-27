@@ -43,7 +43,8 @@
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "fast-check": "^4.9.0"
   },
   "publishConfig": {
     "exports": {
