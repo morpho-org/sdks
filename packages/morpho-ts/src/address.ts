@@ -1,5 +1,7 @@
+import { keccak_256 } from "@noble/hashes/sha3.js";
+import { utf8ToBytes } from "@noble/hashes/utils.js";
+
 import { InvalidAddressError } from "./errors.js";
-import { keccak256, utf8ToBytes } from "./keccak.js";
 
 /**
  * Checks whether a string has the syntactic shape of an EVM address
@@ -20,7 +22,7 @@ export const isAddress = (value: string): value is `0x${string}` =>
   /^0x[0-9a-fA-F]{40}$/.test(value);
 
 const computeChecksum = (lowerHex: string): `0x${string}` => {
-  const hash = keccak256(utf8ToBytes(lowerHex));
+  const hash = keccak_256(utf8ToBytes(lowerHex));
   let checksum = "0x";
 
   for (let i = 0; i < 40; i++) {

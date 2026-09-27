@@ -292,6 +292,10 @@ importers:
         version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
 
   packages/morpho-ts:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.2.0
     devDependencies:
       fast-check:
         specifier: ^4.9.0
