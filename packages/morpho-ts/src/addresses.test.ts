@@ -1430,6 +1430,23 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
     expect(addressesRegistry[chainId]).toBeUndefined();
   });
 
+  test("error: InvalidAddressError on custom address without 0x prefix", () => {
+    const chainId = 31_337_104;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress().slice(2) as `0x${string}`,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
   test("error: InvalidAddressError on mis-checksummed address leaves registry untouched", () => {
     const chainId = 31_337_103;
     const misChecksummed =

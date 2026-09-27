@@ -1,8 +1,7 @@
-import { getChecksumAddress, isAddress } from "./address.js";
+import { getChecksumAddress } from "./address.js";
 import { ChainId } from "./chain.js";
 import {
   IncompleteChainRegistryError,
-  InvalidAddressError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
@@ -1950,12 +1949,7 @@ const cloneRegistryValue = <T>(value: T): T => {
 };
 
 const canonicalizeRegistryValue = <T>(value: T): T => {
-  if (typeof value === "string") {
-    if (isAddress(value)) return getChecksumAddress(value) as T;
-    if (/^0x/i.test(value)) throw new InvalidAddressError(value);
-
-    return value;
-  }
+  if (typeof value === "string") return getChecksumAddress(value) as T;
 
   if (!isRecord(value)) return value;
 
