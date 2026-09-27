@@ -76,7 +76,7 @@ export function getChecksumAddress(address: string): `0x${string}` {
  * import { isChecksumAddress } from "@morpho-org/morpho-ts";
  *
  * isChecksumAddress("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"); // true
- * isChecksumAddress("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"); // false
+ * isChecksumAddress("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".toLowerCase()); // false
  * ```
  */
 export const isChecksumAddress = (address: string): boolean =>
