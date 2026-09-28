@@ -24,8 +24,7 @@ stored the vault snapshot it fetched, the share cap it derived, and the permit i
 closure, and `buildTx()` accepted only signatures matching "the latest completed read". A handle
 built from the same inputs on another instance therefore rejected a valid signature or produced a
 different transaction, and `buildTx()` on a fresh handle used a different cap than the prepared one.
-The root `AGENTS.md` and the entity guidance already stated the rule as a convention; no record froze
-it as a decision, so implementations drifted away from it and reviewers had no acceptance checklist
+The contributor guidance already stated the rule as a convention; no record froze it as a decision, so implementations drifted away from it and reviewers had no acceptance checklist
 to hold PRs against.
 
 ## Decision
@@ -90,18 +89,17 @@ consequence of its own.
   inputs and rejected with a typed error on mismatch; every signed bound is validated against the
   fresh derivation in the direction the contract enforces (lower bound for funding caps); every
   opaque payload is presence-checked with its sibling `args` validated.
-- The existing entity guidance (`packages/morpho-sdk/src/entities/AGENTS.md`) and the root `AGENTS.md`
-  "Stateless, immutable, composable" rule remain the normative wording → this record freezes the
-  decision and its acceptance checklist and relaxes neither; any new flow's PR that introduces a
-  signing-derived value cites this ADR and shows where the value lives on the signature.
+- A flow that introduces a value only signing or requirement resolution can produce carries it on
+  `signature.args` → its PR cites this ADR and shows which `RequirementSignature` field holds the
+  value; contributor guidance may restate this rule but never relaxes it.
 
 ## Rejected alternatives
 
 - **Cache the resolved snapshot in the closure and let `buildTx()` fall back to it.** Rejected: the
   handle's output then depends on whether and when `getRequirements()` ran, so
   prepare-on-A → finalize-on-B and serialize-then-resume produce different calldata with no error.
-- **Make `buildTx()` async so it can refetch what it needs.** Rejected: it breaks the Action-layer
-  purity table in root `AGENTS.md` §1, makes builders untestable without a transport, and hides a
+- **Make `buildTx()` async so it can refetch what it needs.** Rejected: it breaks the Action layer's
+  purity rule (builders are synchronous and transport-free), makes builders untestable without a transport, and hides a
   network dependency in the step integrators run at submission time.
 - **Return the derived values from `getRequirements()` and require callers to pass them back.**
   Rejected: it widens `buildTx()`'s input surface per flow and duplicates what the signature already
@@ -109,8 +107,6 @@ consequence of its own.
 
 ## References
 
-- Root `AGENTS.md` §1 "Stateless, immutable, composable".
-- `packages/morpho-sdk/src/entities/AGENTS.md` "Responsibilities".
 - [ADR-2026-06-03-midnight-action-output-interface](./ADR-2026-06-03-midnight-action-output-interface.md)
   — first flow to carry a signing-derived payload on `signature.args`.
 - https://github.com/morpho-org/sdks/pull/1148 — Vault V1/V2 handles made stateless.
