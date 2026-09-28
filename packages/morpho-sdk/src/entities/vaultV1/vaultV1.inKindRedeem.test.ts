@@ -1,15 +1,7 @@
 import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
-import {
-  type Address,
-  createWalletClient,
-  custom,
-  erc20Abi,
-  maxUint256,
-  serializeSignature,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { type Address, erc20Abi, maxUint256, serializeSignature } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -22,6 +14,10 @@ import {
   mockMulticallResults,
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
+import {
+  signerAddress,
+  signerWalletClient,
+} from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -42,20 +38,6 @@ import {
 } from "../../types/index.js";
 
 const blue = addressesRegistry[mainnet.id].blue;
-
-const signerAccount = privateKeyToAccount(
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-);
-const signerAddress = signerAccount.address;
-const signerWalletClient = createWalletClient({
-  account: signerAccount,
-  chain: mainnet,
-  transport: custom({
-    request: async ({ method }) => {
-      throw new Error(`Unexpected RPC request "${method}".`);
-    },
-  }),
-});
 
 const mockV1Requirements = (
   handle: ReturnType<typeof createMockClient>,

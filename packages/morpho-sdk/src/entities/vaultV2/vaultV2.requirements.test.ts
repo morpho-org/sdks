@@ -6,15 +6,7 @@ import {
   expectReadCall,
   mockRead,
 } from "@morpho-org/test/mock";
-import {
-  type Address,
-  createWalletClient,
-  custom,
-  erc20Abi,
-  serializeSignature,
-  toHex,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -23,6 +15,10 @@ import {
   IN_KIND_VAULT,
   inKindVaultV2Data,
 } from "../../../test/fixtures/inKindRedeem.js";
+import {
+  signerAddress,
+  signerWalletClient,
+} from "../../../test/helpers/signer.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   type BundlesTokenRequirementSignature,
@@ -34,19 +30,6 @@ import {
 const amount = 100n;
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(address,address)
 
-const signerAccount = privateKeyToAccount(
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-);
-const signerAddress = signerAccount.address;
-const signerWalletClient = createWalletClient({
-  account: signerAccount,
-  chain: mainnet,
-  transport: custom({
-    request: async ({ method }) => {
-      throw new Error(`Unexpected RPC request "${method}".`);
-    },
-  }),
-});
 const MUTATED_ASSET = "0x0000000000000000000000000000000000002001";
 const MUTATED_USER = "0x0000000000000000000000000000000000002002";
 

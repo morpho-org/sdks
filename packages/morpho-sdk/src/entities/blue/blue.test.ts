@@ -8,16 +8,13 @@ import {
 import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import {
-  type Address,
-  createWalletClient,
-  custom,
-  erc20Abi,
-  maxUint256,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  signerAddress,
+  signerWalletClient,
+} from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -49,19 +46,6 @@ import {
 } from "../../types/index.js";
 
 const userAddress: Address = "0x00000000000000000000000000000000000000A1";
-const signerAccount = privateKeyToAccount(
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-);
-const signerAddress = signerAccount.address;
-const signerWalletClient = createWalletClient({
-  account: signerAccount,
-  chain: mainnet,
-  transport: custom({
-    request: async ({ method }) => {
-      throw new Error(`Unexpected RPC request "${method}".`);
-    },
-  }),
-});
 const otherUserAddress: Address = "0x00000000000000000000000000000000000000A2";
 const marketParams = new MarketParams({
   loanToken: "0x0000000000000000000000000000000000000011",
