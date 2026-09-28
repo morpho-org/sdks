@@ -294,8 +294,8 @@ importers:
   packages/morpho-ts:
     dependencies:
       '@noble/hashes':
-        specifier: ^2.2.0
-        version: 2.2.0
+        specifier: ^2.4.0
+        version: 2.4.0
     devDependencies:
       fast-check:
         specifier: ^4.9.0
