@@ -469,63 +469,15 @@ describe("main", () => {
     expect(requests).toHaveLength(0);
   });
 
-  test("reads and trims the PR number file when PR_NUMBER is empty", async () => {
-    const { fetchImpl, requests } = createFetch([
-      {
-        body: pullRequest({
-          login: "alice",
-          type: "User",
-          sha: HEAD,
-        }),
-      },
-      { body: [] },
-      { body: { id: 1 } },
-    ]);
-    const prNumberFile = "/runner/temp/pr-number";
-    const readFiles: string[] = [];
-
-    await main({
-      env: { ...ENV, PR_NUMBER: "", PR_NUMBER_FILE: prNumberFile },
-      fetchImpl,
-      readFile: async (path) => {
-        readFiles.push(path);
-        return "42\n";
-      },
-      writeOutput: () => {},
-    });
-
-    expect(readFiles).toEqual([prNumberFile]);
-    expect(requests[0]?.url.pathname).toBe("/repos/morpho-org/sdks/pulls/42");
-  });
-
-  test("rejects an invalid PR number file before fetching", async () => {
+  test("requires PR_NUMBER", async () => {
     const { fetchImpl, requests } = createFetch([]);
 
     await expect(
       main({
-        env: {
-          ...ENV,
-          PR_NUMBER: "",
-          PR_NUMBER_FILE: "/runner/temp/pr-number",
-        },
-        fetchImpl,
-        readFile: async () => "abc",
-      }),
-    ).rejects.toThrow(/Invalid PR_NUMBER/);
-    expect(requests).toHaveLength(0);
-  });
-
-  test("requires PR_NUMBER or PR_NUMBER_FILE", async () => {
-    const { fetchImpl, requests } = createFetch([]);
-
-    await expect(
-      main({
-        env: { ...ENV, PR_NUMBER: undefined, PR_NUMBER_FILE: undefined },
+        env: { ...ENV, PR_NUMBER: undefined },
         fetchImpl,
       }),
-    ).rejects.toThrow(
-      /Missing required environment variable PR_NUMBER or PR_NUMBER_FILE/,
-    );
+    ).rejects.toThrow(/Missing required environment variable PR_NUMBER/);
     expect(requests).toHaveLength(0);
   });
 

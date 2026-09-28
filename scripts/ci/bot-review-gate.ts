@@ -4,8 +4,6 @@
  * Run with Node's native TypeScript support: `node scripts/ci/bot-review-gate.ts`.
  */
 
-import { readFile } from "node:fs/promises";
-
 import {
   type FetchLike,
   type ListReviewsOptions,
@@ -130,25 +128,13 @@ export async function main(
     readonly apiBaseUrl?: string;
     readonly env?: NodeJS.ProcessEnv;
     readonly fetchImpl?: GateFetchLike;
-    readonly readFile?: (path: string) => Promise<string>;
     readonly writeOutput?: (message: string) => void;
   } = {},
 ): Promise<GateResult> {
   const env = options.env ?? process.env;
   const token = readRequiredEnv(env, "GH_TOKEN");
   const repository = readRequiredEnv(env, "GITHUB_REPOSITORY");
-  let prNumber = env.PR_NUMBER;
-  if (prNumber == null || prNumber === "") {
-    const prNumberFile = env.PR_NUMBER_FILE;
-    if (prNumberFile == null || prNumberFile === "") {
-      throw new Error(
-        "Missing required environment variable PR_NUMBER or PR_NUMBER_FILE.",
-      );
-    }
-    const readFileImpl =
-      options.readFile ?? ((path: string) => readFile(path, "utf8"));
-    prNumber = (await readFileImpl(prNumberFile)).trim();
-  }
+  const prNumber = readRequiredEnv(env, "PR_NUMBER");
   const serverUrl = readRequiredEnv(env, "GITHUB_SERVER_URL").replace(
     /\/+$/,
     "",

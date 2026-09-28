@@ -46,11 +46,20 @@ jobs:
           path: ${{ runner.temp }}/bot-review-gate
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+      - if: github.event_name == 'workflow_run'
+        id: relay
+        run: |
+          pr_number="$(cat "$RUNNER_TEMP/bot-review-gate/pr-number")"
+          if [[ ! "$pr_number" =~ ^[0-9]+$ ]]; then
+            echo "::error::Relay artifact does not contain a PR number."
+            exit 1
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+        shell: bash
       - run: node scripts/ci/bot-review-gate.ts
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_NUMBER_FILE: ${{ runner.temp }}/bot-review-gate/pr-number
+          PR_NUMBER: ${{ github.event.pull_request.number || steps.relay.outputs.pr_number }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
       - if: failure() || cancelled()
         run: gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=error -f context=bot-review-gate -f description="Bot review gate run failed; re-run this workflow." -f target_url="$RUN_URL"
