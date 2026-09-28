@@ -6,8 +6,8 @@ name: Bot review gate
 # PR number; this workflow re-fetches the PR and reviews from GitHub.
 # The verdict covers every open PR at the head commit, since statuses are per commit.
 # Only approvers with write access or higher count.
-# Runs are serialized per head SHA. If the PR head moved, review-triggered runs post nothing and
-# push-triggered runs post `error`; runs whose relay input fails validation post nothing.
+# Review-triggered runs post nothing until the relayed PR is confirmed at the event head; moved heads,
+# invalid relays, or failures fetching that PR post nothing. Push-triggered runs post `error` on any failure.
 # A PR can still add its own workflow that posts this context: GitHub Actions required statuses
 # cannot distinguish workflows. `.github/` is protected by @morpho-org/security CODEOWNERS;
 # closing that gap fully requires an App-sourced status.
@@ -65,7 +65,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || steps.relay.outputs.pr_number }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
-      - if: (failure() || cancelled()) && (github.event_name == 'pull_request_target' || steps.relay.outcome == 'success')
+      - if: (github.event_name == 'pull_request_target' && (failure() || cancelled())) || (github.event_name == 'workflow_run' && cancelled() && steps.relay.outcome == 'success')
         run: gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=error -f context=bot-review-gate -f description="Bot review gate run failed; re-run this workflow." -f target_url="$RUN_URL"
         env:
           GH_TOKEN: ${{ github.token }}

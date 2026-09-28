@@ -351,6 +351,60 @@ describe("main", () => {
     expect(status.description).toMatch(/^Bot review gate could not evaluate:/);
   });
 
+  test("does not post an error when workflow_run cannot fetch the relayed PR", async () => {
+    const { fetchImpl, requests } = createFetch([
+      { body: { message: "Not Found" }, status: 404 },
+    ]);
+    const output: string[] = [];
+
+    await expect(
+      main({
+        env: { ...ENV, GITHUB_EVENT_NAME: "workflow_run" },
+        fetchImpl,
+        writeOutput: (message) => output.push(message),
+      }),
+    ).rejects.toThrow(/failed with 404/);
+
+    expect(
+      requests.map(({ url, init }) => [url.pathname, init.method]),
+    ).toEqual([["/repos/morpho-org/sdks/pulls/1076", "GET"]]);
+    expect(output).toContain(
+      "::warning::Not publishing an error status: the relayed PR was not confirmed at the event head SHA.\n",
+    );
+  });
+
+  test("posts an error when workflow_run fails after confirming the relayed PR", async () => {
+    const { fetchImpl, requests } = createFetch([
+      {
+        body: pullRequest({
+          login: "devin-ai-integration",
+          type: "Bot",
+          sha: HEAD,
+        }),
+      },
+      { body: { message: "temporarily unavailable" }, status: 500 },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({
+        env: { ...ENV, GITHUB_EVENT_NAME: "workflow_run" },
+        fetchImpl,
+        writeOutput: () => {},
+      }),
+    ).rejects.toThrow(/failed with 500/);
+
+    const statusRequest = requests[requests.length - 1];
+    expect(statusRequest?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(statusRequest?.init.method).toBe("POST");
+    expect(JSON.parse(statusRequest?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+  });
+
   test("follows Link pagination when collecting reviews", async () => {
     const firstPage = createPageResponse(
       [approved("alice")],

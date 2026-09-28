@@ -127,9 +127,10 @@ export function evaluate(options: {
  * publishes one commit status.
  * Only approvers with write access or higher count.
  * Requires `EVENT_HEAD_SHA`, the 40-hex SHA used to serialize this run. If the fetched PR head
- * differs, the run skips without listing other PRs, fetching reviews, or publishing a status.
- * API or payload failures try to publish an `error` status to `EVENT_HEAD_SHA`; the original
- * error is always rethrown. A normal `failure` verdict is represented only by the commit status.
+ * differs, `workflow_run` logs a warning and skips without posting; other events throw and post
+ * `error` to `EVENT_HEAD_SHA`. On `workflow_run`, errors before confirming the relayed PR at that
+ * SHA post nothing. After confirmation, API or payload failures try to post `error` there; the
+ * original error is always rethrown. A normal `failure` verdict is represented only by the status.
  */
 export async function main(
   options: {
@@ -160,6 +161,7 @@ export async function main(
   const apiBaseUrl = options.apiBaseUrl ?? getApiBaseUrl(serverUrl);
   const apiBase = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const targetUrl = `${serverUrl}/${repository}/actions/runs/${runId}`;
+  let canPublishError = env.GITHUB_EVENT_NAME !== "workflow_run";
 
   try {
     if (eventHeadSha == null || eventHeadSha === "") {
@@ -196,6 +198,7 @@ export async function main(
       );
     }
 
+    canPublishError = true;
     const pullRequests = new Map<number, PullRequest>();
     let pullsUrl: URL | null = new URL(
       `repos/${repository}/pulls?state=open&per_page=100`,
@@ -352,7 +355,7 @@ export async function main(
       eventHeadSha != null && /^[0-9a-f]{40}$/.test(eventHeadSha)
         ? eventHeadSha
         : undefined;
-    if (fallbackHeadSha != null) {
+    if (canPublishError && fallbackHeadSha != null) {
       try {
         await postStatus({
           url: new URL(
@@ -374,6 +377,10 @@ export async function main(
           `::warning::Could not publish bot-review-gate error status: ${describeError(fallbackError)}\n`,
         );
       }
+    } else {
+      writeOutput(
+        "::warning::Not publishing an error status: the relayed PR was not confirmed at the event head SHA.\n",
+      );
     }
     throw error;
   }
