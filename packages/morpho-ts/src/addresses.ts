@@ -2072,6 +2072,12 @@ const refreshDeploymentViews = () => {
  *
  * Validation runs over every requested patch before any registry is committed; a thrown error leaves all registries unchanged.
  *
+ * Every string value under `addresses` (and every `unwrappedTokens` key and value) must be a 20-byte
+ * `0x` hex address: it is stored in EIP-55 checksum form and must carry a valid checksum when mixed-case.
+ * Deployment values are not touched.
+ *
+ * @throws InvalidAddressError when an address-like value is malformed or carries an invalid EIP-55 checksum.
+ *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
@@ -2082,10 +2088,6 @@ const refreshDeploymentViews = () => {
  *                              Known-chain entries may be partial; custom-chain entries must include the required
  *                              Blue deployments and may add optional periphery deployments.
  *
- * Address-like string values are stored in EIP-55 checksum form regardless of caller casing, so
- * registered values always compare as canonical strings.
- *
- * @throws InvalidAddressError when an address-like value is malformed or carries an invalid EIP-55 checksum.
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.
@@ -2152,9 +2154,7 @@ export function registerCustomAddresses<
     )) {
       const chainId = Number(chainIdString);
       const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = canonicalizeRegistryValue(
-        cloneRegistryValue(requestedAddresses),
-      );
+      const requestedEntry = canonicalizeRegistryValue(requestedAddresses);
 
       if (registeredEntry == null) {
         assertRequiredBlueRegistry({
@@ -2188,9 +2188,7 @@ export function registerCustomAddresses<
     )) {
       const chainId = Number(chainIdString);
       const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = canonicalizeRegistryValue(
-        cloneRegistryValue(requestedDeployments),
-      );
+      const requestedEntry = cloneRegistryValue(requestedDeployments);
 
       if (registeredEntry == null) {
         assertRequiredBlueRegistry({

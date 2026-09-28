@@ -1372,7 +1372,7 @@ describe("registerCustomAddresses", () => {
 
 describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   test("behavior: stores lowercase custom addresses in checksum form", () => {
-    const chainId = 31_337_100;
+    const chainId = 31_337_302;
     const blue = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
     const adaptiveCurveIrm = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359";
 
@@ -1392,7 +1392,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("behavior: accepts a lowercase alias of a registered address", () => {
-    const chainId = 31_337_101;
+    const chainId = 31_337_303;
     const chainAddresses = createChainAddresses();
 
     registerCustomAddresses({
@@ -1414,7 +1414,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("error: InvalidAddressError on malformed custom address leaves registry untouched", () => {
-    const chainId = 31_337_102;
+    const chainId = 31_337_304;
 
     expect(() =>
       registerCustomAddresses({
@@ -1431,7 +1431,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("error: InvalidAddressError on custom address without 0x prefix", () => {
-    const chainId = 31_337_104;
+    const chainId = 31_337_305;
 
     expect(() =>
       registerCustomAddresses({
@@ -1448,7 +1448,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("error: InvalidAddressError on mis-checksummed address leaves registry untouched", () => {
-    const chainId = 31_337_103;
+    const chainId = 31_337_306;
     const misChecksummed =
       `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
 
@@ -1467,7 +1467,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("behavior: stores lowercase unwrapped token entries in checksum form", () => {
-    const chainId = 31_337_104;
+    const chainId = 31_337_307;
     const wrapped = "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB";
     const unwrapped = "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb";
 
@@ -1484,7 +1484,7 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
   });
 
   test("error: InvalidAddressError on malformed unwrapped token", () => {
-    const chainId = 31_337_105;
+    const chainId = 31_337_308;
 
     expect(() =>
       registerCustomAddresses({
@@ -1499,11 +1499,42 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
     expect(unwrappedTokensMapping[chainId]).toBeUndefined();
   });
 
-  test("behavior: getChecksumAddress agrees with registry canonical form", () => {
-    const lower = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".toLowerCase();
+  test("error: InvalidAddressError on mixed addresses/unwrappedTokens call leaves both registries untouched", () => {
+    const chainId = 31_337_309;
+    const misChecksummedKey =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
 
-    expect(getChecksumAddress(lower)).toBe(
-      "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
-    );
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress(),
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+        unwrappedTokens: {
+          [chainId]: { [misChecksummedKey]: randomAddress() },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("behavior: string deployment values are not treated as addresses", () => {
+    const chainId = 31_337_310;
+
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: {
+            blue: 1n,
+            adaptiveCurveIrm: 2n,
+            wNative: "0x12",
+          } as unknown as ChainDeployments,
+        },
+      }),
+    ).not.toThrow(InvalidAddressError);
   });
 });
