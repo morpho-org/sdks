@@ -4,8 +4,16 @@
  * Run with Node's native TypeScript support: `node scripts/ci/bot-review-gate.ts`.
  */
 
-import { type FetchLike, parseNextLink } from "./claude-review-gate.ts";
+import { readFile } from "node:fs/promises";
+
 import {
+  type FetchLike,
+  type ListReviewsOptions,
+  listReviews,
+  type Review,
+} from "./claude-review-gate.ts";
+import {
+  describeError,
   isMain,
   readRequiredEnv,
   reportCliError,
@@ -28,14 +36,6 @@ export const AGENT_LOGINS: ReadonlySet<string> = new Set([
   "claude-code",
   "hermes-agent",
 ]);
-
-interface Review {
-  readonly body: string | null;
-  readonly commit_id: string | null;
-  readonly id: number;
-  readonly state: string;
-  readonly user: { readonly login: string; readonly type?: string } | null;
-}
 
 interface Author {
   readonly login: string;
@@ -128,13 +128,25 @@ export async function main(
     readonly apiBaseUrl?: string;
     readonly env?: NodeJS.ProcessEnv;
     readonly fetchImpl?: GateFetchLike;
+    readonly readFile?: (path: string) => Promise<string>;
     readonly writeOutput?: (message: string) => void;
   } = {},
 ): Promise<GateResult> {
   const env = options.env ?? process.env;
   const token = readRequiredEnv(env, "GH_TOKEN");
   const repository = readRequiredEnv(env, "GITHUB_REPOSITORY");
-  const prNumber = readRequiredEnv(env, "PR_NUMBER");
+  let prNumber = env.PR_NUMBER;
+  if (prNumber == null || prNumber === "") {
+    const prNumberFile = env.PR_NUMBER_FILE;
+    if (prNumberFile == null || prNumberFile === "") {
+      throw new Error(
+        "Missing required environment variable PR_NUMBER or PR_NUMBER_FILE.",
+      );
+    }
+    const readFileImpl =
+      options.readFile ?? ((path: string) => readFile(path, "utf8"));
+    prNumber = (await readFileImpl(prNumberFile)).trim();
+  }
   const serverUrl = readRequiredEnv(env, "GITHUB_SERVER_URL").replace(
     /\/+$/,
     "",
@@ -171,15 +183,14 @@ export async function main(
       );
     }
 
-    const reviewUrl = new URL(
-      `repos/${repository}/pulls/${prNumber}/reviews?per_page=100`,
-      apiBase,
-    );
-    const reviews = await listReviews({
+    const reviewOptions: ListReviewsOptions = {
+      apiBaseUrl: apiBase,
       fetchImpl,
-      firstUrl: reviewUrl,
+      prNumber,
+      repository,
       token,
-    });
+    };
+    const reviews = await listReviews(reviewOptions);
     const result = evaluate({
       author: pullRequest.user,
       headSha: pullRequest.head.sha,
@@ -212,7 +223,7 @@ export async function main(
           fetchImpl,
           status: {
             description: truncate(
-              `Bot review gate could not evaluate: ${shortReason(error)}`,
+              `Bot review gate could not evaluate: ${describeError(error)}`,
             ),
             state: "error",
             target_url: targetUrl,
@@ -224,40 +235,6 @@ export async function main(
     }
     throw error;
   }
-}
-
-async function listReviews(options: {
-  readonly fetchImpl: GateFetchLike;
-  readonly firstUrl: URL;
-  readonly token: string;
-}): Promise<Review[]> {
-  const reviews: Review[] = [];
-  let url: URL | null = options.firstUrl;
-
-  while (url != null) {
-    const response = await options.fetchImpl(
-      url,
-      requestInit(options.token, "GET"),
-    );
-    await assertOk(response, url);
-    const page = await response.json();
-    if (!Array.isArray(page)) {
-      throw new Error(
-        `GitHub API GET ${url.pathname} returned a non-array reviews payload.`,
-      );
-    }
-    for (const item of page) {
-      if (!isReview(item)) {
-        throw new Error(
-          `GitHub API GET ${url.pathname} returned a malformed review entry.`,
-        );
-      }
-      reviews.push(item);
-    }
-    url = parseNextLink(response.headers.get("link"));
-  }
-
-  return reviews;
 }
 
 async function postStatus(options: {
@@ -307,25 +284,6 @@ async function assertOk(
   }
 }
 
-function isReview(value: unknown): value is Review {
-  if (!isObject(value)) return false;
-  const { body, commit_id, id, state, user } = value;
-  const userOk =
-    user === null ||
-    (isObject(user) &&
-      typeof user.login === "string" &&
-      typeof user.type === "string");
-
-  return (
-    (body === null || typeof body === "string") &&
-    (commit_id === null || typeof commit_id === "string") &&
-    typeof id === "number" &&
-    Number.isInteger(id) &&
-    typeof state === "string" &&
-    userOk
-  );
-}
-
 function isPullRequest(
   value: unknown,
 ): value is { head: { sha: string }; user: Author } {
@@ -351,10 +309,6 @@ function getApiBaseUrl(serverUrl: string): string {
   return parsedServerUrl.hostname === "github.com"
     ? DEFAULT_API_BASE_URL
     : `${parsedServerUrl.origin}/api/v3/`;
-}
-
-function shortReason(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function truncate(description: string): string {

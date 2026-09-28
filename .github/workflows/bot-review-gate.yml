@@ -1,29 +1,33 @@
 name: Bot review gate
 
-# Publishes the `bot-review-gate` commit status (required on `main`): a PR opened by a bot
-# passes only once 2 distinct humans approved its head commit, so whoever prompted the agent
-# cannot be its only approver. Human-authored PRs pass. Logic: scripts/ci/bot-review-gate.ts,
-# always run from the default branch — never PR-controlled code.
+# Publishes `bot-review-gate` only from the default-branch workflow; both triggers load this file
+# from that branch, and the evaluator checks out its code.
+# Review events arrive through the untrusted `Bot review gate trigger` relay. Its only input is a
+# PR number; this workflow re-fetches the PR and reviews from GitHub.
+# A PR can still add its own workflow that posts this context: GitHub Actions required statuses
+# cannot distinguish workflows. `.github/` is protected by @morpho-org/security CODEOWNERS;
+# closing that gap fully requires an App-sourced status.
 
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
-  pull_request_review:
-    types: [submitted, edited, dismissed]
+  workflow_run:
+    workflows: ["Bot review gate trigger"]
+    types: [completed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: bot-review-gate-${{ github.event.pull_request.number }}
+  group: bot-review-gate-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    # Fork PRs get a read-only token on pull_request_review; their status comes from pull_request_target.
-    if: github.event_name == 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request_target' || github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       pull-requests: read
       statuses: write
@@ -35,7 +39,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+      - if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bot-review-gate-pr
+          path: ${{ runner.temp }}/bot-review-gate
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
       - run: node scripts/ci/bot-review-gate.ts
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER_FILE: ${{ runner.temp }}/bot-review-gate/pr-number

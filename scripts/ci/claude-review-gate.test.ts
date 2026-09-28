@@ -289,6 +289,28 @@ describe("listReviews", () => {
       }),
     ).rejects.toThrow(/malformed review entry/);
   });
+
+  test("error: rejects a review user with a non-string type", async () => {
+    const { fetchImpl } = createFetch([
+      {
+        body: [
+          {
+            ...claudeReview(1),
+            user: { login: REVIEW_AUTHOR, type: 7 },
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      listReviews({
+        fetchImpl,
+        prNumber: "1076",
+        repository: "morpho-org/sdks",
+        token: "ghs_test",
+      }),
+    ).rejects.toThrow(/malformed review entry/);
+  });
 });
 
 describe("snapshot", () => {
