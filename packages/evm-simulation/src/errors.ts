@@ -50,7 +50,7 @@ export class BlacklistViolationError extends SimulationPackageError {
   }
 }
 
-/** Tenderly or RPC service is down. Bypassable — user can proceed. */
+/** RPC service is down or unreachable. Bypassable — user can proceed. */
 export class ExternalServiceError extends SimulationPackageError {
   readonly code = "EXTERNAL_SERVICE_ERROR";
 }
