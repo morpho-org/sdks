@@ -317,7 +317,6 @@ export const inKindVaultV2Data = (params?: {
  * Same shape for in-kind redemption and force withdrawal; the force-withdraw tests use this name
  * because the fixture is not in-kind-specific.
  */
-export const vaultV2ExitData = inKindVaultV2Data;
 
 export const encodeReadResult = <
   const abi extends Abi,
