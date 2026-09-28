@@ -153,6 +153,36 @@ describe("Tree.create", () => {
     );
   });
 
+  test("behavior: re-derives materialized generic groups for V1 routes", () => {
+    const offer = Offer.create(offers[0]!);
+    const plain = OfferUtils.toStruct({ offer });
+    const rateOriginal = Tree.create({
+      type: "rateV1",
+      entries: [{ offer, rate: 100n }],
+    });
+    const ratePlain = Tree.create({
+      type: "rateV1",
+      entries: [{ offer: plain, rate: 100n }],
+    });
+    const priceOriginal = Tree.create({
+      type: "priceV1",
+      entries: [{ offer, allowedTaker: zeroAddress }],
+    });
+    const pricePlain = Tree.create({
+      type: "priceV1",
+      entries: [{ offer: plain, allowedTaker: zeroAddress }],
+    });
+
+    expect(ratePlain.root).toBe(rateOriginal.root);
+    expect(ratePlain.entries[0]!.offer.group).toBe(
+      rateOriginal.entries[0]!.offer.group,
+    );
+    expect(pricePlain.root).toBe(priceOriginal.root);
+    expect(pricePlain.entries[0]!.offer.group).toBe(
+      priceOriginal.entries[0]!.offer.group,
+    );
+  });
+
   test("behavior: preserves standard groups and explicit V1 group commitments", () => {
     const group = Group.create(offers);
     expect(Tree.create({ type: "setter", entries: [group] }).root).toBe(

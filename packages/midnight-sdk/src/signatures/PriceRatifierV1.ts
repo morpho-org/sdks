@@ -30,6 +30,7 @@ import type { Payload } from "./Payload.js";
 import {
   assertRatifierV1Address,
   assertRatifierV1Taker,
+  assignRatifierV1Groups,
   buildRatifierV1Descriptor,
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
@@ -351,12 +352,12 @@ export namespace PriceRatifierV1 {
    * Builds a PriceRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. An explicit `group` is committed as-is; an omitted
-   * `group` defaults to the leaf's content-addressed singleton
-   * {@link groupId}, which commits to `allowedTaker` like the router does.
-   * Explicit groups must come from {@link groupId}; ids from `Group.create` /
-   * `GroupUtils.hash` use the protocol offer hash and are rejected by the
-   * router's `group_identity` rule.
+   * highest leaf indices. A group matching the generic content id of all
+   * leaves sharing it (for example from `OfferUtils.toStruct` or
+   * `Group.create`) is re-derived with {@link groupId}; other explicit groups
+   * are committed as-is. An omitted `group` defaults to the leaf's
+   * content-addressed singleton {@link groupId}, which commits to
+   * `allowedTaker` like the router does.
    *
    * @param leaves - Price-bounded offer leaves in leaf order.
    * @returns PriceRatifierV1 tree descriptor.
@@ -374,16 +375,14 @@ export namespace PriceRatifierV1 {
   export function buildDescriptor(
     leaves: readonly PriceRatifierV1Leaf[],
   ): PriceRatifierV1TreeDescriptor {
+    const normalized = leaves.map((leaf) => ({
+      offer: Offer.from(leaf.offer),
+      allowedTaker: leaf.allowedTaker ?? zeroAddress,
+    }));
+    const assignedOffers = assignRatifierV1Groups(normalized, groupId);
     const offers: Offer[] = [];
-    const structs = leaves.map((leaf) => {
-      const allowedTaker = leaf.allowedTaker ?? zeroAddress;
-      const input = Offer.from(leaf.offer);
-      const offer = input.hasExplicitGroup
-        ? input
-        : Offer.from({
-            ...input,
-            group: groupId([{ offer: input, allowedTaker }]),
-          });
+    const structs = normalized.map(({ allowedTaker }, index) => {
+      const offer = assignedOffers[index]!;
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), allowedTaker };

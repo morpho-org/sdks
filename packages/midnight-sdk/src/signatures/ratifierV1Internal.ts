@@ -12,10 +12,49 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { isZeroAddress } from "./offerStructInternal.js";
 import { TreeUtils } from "./TreeUtils.js";
 import { isPowerOfTwo, nextPowerOfTwo } from "./treeMathInternal.js";
 import type { TreeData } from "./treeTypes.js";
+
+/** @internal Resolves V1 leaf groups mirroring the router's group_identity content ids. */
+export function assignRatifierV1Groups<TLeaf extends { readonly offer: Offer }>(
+  leaves: readonly TLeaf[],
+  groupId: (leaves: readonly TLeaf[]) => Hash,
+): Offer[] {
+  const offers = leaves.map((leaf) =>
+    leaf.offer.hasExplicitGroup
+      ? leaf.offer
+      : Offer.from({ ...leaf.offer, group: groupId([leaf]) }),
+  );
+  const buckets = new Map<string, number[]>();
+
+  for (const [index, leaf] of leaves.entries()) {
+    if (!leaf.offer.hasExplicitGroup) continue;
+    const label = leaf.offer.group.toLowerCase();
+    const bucket = buckets.get(label);
+    if (bucket) bucket.push(index);
+    else buckets.set(label, [index]);
+  }
+
+  for (const [label, indices] of buckets) {
+    const bucketLeaves = indices.map((index) => leaves[index]!);
+    if (
+      GroupUtils.hash(bucketLeaves.map((leaf) => leaf.offer)).toLowerCase() !==
+      label
+    ) {
+      continue;
+    }
+
+    const group = groupId(bucketLeaves);
+    for (const index of indices) {
+      offers[index] = Offer.from({ ...leaves[index]!.offer, group });
+    }
+  }
+
+  return offers;
+}
 
 /** @internal Padded V1 ratifier leaf descriptor shared by the V1 ratifier utils. */
 export type RatifierV1Descriptor<TStruct> = Omit<TreeData<TStruct>, "offers">;

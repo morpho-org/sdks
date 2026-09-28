@@ -21,6 +21,7 @@ import {
   RatifierV1TakerNotAllowedError,
 } from "../errors.js";
 import { type IOffer, OfferUtils } from "../offers/index.js";
+import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT, isZeroAddress } from "./offerStructInternal.js";
 import { PriceRatifierV1 } from "./PriceRatifierV1.js";
@@ -205,6 +206,47 @@ describe("PriceRatifierV1.buildDescriptor", () => {
     expect(PriceRatifierV1.groupId([{ ...leaf, allowedTaker }])).not.toBe(
       resolved!.group,
     );
+  });
+
+  test("behavior: re-derives a materialized generic singleton group", () => {
+    const original = { offer: offer() };
+    const materialized = {
+      offer: OfferUtils.toStruct({ offer: original.offer }),
+    };
+    const originalTree = PriceRatifierV1.buildDescriptor([original]);
+    const materializedTree = PriceRatifierV1.buildDescriptor([materialized]);
+
+    expect(materializedTree.offers[0]!.group).toBe(
+      PriceRatifierV1.groupId([original]),
+    );
+    expect(materializedTree.root).toBe(originalTree.root);
+  });
+
+  test("behavior: re-derives a complete generic group", () => {
+    const a = { offer: offer({ tick: 5_000n }) };
+    const b = { offer: offer({ tick: 5_004n }), allowedTaker };
+    const groupedOffers = Group.create([a.offer, b.offer]).offers;
+    const groupLeaves = [
+      { ...a, offer: groupedOffers[0]! },
+      { ...b, offer: groupedOffers[1]! },
+    ];
+    const [resolvedA, resolvedB] =
+      PriceRatifierV1.buildDescriptor(groupLeaves).offers;
+    const expectedGroup = PriceRatifierV1.groupId(groupLeaves);
+
+    expect(resolvedA!.group).toBe(expectedGroup);
+    expect(resolvedB!.group).toBe(expectedGroup);
+  });
+
+  test("behavior: keeps a partial generic group as-is", () => {
+    const a = { offer: offer({ tick: 5_000n }) };
+    const b = { offer: offer({ tick: 5_004n }) };
+    const [groupedOffer] = Group.create([a.offer, b.offer]).offers;
+    const partialLeaf = { offer: groupedOffer! };
+    const [resolved] = PriceRatifierV1.buildDescriptor([partialLeaf]).offers;
+
+    expect(resolved!.group).toBe(groupedOffer!.group);
+    expect(resolved!.group).not.toBe(PriceRatifierV1.groupId([partialLeaf]));
   });
 
   test("behavior: default group commits the leaf allowedTaker", () => {

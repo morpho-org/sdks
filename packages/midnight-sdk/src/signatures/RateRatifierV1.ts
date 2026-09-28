@@ -38,6 +38,7 @@ import type { Payload } from "./Payload.js";
 import {
   assertRatifierV1Address,
   assertRatifierV1Taker,
+  assignRatifierV1Groups,
   buildRatifierV1Descriptor,
   resolveRatifierV1Tree,
 } from "./ratifierV1Internal.js";
@@ -399,12 +400,12 @@ export namespace RateRatifierV1 {
    * Builds a RateRatifierV1 tree descriptor from leaf input.
    *
    * Non-power-of-two leaf lists are padded with protocol-zero leaves at the
-   * highest leaf indices. An explicit `group` is committed as-is; an omitted
-   * `group` defaults to the leaf's content-addressed singleton
-   * {@link groupId}, which commits to `rate` and `allowedTaker` like the
-   * router does. Explicit groups must come from {@link groupId}; ids from
-   * `Group.create` / `GroupUtils.hash` use the protocol offer hash and are
-   * rejected by the router's `group_identity` rule.
+   * highest leaf indices. A group matching the generic content id of all
+   * leaves sharing it (for example from `OfferUtils.toStruct` or
+   * `Group.create`) is re-derived with {@link groupId}; other explicit groups
+   * are committed as-is. An omitted `group` defaults to the leaf's
+   * content-addressed singleton {@link groupId}, which commits to `rate` and
+   * `allowedTaker` like the router does.
    *
    * @param leaves - Rate-bounded offer leaves in leaf order.
    * @returns RateRatifierV1 tree descriptor.
@@ -424,8 +425,7 @@ export namespace RateRatifierV1 {
   export function buildDescriptor(
     leaves: readonly RateRatifierV1Leaf[],
   ): RateRatifierV1TreeDescriptor {
-    const offers: Offer[] = [];
-    const structs = leaves.map((leaf) => {
+    const normalized = leaves.map((leaf) => {
       const rate = BigInt(leaf.rate);
       if (rate < 0n) throw new InvalidRateRatifierV1RateError(rate);
 
@@ -434,12 +434,12 @@ export namespace RateRatifierV1 {
       if (input.tick < MIN_TICK)
         throw new InvalidRateRatifierV1TickError(input.tick, MIN_TICK);
 
-      const offer = input.hasExplicitGroup
-        ? input
-        : Offer.from({
-            ...input,
-            group: groupId([{ offer: input, rate, allowedTaker }]),
-          });
+      return { offer: input, rate, allowedTaker };
+    });
+    const assignedOffers = assignRatifierV1Groups(normalized, groupId);
+    const offers: Offer[] = [];
+    const structs = normalized.map(({ rate, allowedTaker }, index) => {
+      const offer = assignedOffers[index]!;
       offers.push(offer);
 
       return { offer: OfferUtils.toStruct({ offer }), rate, allowedTaker };

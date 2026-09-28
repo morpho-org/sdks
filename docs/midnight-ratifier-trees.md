@@ -39,7 +39,9 @@ roots and proofs are unchanged. Price and Rate derive an omitted `group` from
 their scheme leaf hash with `group = 0` (Price commits `tick` + `allowedTaker`,
 Rate commits `rate` + `allowedTaker`), matching the router's `group_identity`
 rule; omitted-group V1 roots therefore differ from the earlier protocol-hash
-derivation. Explicit groups are committed as-is.
+derivation. A group matching the generic content id of all leaves sharing it
+(for example from `OfferUtils.toStruct` or `Group.create`) is re-derived with
+the V1 `groupId`; other explicit groups are committed as-is.
 
 ## Ratification
 
