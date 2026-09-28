@@ -27,17 +27,31 @@ export interface SimulationErrorCodes {
   readonly UnexpectedSimulationError: "UNEXPECTED_SIMULATION_ERROR";
 }
 
-/** Named stage at which failure occurred; not a transport/provider classification. @internal */
+/** Complete literal union of every catalog code; a `switch` over it is exhaustive. @internal */
+export type SimulationErrorCode =
+  SimulationErrorCodes[keyof SimulationErrorCodes];
+
+/** Machine-readable execution failure cause; consumers never parse `reason`. @internal */
+export type SimulationExecutionReason =
+  | "INSUFFICIENT_BALANCE"
+  | "INSUFFICIENT_ALLOWANCE"
+  | "INSUFFICIENT_LIQUIDITY"
+  | "POSITION_UNHEALTHY"
+  | "SLIPPAGE_EXCEEDED"
+  | "SIGNATURE_EXPIRED"
+  | "SIGNATURE_INVALID"
+  | "NONCE_ALREADY_USED"
+  | "CAP_EXCEEDED"
+  | "ACCESS_RESTRICTED"
+  | "UNKNOWN_REVERT";
+
+/** Stage keying the error context; transport covers RPC and response failures. @internal */
 export type SimulationStage =
   | "validation"
-  | "decoding"
-  | "pinnedReads"
-  | "authorization"
   | "preparation"
   | "execution"
-  | "evidence"
   | "verification"
-  | "limits";
+  | "transport";
 
 /** Typed affected subject, including compound refinance and migration bindings. @internal */
 export type SimulationSubject =
@@ -125,11 +139,11 @@ export type SimulationComparison =
       readonly observed: number;
     };
 
-/** Diagnostic location; preparation and probes cannot carry the legacy user txIdx. @internal */
+/** Explicit failure indices; `failedTransactionIndex` always indexes the caller's transactions. @internal */
 export type SimulationErrorLocation =
   | {
       readonly type: "transaction";
-      readonly txIdx: number;
+      readonly failedTransactionIndex: number;
       readonly callPath: readonly number[];
     }
   | {
@@ -139,18 +153,46 @@ export type SimulationErrorLocation =
     }
   | { readonly type: "probe"; readonly probeId: string };
 
-/** Readonly context added beside preserved legacy error fields and constructors. @internal */
-export interface SimulationErrorContext {
-  readonly mode?: "preview" | "final";
-  readonly stage: SimulationStage;
-  readonly chainId?: number;
-  readonly blockNumber?: bigint;
+interface SimulationContextBase {
+  readonly mode: "preview" | "final";
+  readonly chainId: number;
+  readonly blockNumber: bigint;
   readonly blockHash?: Hex;
   readonly blockTimestamp?: bigint;
-  readonly operation?: DecodedOperation["type"];
   readonly location?: SimulationErrorLocation;
-  readonly subject?: SimulationSubject;
+}
+
+interface OperationContext extends SimulationContextBase {
+  readonly operation: DecodedOperation["type"];
+  readonly subject: SimulationSubject;
   readonly comparison?: SimulationComparison;
+}
+
+/**
+ * Exact readonly context on every error, keyed by stage. Contains no signatures, RPC URLs,
+ * credentials, raw calldata or raw causes; `cause` stays on the error for logging only.
+ * @internal
+ */
+export type SimulationErrorContext =
+  | (SimulationContextBase & {
+      readonly stage: "validation" | "preparation" | "transport";
+      readonly operation?: DecodedOperation["type"];
+      readonly subject?: SimulationSubject;
+      readonly comparison?: SimulationComparison;
+    })
+  | (OperationContext & {
+      readonly stage: "execution";
+      readonly reasonCode: SimulationExecutionReason;
+    })
+  | (OperationContext & { readonly stage: "verification" });
+
+/** Structural shape checked by `isSimulationPackageError` when `instanceof` fails across bundles. @internal */
+export interface SimulationErrorShape<
+  Name extends keyof SimulationErrorCodes = keyof SimulationErrorCodes,
+> {
+  readonly name: Name;
+  readonly code: SimulationErrorCodes[Name];
+  readonly context: SimulationErrorContext;
 }
 
 type ConstraintField<T> = Extract<
