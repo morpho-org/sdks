@@ -49,7 +49,8 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 
 - `secrets.*` interpolated into a `run:` block where it lands in logs (shell echo, `set -x`, error paths). Use `env:` to bind the secret, then reference `$VAR` inside the script so GitHub's redaction works.
 - Secrets passed as arguments to third-party actions whose source is not pinned to a SHA.
-- New secret names introduced without a matching reference in the repo's secrets-management doc (if `SECURITY.md` or similar documents them).
+- **Scope widening** (per AGENTS.md §10 "Secret scoping & branch-gating"). Each secret's intended reach + sensitivity is recorded in [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md). Flag a diff that removes/loosens the `if: github.ref_name == 'main' || github.ref_name == 'next'` gate on the `version-pr`/`publish` jobs, moves a write/publish/signing secret into the ungated `test` job (every-branch), or exposes any secret to a fork-accessible trigger — **high**, **critical** for the write-token or publish path. Do **not** file "a repo secret is readable on a branch push" as a finding by itself: a low-sensitivity, write-access-only secret already repo-level on every branch (the RPC URLs) is the accepted baseline; flag only a regression of the gates above.
+- New secret name added to a workflow without a matching row in the inventory in [`.github/workflows/AGENTS.md`](../../../.github/workflows/AGENTS.md) — **medium**, surface for inventory parity.
 
 ### Publish-flow integrity (HIGH → CRITICAL)
 
@@ -121,4 +122,4 @@ Apply only the mechanical fixes that have a single correct shape:
 
 **Do not** auto-apply: removing a `pull_request_target` trigger, changing `secrets:` plumbing across reusable workflows, touching release-commit signing / write-token hardening, or modifying which workflows fire on which events — surface those for human review.
 
-Cross-check `../references/injection.md`, `../references/secrets.md`, and `../references/github-actions.md`.
+Cross-check `../references/injection.md`, `../references/secrets.md`, `../references/github-actions.md`, and the workflow secret inventory in `../../../.github/workflows/AGENTS.md`.
