@@ -143,13 +143,15 @@ Existing error classes and constructors are unchanged. `SimulationErrorCodes` ac
 
 | Error context / stage contract | Coverage |
 | --- | --- |
-| Legacy fields | Existing reason/details, fieldErrors and retention assetChanges.{address, token, netRetained} string amounts are preserved in errors.ts. Target transaction locations retain txIdx. |
-| Common context | SimulationErrorContext: mode, stage, chainId, blockNumber/blockHash/blockTimestamp, operation, location, subject, comparison. Context is optional where unavailable; the stage is required. |
-| Identity | Transaction txIdx/callPath, authorizationIndex/preparationCallIndex, or probeId; no preparation txIdx. |
+| Legacy fields | Existing reason/details, fieldErrors and retention assetChanges.{address, token, netRetained} string amounts are preserved in errors.ts; `txIdx` stays a `transfers` result field and is not an error field. |
+| Error contract | `SimulationErrorCode` is the complete literal union of catalog codes; `SimulationErrorShape<Name>` fixes the `{ name, code, context }` structure that `isSimulationPackageError` checks. The guard itself and the new classes are runtime work (SDK-1296). |
+| Execution reason | `SimulationExecutionReason`: INSUFFICIENT_BALANCE, INSUFFICIENT_ALLOWANCE, INSUFFICIENT_LIQUIDITY, POSITION_UNHEALTHY, SLIPPAGE_EXCEEDED, SIGNATURE_EXPIRED, SIGNATURE_INVALID, NONCE_ALREADY_USED, CAP_EXCEEDED, ACCESS_RESTRICTED, UNKNOWN_REVERT. Required as `reasonCode` on the execution-stage context; `reason` stays human-readable. |
+| Common context | `SimulationErrorContext` is keyed by stage (validation, preparation, execution, verification, transport). Every stage carries mode, chainId and blockNumber; execution and verification require the decoded operation and subject and may carry a fixed-unit comparison. |
+| Identity | `failedTransactionIndex`/callPath (always indexing the caller's transactions), authorizationIndex/preparationCallIndex, or probeId. |
 | Subject | Wallet/token, allowance owner/token/spender, Morpho operator, market, source/target refinance, vault, migration, adapter, deployment. |
 | Comparison | Fixed-unit expected/observed values: assets, shares, WAD, APY WAD, seconds, nonce, E27, address, boolean, market ID(s), deallocations, count. WAD observations may explicitly be debt-free/unbounded. No signatures, credentials or raw causes. |
 | Consumer failure | ConsumerConstraintContext couples operation and applicable expected/min/max field; wallet failures carry maxDebit/minCredit, account/token, boundAssets and observedAssets. |
-| Stages | validation, decoding, pinnedReads, authorization, preparation, execution, evidence, verification, limits. |
+| Stages | Error stages match the ADR: validation, preparation, execution, verification, transport. Decoding, pinned reads and limit checks report as validation or verification. |
 | Pure contracts | parseRequest → ParsedRequest; decodeAndBind → DecodedBundle; checkRequests → ValidatedAuthorizations; planExecution → ExecutionPlan; parseEvidence → CompleteEvidence; verifyEffects → VerifiedEffects; enforceLimits → ConstrainedEffects; assembleResult → VerifiedSimulationResult. |
 | I/O contracts | readPinnedInputs returns Promise<PinnedInputs>; executePlan returns Promise<unknown>. Parsing and verification cannot treat that unknown as evidence. |
 | Refinements | A private unique-symbol stage brand prevents unchecked structural assignment to parsed/pinned/complete/constrained records. Constructors arrive with their checking implementations. No brand is required in consumer inputs. |
