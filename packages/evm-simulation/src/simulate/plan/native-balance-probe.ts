@@ -5,7 +5,6 @@ import {
   getAddress,
   type Hex,
 } from "viem";
-import { InvalidSimulationResponseError } from "../../errors.js";
 
 /**
  * Synthetic address the planner probes for native balances. It is injected
@@ -61,19 +60,16 @@ export function encodeNativeBalanceProbe(account: Address): Hex {
 }
 
 /**
- * Decode a probe response into a native balance.
+ * Decode a probe response into a native balance. Pure: returns `null` for
+ * malformed data instead of throwing so the caller attaches the probe's
+ * error context.
  * @param data - Raw `returnData` from the probe call.
- * @returns The account's native balance in wei.
- * @throws {InvalidSimulationResponseError} When the data is not exactly 32 bytes.
+ * @returns The account's native balance in wei, or `null` when the data is
+ *   not exactly 32 bytes.
  * @internal
  */
-export function decodeNativeBalanceProbe(data: Hex): bigint {
-  if (data.length !== 66) {
-    throw new InvalidSimulationResponseError(
-      `Native balance probe returned ${(data.length - 2) / 2} byte(s), expected 32. Check that the eth_simulateV1 endpoint honored the probe code override.`,
-      { stage: "evidence", location: { type: "probe", probeId: "unknown" } },
-    );
-  }
+export function decodeNativeBalanceProbe(data: Hex): bigint | null {
+  if (data.length !== 66) return null;
   const [balance] = decodeAbiParameters([{ type: "uint256" }], data);
   return balance;
 }

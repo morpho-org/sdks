@@ -27,7 +27,19 @@ import {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 
-const context: SimulationErrorContext = { stage: "execution" };
+const context: SimulationErrorContext = {
+  mode: "final",
+  stage: "execution",
+  chainId: 1,
+  blockNumber: 1n,
+  operation: "blueSupply",
+  subject: {
+    type: "wallet",
+    account: "0x0000000000000000000000000000000000000001",
+    token: "0x0000000000000000000000000000000000000002",
+  },
+  reasonCode: "UNKNOWN_REVERT",
+};
 const constraint = {
   type: "wallet",
   field: "maxDebit",

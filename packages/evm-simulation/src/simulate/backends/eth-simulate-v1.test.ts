@@ -6,6 +6,7 @@ import {
   InvalidSimulationResponseError,
   MissingVerificationEvidenceError,
   SimulationRevertedError,
+  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
@@ -198,6 +199,71 @@ describe.sequential("executePlan", () => {
       "The RPC configured for chain 1 reports chain 137. Fix SimulationConfig.chains.",
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("error: UnsupportedVerificationFeatureError for preview authorizations", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const plan = planExecution(
+      parseRequest({
+        chainId: 1,
+        mode: "preview",
+        authorizations: [
+          {
+            type: "erc20Approval",
+            token: USDC,
+            owner: OWNER,
+            spender: VAULT,
+            amount: 100n,
+          },
+        ],
+        transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+      }),
+    );
+    const error = await executePlan({ ...params, plan }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      mode: "preview",
+      stage: "preparation",
+      chainId: 1,
+      blockNumber: STATE_BLOCK,
+      blockHash: `0x${"ab".repeat(32)}`,
+      blockTimestamp: 1_700_000_000n,
+    });
+    // The gate fires before eth_simulateV1: only chainId + getBlock ran.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.at(-1)?.[1]?.body).not.toContain(
+      "eth_simulateV1",
+    );
+  });
+
+  test("error: UnsupportedVerificationFeatureError for consumer limits", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const plan = planExecution(
+      parseRequest({
+        chainId: 1,
+        limits: { maxSlippageWad: 1n },
+        transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+      }),
+    );
+    const error = await executePlan({ ...params, plan }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      mode: "final",
+      stage: "preparation",
+      chainId: 1,
+      blockNumber: STATE_BLOCK,
+      blockHash: `0x${"ab".repeat(32)}`,
+      blockTimestamp: 1_700_000_000n,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test.each([null, {}, [{ calls: null }], []])(

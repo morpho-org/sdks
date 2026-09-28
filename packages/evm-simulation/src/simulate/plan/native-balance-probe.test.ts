@@ -1,5 +1,4 @@
 import { getAddress } from "viem";
-import { InvalidSimulationResponseError } from "../../errors.js";
 import { encodeUint256 } from "../../test-helpers/index.js";
 import {
   decodeNativeBalanceProbe,
@@ -23,13 +22,9 @@ describe("native balance probe", () => {
     expect(decodeNativeBalanceProbe(encodeUint256(42n))).toBe(42n);
   });
 
-  test("error: InvalidSimulationResponseError for malformed data", () => {
-    expect(() => decodeNativeBalanceProbe("0x1234")).toThrow(
-      InvalidSimulationResponseError,
-    );
-    expect(() => decodeNativeBalanceProbe("0x")).toThrow(
-      InvalidSimulationResponseError,
-    );
+  test("behavior: returns null for malformed data", () => {
+    expect(decodeNativeBalanceProbe("0x1234")).toBeNull();
+    expect(decodeNativeBalanceProbe("0x")).toBeNull();
   });
 
   test("behavior: probe constants are stable", () => {

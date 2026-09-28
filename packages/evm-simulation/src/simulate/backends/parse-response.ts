@@ -86,9 +86,12 @@ export function parseSimulationResponse(params: {
 }): ExecutionEvidence {
   const { plan, response } = params;
   const errorContext: SimulationErrorContext = {
-    stage: "evidence",
+    stage: "transport",
     chainId: plan.request.chainId,
     mode: plan.request.mode,
+    blockNumber: params.stateBlockNumber,
+    blockHash: params.stateBlockHash,
+    blockTimestamp: params.stateBlockTimestamp,
   };
 
   const parsed = responseSchema.safeParse(response);
@@ -180,17 +183,14 @@ export function parseSimulationResponse(params: {
         },
       );
     }
-    let assets: bigint;
-    try {
-      assets = decodeNativeBalanceProbe(call.returnData as Hex);
-    } catch (error) {
+    const assets = decodeNativeBalanceProbe(call.returnData as Hex);
+    if (assets === null) {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
         {
           ...errorContext,
           location: { type: "probe", probeId: identity.probeId },
         },
-        { cause: error },
       );
     }
     snapshots.push({

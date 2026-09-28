@@ -7,7 +7,6 @@ import {
   zeroAddress,
 } from "viem";
 import { vi } from "vitest";
-import type { SimulationAuthorization } from "../domain/authorizations.js";
 import type { SimulateParams } from "../domain/request.js";
 import {
   brandExecuted,
@@ -21,7 +20,6 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
-  UnsupportedVerificationFeatureError,
 } from "../errors.js";
 import {
   encodeUint256,
@@ -291,29 +289,6 @@ describe.sequential("simulate — modes and unsupported features", () => {
       makeParams({ mode: "preview" }),
     );
     expect(result.calls).toHaveLength(1);
-  });
-
-  it("preview with authorizations throws UnsupportedVerificationFeatureError", async () => {
-    const authorizations: SimulationAuthorization[] = [
-      {
-        type: "erc20Approval",
-        token: USDC,
-        owner: USER,
-        spender: SPENDER,
-        amount: 100n,
-      },
-    ];
-    await expect(
-      simulate(makeConfig(), makeParams({ mode: "preview", authorizations })),
-    ).rejects.toThrow(UnsupportedVerificationFeatureError);
-    expect(mockExecuteSimulation).not.toHaveBeenCalled();
-  });
-
-  it("limits throw UnsupportedVerificationFeatureError", async () => {
-    await expect(
-      simulate(makeConfig(), makeParams({ limits: { maxSlippageWad: 1n } })),
-    ).rejects.toThrow(UnsupportedVerificationFeatureError);
-    expect(mockExecuteSimulation).not.toHaveBeenCalled();
   });
 
   it("legacy signature authorization variant throws SimulationValidationError", async () => {

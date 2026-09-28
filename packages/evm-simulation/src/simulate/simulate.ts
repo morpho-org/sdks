@@ -5,10 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { SimulateParams } from "../domain/request.js";
-import {
-  InvalidSimulationResponseError,
-  UnsupportedVerificationFeatureError,
-} from "../errors.js";
+import { InvalidSimulationResponseError } from "../errors.js";
 import type { SimulationConfig, SimulationResult } from "../types.js";
 
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
@@ -117,23 +114,6 @@ export async function simulate(
 ): Promise<SimulationResult> {
   const request = parseRequest(params);
 
-  if (request.authorizations.length > 0) {
-    throw new UnsupportedVerificationFeatureError(
-      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
-      {
-        mode: request.mode,
-        stage: "authorization",
-        chainId: request.chainId,
-      },
-    );
-  }
-  if (request.limits !== undefined) {
-    throw new UnsupportedVerificationFeatureError(
-      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
-      { mode: request.mode, stage: "limits", chainId: request.chainId },
-    );
-  }
-
   const wNative = _try(
     () => getChainAddresses(request.chainId).wNative ?? null,
     UnsupportedChainIdError,
@@ -160,9 +140,12 @@ export async function simulate(
     throw new InvalidSimulationResponseError(
       `Evidence contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
       {
-        stage: "evidence",
+        stage: "transport",
         chainId: request.chainId,
         mode: request.mode,
+        blockNumber: evidence.context.stateBlockNumber,
+        blockHash: evidence.context.stateBlockHash,
+        blockTimestamp: evidence.context.stateBlockTimestamp,
       },
     );
   }

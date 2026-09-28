@@ -11,6 +11,7 @@ import {
   InvalidSimulationResponseError,
   SimulationPackageError,
   SimulationRevertedError,
+  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
 import { parseSimulationResponse } from "./parse-response.js";
 
@@ -18,7 +19,7 @@ import { parseSimulationResponse } from "./parse-response.js";
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
  * collect pinned evidence.
  *
- * The boundary performs three steps under one shared abort/timeout budget:
+ * The boundary performs four steps under one shared abort/timeout budget:
  *
  * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
  *    mismatch is an endpoint-configuration failure (`ExternalServiceError`),
@@ -29,7 +30,13 @@ import { parseSimulationResponse } from "./parse-response.js";
  *    simulation below pins that number so a drifting head cannot smear the
  *    evidence across blocks, and the state block is re-fetched after the
  *    simulation to detect a reorg that swapped its hash mid-flight.
- * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
+ * 3. **Feature gate** — parsed `authorizations`/`limits` fail typed with
+ *    `UnsupportedVerificationFeatureError` here (preparation stage, carrying
+ *    the pinned state block) so a caller's input is never silently ignored
+ *    before authorization preparation (PR5) and limit enforcement (PR6)
+ *    land. The gate runs after chain identity and block resolution and
+ *    before `eth_simulateV1`.
+ * 4. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from` (probes are sent from the zero address),
  *    the probe code override as `stateOverrides`, `traceTransfers: true` so
  *    the node synthesizes native-ETH moves as transfer logs, and
@@ -55,6 +62,8 @@ import { parseSimulationResponse } from "./parse-response.js";
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (bad shape, call-count mismatch, block behind the pinned state,
  *   or a state-block hash that changed mid-flight).
+ * @throws {UnsupportedVerificationFeatureError} For `authorizations`/`limits`
+ *   passed before their verification releases land.
  * @throws {SimulationRevertedError} When a user transaction reverts.
  * @throws {MissingVerificationEvidenceError} When a probe fails or cannot be
  *   decoded.
@@ -95,13 +104,31 @@ export async function executePlan(params: {
         : { blockTag: blockNumber ?? "latest" },
     );
     if (stateBlock.number === null || stateBlock.hash === null) {
-      throw new InvalidSimulationResponseError(
+      throw new ExternalServiceError(
         "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-        {
-          stage: "evidence",
-          chainId: plan.request.chainId,
-          mode: plan.request.mode,
-        },
+      );
+    }
+
+    // Feature gate: preview authorizations and consumer limits parse and
+    // normalize, but are rejected here until PR5/PR6 verify them.
+    const preparationContext = {
+      mode: plan.request.mode,
+      stage: "preparation" as const,
+      chainId: plan.request.chainId,
+      blockNumber: stateBlock.number,
+      blockHash: stateBlock.hash,
+      blockTimestamp: stateBlock.timestamp,
+    };
+    if (plan.request.authorizations.length > 0) {
+      throw new UnsupportedVerificationFeatureError(
+        "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
+        preparationContext,
+      );
+    }
+    if (plan.request.limits !== undefined) {
+      throw new UnsupportedVerificationFeatureError(
+        "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
+        preparationContext,
       );
     }
 
@@ -143,9 +170,12 @@ export async function executePlan(params: {
       throw new InvalidSimulationResponseError(
         `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
         {
-          stage: "evidence",
+          stage: "transport",
           chainId: plan.request.chainId,
           mode: plan.request.mode,
+          blockNumber: stateBlock.number,
+          blockHash: stateBlock.hash,
+          blockTimestamp: stateBlock.timestamp,
         },
       );
     }
