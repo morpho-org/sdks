@@ -229,6 +229,15 @@ describe("main", () => {
           sha: HEAD,
         }),
       },
+      {
+        body: [
+          pullRequest({
+            login: "devin-ai-integration",
+            type: "Bot",
+            sha: HEAD,
+          }),
+        ],
+      },
       { body: reviews },
       { body: { id: 1 } },
     ]);
@@ -247,11 +256,14 @@ describe("main", () => {
 
     expect(requests.map(({ url }) => url.pathname)).toEqual([
       "/repos/morpho-org/sdks/pulls/1076",
+      "/repos/morpho-org/sdks/pulls",
       "/repos/morpho-org/sdks/pulls/1076/reviews",
       `/repos/morpho-org/sdks/statuses/${HEAD}`,
     ]);
-    expect(requests[2]?.init.method).toBe("POST");
-    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toEqual({
+    expect(requests[1]?.url.searchParams.get("state")).toBe("open");
+    expect(requests[1]?.url.searchParams.get("per_page")).toBe("100");
+    expect(requests[3]?.init.method).toBe("POST");
+    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toEqual({
       context: STATUS_CONTEXT,
       description: "Bot-authored PR approved by 2 humans: alice, bob",
       state: "success",
@@ -276,6 +288,15 @@ describe("main", () => {
           sha: HEAD,
         }),
       },
+      {
+        body: [
+          pullRequest({
+            login: "devin-ai-integration",
+            type: "Bot",
+            sha: HEAD,
+          }),
+        ],
+      },
       firstPage,
       { body: [approved("bob")] },
       { body: { id: 1 } },
@@ -288,8 +309,130 @@ describe("main", () => {
     });
 
     expect(result.state).toBe("success");
-    expect(requests).toHaveLength(4);
+    expect(requests).toHaveLength(5);
+    expect(requests[3]?.url.searchParams.get("page")).toBe("2");
+  });
+
+  test("fails the shared commit when another bot-authored PR lacks approvals", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger, botPullRequest] },
+      { body: [approved("reviewer")] },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description:
+        "#42: Bot-authored PR needs 2 human approvals on the head commit, has 1: reviewer",
+      state: "failure",
+    });
+    expect(
+      requests
+        .filter(({ url }) => url.pathname.endsWith("/reviews"))
+        .map(({ url }) => url.pathname),
+    ).toEqual(["/repos/morpho-org/sdks/pulls/42/reviews"]);
+    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      description: result.description,
+      state: "failure",
+    });
+  });
+
+  test("passes the shared commit when every bot-authored PR has approvals", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger, botPullRequest] },
+      { body: [approved("alice"), approved("bob")] },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description:
+        "Human-authored PR: native review rules apply. (+1 other PRs at this commit)",
+      state: "success",
+    });
+    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      description: result.description,
+      state: "success",
+    });
+  });
+
+  test("finds a same-head bot PR on a later open-pulls page", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const firstPage = createPageResponse(
+      [trigger],
+      "https://api.github.com/repos/morpho-org/sdks/pulls?state=open&per_page=100&page=2",
+    );
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      firstPage,
+      { body: [botPullRequest] },
+      { body: [approved("reviewer")] },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toMatchObject({
+      description: expect.stringMatching(/^#42: /),
+      state: "failure",
+    });
     expect(requests[2]?.url.searchParams.get("page")).toBe("2");
+    expect(requests[3]?.url.pathname).toBe(
+      "/repos/morpho-org/sdks/pulls/42/reviews",
+    );
   });
 
   test("posts an error status and rethrows after an API failure", async () => {
@@ -300,6 +443,15 @@ describe("main", () => {
           type: "Bot",
           sha: HEAD,
         }),
+      },
+      {
+        body: [
+          pullRequest({
+            login: "devin-ai-integration",
+            type: "Bot",
+            sha: HEAD,
+          }),
+        ],
       },
       { body: { message: "temporarily unavailable" }, status: 503 },
       { body: { message: "status unavailable" }, status: 500 },
@@ -315,10 +467,10 @@ describe("main", () => {
         "GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
       );
 
-      expect(requests[2]?.url.pathname).toBe(
+      expect(requests[3]?.url.pathname).toBe(
         `/repos/morpho-org/sdks/statuses/${HEAD}`,
       );
-      expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+      expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
         context: STATUS_CONTEXT,
         description:
           "Bot review gate could not evaluate: GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
@@ -381,6 +533,15 @@ describe("main", () => {
           sha: HEAD,
         }),
       },
+      {
+        body: [
+          pullRequest({
+            login: "devin-ai-integration",
+            type: "Bot",
+            sha: HEAD,
+          }),
+        ],
+      },
       { body: [] },
       { body: { message: "status unavailable" }, status: 500 },
       { body: { id: 1 } },
@@ -392,17 +553,44 @@ describe("main", () => {
       `GitHub API /repos/morpho-org/sdks/statuses/${HEAD} failed with 500.`,
     );
 
-    expect(requests[2]?.url.pathname).toBe(
-      `/repos/morpho-org/sdks/statuses/${HEAD}`,
-    );
     expect(requests[3]?.url.pathname).toBe(
       `/repos/morpho-org/sdks/statuses/${HEAD}`,
     );
-    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+    expect(requests[4]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
       state: "failure",
     });
-    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[4]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+  });
+
+  test("posts an error status when listing open pull requests fails", async () => {
+    const { fetchImpl, requests } = createFetch([
+      {
+        body: pullRequest({
+          login: "alice",
+          type: "User",
+          sha: HEAD,
+        }),
+      },
+      { body: { message: "temporarily unavailable" }, status: 503 },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({ env: ENV, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(
+      "GitHub API /repos/morpho-org/sdks/pulls failed with 503.",
+    );
+    expect(requests[2]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
       state: "error",
     });
@@ -436,6 +624,15 @@ describe("main", () => {
       },
       {
         body: [
+          pullRequest({
+            login: "devin-ai-integration",
+            type: "Bot",
+            sha: HEAD,
+          }),
+        ],
+      },
+      {
+        body: [
           {
             body: "Approved",
             commit_id: HEAD,
@@ -451,7 +648,7 @@ describe("main", () => {
     await expect(
       main({ env: ENV, fetchImpl, writeOutput: () => {} }),
     ).rejects.toThrow(/malformed review entry/);
-    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
       state: "error",
       context: STATUS_CONTEXT,
     });
@@ -496,11 +693,13 @@ describe("main", () => {
 
 function pullRequest(options: {
   readonly login: string;
+  readonly number?: number;
   readonly type: string;
   readonly sha: string;
 }) {
   return {
     head: { sha: options.sha },
+    number: options.number ?? 1076,
     user: { login: options.login, type: options.type },
   };
 }

@@ -4,6 +4,7 @@ name: Bot review gate
 # from that branch, and the evaluator checks out its code.
 # Review events arrive through the untrusted `Bot review gate trigger` relay. Its only input is a
 # PR number; this workflow re-fetches the PR and reviews from GitHub.
+# The verdict covers every open PR at the head commit, since statuses are per commit.
 # A PR can still add its own workflow that posts this context: GitHub Actions required statuses
 # cannot distinguish workflows. `.github/` is protected by @morpho-org/security CODEOWNERS;
 # closing that gap fully requires an App-sourced status.

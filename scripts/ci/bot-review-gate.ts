@@ -8,6 +8,7 @@ import {
   type FetchLike,
   type ListReviewsOptions,
   listReviews,
+  parseNextLink,
   type Review,
 } from "./claude-review-gate.ts";
 import {
@@ -117,7 +118,8 @@ export function evaluate(options: {
 }
 
 /**
- * Fetches the pull request and its reviews, then publishes the verdict as a commit status.
+ * Fetches the triggering pull request, evaluates every open pull request at its head, and
+ * publishes one commit status.
  * API or payload failures try to publish an `error` status to the fetched head, or to
  * `EVENT_HEAD_SHA` (only if it's a valid 40-hex SHA) when the PR fetch fails before the head
  * is known. Nothing is posted when neither SHA is available. The original error is always
@@ -171,24 +173,95 @@ export async function main(
       );
     }
 
-    const reviewOptions: ListReviewsOptions = {
-      apiBaseUrl: apiBase,
-      fetchImpl,
-      prNumber,
-      repository,
-      token,
-    };
-    const reviews = await listReviews(reviewOptions);
-    const result = evaluate({
-      author: pullRequest.user,
-      headSha: pullRequest.head.sha,
-      reviews,
-    });
+    const triggerHeadSha = pullRequest.head.sha;
+    const pullRequests = new Map<number, PullRequest>();
+    let pullsUrl: URL | null = new URL(
+      `repos/${repository}/pulls?state=open&per_page=100`,
+      apiBase,
+    );
+    while (pullsUrl != null) {
+      const response = await fetchImpl(pullsUrl, requestInit(token, "GET"));
+      await assertOk(response, pullsUrl);
+      const page = await response.json();
+      if (!Array.isArray(page)) {
+        throw new Error(
+          `GitHub API GET ${pullsUrl.pathname} returned a non-array pull request payload.`,
+        );
+      }
+      for (const item of page) {
+        if (!isPullRequest(item)) {
+          throw new Error(
+            `GitHub API GET ${pullsUrl.pathname} returned a malformed pull request entry.`,
+          );
+        }
+        if (item.head.sha === triggerHeadSha) {
+          pullRequests.set(item.number, item);
+        }
+      }
+      pullsUrl = parseNextLink(response.headers.get("link"));
+    }
+    if (!pullRequests.has(pullRequest.number)) {
+      pullRequests.set(pullRequest.number, pullRequest);
+    }
+
+    const evaluated: {
+      readonly number: number;
+      readonly result: GateResult;
+    }[] = [];
+    for (const candidate of [...pullRequests.values()].sort(
+      (left, right) => left.number - right.number,
+    )) {
+      const reviews = isBot(candidate.user)
+        ? await listReviews({
+            apiBaseUrl: apiBase,
+            fetchImpl,
+            prNumber: String(candidate.number),
+            repository,
+            token,
+          } satisfies ListReviewsOptions)
+        : [];
+      evaluated.push({
+        number: candidate.number,
+        result: evaluate({
+          author: candidate.user,
+          headSha: triggerHeadSha,
+          reviews,
+        }),
+      });
+    }
+
+    const firstFailure = evaluated.find(
+      ({ result: candidateResult }) => candidateResult.state === "failure",
+    );
+    const triggeringResult = evaluated.find(
+      ({ number }) => number === pullRequest.number,
+    )?.result;
+    if (triggeringResult == null) {
+      throw new Error(
+        `Triggering pull request #${pullRequest.number} was not evaluated.`,
+      );
+    }
+    const otherCount = evaluated.length - 1;
+    const result: GateResult =
+      firstFailure == null
+        ? {
+            description: truncate(
+              `${triggeringResult.description}${
+                otherCount > 0
+                  ? ` (+${otherCount} other PRs at this commit)`
+                  : ""
+              }`,
+            ),
+            state: "success",
+          }
+        : {
+            description: truncate(
+              `#${firstFailure.number}: ${firstFailure.result.description}`,
+            ),
+            state: "failure",
+          };
     await postStatus({
-      url: new URL(
-        `repos/${repository}/statuses/${pullRequest.head.sha}`,
-        apiBase,
-      ),
+      url: new URL(`repos/${repository}/statuses/${triggerHeadSha}`, apiBase),
       token,
       fetchImpl,
       status: {
@@ -198,7 +271,7 @@ export async function main(
       },
     });
     writeOutput(
-      `Published ${STATUS_CONTEXT}=${result.state} for ${repository}#${prNumber} at ${pullRequest.head.sha}.\n`,
+      `Published ${STATUS_CONTEXT}=${result.state} for ${repository}#${prNumber} at ${triggerHeadSha}.\n`,
     );
 
     return result;
@@ -283,20 +356,27 @@ async function assertOk(
   }
 }
 
-function isPullRequest(
-  value: unknown,
-): value is { head: { sha: string }; user: Author } {
+function isPullRequest(value: unknown): value is PullRequest {
   if (!isObject(value) || !isObject(value.user) || !isObject(value.head)) {
     return false;
   }
 
   return (
+    typeof value.number === "number" &&
+    Number.isInteger(value.number) &&
+    value.number > 0 &&
     typeof value.user.login === "string" &&
     value.user.login !== "" &&
     typeof value.user.type === "string" &&
     typeof value.head.sha === "string" &&
     value.head.sha !== ""
   );
+}
+
+interface PullRequest {
+  readonly head: { readonly sha: string };
+  readonly number: number;
+  readonly user: Author;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
