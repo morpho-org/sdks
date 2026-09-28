@@ -41,10 +41,10 @@ Consequently two handles built from identical inputs at the same construction ti
 different entity instances or different processes, produce identical transactions for the same
 signatures, and a handle whose `getRequirements()` was never called builds the same transaction as
 one whose requirements were resolved. A handle rebuilt later from the same arguments is outside this
-guarantee wherever construction derives a bound from the clock. The Vault V1/V2 `inKindRedeem` and
-Vault V2 `forceWithdraw` handles do (their share cap and minimum share price project accrual from
-the construction time), so a resume after interest has accrued can reject or re-bound a signature
-prepared earlier. That is a recorded deviation; it is revisited if an integrator reports a failed
+guarantee wherever construction derives a bound from the clock: every handle that projects accrual
+onto a supplied snapshot at construction — today Vault V1/V2 `inKindRedeem`, Vault V2
+`forceWithdraw`, and Vault V1 `migrateToV2` in shares mode — so a resume after interest has accrued
+can reject or re-bound a signature prepared earlier. That is a recorded deviation; it is revisited if an integrator reports a failed
 delayed resume, by deriving those bounds from the supplied snapshot and the signed deadline.
 
 The observable rules this imposes:
@@ -82,7 +82,7 @@ consequence of its own.
 ## Invariants
 
 - `buildTx()` is synchronous and reads no chain state, clock, or randomness → grep the builder for
-  `await`, `Date`, `Math.random`, and `viem/actions` reads; any hit fails.
+  `await`, `Date`, `Time.timestamp`, `Math.random`, and `viem/actions` reads; any hit fails.
 - No `Map`, `Set`, array, object, or `let` binding captured by an `ActionOutput` closure is both
   written by `getRequirements()`/`sign()` and read by `buildTx()`. The only permitted mutable binding
   is an in-flight `getRequirements()` promise shared between concurrent callers, cleared on
