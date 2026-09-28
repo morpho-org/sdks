@@ -41,12 +41,13 @@ Consequently two handles built from identical inputs at the same construction ti
 different entity instances or different processes, produce identical transactions for the same
 signatures, and a handle whose `getRequirements()` was never called builds the same transaction as
 one whose requirements were resolved. A handle rebuilt later from the same arguments is outside this
-guarantee wherever construction derives a bound from the clock: every handle that projects accrual
-onto a supplied snapshot at construction — today Vault V1/V2 `inKindRedeem`, Vault V2
-`forceWithdraw`, and Vault V1 `migrateToV2` in shares mode — so a resume after interest has accrued
-can reject or re-bound a signature prepared earlier. That is a recorded deviation; it is revisited
-if an integrator reports a failed delayed resume, by deriving those bounds from the supplied
-snapshot and the signed deadline.
+guarantee wherever an encoded bound is projected from the construction clock onto a supplied
+snapshot — today Vault V1/V2 `inKindRedeem`, Vault V2 `forceWithdraw`, and Vault V1 `migrateToV2`
+in shares mode — so a resume after interest has accrued can reject or re-bound a signature prepared
+earlier. That is a recorded deviation; it is revisited if an integrator reports a failed delayed
+resume, by deriving those bounds from the supplied snapshot and the signed deadline. Handles that
+project accrual from the construction clock only to validate (the Blue health checks) encode no
+clock-derived value, so a delayed resume can only be rejected by them, never re-bounded.
 
 The observable rules this imposes:
 
