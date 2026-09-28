@@ -143,16 +143,14 @@ describe("countedApprovers", () => {
 });
 
 describe("evaluate", () => {
-  test("bot-authored PR needs zero, one, and then two distinct approvals", () => {
+  test("applies the approval threshold to the supplied approvers", () => {
     const author = { login: "devin-ai-integration", type: "User" };
-    expect(evaluate({ author, reviews: [], headSha: HEAD })).toEqual({
+    expect(evaluate({ author, approvers: [], headSha: HEAD })).toEqual({
       description:
         "Bot-authored PR needs 2 human approvals on the head commit, has 0",
       state: "failure",
     });
-    expect(
-      evaluate({ author, reviews: [approved("alice")], headSha: HEAD }),
-    ).toEqual({
+    expect(evaluate({ author, approvers: ["alice"], headSha: HEAD })).toEqual({
       description:
         "Bot-authored PR needs 2 human approvals on the head commit, has 1: alice",
       state: "failure",
@@ -160,7 +158,7 @@ describe("evaluate", () => {
     expect(
       evaluate({
         author,
-        reviews: [approved("bob"), approved("alice")],
+        approvers: ["alice", "bob"],
         headSha: HEAD,
       }),
     ).toEqual({
@@ -169,11 +167,11 @@ describe("evaluate", () => {
     });
   });
 
-  test("a repeated approval by one human counts once", () => {
+  test("a single pre-filtered approver does not meet the threshold", () => {
     expect(
       evaluate({
         author: { login: "claude-code" },
-        reviews: [approved("alice"), approved("alice")],
+        approvers: ["alice"],
         headSha: HEAD,
       }),
     ).toMatchObject({ state: "failure" });
@@ -183,7 +181,7 @@ describe("evaluate", () => {
     expect(
       evaluate({
         author: { login: "alice", type: "User" },
-        reviews: [],
+        approvers: [],
         headSha: HEAD,
       }),
     ).toEqual({
@@ -193,14 +191,14 @@ describe("evaluate", () => {
   });
 
   test("truncates descriptions to GitHub's 140-character limit", () => {
-    const reviewers = Array.from({ length: 12 }, (_, index) =>
-      approved(
+    const approvers = Array.from(
+      { length: 12 },
+      (_, index) =>
         `reviewer-${index.toString().padStart(3, "0")}-${"x".repeat(30)}`,
-      ),
     );
     const result = evaluate({
       author: { login: "hermes-agent" },
-      reviews: reviewers,
+      approvers,
       headSha: HEAD,
     });
 
@@ -244,7 +242,7 @@ describe("main", () => {
         ],
       },
       { body: reviews },
-      permissionResponse(),
+      permissionResponse("admin"),
       permissionResponse(),
       { body: { id: 1 } },
     ]);
@@ -424,21 +422,31 @@ describe("main", () => {
     const { fetchImpl, requests } = createFetch([
       { body: trigger },
       { body: [trigger, botPullRequest] },
-      { body: [approved("alice"), approved("octocat")] },
+      {
+        body: [
+          approved("alice"),
+          approved("octocat"),
+          approved("triage"),
+          approved("none"),
+        ],
+      },
       permissionResponse("write"),
+      permissionResponse("none"),
       { body: { permission: "read", role_name: "maintain" } },
+      permissionResponse("triage"),
       { body: { id: 1 } },
     ]);
+    const output: string[] = [];
 
     const result = await main({
       env: { ...ENV, PR_NUMBER: "50" },
       fetchImpl,
-      writeOutput: () => {},
+      writeOutput: (message) => output.push(message),
     });
 
     expect(result).toEqual({
       description:
-        "#42: Bot-authored PR needs 2 human approvals on the head commit, has 1: alice",
+        "#42: Bot-authored PR needs 2 human approvals on the head commit, has 1: alice; ignored (no write access): none, octocat, triage",
       state: "failure",
     });
     expect(
@@ -447,13 +455,18 @@ describe("main", () => {
         .map(({ url }) => url.pathname),
     ).toEqual([
       "/repos/morpho-org/sdks/collaborators/alice/permission",
+      "/repos/morpho-org/sdks/collaborators/none/permission",
       "/repos/morpho-org/sdks/collaborators/octocat/permission",
+      "/repos/morpho-org/sdks/collaborators/triage/permission",
     ]);
-    expect(JSON.parse(requests[5]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[7]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
       description: result.description,
       state: "failure",
     });
+    expect(output).toContain(
+      "Ignored approvers without write access for morpho-org/sdks#42: none, octocat, triage.\n",
+    );
   });
 
   test("caches write-access checks across bot PRs sharing the head", async () => {

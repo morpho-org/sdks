@@ -87,11 +87,10 @@ export function countedApprovers(
     .sort();
 }
 
-/** Evaluates the gate, optionally using current-head approvers already filtered by permission. */
+/** Evaluates the gate using current-head approvers already filtered by permission. */
 export function evaluate(options: {
   readonly author: Author;
-  readonly approvers?: readonly string[];
-  readonly reviews: readonly Review[];
+  readonly approvers: readonly string[];
   readonly headSha: string;
 }): GateResult {
   if (!isBot(options.author)) {
@@ -101,22 +100,21 @@ export function evaluate(options: {
     };
   }
 
-  const approvers =
-    options.approvers ??
-    countedApprovers(options.reviews, {
-      author: options.author.login,
-      headSha: options.headSha,
-    });
   const description =
-    approvers.length >= REQUIRED_HUMAN_APPROVALS
-      ? `Bot-authored PR approved by ${approvers.length} humans: ${approvers.join(", ")}`
-      : `Bot-authored PR needs ${REQUIRED_HUMAN_APPROVALS} human approvals on the head commit, has ${approvers.length}${
-          approvers.length > 0 ? `: ${approvers.join(", ")}` : ""
+    options.approvers.length >= REQUIRED_HUMAN_APPROVALS
+      ? `Bot-authored PR approved by ${options.approvers.length} humans: ${options.approvers.join(", ")}`
+      : `Bot-authored PR needs ${REQUIRED_HUMAN_APPROVALS} human approvals on the head commit, has ${options.approvers.length}${
+          options.approvers.length > 0
+            ? `: ${options.approvers.join(", ")}`
+            : ""
         }`;
 
   return {
     description: truncate(description),
-    state: approvers.length >= REQUIRED_HUMAN_APPROVALS ? "success" : "failure",
+    state:
+      options.approvers.length >= REQUIRED_HUMAN_APPROVALS
+        ? "success"
+        : "failure",
   };
 }
 
@@ -221,66 +219,68 @@ export async function main(
     for (const candidate of [...pullRequests.values()].sort(
       (left, right) => left.number - right.number,
     )) {
-      const isBotAuthor = isBot(candidate.user);
-      const reviews = isBotAuthor
-        ? await listReviews({
-            apiBaseUrl: apiBase,
+      if (!isBot(candidate.user)) {
+        evaluated.push({
+          number: candidate.number,
+          result: evaluate({
+            author: candidate.user,
+            approvers: [],
+            headSha: triggerHeadSha,
+          }),
+        });
+        continue;
+      }
+
+      const reviews = await listReviews({
+        apiBaseUrl: apiBase,
+        fetchImpl,
+        prNumber: String(candidate.number),
+        repository,
+        token,
+      } satisfies ListReviewsOptions);
+      const counted = countedApprovers(reviews, {
+        author: candidate.user.login,
+        headSha: triggerHeadSha,
+      });
+      const permissionChecks = await Promise.all(
+        counted.map(async (login) => ({
+          hasWriteAccess: await hasWriteAccess(login, {
+            apiBase,
+            cache: permissionCache,
             fetchImpl,
-            prNumber: String(candidate.number),
             repository,
             token,
-          } satisfies ListReviewsOptions)
-        : [];
-      const counted = isBotAuthor
-        ? countedApprovers(reviews, {
-            author: candidate.user.login,
-            headSha: triggerHeadSha,
-          })
-        : [];
-      const approvers = await Promise.all(
-        counted.map(async (login) => {
-          let hasWriteAccess = permissionCache.get(login);
-          if (hasWriteAccess == null) {
-            const permissionUrl = new URL(
-              `repos/${repository}/collaborators/${encodeURIComponent(login)}/permission`,
-              apiBase,
-            );
-            hasWriteAccess = (async () => {
-              const response = await fetchImpl(
-                permissionUrl,
-                requestInit(token, "GET"),
-              );
-              await assertOk(response, permissionUrl);
-              const permission = await response.json();
-              if (
-                !isObject(permission) ||
-                typeof permission.permission !== "string"
-              ) {
-                throw new Error(
-                  `GitHub API GET ${permissionUrl.pathname} returned a malformed collaborator permission payload.`,
-                );
-              }
-              return (
-                permission.permission === "admin" ||
-                permission.permission === "write" ||
-                permission.permission === "maintain"
-              );
-            })();
-            permissionCache.set(login, hasWriteAccess);
-          }
-          return (await hasWriteAccess) ? login : null;
-        }),
-      ).then((logins) =>
-        logins.filter((login): login is string => login != null),
+          }),
+          login,
+        })),
       );
+      const approvers = permissionChecks
+        .filter(({ hasWriteAccess: approved }) => approved)
+        .map(({ login }) => login);
+      const ignoredApprovers = permissionChecks
+        .filter(({ hasWriteAccess: approved }) => !approved)
+        .map(({ login }) => login);
+      const verdict = evaluate({
+        author: candidate.user,
+        approvers,
+        headSha: triggerHeadSha,
+      });
+      const result: GateResult = {
+        description: truncate(
+          verdict.state === "failure" && ignoredApprovers.length > 0
+            ? `${verdict.description}; ignored (no write access): ${ignoredApprovers.join(", ")}`
+            : verdict.description,
+        ),
+        state: verdict.state,
+      };
+      if (ignoredApprovers.length > 0) {
+        writeOutput(
+          `Ignored approvers without write access for ${repository}#${candidate.number}: ${ignoredApprovers.join(", ")}.\n`,
+        );
+      }
       evaluated.push({
         number: candidate.number,
-        result: evaluate({
-          author: candidate.user,
-          headSha: triggerHeadSha,
-          approvers,
-          reviews,
-        }),
+        result,
       });
     }
 
@@ -361,6 +361,45 @@ export async function main(
     }
     throw error;
   }
+}
+
+function hasWriteAccess(
+  login: string,
+  options: {
+    readonly apiBase: string;
+    readonly cache: Map<string, Promise<boolean>>;
+    readonly fetchImpl: GateFetchLike;
+    readonly repository: string;
+    readonly token: string;
+  },
+): Promise<boolean> {
+  const cached = options.cache.get(login);
+  if (cached != null) return cached;
+
+  const permissionUrl = new URL(
+    `repos/${options.repository}/collaborators/${encodeURIComponent(login)}/permission`,
+    options.apiBase,
+  );
+  const permission = (async () => {
+    const response = await options.fetchImpl(
+      permissionUrl,
+      requestInit(options.token, "GET"),
+    );
+    await assertOk(response, permissionUrl);
+    const payload = await response.json();
+    if (!isObject(payload) || typeof payload.permission !== "string") {
+      throw new Error(
+        `GitHub API GET ${permissionUrl.pathname} returned a malformed collaborator permission payload.`,
+      );
+    }
+    return (
+      payload.permission === "admin" ||
+      payload.permission === "write" ||
+      payload.permission === "maintain"
+    );
+  })();
+  options.cache.set(login, permission);
+  return permission;
 }
 
 async function postStatus(options: {
