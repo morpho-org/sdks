@@ -44,8 +44,9 @@ one whose requirements were resolved. A handle rebuilt later from the same argum
 guarantee wherever construction derives a bound from the clock: every handle that projects accrual
 onto a supplied snapshot at construction — today Vault V1/V2 `inKindRedeem`, Vault V2
 `forceWithdraw`, and Vault V1 `migrateToV2` in shares mode — so a resume after interest has accrued
-can reject or re-bound a signature prepared earlier. That is a recorded deviation; it is revisited if an integrator reports a failed
-delayed resume, by deriving those bounds from the supplied snapshot and the signed deadline.
+can reject or re-bound a signature prepared earlier. That is a recorded deviation; it is revisited
+if an integrator reports a failed delayed resume, by deriving those bounds from the supplied
+snapshot and the signed deadline.
 
 The observable rules this imposes:
 
