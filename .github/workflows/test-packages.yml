@@ -1,0 +1,94 @@
+name: Test packages
+
+on:
+  workflow_call:
+    inputs:
+      fork:
+        description: Whether the packages run fork suites against the RPC endpoints.
+        type: boolean
+        required: true
+      packages:
+        description: JSON array of { name, projects } matrix entries.
+        type: string
+        required: true
+    secrets:
+      MAINNET_RPC_URL:
+        required: false
+      BASE_RPC_URL:
+        required: false
+      ARBITRUM_RPC_URL:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.packages) }}
+
+    # Pure and fork projects from one package share a single runner.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Restore Foundry cache
+        id: foundry-cache
+        if: inputs.fork
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.foundry/cache/rpc
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: |
+            foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
+            foundry-${{ github.job }}-${{ matrix.name }}-
+
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        if: inputs.fork
+        with:
+          version: v1.8.0
+          cache: false # Disable built-in cache to always save it.
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test
+        id: test
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          IS_LOGGING_DISABLED: true
+          VITEST_PROJECTS: ${{ matrix.projects }}
+          COVERAGE_ROOT: ${{ matrix.name == 'scripts' && 'scripts/{ci,release}' || format('packages/{0}/src', matrix.name) }}
+        run: |
+          project_args=()
+          for project in $VITEST_PROJECTS; do
+            project_args+=(--project "$project")
+          done
+          pnpm exec vitest run --coverage \
+            --coverage.include="$COVERAGE_ROOT/**/*.{js,mjs,ts,tsx}" \
+            "${project_args[@]}" \
+            --reporter=default --reporter=github-actions
+
+      - name: Save Foundry cache
+        if: >-
+          inputs.fork &&
+          steps.test.outcome == 'success' &&
+          steps.foundry-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.foundry/cache/rpc
+          key: ${{ steps.foundry-cache.outputs.cache-primary-key }}
