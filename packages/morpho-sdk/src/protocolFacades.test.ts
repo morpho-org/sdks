@@ -12,6 +12,7 @@ import {
 import { Market as RawBlueMarket } from "@morpho-org/morpho-sdk/blue/entities";
 import {
   DivisionByZeroError as RawBlueDivisionByZeroError,
+  InvalidAddressError as RawBlueInvalidAddressError,
   InvalidBitLengthError as RawBlueInvalidBitLengthError,
   InvalidMarketParamsError as RawBlueInvalidMarketParamsError,
   InvalidNumberError as RawBlueInvalidNumberError,
@@ -59,6 +60,7 @@ import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
+  InvalidAddressError,
   InvalidBitLengthError,
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
@@ -133,6 +135,7 @@ describe("protocol facades", () => {
     [BlueMarket, RawBlueMarket],
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
     [DivisionByZeroError, RawBlueDivisionByZeroError],
+    [InvalidAddressError, RawBlueInvalidAddressError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
     [InvalidNumberError, RawBlueInvalidNumberError],
     [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],

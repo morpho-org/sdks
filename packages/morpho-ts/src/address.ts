@@ -21,19 +21,6 @@ import { InvalidAddressError } from "./errors.js";
 export const isAddress = (value: string): value is `0x${string}` =>
   /^0x[0-9a-fA-F]{40}$/.test(value);
 
-const computeChecksum = (lowerHex: string): `0x${string}` => {
-  const hash = keccak_256(utf8ToBytes(lowerHex));
-  let checksum = "0x";
-
-  for (let i = 0; i < 40; i++) {
-    const char = lowerHex[i]!;
-    const nibble = (hash[i >> 1]! >> (i % 2 === 0 ? 4 : 0)) & 0x0f;
-    checksum += nibble >= 8 ? char.toUpperCase() : char;
-  }
-
-  return checksum as `0x${string}`;
-};
-
 /**
  * Returns the EIP-55 checksummed form of an EVM address.
  *
@@ -56,13 +43,21 @@ const computeChecksum = (lowerHex: string): `0x${string}` => {
 export function getChecksumAddress(address: string): `0x${string}` {
   if (!isAddress(address)) throw new InvalidAddressError(address);
 
-  const checksum = computeChecksum(address.slice(2).toLowerCase());
+  const lowerHex = address.slice(2).toLowerCase();
+  const hash = keccak_256(utf8ToBytes(lowerHex));
+  let checksum = "0x";
+
+  for (let i = 0; i < 40; i++) {
+    const char = lowerHex[i]!;
+    const nibble = (hash[i >> 1]! >> (i % 2 === 0 ? 4 : 0)) & 0x0f;
+    checksum += nibble >= 8 ? char.toUpperCase() : char;
+  }
 
   const hex = address.slice(2);
   if (/[a-f]/.test(hex) && /[A-F]/.test(hex) && address !== checksum)
     throw new InvalidAddressError(address);
 
-  return checksum;
+  return checksum as `0x${string}`;
 }
 
 /**
@@ -80,5 +75,4 @@ export function getChecksumAddress(address: string): `0x${string}` {
  * ```
  */
 export const isChecksumAddress = (address: string): boolean =>
-  isAddress(address) &&
-  computeChecksum(address.slice(2).toLowerCase()) === address;
+  isAddress(address) && getChecksumAddress(address.toLowerCase()) === address;
