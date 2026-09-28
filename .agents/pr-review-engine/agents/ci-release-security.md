@@ -36,7 +36,7 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 ### Action pinning (HIGH)
 
 - `uses:` lines that reference a floating ref — branch (`@main`, `@master`) or floating tag (`@v4`, `@v3.5`) — for any third-party action. Pin to a full commit SHA with the human-readable tag in a trailing comment: `uses: actions/checkout@<40-char-sha>  # v4.1.7`.
-- Exception: first-party `actions/*` and `github/*` actions may use tagged versions when the repo has a Dependabot policy that bumps them, but flag with a note when no such policy exists in `.github/dependabot.yml`.
+- Exception: first-party `actions/*` and `github/*` actions may use tagged versions; the Devin dependency-maintenance automation reviews and bumps them (Dependabot version updates are not enabled in this repo).
 - Newly added actions from unknown publishers — surface the publisher name and ask whether it was reviewed.
 
 ### Workflow `permissions:` scopes (HIGH)
@@ -101,7 +101,7 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 - Registry changes (`registry=` or `@scope:registry=`) — flag any non-`registry.npmjs.org` URL for explicit human review.
 - `always-auth=true` or `_authToken=` committed to the repo — **critical** (credential leak).
 - New `auto-install-peers` / `strict-peer-dependencies` flips — flag as **medium**, surface impact on consumer install behavior.
-- New `minimumReleaseAgeExclude` entries or equivalent pnpm minimum-release-age bypasses — flag as **high** unless the PR includes explicit maintainer approval, a narrowly-scoped emergency reason, and removal before merge. Removing `minimumReleaseAgeStrict` is also **high**. Dependency bump PRs should wait for the configured `minimumReleaseAge` window or pin to the latest eligible version.
+- New `minimumReleaseAgeExclude` entries or equivalent pnpm minimum-release-age bypasses — flag as **high** unless either the PR is a critical-severity security fix following the AGENTS.md §7 exception (exact `<package>@<version>` scope, advisory/severity/publish date in the PR body, follow-up removal tracked) or it includes explicit maintainer approval, a narrowly-scoped emergency reason, and removal before merge. Removing `minimumReleaseAgeStrict` is always **high**. Other dependency bump PRs should wait for the configured `minimumReleaseAge` window or pin to the latest eligible version.
 
 ## Output expectations
 
