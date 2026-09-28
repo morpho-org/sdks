@@ -8,7 +8,7 @@ import { _try } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";
-import { readContractRestructured } from "../utils.js";
+import { readContractRestructured, validateMarketParamsId } from "../utils.js";
 
 /**
  * Fetches immutable Morpho Blue market params by market id.
@@ -21,6 +21,7 @@ import { readContractRestructured } from "../utils.js";
  * @returns The resolved `MarketParams` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry
  * (on-chain fallback only; ids found in the local `MarketParams` registry skip the lookup).
+ * @throws {MarketParamsIdMismatchError} when fetched params hash to another market id.
  * @example
  * ```ts
  * import type { MarketId, MarketParams } from "@morpho-org/blue-sdk";
@@ -40,17 +41,17 @@ export async function fetchMarketParams(id: MarketId, client: Client) {
 
   if (!config) {
     const { blue } = getChainAddresses(await getChainId(client));
+    const params = await readContractRestructured(client, {
+      address: blue,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+      // Always fetch at latest block because config is immutable.
+      blockTag: "latest",
+    });
 
-    config = new MarketParams(
-      await readContractRestructured(client, {
-        address: blue,
-        abi: blueAbi,
-        functionName: "idToMarketParams",
-        args: [id],
-        // Always fetch at latest block because config is immutable.
-        blockTag: "latest",
-      }),
-    );
+    validateMarketParamsId(id, params);
+    config = new MarketParams(params);
   }
 
   return config;

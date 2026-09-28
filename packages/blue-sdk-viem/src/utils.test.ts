@@ -1,15 +1,79 @@
+import {
+  type IMarketParams,
+  type MarketId,
+  MarketUtils,
+} from "@morpho-org/blue-sdk";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
+import {
+  erc20Abi,
+  InvalidAddressError,
+  parseAbi,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { InvalidNumberError } from "./error.js";
+import { InvalidNumberError, MarketParamsIdMismatchError } from "./error.js";
 import {
   readContractRestructured,
   restructure,
   safeGetAddress,
   safeParseNumber,
   safeParseUnits,
+  validateMarketParamsId,
 } from "./utils.js";
+
+const MARKET_PARAMS: IMarketParams = {
+  loanToken: "0x0000000000000000000000000000000000000001",
+  collateralToken: "0x0000000000000000000000000000000000000002",
+  oracle: "0x0000000000000000000000000000000000000003",
+  irm: "0x0000000000000000000000000000000000000004",
+  lltv: 860000000000000000n,
+};
+
+describe("validateMarketParamsId", () => {
+  test("accepts params that hash to the requested id", () => {
+    const id = MarketUtils.getMarketId(MARKET_PARAMS);
+
+    expect(() => validateMarketParamsId(id, MARKET_PARAMS)).not.toThrow();
+  });
+
+  test("behavior: accepts an uppercase requested id", () => {
+    const id = MarketUtils.getMarketId(MARKET_PARAMS).toUpperCase() as MarketId;
+
+    expect(() => validateMarketParamsId(id, MARKET_PARAMS)).not.toThrow();
+  });
+
+  test("behavior: accepts all-zero params for an uncreated market", () => {
+    expect(() =>
+      validateMarketParamsId(MarketUtils.getMarketId(MARKET_PARAMS), {
+        loanToken: zeroAddress,
+        collateralToken: zeroAddress,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: MarketParamsIdMismatchError", () => {
+    const marketId = MarketUtils.getMarketId({
+      ...MARKET_PARAMS,
+      lltv: 800000000000000000n,
+    });
+    const receivedMarketId = MarketUtils.getMarketId(MARKET_PARAMS);
+
+    let error: unknown;
+    try {
+      validateMarketParamsId(marketId, MARKET_PARAMS);
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect(error).toBeInstanceOf(MarketParamsIdMismatchError);
+    expect(error).toMatchObject({ marketId, receivedMarketId });
+  });
+});
 
 describe("safeParseNumber", () => {
   test("parses an integer", () => {

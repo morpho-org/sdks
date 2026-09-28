@@ -8,9 +8,10 @@ import { type Client, isAddressEqual, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
+import { MarketParamsIdMismatchError } from "../error.js";
 import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
-import { readContractRestructured } from "../utils.js";
+import { readContractRestructured, validateMarketParamsId } from "../utils.js";
 
 /**
  * Fetches Morpho Blue market state, params, oracle price, and adaptive IRM rate.
@@ -28,6 +29,7 @@ import { readContractRestructured } from "../utils.js";
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Market` entity.
  * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ * @throws {MarketParamsIdMismatchError} when fetched params hash to another market id.
  * @example
  * ```ts
  * import type { Market, MarketId } from "@morpho-org/blue-sdk";
@@ -76,6 +78,8 @@ export async function fetchMarket(
         args: [blue, id, adaptiveCurveIrm],
       });
 
+      validateMarketParamsId(id, marketParams);
+
       return new Market({
         params: new MarketParams(marketParams),
         totalSupplyAssets,
@@ -90,7 +94,11 @@ export async function fetchMarket(
           : undefined,
       });
     } catch (error) {
-      if (deployless === "force") throw error;
+      if (
+        deployless === "force" ||
+        error instanceof MarketParamsIdMismatchError
+      )
+        throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -111,6 +119,8 @@ export async function fetchMarket(
       args: [id],
     }),
   ]);
+
+  validateMarketParamsId(id, params);
 
   const [price, rateAtTarget] = await Promise.all([
     params.oracle !== zeroAddress
