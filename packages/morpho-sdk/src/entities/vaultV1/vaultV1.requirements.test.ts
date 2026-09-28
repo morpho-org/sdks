@@ -6,7 +6,15 @@ import {
   expectReadCall,
   mockRead,
 } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, serializeSignature, toHex } from "viem";
+import {
+  type Address,
+  createWalletClient,
+  custom,
+  erc20Abi,
+  serializeSignature,
+  toHex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -26,6 +34,20 @@ import {
 
 const amount = 100n;
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(address,address)
+
+const signerAccount = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
+const signerAddress = signerAccount.address;
+const signerWalletClient = createWalletClient({
+  account: signerAccount,
+  chain: mainnet,
+  transport: custom({
+    request: async ({ method }) => {
+      throw new Error(`Unexpected RPC request "${method}".`);
+    },
+  }),
+});
 const MUTATED_ASSET = "0x0000000000000000000000000000000000002001";
 const MUTATED_USER = "0x0000000000000000000000000000000000002002";
 
@@ -201,7 +223,7 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
     };
     const params = {
       amount,
-      userAddress: IN_KIND_USER,
+      userAddress: signerAddress,
       vaultData: inKindVaultV1Data(),
       deadline: Time.timestamp() + 7_200n,
     };
@@ -213,21 +235,7 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
     if (requirement?.action.type !== "permit2SignatureTransfer") {
       throw new Error("Permit2 SignatureTransfer requirement not found");
     }
-    const signature = {
-      action: requirement.action,
-      args: {
-        owner: IN_KIND_USER,
-        asset: IN_KIND_ASSET,
-        amount,
-        nonce: requirement.action.args.nonce,
-        deadline: requirement.action.args.deadline,
-        signature: serializeSignature({
-          r: toHex(1n, { size: 32 }),
-          s: toHex(2n, { size: 32 }),
-          yParity: 0,
-        }),
-      },
-    } satisfies BundlesTokenRequirementSignature;
+    const signature = await requirement.sign(signerWalletClient, signerAddress);
 
     const depositB = makeVault().deposit(params);
     expect(depositB.buildTx([signature])).toEqual(
@@ -549,7 +557,7 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     };
     const params = {
       amount,
-      userAddress: IN_KIND_USER as Address,
+      userAddress: signerAddress,
       vaultData: inKindVaultV1Data(),
       deadline: Time.timestamp() + 7_200n,
     };
@@ -560,21 +568,7 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
     );
     if (permit?.action.type !== "permit")
       throw new Error("Share permit requirement not found");
-    const signature = {
-      action: permit.action,
-      args: {
-        owner: IN_KIND_USER,
-        asset: IN_KIND_VAULT,
-        amount: permit.action.args.amount,
-        nonce: 0n,
-        deadline: permit.action.args.deadline,
-        signature: serializeSignature({
-          r: toHex(1n, { size: 32 }),
-          s: toHex(2n, { size: 32 }),
-          yParity: 0,
-        }),
-      },
-    } satisfies Erc2612RequirementSignature;
+    const signature = await permit.sign(signerWalletClient, signerAddress);
 
     const withdrawB = makeVault().withdraw(params);
     expect(withdrawB.buildTx([signature])).toEqual(
@@ -587,7 +581,14 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
         ...permit.action,
         args: { ...permit.action.args, amount: permit.action.args.amount + 1n },
       },
-      args: { ...signature.args, amount: permit.action.args.amount + 1n },
+      args: {
+        owner: signerAddress,
+        asset: IN_KIND_VAULT,
+        amount: permit.action.args.amount + 1n,
+        nonce: permit.action.args.nonce ?? 0n,
+        deadline: permit.action.args.deadline,
+        signature: signature.args.signature,
+      },
     } satisfies Erc2612RequirementSignature;
     expect(() => withdrawB.buildTx([oversizedSignature])).toThrowError(
       expect.objectContaining({
@@ -806,7 +807,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
     };
     const params = {
       shares: amount,
-      userAddress: IN_KIND_USER as Address,
+      userAddress: signerAddress,
       deadline: Time.timestamp() + 7_200n,
     };
     const redeemA = makeVault().redeem(params);
@@ -816,21 +817,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
     );
     if (permit?.action.type !== "permit")
       throw new Error("Share permit requirement not found");
-    const signature = {
-      action: permit.action,
-      args: {
-        owner: IN_KIND_USER,
-        asset: IN_KIND_VAULT,
-        amount: permit.action.args.amount,
-        nonce: 0n,
-        deadline: permit.action.args.deadline,
-        signature: serializeSignature({
-          r: toHex(1n, { size: 32 }),
-          s: toHex(2n, { size: 32 }),
-          yParity: 0,
-        }),
-      },
-    } satisfies Erc2612RequirementSignature;
+    const signature = await permit.sign(signerWalletClient, signerAddress);
 
     const redeemB = makeVault().redeem(params);
     expect(redeemB.buildTx([signature])).toEqual(redeemA.buildTx([signature]));
@@ -1029,7 +1016,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
     };
     const params = {
       assets: amount,
-      userAddress: IN_KIND_USER as Address,
+      userAddress: signerAddress,
       sourceVault: inKindVaultV1Data(),
       targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
       deadline: Time.timestamp() + 7_200n,
@@ -1041,21 +1028,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
     );
     if (permit?.action.type !== "permit")
       throw new Error("Share permit requirement not found");
-    const signature = {
-      action: permit.action,
-      args: {
-        owner: IN_KIND_USER,
-        asset: IN_KIND_VAULT,
-        amount: permit.action.args.amount,
-        nonce: 0n,
-        deadline: permit.action.args.deadline,
-        signature: serializeSignature({
-          r: toHex(1n, { size: 32 }),
-          s: toHex(2n, { size: 32 }),
-          yParity: 0,
-        }),
-      },
-    } satisfies Erc2612RequirementSignature;
+    const signature = await permit.sign(signerWalletClient, signerAddress);
 
     const migrationB = makeVault().migrateToV2(params);
     expect(migrationB.buildTx([signature])).toEqual(

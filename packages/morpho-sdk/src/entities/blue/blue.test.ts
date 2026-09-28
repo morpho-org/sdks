@@ -1027,11 +1027,13 @@ describe("MorphoBlue position validation", () => {
   test.each([
     {
       method: "supply",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.supply({ userAddress: signerAddress, assets: 1_000n, deadline }),
     },
     {
       method: "supplyCollateralBorrow",
+      expectedSignatures: 2,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.supplyCollateralBorrow({
           userAddress: signerAddress,
@@ -1043,6 +1045,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "withdraw",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.withdraw({
           userAddress: signerAddress,
@@ -1057,6 +1060,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "repay",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.repay({
           userAddress: signerAddress,
@@ -1070,6 +1074,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "supplyCollateral",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.supplyCollateral({
           userAddress: signerAddress,
@@ -1079,6 +1084,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "borrow",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.borrow({
           userAddress: signerAddress,
@@ -1089,6 +1095,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "withdrawCollateral",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.withdrawCollateral({
           userAddress: signerAddress,
@@ -1102,6 +1109,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "repayWithdrawCollateral",
+      expectedSignatures: 2,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.repayWithdrawCollateral({
           userAddress: signerAddress,
@@ -1116,6 +1124,7 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "refinance",
+      expectedSignatures: 1,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.refinance({
           userAddress: signerAddress,
@@ -1133,7 +1142,7 @@ describe("MorphoBlue position validation", () => {
     },
   ])(
     "behavior: $method signatures prepared on one handle finalize on a fresh handle",
-    async ({ prepare }) => {
+    async ({ expectedSignatures, prepare }) => {
       const now = 1_800_000_000n;
       const deadline = now + 3_600n;
       const makeSignatureEntity = () => {
@@ -1178,7 +1187,7 @@ describe("MorphoBlue position validation", () => {
       const requirements = (
         await withChainTimestamp(now, () => actionA.getRequirements())
       ).filter(isRequirementSignature);
-      expect(requirements.length).toBeGreaterThan(0);
+      expect(requirements).toHaveLength(expectedSignatures);
       const signatures = await Promise.all(
         requirements.map((requirement) =>
           requirement.sign(signerWalletClient, signerAddress),
