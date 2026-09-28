@@ -41,6 +41,7 @@ import {
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementApproval,
+  isRequirementSignature,
   NonPositiveInputError,
   type PermitRequirementSignature,
   VaultAddressMismatchError,
@@ -665,7 +666,10 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     };
     const exitA = makeVault().inKindRedeem(params);
     const [requirement] = await exitA.getRequirements();
-    if (requirement?.action.type !== "permit") {
+    if (
+      !isRequirementSignature(requirement) ||
+      requirement.action.type !== "permit"
+    ) {
       throw new Error("Expected a permit requirement");
     }
     const permit = await requirement.sign(signerWalletClient, signerAddress);
