@@ -10,11 +10,12 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
+  createWalletClient,
+  custom,
   erc20Abi,
   maxUint256,
-  serializeSignature,
-  toHex,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
@@ -26,7 +27,6 @@ import {
 } from "../../helpers/index.js";
 import {
   AccrualPositionUserMismatchError,
-  type AuthorizationRequirementSignature,
   BorrowExceedsSafeLtvError,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
@@ -49,6 +49,19 @@ import {
 } from "../../types/index.js";
 
 const userAddress: Address = "0x00000000000000000000000000000000000000A1";
+const signerAccount = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
+const signerAddress = signerAccount.address;
+const signerWalletClient = createWalletClient({
+  account: signerAccount,
+  chain: mainnet,
+  transport: custom({
+    request: async ({ method }) => {
+      throw new Error(`Unexpected RPC request "${method}".`);
+    },
+  }),
+});
 const otherUserAddress: Address = "0x00000000000000000000000000000000000000A2";
 const marketParams = new MarketParams({
   loanToken: "0x0000000000000000000000000000000000000011",
@@ -1014,17 +1027,15 @@ describe("MorphoBlue position validation", () => {
   test.each([
     {
       method: "supply",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
-        entity.supply({ userAddress, assets: 1_000n, deadline }),
+        entity.supply({ userAddress: signerAddress, assets: 1_000n, deadline }),
     },
     {
       method: "supplyCollateralBorrow",
-      fundedToken: marketParams.collateralToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.supplyCollateralBorrow({
-          userAddress,
-          positionData: makePosition(marketParams),
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
           collateralAssets: 1_000n,
           borrowAssets: 1n,
           deadline,
@@ -1032,11 +1043,11 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "withdraw",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.withdraw({
-          userAddress,
+          userAddress: signerAddress,
           positionData: makePosition(marketParams, {
+            user: signerAddress,
             borrowShares: 0n,
             supplyShares: 10n ** 18n,
           }),
@@ -1046,11 +1057,11 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "repay",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.repay({
-          userAddress,
+          userAddress: signerAddress,
           positionData: makePosition(marketParams, {
+            user: signerAddress,
             lastUpdate: deadline - 3_600n,
           }),
           repayShares: maxUint256,
@@ -1059,43 +1070,43 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "supplyCollateral",
-      fundedToken: marketParams.collateralToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.supplyCollateral({
-          userAddress,
+          userAddress: signerAddress,
           collateralAssets: 1_000n,
           deadline,
         }),
     },
     {
       method: "borrow",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.borrow({
-          userAddress,
-          positionData: makePosition(marketParams),
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
           borrowAssets: 1n,
           deadline,
         }),
     },
     {
       method: "withdrawCollateral",
-      fundedToken: marketParams.collateralToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.withdrawCollateral({
-          userAddress,
-          positionData: makePosition(marketParams, { borrowShares: 0n }),
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, {
+            user: signerAddress,
+            borrowShares: 0n,
+          }),
           collateralAssets: 1n,
           deadline,
         }),
     },
     {
       method: "repayWithdrawCollateral",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.repayWithdrawCollateral({
-          userAddress,
+          userAddress: signerAddress,
           positionData: makePosition(marketParams, {
+            user: signerAddress,
             lastUpdate: deadline - 3_600n,
           }),
           repayShares: maxUint256,
@@ -1105,14 +1116,14 @@ describe("MorphoBlue position validation", () => {
     },
     {
       method: "refinance",
-      fundedToken: marketParams.loanToken,
       prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
         entity.refinance({
-          userAddress,
-          positionData: makePosition(marketParams),
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
           destination: {
             marketParams: destinationMarketParams,
             positionData: makePosition(destinationMarketParams, {
+              user: signerAddress,
               borrowShares: 0n,
               collateral: 0n,
             }),
@@ -1122,13 +1133,9 @@ describe("MorphoBlue position validation", () => {
     },
   ])(
     "behavior: $method signatures prepared on one handle finalize on a fresh handle",
-    async ({ fundedToken, prepare }) => {
+    async ({ prepare }) => {
       const now = 1_800_000_000n;
       const deadline = now + 3_600n;
-      const blueBundlesV1 = getChainAddress(
-        mainnet.id,
-        "bundles.blueBundlesV1",
-      );
       const makeSignatureEntity = () => {
         const handle = createMockClient(mainnet);
         for (const address of [
@@ -1164,11 +1171,6 @@ describe("MorphoBlue position validation", () => {
           .extend(morphoViemExtension({ supportSignature: true }))
           .morpho.blue(marketParams, mainnet.id);
       };
-      const stubSignature = serializeSignature({
-        r: toHex(1n, { size: 32 }),
-        s: toHex(2n, { size: 32 }),
-        yParity: 0,
-      });
 
       const actionA = withChainTimestamp(now, () =>
         prepare(makeSignatureEntity(), deadline),
@@ -1177,38 +1179,11 @@ describe("MorphoBlue position validation", () => {
         await withChainTimestamp(now, () => actionA.getRequirements())
       ).filter(isRequirementSignature);
       expect(requirements.length).toBeGreaterThan(0);
-      const signatures = requirements.map((requirement) => {
-        switch (requirement.action.type) {
-          case "permit2SignatureTransfer":
-            return {
-              action: requirement.action,
-              args: {
-                owner: userAddress,
-                asset: fundedToken,
-                amount: requirement.action.args.amount,
-                nonce: requirement.action.args.nonce,
-                deadline: requirement.action.args.deadline,
-                signature: stubSignature,
-              },
-            } satisfies BundlesTokenRequirementSignature;
-          case "authorization":
-            return {
-              action: requirement.action,
-              args: {
-                owner: userAddress,
-                authorized: blueBundlesV1,
-                isAuthorized: true,
-                nonce: 0n,
-                deadline: requirement.action.args.deadline,
-                signature: stubSignature,
-              },
-            } satisfies AuthorizationRequirementSignature;
-          default:
-            throw new Error(
-              `Unexpected requirement ${requirement.action.type}`,
-            );
-        }
-      });
+      const signatures = await Promise.all(
+        requirements.map((requirement) =>
+          requirement.sign(signerWalletClient, signerAddress),
+        ),
+      );
 
       const actionB = withChainTimestamp(now, () =>
         prepare(makeSignatureEntity(), deadline),

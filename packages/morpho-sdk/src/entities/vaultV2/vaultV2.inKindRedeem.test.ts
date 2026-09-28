@@ -627,11 +627,13 @@ describe("MorphoVaultV2.inKindRedeem", () => {
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const handle = createMockClient(mainnet);
-    mockV2Requirements(handle);
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockV2Requirements(handle);
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    };
     const params = {
       amount: 500n,
       marketParamsList: [inKindMarketParams],
@@ -639,7 +641,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       userAddress: IN_KIND_USER,
       deadline: 1_900_000_000n,
     };
-    const exitA = vault.inKindRedeem(params);
+    const exitA = makeVault().inKindRedeem(params);
     const [requirement] = await exitA.getRequirements();
     if (requirement?.action.type !== "permit") {
       throw new Error("Expected a permit requirement");
@@ -660,7 +662,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       action: requirement.action,
     };
 
-    const exitB = vault.inKindRedeem(params);
+    const exitB = makeVault().inKindRedeem(params);
     expect(exitB.buildTx([permit])).toEqual(exitA.buildTx([permit]));
   });
 
