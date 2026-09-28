@@ -8,8 +8,12 @@ import type {
 } from "../errors.js";
 import type {
   ConsumerConstraintContext,
+  SimulationErrorCode,
   SimulationErrorCodes,
+  SimulationErrorContext,
   SimulationErrorLocation,
+  SimulationErrorShape,
+  SimulationExecutionReason,
 } from "./diagnostics.js";
 
 describe("simulation diagnostics", () => {
@@ -41,5 +45,27 @@ describe("simulation diagnostics", () => {
     expectTypeOf<"txIdx">().not.toExtend<
       keyof Extract<SimulationErrorLocation, { type: "authorization" }>
     >();
+  });
+
+  test("behavior: the error contract is exhaustive and machine-readable", () => {
+    expectTypeOf<SimulationErrorCode>().toEqualTypeOf<
+      SimulationErrorCodes[keyof SimulationErrorCodes]
+    >();
+    expectTypeOf<"UNKNOWN_REVERT">().toExtend<SimulationExecutionReason>();
+    expectTypeOf<
+      Extract<SimulationErrorContext, { stage: "execution" }>["reasonCode"]
+    >().toEqualTypeOf<SimulationExecutionReason>();
+    expectTypeOf<"reasonCode">().not.toExtend<
+      keyof Extract<SimulationErrorContext, { stage: "verification" }>
+    >();
+    expectTypeOf<
+      SimulationErrorContext["blockNumber"]
+    >().toEqualTypeOf<bigint>();
+    expectTypeOf<"txIdx">().not.toExtend<
+      keyof Extract<SimulationErrorLocation, { type: "transaction" }>
+    >();
+    expectTypeOf<
+      SimulationErrorShape<"SimulationRevertedError">["code"]
+    >().toEqualTypeOf<"SIMULATION_REVERTED">();
   });
 });
