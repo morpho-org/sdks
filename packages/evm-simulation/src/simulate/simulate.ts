@@ -51,14 +51,17 @@ import { parseRequest } from "./request/index.js";
  *   Defaults to `latest`, resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, weakening limits).
+ *   authorizations, weakening limits) and for an operation limit that binds
+ *   no operation, several operations, an already-bound operation, or a
+ *   bound weaker than the calldata protection (`limits.operations[<index>]`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the verified effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
  * @throws {SimulationRevertedError} when a user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a probe fails or its data
- *   cannot be decoded.
+ * @throws {MissingVerificationEvidenceError} when a probe fails, its data
+ *   cannot be decoded, or a wallet limit names a token whose owner balance
+ *   was never observed.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block behind the pinned state,
  *   or a state-block hash that changed mid-flight).

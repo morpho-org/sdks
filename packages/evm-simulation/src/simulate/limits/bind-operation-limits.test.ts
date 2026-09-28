@@ -31,9 +31,20 @@ const supply = (
     { transactionIndex, callPath },
   );
 
-const deposit = (transactionIndex: number): DecodedOperation =>
+const deposit = (
+  transactionIndex: number,
+  pricing?: { assets: bigint; maxSharePriceE27: bigint; feeRateWad: bigint },
+): DecodedOperation =>
   op(
-    { type: "vaultV1Deposit", vault: VAULT.toLowerCase() },
+    {
+      type: "vaultV1Deposit",
+      vault: VAULT.toLowerCase(),
+      ...(pricing && {
+        funding: { type: "erc20", assets: pricing.assets },
+        maxSharePriceE27: pricing.maxSharePriceE27,
+        referralFee: { rateWad: pricing.feeRateWad },
+      }),
+    },
     { transactionIndex },
   );
 
@@ -69,6 +80,36 @@ describe("bindOperationLimits", () => {
       [1, [0]],
       [2, [0]],
     ]);
+  });
+
+  test("behavior: minSharesMinted floor is computed on the net deposit after the referral fee", () => {
+    // gross 1000, 10% fee → net 900; price 1e27 → floor 900 shares.
+    const priced = deposit(0, {
+      assets: 1000n,
+      maxSharePriceE27: 10n ** 27n,
+      feeRateWad: 10n ** 17n,
+    });
+    const bind = (minSharesMinted: bigint) =>
+      bindOperationLimits([priced], {
+        operations: [{ type: "vaultV1Deposit", vault: VAULT, minSharesMinted }],
+      });
+    expect(bind(900n)).toHaveLength(1);
+    expect(() => bind(899n)).toThrow(SimulationValidationError);
+  });
+
+  test("error: SimulationValidationError when calldata maxSharePriceE27 is zero", () => {
+    const priced = deposit(0, {
+      assets: 1000n,
+      maxSharePriceE27: 0n,
+      feeRateWad: 0n,
+    });
+    expect(() =>
+      bindOperationLimits([priced], {
+        operations: [
+          { type: "vaultV1Deposit", vault: VAULT, minSharesMinted: 1n },
+        ],
+      }),
+    ).toThrow(SimulationValidationError);
   });
 
   test("behavior: an empty limit list binds nothing", () => {
