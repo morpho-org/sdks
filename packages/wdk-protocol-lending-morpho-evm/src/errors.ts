@@ -22,3 +22,24 @@ export class MissingWalletProviderError extends Error {
     );
   }
 }
+
+/**
+ * Thrown when `eth_sendRawTransaction` returns a hash that differs from `keccak256` of the signed
+ * transaction bytes. The provider may still have broadcast the signed transaction, so track
+ * `expectedHash` on an independent node before retrying.
+ */
+export class RawTransactionHashMismatchError extends Error {
+  /**
+   * @param expectedHash - Hash of the signed transaction bytes, computed locally.
+   * @param returnedHash - Hash returned by the RPC provider.
+   */
+  constructor(
+    readonly expectedHash: string,
+    readonly returnedHash: string,
+  ) {
+    super(
+      `RPC returned transaction hash "${returnedHash}", expected "${expectedHash}" (keccak256 of the signed transaction). The transaction may already be broadcast: check "${expectedHash}" on an independent node or explorer before retrying, and switch to a trusted RPC provider.`,
+    );
+    this.name = "RawTransactionHashMismatchError";
+  }
+}

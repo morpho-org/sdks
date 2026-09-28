@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   MissingWalletProviderError,
+  RawTransactionHashMismatchError,
 } from "./errors.js";
 import type {
   AuthorizationOrSignatureRequirement,
@@ -196,9 +197,12 @@ const prepareTransactionRequestMock = vi.fn().mockResolvedValue({
   maxFeePerGas: 12_345n,
   maxPriorityFeePerGas: 1n,
 });
-const sendRawTransactionMock = vi
-  .fn()
-  .mockResolvedValue("dummy-transaction-hash");
+const broadcastHash = async ({
+  serializedTransaction,
+}: {
+  serializedTransaction: viem.Hex;
+}) => viem.keccak256(serializedTransaction);
+const sendRawTransactionMock = vi.fn(broadcastHash);
 const extendMock = vi.fn().mockReturnValue({
   account: { address: ADDRESS },
   chain: { id: 1 },
@@ -242,6 +246,11 @@ const {
 describe.sequential("MorphoProtocolEvm", () => {
   let account: InstanceType<typeof WalletAccountEvm>;
   let protocol: InstanceType<typeof MorphoProtocolEvm>;
+  const signedTransactionHash = async () =>
+    viem.keccak256(
+      (await vi.mocked(account.signTransaction).mock.results.at(-1)
+        ?.value) as viem.Hex,
+    );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -256,9 +265,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       maxFeePerGas: 12_345n,
       maxPriorityFeePerGas: 1n,
     });
-    sendRawTransactionMock
-      .mockReset()
-      .mockResolvedValue("dummy-transaction-hash");
+    sendRawTransactionMock.mockReset().mockImplementation(broadcastHash);
 
     account = new WalletAccountEvm(SEED, "0'/0/0", {
       provider: "https://dummy-rpc-url.com",
@@ -384,16 +391,14 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
 
     test("uses real viem transport actions for legacy EOA preparation and broadcast", async () => {
       const handle = createMockClient(mainnet);
-      const hash =
-        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-      handle.request.mockImplementation(async ({ method }) => {
+      handle.request.mockImplementation(async ({ method, params }) => {
         if (method === "eth_chainId") return "0x1";
         if (method === "eth_fillTransaction") {
           return {
@@ -410,7 +415,8 @@ describe.sequential("MorphoProtocolEvm", () => {
             },
           };
         }
-        if (method === "eth_sendRawTransaction") return hash;
+        if (method === "eth_sendRawTransaction")
+          return viem.keccak256((params as [viem.Hex])[0]);
         throw new Error(`Unhandled RPC ${method}`);
       });
       const transportAccount = new WalletAccountEvm(SEED, "0'/0/0", {
@@ -427,6 +433,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         .fn()
         .mockResolvedValue({ fee: 12_345n });
       const signTransaction = vi.spyOn(transportAccount, "signTransaction");
+      let result: unknown;
       const transportProtocol = new MorphoProtocolEvm(transportAccount, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -442,15 +449,20 @@ describe.sequential("MorphoProtocolEvm", () => {
           morphoViemExtensionMock.withImplementation(
             () => () => ({ morpho: morphoNamespaceMock }),
             async () => {
-              await expect(
-                transportProtocol.supply({
-                  token: TOKEN,
-                  amount: 100_000n,
-                }),
-              ).resolves.toEqual({ hash, fee: 12_345n });
+              result = await transportProtocol.supply({
+                token: TOKEN,
+                amount: 100_000n,
+              });
             },
           ),
       );
+
+      expect(result).toEqual({
+        hash: viem.keccak256(
+          (await signTransaction.mock.results[0]?.value) as viem.Hex,
+        ),
+        fee: 12_345n,
+      });
 
       expect(signTransaction).toHaveBeenCalledWith({
         ...SUPPLY_TX,
@@ -466,6 +478,39 @@ describe.sequential("MorphoProtocolEvm", () => {
           "eth_sendRawTransaction",
         ]),
       );
+    });
+
+    test("behavior: returns the locally computed hash when the RPC returns it in another case", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      sendRawTransactionMock.mockImplementationOnce(
+        async ({ serializedTransaction }) =>
+          `0x${viem.keccak256(serializedTransaction).slice(2).toUpperCase()}`,
+      );
+
+      const result = await protocol.supply({ token: TOKEN, amount: 100_000n });
+
+      expect(result).toEqual({
+        hash: await signedTransactionHash(),
+        fee: 12_345n,
+      });
+    });
+
+    test("error: RawTransactionHashMismatchError when the RPC returns a hash unrelated to the signed bytes", async () => {
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
+      const unrelatedHash =
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      sendRawTransactionMock.mockResolvedValueOnce(unrelatedHash);
+
+      const error = await protocol
+        .supply({ token: TOKEN, amount: 100_000n })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(RawTransactionHashMismatchError);
+      expect(error).toMatchObject({
+        expectedHash: await signedTransactionHash(),
+        returnedHash: unrelatedHash,
+      });
+      expect(sendRawTransactionMock).toHaveBeenCalledOnce();
     });
 
     test("should return supply requirements from morpho-sdk", async () => {
@@ -586,7 +631,7 @@ describe.sequential("MorphoProtocolEvm", () => {
             ...POPULATED_TRANSACTION,
           });
           expect(result).toEqual({
-            hash: "dummy-transaction-hash",
+            hash: await signedTransactionHash(),
             fee: 123n,
           });
         } else {
@@ -951,7 +996,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
@@ -1020,7 +1065,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
@@ -1109,7 +1154,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
@@ -1420,7 +1465,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
@@ -1600,7 +1645,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });
@@ -1659,7 +1704,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         ...POPULATED_TRANSACTION,
       });
       expect(result).toEqual({
-        hash: "dummy-transaction-hash",
+        hash: await signedTransactionHash(),
         fee: 12_345n,
       });
     });

@@ -169,6 +169,8 @@ When `prepareSupply(...).getRequirements`, `getRepayRequirements`, or `getSupply
 
 For ERC-4337 accounts you can choose to batch the returned requirement transactions with the final transaction using your account-level flow. For EOA accounts, send requirements before the final operation.
 
+For EOA accounts, the returned `hash` is `keccak256` of the signed transaction, not the value reported by the RPC. If `eth_sendRawTransaction` reports a different hash, the call throws `RawTransactionHashMismatchError`; the signed transaction may still have been broadcast, so track `error.expectedHash` on an independent node before retrying.
+
 Requirement entries are one of:
 
 - Approval transaction: send the returned transaction before the final action.

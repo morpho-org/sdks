@@ -58,6 +58,7 @@ import {
   getAddress,
   isAddress,
   isAddressEqual,
+  keccak256,
   maxUint256,
   type PublicActions,
   parseTransaction,
@@ -69,6 +70,7 @@ import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
   MissingWalletProviderError,
+  RawTransactionHashMismatchError,
 } from "./errors.js";
 import {
   type MarketPresetKey,
@@ -332,6 +334,7 @@ export interface PreparedMorphoSupply {
    * @throws {DepositAssetMismatchError} when the signed asset is not the vault asset.
    * @throws {BundlesRequirementSignatureMismatchError} when the token signature is malformed.
    * @throws {viem.BaseError} when a required provider read or transaction encoding fails.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the WDK account is read-only, the ERC-20 balance is insufficient,
    *   or the wallet rejects or fails to submit the transaction.
    * @example
@@ -466,6 +469,7 @@ export interface PreparedMorphoWithdraw {
    * @throws {ExpiredDeadlineError} when unsigned requirement resolution happens after the deadline.
    * @throws {BundlesPermitMismatchError} when the supplied permit does not match this handle.
    * @throws {viem.BaseError} when a vault, allowance, or permit-nonce read or encoding fails.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the account is read-only or the wallet rejects or fails to submit.
    * @example
    * ```ts
@@ -1002,6 +1006,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the chain.
    * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets another vault asset.
    * @throws {ExcessiveSlippageToleranceError} when slippage exceeds the SDK maximum.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when configuration, the wallet balance, or submission is invalid.
    * @example
    * ```ts
@@ -1266,6 +1271,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
    *   already in place, so the withdrawal must go through {@link prepareWithdraw}.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the options or account configuration are invalid, or the transaction fails.
    * @example
    * ```ts
@@ -1488,6 +1494,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -1687,6 +1694,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
    * @throws {ChainIdMismatchError} when the provider chain changes or conflicts with the configured target.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -1931,6 +1939,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the account is read-only, lacks funds, has invalid configuration, or submission fails.
    * @example
    * ```ts
@@ -2173,6 +2182,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
    * @throws {BlueBundlesV1DeadlineExceedsWindowError} when `options.requirementSignature` carries a deadline beyond the bounded execution window.
+   * @throws {RawTransactionHashMismatchError} when a non-ERC-4337 account's RPC returns a hash other than the signed transaction's; it may still be broadcast.
    * @throws {Error} when the account is read-only, an address or token is invalid, or submission fails.
    * @example
    * ```ts
@@ -3022,9 +3032,16 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       if (signedChainId !== prepared.context.chainId) {
         throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
       }
-      const hash = await client.sendRawTransaction({
+      const hash = keccak256(serializedTransaction);
+      const returnedHash: unknown = await client.sendRawTransaction({
         serializedTransaction,
       });
+      if (
+        typeof returnedHash !== "string" ||
+        returnedHash.toLowerCase() !== hash
+      ) {
+        throw new RawTransactionHashMismatchError(hash, String(returnedHash));
+      }
 
       return { hash, fee };
     }

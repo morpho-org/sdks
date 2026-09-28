@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/morpho-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
-import { createWalletClient, http } from "viem";
+import { createWalletClient, type Hex, http, keccak256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
@@ -228,9 +228,7 @@ describe.sequential("prepared withdrawal adapter", () => {
     const { protocol, action, send, quote, transaction, transport, account } =
       setup();
     const owner = "0x405005C7c4422390F4B334F64Cf20E0b767131d0";
-    const hash =
-      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    transport.request.mockImplementation(async ({ method }) => {
+    transport.request.mockImplementation(async ({ method, params }) => {
       if (method === "eth_chainId") return "0x1";
       if (method === "eth_fillTransaction") {
         return {
@@ -247,7 +245,8 @@ describe.sequential("prepared withdrawal adapter", () => {
           },
         };
       }
-      if (method === "eth_sendRawTransaction") return hash;
+      if (method === "eth_sendRawTransaction")
+        return keccak256((params as [Hex])[0]);
       throw new Error(`Unhandled RPC ${method}`);
     });
     const signTransaction = vi.spyOn(account, "signTransaction");
@@ -313,8 +312,9 @@ describe.sequential("prepared withdrawal adapter", () => {
     const signed = await requirement.sign(wallet, owner);
     expectTypeOf(signed).toEqualTypeOf<Erc2612RequirementSignature>();
     await expect(prepared.quote(signed)).resolves.toEqual({ fee: 12_345n });
-    await expect(prepared.submit(signed)).resolves.toEqual({
-      hash,
+    const result = await prepared.submit(signed);
+    expect(result).toEqual({
+      hash: keccak256((await signTransaction.mock.results[0]?.value) as Hex),
       fee: 12_345n,
     });
 

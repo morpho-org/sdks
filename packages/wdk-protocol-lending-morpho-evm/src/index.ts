@@ -23,6 +23,7 @@ export type {
 export {
   BlueBundlesV1DeadlineExceedsWindowError,
   MissingWalletProviderError,
+  RawTransactionHashMismatchError,
 } from "./errors.js";
 export {
   type Market,
