@@ -120,8 +120,10 @@ export function evaluate(options: {
 
 /**
  * Fetches the pull request and its reviews, then publishes the verdict as a commit status.
- * API and payload failures attempt to publish an `error` status for the fetched head before
- * rethrowing; a normal `failure` verdict is represented only by the commit status.
+ * API or payload failures try to publish an `error` status to the fetched head, or to
+ * `EVENT_HEAD_SHA` (only if it's a valid 40-hex SHA) when the PR fetch fails before the head
+ * is known. Nothing is posted when neither SHA is available. The original error is always
+ * rethrown. A normal `failure` verdict is represented only by the commit status.
  */
 export async function main(
   options: {

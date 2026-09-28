@@ -52,7 +52,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_NUMBER_FILE: ${{ runner.temp }}/bot-review-gate/pr-number
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
-      - if: failure()
+      - if: failure() || cancelled()
         run: gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=error -f context=bot-review-gate -f description="Bot review gate run failed; re-run this workflow." -f target_url="$RUN_URL"
         env:
           GH_TOKEN: ${{ github.token }}
