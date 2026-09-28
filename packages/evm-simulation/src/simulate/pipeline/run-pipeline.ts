@@ -14,6 +14,7 @@ import { verifyEffects } from "../effects/verify-effects.js";
 import { transportContext } from "../internal/error-context.js";
 import type { CompleteEvidence, ParsedRequest } from "../internal/stages.js";
 import { brandDecoded } from "../internal/stages.js";
+import { bindOperationLimits } from "../limits/bind-operation-limits.js";
 import { enforceLimits } from "../limits/enforce-limits.js";
 import { parseTransfers } from "../parsing/index.js";
 import { planExecution } from "../plan/index.js";
@@ -72,6 +73,10 @@ export async function runPipeline(params: {
   });
   const bundle = brandDecoded({ request, ...decoded });
 
+  const limits = resolveEffectiveLimits(request.limits);
+  // Validation only: rejects unbindable operation limits before any pinned read.
+  bindOperationLimits(bundle.operations, limits);
+
   const inputs = await readPinnedInputs({
     client,
     bundle,
@@ -80,7 +85,6 @@ export async function runPipeline(params: {
     preLiquidations: bindings.preLiquidations,
   });
 
-  const limits = resolveEffectiveLimits(request.limits);
   const validated = checkRequests({ inputs, limits });
 
   const reads = planProbeReads(bundle, inputs.before, validated.preparations);

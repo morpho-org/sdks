@@ -1,0 +1,7 @@
+---
+"@morpho-org/evm-simulation": major
+---
+
+Consumer operation limits are now bound to exactly one decoded operation before anything executes. A limit that names an operation type absent from the bundle, a subject (`marketId`, `vault`, `authorized`, …) no operation of that type carries, several candidate operations without a `transactionIndex`, the same operation as another limit, or a bound weaker than the calldata protection (`maxLtvAfterWad` above the encoded `maxLtvWad`, `maxAssetsPaid` above `maxRepayAssets`, `minSharesMinted` below the encoded share-price floor, or any negative bound) throws `SimulationValidationError` with one `fieldErrors` entry per offender, keyed `limits.operations[<index>]`. Previously an unmatched or mismatched subject surfaced as `ConsumerLimitViolationError` and an unindexed limit silently bound the first matching operation.
+
+Enforcement order is fixed: operation limits in operation order (transaction index, then call path), then wallet `maxDebit`/`minCredit` in declaration order. Wallet limits on a token the verification snapshot never observed throw `MissingVerificationEvidenceError` instead of treating the change as zero.
