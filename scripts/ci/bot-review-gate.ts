@@ -51,6 +51,11 @@ interface GateResult {
   readonly state: "success" | "failure";
 }
 
+interface SkippedGateResult {
+  readonly description: string;
+  readonly state: "skipped";
+}
+
 /** Returns whether a GitHub account is a bot or a known agent account. */
 export function isBot(user: { login: string; type?: string }): boolean {
   return (
@@ -91,7 +96,6 @@ export function countedApprovers(
 export function evaluate(options: {
   readonly author: Author;
   readonly approvers: readonly string[];
-  readonly headSha: string;
 }): GateResult {
   if (!isBot(options.author)) {
     return {
@@ -122,10 +126,10 @@ export function evaluate(options: {
  * Fetches the triggering pull request, evaluates every open pull request at its head, and
  * publishes one commit status.
  * Only approvers with write access or higher count.
- * API or payload failures try to publish an `error` status to the fetched head, or to
- * `EVENT_HEAD_SHA` (only if it's a valid 40-hex SHA) when the PR fetch fails before the head
- * is known. Nothing is posted when neither SHA is available. The original error is always
- * rethrown. A normal `failure` verdict is represented only by the commit status.
+ * Requires `EVENT_HEAD_SHA`, the 40-hex SHA used to serialize this run. If the fetched PR head
+ * differs, the run skips without listing other PRs, fetching reviews, or publishing a status.
+ * API or payload failures try to publish an `error` status to `EVENT_HEAD_SHA`; the original
+ * error is always rethrown. A normal `failure` verdict is represented only by the commit status.
  */
 export async function main(
   options: {
@@ -134,11 +138,12 @@ export async function main(
     readonly fetchImpl?: GateFetchLike;
     readonly writeOutput?: (message: string) => void;
   } = {},
-): Promise<GateResult> {
+): Promise<GateResult | SkippedGateResult> {
   const env = options.env ?? process.env;
   const token = readRequiredEnv(env, "GH_TOKEN");
   const repository = readRequiredEnv(env, "GITHUB_REPOSITORY");
   const prNumber = readRequiredEnv(env, "PR_NUMBER");
+  const eventHeadSha = env.EVENT_HEAD_SHA;
   const serverUrl = readRequiredEnv(env, "GITHUB_SERVER_URL").replace(
     /\/+$/,
     "",
@@ -155,20 +160,22 @@ export async function main(
   const apiBaseUrl = options.apiBaseUrl ?? getApiBaseUrl(serverUrl);
   const apiBase = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const targetUrl = `${serverUrl}/${repository}/actions/runs/${runId}`;
-  let headSha: string | undefined;
 
   try {
+    if (eventHeadSha == null || eventHeadSha === "") {
+      throw new Error("Missing required environment variable EVENT_HEAD_SHA.");
+    }
+    if (!/^[0-9a-f]{40}$/.test(eventHeadSha)) {
+      throw new Error(
+        `Invalid EVENT_HEAD_SHA "${eventHeadSha}". Expected a 40-character hexadecimal SHA.`,
+      );
+    }
+
     const pullUrl = new URL(`repos/${repository}/pulls/${prNumber}`, apiBase);
     const pullResponse = await fetchImpl(pullUrl, requestInit(token, "GET"));
     await assertOk(pullResponse, pullUrl);
     const pullRequest = await pullResponse.json();
 
-    if (isObject(pullRequest)) {
-      const head = pullRequest.head;
-      if (isObject(head) && typeof head.sha === "string" && head.sha !== "") {
-        headSha = head.sha;
-      }
-    }
     if (!isPullRequest(pullRequest)) {
       throw new Error(
         `GitHub API GET ${pullUrl.pathname} returned a malformed pull request.`,
@@ -176,6 +183,14 @@ export async function main(
     }
 
     const triggerHeadSha = pullRequest.head.sha;
+    if (triggerHeadSha !== eventHeadSha) {
+      const description =
+        `Head moved from ${eventHeadSha} to ${triggerHeadSha} for ${repository}#${prNumber}; ` +
+        "skipping (a newer run evaluates the current head).";
+      writeOutput(`${description}\n`);
+      return { description, state: "skipped" };
+    }
+
     const pullRequests = new Map<number, PullRequest>();
     let pullsUrl: URL | null = new URL(
       `repos/${repository}/pulls?state=open&per_page=100`,
@@ -225,7 +240,6 @@ export async function main(
           result: evaluate({
             author: candidate.user,
             approvers: [],
-            headSha: triggerHeadSha,
           }),
         });
         continue;
@@ -263,7 +277,6 @@ export async function main(
       const verdict = evaluate({
         author: candidate.user,
         approvers,
-        headSha: triggerHeadSha,
       });
       const result: GateResult = {
         description: truncate(
@@ -330,12 +343,10 @@ export async function main(
 
     return result;
   } catch (error) {
-    const eventHeadSha = env.EVENT_HEAD_SHA;
     const fallbackHeadSha =
-      headSha ??
-      (eventHeadSha != null && /^[0-9a-f]{40}$/.test(eventHeadSha)
+      eventHeadSha != null && /^[0-9a-f]{40}$/.test(eventHeadSha)
         ? eventHeadSha
-        : undefined);
+        : undefined;
     if (fallbackHeadSha != null) {
       try {
         await postStatus({

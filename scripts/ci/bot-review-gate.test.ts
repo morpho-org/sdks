@@ -19,6 +19,7 @@ const ENV = {
   GITHUB_REPOSITORY: "morpho-org/sdks",
   GITHUB_RUN_ID: "34956932196",
   GITHUB_SERVER_URL: "https://github.com",
+  EVENT_HEAD_SHA: HEAD,
   PR_NUMBER: "1076",
 };
 
@@ -145,12 +146,12 @@ describe("countedApprovers", () => {
 describe("evaluate", () => {
   test("applies the approval threshold to the supplied approvers", () => {
     const author = { login: "devin-ai-integration", type: "User" };
-    expect(evaluate({ author, approvers: [], headSha: HEAD })).toEqual({
+    expect(evaluate({ author, approvers: [] })).toEqual({
       description:
         "Bot-authored PR needs 2 human approvals on the head commit, has 0",
       state: "failure",
     });
-    expect(evaluate({ author, approvers: ["alice"], headSha: HEAD })).toEqual({
+    expect(evaluate({ author, approvers: ["alice"] })).toEqual({
       description:
         "Bot-authored PR needs 2 human approvals on the head commit, has 1: alice",
       state: "failure",
@@ -159,7 +160,6 @@ describe("evaluate", () => {
       evaluate({
         author,
         approvers: ["alice", "bob"],
-        headSha: HEAD,
       }),
     ).toEqual({
       description: "Bot-authored PR approved by 2 humans: alice, bob",
@@ -172,7 +172,6 @@ describe("evaluate", () => {
       evaluate({
         author: { login: "claude-code" },
         approvers: ["alice"],
-        headSha: HEAD,
       }),
     ).toMatchObject({ state: "failure" });
   });
@@ -182,7 +181,6 @@ describe("evaluate", () => {
       evaluate({
         author: { login: "alice", type: "User" },
         approvers: [],
-        headSha: HEAD,
       }),
     ).toEqual({
       description: "Human-authored PR: native review rules apply.",
@@ -199,7 +197,6 @@ describe("evaluate", () => {
     const result = evaluate({
       author: { login: "hermes-agent" },
       approvers,
-      headSha: HEAD,
     });
 
     expect(result.description.length).toBeLessThanOrEqual(140);
@@ -280,6 +277,35 @@ describe("main", () => {
       `Published ${STATUS_CONTEXT}=success for morpho-org/sdks#1076 at ${HEAD}.\n`,
     ]);
     expect(REQUIRED_HUMAN_APPROVALS).toBe(2);
+  });
+
+  test("skips stale events before listing same-head pull requests or reviews", async () => {
+    const trigger = pullRequest({
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([{ body: trigger }]);
+    const output: string[] = [];
+
+    await expect(
+      main({
+        env: { ...ENV, EVENT_HEAD_SHA: OTHER_HEAD },
+        fetchImpl,
+        writeOutput: (message) => output.push(message),
+      }),
+    ).resolves.toMatchObject({
+      description: `Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).`,
+      state: "skipped",
+    });
+
+    expect(requests.map(({ url }) => url.pathname)).toEqual([
+      "/repos/morpho-org/sdks/pulls/1076",
+    ]);
+    expect(requests[0]?.init.method).toBe("GET");
+    expect(output).toEqual([
+      `Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).\n`,
+    ]);
   });
 
   test("follows Link pagination when collecting reviews", async () => {
@@ -577,6 +603,61 @@ describe("main", () => {
     expect(requests).toHaveLength(3);
   });
 
+  test("posts an error status for a malformed same-head pull request entry", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const malformedPullRequest = {
+      head: { sha: HEAD },
+      number: 42,
+      user: { login: "devin-ai-integration" },
+    };
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger, malformedPullRequest] },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({ env: { ...ENV, PR_NUMBER: "50" }, fetchImpl }),
+    ).rejects.toThrow(/malformed pull request entry/);
+    expect(requests[2]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+  });
+
+  test("posts an error status for a non-array open-pulls payload", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: { not: "an array" } },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({ env: { ...ENV, PR_NUMBER: "50" }, fetchImpl }),
+    ).rejects.toThrow(/non-array pull request payload/);
+    expect(requests[2]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+  });
+
   test("finds a same-head bot PR on a later open-pulls page", async () => {
     const trigger = pullRequest({
       number: 50,
@@ -781,19 +862,28 @@ describe("main", () => {
     });
   });
 
-  test("does not post a fallback status when the event head SHA is invalid or absent", async () => {
-    for (const env of [{ ...ENV, EVENT_HEAD_SHA: "not-a-sha" }, ENV]) {
-      const { fetchImpl, requests } = createFetch([
-        { body: { message: "temporarily unavailable" }, status: 503 },
-      ]);
+  test("requires EVENT_HEAD_SHA before fetching", async () => {
+    const { fetchImpl, requests } = createFetch([]);
 
-      await expect(
-        main({ env, fetchImpl, writeOutput: () => {} }),
-      ).rejects.toThrow(
-        "GitHub API /repos/morpho-org/sdks/pulls/1076 failed with 503.",
-      );
-      expect(requests).toHaveLength(1);
-    }
+    await expect(
+      main({
+        env: { ...ENV, EVENT_HEAD_SHA: undefined },
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/Missing required environment variable EVENT_HEAD_SHA/);
+    expect(requests).toHaveLength(0);
+  });
+
+  test("rejects an invalid EVENT_HEAD_SHA before fetching", async () => {
+    const { fetchImpl, requests } = createFetch([]);
+
+    await expect(
+      main({
+        env: { ...ENV, EVENT_HEAD_SHA: "not-a-sha" },
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/Invalid EVENT_HEAD_SHA/);
+    expect(requests).toHaveLength(0);
   });
 
   test("posts an error status after a verdict status fails", async () => {
