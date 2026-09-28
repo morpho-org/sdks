@@ -24,8 +24,9 @@ stored the vault snapshot it fetched, the share cap it derived, and the permit i
 closure, and `buildTx()` accepted only signatures matching "the latest completed read". A handle
 built from the same inputs on another instance therefore rejected a valid signature or produced a
 different transaction, and `buildTx()` on a fresh handle used a different cap than the prepared one.
-The contributor guidance already stated the rule as a convention; no record froze it as a decision, so implementations drifted away from it and reviewers had no acceptance checklist
-to hold PRs against.
+The contributor guidance already stated the rule as a convention; no record froze it as a decision,
+so implementations drifted away from it and reviewers had no acceptance checklist to hold PRs
+against.
 
 ## Decision
 
@@ -99,8 +100,8 @@ consequence of its own.
   handle's output then depends on whether and when `getRequirements()` ran, so
   prepare-on-A → finalize-on-B and serialize-then-resume produce different calldata with no error.
 - **Make `buildTx()` async so it can refetch what it needs.** Rejected: it breaks the Action layer's
-  purity rule (builders are synchronous and transport-free), makes builders untestable without a transport, and hides a
-  network dependency in the step integrators run at submission time.
+  purity rule (builders are synchronous and transport-free), makes builders untestable without a
+  transport, and hides a network dependency in the step integrators run at submission time.
 - **Return the derived values from `getRequirements()` and require callers to pass them back.**
   Rejected: it widens `buildTx()`'s input surface per flow and duplicates what the signature already
   carries; the `RequirementSignature` is the single transport.
