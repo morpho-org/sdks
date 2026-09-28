@@ -1,11 +1,13 @@
-# TIB-2026-07-29: Vault V2 public-allocator shared liquidity
+# ADR-2026-07-29: Vault V2 public-allocator shared liquidity
 
-| Field      | Value                                                            |
-| ---------- | ---------------------------------------------------------------- |
-| **Status** | Accepted                                                         |
-| **Date**   | 2026-07-29                                                       |
-| **Author** | @foulques                                                        |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted; V2 naming, entrypoints, and validator boundary superseded by ADR-2026-08-18-vault-v2-blue-reallocation-api |
+| **Date**   | 2026-07-29 |
+| **Author** | @foulques |
 | **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
+
+_Migrated from TIB-2026-07-29-vault-v2-public-allocator-shared-liquidity. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ## Context
 
@@ -454,7 +456,7 @@ source and target thresholds plus an internal 100% fallback.
 - [`VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol)
 - [`MorphoMarketV1AdapterV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/adapters/MorphoMarketV1AdapterV2.sol)
 - [BluePublicAllocator deployments](https://github.com/morpho-org/deployments/pull/233)
-- [TIB-2026-06-16 shared-liquidity target-utilization metric](./TIB-2026-06-16-shared-liquidity-target-utilization-metric.md)
+- [ADR-2026-06-16 shared-liquidity target-utilization metric](./ADR-2026-06-16-shared-liquidity-target-utilization-metric.md)
 - `packages/morpho-sdk/src/entities/vaultV1ReallocationData.ts`
 - `packages/morpho-sdk/src/entities/vaultV2BlueReallocationData.ts`
 - `packages/morpho-sdk/src/helpers/computeVaultV1Reallocations.ts`

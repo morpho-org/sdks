@@ -1,17 +1,19 @@
-# TIB-2026-08-28: VaultExitBundlesV1 force withdraw for Vault V2
+# ADR-2026-08-28: VaultExitBundlesV1 force withdraw for Vault V2
 
-| Field      | Value                                    |
-| ---------- | ---------------------------------------- |
-| **Status** | Accepted                                 |
-| **Date**   | 2026-08-28                               |
-| **Author** | @foulques                                |
-| **Scope**  | Packages: `morpho-sdk`                   |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-08-28 |
+| **Author** | @foulques |
+| **Scope**  | Packages: `morpho-sdk` |
+
+_Migrated from TIB-2026-08-28-vault-exit-force-withdraw. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
 ## Context
 
-[`TIB-2026-07-27`](./TIB-2026-07-27-vault-exit-in-kind-redemption.md) integrated two of
+[`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) integrated two of
 `VaultExitBundlesV1`'s three entry points and explicitly deferred the third:
 
 > **`vaultExitBundlesV1ForceWithdrawVaultV2` is out of scope** and gets its own TIB.
@@ -613,7 +615,7 @@ the in-kind TIB, so no downstream peer-range audit is required.
 - [`VaultExitBundlesV1.sol`](https://github.com/morpho-org/bundles/blob/main/src/vault-exit/VaultExitBundlesV1.sol) — the contract
 - [`VaultV2ExitBundlesTest.sol`](https://github.com/morpho-org/bundles/blob/main/test/VaultV2ExitBundlesTest.sol) — `testForceWithdrawTightPriceBound` is the source of the dust term
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `exit`, `forceDeallocate`, `previewWithdraw`, the gates
-- [`TIB-2026-07-27`](./TIB-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
+- [`ADR-2026-07-27`](./ADR-2026-07-27-vault-exit-in-kind-redemption.md) — the in-kind decision this TIB extends, and the source of the permit, allowance, and gate reasoning
 
 ## Addenda
 
@@ -624,7 +626,7 @@ the in-kind TIB, so no downstream peer-range audit is required.
 The three deprecated aliases recorded in the validation matrix —
 `InKindRedeemRequiresSingleAdapterError`, `UnsupportedInKindAdapterError`, and
 `MissingReferralFeeRecipientError` — were subsequently removed outright by
-[`TIB-2026-09-17`](./TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md). The
+[`ADR-2026-09-17`](./ADR-2026-09-17-remove-bundler3-primitives-without-deprecation.md). The
 canonical names (`VaultV2SingleAdapterRequiredError`, `VaultV2UnsupportedExitAdapterError`,
 `ReferralFeeRecipientMissingError`) are unchanged; only the `export const X = Y;` aliases are gone.
 

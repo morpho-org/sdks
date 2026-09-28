@@ -1,11 +1,13 @@
-# TIB-2026-06-16: Shared-liquidity target-utilization metric
+# ADR-2026-06-16: Shared-liquidity target-utilization metric
 
-| Field      | Value                  |
-| ---------- | ---------------------- |
-| **Status** | Proposed               |
-| **Date**   | 2026-06-16             |
-| **Author** | @foulques              |
-| **Scope**  | Package: `morpho-sdk`  |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-06-16 |
+| **Author** | @foulques |
+| **Scope**  | Package: `morpho-sdk` |
+
+_Migrated from TIB-2026-06-16-shared-liquidity-target-utilization-metric. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 

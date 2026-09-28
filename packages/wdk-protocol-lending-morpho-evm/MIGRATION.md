@@ -45,7 +45,7 @@ these deposits. There is no Bundler3 fallback.
 `BlueApprovalOrSignatureRequirement` and the Bundler3-routed input shapes were deprecated only during
 the 2.0.0 prerelease and are removed without a published deprecation window. This is the one-time
 lifecycle deviation recorded in
-[`TIB-2026-09-17`](../../docs/tibs/TIB-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
+[`ADR-2026-09-17`](../../docs/adrs/ADR-2026-09-17-remove-bundler3-primitives-without-deprecation.md).
 Stay on 1.x if an integration still depends on those inputs.
 
 ## TypeScript output changes

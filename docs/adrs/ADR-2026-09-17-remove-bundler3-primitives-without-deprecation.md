@@ -1,23 +1,24 @@
-# TIB-2026-09-17: Remove never-deprecated Bundler3 primitives in the pending majors
+# ADR-2026-09-17: Remove never-deprecated Bundler3 primitives in the pending majors
 
-| Field          | Value                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| **Status**     | Accepted                                                                                          |
-| **Date**       | 2026-09-17                                                                                        |
-| **Author**     | @foulques                                                                                         |
-| **Scope**      | `morpho-sdk` 6.0.0, `wdk-protocol-lending-morpho-evm` 2.0.0, `morpho-ts` 3.0.0, `blue-sdk` 7.0.0, `blue-sdk-viem` 6.0.0 |
-| **Supersedes** | TIB-2026-08-25 Bundler3-primitive retention only                                                  |
+| Field      | Value     |
+| ---------- | --------- |
+| **Status** | accepted  |
+| **Date**   | 2026-09-17 |
+| **Author** | @foulques |
+| **Scope**  | `morpho-sdk` 6.0.0, `wdk-protocol-lending-morpho-evm` 2.0.0, `morpho-ts` 3.0.0, `blue-sdk` 7.0.0, `blue-sdk-viem` 6.0.0 |
+
+_Migrated from TIB-2026-09-17-remove-bundler3-primitives-without-deprecation. Historical record: its implementation-time sections and instructions are kept as written; only the Status row is maintained._
 
 ---
 
 ## Context
 
-[`TIB-2026-08-25`](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md) routes high-level Blue writes
+[`ADR-2026-08-25`](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) routes high-level Blue writes
 through `BlueBundlesV1` and lists "Removing Bundler3 primitives used by other SDK products or
 advanced composition" as a non-goal, so the low-level Bundler3 surface (`BundlerAction`, the
 `./bundler` subpath, executor and adapter ABIs, the `bundler3` registry tree, GeneralAdapter
 requirement helpers, and the Bundler3-specific `Holding`/`User` state) stayed public and stable.
-[`TIB-2026-08-28-retire-vault-v1-shared-liquidity`](./TIB-2026-08-28-retire-vault-v1-shared-liquidity.md)
+[`ADR-2026-08-28-retire-vault-v1-shared-liquidity`](./ADR-2026-08-28-retire-vault-v1-shared-liquidity.md)
 superseded that TIB for Vault V1 planning only and kept the same non-goal.
 
 Once every high-level route in the pending majors is served by the standalone `BlueBundlesV1`,
@@ -104,7 +105,7 @@ guides, the maintained-dependent audit and bumps, or continued availability of t
   routes; consumers who compose arbitrary bundles get the same guidance (stay on the previous major)
   either way.
 - **Keep the primitives exported through the majors as unsupported advanced APIs.** Rejected: it
-  preserves an untested second route (TIB-2026-08-28 rejected the same shape for Vault V1 planning)
+  preserves an untested second route (ADR-2026-08-28 rejected the same shape for Vault V1 planning)
   and implies an ongoing compatibility commitment the SDK does not intend to honor.
 - **Fold the removal into the BlueBundlesV1 route exception.** Rejected: that exception explicitly
   states no break outside its route inherits it; widening it silently would erase the boundary
@@ -137,7 +138,9 @@ contracts independently.
 
 ## References
 
-- [TIB-2026-08-25: Route Blue actions through BlueBundlesV1](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
-- [TIB-2026-08-28: Retire Vault V1 shared liquidity](./TIB-2026-08-28-retire-vault-v1-shared-liquidity.md)
-- [TIB-2026-08-28: VaultExitBundlesV1 force withdraw for Vault V2](./TIB-2026-08-28-vault-exit-force-withdraw.md)
-- [TIB-0003: SDK package deprecation lifecycle](./TIB-0003-sdk-package-deprecation-lifecycle.md)
+- Supersedes [ADR-2026-08-25-blue-bundles-v1-sdk-actions](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md) for Bundler3-primitive retention only.
+
+- [ADR-2026-08-25: Route Blue actions through BlueBundlesV1](./ADR-2026-08-25-blue-bundles-v1-sdk-actions.md)
+- [ADR-2026-08-28: Retire Vault V1 shared liquidity](./ADR-2026-08-28-retire-vault-v1-shared-liquidity.md)
+- [ADR-2026-08-28: VaultExitBundlesV1 force withdraw for Vault V2](./ADR-2026-08-28-vault-exit-force-withdraw.md)
+- [ADR-2026-05-13: SDK package deprecation lifecycle](./ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)

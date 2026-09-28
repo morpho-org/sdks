@@ -237,34 +237,23 @@ jobs:
             }
           ')
 
-          # Inventory the received tarballs by reading name/version from inside
-          # each, rejecting duplicates.
-          #
-          # npm's manifest reader (pacote) strips the leading path component of
-          # every tar entry, so a tarball smuggling a second top-level directory
-          # (e.g. `zzz/package.json`) can make `npm publish` ship a different
-          # name/version than a naive read of `package/package.json` — defeating
-          # the allowlist below. We close that structurally: reject any tarball
-          # that is not a single-rooted `package/` archive with exactly one
-          # `package/package.json` and no symlink/hardlink/device entries. Once
-          # that invariant holds there is exactly one manifest in the archive, so
-          # the literal read below is the same manifest npm will publish. (A
-          # registry-aware `npm publish --dry-run` cannot be used for this: it
-          # errors on versions already on the registry, which the idempotent
-          # rerun path relies on being publishable-or-skippable.)
+          # Inventory the received tarballs by reading name/version through
+          # the same pacote manifest reader that npm publish uses, rejecting
+          # duplicates. The GNU tar listing checks below remain defense in
+          # depth for archive structure and irregular entries.
           declare -A received_version
           declare -A received_tarball
           shopt -s nullglob
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
-            entries="$(tar -tzf "$tgz")"
+            # `--quoting-style=escape` keeps one line per entry (a stored
+            # newline or control byte is rendered as `\n`/octal rather than
+            # raw).
+            entries="$(tar -tzf "$tgz" --quoting-style=escape)"
             # Count-based checks (not `grep -q`) so behaviour is identical across
             # GNU and BSD grep and unaffected by early-exit/SIGPIPE quirks.
             #
-            # Reject non-canonical entry paths first: pacote normalizes `.`/`..`
-            # segments and `//` before resolving the manifest, so an entry like
-            # `package/./package.json` aliases onto the root `package.json` after
-            # the leading component is stripped — it would be published while the
-            # exact-path checks below still read the benign `package/package.json`.
+            # Reject non-canonical entry paths as a defense-in-depth archive
+            # structure check; pacote remains the source of truth for identity.
             noncanon="$(printf '%s\n' "$entries" | grep -cE '(^|/)\.\.?(/|$)|//' || true)"
             if [ "$noncanon" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} has ${noncanon} non-canonical path(s) (., .., //); refusing to publish."
@@ -280,17 +269,42 @@ jobs:
               echo "::error::Tarball ${tgz##*/} must contain exactly one package/package.json (found ${pj_count}); refusing to publish."
               exit 1
             fi
+            pj_children="$(printf '%s\n' "$entries" | grep -cE '^package/package\.json/' || true)"
+            if [ "$pj_children" != "0" ]; then
+              echo "::error::Tarball ${tgz##*/} has ${pj_children} entr(y/ies) below package/package.json (manifest must be a regular file); refusing to publish."
+              exit 1
+            fi
             irregular="$(tar -tvzf "$tgz" | awk '{print substr($1, 1, 1)}' | grep -cvE '^[-d]$' || true)"
             if [ "$irregular" != "0" ]; then
               echo "::error::Tarball ${tgz##*/} contains ${irregular} non-regular entr(y/ies) (symlink/hardlink/device); refusing to publish."
               exit 1
             fi
 
+            # Fail closed on entries a case-insensitive or Windows consumer would
+            # resolve to the same path (SDK-672/673), parsed with npm's bundled node-tar.
+            node scripts/ci/verify-tarball-collisions.ts "$tgz"
+            # Read name/version through the exact code path `npm publish` uses
+            # (pacote.manifest → node-tar extraction), so the identity we check
+            # against the source allowlist is the identity npm will publish.
+            identity="$(node scripts/ci/read-tarball-identity.ts "$tgz")"
+            IFS=$'\t' read -r name version <<<"$identity"
+
+            # npm flattens every publishConfig key from the packed manifest
+            # into the publish options (including transport keys such as
+            # proxy, https-proxy, strict-ssl, ca) BEFORE the OIDC exchange,
+            # so only `access`/`registry` pinned to npmjs are allowed (SDK-664).
+            # The validator reads the stored package/package.json (a regular
+            # file, parsed not require()d — SDK-637); its name@version must
+            # match what pacote resolved, proving the allowlisted manifest is
+            # the one npm will publish.
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
-            name="$(node -p "require('${tmpd}/package/package.json').name")"
-            version="$(node -p "require('${tmpd}/package/package.json').version")"
+            manifest_identity="$(node scripts/ci/verify-tarball-manifest.ts "${tmpd}/package/package.json")"
             rm -rf "$tmpd"
+            if [ "$manifest_identity" != "${name}@${version}" ]; then
+              echo "::error::Tarball ${tgz##*/}: stored package/package.json identity '${manifest_identity}' differs from the identity npm would publish '${name}@${version}'; refusing to publish."
+              exit 1
+            fi
 
             if [ -n "${received_version[$name]:-}" ]; then
               echo "::error::Duplicate tarball for ${name} in the artifact."
@@ -332,9 +346,12 @@ jobs:
             fi
 
             # `--ignore-scripts` makes the no-lifecycle-hook behaviour of tarball
-            # publishes explicit and future-proof; `--registry` overrides any
-            # `publishConfig.registry` in the packed manifest so a tampered pack
-            # job cannot redirect the OIDC audience away from npmjs.
+            # publishes explicit and future-proof; `--registry` pins the registry
+            # endpoint, and the per-tarball manifest check above (which runs
+            # before the OIDC token exchange inside `npm publish`, the first
+            # npm-credentialed operation) guarantees no other publishConfig
+            # key can redirect the OIDC exchange or the package PUT away from
+            # npmjs.
             echo "Publishing ${name}@${version} (dist-tag: ${publish_tag})"
             npm publish "$tgz" \
               --provenance \
