@@ -1,0 +1,41 @@
+name: Bot review gate
+
+# Publishes the `bot-review-gate` commit status (required on `main`): a PR opened by a bot
+# passes only once 2 distinct humans approved its head commit, so whoever prompted the agent
+# cannot be its only approver. Human-authored PRs pass. Logic: scripts/ci/bot-review-gate.ts,
+# always run from the default branch — never PR-controlled code.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Fork PRs get a read-only token on pull_request_review; their status comes from pull_request_target.
+    if: github.event_name == 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/ci/bot-review-gate.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
