@@ -1537,4 +1537,75 @@ describe("registerCustomAddresses EIP-55 canonicalisation", () => {
       }),
     ).not.toThrow(InvalidAddressError);
   });
+
+  test("behavior: nested bundle addresses are canonicalised", () => {
+    const chainId = 31_337_311;
+    const vaultExitBundlesV1 = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          ...createMidnightAddresses(),
+          blue: randomAddress(),
+          adaptiveCurveIrm: randomAddress(),
+          bundles: {
+            vaultExitBundlesV1:
+              vaultExitBundlesV1.toLowerCase() as `0x${string}`,
+          },
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.bundles?.vaultExitBundlesV1).toBe(
+      vaultExitBundlesV1,
+    );
+  });
+
+  test("error: InvalidAddressError on mis-checksummed nested bundle address", () => {
+    const chainId = 31_337_312;
+    const misChecksummed =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress(),
+            adaptiveCurveIrm: randomAddress(),
+            bundles: { vaultExitBundlesV1: misChecksummed },
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on malformed unwrapped token value", () => {
+    const chainId = 31_337_313;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { [randomAddress()]: "0x12" },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on mis-checksummed unwrapped token value", () => {
+    const chainId = 31_337_314;
+    const misChecksummed =
+      `0x${"D1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb".replace("D", "d")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { [randomAddress()]: misChecksummed },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
 });

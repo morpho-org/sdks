@@ -2076,8 +2076,6 @@ const refreshDeploymentViews = () => {
  * `0x` hex address: it is stored in EIP-55 checksum form and must carry a valid checksum when mixed-case.
  * Deployment values are not touched.
  *
- * @throws InvalidAddressError when an address-like value is malformed or carries an invalid EIP-55 checksum.
- *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
@@ -2088,6 +2086,7 @@ const refreshDeploymentViews = () => {
  *                              Known-chain entries may be partial; custom-chain entries must include the required
  *                              Blue deployments and may add optional periphery deployments.
  *
+ * @throws InvalidAddressError when an address-like value is malformed or carries an invalid EIP-55 checksum.
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.

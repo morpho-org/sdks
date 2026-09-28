@@ -2,6 +2,7 @@ export {
   BlueErrors,
   DivisionByZeroError,
   IncompleteChainRegistryError,
+  InvalidAddressError,
   InvalidBitLengthError,
   InvalidMarketParamsError,
   RegistryValueAlreadyRegisteredError,

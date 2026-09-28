@@ -34,9 +34,6 @@ const computeChecksum = (lowerHex: string): `0x${string}` => {
   return checksum as `0x${string}`;
 };
 
-const hasMixedCase = (hex: string): boolean =>
-  /[a-f]/.test(hex) && /[A-F]/.test(hex);
-
 /**
  * Returns the EIP-55 checksummed form of an EVM address.
  *
@@ -61,7 +58,8 @@ export function getChecksumAddress(address: string): `0x${string}` {
 
   const checksum = computeChecksum(address.slice(2).toLowerCase());
 
-  if (hasMixedCase(address.slice(2)) && address !== checksum)
+  const hex = address.slice(2);
+  if (/[a-f]/.test(hex) && /[A-F]/.test(hex) && address !== checksum)
     throw new InvalidAddressError(address);
 
   return checksum;
