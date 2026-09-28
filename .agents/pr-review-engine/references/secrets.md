@@ -26,8 +26,10 @@ concern applies.`
 | Environment-file commits (`.env`, `.env.local`) | **Critical** | Should never be in git; verify `.gitignore` covers them |
 | `.npmrc` with `_authToken=` or `always-auth=true` | **Critical** | Owned by `dependencies` agent — confirm the `_authToken` value is a literal, not a `${VAR}` reference |
 | CI workflow `run:` block with `secrets.*` interpolated directly (not via `env:`) | **High** | Lands in logs; owned by `ci-security` |
-| New `secrets:` names introduced without a matching reference in `SECURITY.md` | **Medium** | Surface for documentation parity |
+| New workflow secret without a matching row in `.github/workflows/AGENTS.md` (workflow secret inventory) | **Medium** | Surface for inventory parity — owned by `ci-security` |
 | Test fixtures with realistic-looking but fake secrets | **Low** | Note only — confirm they're not real |
+
+> **Workflow secret scoping / branch-gating** — which secret is reachable on which branches, and when *widening* that reach is a finding — is owned by `ci-security` per AGENTS.md §10 "Secret scoping & branch-gating" and the inventory in `.github/workflows/AGENTS.md`. This rubric covers only hardcoded-secret detection and log-exposure: a repo-level secret intentionally readable on branch pushes is not, by itself, a hardcoded-secret finding.
 
 ## How to fix
 
