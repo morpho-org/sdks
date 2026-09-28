@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   AGENT_LOGINS,
@@ -304,22 +304,72 @@ describe("main", () => {
       { body: { message: "temporarily unavailable" }, status: 503 },
       { body: { message: "status unavailable" }, status: 500 },
     ]);
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+
+    try {
+      await expect(
+        main({ env: ENV, fetchImpl, writeOutput: () => {} }),
+      ).rejects.toThrow(
+        "GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
+      );
+
+      expect(requests[2]?.url.pathname).toBe(
+        `/repos/morpho-org/sdks/statuses/${HEAD}`,
+      );
+      expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+        context: STATUS_CONTEXT,
+        description:
+          "Bot review gate could not evaluate: GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
+        state: "error",
+      });
+      expect(stderr).toHaveBeenCalledWith(
+        `::warning::Could not publish bot-review-gate error status: GitHub API /repos/morpho-org/sdks/statuses/${HEAD} failed with 500.\n`,
+      );
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  test("uses the event head SHA when the pull-request fetch fails", async () => {
+    const { fetchImpl, requests } = createFetch([
+      { body: { message: "temporarily unavailable" }, status: 503 },
+      { body: { id: 1 } },
+    ]);
 
     await expect(
-      main({ env: ENV, fetchImpl, writeOutput: () => {} }),
+      main({
+        env: { ...ENV, EVENT_HEAD_SHA: HEAD },
+        fetchImpl,
+        writeOutput: () => {},
+      }),
     ).rejects.toThrow(
-      "GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
+      "GitHub API /repos/morpho-org/sdks/pulls/1076 failed with 503.",
     );
 
-    expect(requests[2]?.url.pathname).toBe(
+    expect(requests[1]?.url.pathname).toBe(
       `/repos/morpho-org/sdks/statuses/${HEAD}`,
     );
-    expect(JSON.parse(requests[2]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[1]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
-      description:
-        "Bot review gate could not evaluate: GitHub API GET /repos/morpho-org/sdks/pulls/1076/reviews failed with 503.",
       state: "error",
     });
+  });
+
+  test("does not post a fallback status when the event head SHA is invalid or absent", async () => {
+    for (const env of [{ ...ENV, EVENT_HEAD_SHA: "not-a-sha" }, ENV]) {
+      const { fetchImpl, requests } = createFetch([
+        { body: { message: "temporarily unavailable" }, status: 503 },
+      ]);
+
+      await expect(
+        main({ env, fetchImpl, writeOutput: () => {} }),
+      ).rejects.toThrow(
+        "GitHub API /repos/morpho-org/sdks/pulls/1076 failed with 503.",
+      );
+      expect(requests).toHaveLength(1);
+    }
   });
 
   test("posts an error status after a verdict status fails", async () => {

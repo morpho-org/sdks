@@ -215,10 +215,19 @@ export async function main(
 
     return result;
   } catch (error) {
-    if (headSha != null) {
+    const eventHeadSha = env.EVENT_HEAD_SHA;
+    const fallbackHeadSha =
+      headSha ??
+      (eventHeadSha != null && /^[0-9a-f]{40}$/.test(eventHeadSha)
+        ? eventHeadSha
+        : undefined);
+    if (fallbackHeadSha != null) {
       try {
         await postStatus({
-          url: new URL(`repos/${repository}/statuses/${headSha}`, apiBase),
+          url: new URL(
+            `repos/${repository}/statuses/${fallbackHeadSha}`,
+            apiBase,
+          ),
           token,
           fetchImpl,
           status: {
@@ -229,8 +238,10 @@ export async function main(
             target_url: targetUrl,
           },
         });
-      } catch {
-        // The original evaluation error is more useful than a failed fallback status request.
+      } catch (fallbackError) {
+        process.stderr.write(
+          `::warning::Could not publish bot-review-gate error status: ${describeError(fallbackError)}\n`,
+        );
       }
     }
     throw error;
