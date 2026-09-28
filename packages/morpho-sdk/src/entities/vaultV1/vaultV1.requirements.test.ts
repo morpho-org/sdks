@@ -180,30 +180,32 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const handle = createMockClient(mainnet);
     const permit2 = getChainAddress(mainnet.id, "permit2");
-    mockRead(handle, {
-      address: IN_KIND_ASSET,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "nonceBitmap",
-      result: 0n,
-    });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_ASSET,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: permit2,
+        abi: permit2Abi,
+        functionName: "nonceBitmap",
+        result: 0n,
+      });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    };
     const params = {
       amount,
       userAddress: IN_KIND_USER,
       vaultData: inKindVaultV1Data(),
       deadline: Time.timestamp() + 7_200n,
     };
-    const depositA = vault.deposit(params);
+    const depositA = makeVault().deposit(params);
 
     const requirement = (await depositA.getRequirements()).find(
       isRequirementSignature,
@@ -227,7 +229,7 @@ describe("MorphoVaultV1 deposit getRequirements", () => {
       },
     } satisfies BundlesTokenRequirementSignature;
 
-    const depositB = vault.deposit(params);
+    const depositB = makeVault().deposit(params);
     expect(depositB.buildTx([signature])).toEqual(
       depositA.buildTx([signature]),
     );
@@ -527,29 +529,31 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc2612Abi,
-      functionName: "nonces",
-      result: 0n,
-    });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    };
     const params = {
       amount,
       userAddress: IN_KIND_USER as Address,
       vaultData: inKindVaultV1Data(),
       deadline: Time.timestamp() + 7_200n,
     };
-    const withdrawA = vault.withdraw(params);
+    const withdrawA = makeVault().withdraw(params);
 
     const permit = (await withdrawA.getRequirements()).find(
       isRequirementSignature,
@@ -572,7 +576,7 @@ describe("MorphoVaultV1 withdraw getRequirements", () => {
       },
     } satisfies Erc2612RequirementSignature;
 
-    const withdrawB = vault.withdraw(params);
+    const withdrawB = makeVault().withdraw(params);
     expect(withdrawB.buildTx([signature])).toEqual(
       withdrawA.buildTx([signature]),
     );
@@ -780,29 +784,32 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
   );
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc2612Abi,
-      functionName: "nonces",
-      result: 0n,
-    });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      return vault;
+    };
     const params = {
       shares: amount,
       userAddress: IN_KIND_USER as Address,
       deadline: Time.timestamp() + 7_200n,
     };
-    const redeemA = vault.redeem(params);
+    const redeemA = makeVault().redeem(params);
 
     const permit = (await redeemA.getRequirements()).find(
       isRequirementSignature,
@@ -825,7 +832,7 @@ describe("MorphoVaultV1 redeem getRequirements", () => {
       },
     } satisfies Erc2612RequirementSignature;
 
-    const redeemB = vault.redeem(params);
+    const redeemB = makeVault().redeem(params);
     expect(redeemB.buildTx([signature])).toEqual(redeemA.buildTx([signature]));
   });
 });
@@ -1000,23 +1007,26 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
   });
 
   test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
-    const handle = createMockClient(mainnet);
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: IN_KIND_VAULT,
-      abi: erc2612Abi,
-      functionName: "nonces",
-      result: 0n,
-    });
-    const vault = handle.client
-      .extend(morphoViemExtension({ supportSignature: true }))
-      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: IN_KIND_VAULT,
+        abi: erc2612Abi,
+        functionName: "nonces",
+        result: 0n,
+      });
+      const vault = handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+      vi.spyOn(vault, "getData").mockResolvedValue(inKindVaultV1Data());
+      return vault;
+    };
     const params = {
       assets: amount,
       userAddress: IN_KIND_USER as Address,
@@ -1024,7 +1034,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
       targetVault: inKindVaultV2Data({ address: MUTATED_USER }),
       deadline: Time.timestamp() + 7_200n,
     };
-    const migrationA = vault.migrateToV2(params);
+    const migrationA = makeVault().migrateToV2(params);
 
     const permit = (await migrationA.getRequirements()).find(
       isRequirementSignature,
@@ -1047,7 +1057,7 @@ describe("MorphoVaultV1 migrateToV2 getRequirements", () => {
       },
     } satisfies Erc2612RequirementSignature;
 
-    const migrationB = vault.migrateToV2(params);
+    const migrationB = makeVault().migrateToV2(params);
     expect(migrationB.buildTx([signature])).toEqual(
       migrationA.buildTx([signature]),
     );
