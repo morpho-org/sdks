@@ -187,8 +187,13 @@ export async function main(
       const description =
         `Head moved from ${eventHeadSha} to ${triggerHeadSha} for ${repository}#${prNumber}; ` +
         "skipping (a newer run evaluates the current head).";
-      writeOutput(`${description}\n`);
-      return { description, state: "skipped" };
+      if (env.GITHUB_EVENT_NAME === "workflow_run") {
+        writeOutput(`::warning::${description}\n`);
+        return { description, state: "skipped" };
+      }
+      throw new Error(
+        `PR head is ${triggerHeadSha}, expected ${eventHeadSha} from the triggering event; re-run this workflow.`,
+      );
     }
 
     const pullRequests = new Map<number, PullRequest>();

@@ -290,7 +290,11 @@ describe("main", () => {
 
     await expect(
       main({
-        env: { ...ENV, EVENT_HEAD_SHA: OTHER_HEAD },
+        env: {
+          ...ENV,
+          EVENT_HEAD_SHA: OTHER_HEAD,
+          GITHUB_EVENT_NAME: "workflow_run",
+        },
         fetchImpl,
         writeOutput: (message) => output.push(message),
       }),
@@ -304,8 +308,47 @@ describe("main", () => {
     ]);
     expect(requests[0]?.init.method).toBe("GET");
     expect(output).toEqual([
-      `Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).\n`,
+      `::warning::Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).\n`,
     ]);
+  });
+
+  test("posts an error when pull_request_target observes a moved head", async () => {
+    const trigger = pullRequest({
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({
+        env: {
+          ...ENV,
+          EVENT_HEAD_SHA: OTHER_HEAD,
+          GITHUB_EVENT_NAME: "pull_request_target",
+        },
+        fetchImpl,
+        writeOutput: () => {},
+      }),
+    ).rejects.toThrow(
+      `PR head is ${HEAD}, expected ${OTHER_HEAD} from the triggering event; re-run this workflow.`,
+    );
+
+    expect(
+      requests.map(({ url, init }) => [url.pathname, init.method]),
+    ).toEqual([
+      ["/repos/morpho-org/sdks/pulls/1076", "GET"],
+      [`/repos/morpho-org/sdks/statuses/${OTHER_HEAD}`, "POST"],
+    ]);
+    const status = JSON.parse(requests[1]?.init.body ?? "{}");
+    expect(status).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+    expect(status.description).toMatch(/^Bot review gate could not evaluate:/);
   });
 
   test("follows Link pagination when collecting reviews", async () => {
