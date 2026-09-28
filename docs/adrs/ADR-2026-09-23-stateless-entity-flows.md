@@ -35,15 +35,23 @@ An `ActionOutput` handle is a pure function of the inputs the caller passed at c
 `RequirementSignature` objects it is handed; it never reads a value that `getRequirements()` or
 `sign()` wrote. Any value that only signing or requirement resolution can produce travels on the
 signature — on `signature.args` — so the signature is the only transport between the two steps.
-Consequently two handles built from identical inputs, on different entity instances or different
-processes, produce identical transactions for the same signatures, and a handle whose
-`getRequirements()` was never called builds the same transaction as one whose requirements were
-resolved.
+The clock a handle reads at construction (to default its deadline, check expiry, or project
+accrual onto a supplied snapshot) counts as one of those inputs; `buildTx()` itself never reads it.
+Consequently two handles built from identical inputs at the same construction timestamp, on
+different entity instances or different processes, produce identical transactions for the same
+signatures, and a handle whose `getRequirements()` was never called builds the same transaction as
+one whose requirements were resolved. A handle rebuilt later from the same arguments is outside this
+guarantee wherever construction derives a bound from the clock. The Vault V1/V2 `inKindRedeem` and
+Vault V2 `forceWithdraw` handles do (their share cap and minimum share price project accrual from
+the construction time), so a resume after interest has accrued can reject or re-bound a signature
+prepared earlier. That is a recorded deviation; it is revisited if an integrator reports a failed
+delayed resume, by deriving those bounds from the supplied snapshot and the signed deadline.
 
 The observable rules this imposes:
 
 - If a caller builds handle A, awaits `A.getRequirements()`, signs, then builds handle B from the
-  same inputs on any instance, then `B.buildTx(signatures)` equals `A.buildTx(signatures)`.
+  same inputs at the same construction timestamp on any instance, then `B.buildTx(signatures)`
+  equals `A.buildTx(signatures)`.
 - If `buildTx()` needs a value the caller cannot know before requirements resolve (a Permit2 funding
   cap, a Midnight offer-root payload), that value is read from the matching signature's `args`. An
   identity field the handle can re-derive from its immutable inputs (spender, owner, root, offer
@@ -81,9 +89,9 @@ consequence of its own.
   settlement, and never awaited or read by `buildTx()` → `module-api-architecture` review flags a
   consumed closure binding as **critical**.
 - Every entity flow that consumes a signature has a test proving a signature prepared on one handle
-  finalizes identically on a fresh handle built from the same inputs → the cross-handle test fails if
-  `buildTx()` starts reading closure state; `test-coverage` flags a signature-consuming flow that
-  lacks one as **high**.
+  finalizes identically on a fresh handle built from the same inputs at the same construction
+  timestamp → the cross-handle test fails if `buildTx()` starts reading closure state;
+  `test-coverage` flags a signature-consuming flow that lacks one as **high**.
 - Every value `buildTx()` derives from a signature is present on a `RequirementSignature` passed to
   it and is serializable → a serialized requirement + signature resumed on a fresh handle builds the
   same transaction. Every re-derivable identity field is validated against the handle's immutable
@@ -111,3 +119,4 @@ consequence of its own.
 - [ADR-2026-06-03-midnight-action-output-interface](./ADR-2026-06-03-midnight-action-output-interface.md)
   — first flow to carry a signing-derived payload on `signature.args`.
 - https://github.com/morpho-org/sdks/pull/1148 — Vault V1/V2 handles made stateless.
+- Accepted in the PR that added this file.

@@ -46,6 +46,7 @@ Per AGENTS.md §5, every package uses the same layout:
 
 - **High** — onchain code path with no test at all (a contract call shipped untested).
 - **High** — removed or modified public export whose tests still describe the old behavior (false negative).
+- **High** — new or changed entity flow that consumes a `RequirementSignature` without a cross-handle test (see `ADR-2026-09-23-stateless-entity-flows`).
 - **Medium** — missing unit test for a new public export; misplaced unit/integration test; incorrect Vitest routing.
 - **Low** — missing edge-case coverage on an export that already has happy-path tests; noncanonical test directory or suffix when routing remains correct.
 
