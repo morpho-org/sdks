@@ -87,9 +87,10 @@ export function countedApprovers(
     .sort();
 }
 
-/** Evaluates whether the pull request's author and current-head approvals satisfy the gate. */
+/** Evaluates the gate, optionally using current-head approvers already filtered by permission. */
 export function evaluate(options: {
   readonly author: Author;
+  readonly approvers?: readonly string[];
   readonly reviews: readonly Review[];
   readonly headSha: string;
 }): GateResult {
@@ -100,10 +101,12 @@ export function evaluate(options: {
     };
   }
 
-  const approvers = countedApprovers(options.reviews, {
-    author: options.author.login,
-    headSha: options.headSha,
-  });
+  const approvers =
+    options.approvers ??
+    countedApprovers(options.reviews, {
+      author: options.author.login,
+      headSha: options.headSha,
+    });
   const description =
     approvers.length >= REQUIRED_HUMAN_APPROVALS
       ? `Bot-authored PR approved by ${approvers.length} humans: ${approvers.join(", ")}`
@@ -120,6 +123,7 @@ export function evaluate(options: {
 /**
  * Fetches the triggering pull request, evaluates every open pull request at its head, and
  * publishes one commit status.
+ * Only approvers with write access or higher count.
  * API or payload failures try to publish an `error` status to the fetched head, or to
  * `EVENT_HEAD_SHA` (only if it's a valid 40-hex SHA) when the PR fetch fails before the head
  * is known. Nothing is posted when neither SHA is available. The original error is always
@@ -189,14 +193,19 @@ export async function main(
         );
       }
       for (const item of page) {
+        if (
+          !isObject(item) ||
+          !isObject(item.head) ||
+          item.head.sha !== triggerHeadSha
+        ) {
+          continue;
+        }
         if (!isPullRequest(item)) {
           throw new Error(
             `GitHub API GET ${pullsUrl.pathname} returned a malformed pull request entry.`,
           );
         }
-        if (item.head.sha === triggerHeadSha) {
-          pullRequests.set(item.number, item);
-        }
+        pullRequests.set(item.number, item);
       }
       pullsUrl = parseNextLink(response.headers.get("link"));
     }
@@ -208,10 +217,12 @@ export async function main(
       readonly number: number;
       readonly result: GateResult;
     }[] = [];
+    const permissionCache = new Map<string, Promise<boolean>>();
     for (const candidate of [...pullRequests.values()].sort(
       (left, right) => left.number - right.number,
     )) {
-      const reviews = isBot(candidate.user)
+      const isBotAuthor = isBot(candidate.user);
+      const reviews = isBotAuthor
         ? await listReviews({
             apiBaseUrl: apiBase,
             fetchImpl,
@@ -220,11 +231,54 @@ export async function main(
             token,
           } satisfies ListReviewsOptions)
         : [];
+      const counted = isBotAuthor
+        ? countedApprovers(reviews, {
+            author: candidate.user.login,
+            headSha: triggerHeadSha,
+          })
+        : [];
+      const approvers = await Promise.all(
+        counted.map(async (login) => {
+          let hasWriteAccess = permissionCache.get(login);
+          if (hasWriteAccess == null) {
+            const permissionUrl = new URL(
+              `repos/${repository}/collaborators/${encodeURIComponent(login)}/permission`,
+              apiBase,
+            );
+            hasWriteAccess = (async () => {
+              const response = await fetchImpl(
+                permissionUrl,
+                requestInit(token, "GET"),
+              );
+              await assertOk(response, permissionUrl);
+              const permission = await response.json();
+              if (
+                !isObject(permission) ||
+                typeof permission.permission !== "string"
+              ) {
+                throw new Error(
+                  `GitHub API GET ${permissionUrl.pathname} returned a malformed collaborator permission payload.`,
+                );
+              }
+              return (
+                permission.permission === "admin" ||
+                permission.permission === "write" ||
+                permission.permission === "maintain"
+              );
+            })();
+            permissionCache.set(login, hasWriteAccess);
+          }
+          return (await hasWriteAccess) ? login : null;
+        }),
+      ).then((logins) =>
+        logins.filter((login): login is string => login != null),
+      );
       evaluated.push({
         number: candidate.number,
         result: evaluate({
           author: candidate.user,
           headSha: triggerHeadSha,
+          approvers,
           reviews,
         }),
       });

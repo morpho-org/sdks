@@ -13,6 +13,7 @@ import type { FetchLike } from "./claude-review-gate.ts";
 
 const HEAD = "c462f0c49c0f35e3cb065cf2247312502d1f8062";
 const OLD_HEAD = "da7cc34a1111111111111111111111111111111111";
+const OTHER_HEAD = "ffffffffffffffffffffffffffffffffffffffff";
 const ENV = {
   GH_TOKEN: "ghs_test",
   GITHUB_REPOSITORY: "morpho-org/sdks",
@@ -50,6 +51,10 @@ const review = (options: {
 
 const approved = (login: string, commitId = HEAD): TestReview =>
   review({ commitId, login, state: "APPROVED", type: "User" });
+
+const permissionResponse = (permission = "write") => ({
+  body: { permission },
+});
 
 describe("isBot", () => {
   test("identifies GitHub bot accounts and known agent logins", () => {
@@ -239,6 +244,8 @@ describe("main", () => {
         ],
       },
       { body: reviews },
+      permissionResponse(),
+      permissionResponse(),
       { body: { id: 1 } },
     ]);
     const output: string[] = [];
@@ -258,12 +265,14 @@ describe("main", () => {
       "/repos/morpho-org/sdks/pulls/1076",
       "/repos/morpho-org/sdks/pulls",
       "/repos/morpho-org/sdks/pulls/1076/reviews",
+      "/repos/morpho-org/sdks/collaborators/alice/permission",
+      "/repos/morpho-org/sdks/collaborators/bob/permission",
       `/repos/morpho-org/sdks/statuses/${HEAD}`,
     ]);
     expect(requests[1]?.url.searchParams.get("state")).toBe("open");
     expect(requests[1]?.url.searchParams.get("per_page")).toBe("100");
-    expect(requests[3]?.init.method).toBe("POST");
-    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toEqual({
+    expect(requests[5]?.init.method).toBe("POST");
+    expect(JSON.parse(requests[5]?.init.body ?? "{}")).toEqual({
       context: STATUS_CONTEXT,
       description: "Bot-authored PR approved by 2 humans: alice, bob",
       state: "success",
@@ -299,6 +308,8 @@ describe("main", () => {
       },
       firstPage,
       { body: [approved("bob")] },
+      permissionResponse("maintain"),
+      permissionResponse(),
       { body: { id: 1 } },
     ]);
 
@@ -309,7 +320,7 @@ describe("main", () => {
     });
 
     expect(result.state).toBe("success");
-    expect(requests).toHaveLength(5);
+    expect(requests).toHaveLength(7);
     expect(requests[3]?.url.searchParams.get("page")).toBe("2");
   });
 
@@ -330,6 +341,7 @@ describe("main", () => {
       { body: trigger },
       { body: [trigger, botPullRequest] },
       { body: [approved("reviewer")] },
+      permissionResponse(),
       { body: { id: 1 } },
     ]);
 
@@ -349,7 +361,7 @@ describe("main", () => {
         .filter(({ url }) => url.pathname.endsWith("/reviews"))
         .map(({ url }) => url.pathname),
     ).toEqual(["/repos/morpho-org/sdks/pulls/42/reviews"]);
-    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[4]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
       description: result.description,
       state: "failure",
@@ -373,6 +385,8 @@ describe("main", () => {
       { body: trigger },
       { body: [trigger, botPullRequest] },
       { body: [approved("alice"), approved("bob")] },
+      permissionResponse(),
+      permissionResponse(),
       { body: { id: 1 } },
     ]);
 
@@ -387,11 +401,167 @@ describe("main", () => {
         "Human-authored PR: native review rules apply. (+1 other PRs at this commit)",
       state: "success",
     });
-    expect(JSON.parse(requests[3]?.init.body ?? "{}")).toMatchObject({
+    expect(JSON.parse(requests[5]?.init.body ?? "{}")).toMatchObject({
       context: STATUS_CONTEXT,
       description: result.description,
       state: "success",
     });
+  });
+
+  test("does not count an outside approver without write access", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger, botPullRequest] },
+      { body: [approved("alice"), approved("octocat")] },
+      permissionResponse("write"),
+      { body: { permission: "read", role_name: "maintain" } },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description:
+        "#42: Bot-authored PR needs 2 human approvals on the head commit, has 1: alice",
+      state: "failure",
+    });
+    expect(
+      requests
+        .filter(({ url }) => url.pathname.includes("/collaborators/"))
+        .map(({ url }) => url.pathname),
+    ).toEqual([
+      "/repos/morpho-org/sdks/collaborators/alice/permission",
+      "/repos/morpho-org/sdks/collaborators/octocat/permission",
+    ]);
+    expect(JSON.parse(requests[5]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      description: result.description,
+      state: "failure",
+    });
+  });
+
+  test("caches write-access checks across bot PRs sharing the head", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "carol",
+      type: "User",
+      sha: HEAD,
+    });
+    const firstBotPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const secondBotPullRequest = pullRequest({
+      number: 51,
+      login: "claude-code",
+      type: "User",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger, firstBotPullRequest, secondBotPullRequest] },
+      { body: [approved("alice"), approved("bob")] },
+      permissionResponse(),
+      permissionResponse(),
+      { body: [approved("alice"), approved("bob")] },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description:
+        "Human-authored PR: native review rules apply. (+2 other PRs at this commit)",
+      state: "success",
+    });
+    expect(
+      requests
+        .filter(({ url }) => url.pathname.endsWith("/reviews"))
+        .map(({ url }) => url.pathname),
+    ).toEqual([
+      "/repos/morpho-org/sdks/pulls/42/reviews",
+      "/repos/morpho-org/sdks/pulls/51/reviews",
+    ]);
+    expect(
+      requests
+        .filter(({ url }) => url.pathname.includes("/collaborators/"))
+        .map(({ url }) => url.pathname),
+    ).toEqual([
+      "/repos/morpho-org/sdks/collaborators/alice/permission",
+      "/repos/morpho-org/sdks/collaborators/bob/permission",
+    ]);
+    expect(JSON.parse(requests[6]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      description: result.description,
+      state: "success",
+    });
+  });
+
+  test("skips malformed or unapproved pull requests at other heads", async () => {
+    const trigger = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const staleBotPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: OLD_HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      {
+        body: [
+          trigger,
+          staleBotPullRequest,
+          { head: { sha: OTHER_HEAD }, number: "invalid" },
+        ],
+      },
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...ENV, PR_NUMBER: "50" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description: "Human-authored PR: native review rules apply.",
+      state: "success",
+    });
+    expect(
+      requests.some(
+        ({ url }) =>
+          url.pathname.endsWith("/reviews") ||
+          url.pathname.includes("/collaborators/"),
+      ),
+    ).toBe(false);
+    expect(requests).toHaveLength(3);
   });
 
   test("finds a same-head bot PR on a later open-pulls page", async () => {
@@ -416,6 +586,7 @@ describe("main", () => {
       firstPage,
       { body: [botPullRequest] },
       { body: [approved("reviewer")] },
+      permissionResponse(),
       { body: { id: 1 } },
     ]);
 
@@ -433,6 +604,94 @@ describe("main", () => {
     expect(requests[3]?.url.pathname).toBe(
       "/repos/morpho-org/sdks/pulls/42/reviews",
     );
+  });
+
+  test("adds a bot-authored trigger missing from the open-pulls list", async () => {
+    const trigger = pullRequest({
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [] },
+      { body: [approved("alice"), approved("bob")] },
+      permissionResponse(),
+      permissionResponse(),
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: ENV,
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result).toEqual({
+      description: "Bot-authored PR approved by 2 humans: alice, bob",
+      state: "success",
+    });
+    expect(requests[2]?.url.pathname).toBe(
+      "/repos/morpho-org/sdks/pulls/1076/reviews",
+    );
+    expect(JSON.parse(requests[5]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "success",
+    });
+  });
+
+  test("posts an error status when collaborator permission lookup fails", async () => {
+    const trigger = pullRequest({
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger] },
+      { body: [approved("alice")] },
+      { body: { message: "temporarily unavailable" }, status: 500 },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({ env: ENV, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(
+      "GitHub API /repos/morpho-org/sdks/collaborators/alice/permission failed with 500.",
+    );
+    expect(requests[4]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[4]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
+  });
+
+  test("posts an error status for a malformed collaborator permission payload", async () => {
+    const trigger = pullRequest({
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: trigger },
+      { body: [trigger] },
+      { body: [approved("alice")] },
+      { body: { permission: 1 } },
+      { body: { id: 1 } },
+    ]);
+
+    await expect(
+      main({ env: ENV, fetchImpl, writeOutput: () => {} }),
+    ).rejects.toThrow(/malformed collaborator permission payload/);
+    expect(requests[4]?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(requests[4]?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "error",
+    });
   });
 
   test("posts an error status and rethrows after an API failure", async () => {
