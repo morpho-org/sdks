@@ -34,6 +34,20 @@ jobs:
 
     # Pure and fork projects from one package share a single runner.
     steps:
+      - name: Check RPC secrets
+        if: inputs.fork
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+        run: |
+          for name in MAINNET_RPC_URL BASE_RPC_URL ARBITRUM_RPC_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is empty; fork suites would skip instead of failing."
+              exit 1
+            fi
+          done
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
