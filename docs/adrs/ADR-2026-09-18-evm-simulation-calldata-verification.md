@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | **Status** | accepted |
-| **Date** | 2026-09-18; revised 2026-09-24 |
+| **Date** | 2026-09-18; revised 2026-09-25 |
 | **Author** | @foulques, @jinmel |
 | **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
 
@@ -90,7 +90,8 @@ Permit2 SignatureTransfer does not include the owner in its signed message; its 
 field binds the request to the protected sender. Permit2 AllowanceTransfer (`PermitSingle`) is not
 supported by the migrated routes.
 
-The legacy `approval` and `signature` variants are removed in the major (see Migration).
+The deprecation minor introduces these variants beside the legacy `approval` and `signature`
+variants, which it marks `@deprecated`; the major removes the legacy variants (see Migration).
 
 #### `SimulationLimits`
 
@@ -125,15 +126,40 @@ The added `verification` field contains:
 
 #### Errors
 
-Preserve `SimulationPackageError` and existing error names, codes, constructors, fields and
-`instanceof` behavior. Additions extend the base directly. See the [error catalog](#error-catalog)
-for classes, codes and failure conditions.
+Preserve `SimulationPackageError` and existing error names, codes, constructors and `instanceof`
+behavior. Additions extend the base directly. See the [error catalog](#error-catalog) for classes,
+codes and failure conditions.
 
-Errors preserve `txIdx`, `fieldErrors`, `reason`, `details` and retention's
-`{ address, token, netRetained }` string amounts. Readonly context identifies the mode, stage, chain,
-block, operation, transaction or authorization, affected subject, and expected/observed values with
-units, where available. Consumers branch on class or code; messages explain the failure and remedy.
-Do not expose signatures, credentials or raw causes in consumer-facing output.
+Existing fields `fieldErrors`, `reason` and `details` are preserved. `BlacklistViolationError`'s
+retention entries are retyped in the major to `{ address: Address, token: Address, netRetained: bigint }`
+(previously `string | undefined` addresses and a string amount), matching the `bigint`/`Address`
+rule for onchain quantities; the migration guide lists this retype.
+
+Export the error contract, not only the classes:
+
+- `SimulationErrorCode`: the complete literal union of every `code` in the catalog. Each class
+  narrows `code` to its own literal so a `switch` over `error.code` is exhaustive.
+- `isSimulationPackageError(value: unknown): value is SimulationPackageError`, a structural guard
+  on `name`, `code` and `context` for consumers that cannot rely on `instanceof` across bundles.
+- `SimulationRevertedError.reasonCode: SimulationExecutionReason`, a machine-readable discriminator
+  for execution failures; `reason` stays a human-readable message. The initial union is
+  `"INSUFFICIENT_BALANCE" | "INSUFFICIENT_ALLOWANCE" | "INSUFFICIENT_LIQUIDITY" |
+  "POSITION_UNHEALTHY" | "SLIPPAGE_EXCEEDED" | "SIGNATURE_EXPIRED" | "SIGNATURE_INVALID" |
+  "NONCE_ALREADY_USED" | "CAP_EXCEEDED" | "ACCESS_RESTRICTED" | "UNKNOWN_REVERT"`; adding a
+  member is a minor, and the failure-message inventory below assigns every mapped revert a member.
+  Consumers must never parse `reason`.
+- `SimulationErrorContext`, an exact readonly discriminated type on `context` of every class,
+  keyed by `stage` (`"validation" | "preparation" | "execution" | "verification" | "transport"`).
+  Every stage carries `mode`, `chainId` and `blockNumber`; execution and verification stages carry
+  the decoded `operation` and subject, and expected/observed values with their unit suffix. Failure
+  location uses explicit indices: `failedTransactionIndex?` always indexes the caller's
+  `transactions` (preview preparation never shifts it), `authorizationIndex?` indexes
+  `authorizations`, and `preparationCallIndex?` indexes that authorization's preparation calls.
+  `txIdx` is a result field on `transfers`, not an error field.
+
+The context is frozen and contains no signatures, RPC URLs, credentials, raw calldata or raw
+causes; `cause` is preserved on the error for logging but is not part of `context`. Consumers
+branch on class or `code`, then on `reasonCode`; messages explain the failure and remedy.
 
 ### Morpho-specific failure messages
 
@@ -184,8 +210,8 @@ can execute successfully and still fail these constraints. Such a failure must n
 - Risk-increasing actions must respect the LLTV minus the buffer.
   Repayments and collateral top-ups may leave a position unhealthy if they do not worsen risk.
 - Report a consumer constraint breach as `ConsumerLimitViolationError`, with the violated field,
-  subject, bound and observed value in its fixed unit. Preserve `MarketConstraintViolationError`
-  and `SlippageLimitExceededError` for their SDK policy checks.
+  subject, bound and observed value in its fixed unit. Introduce `MarketConstraintViolationError`
+  and `SlippageLimitExceededError` for breaches of the SDK's own policy bounds.
 
 For example, a successful borrow that leaves LTV above `maxLtvAfterWad` is a consumer limit violation.
 A borrow rejected by the contract is an execution failure. A correct exit penalty above the consumer's
@@ -237,12 +263,28 @@ Preserve request order, including zero-reset approvals. Never widen amounts, inv
 reconstruct typed data from summaries. Unsupported requirements fail explicitly. Conversion creates
 descriptors; it does not establish that the requests are safe for the decoded operation.
 
+The adapter is a trust boundary, not a shortcut. Its output is deterministic for the same input,
+deep-frozen, and plain data: `Address`, `Hex`, `bigint`, `boolean`, string literals and the
+typed-data object, with no functions, closures, `sign` handles or references back to the SDK
+action. It is safe to serialize into a cross-service DTO (bigints as decimal strings) and rebuild
+elsewhere. `simulate()` treats every `SimulationAuthorization` as untrusted regardless of origin:
+it verifies the descriptor against the decoded calldata and chain state exactly as it would a
+hand-built one, so a builder service and a separate attestor may exchange descriptors without
+exchanging SDK requirement objects.
+
 #### Consumer flow
 
 1. Create the vault action and resolve its requirements.
 2. Convert pending requirements into authorizations and preview the no-signature `buildTx()` output.
 3. Fulfill those same wallet requests, then pass their signatures to `buildTx(signatures)`.
 4. After prerequisite approvals are confirmed, run `final` with no pending `authorizations`.
+
+A successful preview authorizes the consumer to request the pending wallet actions; it is not an
+execution claim. A failed preview happens before anything is signed, so the consumer must not
+expose the unsigned transaction as executable: the outcome is a failure with no calls. A failed
+`final` happens after signatures are embedded, so its result may be surfaced as a rejected signed
+simulation carrying the exact diagnostic calls and context. How either failure maps to transport
+status codes is consumer-owned.
 
 ```mermaid
 sequenceDiagram
@@ -291,13 +333,18 @@ calldata in preview instead of attempting to bypass signature verification.
 
 ### Migration
 
-`evm-simulation` 6.0.0 replaces the legacy authorization inputs with the exact-wallet-request
-interface directly, without a prior coexistence minor for those inputs. Consumers migrate their
-simulation inputs; `morpho-sdk` 6.0.0's action API is unchanged.
+Follow the four-step deprecation flow. The deprecation minor adds the five typed
+`SimulationAuthorization` variants to the existing union, marks the legacy `approval` and
+`signature` variants `@deprecated` with their typed replacement named, and marks the Tenderly
+configuration `@deprecated`. Both forms are accepted for that minor. `morpho-sdk` 6.0.0's action
+API is unchanged.
 
-Ship a deprecation minor for the Tenderly configuration before its removal. The major requires
-`simulateV1Url`, introduces the typed authorization requests and verification output, and makes
-`txIdx` index only caller transactions. The SDK baseline remains pinned to `morpho-sdk` 6.0.0.
+`evm-simulation` 6.0.0 removes the legacy variants and the Tenderly configuration, requires
+`simulateV1Url`, adds `mode`, `limits` and the verification output, makes `txIdx` index only
+caller transactions, adds `reasonCode` and the typed `context` to errors, retypes
+`BlacklistViolationError` retention entries to `Address`/`bigint`, and exports
+`SimulationErrorCode`, `SimulationErrorContext` and `isSimulationPackageError`. The SDK baseline
+remains pinned to `morpho-sdk` 6.0.0.
 
 Version 6.0.0 rejects legacy Bundler3/GeneralAdapter1 transactions, arbitrary call compositions,
 partial refinance, pre-liquidation operations and Midnight operations with `UnsupportedOperationError`.
@@ -327,12 +374,12 @@ Blue operations (subject: `marketId`, or `sourceMarketId` + `targetMarketId` for
 | `blueSupply` | `expectedAssets`, `expectedOnBehalf` | `minSupplySharesMinted` |
 | `blueWithdraw` | `expectedReceiver`, `expectedFullClose` | `minAssetsReceived`, `maxSupplySharesBurned`, `maxUtilizationAfterWad`, `maxReallocationPenaltyAssets` |
 | `blueSupplyCollateral` | `expectedAssets`, `expectedOnBehalf` | `maxLtvAfterWad` |
-| `blueBorrow` | `expectedAssets`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxBorrowApyAfterWad`, `maxReallocationPenaltyAssets` |
+| `blueBorrow` | `expectedAssets`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxAfterBorrowApyWad`, `maxReallocationPenaltyAssets` |
 | `blueSupplyCollateralBorrow` | `expectedCollateralAssets`, `expectedBorrowAssets`, `expectedOnBehalf`, `expectedReceiver` | Same as `blueBorrow` |
 | `blueRepay` | `expectedOnBehalf`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets` |
 | `blueWithdrawCollateral` | `expectedAssets`, `expectedReceiver` | `maxLtvAfterWad`, `minHealthFactorAfterWad` |
 | `blueRepayWithdrawCollateral` | `expectedWithdrawAssets`, `expectedOnBehalf`, `expectedReceiver`, `expectedFullClose` | Union of `blueRepay` and `blueWithdrawCollateral` bounds |
-| `blueRefinance` | `expectedSourceFullClose` | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` |
+| `blueRefinance` | none (the source position's full close is asserted unconditionally) | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` |
 | `blueAuthorization` | `expectedIsAuthorized` | none |
 
 Vault operations (subject: `vault`, or `sourceVault` + `targetVault` for migration):
@@ -343,7 +390,7 @@ Vault operations (subject: `vault`, or `sourceVault` + `targetVault` for migrati
 | `vaultV1Withdraw`, `vaultV2Withdraw` | `expectedAssets`, `expectedReceiver` | `maxSharesBurned` |
 | `vaultV1Redeem`, `vaultV2Redeem` | `expectedShares`, `expectedReceiver` | `minAssetsReceived` |
 | `vaultV2ForceWithdraw` | `expectedExitAssets` (penalty-inclusive), `expectedAdapter` | `maxSharesBurned`, `minAssetsReceived`, `maxPenaltyAssets` |
-| `vaultV2ForceRedeem` | `expectedShares`, `expectedDeallocations` (`{ adapter, marketId?, amount }[]`, ordered) | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` |
+| `vaultV2ForceRedeem` | `expectedShares`, `expectedRecipient`, `expectedOnBehalf`, `expectedDeallocations` (`{ adapter, marketId?, assets }[]`, ordered) | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` |
 | `vaultV1InKindRedeem`, `vaultV2InKindRedeem` | `expectedAssets`, `expectedMarketIds` (ordered) | `maxSharesBurned`, `minIdleAssetsReceived`, `minSupplyAssetsByMarket` (`{ marketId, minAssets }[]`), `maxPenaltyAssets`, `maxResidualShareAllowance` |
 | `vaultV1MigrateToV2` | `expectedAssets` or `expectedShares`, `expectedReceiver` | `minTargetSharesMinted` |
 
@@ -356,7 +403,7 @@ The first five classes already exist; additions extend `SimulationPackageError` 
 | `SimulationValidationError` / `VALIDATION_ERROR` | Invalid config, input, calldata or limit; mixed senders; request owner differs from sender; `authorizations` in `final`; `preview` transaction containing a signature-consuming call |
 | `UnsupportedChainError` / `UNSUPPORTED_CHAIN` | Missing chain configuration or `simulateV1Url` |
 | `ExternalServiceError` / `EXTERNAL_SERVICE_ERROR` | RPC transport, timeout, authentication, rate limit, availability or unclassified rejection |
-| `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user or preparation execution, including a reverted approval or an approval returning `false`, panic, gas, signature, nonce or deadline rejection |
+| `SimulationRevertedError` / `SIMULATION_REVERTED` | Failed user or preparation execution, including a reverted approval or an approval returning `false`, panic, gas, signature, nonce or deadline rejection; `reasonCode` names the mapped cause or `UNKNOWN_REVERT` |
 | `BlacklistViolationError` / `BLACKLIST_ERROR` | Standalone bundle retention exceeds dust |
 | `UnsupportedOperationError` / `UNSUPPORTED_OPERATION` | Unrecognized target or selector, unsupported call recipe or top-level callback |
 | `ProtocolBindingMismatchError` / `PROTOCOL_BINDING_MISMATCH` | Known route with wrong owner, recipient, underlying, market, adapter, operator or deployment binding |
