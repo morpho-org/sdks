@@ -1,7 +1,7 @@
 name: Bot review gate trigger
 
-# Untrusted relay: records which PR got a review so the default-branch `Bot review gate` workflow
-# (workflow_run) re-evaluates it. Grants nothing; the evaluator re-fetches everything from the API.
+# Untrusted relay: the default-branch `Bot review gate` workflow re-evaluates the event head.
+# Carries no data and grants no permissions.
 
 on:
   pull_request_review:
@@ -13,12 +13,4 @@ jobs:
   relay:
     runs-on: ubuntu-latest
     steps:
-      - run: printf '%s\n' "$PR_NUMBER" > "$RUNNER_TEMP/pr-number"
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: bot-review-gate-pr
-          path: ${{ runner.temp }}/pr-number
-          retention-days: 1
-          if-no-files-found: error
+      - run: echo "Relays review events to the Bot review gate workflow."

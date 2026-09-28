@@ -23,6 +23,15 @@ const ENV = {
   PR_NUMBER: "1076",
 };
 
+const workflowRunEnv = () => {
+  const { PR_NUMBER, ...env } = {
+    ...ENV,
+    GITHUB_EVENT_NAME: "workflow_run",
+  };
+  void PR_NUMBER;
+  return env;
+};
+
 interface TestReview {
   readonly body: string | null;
   readonly commit_id: string | null;
@@ -279,39 +288,6 @@ describe("main", () => {
     expect(REQUIRED_HUMAN_APPROVALS).toBe(2);
   });
 
-  test("skips stale events before listing same-head pull requests or reviews", async () => {
-    const trigger = pullRequest({
-      login: "devin-ai-integration",
-      type: "Bot",
-      sha: HEAD,
-    });
-    const { fetchImpl, requests } = createFetch([{ body: trigger }]);
-    const output: string[] = [];
-
-    await expect(
-      main({
-        env: {
-          ...ENV,
-          EVENT_HEAD_SHA: OTHER_HEAD,
-          GITHUB_EVENT_NAME: "workflow_run",
-        },
-        fetchImpl,
-        writeOutput: (message) => output.push(message),
-      }),
-    ).resolves.toMatchObject({
-      description: `Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).`,
-      state: "skipped",
-    });
-
-    expect(requests.map(({ url }) => url.pathname)).toEqual([
-      "/repos/morpho-org/sdks/pulls/1076",
-    ]);
-    expect(requests[0]?.init.method).toBe("GET");
-    expect(output).toEqual([
-      `::warning::Head moved from ${OTHER_HEAD} to ${HEAD} for morpho-org/sdks#1076; skipping (a newer run evaluates the current head).\n`,
-    ]);
-  });
-
   test("posts an error when pull_request_target observes a moved head", async () => {
     const trigger = pullRequest({
       login: "devin-ai-integration",
@@ -351,50 +327,137 @@ describe("main", () => {
     expect(status.description).toMatch(/^Bot review gate could not evaluate:/);
   });
 
-  test("does not post an error when workflow_run cannot fetch the relayed PR", async () => {
+  test("skips workflow_run when no open pull request has the event head", async () => {
     const { fetchImpl, requests } = createFetch([
-      { body: { message: "Not Found" }, status: 404 },
+      {
+        body: [
+          pullRequest({
+            number: 42,
+            login: "alice",
+            type: "User",
+            sha: OTHER_HEAD,
+          }),
+        ],
+      },
     ]);
     const output: string[] = [];
 
     await expect(
       main({
-        env: { ...ENV, GITHUB_EVENT_NAME: "workflow_run" },
+        env: workflowRunEnv(),
         fetchImpl,
         writeOutput: (message) => output.push(message),
       }),
-    ).rejects.toThrow(/failed with 404/);
+    ).resolves.toEqual({
+      description: `No open PR at ${HEAD}; nothing to evaluate.`,
+      state: "skipped",
+    });
 
-    expect(
-      requests.map(({ url, init }) => [url.pathname, init.method]),
-    ).toEqual([["/repos/morpho-org/sdks/pulls/1076", "GET"]]);
-    expect(output).toContain(
-      "::warning::Not publishing an error status: the relayed PR was not confirmed at the event head SHA.\n",
-    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url.pathname).toBe("/repos/morpho-org/sdks/pulls");
+    expect(requests[0]?.init.method).toBe("GET");
+    expect(requests[0]?.url.searchParams.get("state")).toBe("open");
+    expect(output).toEqual([
+      `::warning::No open PR at ${HEAD}; nothing to evaluate.\n`,
+    ]);
   });
 
-  test("posts an error when workflow_run fails after confirming the relayed PR", async () => {
+  test("evaluates same-head bot approvals on workflow_run without fetching one PR", async () => {
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
     const { fetchImpl, requests } = createFetch([
-      {
-        body: pullRequest({
-          login: "devin-ai-integration",
-          type: "Bot",
-          sha: HEAD,
-        }),
-      },
+      { body: [botPullRequest] },
+      { body: [approved("alice"), approved("bob")] },
+      permissionResponse(),
+      permissionResponse(),
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: workflowRunEnv(),
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result.state).toBe("success");
+    const statusRequest = requests.at(-1);
+    expect(statusRequest?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(statusRequest?.init.method).toBe("POST");
+    expect(JSON.parse(statusRequest?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "success",
+    });
+    expect(
+      requests.some(
+        ({ url }) => url.pathname === "/repos/morpho-org/sdks/pulls/42",
+      ),
+    ).toBe(false);
+  });
+
+  test("fails workflow_run when a same-head bot PR lacks approvals", async () => {
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const humanPullRequest = pullRequest({
+      number: 50,
+      login: "alice",
+      type: "User",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: [humanPullRequest, botPullRequest] },
+      { body: [approved("reviewer")] },
+      permissionResponse(),
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: workflowRunEnv(),
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result.state).toBe("failure");
+    expect(result.description).toMatch(
+      /^#42: Bot-authored PR needs 2 human approvals/,
+    );
+    const statusRequest = requests.at(-1);
+    expect(statusRequest?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
+    expect(JSON.parse(statusRequest?.init.body ?? "{}")).toMatchObject({
+      context: STATUS_CONTEXT,
+      state: "failure",
+      description: result.description,
+    });
+  });
+
+  test("posts an error when workflow_run cannot list open pull requests", async () => {
+    const { fetchImpl, requests } = createFetch([
       { body: { message: "temporarily unavailable" }, status: 500 },
       { body: { id: 1 } },
     ]);
 
     await expect(
       main({
-        env: { ...ENV, GITHUB_EVENT_NAME: "workflow_run" },
+        env: workflowRunEnv(),
         fetchImpl,
         writeOutput: () => {},
       }),
-    ).rejects.toThrow(/failed with 500/);
+    ).rejects.toThrow(
+      "GitHub API /repos/morpho-org/sdks/pulls failed with 500.",
+    );
 
-    const statusRequest = requests[requests.length - 1];
+    const statusRequest = requests.at(-1);
     expect(statusRequest?.url.pathname).toBe(
       `/repos/morpho-org/sdks/statuses/${HEAD}`,
     );
@@ -403,6 +466,38 @@ describe("main", () => {
       context: STATUS_CONTEXT,
       state: "error",
     });
+  });
+
+  test("ignores PR_NUMBER on workflow_run and evaluates open PRs at the event head", async () => {
+    const botPullRequest = pullRequest({
+      number: 42,
+      login: "devin-ai-integration",
+      type: "Bot",
+      sha: HEAD,
+    });
+    const { fetchImpl, requests } = createFetch([
+      { body: [botPullRequest] },
+      { body: [approved("alice"), approved("bob")] },
+      permissionResponse(),
+      permissionResponse(),
+      { body: { id: 1 } },
+    ]);
+
+    const result = await main({
+      env: { ...workflowRunEnv(), PR_NUMBER: "999999999" },
+      fetchImpl,
+      writeOutput: () => {},
+    });
+
+    expect(result.state).toBe("success");
+    expect(
+      requests.some(
+        ({ url }) => url.pathname === "/repos/morpho-org/sdks/pulls/999999999",
+      ),
+    ).toBe(false);
+    expect(requests.at(-1)?.url.pathname).toBe(
+      `/repos/morpho-org/sdks/statuses/${HEAD}`,
+    );
   });
 
   test("follows Link pagination when collecting reviews", async () => {

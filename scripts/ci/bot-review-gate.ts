@@ -123,14 +123,14 @@ export function evaluate(options: {
 }
 
 /**
- * Fetches the triggering pull request, evaluates every open pull request at its head, and
- * publishes one commit status.
+ * Evaluates every open pull request at `EVENT_HEAD_SHA` and publishes one commit status.
  * Only approvers with write access or higher count.
- * Requires `EVENT_HEAD_SHA`, the 40-hex SHA used to serialize this run. If the fetched PR head
- * differs, `workflow_run` logs a warning and skips without posting; other events throw and post
- * `error` to `EVENT_HEAD_SHA`. On `workflow_run`, errors before confirming the relayed PR at that
- * SHA post nothing. After confirmation, API or payload failures try to post `error` there; the
- * original error is always rethrown. A normal `failure` verdict is represented only by the status.
+ * Requires `EVENT_HEAD_SHA`, the 40-hex SHA used to serialize this run. `pull_request_target`
+ * fetches `PR_NUMBER` and throws if its head has moved. `workflow_run` evaluates every open PR at
+ * that SHA without reading relay data; if none are open there, it warns and returns `skipped`
+ * without posting. API or payload failures try to post `error` to the valid SHA; the original error
+ * is always rethrown.
+ * A normal `failure` verdict is represented only by the commit status.
  */
 export async function main(
   options: {
@@ -143,14 +143,17 @@ export async function main(
   const env = options.env ?? process.env;
   const token = readRequiredEnv(env, "GH_TOKEN");
   const repository = readRequiredEnv(env, "GITHUB_REPOSITORY");
-  const prNumber = readRequiredEnv(env, "PR_NUMBER");
+  const isWorkflowRun = env.GITHUB_EVENT_NAME === "workflow_run";
+  const prNumber = isWorkflowRun
+    ? undefined
+    : readRequiredEnv(env, "PR_NUMBER");
   const eventHeadSha = env.EVENT_HEAD_SHA;
   const serverUrl = readRequiredEnv(env, "GITHUB_SERVER_URL").replace(
     /\/+$/,
     "",
   );
   const runId = readRequiredEnv(env, "GITHUB_RUN_ID");
-  if (!/^\d+$/.test(prNumber)) {
+  if (prNumber != null && !/^\d+$/.test(prNumber)) {
     throw new Error(
       `Invalid PR_NUMBER "${prNumber}". Expected a positive integer.`,
     );
@@ -161,7 +164,6 @@ export async function main(
   const apiBaseUrl = options.apiBaseUrl ?? getApiBaseUrl(serverUrl);
   const apiBase = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
   const targetUrl = `${serverUrl}/${repository}/actions/runs/${runId}`;
-  let canPublishError = env.GITHUB_EVENT_NAME !== "workflow_run";
 
   try {
     if (eventHeadSha == null || eventHeadSha === "") {
@@ -173,32 +175,28 @@ export async function main(
       );
     }
 
-    const pullUrl = new URL(`repos/${repository}/pulls/${prNumber}`, apiBase);
-    const pullResponse = await fetchImpl(pullUrl, requestInit(token, "GET"));
-    await assertOk(pullResponse, pullUrl);
-    const pullRequest = await pullResponse.json();
+    let pullRequest: PullRequest | undefined;
+    if (prNumber != null) {
+      const pullUrl = new URL(`repos/${repository}/pulls/${prNumber}`, apiBase);
+      const pullResponse = await fetchImpl(pullUrl, requestInit(token, "GET"));
+      await assertOk(pullResponse, pullUrl);
+      const pullPayload = await pullResponse.json();
 
-    if (!isPullRequest(pullRequest)) {
-      throw new Error(
-        `GitHub API GET ${pullUrl.pathname} returned a malformed pull request.`,
-      );
-    }
-
-    const triggerHeadSha = pullRequest.head.sha;
-    if (triggerHeadSha !== eventHeadSha) {
-      const description =
-        `Head moved from ${eventHeadSha} to ${triggerHeadSha} for ${repository}#${prNumber}; ` +
-        "skipping (a newer run evaluates the current head).";
-      if (env.GITHUB_EVENT_NAME === "workflow_run") {
-        writeOutput(`::warning::${description}\n`);
-        return { description, state: "skipped" };
+      if (!isPullRequest(pullPayload)) {
+        throw new Error(
+          `GitHub API GET ${pullUrl.pathname} returned a malformed pull request.`,
+        );
       }
-      throw new Error(
-        `PR head is ${triggerHeadSha}, expected ${eventHeadSha} from the triggering event; re-run this workflow.`,
-      );
+
+      pullRequest = pullPayload;
+      if (pullRequest.head.sha !== eventHeadSha) {
+        throw new Error(
+          `PR head is ${pullRequest.head.sha}, expected ${eventHeadSha} from the triggering event; re-run this workflow.`,
+        );
+      }
     }
 
-    canPublishError = true;
+    const triggerHeadSha = eventHeadSha;
     const pullRequests = new Map<number, PullRequest>();
     let pullsUrl: URL | null = new URL(
       `repos/${repository}/pulls?state=open&per_page=100`,
@@ -230,8 +228,13 @@ export async function main(
       }
       pullsUrl = parseNextLink(response.headers.get("link"));
     }
-    if (!pullRequests.has(pullRequest.number)) {
+    if (pullRequest != null && !pullRequests.has(pullRequest.number)) {
       pullRequests.set(pullRequest.number, pullRequest);
+    }
+    if (pullRequests.size === 0 && isWorkflowRun) {
+      const description = `No open PR at ${triggerHeadSha}; nothing to evaluate.`;
+      writeOutput(`::warning::${description}\n`);
+      return { description, state: "skipped" };
     }
 
     const evaluated: {
@@ -308,12 +311,15 @@ export async function main(
     const firstFailure = evaluated.find(
       ({ result: candidateResult }) => candidateResult.state === "failure",
     );
-    const triggeringResult = evaluated.find(
-      ({ number }) => number === pullRequest.number,
-    )?.result;
-    if (triggeringResult == null) {
+    const summaryResult =
+      pullRequest == null
+        ? evaluated[0]?.result
+        : evaluated.find(({ number }) => number === pullRequest.number)?.result;
+    if (summaryResult == null) {
       throw new Error(
-        `Triggering pull request #${pullRequest.number} was not evaluated.`,
+        pullRequest == null
+          ? `No open PR at ${triggerHeadSha}; nothing to evaluate.`
+          : `Triggering pull request #${pullRequest.number} was not evaluated.`,
       );
     }
     const otherCount = evaluated.length - 1;
@@ -321,7 +327,7 @@ export async function main(
       firstFailure == null
         ? {
             description: truncate(
-              `${triggeringResult.description}${
+              `${summaryResult.description}${
                 otherCount > 0
                   ? ` (+${otherCount} other PRs at this commit)`
                   : ""
@@ -345,8 +351,12 @@ export async function main(
         target_url: targetUrl,
       },
     });
+    const publicationTarget =
+      pullRequest == null
+        ? `at ${triggerHeadSha}`
+        : `for ${repository}#${pullRequest.number} at ${triggerHeadSha}`;
     writeOutput(
-      `Published ${STATUS_CONTEXT}=${result.state} for ${repository}#${prNumber} at ${triggerHeadSha}.\n`,
+      `Published ${STATUS_CONTEXT}=${result.state} ${publicationTarget}.\n`,
     );
 
     return result;
@@ -355,7 +365,7 @@ export async function main(
       eventHeadSha != null && /^[0-9a-f]{40}$/.test(eventHeadSha)
         ? eventHeadSha
         : undefined;
-    if (canPublishError && fallbackHeadSha != null) {
+    if (fallbackHeadSha != null) {
       try {
         await postStatus({
           url: new URL(
@@ -377,10 +387,6 @@ export async function main(
           `::warning::Could not publish bot-review-gate error status: ${describeError(fallbackError)}\n`,
         );
       }
-    } else {
-      writeOutput(
-        "::warning::Not publishing an error status: the relayed PR was not confirmed at the event head SHA.\n",
-      );
     }
     throw error;
   }
