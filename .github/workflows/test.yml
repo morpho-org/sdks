@@ -47,9 +47,6 @@ jobs:
           - name: blue-sdk-viem
             projects: blue-sdk-viem blue-sdk-viem-fork
             uses_foundry: true
-          - name: liquidity-sdk-viem
-            projects: liquidity-sdk-viem liquidity-sdk-viem-fork
-            uses_foundry: true
           - name: test
             projects: test test-fork
             uses_foundry: true
