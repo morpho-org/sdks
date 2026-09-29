@@ -185,7 +185,7 @@ export function assertNoBundlesRetention(
       retained.map((e) => ({
         address: e.address,
         token: e.token,
-        netRetained: e.netChange,
+        netRetained: e.netChange.toString(),
       })),
     );
   }

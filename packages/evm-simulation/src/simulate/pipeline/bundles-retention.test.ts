@@ -312,7 +312,7 @@ describe("assertNoBundlesRetention", () => {
       // Only USDC retention flagged; DAI is net zero.
       expect(changes).toHaveLength(1);
       expect(changes[0]!.token?.toLowerCase()).toBe(USDC.toLowerCase());
-      expect(changes[0]!.netRetained).toBe(1000000n);
+      expect(changes[0]!.netRetained).toBe("1000000");
     }
   });
 
@@ -337,7 +337,7 @@ describe("assertNoBundlesRetention", () => {
       const entry = changes[0]!;
       expect(entry.address?.toLowerCase()).toBe(BUNDLES_TARGET.toLowerCase());
       expect(entry.token?.toLowerCase()).toBe(USDC.toLowerCase());
-      expect(entry.netRetained).toBe(777n);
+      expect(entry.netRetained).toBe("777");
     }
   });
 
@@ -487,7 +487,7 @@ describe("assertNoBundlesRetention", () => {
       expect(changes).toHaveLength(1);
       expect(changes[0]!.token?.toLowerCase()).toBe(ethAddress.toLowerCase());
       // Counted once (assetChanges), not doubled with the synthetic log.
-      expect(changes[0]!.netRetained).toBe(ONE_ETH);
+      expect(changes[0]!.netRetained).toBe(ONE_ETH.toString());
     }
   });
 
