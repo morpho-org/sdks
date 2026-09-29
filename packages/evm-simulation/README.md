@@ -54,7 +54,10 @@ All symbols below are re-exported from the package root.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams`, `SimulationTransaction`, `SimulationAuthorization`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageErrorLike`), `RetainedAsset`.
+- Revert catalog: `SimulationRevertReason` (decoded Morpho revert on `SimulationRevertedError.revert`, keyed by contract — Blue, Vault V1, Vault V2, Vault V2 adapters, VaultBundlesV1, VaultExitBundlesV1, Permit2), with `BLUE_REVERT_REASONS`, `VAULT_BUNDLES_V1_REVERT_REASONS`, `VAULT_EXIT_BUNDLES_V1_REVERT_REASONS`; vault and Permit2 names derive from the `@morpho-org/morpho-ts` ABIs.
+- Verification vocabulary: `SimulationMode`, `OperationType`.
 
 ### Deeper docs
 
