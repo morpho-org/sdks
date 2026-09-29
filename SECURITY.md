@@ -38,6 +38,7 @@ Out of scope:
 
 - Issues in `viem`, `wagmi`, or other third-party dependencies; report these upstream.
 - Social-engineering, DoS on npm or GitHub, and physical attacks.
+- Findings whose only precondition is a malicious or compromised RPC, simulation or paymaster endpoint. [THREAT_MODEL.md](./THREAT_MODEL.md) lists each audited case and why it is out of scope.
 
 ## Dependency Version Ranges
 

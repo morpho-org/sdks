@@ -51,6 +51,7 @@ export const getVaultBundlesSharesRequirements = async (
     throw new ExpiredDeadlineError(params.deadline, now);
   }
   const spender = getChainAddress(params.chainId, "bundles.vaultBundlesV1");
+  // The allowance is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
   const allowance = await readContract(viemClient, {
     address: params.vaultData.address,
     abi: erc20Abi,
