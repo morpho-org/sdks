@@ -32,6 +32,7 @@ import type {
   Erc2612PermitTypedData,
   PendingAuthorization,
   Permit2TransferTypedData,
+  SimulationAuthorization,
 } from "../authorizations.js";
 import {
   AuthorizationRequestMismatchError,
@@ -719,7 +720,7 @@ const toBlueAuthorization = (
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @param params.preLiquidations - Bound pre-liquidation contracts a `blueAuthorization`
  *   requirement may authorize, mirroring {@link decodeOperations}.
- * @returns One {@link PendingAuthorization} per input requirement, in the same order.
+ * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {AuthorizationRequestMismatchError} when decoded calldata or typed data disagrees with the
  *   requirement's action metadata, or when the payload is malformed.
@@ -751,7 +752,7 @@ const toBlueAuthorization = (
  *     owner: userAddress,
  *     requirements,
  *   });
- *   return authorizations; // readonly PendingAuthorization[], one entry per requirement
+ *   return authorizations; // readonly SimulationAuthorization[], one entry per requirement
  * }
  * ```
  */
@@ -762,7 +763,7 @@ export function toSimulationAuthorizations(params: {
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];
   readonly preLiquidations?: readonly PreLiquidationBinding[];
-}): readonly PendingAuthorization[] {
+}): readonly SimulationAuthorization[] {
   const {
     chainId,
     mode,

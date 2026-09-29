@@ -1,6 +1,7 @@
 import {
   blueAbi,
   blueBundlesV1Abi,
+  vaultBundlesV1Abi,
   vaultExitBundlesV1Abi,
   vaultV2Abi,
 } from "@morpho-org/morpho-sdk/abis";
@@ -36,6 +37,7 @@ if (bundles == null) {
 }
 const blueBundlesV1 = bundles.blueBundlesV1 as Address;
 const vaultExitBundlesV1 = bundles.vaultExitBundlesV1 as Address;
+const vaultBundlesV1 = bundles.vaultBundlesV1 as Address;
 const RANDOM = getAddress("0x5555555555555555555555555555555555555555");
 const VAULT_V2 = getAddress("0x2222222222222222222222222222222222222222");
 const ADAPTER = getAddress("0x3333333333333333333333333333333333333333");
@@ -219,6 +221,64 @@ describe("decodeOperations rejected routes", () => {
         value: 1n,
       }),
       ProtocolBindingMismatchError,
+    ],
+    [
+      "blueBundlesV1SupplyCollateralAndBorrow with both legs zero",
+      tx({
+        to: blueBundlesV1,
+        data: encodeFunctionData({
+          abi: blueBundlesV1Abi,
+          functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+          args: [
+            marketTuple,
+            0n,
+            0n,
+            0n,
+            { kind: 0, data: "0x" },
+            emptyAuthorization,
+            [],
+            0n,
+            zeroAddress,
+            1n,
+          ],
+        }),
+      }),
+      UnsupportedOperationError,
+    ],
+    [
+      "blueBundlesV1RepayAndWithdrawCollateral with all legs zero",
+      tx({
+        to: blueBundlesV1,
+        data: encodeFunctionData({
+          abi: blueBundlesV1Abi,
+          functionName: "blueBundlesV1RepayAndWithdrawCollateral",
+          args: [
+            marketTuple,
+            0n,
+            0n,
+            0n,
+            0n,
+            0n,
+            { kind: 0, data: "0x" },
+            emptyAuthorization,
+            0n,
+            zeroAddress,
+            1n,
+          ],
+        }),
+      }),
+      UnsupportedOperationError,
+    ],
+    [
+      "initiator on VaultBundlesV1",
+      tx({
+        to: vaultBundlesV1,
+        data: encodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          functionName: "initiator",
+        }),
+      }),
+      UnsupportedOperationError,
     ],
     [
       "midnightBundles deployment when registered",

@@ -42,13 +42,15 @@ export type OperationFunding =
  *
  * Token permits encoded through the fixed bundles `Permit{kind,data}` parameter carry no nonce
  * (kind 1 data is `abi.encode(deadline, v, r, s)`), so `nonce` is absent there; vault-share
- * `SharesPermit{value,nonce,deadline,v,r,s}` structs do carry one.
+ * `SharesPermit{value,nonce,deadline,v,r,s}` structs carry `nonce` and `value`.
  */
 export type OperationSignature =
   | { readonly type: "none" }
   | {
       readonly type: "erc2612Permit";
       readonly nonce?: bigint;
+      /** Signed share allowance, present only for vault `SharesPermit` structs — the onchain share-burn cap. */
+      readonly value?: bigint;
       readonly deadline: bigint;
     }
   | {

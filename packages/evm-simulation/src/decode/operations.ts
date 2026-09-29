@@ -297,16 +297,20 @@ const decodePermitData = <
 
 /** Decodes a vault-share `SharesPermit` struct; the all-zero sentinel maps to no signature. */
 const decodeSharesPermit = (
+  f: Fails,
   permit: SharesPermitArg,
 ): Extract<OperationSignature, { readonly type: "none" | "erc2612Permit" }> => {
-  if (permit.v === 0 && permit.r === zeroHash && permit.s === zeroHash) {
+  const { v, r, s, value, nonce, deadline } = permit;
+  if (v === 0 && r === zeroHash && s === zeroHash) {
+    // The unsigned sentinel still carries the transaction deadline.
+    if (value !== 0n || nonce !== 0n) {
+      return f.mismatch(
+        "SharesPermit signature is empty but value/nonce are set. Rebuild the vault permit",
+      );
+    }
     return { type: "none" };
   }
-  return {
-    type: "erc2612Permit",
-    nonce: permit.nonce,
-    deadline: permit.deadline,
-  };
+  return { type: "erc2612Permit", value, nonce, deadline };
 };
 
 /** Decodes a Morpho `signedAuthorization` struct; the all-zero sentinel maps to no signature. */
@@ -978,7 +982,7 @@ const decodeVaultBundles = (
           vault: vault.address,
         },
       });
-      const tokenSignature = decodeSharesPermit(sharesPermit);
+      const tokenSignature = decodeSharesPermit(f, sharesPermit);
       checkPreview(f, tokenSignature);
       const common = {
         route: "vaultBundlesV1" as const,
@@ -1042,7 +1046,7 @@ const decodeVaultBundles = (
           `vaultBundlesV1Migrate expected exactly one of assetsWithdrawn/sharesRedeemed, got assets "${assetsWithdrawn}", shares "${sharesRedeemed}"`,
         );
       }
-      const tokenSignature = decodeSharesPermit(sharesPermit);
+      const tokenSignature = decodeSharesPermit(f, sharesPermit);
       checkPreview(f, tokenSignature);
       return {
         type: "vaultV1MigrateToV2",
@@ -1106,7 +1110,7 @@ const decodeVaultExitBundles = (
         name: "vaultExitBundlesV1ForceWithdrawVaultV2",
       });
       const vault = boundVault(f, { address: vaultAddress, kind: "vaultV2" });
-      const tokenSignature = decodeSharesPermit(sharesPermit);
+      const tokenSignature = decodeSharesPermit(f, sharesPermit);
       checkPreview(f, tokenSignature);
       return {
         type: "vaultV2ForceWithdraw",
@@ -1139,7 +1143,7 @@ const decodeVaultExitBundles = (
         name: "vaultExitBundlesV1InKindRedemptionVaultV1",
       });
       const vault = boundVault(f, { address: vaultAddress, kind: "vaultV1" });
-      const tokenSignature = decodeSharesPermit(sharesPermit);
+      const tokenSignature = decodeSharesPermit(f, sharesPermit);
       checkPreview(f, tokenSignature);
       return {
         type: "vaultV1InKindRedeem",
@@ -1174,7 +1178,7 @@ const decodeVaultExitBundles = (
         name: "vaultExitBundlesV1InKindRedemptionVaultV2",
       });
       const vault = boundVault(f, { address: vaultAddress, kind: "vaultV2" });
-      const tokenSignature = decodeSharesPermit(sharesPermit);
+      const tokenSignature = decodeSharesPermit(f, sharesPermit);
       checkPreview(f, tokenSignature);
       return {
         type: "vaultV2InKindRedeem",

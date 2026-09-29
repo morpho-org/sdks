@@ -762,11 +762,38 @@ describe("decodeOperations", () => {
         shares: redeemShares,
         tokenSignature: {
           type: "erc2612Permit",
+          value: redeemShares,
           nonce: 9n,
           deadline: DEADLINE,
         },
       }),
     );
+  });
+
+  test("error: ProtocolBindingMismatchError on a half-empty shares permit sentinel", () => {
+    const data = encodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        VAULT_V1,
+        0n,
+        1_000n,
+        {
+          value: 1n,
+          nonce: 0n,
+          deadline: 0n,
+          v: 0,
+          r: zeroHash,
+          s: zeroHash,
+        },
+        0n,
+        owner,
+        DEADLINE,
+      ],
+    });
+    expect(() =>
+      decode([{ from: owner, to: vaultBundlesV1, data, value: 0n }]),
+    ).toThrow(ProtocolBindingMismatchError);
   });
 
   test("behavior: vaultV1MigrateToV2 binds source/destination vaults", () => {
