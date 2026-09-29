@@ -4,13 +4,14 @@ export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
-  SimulationErrorStage,
+  SimulationPackageErrorLike,
   SimulationRevertReason,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
   AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
+  BLUE_REVERT_REASONS,
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
@@ -31,6 +32,8 @@ export {
   UnsupportedChainError,
   UnsupportedOperationError,
   UnsupportedVerificationFeatureError,
+  VAULT_BUNDLES_V1_REVERT_REASONS,
+  VAULT_EXIT_BUNDLES_V1_REVERT_REASONS,
 } from "./errors.js";
 export type { OperationType } from "./limits.js";
 export type { SimulationMode } from "./params.js";
