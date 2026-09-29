@@ -368,6 +368,7 @@ export function evaluateProvenance(
 
   let statement: ProvenanceStatement;
   let signature = evaluateSlsaSignature(attestation);
+  const signatureCryptographicallyValid = signature.status === "pass";
   try {
     statement = JSON.parse(
       Buffer.from(payload, "base64").toString("utf8"),
@@ -438,7 +439,7 @@ export function evaluateProvenance(
       : `Expected subject sha512 ${expectedDigest ?? "(invalid dist.integrity)"}, got ${actualDigest ?? "(missing)"}.`,
   );
 
-  if (signature.status !== "pass") {
+  if (!signatureCryptographicallyValid) {
     addResult(
       checks,
       findings,
@@ -477,6 +478,11 @@ export function evaluateProvenance(
       `ref expected ${EXPECTED.refs.join(" or ")}, got ${workflow?.ref ?? "(missing)"}`,
     );
   }
+  if (workflow?.ref !== signature.signerRef) {
+    mismatches.push(
+      `signer ref ${signature.signerRef ?? "(missing)"} != predicate ref ${workflow?.ref ?? "(missing)"}`,
+    );
+  }
   if (github?.event_name !== EXPECTED.event) {
     mismatches.push(
       `event_name expected ${EXPECTED.event}, got ${github?.event_name ?? "(missing)"}`,
@@ -502,7 +508,11 @@ export function evaluateProvenance(
       ? "Repository, workflow, ref, event, and builder match the expected release pipeline."
       : mismatches.join("; "),
   );
-  return { checks, findings, gitCommit };
+  return {
+    checks,
+    findings,
+    gitCommit: signature.status === "pass" ? gitCommit : null,
+  };
 }
 
 function evaluateSlsaSignature(attestation: Attestation): SignatureEvaluation {

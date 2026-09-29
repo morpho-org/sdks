@@ -1,9 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { createHash, sign as signPayload, X509Certificate } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import {
   aggregateSeverity,
@@ -35,29 +37,75 @@ const integrity = `sha512-${Buffer.alloc(64, 42).toString("base64")}`;
 const digestHex = Buffer.alloc(64, 42).toString("hex");
 const payloadType = "application/vnd.in-toto+json";
 
+let certificateDirectory: string | undefined;
 let signerKey: Buffer;
 let signerCertificate: string;
 let wrongSignerKey: Buffer;
 let wrongSignerCertificate: string;
 
 beforeAll(() => {
-  signerKey = readFileSync(
-    new URL("./test-fixtures/npm-release-test-key.fixture", import.meta.url),
+  certificateDirectory = mkdtempSync(join(tmpdir(), "npm-release-signer-"));
+  const keyPath = join(certificateDirectory, "signer.key");
+  const mainCertificatePath = join(certificateDirectory, "main.pem");
+  const featureCertificatePath = join(certificateDirectory, "feature.pem");
+  const workflowIdentity =
+    "https://github.com/morpho-org/sdks/.github/workflows/publish.yml";
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "ec",
+      "-pkeyopt",
+      "ec_paramgen_curve:P-256",
+      "-addext",
+      `subjectAltName=URI:${workflowIdentity}@refs/heads/main`,
+      "-keyout",
+      keyPath,
+      "-out",
+      mainCertificatePath,
+      "-nodes",
+      "-subj",
+      "/CN=npm-release-verifier-test",
+      "-days",
+      "1",
+    ],
+    { stdio: "ignore" },
   );
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-new",
+      "-key",
+      keyPath,
+      "-addext",
+      `subjectAltName=URI:${workflowIdentity}@refs/heads/feature`,
+      "-out",
+      featureCertificatePath,
+      "-subj",
+      "/CN=npm-release-verifier-test",
+      "-days",
+      "1",
+    ],
+    { stdio: "ignore" },
+  );
+  signerKey = readFileSync(keyPath);
   signerCertificate = new X509Certificate(
-    readFileSync(
-      new URL("./test-fixtures/npm-release-test-main.fixture", import.meta.url),
-    ),
+    readFileSync(mainCertificatePath),
   ).raw.toString("base64");
   wrongSignerKey = signerKey;
   wrongSignerCertificate = new X509Certificate(
-    readFileSync(
-      new URL(
-        "./test-fixtures/npm-release-test-feature.fixture",
-        import.meta.url,
-      ),
-    ),
+    readFileSync(featureCertificatePath),
   ).raw.toString("base64");
+});
+
+afterAll(() => {
+  if (certificateDirectory != null) {
+    rmSync(certificateDirectory, { force: true, recursive: true });
+  }
 });
 
 function statement(
@@ -364,6 +412,16 @@ describe("evaluateProvenance", () => {
       result.findings.some(
         ({ id, severity }) =>
           id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+    expect(
+      result.findings.some(
+        ({ id, severity, detail }) =>
+          id === "provenance.source" &&
+          severity === "CRITICAL" &&
+          detail.includes(
+            "signer ref refs/heads/main != predicate ref refs/heads/next",
+          ),
       ),
     ).toBe(true);
   });
