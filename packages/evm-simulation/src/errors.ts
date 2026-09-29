@@ -1,5 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type { Address, Hash, Hex } from "viem";
+import type { Address, Hash } from "viem";
 import type { OperationType } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 
@@ -29,250 +29,44 @@ export const SIMULATION_ERROR_CODES = [
 /** Stable string discriminator for log aggregation and external mapping. */
 export type SimulationErrorCode = (typeof SIMULATION_ERROR_CODES)[number];
 
-/** Morpho Blue `require` revert strings (Morpho Blue `ErrorsLib`). */
-export const BLUE_REVERT_REASONS = [
-  "not owner",
-  "max LLTV exceeded",
-  "max fee exceeded",
-  "already set",
-  "IRM not enabled",
-  "LLTV not enabled",
-  "market already created",
-  "no code",
-  "market not created",
-  "inconsistent input",
-  "zero assets",
-  "zero address",
-  "unauthorized",
-  "insufficient collateral",
-  "insufficient liquidity",
-  "position is healthy",
-  "invalid signature",
-  "signature expired",
-  "invalid nonce",
-  "transfer reverted",
-  "transfer returned false",
-  "transferFrom reverted",
-  "transferFrom returned false",
-  "max uint128 exceeded",
-] as const;
-
-/** Vault V1 (MetaMorpho) custom error names, including inherited OpenZeppelin ERC-20/4626/2612 errors (mirrors `metaMorphoAbi`). */
-export const VAULT_V1_REVERT_REASONS = [
-  "AboveMaxTimelock",
-  "AddressEmptyCode",
-  "AddressInsufficientBalance",
-  "AllCapsReached",
-  "AlreadyPending",
-  "AlreadySet",
-  "BelowMinTimelock",
-  "DuplicateMarket",
-  "ECDSAInvalidSignature",
-  "ECDSAInvalidSignatureLength",
-  "ECDSAInvalidSignatureS",
-  "ERC20InsufficientAllowance",
-  "ERC20InsufficientBalance",
-  "ERC20InvalidApprover",
-  "ERC20InvalidReceiver",
-  "ERC20InvalidSender",
-  "ERC20InvalidSpender",
-  "ERC2612ExpiredSignature",
-  "ERC2612InvalidSigner",
-  "ERC4626ExceededMaxDeposit",
-  "ERC4626ExceededMaxMint",
-  "ERC4626ExceededMaxRedeem",
-  "ERC4626ExceededMaxWithdraw",
-  "FailedInnerCall",
-  "InconsistentAsset",
-  "InconsistentReallocation",
-  "InvalidAccountNonce",
-  "InvalidMarketRemovalNonZeroCap",
-  "InvalidMarketRemovalNonZeroSupply",
-  "InvalidMarketRemovalTimelockNotElapsed",
-  "InvalidShortString",
-  "MarketNotCreated",
-  "MarketNotEnabled",
-  "MathOverflowedMulDiv",
-  "MaxFeeExceeded",
-  "MaxQueueLengthExceeded",
-  "NoPendingValue",
-  "NonZeroCap",
-  "NotAllocatorRole",
-  "NotCuratorNorGuardianRole",
-  "NotCuratorRole",
-  "NotEnoughLiquidity",
-  "NotGuardianRole",
-  "OwnableInvalidOwner",
-  "OwnableUnauthorizedAccount",
-  "PendingCap",
-  "PendingRemoval",
-  "SafeCastOverflowedUintDowncast",
-  "SafeERC20FailedOperation",
-  "StringTooLong",
-  "SupplyCapExceeded",
-  "TimelockNotElapsed",
-  "UnauthorizedMarket",
-  "ZeroAddress",
-  "ZeroFeeRecipient",
-] as const;
-
-/** Vault V2 custom error names (mirrors `vaultV2Abi`). */
-export const VAULT_V2_REVERT_REASONS = [
-  "Abdicated",
-  "AbsoluteCapExceeded",
-  "AbsoluteCapNotDecreasing",
-  "AbsoluteCapNotIncreasing",
-  "AutomaticallyTimelocked",
-  "CannotReceiveAssets",
-  "CannotReceiveShares",
-  "CannotSendAssets",
-  "CannotSendShares",
-  "CastOverflow",
-  "DataAlreadyPending",
-  "DataNotTimelocked",
-  "FeeInvariantBroken",
-  "FeeTooHigh",
-  "InvalidSigner",
-  "MaxRateTooHigh",
-  "NoCode",
-  "NotAdapter",
-  "NotInAdapterRegistry",
-  "PenaltyTooHigh",
-  "PermitDeadlineExpired",
-  "RelativeCapAboveOne",
-  "RelativeCapExceeded",
-  "RelativeCapNotDecreasing",
-  "RelativeCapNotIncreasing",
-  "TimelockNotDecreasing",
-  "TimelockNotExpired",
-  "TimelockNotIncreasing",
-  "TransferFromReturnedFalse",
-  "TransferFromReverted",
-  "TransferReturnedFalse",
-  "TransferReverted",
-  "Unauthorized",
-  "ZeroAbsoluteCap",
-  "ZeroAddress",
-  "ZeroAllocation",
-] as const;
-
-/** Vault V2 adapter custom error names (union of the MorphoVaultV1 and MorphoMarketV1/V2 adapter ABIs). */
-export const VAULT_V2_ADAPTER_REVERT_REASONS = [
-  "Abdicated",
-  "ApproveReturnedFalse",
-  "ApproveReverted",
-  "AssetMismatch",
-  "AutomaticallyTimelocked",
-  "CannotSkimMorphoVaultV1Shares",
-  "DataAlreadyPending",
-  "DataNotTimelocked",
-  "InvalidData",
-  "IrmMismatch",
-  "LoanAssetMismatch",
-  "NoCode",
-  "NotAuthorized",
-  "SharePriceAboveOne",
-  "TimelockNotDecreasing",
-  "TimelockNotExpired",
-  "TimelockNotIncreasing",
-  "TransferReturnedFalse",
-  "TransferReverted",
-  "Unauthorized",
-] as const;
-
-/** VaultBundlesV1 custom error names (mirrors `vaultBundlesV1Abi`). */
-export const VAULT_BUNDLES_V1_REVERT_REASONS = [
-  "AlreadyInitiated",
-  "DeadlinePassed",
-  "InconsistentAssets",
-  "NotExactlyOneZero",
-  "PctExceeded",
-  "SlippageExceeded",
-] as const;
-
-/** VaultExitBundlesV1 custom error names (mirrors `vaultExitBundlesV1Abi`). */
-export const VAULT_EXIT_BUNDLES_V1_REVERT_REASONS = [
-  "AdapterNotPartOfVault",
-  "AlreadyInitiated",
-  "ApproveReturnedFalse",
-  "DeadlinePassed",
-  "InvalidAdaptersLength",
-  "MorphoMismatch",
-  "NoCode",
-  "PctExceeded",
-  "SlippageExceeded",
-  "TransferReturnedFalse",
-  "UnauthorizedCallback",
-] as const;
-
-/** Permit2 custom error names (mirrors `permit2Abi`). */
-export const PERMIT2_REVERT_REASONS = [
-  "AllowanceExpired",
-  "ExcessiveInvalidation",
-  "InsufficientAllowance",
-  "InvalidAmount",
-  "InvalidContractSignature",
-  "InvalidNonce",
-  "InvalidSignature",
-  "InvalidSignatureLength",
-  "InvalidSigner",
-  "LengthMismatch",
-  "SignatureExpired",
-] as const;
-
-/** Contracts whose reverts are decoded by name. */
-type CatalogedRevert<
-  contract extends string,
-  names extends readonly string[],
-> = {
-  readonly contract: contract;
-  readonly name: names[number];
-  readonly args?: readonly unknown[];
-};
-
 /**
- * Decoded revert of a Morpho contract, keyed by the contract that raised it.
- * `name` is the `require` string for Blue and the custom error name elsewhere;
- * `args` are the decoded custom-error arguments (e.g. the market `id` of
- * `SupplyCapExceeded(bytes32 id)`). Catalogs are local copies of the pinned
- * ABIs (tests assert equality) so upstream ABI churn cannot change this union.
- * `BlueBundlesV1` and `VaultV2BluePublicAllocator` declare no errors in their
- * pinned ABIs, so their reverts carry the raw `name`/`data` only.
+ * Machine-readable cause of an execution failure (ADR-2026-09-18 §Errors).
+ * `UNKNOWN_REVERT` is used when the revert maps to no known Morpho condition;
+ * consumers branch on it and never parse `reason`.
  */
-export type SimulationRevertReason =
-  | {
-      readonly contract: "blue";
-      readonly name: (typeof BLUE_REVERT_REASONS)[number];
-    }
-  | CatalogedRevert<"vaultV1", typeof VAULT_V1_REVERT_REASONS>
-  | CatalogedRevert<"vaultV2", typeof VAULT_V2_REVERT_REASONS>
-  | CatalogedRevert<"vaultV2Adapter", typeof VAULT_V2_ADAPTER_REVERT_REASONS>
-  | CatalogedRevert<"vaultBundlesV1", typeof VAULT_BUNDLES_V1_REVERT_REASONS>
-  | CatalogedRevert<
-      "vaultExitBundlesV1",
-      typeof VAULT_EXIT_BUNDLES_V1_REVERT_REASONS
-    >
-  | CatalogedRevert<"permit2", typeof PERMIT2_REVERT_REASONS>
-  | {
-      readonly contract: "blueBundlesV1" | "bluePublicAllocator" | "other";
-      readonly name?: string;
-      readonly args?: readonly unknown[];
-      readonly data?: Hex;
-    };
+export type SimulationExecutionReason =
+  | "INSUFFICIENT_BALANCE"
+  | "INSUFFICIENT_ALLOWANCE"
+  | "INSUFFICIENT_LIQUIDITY"
+  | "POSITION_UNHEALTHY"
+  | "SLIPPAGE_EXCEEDED"
+  | "SIGNATURE_EXPIRED"
+  | "SIGNATURE_INVALID"
+  | "NONCE_ALREADY_USED"
+  | "CAP_EXCEEDED"
+  | "ACCESS_RESTRICTED"
+  | "UNKNOWN_REVERT";
 
-/**
- * Where and why a simulation failed. Never contains signatures, RPC URLs,
- * credentials, raw calldata or raw causes (`cause` stays on the error).
- */
-export interface SimulationErrorContext {
+/** Pipeline stage a failure belongs to; `transport` covers RPC and response failures. */
+export type SimulationStage =
+  | "validation"
+  | "preparation"
+  | "execution"
+  | "verification"
+  | "transport";
+
+interface SimulationContextBase {
   /** Request mode the failure happened in. */
   readonly mode: SimulationMode;
   /** Chain the request targeted. */
   readonly chainId: number;
-  /** Unset when the failure happens before the block is resolved. */
-  readonly blockNumber?: bigint;
-  /** Decoded operation being verified, when the failure is operation-scoped. */
-  readonly operation?: OperationType;
+  /** Block the simulation was pinned to. */
+  readonly blockNumber: bigint;
+}
+
+interface SimulationOperationContext extends SimulationContextBase {
+  /** Decoded operation being executed or verified. */
+  readonly operation: OperationType;
   /** Blue market the operation acts on. */
   readonly marketId?: MarketId;
   /** Vault the operation acts on. */
@@ -291,13 +85,28 @@ export interface SimulationErrorContext {
   readonly expected?: bigint | boolean | Address | Hash;
   /** Value observed in the simulation, same domain as `expected`. */
   readonly observed?: bigint | boolean | Address | Hash;
-  /** Index into the caller's `transactions`. */
+  /** Index into the caller's `transactions`; preview preparation never shifts it. */
   readonly failedTransactionIndex?: number;
-  /** Index into `authorizations`. */
-  readonly authorizationIndex?: number;
-  /** Index into that authorization's preparation calls. */
-  readonly preparationCallIndex?: number;
 }
+
+/**
+ * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
+ * Every stage carries `mode`, `chainId` and `blockNumber`. Never contains
+ * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
+ * on the error).
+ */
+export type SimulationErrorContext =
+  | (SimulationContextBase & { readonly stage: "validation" })
+  | (SimulationContextBase & { readonly stage: "transport" })
+  | (SimulationContextBase & {
+      readonly stage: "preparation";
+      /** Index into `authorizations`. */
+      readonly authorizationIndex: number;
+      /** Index into that authorization's preparation calls. */
+      readonly preparationCallIndex?: number;
+    })
+  | (SimulationOperationContext & { readonly stage: "execution" })
+  | (SimulationOperationContext & { readonly stage: "verification" });
 
 /**
  * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.
@@ -332,10 +141,13 @@ export class SimulationRevertedError extends SimulationPackageError {
     /** Raw revert string as reported by the backend, when any. */
     public readonly reason: string | undefined,
     public readonly details?: unknown,
-    /** Decoded Morpho revert; undefined when the revert data could not be decoded. */
-    public readonly revert?: SimulationRevertReason,
+    /** Machine-readable cause; `UNKNOWN_REVERT` when the revert maps to no known Morpho condition. */
+    public readonly reasonCode: SimulationExecutionReason = "UNKNOWN_REVERT",
     /** Which transaction/authorization reverted and the operation it belonged to. */
-    context?: SimulationErrorContext,
+    context?: Extract<
+      SimulationErrorContext,
+      { stage: "preparation" | "execution" }
+    >,
   ) {
     super(
       reason ?? "Transaction simulation reverted",
@@ -344,11 +156,11 @@ export class SimulationRevertedError extends SimulationPackageError {
   }
 }
 
-/** Per-asset net retained amount keyed by restricted contract and token; `netRetained` is a decimal string. */
+/** Per-asset net retained amount keyed by restricted contract and token. */
 export interface RetainedAsset {
-  readonly address: string | undefined;
-  readonly token: string | undefined;
-  readonly netRetained: string;
+  readonly address: Address;
+  readonly token: Address;
+  readonly netRetained: bigint;
 }
 
 /**
@@ -485,22 +297,21 @@ export class UnexpectedSimulationError extends SimulationVerificationError {
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
 
-/** What `isSimulationPackageError` guarantees: the serializable core of a `SimulationPackageError`. */
-export interface SimulationPackageErrorLike {
-  readonly name: string;
-  readonly message: string;
-  readonly code: SimulationErrorCode;
-  readonly context?: SimulationErrorContext;
-}
+const SIMULATION_STAGES: readonly string[] = [
+  "validation",
+  "preparation",
+  "execution",
+  "verification",
+  "transport",
+];
 
 /**
- * Structural guard for consumers where `instanceof` fails across bundles or
- * after (de)serialization.
+ * Structural guard for consumers where `instanceof` fails across bundles.
  *
- * @param value - Anything caught or received.
+ * @param value - Anything caught.
  * @returns `true` for `SimulationPackageError` instances and for objects
  *   carrying `name`/`message` strings, a known `code` and an absent or
- *   well-formed `context` (`mode` and numeric `chainId` present).
+ *   well-formed `context` (known `stage`, `mode`, numeric `chainId`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -512,13 +323,13 @@ export interface SimulationPackageErrorLike {
  *   await simulate(config, { chainId: 1, transactions: [] });
  * } catch (e) {
  *   if (!isSimulationPackageError(e)) throw e;
- *   if (e.code === "SIMULATION_REVERTED") console.log(e.context?.failedTransactionIndex);
+ *   if (e instanceof SimulationRevertedError) console.log(e.reasonCode);
  * }
  * ```
  */
 export function isSimulationPackageError(
   value: unknown,
-): value is SimulationPackageErrorLike {
+): value is SimulationPackageError {
   if (value instanceof SimulationPackageError) return true;
   if (typeof value !== "object" || value === null) return false;
   const { name, message, code, context } = value as {
@@ -536,8 +347,15 @@ export function isSimulationPackageError(
   if (context === undefined) return true;
   if (typeof context !== "object" || context === null || Array.isArray(context))
     return false;
-  const { mode, chainId } = context as { mode?: unknown; chainId?: unknown };
+  const { stage, mode, chainId } = context as {
+    stage?: unknown;
+    mode?: unknown;
+    chainId?: unknown;
+  };
   return (
-    (mode === "preview" || mode === "final") && typeof chainId === "number"
+    typeof stage === "string" &&
+    SIMULATION_STAGES.includes(stage) &&
+    (mode === "preview" || mode === "final") &&
+    typeof chainId === "number"
   );
 }

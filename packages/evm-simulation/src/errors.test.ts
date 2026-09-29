@@ -1,16 +1,3 @@
-import {
-  vaultBundlesV1Abi,
-  vaultExitBundlesV1Abi,
-} from "@morpho-org/morpho-sdk/abis";
-import {
-  metaMorphoAbi,
-  morphoMarketV1AdapterAbi,
-  morphoMarketV1AdapterV2Abi,
-  morphoVaultV1AdapterAbi,
-  permit2Abi,
-  vaultV2Abi,
-} from "@morpho-org/morpho-ts/abis";
-import type { Abi } from "viem";
 import { expectTypeOf } from "vitest";
 import {
   AssetChangeMismatchError,
@@ -23,14 +10,13 @@ import {
   isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
-  PERMIT2_REVERT_REASONS,
   PermissionChangeMismatchError,
   ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
+  type SimulationExecutionReason,
   SimulationPackageError,
   SimulationRevertedError,
-  type SimulationRevertReason,
   SimulationValidationError,
   SimulationVerificationError,
   SlippageLimitExceededError,
@@ -39,14 +25,22 @@ import {
   UnsupportedChainError,
   UnsupportedOperationError,
   UnsupportedVerificationFeatureError,
-  VAULT_BUNDLES_V1_REVERT_REASONS,
-  VAULT_EXIT_BUNDLES_V1_REVERT_REASONS,
-  VAULT_V1_REVERT_REASONS,
-  VAULT_V2_ADAPTER_REVERT_REASONS,
-  VAULT_V2_REVERT_REASONS,
 } from "./errors.js";
 
-const CONTEXT: SimulationErrorContext = { mode: "final", chainId: 1 };
+const CONTEXT: SimulationErrorContext = {
+  stage: "validation",
+  mode: "final",
+  chainId: 1,
+  blockNumber: 100n,
+};
+const EXECUTION: Extract<SimulationErrorContext, { stage: "execution" }> = {
+  stage: "execution",
+  mode: "preview",
+  chainId: 1,
+  blockNumber: 100n,
+  operation: "blueSupply",
+  failedTransactionIndex: 2,
+};
 
 describe("error hierarchy", () => {
   it("every concrete error extends SimulationPackageError", () => {
@@ -126,9 +120,9 @@ describe("BlacklistViolationError", () => {
       {
         address: "0x00000000000000000000000000000000000000ab",
         token: "0x00000000000000000000000000000000000000cd",
-        netRetained: "100",
+        netRetained: 100n,
       },
-    ];
+    ] as const;
     const err = new BlacklistViolationError("stuck", changes);
     expect(err.assetChanges).toBe(changes);
   });
@@ -197,14 +191,9 @@ describe("verification error classes", () => {
   });
 
   it.each(cases)("%s stores a frozen copy of the context", (Ctor) => {
-    const context: SimulationErrorContext = {
-      mode: "preview",
-      chainId: 1,
-      failedTransactionIndex: 2,
-    };
-    const err = new Ctor("boom", context);
-    expect(err.context).toEqual(context);
-    expect(err.context).not.toBe(context);
+    const err = new Ctor("boom", EXECUTION);
+    expect(err.context).toEqual(EXECUTION);
+    expect(err.context).not.toBe(EXECUTION);
     expect(Object.isFrozen(err.context)).toBe(true);
   });
 
@@ -237,101 +226,76 @@ describe("SimulationPackageError.context", () => {
   });
 });
 
-describe("SimulationRevertedError.revert", () => {
-  it("is undefined when the revert was not decoded", () => {
-    expect(new SimulationRevertedError("x").revert).toBeUndefined();
+describe("SimulationRevertedError.reasonCode", () => {
+  it("defaults to UNKNOWN_REVERT", () => {
+    expect(new SimulationRevertedError("x").reasonCode).toBe("UNKNOWN_REVERT");
   });
 
-  it("carries a decoded Morpho revert", () => {
-    const revert: SimulationRevertReason = {
-      contract: "vaultV1",
-      name: "SupplyCapExceeded",
-      args: ["0xab"],
-    };
-    expect(new SimulationRevertedError("x", undefined, revert).revert).toBe(
-      revert,
-    );
+  it("carries the mapped cause", () => {
+    expect(
+      new SimulationRevertedError("x", undefined, "INSUFFICIENT_LIQUIDITY")
+        .reasonCode,
+    ).toBe("INSUFFICIENT_LIQUIDITY");
   });
 
-  it("names are pinned to the Morpho contracts' ABIs", () => {
+  it("is the ADR union", () => {
+    expectTypeOf<SimulationExecutionReason>().toEqualTypeOf<
+      | "INSUFFICIENT_BALANCE"
+      | "INSUFFICIENT_ALLOWANCE"
+      | "INSUFFICIENT_LIQUIDITY"
+      | "POSITION_UNHEALTHY"
+      | "SLIPPAGE_EXCEEDED"
+      | "SIGNATURE_EXPIRED"
+      | "SIGNATURE_INVALID"
+      | "NONCE_ALREADY_USED"
+      | "CAP_EXCEEDED"
+      | "ACCESS_RESTRICTED"
+      | "UNKNOWN_REVERT"
+    >();
+  });
+});
+
+describe("SimulationErrorContext", () => {
+  it("is keyed by stage", () => {
+    expectTypeOf<SimulationErrorContext["stage"]>().toEqualTypeOf<
+      "validation" | "preparation" | "execution" | "verification" | "transport"
+    >();
+    expectTypeOf<
+      SimulationErrorContext["blockNumber"]
+    >().toEqualTypeOf<bigint>();
     expectTypeOf<{
-      contract: "blue";
-      name: "insufficient collateral";
-    }>().toExtend<SimulationRevertReason>();
+      stage: "preparation";
+      mode: "preview";
+      chainId: 1;
+      blockNumber: 1n;
+    }>().not.toExtend<SimulationErrorContext>();
     expectTypeOf<{
-      contract: "vaultV1";
-      name: "ERC4626ExceededMaxWithdraw";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "vaultV2";
-      name: "AbsoluteCapExceeded";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "vaultV2Adapter";
-      name: "LoanAssetMismatch";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "vaultBundlesV1";
-      name: "SlippageExceeded";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "vaultExitBundlesV1";
-      name: "MorphoMismatch";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "permit2";
-      name: "InvalidNonce";
-    }>().toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "blue";
-      name: "SupplyCapExceeded";
-    }>().not.toExtend<SimulationRevertReason>();
-    expectTypeOf<{
-      contract: "vaultV2";
-      name: "nope";
-    }>().not.toExtend<SimulationRevertReason>();
+      stage: "verification";
+      mode: "final";
+      chainId: 1;
+      blockNumber: 1n;
+    }>().not.toExtend<SimulationErrorContext>();
   });
 
-  const names = (...abis: Abi[]) =>
-    [
-      ...new Set(
-        abis.flatMap((abi) =>
-          abi.flatMap((e) => (e.type === "error" ? [e.name] : [])),
-        ),
-      ),
-    ].sort();
-  const sorted = (xs: readonly string[]) => [...xs].sort();
-
-  it("catalogs match the pinned ABIs", () => {
-    expect(sorted(VAULT_V1_REVERT_REASONS)).toEqual(names(metaMorphoAbi));
-    expect(sorted(VAULT_V2_REVERT_REASONS)).toEqual(names(vaultV2Abi));
-    expect(sorted(VAULT_V2_ADAPTER_REVERT_REASONS)).toEqual(
-      names(
-        morphoVaultV1AdapterAbi,
-        morphoMarketV1AdapterAbi,
-        morphoMarketV1AdapterV2Abi,
-      ),
-    );
-    expect(sorted(VAULT_BUNDLES_V1_REVERT_REASONS)).toEqual(
-      names(vaultBundlesV1Abi),
-    );
-    expect(sorted(VAULT_EXIT_BUNDLES_V1_REVERT_REASONS)).toEqual(
-      names(vaultExitBundlesV1Abi),
-    );
-    expect(sorted(PERMIT2_REVERT_REASONS)).toEqual(names(permit2Abi));
+  it("SimulationRevertedError only accepts preparation or execution contexts", () => {
+    expectTypeOf<
+      NonNullable<
+        ConstructorParameters<typeof SimulationRevertedError>[3]
+      >["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
   });
 });
 
 describe("context on legacy errors", () => {
   it("SimulationRevertedError keeps cause and freezes context", () => {
     const cause = new Error("inner");
-    const err = new SimulationRevertedError("x", cause, undefined, CONTEXT);
+    const err = new SimulationRevertedError("x", cause, undefined, EXECUTION);
     expect(err.cause).toBe(cause);
-    expect(err.context).toEqual(CONTEXT);
+    expect(err.context).toEqual(EXECUTION);
     expect(Object.isFrozen(err.context)).toBe(true);
     expect(
-      new SimulationRevertedError("x", "raw", undefined, CONTEXT).context,
-    ).toEqual(CONTEXT);
+      new SimulationRevertedError("x", "raw", undefined, EXECUTION).context,
+    ).toEqual(EXECUTION);
   });
 
   it("BlacklistViolationError stores context", () => {
@@ -344,7 +308,7 @@ describe("context on legacy errors", () => {
     const err = new FeeMismatchError("x", CONTEXT);
     expect(err).toBeInstanceOf(SimulationVerificationError);
     expectTypeOf(err.context).toEqualTypeOf<SimulationErrorContext>();
-    expectTypeOf(new SimulationRevertedError("x").context).toEqualTypeOf<
+    expectTypeOf(new BlacklistViolationError("x").context).toEqualTypeOf<
       SimulationErrorContext | undefined
     >();
   });
@@ -402,7 +366,7 @@ describe("isSimulationPackageError", () => {
         name: "FeeMismatchError",
         message: "boom",
         code: "FEE_MISMATCH",
-        context: { mode: "final", chainId: 1 },
+        context: { stage: "validation", mode: "final", chainId: 1 },
       }),
     ).toBe(true);
   });
@@ -428,19 +392,25 @@ describe("isSimulationPackageError", () => {
     expect(
       isSimulationPackageError({
         ...base,
-        context: { mode: "bogus", chainId: 1 },
+        context: { stage: "bogus", mode: "final", chainId: 1 },
       }),
     ).toBe(false);
     expect(
       isSimulationPackageError({
         ...base,
-        context: { mode: "final", chainId: "1" },
+        context: { stage: "validation", mode: "bogus", chainId: 1 },
       }),
     ).toBe(false);
     expect(
       isSimulationPackageError({
         ...base,
-        context: { mode: "final", chainId: 1 },
+        context: { stage: "validation", mode: "final", chainId: "1" },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { stage: "validation", mode: "final", chainId: 1 },
       }),
     ).toBe(true);
   });
