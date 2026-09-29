@@ -5,6 +5,7 @@ import {
   checkTarballFiles,
   compareManifestDependencies,
   compareManifestIdentity,
+  evaluateManifestBin,
   evaluateProvenance,
   findInstallProblems,
   findInstallScripts,
@@ -174,6 +175,36 @@ describe("manifest lifecycle hooks and bins", () => {
     expect(hasManifestBin({ morpho: "" })).toBe(false);
     expect(hasManifestBin({ morpho: "bin/cli.js" })).toBe(true);
     expect(hasManifestBin("bin/cli.js")).toBe(true);
+  });
+
+  test("passes when bin is absent and fails HIGH when bin is declared", () => {
+    expect(evaluateManifestBin(undefined)).toEqual({
+      checks: [
+        {
+          id: "manifest.bin",
+          status: "pass",
+          detail: "The published manifest has no bin entry.",
+        },
+      ],
+      findings: [],
+    });
+    expect(evaluateManifestBin({ morpho: "bin/cli.js" })).toEqual({
+      checks: [
+        {
+          id: "manifest.bin",
+          status: "fail",
+          detail: "The published manifest declares at least one bin entry.",
+        },
+      ],
+      findings: [
+        {
+          id: "manifest.bin",
+          severity: "HIGH",
+          title: "Package exposes a command-line binary",
+          detail: "The published manifest declares at least one bin entry.",
+        },
+      ],
+    });
   });
 
   test("detects native addon install behavior", () => {

@@ -191,15 +191,20 @@ export function evaluateProvenance(
 ): ProvenanceEvaluation {
   const checks: VerificationCheck[] = [];
   const findings: VerificationFinding[] = [];
-  if (attestationsUrl == null || attestationsUrl === "") {
+  const failNoStatement = (options: {
+    presentStatus: VerificationCheck["status"];
+    presentSeverity: Severity;
+    presentDetail: string;
+    unavailableDetail: string;
+  }): ProvenanceEvaluation => {
     addResult(
       checks,
       findings,
       "provenance.present",
       "SLSA provenance is present",
-      "fail",
-      "CRITICAL",
-      "The published manifest has no attestations URL.",
+      options.presentStatus,
+      options.presentSeverity,
+      options.presentDetail,
     );
     addResult(
       checks,
@@ -208,7 +213,7 @@ export function evaluateProvenance(
       "Provenance subject matches package integrity",
       "error",
       "HIGH",
-      "No SLSA statement is available to inspect.",
+      options.unavailableDetail,
     );
     addResult(
       checks,
@@ -217,9 +222,18 @@ export function evaluateProvenance(
       "Provenance identifies the trusted source workflow",
       "error",
       "HIGH",
-      "No SLSA statement is available to inspect.",
+      options.unavailableDetail,
     );
     return { checks, findings, gitCommit: null };
+  };
+
+  if (attestationsUrl == null || attestationsUrl === "") {
+    return failNoStatement({
+      presentStatus: "fail",
+      presentSeverity: "CRITICAL",
+      presentDetail: "The published manifest has no attestations URL.",
+      unavailableDetail: "No SLSA statement is available to inspect.",
+    });
   }
 
   let statement: ProvenanceStatement | undefined;
@@ -235,65 +249,21 @@ export function evaluateProvenance(
     }
   } catch (error) {
     const detail = `Could not decode the SLSA statement: ${getErrorMessage(error)}`;
-    addResult(
-      checks,
-      findings,
-      "provenance.present",
-      "SLSA provenance is present",
-      "error",
-      "HIGH",
-      detail,
-    );
-    addResult(
-      checks,
-      findings,
-      "provenance.subject",
-      "Provenance subject matches package integrity",
-      "error",
-      "HIGH",
-      "The SLSA statement could not be decoded.",
-    );
-    addResult(
-      checks,
-      findings,
-      "provenance.source",
-      "Provenance identifies the trusted source workflow",
-      "error",
-      "HIGH",
-      "The SLSA statement could not be decoded.",
-    );
-    return { checks, findings, gitCommit: null };
+    return failNoStatement({
+      presentStatus: "error",
+      presentSeverity: "HIGH",
+      presentDetail: detail,
+      unavailableDetail: "The SLSA statement could not be decoded.",
+    });
   }
 
   if (statement == null) {
-    addResult(
-      checks,
-      findings,
-      "provenance.present",
-      "SLSA provenance is present",
-      "fail",
-      "CRITICAL",
-      "The attestations response contains no SLSA v1 statement.",
-    );
-    addResult(
-      checks,
-      findings,
-      "provenance.subject",
-      "Provenance subject matches package integrity",
-      "error",
-      "HIGH",
-      "No SLSA statement is available to inspect.",
-    );
-    addResult(
-      checks,
-      findings,
-      "provenance.source",
-      "Provenance identifies the trusted source workflow",
-      "error",
-      "HIGH",
-      "No SLSA statement is available to inspect.",
-    );
-    return { checks, findings, gitCommit: null };
+    return failNoStatement({
+      presentStatus: "fail",
+      presentSeverity: "CRITICAL",
+      presentDetail: "The attestations response contains no SLSA v1 statement.",
+      unavailableDetail: "No SLSA statement is available to inspect.",
+    });
   }
 
   addResult(
@@ -535,6 +505,32 @@ export function hasManifestBin(
       bin != null &&
       Object.values(bin).some((path) => path !== ""))
   );
+}
+
+/**
+ * Creates the report check for the published manifest's bin declaration.
+ *
+ * @param bin The package manifest's bin value.
+ * @returns The check and any finding for the bin declaration.
+ */
+export function evaluateManifestBin(
+  bin: RegistryManifest["bin"] | null | undefined,
+): { checks: VerificationCheck[]; findings: VerificationFinding[] } {
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  const hasBin = hasManifestBin(bin);
+  addResult(
+    checks,
+    findings,
+    "manifest.bin",
+    "Package exposes a command-line binary",
+    hasBin ? "fail" : "pass",
+    "HIGH",
+    hasBin
+      ? "The published manifest declares at least one bin entry."
+      : "The published manifest has no bin entry.",
+  );
+  return { checks, findings };
 }
 
 /**
@@ -1381,17 +1377,9 @@ async function verifyNpmRelease(options: {
       );
     }
 
-    addResult(
-      checks,
-      findings,
-      "manifest.bin",
-      "Package exposes a command-line binary",
-      hasManifestBin(manifest.bin) ? "pass" : "fail",
-      "HIGH",
-      hasManifestBin(manifest.bin)
-        ? "The published manifest declares at least one bin entry."
-        : "The published manifest has no bin entry.",
-    );
+    const manifestBinEvaluation = evaluateManifestBin(manifest.bin);
+    checks.push(...manifestBinEvaluation.checks);
+    findings.push(...manifestBinEvaluation.findings);
 
     if (previousVersion == null) {
       addResult(
