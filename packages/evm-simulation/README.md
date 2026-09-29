@@ -58,6 +58,7 @@ This is the unreleased v5 integration stack. See the [v4 → v5 migration guide]
 All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
+- `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements, preLiquidations? })` — convert morpho-sdk `ActionRequirement[]` into `SimulationAuthorization[]`, and `decodeOperations(params)` — decode v6 fixed-bundles calldata into ordered `DecodedOperation` entries. Their types: `DecodeOperationsParams`, `DecodedOperations`, `VaultBinding`, `PreLiquidationBinding`, `DecodedOperation`, `DecodedOperationFields`, `OperationIdentity`, `MarketBinding`, `OperationAmount`, `OperationFunding`, `OperationSignature`, `OperationReallocation`, `ReferralFee`.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams` (options object with `mode: "preview" | "final"`), `SimulationMode`, `SimulationTransaction`, `SimulationAuthorization` (the typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes `Erc2612PermitTypedData` / `Permit2TransferTypedData` / `BlueAuthorizationTypedData` / `Eip712Domain` / `Eip712Field`), `SimulationLimits`, `OperationLimit`, `OperationType`, `VaultDeallocation`, `MarketMinAssets`, and the per-operation limit types.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
