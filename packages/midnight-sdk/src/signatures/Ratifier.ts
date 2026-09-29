@@ -1,11 +1,11 @@
 import type { Address, Hex } from "viem";
+import { MAX_TREE_HEIGHT } from "../constants.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
-import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
-import { Group } from "./Group.js";
-import { GroupUtils } from "./GroupUtils.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { isEmptyOfferStruct } from "./offerStructInternal.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
+import { nextPowerOfTwo } from "./treeMathInternal.js";
 
 function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
   return (
@@ -20,7 +20,11 @@ function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
 
 function normalizeTree(tree: RatifierTreeInput): TreeLike {
   if (isTreeLike(tree)) {
-    if (!Number.isInteger(tree.height) || tree.height < 0 || tree.height > 20) {
+    if (
+      !Number.isInteger(tree.height) ||
+      tree.height < 0 ||
+      tree.height > MAX_TREE_HEIGHT
+    ) {
       throw new InvalidTreeHeightError(tree.height);
     }
 
@@ -28,7 +32,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     if (
       tree.paddedOffers.length !== expectedLength ||
       tree.leaves.length !== expectedLength ||
-      tree.offers.length > expectedLength
+      expectedLength !== nextPowerOfTwo(tree.offers.length)
     ) {
       throw new InvalidTreeError(
         "Tree offers, leaves, and height describe different trees.",
@@ -94,16 +98,7 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
   }
 
   const entries = Array.isArray(tree) ? tree : [tree];
-  const offers: readonly IOffer[] = entries.flatMap((entry) =>
-    GroupUtils.isGroupInput(entry)
-      ? Group.from(entry).offers
-      : [
-          new Offer({
-            ...Offer.from(entry as IOffer),
-            group: GroupUtils.hash([entry as IOffer]),
-          }),
-        ],
-  );
+  const offers: readonly IOffer[] = TreeUtils.normalizeEntries(entries);
   const descriptor = TreeUtils.buildDescriptor(entries);
 
   return {
@@ -138,7 +133,7 @@ function assertRatifierTree(params: {
 }
 
 /**
- * Parameters for {@link RatifierUtils.getRatifierInfo}.
+ * Parameters for {@link Ratifier.getRatifierInfo}.
  *
  * Pass the maker account bytecode read at the same block context used to build
  * the offer. The bytecode is used only to choose the ratifier address to put on
@@ -199,12 +194,12 @@ export interface RatifierInfo {
  *
  * @example
  * ```ts
- * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+ * import { Ratifier } from "@morpho-org/midnight-sdk";
  *
- * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
+ * console.log(Ratifier.isEip7702Designator("0xef0100"));
  * ```
  */
-export namespace RatifierUtils {
+export namespace Ratifier {
   /**
    * Normalizes a ratifier tree input and asserts it uses one ratifier address.
    *
@@ -219,7 +214,7 @@ export namespace RatifierUtils {
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
-   * import { Offer, RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, Ratifier } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
    * const offer = Offer.create({
@@ -247,7 +242,7 @@ export namespace RatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
+   * const { tree, ratifier } = Ratifier.normalizeRatifierTree({
    *   tree: [offer],
    *   label: "Ecrecover",
    * });
@@ -258,6 +253,15 @@ export namespace RatifierUtils {
     readonly tree: RatifierTreeInput;
     readonly label: "Ecrecover" | "Setter";
   }): { readonly tree: TreeLike; readonly ratifier: Address } {
+    if (
+      "type" in params.tree &&
+      params.tree.type != null &&
+      params.tree.type !== params.label.toLowerCase()
+    ) {
+      throw new InvalidTreeError(
+        "Ratifier route does not match the tree route.",
+      );
+    }
     const tree = normalizeTree(params.tree);
     const ratifier = assertRatifierTree({ tree, label: params.label });
 
@@ -274,9 +278,9 @@ export namespace RatifierUtils {
    * @returns Whether the bytecode starts with `0xef0100`.
    * @example
    * ```ts
-   * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Ratifier } from "@morpho-org/midnight-sdk";
    *
-   * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
+   * console.log(Ratifier.isEip7702Designator("0xef0100"));
    * ```
    */
   export function isEip7702Designator(bytecode: Hex) {
@@ -288,8 +292,8 @@ export namespace RatifierUtils {
    * accounts.
    *
    * Use the returned `ratifier` address in `Offer.create`. Later, use
-   * `EcrecoverRatifierUtils.ratify` when `type` is `ecrecover`, or approve the
-   * root and call `SetterRatifierUtils.ratify` when `type` is `setter`.
+   * `EcrecoverRatifier.ratify` when `type` is `ecrecover`, or approve the
+   * root and call `SetterRatifier.ratify` when `type` is `setter`.
    *
    * @param params.bytecode - Maker bytecode returned by `eth_getCode`.
    * @param params.ecrecoverRatifier - Ratifier address used for EOAs and EIP-7702 accounts.
@@ -297,9 +301,9 @@ export namespace RatifierUtils {
    * @returns Ratifier information for the maker.
    * @example
    * ```ts
-   * import { RatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Ratifier } from "@morpho-org/midnight-sdk";
    *
-   * const info = RatifierUtils.getRatifierInfo({
+   * const info = Ratifier.getRatifierInfo({
    *   bytecode: "0x",
    *   ecrecoverRatifier: "0x0000000000000000000000000000000000000001",
    *   setterRatifier: "0x0000000000000000000000000000000000000002",
@@ -322,3 +326,6 @@ export namespace RatifierUtils {
     return { type: "setter", ratifier: setterRatifier };
   }
 }
+
+/** @deprecated Use {@link Ratifier}. Retained for compatibility. */
+export { Ratifier as RatifierUtils };
