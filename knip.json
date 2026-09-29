@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["genhtml", "mkfifo"],
+  "ignoreBinaries": ["genhtml", "mkfifo", "openssl"],
   "ignoreIssues": {
     "packages/blue-sdk-viem/src/MetaMorphoAction.ts": ["duplicates"],
     "packages/morpho-ts/src/addresses.ts": ["duplicates"]
