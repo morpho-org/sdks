@@ -19,7 +19,6 @@ import {
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -215,7 +214,7 @@ describe("verification error classes", () => {
   ] as const;
 
   it.each(cases)("%s has its literal code and name", (Ctor, code) => {
-    const err = new Ctor("boom", CONTEXT);
+    const err = new Ctor("boom", { context: CONTEXT });
     expect(err.code).toBe(code);
     expect(err.name).toBe(Ctor.name);
     expect(err).toBeInstanceOf(SimulationPackageError);
@@ -223,7 +222,7 @@ describe("verification error classes", () => {
   });
 
   it.each(cases)("%s stores a frozen copy of the context", (Ctor) => {
-    const err = new Ctor("boom", EXECUTION);
+    const err = new Ctor("boom", { context: EXECUTION });
     expect(err.context).toEqual(EXECUTION);
     expect(err.context).not.toBe(EXECUTION);
     expect(Object.isFrozen(err.context)).toBe(true);
@@ -231,7 +230,7 @@ describe("verification error classes", () => {
 
   it.each(cases)("%s keeps the cause", (Ctor) => {
     const cause = new Error("root");
-    const err = new Ctor("boom", CONTEXT, { cause });
+    const err = new Ctor("boom", { context: CONTEXT, cause });
     expect(err.cause).toBe(cause);
   });
 });
@@ -428,11 +427,13 @@ describe("context on legacy errors", () => {
     expect(Object.isFrozen(err.context)).toBe(true);
   });
 
-  it("verification errors extend SimulationVerificationError with required context", () => {
-    const err = new FeeMismatchError("x", CONTEXT);
-    expect(err).toBeInstanceOf(SimulationVerificationError);
-    expectTypeOf(err.context).toEqualTypeOf<SimulationErrorContext>();
-    expectTypeOf(new BlacklistViolationError("x").context).toEqualTypeOf<
+  it("verification errors extend SimulationPackageError directly", () => {
+    const err = new FeeMismatchError("x", { context: CONTEXT });
+    expect(Object.getPrototypeOf(FeeMismatchError)).toBe(
+      SimulationPackageError,
+    );
+    expect(err.context).toEqual(CONTEXT);
+    expectTypeOf(err.context).toEqualTypeOf<
       SimulationErrorContext | undefined
     >();
   });
@@ -445,20 +446,20 @@ describe("SIMULATION_ERROR_CODES", () => {
     new ExternalServiceError("x"),
     new SimulationValidationError("x"),
     new UnsupportedChainError(1),
-    new UnsupportedOperationError("x", CONTEXT),
-    new ProtocolBindingMismatchError("x", CONTEXT),
-    new UnsupportedVerificationFeatureError("x", CONTEXT),
-    new InvalidSimulationResponseError("x", CONTEXT),
-    new MissingVerificationEvidenceError("x", CONTEXT),
-    new AuthorizationRequestMismatchError("x", CONTEXT),
-    new AssetChangeMismatchError("x", CONTEXT),
-    new PermissionChangeMismatchError("x", CONTEXT),
-    new StateChangeMismatchError("x", CONTEXT),
-    new MarketConstraintViolationError("x", CONTEXT),
-    new SlippageLimitExceededError("x", CONTEXT),
-    new FeeMismatchError("x", CONTEXT),
-    new ConsumerLimitViolationError("x", CONTEXT),
-    new UnexpectedSimulationError("x", CONTEXT),
+    new UnsupportedOperationError("x", { context: CONTEXT }),
+    new ProtocolBindingMismatchError("x", { context: CONTEXT }),
+    new UnsupportedVerificationFeatureError("x", { context: CONTEXT }),
+    new InvalidSimulationResponseError("x", { context: CONTEXT }),
+    new MissingVerificationEvidenceError("x", { context: CONTEXT }),
+    new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
+    new AssetChangeMismatchError("x", { context: CONTEXT }),
+    new PermissionChangeMismatchError("x", { context: CONTEXT }),
+    new StateChangeMismatchError("x", { context: CONTEXT }),
+    new MarketConstraintViolationError("x", { context: CONTEXT }),
+    new SlippageLimitExceededError("x", { context: CONTEXT }),
+    new FeeMismatchError("x", { context: CONTEXT }),
+    new ConsumerLimitViolationError("x", { context: CONTEXT }),
+    new UnexpectedSimulationError("x", { context: CONTEXT }),
   ];
 
   it("lists exactly the codes of the concrete classes", () => {
@@ -476,6 +477,20 @@ describe("SIMULATION_ERROR_CODES", () => {
       isSimulationPackageError({ name: "FetchError", message: "m", code }),
     ).toBe(false);
   });
+
+  it.each(
+    concrete.map((e, i) => ({
+      code: e.code,
+      name: concrete[(i + 1) % concrete.length]!.name,
+    })),
+  )(
+    "guard rejects $code under another package class name $name",
+    ({ code, name }) => {
+      expect(isSimulationPackageError({ name, message: "m", code })).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe("isSimulationPackageError", () => {
@@ -483,9 +498,9 @@ describe("isSimulationPackageError", () => {
     expect(isSimulationPackageError(new SimulationRevertedError("x"))).toBe(
       true,
     );
-    expect(isSimulationPackageError(new FeeMismatchError("x", CONTEXT))).toBe(
-      true,
-    );
+    expect(
+      isSimulationPackageError(new FeeMismatchError("x", { context: CONTEXT })),
+    ).toBe(true);
   });
 
   it("is true for a plain object with a known code", () => {
