@@ -348,6 +348,10 @@ export async function main(
   } else if (repository == null || repository === "") {
     throw new Error("GITHUB_REPOSITORY is required when GITHUB_TOKEN is set.");
   }
+  const githubCredentials =
+    token != null && token !== "" && repository != null && repository !== ""
+      ? { token, repository }
+      : null;
 
   const nowMs = options.nowMs ?? Date.now();
   const lookbackMs = lookbackHours * HOUR_MS;
@@ -395,12 +399,22 @@ export async function main(
     }
   }
 
+  for (const { name, detail } of packageErrors) {
+    process.stderr.write(`Package ${name} failed: ${detail}\n`);
+  }
+
   let missing = candidates;
-  if (token != null && token !== "" && repository != null) {
-    if (!dryRun) await ensureIssueLabel({ repository, token, fetchImpl });
+  if (githubCredentials != null) {
+    if (!dryRun) {
+      await ensureIssueLabel({
+        repository: githubCredentials.repository,
+        token: githubCredentials.token,
+        fetchImpl,
+      });
+    }
     const existingTitles = await fetchExistingIssueTitles({
-      repository,
-      token,
+      repository: githubCredentials.repository,
+      token: githubCredentials.token,
       since: new Date(nowMs - lookbackMs - 24 * HOUR_MS).toISOString(),
       fetchImpl,
     });
@@ -409,25 +423,23 @@ export async function main(
     process.stdout.write(
       "GITHUB_TOKEN is not set; skipping release issue deduplication.\n",
     );
-  } else {
-    throw new Error("GITHUB_TOKEN is required unless --dry-run is used.");
   }
 
+  let created = 0;
   if (dryRun) {
     for (const candidate of missing) {
       process.stdout.write(
         `Would create: ${releaseIssueTitle(candidate.name, candidate.version)}\n`,
       );
     }
-  } else {
-    const issueRepository = repository as string;
-    const issueToken = token as string;
-    let created = 0;
+  } else if (githubCredentials != null) {
     for (const candidate of missing) {
       try {
         await githubRequest({
-          url: new URL(`${GITHUB_API_URL}/repos/${issueRepository}/issues`),
-          token: issueToken,
+          url: new URL(
+            `${GITHUB_API_URL}/repos/${githubCredentials.repository}/issues`,
+          ),
+          token: githubCredentials.token,
           init: {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -448,20 +460,11 @@ export async function main(
         });
       }
     }
-    process.stdout.write(
-      `Checked ${packages.length} packages; found ${candidates.length} recent versions; created ${created} issues.\n`,
-    );
-    if (packageErrors.length > 0) {
-      throw new Error(
-        `${packageErrors.length} package operation(s) failed: ${packageErrors
-          .map(({ name, detail }) => `${name}: ${detail}`)
-          .join("; ")}`,
-      );
-    }
-    return candidates.length;
   }
   process.stdout.write(
-    `Checked ${packages.length} packages; found ${candidates.length} recent versions; would create ${missing.length} issues.\n`,
+    dryRun
+      ? `Checked ${packages.length} packages; found ${candidates.length} recent versions; would create ${missing.length} issues.\n`
+      : `Checked ${packages.length} packages; found ${candidates.length} recent versions; created ${created} issues.\n`,
   );
   if (packageErrors.length > 0) {
     throw new Error(

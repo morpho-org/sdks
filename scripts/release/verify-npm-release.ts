@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import {
-  createHash,
-  verify as verifySignature,
-  X509Certificate,
-} from "node:crypto";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -156,6 +152,21 @@ interface SignatureEvaluation {
   signerRef: string | null;
 }
 
+interface SigstoreVerifyOptions {
+  certificateIssuer: string;
+  certificateIdentityURI: string;
+  certificateOIDs: Record<string, string>;
+}
+
+interface SigstoreSigner {
+  identity?: { subjectAlternativeName?: string };
+}
+
+type BundleVerifier = (
+  bundle: NonNullable<Attestation["bundle"]>,
+  options: SigstoreVerifyOptions,
+) => Promise<SigstoreSigner>;
+
 interface CheckEvaluation {
   status: VerificationCheck["status"];
   severity: Severity;
@@ -278,17 +289,19 @@ export function selectPreviousVersion(
  * @param attestationsUrl The release manifest's attestations URL, if present.
  * @param attestations Entries returned by the npm attestations endpoint.
  * @param integrity The published package's sha512 integrity.
+ * @param options Optional Sigstore verifier injection for deterministic tests.
  * @returns Provenance checks, findings, and the source commit digest.
  */
 // biome-ignore lint/complexity/useMaxParams: Keep this pure evaluator's inputs explicit.
-export function evaluateProvenance(
+export async function evaluateProvenance(
   attestationsUrl: string | undefined,
   attestations: readonly Attestation[],
   integrity: string,
-): ProvenanceEvaluation {
+  options: { verifyBundle?: BundleVerifier } = {},
+): Promise<ProvenanceEvaluation> {
   const checks: VerificationCheck[] = [];
   const findings: VerificationFinding[] = [];
-  const failNoStatement = (options: {
+  const failNoStatement = (details: {
     presentStatus: VerificationCheck["status"];
     presentSeverity: Severity;
     presentDetail: string;
@@ -302,18 +315,18 @@ export function evaluateProvenance(
       findings,
       "provenance.present",
       "SLSA provenance is present",
-      options.presentStatus,
-      options.presentSeverity,
-      options.presentDetail,
+      details.presentStatus,
+      details.presentSeverity,
+      details.presentDetail,
     );
     addResult(
       checks,
       findings,
       "provenance.signature",
       "SLSA statement is signed by the expected workflow identity",
-      options.signatureStatus,
-      options.signatureSeverity,
-      options.signatureDetail,
+      details.signatureStatus,
+      details.signatureSeverity,
+      details.signatureDetail,
     );
     addResult(
       checks,
@@ -322,7 +335,7 @@ export function evaluateProvenance(
       "Provenance subject matches package integrity",
       "error",
       "HIGH",
-      options.unavailableDetail,
+      details.unavailableDetail,
     );
     addResult(
       checks,
@@ -331,7 +344,7 @@ export function evaluateProvenance(
       "Provenance identifies the trusted source workflow",
       "error",
       "HIGH",
-      options.unavailableDetail,
+      details.unavailableDetail,
     );
     return { checks, findings, gitCommit: null };
   };
@@ -367,8 +380,6 @@ export function evaluateProvenance(
   }
 
   let statement: ProvenanceStatement;
-  let signature = evaluateSlsaSignature(attestation);
-  const signatureCryptographicallyValid = signature.status === "pass";
   try {
     statement = JSON.parse(
       Buffer.from(payload, "base64").toString("utf8"),
@@ -379,28 +390,33 @@ export function evaluateProvenance(
       presentStatus: "error",
       presentSeverity: "HIGH",
       presentDetail: detail,
-      signatureStatus: signature.status === "pass" ? "error" : signature.status,
-      signatureSeverity:
-        signature.status === "pass" ? "HIGH" : signature.severity,
-      signatureDetail:
-        signature.status === "pass"
-          ? `Could not bind the signature to the SLSA statement: ${getErrorMessage(error)}`
-          : signature.detail,
+      signatureStatus: "error",
+      signatureSeverity: "HIGH",
+      signatureDetail: `Could not bind the signature to the SLSA statement: ${getErrorMessage(error)}`,
       unavailableDetail: "The SLSA statement could not be decoded.",
     });
   }
 
-  if (signature.status === "pass") {
-    const workflowRef = (statement.predicate ?? statement).buildDefinition
-      ?.externalParameters?.workflow?.ref;
-    if (signature.signerRef !== workflowRef) {
-      signature = {
-        ...signature,
-        status: "fail",
-        severity: "CRITICAL",
-        detail: `Signer workflow ref expected ${workflowRef ?? "(missing)"}, got ${signature.signerRef ?? "(missing)"}.`,
-      };
-    }
+  const provenance = statement.predicate ?? statement;
+  const workflow = provenance.buildDefinition?.externalParameters?.workflow;
+  const github = provenance.buildDefinition?.internalParameters?.github;
+  const gitCommit =
+    provenance.buildDefinition?.resolvedDependencies?.[0]?.digest?.gitCommit ??
+    null;
+  let signature = await evaluateSlsaSignature(
+    attestation,
+    workflow?.ref,
+    gitCommit,
+    options.verifyBundle,
+  );
+  const signatureVerified = signature.status === "pass";
+  if (signatureVerified && signature.signerRef !== workflow?.ref) {
+    signature = {
+      ...signature,
+      status: "fail",
+      severity: "CRITICAL",
+      detail: `Signer workflow ref expected ${workflow?.ref ?? "(missing)"}, got ${signature.signerRef ?? "(missing)"}.`,
+    };
   }
 
   addResult(
@@ -439,7 +455,7 @@ export function evaluateProvenance(
       : `Expected subject sha512 ${expectedDigest ?? "(invalid dist.integrity)"}, got ${actualDigest ?? "(missing)"}.`,
   );
 
-  if (!signatureCryptographicallyValid) {
+  if (!signatureVerified) {
     addResult(
       checks,
       findings,
@@ -452,9 +468,6 @@ export function evaluateProvenance(
     return { checks, findings, gitCommit: null };
   }
 
-  const provenance = statement.predicate ?? statement;
-  const workflow = provenance.buildDefinition?.externalParameters?.workflow;
-  const github = provenance.buildDefinition?.internalParameters?.github;
   const mismatches: string[] = [];
   if (workflow?.repository !== EXPECTED.repository) {
     mismatches.push(
@@ -471,9 +484,7 @@ export function evaluateProvenance(
       `workflow path expected ${EXPECTED.workflowPath}, got ${workflow?.path ?? "(missing)"}`,
     );
   }
-  if (
-    !EXPECTED.refs.includes(workflow?.ref as (typeof EXPECTED.refs)[number])
-  ) {
+  if (!EXPECTED.refs.some((ref) => ref === workflow?.ref)) {
     mismatches.push(
       `ref expected ${EXPECTED.refs.join(" or ")}, got ${workflow?.ref ?? "(missing)"}`,
     );
@@ -494,9 +505,6 @@ export function evaluateProvenance(
       `builder id expected ${EXPECTED.builder}, got ${builder ?? "(missing)"}`,
     );
   }
-  const gitCommit =
-    provenance.buildDefinition?.resolvedDependencies?.[0]?.digest?.gitCommit ??
-    null;
   addResult(
     checks,
     findings,
@@ -515,94 +523,117 @@ export function evaluateProvenance(
   };
 }
 
-function evaluateSlsaSignature(attestation: Attestation): SignatureEvaluation {
+// biome-ignore lint/complexity/useMaxParams: Keep verifier inputs explicit.
+async function evaluateSlsaSignature(
+  attestation: Attestation,
+  workflowRef: string | undefined,
+  gitCommit: string | null,
+  verifyBundle?: BundleVerifier,
+): Promise<SignatureEvaluation> {
   const bundle = attestation.bundle;
   const envelope = bundle?.dsseEnvelope;
-  const payload = envelope?.payload;
-  const payloadType = envelope?.payloadType;
-  const signature = envelope?.signatures?.[0]?.sig;
-  const certificateBytes =
-    bundle?.verificationMaterial?.certificate?.rawBytes ??
-    bundle?.verificationMaterial?.x509CertificateChain?.certificates?.[0]
-      ?.rawBytes;
+  if (bundle == null || envelope?.payload == null) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: "The SLSA DSSE bundle is incomplete.",
+      signerRef: null,
+    };
+  }
   if (
-    payload == null ||
-    payloadType == null ||
-    signature == null ||
-    certificateBytes == null
+    workflowRef == null ||
+    !EXPECTED.refs.some((ref) => ref === workflowRef)
   ) {
     return {
       status: "fail",
       severity: "CRITICAL",
-      detail:
-        "The SLSA DSSE payload, payload type, signature, or signing certificate is missing.",
+      detail: `Predicate workflow ref is missing or not allowed: ${workflowRef ?? "(missing)"}.`,
       signerRef: null,
     };
   }
-
-  let certificate: X509Certificate;
-  try {
-    certificate = new X509Certificate(Buffer.from(certificateBytes, "base64"));
-  } catch (error) {
-    return {
-      status: "error",
-      severity: "HIGH",
-      detail: `Could not parse the SLSA signing certificate: ${getErrorMessage(error)}`,
-      signerRef: null,
-    };
-  }
-
-  const identityPrefix = `URI:${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@`;
-  const signerRef = EXPECTED.refs.find(
-    (ref) => certificate.subjectAltName === `${identityPrefix}${ref}`,
-  );
-  if (signerRef == null) {
+  if (gitCommit == null) {
     return {
       status: "fail",
       severity: "CRITICAL",
-      detail: `Signing certificate SAN does not match ${identityPrefix}${EXPECTED.refs.join(" or ")}, got ${certificate.subjectAltName ?? "(missing)"}.`,
+      detail: "The SLSA statement has no resolved git commit to bind.",
       signerRef: null,
     };
   }
 
-  const payloadBytes = Buffer.from(payload, "base64");
-  const pae = Buffer.concat([
-    Buffer.from(
-      `DSSEv1 ${Buffer.byteLength(payloadType)} ${payloadType} ${payloadBytes.length} `,
-    ),
-    payloadBytes,
-  ]);
-  let isValid: boolean;
   try {
-    // npm audit signatures verifies the Fulcio certificate chain and transparency log.
-    isValid = verifySignature(
-      "sha256",
-      pae,
-      certificate.publicKey,
-      Buffer.from(signature, "base64"),
+    const verifyOptions: SigstoreVerifyOptions = {
+      certificateIssuer: "https://token.actions.githubusercontent.com",
+      certificateIdentityURI: `^${`${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${workflowRef}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+      certificateOIDs: {
+        "1.3.6.1.4.1.57264.1.11": encodeFulcioOidValue("github-hosted"),
+        "1.3.6.1.4.1.57264.1.12": encodeFulcioOidValue(EXPECTED.repository),
+        "1.3.6.1.4.1.57264.1.13": encodeFulcioOidValue(gitCommit),
+        "1.3.6.1.4.1.57264.1.14": encodeFulcioOidValue(workflowRef),
+        "1.3.6.1.4.1.57264.1.15": encodeFulcioOidValue(EXPECTED.repositoryId),
+        "1.3.6.1.4.1.57264.1.18": encodeFulcioOidValue(
+          `${EXPECTED.repository}/${EXPECTED.workflowPath}@${workflowRef}`,
+        ),
+        "1.3.6.1.4.1.57264.1.20": encodeFulcioOidValue(EXPECTED.event),
+      },
+    };
+    let signer: SigstoreSigner;
+    if (verifyBundle == null) {
+      const npmRoot = execFileSync("npm", ["root", "-g"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).trim();
+      const sigstore = createRequire(join(npmRoot, "npm", "package.json"))(
+        "sigstore",
+      ) as { verify: BundleVerifier };
+      // Sigstore performs the Fulcio chain and transparency-log checks used by npm audit signatures.
+      signer = await sigstore.verify(bundle, verifyOptions);
+    } else {
+      signer = await verifyBundle(bundle, verifyOptions);
+    }
+    const signerIdentity = signer.identity?.subjectAlternativeName;
+    const signerRef = EXPECTED.refs.find(
+      (ref) =>
+        signerIdentity ===
+        `${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@${ref}`,
     );
-  } catch (error) {
+    if (signerRef == null) {
+      return {
+        status: "fail",
+        severity: "CRITICAL",
+        detail: `Sigstore signer identity is not an allowed publish workflow: ${signerIdentity ?? "(missing)"}.`,
+        signerRef: null,
+      };
+    }
     return {
-      status: "error",
-      severity: "HIGH",
-      detail: `Could not verify the SLSA DSSE signature: ${getErrorMessage(error)}`,
-      signerRef,
-    };
-  }
-  if (!isValid) {
-    return {
-      status: "fail",
+      status: "pass",
       severity: "CRITICAL",
-      detail: "The SLSA DSSE signature is invalid.",
+      detail: `Sigstore verified the SLSA bundle for ${signerIdentity}.`,
       signerRef,
     };
+  } catch (error) {
+    const errorName =
+      typeof error === "object" &&
+      error != null &&
+      "name" in error &&
+      typeof error.name === "string"
+        ? error.name
+        : "";
+    const verificationFailure = [
+      "PolicyError",
+      "ValidationError",
+      "VerificationError",
+    ].includes(errorName);
+    return {
+      status: verificationFailure ? "fail" : "error",
+      severity: verificationFailure ? "CRITICAL" : "HIGH",
+      detail: `${verificationFailure ? "Sigstore verification failed" : "Could not run Sigstore verification"}: ${getErrorMessage(error)}`,
+      signerRef: null,
+    };
   }
-  return {
-    status: "pass",
-    severity: "CRITICAL",
-    detail: "The SLSA DSSE signature and signing workflow identity are valid.",
-    signerRef,
-  };
+}
+
+function encodeFulcioOidValue(value: string): string {
+  return `\u000c${String.fromCharCode(Buffer.byteLength(value))}${value}`;
 }
 
 /**
@@ -610,11 +641,14 @@ function evaluateSlsaSignature(attestation: Attestation): SignatureEvaluation {
  *
  * @param published The npm registry manifest.
  * @param source The package manifest at the attested commit.
+ * @param catalog The top-level catalog at the attested commit.
  * @returns Human-readable dependency declaration mismatches.
  */
+// biome-ignore lint/complexity/useMaxParams: Keep published/source/catalog inputs explicit.
 export function compareManifestDependencies(
   published: RegistryManifest,
   source: RegistryManifest,
+  catalog: Readonly<Record<string, string>> = {},
 ): string[] {
   const mismatches: string[] = [];
   for (const field of [
@@ -635,13 +669,43 @@ export function compareManifestDependencies(
       const expectedSpecifier = expected[name];
       const actualSpecifier = actual[name];
       if (expectedSpecifier == null) continue;
-      if (/^(workspace:|catalog:)/.test(expectedSpecifier)) {
-        if (
+      if (expectedSpecifier.startsWith("workspace:")) {
+        const workspaceRange = expectedSpecifier.slice("workspace:".length);
+        const normalizedRange =
+          workspaceRange === "^"
+            ? /^\^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+            : workspaceRange === "~"
+              ? /^~\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+              : workspaceRange === "*"
+                ? /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+                : null;
+        const validPublishedRange =
+          actualSpecifier != null && /^[\w.\-^~<>=|* ]+$/.test(actualSpecifier);
+        const expectedRange =
+          workspaceRange === "^" ||
+          workspaceRange === "~" ||
+          workspaceRange === "*"
+            ? normalizedRange?.test(actualSpecifier ?? "") === true
+            : validPublishedRange && actualSpecifier === workspaceRange;
+        if (!expectedRange) {
+          mismatches.push(
+            `${field}.${name} expected ${workspaceRange || "(empty workspace range)"}, got ${actualSpecifier ?? "(missing)"}`,
+          );
+        }
+      } else if (expectedSpecifier.startsWith("catalog:")) {
+        const catalogName = expectedSpecifier.slice("catalog:".length);
+        if (catalogName !== "" && catalogName !== "default") {
+          mismatches.push(
+            `${field}.${name} uses unsupported catalog ${catalogName}`,
+          );
+        } else if (
           actualSpecifier == null ||
-          !/^[\w.\-^~<>=|* ]+$/.test(actualSpecifier)
+          !/^[\w.\-^~<>=|* ]+$/.test(actualSpecifier) ||
+          catalog[name] == null ||
+          actualSpecifier !== catalog[name]
         ) {
           mismatches.push(
-            `${field}.${name} expected a published semver range, got ${actualSpecifier ?? "(missing)"}`,
+            `${field}.${name} expected catalog range ${catalog[name] ?? "(missing)"}, got ${actualSpecifier ?? "(missing)"}`,
           );
         }
       } else if (
@@ -1131,8 +1195,26 @@ function execGit(
   });
 }
 
-function parseManifest(source: string): RegistryManifest {
-  return JSON.parse(source) as RegistryManifest;
+function readWorkspaceCatalogAtCommit(
+  commit: string,
+  cwd: string,
+): Record<string, string> {
+  const source = execGit(["show", `${commit}:pnpm-workspace.yaml`], cwd);
+  const catalog: Record<string, string> = {};
+  let inCatalog = false;
+  for (const line of source.split("\n")) {
+    if (!inCatalog) {
+      inCatalog = line === "catalog:";
+      continue;
+    }
+    const entry = /^ {2}([^:\s][^:]*):\s*(.*?)\s*$/.exec(line);
+    if (entry?.[1] != null && entry[2] != null) {
+      catalog[entry[1]] = entry[2].replace(/^(['"])(.*)\1$/, "$2");
+    } else if (line !== "" && !/^\s/.test(line)) {
+      break;
+    }
+  }
+  return catalog;
 }
 
 function readPackageSourcesAtRef(ref: string, cwd: string): PackageSource[] {
@@ -1145,19 +1227,26 @@ function readPackageSourcesAtRef(ref: string, cwd: string): PackageSource[] {
   const sources: PackageSource[] = [];
   for (const directory of directories) {
     try {
-      const manifest = parseManifest(
+      const manifest = JSON.parse(
         execGit(["show", `${ref}:packages/${directory}/package.json`], cwd),
-      );
+      ) as RegistryManifest;
       sources.push({ directory, manifest });
     } catch (error) {
-      if (isMissingGitPath(error)) continue;
+      if (
+        isGitCommandError(
+          error,
+          /does not exist in|exists on disk, but not in|path .* does not exist/i,
+        )
+      ) {
+        continue;
+      }
       throw error;
     }
   }
   return sources;
 }
 
-function isMissingGitPath(error: unknown): boolean {
+function isGitCommandError(error: unknown, stderrPattern: RegExp): boolean {
   if (
     !(error instanceof Error) ||
     !("status" in error) ||
@@ -1166,43 +1255,7 @@ function isMissingGitPath(error: unknown): boolean {
     return false;
   }
   const stderr = "stderr" in error ? String(error.stderr) : "";
-  return /does not exist in|exists on disk, but not in|path .* does not exist/i.test(
-    stderr,
-  );
-}
-
-function isUnknownGitObject(error: unknown): boolean {
-  if (
-    !(error instanceof Error) ||
-    !("status" in error) ||
-    error.status !== 128
-  ) {
-    return false;
-  }
-  const stderr = "stderr" in error ? String(error.stderr) : "";
-  return /not a valid (?:commit|object) name|bad object/i.test(stderr);
-}
-
-function isMissingGitTag(error: unknown): boolean {
-  if (
-    !(error instanceof Error) ||
-    !("status" in error) ||
-    error.status !== 128
-  ) {
-    return false;
-  }
-  const stderr = "stderr" in error ? String(error.stderr) : "";
-  return /Needed a single revision|unknown revision or path/i.test(stderr);
-}
-
-function isMissingNextRef(error: unknown): boolean {
-  const stderr =
-    typeof error === "object" && error != null && "stderr" in error
-      ? String(error.stderr)
-      : "";
-  return /couldn't find remote ref next|could not find remote ref next/i.test(
-    `${getErrorMessage(error)}\n${stderr}`,
-  );
+  return stderrPattern.test(`${stderr}\n${getErrorMessage(error)}`);
 }
 
 function fetchReleaseRefs(cwd: string): void {
@@ -1222,7 +1275,14 @@ function fetchReleaseRefs(cwd: string): void {
       cwd,
     );
   } catch (error) {
-    if (!isMissingNextRef(error)) throw error;
+    if (
+      !isGitCommandError(
+        error,
+        /couldn't find remote ref next|could not find remote ref next/i,
+      )
+    ) {
+      throw error;
+    }
     execGit(
       [
         "fetch",
@@ -1234,22 +1294,6 @@ function fetchReleaseRefs(cwd: string): void {
       ],
       cwd,
     );
-  }
-}
-
-function hasGitRef(ref: string, cwd: string): boolean {
-  try {
-    execGit(["rev-parse", "--verify", "--quiet", ref], cwd);
-    return true;
-  } catch (error) {
-    if (
-      getErrorStatus(error) === 1 ||
-      isMissingGitPath(error) ||
-      isUnknownGitObject(error)
-    ) {
-      return false;
-    }
-    throw error;
   }
 }
 
@@ -1388,8 +1432,10 @@ function addGitCommitCheck(
     } catch (error) {
       if (
         getErrorStatus(error) === 1 ||
-        isMissingGitPath(error) ||
-        isUnknownGitObject(error)
+        isGitCommandError(
+          error,
+          /does not exist in|exists on disk, but not in|path .* does not exist|not a valid (?:commit|object) name|bad object/i,
+        )
       ) {
         continue;
       }
@@ -1438,7 +1484,12 @@ function addGitTagCheck(
       cwd,
     ).trim();
   } catch (error) {
-    if (!isMissingGitTag(error)) {
+    if (
+      !isGitCommandError(
+        error,
+        /Needed a single revision|unknown revision or path/i,
+      )
+    ) {
       addError(
         checks,
         findings,
@@ -1768,7 +1819,7 @@ async function checkTarball(
       }
       tarballManifest = manifestValue;
     } catch (error) {
-      manifestError = getErrorMessage(error);
+      manifestError = `${getErrorMessage(error)}${error instanceof Error && error.cause instanceof Error ? `: ${error.cause.message}` : ""}`;
     }
     return {
       entries,
@@ -1778,7 +1829,7 @@ async function checkTarball(
       error: null,
     };
   } catch (error) {
-    const detail = getErrorMessage(error);
+    const detail = `${getErrorMessage(error)}${error instanceof Error && error.cause instanceof Error ? `: ${error.cause.message}` : ""}`;
     return {
       entries: null,
       irregularEntries: [],
@@ -1935,9 +1986,21 @@ async function verifyNpmRelease(options: {
   if (refsFetched) {
     try {
       mainSources = readPackageSourcesAtRef("origin/main", cwd);
-      const nextSources = hasGitRef("origin/next", cwd)
-        ? readPackageSourcesAtRef("origin/next", cwd)
-        : [];
+      let nextSources: PackageSource[] = [];
+      try {
+        execGit(["rev-parse", "--verify", "--quiet", "origin/next"], cwd);
+        nextSources = readPackageSourcesAtRef("origin/next", cwd);
+      } catch (error) {
+        if (
+          getErrorStatus(error) !== 1 &&
+          !isGitCommandError(
+            error,
+            /does not exist in|exists on disk, but not in|path .* does not exist|not a valid (?:commit|object) name|bad object/i,
+          )
+        ) {
+          throw error;
+        }
+      }
       checkPackageKnown(
         name,
         [...mainSources, ...nextSources],
@@ -2165,7 +2228,7 @@ async function verifyNpmRelease(options: {
 
     const attestationsUrl = manifest.dist?.attestations?.url;
     if (attestationsUrl == null || attestationsUrl === "") {
-      const evaluation = evaluateProvenance(
+      const evaluation = await evaluateProvenance(
         undefined,
         [],
         manifest.dist?.integrity ?? "",
@@ -2187,7 +2250,7 @@ async function verifyNpmRelease(options: {
             `Attestations request failed with HTTP ${attestationsResponse.status}: ${attestationsResponse.body.slice(0, 500)}`,
           );
         }
-        const evaluation = evaluateProvenance(
+        const evaluation = await evaluateProvenance(
           attestationsUrl,
           attestationsResponse.value.attestations ?? [],
           manifest.dist?.integrity ?? "",
@@ -2283,21 +2346,38 @@ async function verifyNpmRelease(options: {
           ),
         );
       } else {
-        const dependencyMismatches = compareManifestDependencies(
-          tarballManifest,
-          source.manifest,
-        );
-        addResult(
-          checks,
-          findings,
-          "manifest.dependencies",
-          "Published dependency declarations match source",
-          dependencyMismatches.length === 0 ? "pass" : "fail",
-          "HIGH",
-          dependencyMismatches.length === 0
-            ? "Dependency names and non-workspace specifiers match the provenance commit."
-            : dependencyMismatches.join("; "),
-        );
+        try {
+          if (gitCommit == null) {
+            throw new Error(
+              "The catalog cannot be read without a trusted provenance commit.",
+            );
+          }
+          const catalog = readWorkspaceCatalogAtCommit(gitCommit, cwd);
+          const dependencyMismatches = compareManifestDependencies(
+            tarballManifest,
+            source.manifest,
+            catalog,
+          );
+          addResult(
+            checks,
+            findings,
+            "manifest.dependencies",
+            "Published dependency declarations match source",
+            dependencyMismatches.length === 0 ? "pass" : "fail",
+            "HIGH",
+            dependencyMismatches.length === 0
+              ? "Dependency names and specifiers match the provenance commit and catalog."
+              : dependencyMismatches.join("; "),
+          );
+        } catch (error) {
+          addError(
+            checks,
+            findings,
+            "manifest.dependencies",
+            "Published dependency declarations match source",
+            error,
+          );
+        }
       }
       if (archiveEntries != null) {
         const filesResult = checkTarballFiles(
@@ -2386,7 +2466,7 @@ async function verifyNpmRelease(options: {
 }
 
 /**
- * Parses a scoped Morphо npm package and strict semver release specification.
+ * Parses a scoped Morpho npm package and strict semver release specification.
  *
  * @param spec The CLI argument in `<name>@<version>` form.
  * @returns The validated package name and version.

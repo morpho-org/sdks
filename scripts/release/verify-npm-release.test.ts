@@ -1,11 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { createHash, sign as signPayload, X509Certificate } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import {
   aggregateSeverity,
@@ -18,7 +15,7 @@ import {
   evaluateGitTagDecision,
   evaluateManifestBin,
   evaluateMissingManifest,
-  evaluateProvenance,
+  evaluateProvenance as evaluateProvenanceWithSigstore,
   evaluatePublishTime,
   evaluateRegistryManifest,
   evaluateTarballIntegrity,
@@ -36,77 +33,6 @@ import {
 const integrity = `sha512-${Buffer.alloc(64, 42).toString("base64")}`;
 const digestHex = Buffer.alloc(64, 42).toString("hex");
 const payloadType = "application/vnd.in-toto+json";
-
-let certificateDirectory: string | undefined;
-let signerKey: Buffer;
-let signerCertificate: string;
-let wrongSignerKey: Buffer;
-let wrongSignerCertificate: string;
-
-beforeAll(() => {
-  certificateDirectory = mkdtempSync(join(tmpdir(), "npm-release-signer-"));
-  const keyPath = join(certificateDirectory, "signer.key");
-  const mainCertificatePath = join(certificateDirectory, "main.pem");
-  const featureCertificatePath = join(certificateDirectory, "feature.pem");
-  const workflowIdentity =
-    "https://github.com/morpho-org/sdks/.github/workflows/publish.yml";
-  execFileSync(
-    "openssl",
-    [
-      "req",
-      "-x509",
-      "-newkey",
-      "ec",
-      "-pkeyopt",
-      "ec_paramgen_curve:P-256",
-      "-addext",
-      `subjectAltName=URI:${workflowIdentity}@refs/heads/main`,
-      "-keyout",
-      keyPath,
-      "-out",
-      mainCertificatePath,
-      "-nodes",
-      "-subj",
-      "/CN=npm-release-verifier-test",
-      "-days",
-      "1",
-    ],
-    { stdio: "ignore" },
-  );
-  execFileSync(
-    "openssl",
-    [
-      "req",
-      "-x509",
-      "-new",
-      "-key",
-      keyPath,
-      "-addext",
-      `subjectAltName=URI:${workflowIdentity}@refs/heads/feature`,
-      "-out",
-      featureCertificatePath,
-      "-subj",
-      "/CN=npm-release-verifier-test",
-      "-days",
-      "1",
-    ],
-    { stdio: "ignore" },
-  );
-  signerKey = readFileSync(keyPath);
-  signerCertificate = new X509Certificate(
-    readFileSync(mainCertificatePath),
-  ).raw.toString("base64");
-  wrongSignerKey = signerKey;
-  wrongSignerCertificate = new X509Certificate(
-    readFileSync(featureCertificatePath),
-  ).raw.toString("base64");
-});
-
-afterAll(() => {
-  if (certificateDirectory != null) {
-    rmSync(certificateDirectory, { force: true, recursive: true });
-  }
-});
 
 function statement(
   overrides: {
@@ -163,43 +89,56 @@ function attestations(
   value: ReturnType<typeof statement>,
   options: {
     payload?: Buffer;
-    wrongIdentity?: boolean;
   } = {},
 ) {
   const payload = options.payload ?? Buffer.from(JSON.stringify(value));
-  const pae = Buffer.concat([
-    Buffer.from(
-      `DSSEv1 ${Buffer.byteLength(payloadType)} ${payloadType} ${payload.length} `,
-    ),
-    payload,
-  ]);
   return [
     {
       predicateType: "https://slsa.dev/provenance/v1",
       bundle: {
         verificationMaterial: {
-          certificate: {
-            rawBytes: options.wrongIdentity
-              ? wrongSignerCertificate
-              : signerCertificate,
-          },
+          certificate: { rawBytes: "dGVzdA==" },
         },
         dsseEnvelope: {
           payload: payload.toString("base64"),
           payloadType,
           signatures: [
-            {
-              sig: signPayload(
-                "sha256",
-                pae,
-                options.wrongIdentity ? wrongSignerKey : signerKey,
-              ).toString("base64"),
-            },
+            { sig: Buffer.from("test signature").toString("base64") },
           ],
         },
       },
     },
   ];
+}
+
+type TestBundleVerifier = NonNullable<
+  NonNullable<
+    Parameters<typeof evaluateProvenanceWithSigstore>[3]
+  >["verifyBundle"]
+>;
+
+const mainSigner = {
+  identity: {
+    subjectAlternativeName:
+      "https://github.com/morpho-org/sdks/.github/workflows/publish.yml@refs/heads/main",
+  },
+};
+
+const testBundleVerifier: TestBundleVerifier = async () => mainSigner;
+
+// biome-ignore lint/complexity/useMaxParams: Keep fixture adapter aligned with the evaluator.
+function evaluateProvenance(
+  attestationsUrl: string | undefined,
+  attestationValues: Parameters<typeof evaluateProvenanceWithSigstore>[1],
+  packageIntegrity: string,
+  verifyBundle: TestBundleVerifier = testBundleVerifier,
+) {
+  return evaluateProvenanceWithSigstore(
+    attestationsUrl,
+    attestationValues,
+    packageIntegrity,
+    { verifyBundle },
+  );
 }
 
 describe("integrityToSha512Hex", () => {
@@ -346,8 +285,8 @@ describe("release CLI arguments", () => {
 });
 
 describe("evaluateProvenance", () => {
-  test("accepts the expected GitHub Actions SLSA provenance shape", () => {
-    const result = evaluateProvenance(
+  test("accepts the expected GitHub Actions SLSA provenance shape", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement()),
       integrity,
@@ -359,7 +298,7 @@ describe("evaluateProvenance", () => {
     ).toMatchObject({ status: "pass" });
   });
 
-  test("fails CRITICAL when the signed payload is tampered with", () => {
+  test("fails CRITICAL when the signed payload is tampered with", async () => {
     const signedAttestation = attestations(statement());
     const envelope = signedAttestation[0]?.bundle?.dsseEnvelope;
     if (envelope == null) throw new Error("Test DSSE envelope is missing.");
@@ -368,11 +307,23 @@ describe("evaluateProvenance", () => {
         statement({ repository: "https://github.com/other/repo" }),
       ),
     ).toString("base64");
+    const verifyBundle: TestBundleVerifier = async (bundle) => {
+      if (
+        bundle.dsseEnvelope?.payload !==
+        Buffer.from(JSON.stringify(statement())).toString("base64")
+      ) {
+        throw Object.assign(new Error("DSSE signature is invalid."), {
+          name: "VerificationError",
+        });
+      }
+      return mainSigner;
+    };
 
-    const result = evaluateProvenance(
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       signedAttestation,
       integrity,
+      verifyBundle,
     );
     expect(result.gitCommit).toBeNull();
     expect(
@@ -386,11 +337,18 @@ describe("evaluateProvenance", () => {
     ).toBe("error");
   });
 
-  test("fails CRITICAL when the signer SAN is not the trusted publish workflow", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL when the signer SAN is not the trusted publish workflow", async () => {
+    const verifyBundle: TestBundleVerifier = async () => ({
+      identity: {
+        subjectAlternativeName:
+          "https://github.com/morpho-org/sdks/.github/workflows/publish.yml@refs/heads/feature",
+      },
+    });
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
-      attestations(statement(), { wrongIdentity: true }),
+      attestations(statement()),
       integrity,
+      verifyBundle,
     );
     expect(result.gitCommit).toBeNull();
     expect(
@@ -401,8 +359,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL when signer and caller refs differ", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL when signer and caller refs differ", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement({ workflowRef: "refs/heads/next" })),
       integrity,
@@ -426,8 +384,111 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("reports undecodable signed payloads as HIGH errors", () => {
-    const result = evaluateProvenance(
+  test("passes the exact Sigstore issuer, identity, and Fulcio OID policy", async () => {
+    const bundle = attestations(statement());
+    let receivedBundle: unknown;
+    let receivedOptions: unknown;
+    const verifyBundle: TestBundleVerifier = async (
+      verifiedBundle,
+      options,
+    ) => {
+      receivedBundle = verifiedBundle;
+      receivedOptions = options;
+      return mainSigner;
+    };
+    await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      bundle,
+      integrity,
+      verifyBundle,
+    );
+    const encode = (value: string) =>
+      Buffer.concat([
+        Buffer.from([0x0c, Buffer.byteLength(value)]),
+        Buffer.from(value),
+      ]).toString("latin1");
+    expect(receivedBundle).toBe(bundle[0]?.bundle);
+    expect(receivedOptions).toEqual({
+      certificateIssuer: "https://token.actions.githubusercontent.com",
+      certificateIdentityURI:
+        "^https://github\\.com/morpho-org/sdks/\\.github/workflows/publish\\.yml@refs/heads/main$",
+      certificateOIDs: {
+        "1.3.6.1.4.1.57264.1.11": encode("github-hosted"),
+        "1.3.6.1.4.1.57264.1.12": encode("https://github.com/morpho-org/sdks"),
+        "1.3.6.1.4.1.57264.1.13": encode("bedd89c1".padEnd(40, "0")),
+        "1.3.6.1.4.1.57264.1.14": encode("refs/heads/main"),
+        "1.3.6.1.4.1.57264.1.15": encode("829304716"),
+        "1.3.6.1.4.1.57264.1.18": encode(
+          "https://github.com/morpho-org/sdks/.github/workflows/push.yml@refs/heads/main",
+        ),
+        "1.3.6.1.4.1.57264.1.20": encode("push"),
+      },
+    });
+  });
+
+  test.each([
+    [
+      "identity",
+      Object.assign(new Error("identity mismatch"), { name: "PolicyError" }),
+    ],
+    [
+      "signature",
+      Object.assign(new Error("signature mismatch"), {
+        name: "VerificationError",
+      }),
+    ],
+  ])(
+    "reports a CRITICAL verifier %s failure and withholds the commit",
+    async (_case, error) => {
+      const result = await evaluateProvenance(
+        "https://registry.npmjs.org/attestations",
+        attestations(statement()),
+        integrity,
+        async () => {
+          throw error;
+        },
+      );
+      expect(result.gitCommit).toBeNull();
+      expect(
+        result.findings.some(
+          ({ id, severity }) =>
+            id === "provenance.signature" && severity === "CRITICAL",
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test.each([
+    [
+      "module",
+      Object.assign(new Error("Cannot find module sigstore"), {
+        code: "MODULE_NOT_FOUND",
+      }),
+    ],
+    [
+      "network",
+      Object.assign(new Error("network unavailable"), { name: "FetchError" }),
+    ],
+  ])("reports a HIGH Sigstore %s execution error", async (_case, error) => {
+    const result = await evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement()),
+      integrity,
+      async () => {
+        throw error;
+      },
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature.error" && severity === "HIGH",
+      ),
+    ).toBe(true);
+  });
+
+  test("reports undecodable signed payloads as HIGH errors", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement(), { payload: Buffer.from("not JSON") }),
       integrity,
@@ -440,8 +501,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL when no attestations URL is available", () => {
-    const result = evaluateProvenance(undefined, [], integrity);
+  test("fails CRITICAL when no attestations URL is available", async () => {
+    const result = await evaluateProvenance(undefined, [], integrity);
     expect(result.gitCommit).toBeNull();
     expect(
       result.findings.some(
@@ -451,8 +512,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL for malformed integrity", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL for malformed integrity", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement()),
       "sha512-not-a-digest",
@@ -465,16 +526,19 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("does not derive a commit when resolvedDependencies is absent", () => {
-    const result = evaluateProvenance(
+  test("does not derive a commit when resolvedDependencies is absent", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement({ omitResolvedDependencies: true })),
       integrity,
     );
     expect(result.gitCommit).toBeNull();
     expect(
-      result.checks.find(({ id }) => id === "provenance.source")?.status,
-    ).toBe("pass");
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
   });
 
   test.each([
@@ -483,8 +547,8 @@ describe("evaluateProvenance", () => {
     ["wrong workflow path", { workflowPath: ".github/workflows/publish.yml" }],
     ["wrong event", { event: "pull_request" }],
     ["self-hosted builder", { builder: "https://example.com/self-hosted" }],
-  ])("fails CRITICAL for %s", (_case, overrides) => {
-    const result = evaluateProvenance(
+  ])("fails CRITICAL for %s", async (_case, overrides) => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement(overrides)),
       integrity,
@@ -497,8 +561,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL when a feature ref is not bound to the signer", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL when a feature ref is not bound to the signer", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement({ ref: "refs/heads/feature" })),
       integrity,
@@ -512,8 +576,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL for a subject digest mismatch", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL for a subject digest mismatch", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       attestations(statement({ subjectDigest: "00".repeat(64) })),
       integrity,
@@ -526,8 +590,8 @@ describe("evaluateProvenance", () => {
     ).toBe(true);
   });
 
-  test("fails CRITICAL when the attestations response has no SLSA v1 statement", () => {
-    const result = evaluateProvenance(
+  test("fails CRITICAL when the attestations response has no SLSA v1 statement", async () => {
+    const result = await evaluateProvenance(
       "https://registry.npmjs.org/attestations",
       [
         {
@@ -683,22 +747,66 @@ describe("tarball manifest provenance", () => {
 });
 
 describe("compareManifestDependencies", () => {
-  test("allows a published semver for a workspace dependency", () => {
+  test("normalizes workspace shorthand and preserves explicit ranges", () => {
     expect(
       compareManifestDependencies(
-        { dependencies: { "@morpho-org/blue-sdk": "^1.2.3" } },
-        { dependencies: { "@morpho-org/blue-sdk": "workspace:^" } },
+        {
+          dependencies: {
+            caret: "^1.2.3-next.1",
+            tilde: "~2.3.4",
+            exact: "3.4.5",
+            range: ">=4.0.0 <5.0.0",
+          },
+        },
+        {
+          dependencies: {
+            caret: "workspace:^",
+            tilde: "workspace:~",
+            exact: "workspace:*",
+            range: "workspace:>=4.0.0 <5.0.0",
+          },
+        },
       ),
     ).toEqual([]);
   });
 
-  test("allows catalog dependencies to publish as semver ranges", () => {
+  test.each(["*", "latest", ">=0.0.0", "x"])(
+    "rejects %s as a published workspace caret range",
+    (specifier) => {
+      expect(
+        compareManifestDependencies(
+          { dependencies: { alpha: specifier } },
+          { dependencies: { alpha: "workspace:^" } },
+        ),
+      ).not.toEqual([]);
+    },
+  );
+
+  test("requires catalog dependencies to match the attested default catalog", () => {
+    expect(
+      compareManifestDependencies(
+        { dependencies: { alpha: "^1.2.3", beta: "~2.3.4" } },
+        { dependencies: { alpha: "catalog:", beta: "catalog:default" } },
+        { alpha: "^1.2.3", beta: "~2.3.4" },
+      ),
+    ).toEqual([]);
+    expect(
+      compareManifestDependencies(
+        { dependencies: { alpha: "^1.2.4" } },
+        { dependencies: { alpha: "catalog:default" } },
+        { alpha: "^1.2.3" },
+      ),
+    ).toContain("dependencies.alpha expected catalog range ^1.2.3, got ^1.2.4");
+  });
+
+  test("rejects named catalogs as unsupported", () => {
     expect(
       compareManifestDependencies(
         { dependencies: { alpha: "^1.2.3" } },
-        { dependencies: { alpha: "catalog:" } },
+        { dependencies: { alpha: "catalog:next" } },
+        { alpha: "^1.2.3" },
       ),
-    ).toEqual([]);
+    ).toContain("dependencies.alpha uses unsupported catalog next");
   });
 
   test.each(["https://evil/x.tgz", "github:a/b", "npm:evil@1"])(
@@ -709,9 +817,7 @@ describe("compareManifestDependencies", () => {
           { dependencies: { alpha: specifier } },
           { dependencies: { alpha: "workspace:^" } },
         ),
-      ).toContain(
-        `dependencies.alpha expected a published semver range, got ${specifier}`,
-      );
+      ).not.toEqual([]);
     },
   );
 
