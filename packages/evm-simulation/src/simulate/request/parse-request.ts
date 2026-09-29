@@ -1310,8 +1310,8 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
   }
 
   try {
-    // Validate tightening rules on the normalized limits; skipped entirely
-    // when the limits block already produced field errors.
+    // Validate tightening rules on the normalized limits only; invalid
+    // fields were already reported and never reach this check.
     if (normalizedLimits !== undefined)
       resolveEffectiveLimits(normalizedLimits);
   } catch (error) {
