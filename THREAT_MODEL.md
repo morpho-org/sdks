@@ -23,7 +23,7 @@ The SDK does reject an RPC answer when it can compare it with something the RPC 
 
 ### Out of our threat model
 
-Each finding below requires the endpoint to lie. Mitigating it would require trusting or independently verifying another source of truth. Cantina ids come first; Linear ids follow in parentheses.
+Each finding below requires the endpoint to lie, except SDKS-498, which requires a lying token. Mitigating it would require trusting or independently verifying another source of truth. Cantina ids come first; Linear ids follow in parentheses.
 
 #### Vault accounting read by deployless queries (`blue-sdk-viem`)
 
@@ -96,7 +96,7 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 
 - **SDKS-434** (SDK-789): `market(id)` returns totals, fee and `lastUpdate` with no identity. Unlike params, nothing hashes back to `id`.
 - **SDKS-20** (SDK-399): a forged oracle `price()` changes health and price floors. The oracle is only reachable through the node.
-- **SDKS-166** (SDK-449): an unvalidated `rateAtTarget` inflates V1 source withdrawal capacity. Every non-negative value is a valid rate.
+- **SDKS-166** (SDK-449): a forged `rateAtTarget` inflates V1 source withdrawal capacity. Any value within `MIN_RATE_AT_TARGET`..`MAX_RATE_AT_TARGET` is a valid rate, so range checks cannot catch it.
 - **SDKS-793** (SDK-785), **SDKS-872** (SDK-807), **SDKS-833** (SDK-929): a false `market(id)`, `assetBalance` or `liquidityData` weakens the Vault V2 force-withdraw price floor.
 
 #### Point reads in prepared flows (`morpho-sdk`, `midnight-sdk`)
@@ -127,13 +127,13 @@ Backend output is the only execution evidence the retention check sees. Format c
 
 #### Tenderly responses (`evm-simulation`)
 
-Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. When its answer is unusable, the SDK re-simulates on `eth_simulateV1` instead of trusting part of it.
+Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. When its answer is unusable, the SDK re-simulates on `eth_simulateV1` if `simulateV1Url` is configured and otherwise throws `ExternalServiceError`. It never uses part of the answer.
 
-- **SDKS-13** (SDK-392, SDK-1232), **SDKS-706** (SDK-816): a malformed asset amount in a success response triggers the fallback. The fallback re-executes the bundle, so no evidence is erased.
+- **SDKS-13** (SDK-392, SDK-1232), **SDKS-706** (SDK-816): a malformed asset amount in a success response triggers the fallback or `ExternalServiceError`. Neither path uses the malformed evidence.
 - **SDKS-41** (SDK-420, SDK-1235), **SDKS-748** (SDK-1026): an out-of-range `rawAmount` cancels native evidence. Only an endpoint that forges amounts emits one.
 - **SDKS-42** (SDK-421, SDK-1192), **SDKS-548** (SDK-887): a truncated bundle result becomes a bypassable `ExternalServiceError`. Bypassing it is the caller's choice to proceed unsimulated.
 - **SDKS-44** (SDK-423), **SDKS-525** (SDK-886): results are not correlated by JSON-RPC `id`. Separate responses mix only if the endpoint is compromised.
-- **SDKS-49** (SDK-428), **SDKS-618** (SDK-891), **SDKS-470** (SDK-712): a malformed or mixed revert envelope triggers the fallback. The fallback re-simulates, so a real revert reverts again.
+- **SDKS-49** (SDK-428), **SDKS-618** (SDK-891), **SDKS-470** (SDK-712): a malformed or mixed revert envelope triggers the fallback or `ExternalServiceError`. The fallback re-simulates, so a real revert reverts again.
 - **SDKS-154** (SDK-437), **SDKS-400** (SDK-889), **SDKS-391** (SDK-802): a non-2xx body is treated as a service failure. Tenderly returns reverts with HTTP 200.
 - **SDKS-407** (SDK-711): Tenderly and fallback errors are each discarded. Both halves need non-compliant responses, and the fallback re-derives the revert.
 - **SDKS-53** (SDK-432), **SDKS-539** (SDK-697): partial native `assetChanges` rows hide inflows. The same endpoint writes the logs, so it can hide the transfer there too.
