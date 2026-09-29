@@ -209,10 +209,14 @@ export type SimulationErrorContext =
 interface SimulationErrorExtras {
   readonly SimulationRevertedError: {
     readonly reasonCode: SimulationExecutionReason;
-    readonly context: Extract<
-      SimulationErrorContext,
-      { stage: "preparation" | "execution" }
-    >;
+    readonly context:
+      | Extract<SimulationErrorContext, { stage: "preparation" }>
+      | (Extract<SimulationErrorContext, { stage: "execution" }> & {
+          readonly location: Extract<
+            SimulationErrorLocation,
+            { type: "transaction" }
+          >;
+        });
   };
 }
 
