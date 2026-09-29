@@ -30,7 +30,8 @@
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "viem": "^2.0.0"
