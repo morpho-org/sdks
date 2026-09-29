@@ -26,7 +26,6 @@ import {
   hasManifestBin,
   integrityToSha512Hex,
   isPackageKnown,
-  parseReleaseSpec,
   selectPreviousVersion,
 } from "./verify-npm-release.ts";
 
@@ -255,15 +254,6 @@ describe("release CLI arguments", () => {
   const script = fileURLToPath(
     new URL("./verify-npm-release.ts", import.meta.url),
   );
-
-  test("accepts scoped package names and strict semver", () => {
-    expect(
-      parseReleaseSpec("@morpho-org/blue-sdk@7.1.0-next.2+build.1"),
-    ).toEqual({
-      name: "@morpho-org/blue-sdk",
-      version: "7.1.0-next.2+build.1",
-    });
-  });
 
   test.each(["@other/blue-sdk@7.1.0", "@morpho-org/blue-sdk@7.1"])(
     "rejects invalid release spec %s with usage exit 2",

@@ -4,12 +4,37 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
-import { parseReleaseSpec } from "./verify-npm-release.ts";
+import {
+  getErrorMessage,
+  parseReleaseSpec,
+  sanitizeLogLine,
+} from "./helpers.ts";
 
 const REGISTRY_URL = "https://registry.npmjs.org";
 const GITHUB_API_URL = "https://api.github.com";
 const LOOKBACK_MS = 48 * 60 * 60 * 1000;
+const DEDUP_WINDOW_MS = LOOKBACK_MS + 24 * 60 * 60 * 1000;
+
+/** Packages once published from this repository and still installable from npm. */
+const RETIRED_PACKAGES = [
+  "@morpho-org/blue-api-sdk",
+  "@morpho-org/blue-sdk-ethers",
+  "@morpho-org/blue-sdk-ethers-liquidation",
+  "@morpho-org/blue-sdk-simulation",
+  "@morpho-org/blue-sdk-viem-bundler",
+  "@morpho-org/blue-sdk-viem-simulation",
+  "@morpho-org/blue-sdk-wagmi",
+  "@morpho-org/bundler-sdk-ethers",
+  "@morpho-org/bundler-sdk-viem",
+  "@morpho-org/liquidation-sdk-viem",
+  "@morpho-org/liquidity-sdk-ethers",
+  "@morpho-org/migration-sdk-viem",
+  "@morpho-org/simulation-sdk",
+  "@morpho-org/simulation-sdk-wagmi",
+  "@morpho-org/test-ethers",
+  "@morpho-org/test-viem",
+  "@morpho-org/test-wagmi",
+] as const;
 
 type Packument = {
   versions?: Record<string, unknown>;
@@ -21,23 +46,38 @@ type Packument = {
  * @param packument npm registry package metadata.
  * @param nowMs The current time in milliseconds.
  * @returns Matching versions in ascending publish-time order.
+ * @throws If the packument does not contain plain version and time objects with valid publish times.
  */
 export function selectRecentVersions(
   packument: Packument,
   nowMs: number,
 ): string[] {
+  const { time, versions } = packument;
+  if (
+    time == null ||
+    typeof time !== "object" ||
+    Object.getPrototypeOf(time) !== Object.prototype ||
+    versions == null ||
+    typeof versions !== "object" ||
+    Object.getPrototypeOf(versions) !== Object.prototype
+  ) {
+    throw new Error("npm packument time and versions must be plain objects.");
+  }
+
   const lowerBound = nowMs - LOOKBACK_MS;
-  return Object.entries(packument.time ?? {})
-    .filter(
-      ([version, publishTime]) =>
-        version !== "created" &&
-        version !== "modified" &&
-        Object.hasOwn(packument.versions ?? {}, version) &&
-        Number.isFinite(Date.parse(publishTime)) &&
-        Date.parse(publishTime) >= lowerBound,
-    )
-    .sort(([, left], [, right]) => Date.parse(left) - Date.parse(right))
-    .map(([version]) => version);
+  return Object.entries(versions)
+    .map(([version]) => {
+      const publishTime = time[version];
+      const publishTimeMs =
+        typeof publishTime === "string" ? Date.parse(publishTime) : NaN;
+      if (!Number.isFinite(publishTimeMs)) {
+        throw new Error(`Missing or unparsable publish time for ${version}.`);
+      }
+      return { version, publishTimeMs };
+    })
+    .filter(({ publishTimeMs }) => publishTimeMs >= lowerBound)
+    .sort((left, right) => left.publishTimeMs - right.publishTimeMs)
+    .map(({ version }) => version);
 }
 
 /**
@@ -71,7 +111,7 @@ export async function main(
   const fetchImpl = options.fetchImpl ?? fetch;
   const nowMs = options.nowMs ?? Date.now();
   const cwd = options.cwd ?? process.cwd();
-  const packages = readdirSync(join(cwd, "packages"), {
+  const discoveredNonPrivate = readdirSync(join(cwd, "packages"), {
     withFileTypes: true,
   }).flatMap((entry) => {
     if (!entry.isDirectory()) return [];
@@ -85,6 +125,7 @@ export async function main(
       ? []
       : [manifest.name];
   });
+  const packages = [...new Set([...discoveredNonPrivate, ...RETIRED_PACKAGES])];
 
   const candidates: { name: string; version: string }[] = [];
   const errors: string[] = [];
@@ -130,7 +171,7 @@ export async function main(
         url.search = new URLSearchParams({
           state: "all",
           creator: "github-actions[bot]",
-          since: new Date(nowMs - 72 * 60 * 60 * 1000).toISOString(),
+          since: new Date(nowMs - DEDUP_WINDOW_MS).toISOString(),
           per_page: "100",
           page: String(page),
         }).toString();

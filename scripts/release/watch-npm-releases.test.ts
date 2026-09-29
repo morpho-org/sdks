@@ -59,17 +59,14 @@ function releasePackument(
 }
 
 describe("selectRecentVersions", () => {
-  test("filters invalid and out-of-window entries and sorts by publish time", () => {
+  test("includes the lower boundary and sorts by publish time", () => {
     const lowerBound = NOW_MS - 48 * 60 * 60 * 1000;
     expect(
       selectRecentVersions(
         {
           versions: {
-            created: {},
-            modified: {},
             "1.0.0": {},
             "1.0.1": {},
-            "1.0.2": {},
             "1.0.3": {},
           },
           time: {
@@ -77,7 +74,6 @@ describe("selectRecentVersions", () => {
             modified: new Date(lowerBound + 1).toISOString(),
             "1.0.0": new Date(lowerBound + 60_000).toISOString(),
             "1.0.1": new Date(lowerBound - 1).toISOString(),
-            "1.0.2": "not-a-date",
             "1.0.3": new Date(lowerBound).toISOString(),
             "missing-manifest": new Date(lowerBound + 120_000).toISOString(),
           },
@@ -85,6 +81,39 @@ describe("selectRecentVersions", () => {
         NOW_MS,
       ),
     ).toEqual(["1.0.3", "1.0.0"]);
+  });
+
+  test.each([
+    ["missing", {}],
+    ["unparsable", { "1.0.0": "not-a-date" }],
+  ])("throws for a %s publish time", (_case, time) => {
+    expect(() =>
+      selectRecentVersions({ versions: { "1.0.0": {} }, time }, NOW_MS),
+    ).toThrow("Missing or unparsable publish time for 1.0.0.");
+  });
+
+  test("requires plain time and versions objects", () => {
+    expect(() =>
+      selectRecentVersions({ versions: { "1.0.0": {} } }, NOW_MS),
+    ).toThrow("plain objects");
+    expect(() =>
+      selectRecentVersions(
+        {
+          versions: {},
+          time: [] as unknown as Record<string, string>,
+        },
+        NOW_MS,
+      ),
+    ).toThrow("plain objects");
+    expect(() =>
+      selectRecentVersions(
+        {
+          versions: [] as unknown as Record<string, unknown>,
+          time: {},
+        },
+        NOW_MS,
+      ),
+    ).toThrow("plain objects");
   });
 });
 
@@ -108,7 +137,9 @@ describe("release issues", () => {
           const url = String(input);
           requests.push({ url, init });
           if (url.startsWith("https://registry.npmjs.org/")) {
-            return jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]));
+            return url.endsWith(name.replaceAll("/", "%2f"))
+              ? jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]))
+              : new Response("Not Found", { status: 404 });
           }
           if (init?.method === "POST") return jsonResponse({ number: 1 }, 201);
           return jsonResponse([]);
@@ -129,6 +160,44 @@ describe("release issues", () => {
       expect(requests.every(({ init }) => init?.redirect === "error")).toBe(
         true,
       );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("watches retired packages absent from the workspace", async () => {
+    const retired = "@morpho-org/bundler-sdk-viem";
+    const workspacePackage = "@morpho-org/workspace-only";
+    const cwd = createRepository([
+      { directory: "workspace-only", name: workspacePackage },
+    ]);
+    const retiredUrlSuffix = retired.replaceAll("/", "%2f");
+    const registryUrls: string[] = [];
+    const createdTitles: string[] = [];
+    try {
+      await main({
+        cwd,
+        nowMs: NOW_MS,
+        env: ENV,
+        fetchImpl: async (input, init) => {
+          const url = String(input);
+          if (url.startsWith("https://registry.npmjs.org/")) {
+            registryUrls.push(url);
+            return url.endsWith(retiredUrlSuffix)
+              ? jsonResponse(releasePackument(NOW_MS))
+              : new Response("Not Found", { status: 404 });
+          }
+          if (init?.method === "POST") {
+            createdTitles.push(JSON.parse(String(init.body)).title as string);
+            return jsonResponse({ number: 2 }, 201);
+          }
+          return jsonResponse([]);
+        },
+      });
+      expect(
+        registryUrls.filter((url) => url.endsWith(retiredUrlSuffix)),
+      ).toHaveLength(1);
+      expect(createdTitles).toEqual([releaseIssueTitle(retired, "1.2.3")]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -156,7 +225,9 @@ describe("release issues", () => {
         fetchImpl: async (input, init) => {
           const url = new URL(String(input));
           if (url.origin === "https://registry.npmjs.org") {
-            return jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]));
+            return url.pathname.endsWith(name.replaceAll("/", "%2f"))
+              ? jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]))
+              : new Response("Not Found", { status: 404 });
           }
           if (init?.method === "POST") {
             createdTitles.push(JSON.parse(String(init.body)).title as string);
@@ -224,9 +295,12 @@ describe("release issues", () => {
           fetchImpl: async (input, init) => {
             const url = String(input);
             if (url.startsWith("https://registry.npmjs.org/")) {
-              return url.includes("broken")
-                ? new Response("unavailable", { status: 500 })
-                : jsonResponse(releasePackument(NOW_MS));
+              if (url.endsWith(broken.replaceAll("/", "%2f"))) {
+                return new Response("unavailable", { status: 500 });
+              }
+              return url.endsWith(healthy.replaceAll("/", "%2f"))
+                ? jsonResponse(releasePackument(NOW_MS))
+                : new Response("Not Found", { status: 404 });
             }
             if (init?.method === "POST") {
               createdTitles.push(JSON.parse(String(init.body)).title as string);
@@ -242,6 +316,74 @@ describe("release issues", () => {
     }
   });
 
+  test("creates healthy issues after collecting a missing publish-time error", async () => {
+    const missingTime = "@morpho-org/missing-time";
+    const healthy = "@morpho-org/healthy";
+    const cwd = createRepository([
+      { directory: "missing-time", name: missingTime },
+      { directory: "healthy", name: healthy },
+    ]);
+    const createdTitles: string[] = [];
+    try {
+      await expect(
+        main({
+          cwd,
+          nowMs: NOW_MS,
+          env: ENV,
+          fetchImpl: async (input, init) => {
+            const url = String(input);
+            if (url.startsWith("https://registry.npmjs.org/")) {
+              if (url.endsWith(missingTime.replaceAll("/", "%2f"))) {
+                return jsonResponse({ versions: { "1.0.0": {} }, time: {} });
+              }
+              return url.endsWith(healthy.replaceAll("/", "%2f"))
+                ? jsonResponse(releasePackument(NOW_MS))
+                : new Response("Not Found", { status: 404 });
+            }
+            if (init?.method === "POST") {
+              createdTitles.push(JSON.parse(String(init.body)).title as string);
+              return jsonResponse({ number: 3 }, 201);
+            }
+            return jsonResponse([]);
+          },
+        }),
+      ).rejects.toThrow("Missing or unparsable publish time for 1.0.0.");
+      expect(createdTitles).toEqual([releaseIssueTitle(healthy, "1.2.3")]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects issue-list failure without attempting issue creation", async () => {
+    const name = "@morpho-org/blue-sdk";
+    const cwd = createRepository([{ directory: "blue-sdk", name }]);
+    let postCount = 0;
+    try {
+      await expect(
+        main({
+          cwd,
+          nowMs: NOW_MS,
+          env: ENV,
+          fetchImpl: async (input, init) => {
+            if (init?.method === "POST") {
+              postCount += 1;
+              return jsonResponse({ number: 4 }, 201);
+            }
+            if (String(input).startsWith("https://registry.npmjs.org/")) {
+              return String(input).endsWith(name.replaceAll("/", "%2f"))
+                ? jsonResponse(releasePackument(NOW_MS))
+                : new Response("Not Found", { status: 404 });
+            }
+            return new Response("Unavailable", { status: 500 });
+          },
+        }),
+      ).rejects.toThrow("GitHub issue listing failed (500)");
+      expect(postCount).toBe(0);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("collects invalid registry JSON", async () => {
     const name = "@morpho-org/invalid-json";
     const cwd = createRepository([{ directory: "invalid-json", name }]);
@@ -251,7 +393,10 @@ describe("release issues", () => {
           cwd,
           nowMs: NOW_MS,
           env: ENV,
-          fetchImpl: async () => new Response("{", { status: 200 }),
+          fetchImpl: async (input) =>
+            String(input).endsWith(name.replaceAll("/", "%2f"))
+              ? new Response("{", { status: 200 })
+              : new Response("Not Found", { status: 404 }),
         }),
       ).rejects.toThrow(name);
     } finally {
@@ -269,12 +414,14 @@ describe("release issues", () => {
           cwd,
           nowMs: NOW_MS,
           env: ENV,
-          fetchImpl: async (_input, init) => {
+          fetchImpl: async (input, init) => {
             if (init?.method === "POST") postCount += 1;
             if (init?.method === "POST")
               return jsonResponse({ number: 4 }, 201);
-            if (String(_input).startsWith("https://registry.npmjs.org/")) {
-              return jsonResponse(releasePackument(NOW_MS, ["1.0.0 @here"]));
+            if (String(input).startsWith("https://registry.npmjs.org/")) {
+              return String(input).endsWith(name.replaceAll("/", "%2f"))
+                ? jsonResponse(releasePackument(NOW_MS, ["1.0.0 @here"]))
+                : new Response("Not Found", { status: 404 });
             }
             return jsonResponse([]);
           },
@@ -298,9 +445,13 @@ describe("release issues", () => {
           env: ENV,
           fetchImpl: async (input, init) => {
             if (init?.method !== "POST") {
-              return String(input).startsWith("https://registry.npmjs.org/")
-                ? jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]))
-                : jsonResponse([]);
+              const url = String(input);
+              if (url.startsWith("https://registry.npmjs.org/")) {
+                return url.endsWith(name.replaceAll("/", "%2f"))
+                  ? jsonResponse(releasePackument(NOW_MS, ["1.2.3", "2.0.0"]))
+                  : new Response("Not Found", { status: 404 });
+              }
+              return jsonResponse([]);
             }
             const title = JSON.parse(String(init.body)).title as string;
             attemptedTitles.push(title);
