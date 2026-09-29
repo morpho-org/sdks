@@ -4,8 +4,13 @@ export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
+  SimulationExecutionContext,
   SimulationExecutionReason,
+  SimulationPreparationContext,
   SimulationStage,
+  SimulationTransportContext,
+  SimulationValidationContext,
+  SimulationVerificationContext,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
