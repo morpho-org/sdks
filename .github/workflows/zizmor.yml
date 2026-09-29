@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      contents: read # checkout
       security-events: write # upload SARIF results to code scanning
 
     steps:
@@ -25,6 +26,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+      - name: Install zizmor
+        run: 'pip install --only-binary :all: --require-hashes --requirement .github/zizmor-requirements.txt'
+
+      - name: Run zizmor
+        run: zizmor --format sarif --no-exit-codes . > zizmor.sarif
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Fork PRs get a read-only token, so code scanning would reject the upload.
+      - if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         with:
-          version: 1.30.1
+          sarif_file: zizmor.sarif
+          category: zizmor
