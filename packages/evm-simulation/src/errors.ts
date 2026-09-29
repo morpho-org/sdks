@@ -1,6 +1,10 @@
 import type { Address, Hash } from "viem";
 import type { SimulationOperationSubject } from "./limits.js";
-import { OPERATION_TYPES } from "./limits.js";
+import {
+  BLUE_MARKET_OPERATION_TYPES,
+  OPERATION_TYPES,
+  VAULT_OPERATION_TYPES,
+} from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import { SIMULATION_MODES } from "./params.js";
 
@@ -417,16 +421,14 @@ export function isSimulationPackageError(
   )
     return false;
   const isString = (key: string) => typeof c[key] === "string";
-  switch (operation) {
-    case "blueAuthorization":
-      return isString("authorized");
-    case "blueRefinance":
-      return isString("sourceMarketId") && isString("targetMarketId");
-    case "vaultV1MigrateToV2":
-      return isString("sourceVault") && isString("targetVault");
-    default:
-      return operation.startsWith("blue")
-        ? isString("marketId")
-        : isString("vault");
-  }
+  if (operation === "blueAuthorization") return isString("authorized");
+  if (operation === "blueRefinance")
+    return isString("sourceMarketId") && isString("targetMarketId");
+  if (operation === "vaultV1MigrateToV2")
+    return isString("sourceVault") && isString("targetVault");
+  if ((BLUE_MARKET_OPERATION_TYPES as readonly string[]).includes(operation))
+    return isString("marketId");
+  if ((VAULT_OPERATION_TYPES as readonly string[]).includes(operation))
+    return isString("vault");
+  return false;
 }
