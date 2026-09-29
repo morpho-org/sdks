@@ -319,6 +319,166 @@ export class InvalidTreeError extends Error {
 }
 
 /**
+ * Thrown when a RateRatifierV1 leaf receives a negative rate.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1RateError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1RateError(-1n);
+ * ```
+ */
+export class InvalidRateRatifierV1RateError extends Error {
+  /** Negative rate that was rejected. */
+  public readonly rate: bigint;
+
+  public constructor(rate: bigint) {
+    super(`Rate "${rate}" is negative. Use a non-negative WAD-scaled rate.`);
+    this.name = "InvalidRateRatifierV1RateError";
+    this.rate = rate;
+  }
+}
+
+/**
+ * Thrown when RateRatifierV1 price-bound arithmetic overflows uint256.
+ *
+ * @example
+ * ```ts
+ * import { RateRatifierV1BoundOverflowError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new RateRatifierV1BoundOverflowError(2n ** 255n, 10n);
+ * ```
+ */
+export class RateRatifierV1BoundOverflowError extends Error {
+  /** Rate whose bound arithmetic overflowed. */
+  public readonly rate: bigint;
+  /** Time to maturity used in the overflowing bound. */
+  public readonly timeToMaturity: bigint;
+
+  public constructor(rate: bigint, timeToMaturity: bigint) {
+    super(
+      `Rate bound arithmetic overflows uint256 for rate "${rate}" and timeToMaturity "${timeToMaturity}". Lower the rate or time to maturity.`,
+    );
+    this.name = "RateRatifierV1BoundOverflowError";
+    this.rate = rate;
+    this.timeToMaturity = timeToMaturity;
+  }
+}
+
+/**
+ * Thrown when a RateRatifierV1 leaf offer commits a nominal tick below the
+ * router's minimum takeable tick.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1TickError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1TickError(0n, 3372n);
+ * ```
+ */
+export class InvalidRateRatifierV1TickError extends Error {
+  /** Nominal tick that was rejected. */
+  public readonly tick: bigint;
+
+  /** Minimum accepted tick. */
+  public readonly minTick: bigint;
+
+  public constructor(tick: bigint, minTick: bigint) {
+    super(
+      `Offer tick "${tick}" is below the minimum "${minTick}" (price >= 0.5 WAD). RateRatifierV1 prices from \`rate\`, but the router still validates the committed tick; set a nominal tick of at least "${minTick}".`,
+    );
+    this.name = "InvalidRateRatifierV1TickError";
+    this.tick = tick;
+    this.minTick = minTick;
+  }
+}
+
+/**
+ * Thrown when a RateRatifierV1 time parameter is negative.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRateRatifierV1TimeError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRateRatifierV1TimeError(-1n, "timestamp");
+ * ```
+ */
+export class InvalidRateRatifierV1TimeError extends Error {
+  /** Negative time value that was rejected. */
+  public readonly value: bigint;
+
+  /** Parameter that carried the negative value. */
+  public readonly field: "timeToMaturity" | "timestamp";
+
+  public constructor(value: bigint, field: "timeToMaturity" | "timestamp") {
+    super(
+      `${field} "${value}" is negative. Use a non-negative number of seconds.`,
+    );
+    this.name = "InvalidRateRatifierV1TimeError";
+    this.value = value;
+    this.field = field;
+  }
+}
+
+/**
+ * Thrown when a V1 ratifier address is the zero address.
+ *
+ * @example
+ * ```ts
+ * import { InvalidRatifierV1AddressError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidRatifierV1AddressError(
+ *   "0x0000000000000000000000000000000000000000",
+ * );
+ * ```
+ */
+export class InvalidRatifierV1AddressError extends Error {
+  /** Zero ratifier address that was rejected. */
+  public readonly ratifier: Address;
+
+  public constructor(ratifier: Address) {
+    super(
+      `Ratifier address "${ratifier}" is the zero address. Use a deployed PriceRatifierV1 or RateRatifierV1 address.`,
+    );
+    this.name = "InvalidRatifierV1AddressError";
+    this.ratifier = ratifier;
+  }
+}
+
+/**
+ * Thrown when a taker is not the allowed taker of a V1 ratifier leaf.
+ *
+ * @example
+ * ```ts
+ * import { RatifierV1TakerNotAllowedError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new RatifierV1TakerNotAllowedError({
+ *   taker: "0x0000000000000000000000000000000000000001",
+ *   allowedTaker: "0x0000000000000000000000000000000000000002",
+ * });
+ * ```
+ */
+export class RatifierV1TakerNotAllowedError extends Error {
+  /** Taker that attempted to take the offer. */
+  public readonly taker: Address;
+
+  /** Taker allowed by the ratified leaf. */
+  public readonly allowedTaker: Address;
+
+  public constructor(params: {
+    readonly taker: Address;
+    readonly allowedTaker: Address;
+  }) {
+    super(
+      `Taker "${params.taker}" is not the allowed taker "${params.allowedTaker}". Use the allowed taker or an offer without a taker restriction.`,
+    );
+    this.name = "RatifierV1TakerNotAllowedError";
+    this.taker = params.taker;
+    this.allowedTaker = params.allowedTaker;
+  }
+}
+
+/**
  * Thrown when a viem client's chain id does not match the chain id required by a signing flow.
  *
  * @example

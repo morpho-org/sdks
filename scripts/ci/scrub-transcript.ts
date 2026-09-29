@@ -42,7 +42,7 @@ export const MASK = "***";
  * header values in both text (`Authorization: Bearer x`) and JSON (`"Authorization":"Bearer x"`,
  * escaped or not) form.
  */
-export const SECRET_PATTERNS: readonly RegExp[] = [
+const SECRET_PATTERNS: readonly RegExp[] = [
   /\bgh[pousr]_[0-9]+_[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,

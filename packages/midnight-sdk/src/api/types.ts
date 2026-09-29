@@ -494,10 +494,10 @@ export interface MidnightApiTakeableOffersResult {
 }
 
 /** @internal HTTP method owned by Midnight API helpers. */
-export type ApiMethod = "GET" | "POST";
+type ApiMethod = "GET" | "POST";
 
 /** @internal Query values serializable by Midnight API helpers. */
-export type QueryValue =
+type QueryValue =
   | string
   | number
   | bigint
@@ -564,7 +564,7 @@ export type ApiPriceLevelsResponse = {
 };
 
 /** @internal Offer market response shape returned by the API. */
-export type ApiOfferMarketResponse = {
+type ApiOfferMarketResponse = {
   readonly chain_id: number;
   readonly midnight: Address;
   readonly loan_token: Address;
@@ -576,7 +576,7 @@ export type ApiOfferMarketResponse = {
 };
 
 /** @internal Inline offer response shape returned by the API. */
-export type ApiOfferResponse = {
+type ApiOfferResponse = {
   readonly market: ApiOfferMarketResponse;
   readonly buy: boolean;
   readonly maker: Address;

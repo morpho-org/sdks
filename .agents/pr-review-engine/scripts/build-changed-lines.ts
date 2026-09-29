@@ -129,11 +129,11 @@ function getRenames(range: string): string[] {
     .filter((p) => p !== "");
 }
 
-export class UsageError extends Error {}
+class UsageError extends Error {}
 
 type CliArgs = { base: string; head: string; includeUncommitted: boolean };
 
-export function parseArgs(argv: readonly string[]): CliArgs {
+function parseArgs(argv: readonly string[]): CliArgs {
   const args = [...argv];
   let base: string | undefined;
   let head: string | undefined;
