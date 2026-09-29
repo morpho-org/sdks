@@ -24,6 +24,7 @@ export {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
+  MarketParamsIdMismatchError as BlueMarketParamsIdMismatchError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {
