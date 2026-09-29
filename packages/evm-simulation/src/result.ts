@@ -1,7 +1,7 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
-import type { SimulationAuthorization } from "./authorizations.js";
-import type { AppliedSimulationLimits, OperationType } from "./limits.js";
+import type { PendingAuthorization } from "./authorizations.js";
+import type { OperationType, SimulationLimits } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
   SimulationCall,
@@ -9,7 +9,7 @@ import type {
   SimulationTransaction,
 } from "./types.js";
 
-/** One operation decoded from the caller's transactions. */
+/** @internal One operation decoded from the caller's transactions. */
 export interface SimulatedOperation {
   readonly type: OperationType;
   /** Index into `simulationTxs`. */
@@ -28,10 +28,10 @@ export interface SimulatedOperation {
   readonly authorized?: Address;
 }
 
-/** How a pending authorization was modeled in preview. */
+/** @internal How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
-  readonly authorization: SimulationAuthorization;
+  readonly authorization: PendingAuthorization;
   /** Approval calls simulated before the user transactions; empty when a state override was used. */
   readonly calls: readonly {
     readonly transaction: SimulationTransaction;
@@ -44,14 +44,14 @@ export interface AuthorizationPreparation {
   };
 }
 
-/** One account's balance of one token. */
+/** @internal One account's balance of one token. */
 export interface TokenBalance {
   readonly account: Address;
   readonly token: Address;
   readonly assets: bigint;
 }
 
-/** One ERC-20 allowance. */
+/** @internal One ERC-20 allowance. */
 export interface TokenAllowance {
   readonly token: Address;
   readonly owner: Address;
@@ -59,14 +59,14 @@ export interface TokenAllowance {
   readonly amount: bigint;
 }
 
-/** One Morpho `isAuthorized` state. */
+/** @internal One Morpho `isAuthorized` state. */
 export interface MorphoAuthorizationState {
   readonly authorizer: Address;
   readonly authorized: Address;
   readonly isAuthorized: boolean;
 }
 
-/** One signature nonce tracked by the simulation. */
+/** @internal One signature nonce tracked by the simulation. */
 export interface SignatureNonce {
   readonly type: "erc2612" | "blueAuthorization" | "permit2";
   /** Token for erc2612, Morpho for blueAuthorization, Permit2 for permit2. */
@@ -77,7 +77,7 @@ export interface SignatureNonce {
   readonly used?: boolean;
 }
 
-/** One user's position in one Blue market. */
+/** @internal One user's position in one Blue market. */
 export interface PositionState {
   readonly marketId: MarketId;
   readonly user: Address;
@@ -92,7 +92,7 @@ export interface PositionState {
   readonly healthFactorWad?: bigint;
 }
 
-/** One Blue market's state. */
+/** @internal One Blue market's state. */
 export interface MarketState {
   readonly marketId: MarketId;
   readonly totalSupplyAssets: bigint;
@@ -110,7 +110,7 @@ export interface MarketState {
   readonly oraclePrice?: bigint;
 }
 
-/** One vault allocation. */
+/** @internal One vault allocation. */
 export interface VaultAllocation {
   /** Set for Vault V2. */
   readonly adapter?: Address;
@@ -118,7 +118,7 @@ export interface VaultAllocation {
   readonly assets: bigint;
 }
 
-/** One MetaMorpho vault's state. */
+/** @internal One Vault V1 (MetaMorpho) or Vault V2 vault's state. */
 export interface VaultState {
   readonly vault: Address;
   readonly version: "v1" | "v2";
@@ -131,7 +131,7 @@ export interface VaultState {
   readonly allocations: readonly VaultAllocation[];
 }
 
-/** Full state at one point; unchanged entries are included. */
+/** @internal Full state at one point; unchanged entries are included. */
 export interface SimulationState {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
@@ -142,7 +142,7 @@ export interface SimulationState {
   readonly vaults: readonly VaultState[];
 }
 
-/** Signed differences (after − before) of the amounts in `SimulationState`. */
+/** @internal Signed differences (after − before) of the amounts in `SimulationState`. */
 export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
@@ -172,7 +172,7 @@ export interface SimulationStateChange {
   }[];
 }
 
-/** An asset/share conversion and the bounds it was checked against. */
+/** @internal An asset/share conversion and the bounds it was checked against. */
 export interface Conversion {
   readonly transactionIndex: number;
   readonly marketId?: MarketId;
@@ -185,7 +185,7 @@ export interface Conversion {
   readonly maxSharePriceE27: bigint;
 }
 
-/** A fee observed during the simulation. */
+/** @internal A fee observed during the simulation. */
 export interface Fee {
   readonly transactionIndex: number;
   readonly type:
@@ -200,13 +200,14 @@ export interface Fee {
   readonly observedAmount: bigint;
 }
 
-/** Verification report attached to a verified simulation result. */
+/** @internal Verification report attached to a verified simulation result. */
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
   readonly blockNumber: bigint;
   readonly blockTimestamp: bigint;
-  readonly limits: AppliedSimulationLimits;
+  /** Limits actually enforced: caller values with SDK defaults filled in. */
+  readonly limits: Required<SimulationLimits>;
   readonly operations: readonly SimulatedOperation[];
   /** Preview only; always empty in final. */
   readonly authorizations: readonly AuthorizationPreparation[];
@@ -220,7 +221,7 @@ export interface SimulationVerification {
   readonly fees: readonly Fee[];
 }
 
-/** `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
+/** @internal `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }
