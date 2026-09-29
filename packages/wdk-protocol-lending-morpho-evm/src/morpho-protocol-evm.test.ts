@@ -13,11 +13,17 @@ import {
   type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
+import type {
+  EvmErc4337WalletNativeCoinsConfig,
+  EvmErc4337WalletPaymasterTokenConfig,
+  EvmErc4337WalletSponsorshipPolicyConfig,
+} from "@tetherto/wdk-wallet-evm-erc-4337";
 import * as viem from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  MissingPaymasterFeeCapError,
   MissingWalletProviderError,
 } from "./errors.js";
 import type {
@@ -2027,6 +2033,167 @@ describe.sequential("MorphoProtocolEvm", () => {
         );
       },
     );
+
+    describe("token-paymaster fee cap", () => {
+      const ERC4337_BASE_CONFIG = {
+        chainId: 1,
+        provider: "https://dummy-rpc-url.com",
+        bundlerUrl: "https://dummy-bundler-url.com",
+        safeModulesVersion: "0.3.0",
+      };
+      const TOKEN_PAYMASTER_CONFIG = {
+        isSponsored: false,
+        useNativeCoins: false,
+        paymasterUrl: "https://dummy-paymaster-url.com",
+        paymasterAddress: "0x0000000000000000000000000000000000000007",
+        paymasterToken: { address: TOKEN },
+      } as const;
+
+      const createErc4337Protocol = (
+        walletConfig:
+          | EvmErc4337WalletPaymasterTokenConfig
+          | EvmErc4337WalletSponsorshipPolicyConfig
+          | EvmErc4337WalletNativeCoinsConfig,
+      ) => {
+        const erc4337Account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
+          ...ERC4337_BASE_CONFIG,
+          ...walletConfig,
+        });
+        erc4337Account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
+        erc4337Account.sendTransaction = vi.fn().mockResolvedValue({
+          hash: "dummy-user-operation-hash",
+          fee: 99_999n,
+        });
+        readContractMock.mockResolvedValue(100_000n);
+
+        return {
+          erc4337Account,
+          erc4337Protocol: new MorphoProtocolEvm(erc4337Account, {
+            chainId: 1,
+            earnVaultAddress: VAULT,
+            borrowMarketParams: MARKET_PARAMS,
+          }),
+        };
+      };
+
+      test("error: MissingPaymasterFeeCapError without a cap in the wallet or per-call config", async () => {
+        const { erc4337Account, erc4337Protocol } = createErc4337Protocol(
+          TOKEN_PAYMASTER_CONFIG,
+        );
+
+        await expect(
+          erc4337Protocol.supply({ token: TOKEN, amount: 100_000n }),
+        ).rejects.toBeInstanceOf(MissingPaymasterFeeCapError);
+        await expect(
+          erc4337Protocol.borrow({ token: TOKEN, amount: 100_000n }),
+        ).rejects.toBeInstanceOf(MissingPaymasterFeeCapError);
+        expect(erc4337Account.sendTransaction).not.toHaveBeenCalled();
+      });
+
+      test("error: MissingPaymasterFeeCapError when a per-call override clears the wallet cap", async () => {
+        const { erc4337Account, erc4337Protocol } = createErc4337Protocol({
+          ...TOKEN_PAYMASTER_CONFIG,
+          transactionMaxFee: 1_000n,
+        });
+
+        await expect(
+          erc4337Protocol.supply(
+            { token: TOKEN, amount: 100_000n },
+            { transactionMaxFee: undefined },
+          ),
+        ).rejects.toBeInstanceOf(MissingPaymasterFeeCapError);
+        expect(erc4337Account.sendTransaction).not.toHaveBeenCalled();
+      });
+
+      test("error: MissingPaymasterFeeCapError when a per-call override switches to token mode", async () => {
+        const { erc4337Account, erc4337Protocol } = createErc4337Protocol({
+          isSponsored: false,
+          useNativeCoins: true,
+        });
+
+        await expect(
+          erc4337Protocol.supply(
+            { token: TOKEN, amount: 100_000n },
+            TOKEN_PAYMASTER_CONFIG,
+          ),
+        ).rejects.toBeInstanceOf(MissingPaymasterFeeCapError);
+        expect(erc4337Account.sendTransaction).not.toHaveBeenCalled();
+      });
+
+      test("behavior: sends with a cap in the wallet config only", async () => {
+        const { erc4337Account, erc4337Protocol } = createErc4337Protocol({
+          ...TOKEN_PAYMASTER_CONFIG,
+          transactionMaxFee: 1_000n,
+        });
+
+        await expect(
+          erc4337Protocol.supply({ token: TOKEN, amount: 100_000n }),
+        ).resolves.toEqual({ hash: "dummy-user-operation-hash", fee: 99_999n });
+        expect(erc4337Account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, {
+          nonceKey: 0n,
+        });
+      });
+
+      test("behavior: sends with a cap in the per-call config only", async () => {
+        const { erc4337Account, erc4337Protocol } = createErc4337Protocol(
+          TOKEN_PAYMASTER_CONFIG,
+        );
+
+        await expect(
+          erc4337Protocol.supply(
+            { token: TOKEN, amount: 100_000n },
+            { transactionMaxFee: 1_000n },
+          ),
+        ).resolves.toEqual({ hash: "dummy-user-operation-hash", fee: 99_999n });
+        expect(erc4337Account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX, {
+          transactionMaxFee: 1_000n,
+          nonceKey: 0n,
+        });
+      });
+
+      test.each([
+        {
+          name: "sponsored",
+          walletConfig: {
+            isSponsored: true,
+            paymasterUrl: "https://dummy-paymaster-url.com",
+          },
+          config: undefined,
+        },
+        {
+          name: "native-gas",
+          walletConfig: { isSponsored: false, useNativeCoins: true },
+          config: undefined,
+        },
+        {
+          name: "native-gas with a per-call paymaster token",
+          walletConfig: { isSponsored: false, useNativeCoins: true },
+          config: { paymasterToken: { address: TOKEN } },
+        },
+        {
+          name: "sponsored override of a token-paymaster wallet",
+          walletConfig: TOKEN_PAYMASTER_CONFIG,
+          config: { isSponsored: true },
+        },
+      ] as const)(
+        "behavior: sends $name operations without a cap",
+        async ({ walletConfig, config }) => {
+          const { erc4337Account, erc4337Protocol } =
+            createErc4337Protocol(walletConfig);
+
+          await expect(
+            erc4337Protocol.supply({ token: TOKEN, amount: 100_000n }, config),
+          ).resolves.toEqual({
+            hash: "dummy-user-operation-hash",
+            fee: 99_999n,
+          });
+          expect(erc4337Account.sendTransaction).toHaveBeenCalledWith(
+            SUPPLY_TX,
+            { ...config, nonceKey: 0n },
+          );
+        },
+      );
+    });
 
     test("snapshots native value before resolving chain state", async () => {
       const observedChain = Promise.withResolvers<number>();

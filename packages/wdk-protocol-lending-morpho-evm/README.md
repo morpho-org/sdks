@@ -103,6 +103,16 @@ Built-in presets already carry their expected chain id. If you use `earnVaultAdd
 
 ERC-4337 accounts cache chain-bound UserOperation state. If an account has already cached another chain, create a fresh wallet account and `MorphoProtocolEvm` adapter before continuing.
 
+### ERC-4337 token paymaster
+
+When an ERC-4337 send pays gas in an ERC-20 through a token paymaster (`paymasterToken` set, `isSponsored` and `useNativeCoins` not `true`, after merging the wallet config with the per-call `config`), set `transactionMaxFee` in paymaster-token units on the wallet config or the per-call config. Without it, every send method throws `MissingPaymasterFeeCapError` before signing.
+
+The paymaster endpoint (`paymasterUrl`) quotes the token cost, and WDK batches an ERC-20 approval to the paymaster for twice that quote into the signed UserOperation. This adapter treats that endpoint as untrusted: `transactionMaxFee` is the only bound WDK applies to the quote, so it caps the approval at twice your configured maximum. Sponsored and native-gas sends are unchanged.
+
+```javascript
+await morpho.supply({ token, amount }, { transactionMaxFee: 5_000_000n }) // 5 USDT
+```
+
 Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collateral methods accept `MorphoCollateralSupplyOptions`; both types require exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
 
 ## Methods

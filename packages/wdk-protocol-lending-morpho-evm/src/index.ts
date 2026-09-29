@@ -22,6 +22,7 @@ export type {
 } from "@tetherto/wdk-wallet/protocols";
 export {
   BlueBundlesV1DeadlineExceedsWindowError,
+  MissingPaymasterFeeCapError,
   MissingWalletProviderError,
 } from "./errors.js";
 export {

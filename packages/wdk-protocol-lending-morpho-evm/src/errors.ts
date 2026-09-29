@@ -22,3 +22,17 @@ export class MissingWalletProviderError extends Error {
     );
   }
 }
+
+/**
+ * Thrown when an ERC-4337 send would pay gas through a token paymaster without a `transactionMaxFee` cap.
+ *
+ * In token-paymaster mode WDK approves the paymaster for twice the fee quoted by the paymaster endpoint;
+ * `transactionMaxFee` is the only bound on that quote.
+ */
+export class MissingPaymasterFeeCapError extends Error {
+  constructor() {
+    super(
+      'Token-paymaster ERC-4337 sends require "transactionMaxFee". Set "transactionMaxFee" in paymaster-token units on the wallet config or the per-call config.',
+    );
+  }
+}

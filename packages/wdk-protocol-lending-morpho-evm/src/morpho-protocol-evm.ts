@@ -68,6 +68,7 @@ import {
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import {
   BlueBundlesV1DeadlineExceedsWindowError,
+  MissingPaymasterFeeCapError,
   MissingWalletProviderError,
 } from "./errors.js";
 import {
@@ -324,6 +325,7 @@ export interface PreparedMorphoSupply {
    * @param config - Optional ERC-4337 transaction configuration override; ignored for EOA wallets.
    * @returns The WDK supply result containing the transaction hash and fee, denominated
    *   according to the wallet's payment configuration.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnexpectedRequirementSignatureError} when an unsupported signature kind is supplied.
    * @throws {BundlesPermitMismatchError} when no matching signature requirement was resolved,
@@ -460,6 +462,7 @@ export interface PreparedMorphoWithdraw {
    * @param config - Optional ERC-4337 transaction configuration override; ignored for EOA wallets.
    * @returns The WDK withdrawal result containing the transaction hash and fee, denominated
    *   according to the wallet's payment configuration.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {ChainIdMismatchError} when the provider has switched away from the vault chain.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when no signature is given and the current
    *   share allowance does not exactly match the prepared cap.
@@ -992,6 +995,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.slippageTolerance - Optional WAD-scaled override of the constructor tolerance.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The submitted deposit hash and fee.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {MixedBundlesFundingError} when both funding amounts are supplied.
    * @throws {NonPositiveInputError} when funding is missing or zero.
    * @throws {NegativeInputError} when funding or slippage tolerance is negative.
@@ -1262,6 +1266,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @param options.to - Optional asset recipient; when set, it must equal the wallet account address.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {AddressMismatchError} when `options.to` differs from the wallet account address.
    * @throws {VaultAssetMismatchError} when `options.token` differs from the configured vault asset.
    * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
@@ -1484,6 +1489,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getBorrowRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK borrow result, including the submitted transaction hash and fee data.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {ChainIdMismatchError} when the wallet client is connected to another chain.
    * @throws {NonPositiveInputError} when the amount or a reallocation amount is not positive.
    * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
@@ -1682,6 +1688,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getRepayRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK repay result, including the submitted transaction hash and fee data.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {RepayExceedsDebtError} when an exact asset repayment exceeds the live debt.
    * @throws {InputExceedsMaxError} when the full-share repayment deadline exceeds its quote horizon.
    * @throws {UnsupportedBlueMarketIrmError} when positive debt requires an unsupported IRM projection.
@@ -1927,6 +1934,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getSupplyCollateralRequirements}; unavailable for native funding.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK collateral-supply result, including the transaction hash and fee data.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {MixedBlueCollateralFundingError} when ERC-20 and native funding are both supplied.
    * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets a non-wrapped-native token.
    * @throws {NonPositiveInputError} when the selected collateral amount is not positive.
@@ -2169,6 +2177,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    *   {@link getWithdrawCollateralRequirements}.
    * @param config - Optional ERC-4337 transaction configuration override.
    * @returns The WDK collateral-withdrawal result, including the transaction hash and fee data.
+   * @throws {MissingPaymasterFeeCapError} when an ERC-4337 token-paymaster send has no `transactionMaxFee` cap.
    * @throws {WithdrawExceedsCollateralError} when the amount exceeds the live collateral balance.
    * @throws {MissingMarketPriceError} when the post-withdrawal health check has no oracle price.
    * @throws {WithdrawMakesPositionUnhealthyError} when withdrawal would exceed buffered LLTV.
@@ -2964,6 +2973,27 @@ export default class MorphoProtocolEvm extends LendingProtocol {
           : {}),
         ...config,
       };
+      const isTokenPaymasterMode =
+        "paymasterToken" in effectiveConfig &&
+        effectiveConfig.paymasterToken !== undefined &&
+        !("isSponsored" in effectiveConfig && effectiveConfig.isSponsored) &&
+        !(
+          "useNativeCoins" in effectiveConfig && effectiveConfig.useNativeCoins
+        );
+      const transactionMaxFee =
+        "transactionMaxFee" in effectiveConfig
+          ? effectiveConfig.transactionMaxFee
+          : undefined;
+      // WDK approves the paymaster for twice the quoted token cost and only
+      // bounds that quote when `transactionMaxFee` is set.
+      if (
+        isTokenPaymasterMode &&
+        typeof transactionMaxFee !== "bigint" &&
+        (typeof transactionMaxFee !== "number" ||
+          Number.isNaN(transactionMaxFee))
+      ) {
+        throw new MissingPaymasterFeeCapError();
+      }
       const hasNonceLane =
         ("nonceKey" in effectiveConfig &&
           effectiveConfig.nonceKey !== undefined &&
