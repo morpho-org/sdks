@@ -8,7 +8,7 @@
 - Native balances are observed through a synthetic probe contract whose minimal `BALANCE`-reading bytecode is injected via `stateOverrides` code — no deployed helper or chain registry dependency. Probes are interleaved between user transactions and never exposed in `SimulationResult`; `calls`/`txIdx` index user transactions only.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep RPC I/O under `src/simulate/backends/` and outputs normalized to the internal `SimulationExecution` type. Colocated transport-boundary tests cover request/response shapes and failures; pinned Anvil forks prove sequential state, real native funding, and standalone-bundle retention.
-- Preview `authorizations` and consumer `limits` parse and normalize, but fail typed with `UnsupportedVerificationFeatureError` at validation — before any RPC — until authorization preparation (PR5) and limit enforcement (PR6) land.
+- Preview `authorizations` and consumer `limits` parse and normalize, but fail typed with `UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call — until authorization preparation (PR5) and limit enforcement (PR6) land.
 - Enforce retention by net `(restricted address, token)` balance across the blue-sdk `bundles` registry plus `midnightBundles` with `DUST_THRESHOLD = 100n`; skip only chains that catalog neither.
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
 - Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.

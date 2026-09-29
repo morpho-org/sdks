@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { SimulationValidationError } from "../../errors.js";
 import {
   DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS,
@@ -13,7 +14,6 @@ describe("resolveEffectiveLimits", () => {
       maxSlippageWad: 3_00000000000000n,
       minLltvBufferWad: 10n ** 18n / 200n,
       maxSignatureLifetimeSeconds: 7200n,
-      wallet: { maxDebit: [], minCredit: [] },
       operations: [],
     });
     expect(resolved.maxSlippageWad).toBe(DEFAULT_MAX_SLIPPAGE_WAD);
@@ -51,28 +51,6 @@ describe("resolveEffectiveLimits", () => {
     },
     { maxSignatureLifetimeSeconds: 0n },
     { maxSlippageWad: -1n },
-    {
-      wallet: {
-        maxDebit: [
-          {
-            token:
-              "0x0000000000000000000000000000000000000001" as `0x${string}`,
-            amount: -1n,
-          },
-        ],
-      },
-    },
-    {
-      wallet: {
-        minCredit: [
-          {
-            token:
-              "0x0000000000000000000000000000000000000001" as `0x${string}`,
-            amount: -1n,
-          },
-        ],
-      },
-    },
   ])(
     "error: SimulationValidationError for weaker or invalid limits %#",
     (limits) => {
@@ -82,23 +60,21 @@ describe("resolveEffectiveLimits", () => {
     },
   );
 
-  test("behavior: carries wallet and operation constraints", () => {
-    const resolved = resolveEffectiveLimits({
-      wallet: {
-        maxDebit: [
-          {
-            token: "0x0000000000000000000000000000000000000001",
-            amount: 5n,
-          },
-        ],
+  test("behavior: carries operation constraints", () => {
+    const operations = [
+      {
+        type: "blueSupply" as const,
+        marketId:
+          "0x0000000000000000000000000000000000000000000000000000000000000001" as MarketId,
+        minSharesMinted: 5n,
       },
-    });
-    expect(resolved.wallet.maxDebit[0]?.amount).toBe(5n);
+    ];
+    const resolved = resolveEffectiveLimits({ operations });
+    expect(resolved.operations).toEqual(operations);
   });
 
   test("behavior: result is deep-frozen", () => {
     const resolved = resolveEffectiveLimits();
     expect(Object.isFrozen(resolved)).toBe(true);
-    expect(Object.isFrozen(resolved.wallet)).toBe(true);
   });
 });

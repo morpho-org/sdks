@@ -9,16 +9,18 @@ export type {
   Erc20ApprovalAuthorization,
   Erc2612PermitAuthorization,
   Erc2612PermitTypedData,
+  PendingAuthorization,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
-  SimulationAuthorization,
 } from "./authorizations.js";
 export type {
+  BlueMarketOperationType,
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
-  SimulationErrorStage,
-  SimulationRevertReason,
+  SimulationExecutionReason,
+  SimulationStage,
+  VaultOperationType,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -38,6 +40,7 @@ export {
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
+  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -46,7 +49,6 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
-  AppliedSimulationLimits,
   BlueAuthorizationLimit,
   BlueBorrowLimit,
   BlueRefinanceLimit,
@@ -61,7 +63,6 @@ export type {
   OperationLimit,
   OperationType,
   SimulationLimits,
-  TokenAmount,
   VaultDeallocation,
   VaultDepositLimit,
   VaultInKindRedeemLimit,
@@ -70,9 +71,13 @@ export type {
   VaultV2ForceRedeemLimit,
   VaultV2ForceWithdrawLimit,
   VaultWithdrawLimit,
-  WalletLimits,
 } from "./limits.js";
-export type { SimulateParams, SimulationMode } from "./params.js";
+export { OPERATION_TYPES } from "./limits.js";
+export type {
+  SimulationMode,
+  VerifiedSimulateParams,
+} from "./params.js";
+export { SIMULATION_MODES } from "./params.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants
 export {

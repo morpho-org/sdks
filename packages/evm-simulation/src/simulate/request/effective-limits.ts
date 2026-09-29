@@ -1,10 +1,15 @@
 import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { SimulationValidationError } from "../../errors.js";
-import type {
-  AppliedSimulationLimits,
-  SimulationLimits,
-} from "../../limits.js";
+import type { OperationLimit, SimulationLimits } from "../../limits.js";
+
+/** {@link SimulationLimits} with every optional bound resolved to a concrete value. @internal */
+export interface EffectiveSimulationLimits {
+  readonly maxSlippageWad: bigint;
+  readonly minLltvBufferWad: bigint;
+  readonly maxSignatureLifetimeSeconds: bigint;
+  readonly operations: readonly OperationLimit[];
+}
 
 /** Default slippage bound, identical to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03% WAD). */
 export const DEFAULT_MAX_SLIPPAGE_WAD = DEFAULT_SLIPPAGE_TOLERANCE;
@@ -17,7 +22,7 @@ export const DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS = 7200n;
 
 /**
  * Resolve caller-supplied {@link SimulationLimits} into fully defaulted
- * {@link AppliedSimulationLimits}. Resolution is tightening-only: callers may
+ * {@link EffectiveSimulationLimits}. Resolution is tightening-only: callers may
  * decrease `maxSlippageWad` and `maxSignatureLifetimeSeconds` and may increase
  * `minLltvBufferWad`, never the reverse.
  *
@@ -29,7 +34,7 @@ export const DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS = 7200n;
  */
 export function resolveEffectiveLimits(
   limits?: SimulationLimits,
-): AppliedSimulationLimits {
+): EffectiveSimulationLimits {
   const fieldErrors: string[] = [];
 
   const resolve = (field: {
@@ -77,15 +82,6 @@ export function resolveEffectiveLimits(
     minimum: 1n,
   });
 
-  for (const [i, amount] of (limits?.wallet?.maxDebit ?? []).entries()) {
-    if (amount.amount < 0n)
-      fieldErrors.push(`limits.wallet.maxDebit[${i}].amount: must be >= 0`);
-  }
-  for (const [i, amount] of (limits?.wallet?.minCredit ?? []).entries()) {
-    if (amount.amount < 0n)
-      fieldErrors.push(`limits.wallet.minCredit[${i}].amount: must be >= 0`);
-  }
-
   if (fieldErrors.length > 0) {
     throw new SimulationValidationError(
       "Invalid simulation limits",
@@ -97,10 +93,6 @@ export function resolveEffectiveLimits(
     maxSlippageWad,
     minLltvBufferWad,
     maxSignatureLifetimeSeconds,
-    wallet: {
-      maxDebit: limits?.wallet?.maxDebit ?? [],
-      minCredit: limits?.wallet?.minCredit ?? [],
-    },
     operations: limits?.operations ?? [],
   });
 }

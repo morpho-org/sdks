@@ -4,11 +4,8 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import {
-  InvalidSimulationResponseError,
-  UnsupportedVerificationFeatureError,
-} from "../errors.js";
-import type { SimulateParams } from "../params.js";
+import { InvalidSimulationResponseError } from "../errors.js";
+import type { VerifiedSimulateParams } from "../params.js";
 import type { SimulationConfig, SimulationResult } from "../types.js";
 
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
@@ -113,30 +110,9 @@ import { parseRequest } from "./request/index.js";
  */
 export async function simulate(
   config: SimulationConfig,
-  params: SimulateParams,
+  params: VerifiedSimulateParams,
 ): Promise<SimulationResult> {
   const request = parseRequest(params);
-
-  // Feature gate at validation, before any RPC: preview authorizations and
-  // consumer limits parse and normalize, but are rejected until PR5/PR6
-  // verify them rather than silently ignored.
-  if (request.authorizations.length > 0) {
-    throw new UnsupportedVerificationFeatureError(
-      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
-      {
-        mode: request.mode,
-        stage: "validation",
-        chainId: request.chainId,
-        authorizationIndex: 0,
-      },
-    );
-  }
-  if (request.limits !== undefined) {
-    throw new UnsupportedVerificationFeatureError(
-      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
-      { mode: request.mode, stage: "validation", chainId: request.chainId },
-    );
-  }
 
   const wNative = _try(
     () => getChainAddresses(request.chainId).wNative ?? null,

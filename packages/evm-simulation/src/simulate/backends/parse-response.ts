@@ -1,5 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, ethAddress, type Hex, isAddress, isHex } from "viem";
+import { type Address, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
@@ -199,24 +199,14 @@ export function parseSimulationResponse(params: {
           })),
       ),
       "UNKNOWN_REVERT",
-      {
-        stage: "execution",
-        mode: plan.request.mode,
-        chainId: plan.request.chainId,
-        blockNumber: params.stateBlockNumber,
-        failedTransactionIndex: failedUserCall.planned.transactionIndex,
-      },
     );
   }
 
   const probeContext: SimulationErrorContext = {
-    stage: "execution",
+    stage: "transport",
     mode: plan.request.mode,
     chainId: plan.request.chainId,
     blockNumber: params.stateBlockNumber,
-    account: plan.owner,
-    token: ethAddress,
-    field: "nativeBalance",
   };
 
   const nativeBalances: NativeBalanceReading[] = [];

@@ -40,7 +40,8 @@ try {
   );
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
-    // show err.reason to the user
+    // show err.reason to the user; err.reasonCode is "UNKNOWN_REVERT" until
+    // revert mapping lands with the verification pipeline
   }
   throw err;
 }
@@ -60,11 +61,12 @@ All symbols below are re-exported from the package root.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Input types: `SimulateParams` (with `mode: "preview" | "final"`), `SimulationMode`, `SimulationTransaction`, `SimulationAuthorization` (typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes `Erc2612PermitTypedData` / `Permit2TransferTypedData` / `BlueAuthorizationTypedData` / `Eip712Domain` / `Eip712Field`), `SimulationLimits`, `AppliedSimulationLimits`, `OperationLimit`, `OperationType`, `TokenAmount`, `WalletLimits`, `VaultDeallocation`, `MarketMinAssets`, and the per-operation limit types.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Error context types (carried by every new error class): `SimulationErrorContext`, `SimulationErrorStage`, `SimulationErrorCode`, `SimulationRevertReason`, `RetainedAsset`; plus `SIMULATION_ERROR_CODES` and `isSimulationPackageError`. 
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationVerificationError` (abstract base of the verification errors below), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
+- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BlueMarketOperationType`, `VaultOperationType` (operation groups that key the execution/verification `SimulationErrorContext`).
 - Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 
-Until the authorization-verification release, preview `authorizations` and `limits` are rejected at validation — before any RPC — with `UnsupportedVerificationFeatureError` rather than silently ignored.
+Until the authorization-verification release, preview `authorizations` and `limits` are rejected once the state block is pinned, before the `eth_simulateV1` call, with `UnsupportedVerificationFeatureError` rather than silently ignored.
 
 ### Deeper docs
 

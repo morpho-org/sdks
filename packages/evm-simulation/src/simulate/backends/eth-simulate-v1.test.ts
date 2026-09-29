@@ -5,6 +5,7 @@ import {
   InvalidSimulationResponseError,
   MissingVerificationEvidenceError,
   SimulationRevertedError,
+  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
@@ -20,15 +21,12 @@ const STATE_BLOCK = 20_000_000n;
 
 const fetchMock = vi.fn<typeof fetch>();
 
-function makePlan(transactions = 1): ExecutionPlan {
+function makePlan(overrides: object = {}): ExecutionPlan {
   return planExecution(
     parseRequest({
       chainId: 1,
-      transactions: Array.from({ length: transactions }, () => ({
-        from: OWNER,
-        to: VAULT,
-        data: "0x12",
-      })),
+      transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+      ...overrides,
     }),
   );
 }
@@ -183,6 +181,65 @@ describe.sequential("executePlan", () => {
     expect(blockRequest.params[0]).toBe("latest");
     const simRequest = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
     expect(simRequest.params[1]).toBe(numberToHex(STATE_BLOCK));
+  });
+
+  test("error: UnsupportedVerificationFeatureError for preview authorizations once the block is pinned", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"));
+    const plan = makePlan({
+      mode: "preview",
+      authorizations: [
+        {
+          type: "erc20Approval",
+          token: USDC,
+          owner: OWNER,
+          spender: VAULT,
+          amount: 100n,
+        },
+      ],
+    });
+    const error = await executePlan({ ...params, plan }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      stage: "preparation",
+      mode: "preview",
+      chainId: 1,
+      blockNumber: STATE_BLOCK,
+      authorizationIndex: 0,
+    });
+    // The gate fires before eth_simulateV1: only block + chainId were fetched.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.every(
+        (call) => !String(call[1]?.body).includes("eth_simulateV1"),
+      ),
+    ).toBe(true);
+  });
+
+  test("error: UnsupportedVerificationFeatureError for consumer limits once the block is pinned", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"));
+    const plan = makePlan({ limits: { maxSlippageWad: 1n } });
+    const error = await executePlan({ ...params, plan }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      stage: "validation",
+      mode: "final",
+      chainId: 1,
+      blockNumber: STATE_BLOCK,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.every(
+        (call) => !String(call[1]?.body).includes("eth_simulateV1"),
+      ),
+    ).toBe(true);
   });
 
   test.each([

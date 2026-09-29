@@ -65,7 +65,7 @@ inflation — under-funded bundles revert like on-chain), and `simulationTxs` /
 `txIdx` index user transactions only — no prepended approval calls appear in
 the result. Authorization preparation and consumer-limit enforcement ship in
 later PRs: passing `authorizations` or `limits` throws
-`UnsupportedVerificationFeatureError` at validation, before any RPC, rather
+`UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call, rather
 than being silently ignored.
 The [ADR](../adrs/ADR-2026-09-18-evm-simulation-calldata-verification.md)
 describes the target contract.

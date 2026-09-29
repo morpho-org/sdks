@@ -11,7 +11,7 @@ import {
   maxUint256,
 } from "viem";
 import { z } from "zod";
-import type { SimulationAuthorization } from "../../authorizations.js";
+import type { PendingAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type { SimulationLimits } from "../../limits.js";
 import type { SimulationMode } from "../../params.js";
@@ -36,7 +36,7 @@ export interface ParsedRequest {
   readonly mode: SimulationMode;
   readonly transactions: readonly ParsedTransaction[];
   /** Always empty in final mode. */
-  readonly authorizations: readonly SimulationAuthorization[];
+  readonly authorizations: readonly PendingAuthorization[];
   readonly blockNumber?: bigint | BlockTag;
   readonly limits?: SimulationLimits;
 }
@@ -188,11 +188,6 @@ const authorizationSchema = z.discriminatedUnion("type", [
 ]);
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
-
-const tokenAmountSchema = z.strictObject({
-  token: addressSchema,
-  amount: uint256Schema,
-});
 
 const deallocationSchema = z.strictObject({
   adapter: addressSchema,
@@ -431,12 +426,6 @@ const limitsSchema = z.strictObject({
   maxSlippageWad: uint256Schema.optional(),
   minLltvBufferWad: uint256Schema.optional(),
   maxSignatureLifetimeSeconds: uint256Schema.optional(),
-  wallet: z
-    .strictObject({
-      maxDebit: z.array(tokenAmountSchema).optional(),
-      minCredit: z.array(tokenAmountSchema).optional(),
-    })
-    .optional(),
   operations: z.array(operationLimitSchema).optional(),
 });
 
@@ -451,7 +440,7 @@ const requestSchema = z.strictObject({
   limits: limitsSchema.optional(),
 });
 
-const authorizationOwner = (authorization: SimulationAuthorization): Address =>
+const authorizationOwner = (authorization: PendingAuthorization): Address =>
   authorization.type === "erc20Approval"
     ? authorization.owner
     : authorization.type === "erc2612Permit"
@@ -463,7 +452,7 @@ const authorizationOwner = (authorization: SimulationAuthorization): Address =>
           : authorization.typedData.message.authorizer;
 
 const authorizationDomainChainId = (
-  authorization: SimulationAuthorization,
+  authorization: PendingAuthorization,
 ): number | bigint | undefined =>
   authorization.type === "erc2612Permit" ||
   authorization.type === "permit2SignatureTransfer" ||
@@ -580,8 +569,8 @@ export function parseRequest(input: unknown): ParsedRequest {
   }
 
   // The annotations pin the parsed output to the public types — drift between
-  // the schemas and `SimulationAuthorization`/`SimulationLimits` fails here.
-  const parsedAuthorizations: readonly SimulationAuthorization[] =
+  // the schemas and `PendingAuthorization`/`SimulationLimits` fails here.
+  const parsedAuthorizations: readonly PendingAuthorization[] =
     authorizations ?? [];
   const limits: SimulationLimits | undefined = parsed.limits;
 

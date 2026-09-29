@@ -1,8 +1,8 @@
 import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
-import type { SimulationAuthorization } from "../../authorizations.js";
+import type { PendingAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams } from "../../params.js";
+import type { VerifiedSimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import {
@@ -28,7 +28,7 @@ const tx = (overrides: object = {}) => ({
   ...overrides,
 });
 
-const erc20Approval: SimulationAuthorization = {
+const erc20Approval: PendingAuthorization = {
   type: "erc20Approval",
   token: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
   owner: OWNER,
@@ -36,7 +36,7 @@ const erc20Approval: SimulationAuthorization = {
   amount: 100n,
 };
 
-const permit2Auth: SimulationAuthorization = {
+const permit2Auth: PendingAuthorization = {
   type: "permit2SignatureTransfer",
   owner: OWNER,
   typedData: {
@@ -390,11 +390,11 @@ describe("parseRequest", () => {
     expect(() => parseRequest(42)).toThrow(SimulationValidationError);
   });
 
-  test("type-level: SimulateParams accepts readonly arrays", () => {
+  test("type-level: VerifiedSimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
-    }>().toExtend<SimulateParams>();
+    }>().toExtend<VerifiedSimulateParams>();
   });
 
   test("type-level: ParsedRequest fields are readonly", () => {
