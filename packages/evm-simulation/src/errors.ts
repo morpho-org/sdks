@@ -95,7 +95,11 @@ type SimulationOperationSubject =
       /** Market the refinance opens. */
       readonly targetMarketId: MarketId;
     }
-  | { readonly operation: "blueAuthorization" }
+  | {
+      readonly operation: "blueAuthorization";
+      /** Operator whose Morpho authorization the operation sets. */
+      readonly authorized: Address;
+    }
   | {
       readonly operation: VaultOperationType;
       /** Vault the operation acts on. */
@@ -204,8 +208,11 @@ export class SimulationRevertedError extends SimulationPackageError {
 
 /** Per-asset net retained amount keyed by restricted contract and token. */
 export interface RetainedAsset {
+  /** Restricted bundles contract that ended up holding the token. */
   readonly address: Address;
+  /** Token retained (native ETH uses the zero address). */
   readonly token: Address;
+  /** Net balance increase in the token's base units; always positive. */
   readonly netRetained: bigint;
 }
 
@@ -405,12 +412,7 @@ export function isSimulationPackageError(
   )
     return false;
   if (stage === "preparation") return typeof authorizationIndex === "number";
-  if (stage === "execution" || stage === "verification")
-    return hasOperationSubject(context);
-  return true;
-}
-
-function hasOperationSubject(context: object): boolean {
+  if (stage !== "execution" && stage !== "verification") return true;
   const c = context as Record<string, unknown>;
   const operation = c.operation;
   if (
@@ -421,7 +423,7 @@ function hasOperationSubject(context: object): boolean {
   const isString = (key: string) => typeof c[key] === "string";
   switch (operation) {
     case "blueAuthorization":
-      return true;
+      return isString("authorized");
     case "blueRefinance":
       return isString("sourceMarketId") && isString("targetMarketId");
     case "vaultV1MigrateToV2":
