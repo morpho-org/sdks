@@ -18,13 +18,13 @@ The SDK does reject an RPC answer when it can compare it with something the RPC 
 
 - **SDKS-136** (SDK-619, SDK-1153), **SDKS-623** (SDK-726), and the cached-tuple compositions **SDKS-827** (SDK-730), **SDKS-811** (SDK-775), **SDKS-856** (SDK-804), **SDKS-523** (SDK-938): fetched market params must hash to the requested `MarketId`, else `MarketParamsIdMismatchError`. The all-zero tuple of an uncreated market is accepted, so a lying RPC can hide a market but not swap it.
 - **SDKS-69** (SDK-504, SDK-1127): in token-paymaster mode, WDK rejects a paymaster response whose paymaster differs from the configured `paymasterAddress`.
-- **SDKS-455** (SDK-639), **SDKS-542** (SDK-640), **SDKS-726** (SDK-657): token-paymaster mode requires `transactionMaxFee`, which bounds the fee-token approval that the paymaster quote sizes.
 - **SDKS-169** (SDK-452, SDK-1248): reads and sends go through the WDK account's own provider, so one transaction cannot be built on one chain and broadcast on another.
 
 ### Accepted gaps
 
 The SDK could check these against a source the RPC cannot forge, but does not yet:
 
+- **SDKS-455** (SDK-639), **SDKS-542** (SDK-640), **SDKS-726** (SDK-657): in token-paymaster mode, the paymaster quote sizes the fee-token approval. `transactionMaxFee` would bound it, but it is optional and not enforced.
 - **SDKS-493** (SDK-771): the SDK returns the RPC's EOA hash as is. A `keccak256` check on the signed bytes would catch a swapped hash, but not a dropped transaction or a forged receipt.
 
 ### Out of our threat model
@@ -61,7 +61,7 @@ Each value comes from the same `eth_call` that returns the vault it describes. T
 - **SDKS-783** (SDK-831), **SDKS-784** (SDK-832): the `lostAssets()` failure combined with an understated `assetBalance` or forged `virtualShares`.
 - **SDKS-853** (SDK-740), **SDKS-778** (SDK-742), **SDKS-854** (SDK-741): combine a forged scalar or positional tuple with the adapter IRM or `canReceiveShares` leg. The forged leg is what makes each one exploitable.
 - **SDKS-788** (SDK-739), **SDKS-837** (SDK-762): the omitted parent `allocation()` leg is handled on `main`. What remains is a forged `assetBalance` or `totalSupply`.
-- **SDKS-857** (SDK-848): the forged accounting leg is out of scope. The paymaster leg is bounded by the mandatory `transactionMaxFee` (SDKS-455).
+- **SDKS-857** (SDK-848): the forged accounting leg is out of scope. The paymaster leg is the accepted gap SDKS-455: it is unbounded unless the caller sets `transactionMaxFee`.
 
 #### Adapter, market-list and identity binding (`blue-sdk-viem`)
 
