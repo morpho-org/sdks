@@ -134,9 +134,7 @@ export function buildBookPath(params: {
  * Collaterals are returned in the protocol's canonical order so their array index matches
  * the onchain `collateralIndex`.
  */
-export function mapBookMarket(
-  book: ApiBookMarketResponse,
-): MidnightApiBookMarket {
+function mapBookMarket(book: ApiBookMarketResponse): MidnightApiBookMarket {
   let derivedMarketId: Hash;
   let matchesAdvertisedId: boolean;
   try {
@@ -275,7 +273,7 @@ export function mapBoundBooks(
 }
 
 /** @internal Maps a collateral API payload to the SDK response shape. */
-export function mapCollateral(
+function mapCollateral(
   collateral: ApiCollateralResponse,
 ): MidnightApiCollateral {
   return {
@@ -287,9 +285,7 @@ export function mapCollateral(
 }
 
 /** @internal Maps a price-level API payload to the SDK response shape. */
-export function mapPriceLevel(
-  level: ApiPriceLevelResponse,
-): MidnightApiPriceLevel {
+function mapPriceLevel(level: ApiPriceLevelResponse): MidnightApiPriceLevel {
   return {
     tick: level.tick,
     price: level.price,
@@ -310,7 +306,7 @@ export function mapPriceLevels(
 }
 
 /** @internal Maps a takeable-offer API payload to the SDK response shape. */
-export function mapTakeableOffer(
+function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
 ): MidnightApiTake {
   const offer = takeableOffer.offer;
