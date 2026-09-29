@@ -27,11 +27,13 @@ import {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 import {
+  BLUE_MARKET_OPERATION_TYPES,
   type BlueMarketOperationType,
   OPERATION_TYPES,
   type OperationLimit,
   type OperationType,
   type SimulationOperationSubject,
+  VAULT_OPERATION_TYPES,
   type VaultOperationType,
 } from "./limits.js";
 import { SIMULATION_MODES } from "./params.js";
@@ -374,6 +376,15 @@ describe("SimulationErrorContext", () => {
       | "blueAuthorization"
       | "vaultV1MigrateToV2"
     >().toEqualTypeOf<OperationType>();
+    expect(
+      [
+        ...BLUE_MARKET_OPERATION_TYPES,
+        "blueRefinance",
+        "blueAuthorization",
+        ...VAULT_OPERATION_TYPES,
+        "vaultV1MigrateToV2",
+      ].sort(),
+    ).toEqual([...OPERATION_TYPES].sort());
     expect([...OPERATION_TYPES]).toEqual([
       "blueSupply",
       "blueWithdraw",
