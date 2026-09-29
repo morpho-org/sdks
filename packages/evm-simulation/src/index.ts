@@ -1,11 +1,13 @@
 // Public fns (via feature-folder barrels)
 
 export type {
+  BlueMarketOperationType,
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
   SimulationExecutionReason,
   SimulationStage,
+  VaultOperationType,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {

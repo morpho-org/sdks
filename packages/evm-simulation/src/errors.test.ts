@@ -1,8 +1,10 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { expectTypeOf } from "vitest";
 import {
   AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
+  type BlueMarketOperationType,
   ConsumerLimitViolationError,
   ExternalServiceError,
   FeeMismatchError,
@@ -25,7 +27,14 @@ import {
   UnsupportedChainError,
   UnsupportedOperationError,
   UnsupportedVerificationFeatureError,
+  type VaultOperationType,
 } from "./errors.js";
+import {
+  OPERATION_TYPES,
+  type OperationLimit,
+  type OperationType,
+} from "./limits.js";
+import { SIMULATION_MODES } from "./params.js";
 
 const CONTEXT: SimulationErrorContext = {
   stage: "validation",
@@ -39,8 +48,28 @@ const EXECUTION: Extract<SimulationErrorContext, { stage: "execution" }> = {
   chainId: 1,
   blockNumber: 100n,
   operation: "blueSupply",
+  marketId: "0xmarket" as MarketId,
   failedTransactionIndex: 2,
 };
+
+const A = "0x0000000000000000000000000000000000000001";
+/** One well-formed subject per operation, keyed by operation group. */
+const SUBJECTS: Record<
+  OperationType,
+  Record<string, unknown>
+> = Object.fromEntries(
+  OPERATION_TYPES.map((operation) => {
+    if (operation === "blueAuthorization") return [operation, {}];
+    if (operation === "blueRefinance")
+      return [operation, { sourceMarketId: "0xa", targetMarketId: "0xb" }];
+    if (operation === "vaultV1MigrateToV2")
+      return [operation, { sourceVault: A, targetVault: A }];
+    return [
+      operation,
+      operation.startsWith("blue") ? { marketId: "0xa" } : { vault: A },
+    ];
+  }),
+) as Record<OperationType, Record<string, unknown>>;
 
 describe("error hierarchy", () => {
   it("every concrete error extends SimulationPackageError", () => {
@@ -277,26 +306,81 @@ describe("SimulationErrorContext", () => {
     }>().not.toExtend<SimulationErrorContext>();
   });
 
-  it("names both sides of two-subject operations", () => {
+  it("keys execution/verification contexts by operation group", () => {
     type Verification = Extract<
       SimulationErrorContext,
       { stage: "verification" }
     >;
-    expectTypeOf<Verification["sourceMarketId"]>().toEqualTypeOf<
-      Verification["targetMarketId"]
-    >();
-    expectTypeOf<Verification["sourceVault"]>().toEqualTypeOf<
-      Verification["targetVault"]
-    >();
-    expectTypeOf<{
-      stage: "verification";
-      mode: "final";
-      chainId: 1;
-      blockNumber: 1n;
-      operation: "vaultV1MigrateToV2";
-      sourceVault: `0x${string}`;
-      targetVault: `0x${string}`;
-    }>().toExtend<SimulationErrorContext>();
+    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
+    expectTypeOf<
+      Extract<Verification, { marketId: MarketId }>["operation"]
+    >().toEqualTypeOf<BlueMarketOperationType>();
+    expectTypeOf<
+      Extract<Verification, { operation: "blueRefinance" }>
+    >().not.toHaveProperty("marketId");
+    expectTypeOf<
+      Extract<Verification, { vault: `0x${string}` }>["operation"]
+    >().toEqualTypeOf<VaultOperationType>();
+    expectTypeOf<
+      Extract<Verification, { operation: "vaultV1MigrateToV2" }>
+    >().not.toHaveProperty("vault");
+    const base = {
+      stage: "verification",
+      mode: "final",
+      chainId: 1,
+      blockNumber: 1n,
+    } as const;
+    expectTypeOf<
+      typeof base & { operation: "blueSupply" }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & { operation: "blueRefinance"; sourceMarketId: MarketId }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & {
+        operation: "vaultV1MigrateToV2";
+        sourceVault: `0x${string}`;
+        targetVault: `0x${string}`;
+      }
+    >().toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & { operation: "blueAuthorization" }
+    >().toExtend<SimulationErrorContext>();
+  });
+
+  it("operation groups partition OPERATION_TYPES", () => {
+    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
+    expectTypeOf<
+      | BlueMarketOperationType
+      | VaultOperationType
+      | "blueRefinance"
+      | "blueAuthorization"
+      | "vaultV1MigrateToV2"
+    >().toEqualTypeOf<OperationType>();
+    expect([...OPERATION_TYPES]).toEqual([
+      "blueSupply",
+      "blueWithdraw",
+      "blueSupplyCollateral",
+      "blueBorrow",
+      "blueSupplyCollateralBorrow",
+      "blueRepay",
+      "blueWithdrawCollateral",
+      "blueRepayWithdrawCollateral",
+      "blueRefinance",
+      "blueAuthorization",
+      "vaultV1Deposit",
+      "vaultV2Deposit",
+      "vaultV1Withdraw",
+      "vaultV2Withdraw",
+      "vaultV1Redeem",
+      "vaultV2Redeem",
+      "vaultV2ForceWithdraw",
+      "vaultV2ForceRedeem",
+      "vaultV1InKindRedeem",
+      "vaultV2InKindRedeem",
+      "vaultV1MigrateToV2",
+    ]);
+    expect([...SIMULATION_MODES]).toEqual(["preview", "final"]);
   });
 
   it("SimulationRevertedError only accepts preparation or execution contexts", () => {
@@ -515,9 +599,10 @@ describe("isSimulationPackageError", () => {
     ).toBe(false);
   });
 
+  const base = { name: "X", message: "m", code: "FEE_MISMATCH" };
+  const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
+
   it("requires a known operation on execution and verification contexts", () => {
-    const base = { name: "X", message: "m", code: "FEE_MISMATCH" };
-    const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
     for (const stage of ["execution", "verification"]) {
       expect(
         isSimulationPackageError({ ...base, context: { ...ctx, stage } }),
@@ -525,15 +610,9 @@ describe("isSimulationPackageError", () => {
       expect(
         isSimulationPackageError({
           ...base,
-          context: { ...ctx, stage, operation: "bogus" },
+          context: { ...ctx, stage, operation: "bogus", marketId: "0xa" },
         }),
       ).toBe(false);
-      expect(
-        isSimulationPackageError({
-          ...base,
-          context: { ...ctx, stage, operation: "blueSupply" },
-        }),
-      ).toBe(true);
     }
     expect(
       isSimulationPackageError({
@@ -545,6 +624,30 @@ describe("isSimulationPackageError", () => {
       true,
     );
   });
+
+  it.each(OPERATION_TYPES)(
+    "accepts %s with its subject and rejects it without",
+    (operation) => {
+      const subject = SUBJECTS[operation];
+      for (const stage of ["execution", "verification"]) {
+        expect(
+          isSimulationPackageError({
+            ...base,
+            context: { ...ctx, stage, operation, ...subject },
+          }),
+        ).toBe(true);
+        for (const key of Object.keys(subject)) {
+          const { [key]: _, ...partial } = subject;
+          expect(
+            isSimulationPackageError({
+              ...base,
+              context: { ...ctx, stage, operation, ...partial },
+            }),
+          ).toBe(false);
+        }
+      }
+    },
+  );
 
   it("is false for an unknown code", () => {
     expect(
