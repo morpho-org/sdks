@@ -40,3 +40,10 @@ jobs:
         with:
           sarif_file: zizmor.sarif
           category: zizmor
+
+      # Without an upload, fork PRs fail here on medium+ findings instead.
+      - if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        name: Run zizmor (fork PR)
+        run: zizmor --min-severity medium .
+        env:
+          GH_TOKEN: ${{ github.token }}
