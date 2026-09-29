@@ -1,7 +1,9 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
 import type { OperationType } from "./limits.js";
+import { OPERATION_TYPES } from "./limits.js";
 import type { SimulationMode } from "./params.js";
+import { SIMULATION_MODES } from "./params.js";
 
 /** Stable error codes thrown by this package, part of the public API. */
 export const SIMULATION_ERROR_CODES = [
@@ -315,7 +317,8 @@ export class UnexpectedSimulationError extends SimulationVerificationError {
  * @returns `true` for `SimulationPackageError` instances and for objects
  *   carrying `name`/`message` strings, a known `code` and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
- *   `bigint` `blockNumber`, and `authorizationIndex` for `preparation`).
+ *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
+ *   known `operation` for `execution`/`verification`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -352,20 +355,29 @@ export function isSimulationPackageError(
   if (context === undefined) return true;
   if (typeof context !== "object" || context === null || Array.isArray(context))
     return false;
-  const { stage, mode, chainId, blockNumber, authorizationIndex } = context as {
-    stage?: unknown;
-    mode?: unknown;
-    chainId?: unknown;
-    blockNumber?: unknown;
-    authorizationIndex?: unknown;
-  };
+  const { stage, mode, chainId, blockNumber, authorizationIndex, operation } =
+    context as {
+      stage?: unknown;
+      mode?: unknown;
+      chainId?: unknown;
+      blockNumber?: unknown;
+      authorizationIndex?: unknown;
+      operation?: unknown;
+    };
   if (
     typeof stage !== "string" ||
     !(SIMULATION_STAGES as readonly string[]).includes(stage) ||
-    (mode !== "preview" && mode !== "final") ||
+    typeof mode !== "string" ||
+    !(SIMULATION_MODES as readonly string[]).includes(mode) ||
     typeof chainId !== "number" ||
     typeof blockNumber !== "bigint"
   )
     return false;
-  return stage !== "preparation" || typeof authorizationIndex === "number";
+  if (stage === "preparation") return typeof authorizationIndex === "number";
+  if (stage === "execution" || stage === "verification")
+    return (
+      typeof operation === "string" &&
+      (OPERATION_TYPES as readonly string[]).includes(operation)
+    );
+  return true;
 }

@@ -1,29 +1,33 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
+/** Every decoded operation type; source of `OperationType`. */
+export const OPERATION_TYPES = [
+  "blueSupply",
+  "blueWithdraw",
+  "blueSupplyCollateral",
+  "blueBorrow",
+  "blueSupplyCollateralBorrow",
+  "blueRepay",
+  "blueWithdrawCollateral",
+  "blueRepayWithdrawCollateral",
+  "blueRefinance",
+  "blueAuthorization",
+  "vaultV1Deposit",
+  "vaultV2Deposit",
+  "vaultV1Withdraw",
+  "vaultV2Withdraw",
+  "vaultV1Redeem",
+  "vaultV2Redeem",
+  "vaultV2ForceWithdraw",
+  "vaultV2ForceRedeem",
+  "vaultV1InKindRedeem",
+  "vaultV2InKindRedeem",
+  "vaultV1MigrateToV2",
+] as const;
+
 /** Discriminator for decoded operations and their limits. */
-export type OperationType =
-  | "blueSupply"
-  | "blueWithdraw"
-  | "blueSupplyCollateral"
-  | "blueBorrow"
-  | "blueSupplyCollateralBorrow"
-  | "blueRepay"
-  | "blueWithdrawCollateral"
-  | "blueRepayWithdrawCollateral"
-  | "blueRefinance"
-  | "blueAuthorization"
-  | "vaultV1Deposit"
-  | "vaultV2Deposit"
-  | "vaultV1Withdraw"
-  | "vaultV2Withdraw"
-  | "vaultV1Redeem"
-  | "vaultV2Redeem"
-  | "vaultV2ForceWithdraw"
-  | "vaultV2ForceRedeem"
-  | "vaultV1InKindRedeem"
-  | "vaultV2InKindRedeem"
-  | "vaultV1MigrateToV2";
+export type OperationType = (typeof OPERATION_TYPES)[number];
 
 /** @internal Limit for a Blue `supply` operation. */
 export interface BlueSupplyLimit {
