@@ -33,6 +33,7 @@ import {
   UnsupportedOperationError,
 } from "../errors.js";
 import type { SimulationOperationSubject } from "../limits.js";
+import type { SimulationMode } from "../params.js";
 import type { SimulationTransaction } from "../types.js";
 import type {
   DecodedOperation,
@@ -66,7 +67,7 @@ export interface PreLiquidationBinding {
 /** Parameters for {@link decodeOperations}. */
 export interface DecodeOperationsParams {
   readonly chainId: number;
-  readonly mode: "preview" | "final";
+  readonly mode: SimulationMode;
   /** Pinned block the simulation is verified against; carried into error contexts. */
   readonly blockNumber: bigint;
   readonly transactions: readonly Readonly<SimulationTransaction>[];
@@ -121,7 +122,7 @@ interface ReallocationArg {
 
 interface Env {
   readonly chainId: number;
-  readonly mode: "preview" | "final";
+  readonly mode: SimulationMode;
   readonly blockNumber: bigint;
   readonly owner: Address;
   readonly morpho: Address;

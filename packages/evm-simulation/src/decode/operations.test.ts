@@ -1077,6 +1077,36 @@ describe("decodeOperations", () => {
     ).toThrow(ProtocolBindingMismatchError);
   });
 
+  test("error: ProtocolBindingMismatchError on migrate bound vault kind", () => {
+    const tx = vaultV1MigrateToV2({
+      vault: { chainId, address: VAULT_V1, asset: USDC },
+      args: {
+        assets: 1_000_000n,
+        targetVault: VAULT_V2,
+        targetAsset: USDC,
+        maxSharePriceVaultV2: 2n * 10n ** 27n,
+        userAddress: owner,
+        deadline: DEADLINE,
+      },
+    });
+    expect(() =>
+      decode([toTx(tx)], {
+        vaults: [
+          { address: VAULT_V1, kind: "vaultV2", asset: USDC },
+          { address: VAULT_V2, kind: "vaultV2", asset: USDC },
+        ],
+      }),
+    ).toThrow(ProtocolBindingMismatchError);
+    expect(() =>
+      decode([toTx(tx)], {
+        vaults: [
+          { address: VAULT_V1, kind: "vaultV1", asset: USDC },
+          { address: VAULT_V2, kind: "vaultV1", asset: USDC },
+        ],
+      }),
+    ).toThrow(ProtocolBindingMismatchError);
+  });
+
   test("error: ProtocolBindingMismatchError on native funding of non-wNative token", () => {
     const tx = blueSupply({
       market: { chainId, marketParams: marketParamsClass },

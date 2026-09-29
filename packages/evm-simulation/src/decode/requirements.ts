@@ -39,13 +39,14 @@ import {
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
+import type { SimulationMode } from "../params.js";
 import type { PreLiquidationBinding } from "./operations.js";
 
 type Fail = (message: string, options?: ErrorOptions) => never;
 
 interface Ctx {
   readonly chainId: number;
-  readonly mode: "preview" | "final";
+  readonly mode: SimulationMode;
   readonly blockNumber: bigint;
   readonly owner: Address;
   readonly index: number;
@@ -64,6 +65,16 @@ const bundlesSpenders = (ctx: Ctx): readonly Address[] =>
     ctx.addresses.bundles?.blueBundlesV1,
     ctx.addresses.bundles?.vaultBundlesV1,
     ctx.addresses.bundles?.vaultExitBundlesV1,
+  ].filter(isDefined);
+
+/**
+ * Spenders a Permit2 `PermitTransferFrom` may name: Blue and Vault bundles.
+ * VaultExitBundlesV1 takes share permits, not Permit2 transfers.
+ */
+const permit2Spenders = (ctx: Ctx): readonly Address[] =>
+  [
+    ctx.addresses.bundles?.blueBundlesV1,
+    ctx.addresses.bundles?.vaultBundlesV1,
   ].filter(isDefined);
 
 const failUnlessRegistered = (spec: {
@@ -395,34 +406,31 @@ const toPermit2SignatureTransfer = (
   ctx: Ctx,
 ): PendingAuthorization => {
   const { owner } = ctx;
-  const shapeFail = mismatch(ctx);
-  const shape = validators(shapeFail);
+  const fail = mismatch(ctx);
+  const v = validators(fail);
   const typedData = action.typedData;
-  shape.primaryType(typedData?.primaryType, "PermitTransferFrom");
-  const types = shape.record(typedData?.types, "types");
-  shape.exactTypes(types, ["PermitTransferFrom", "TokenPermissions"]);
-  shape.typesTuple(types.PermitTransferFrom, {
+  v.primaryType(typedData?.primaryType, "PermitTransferFrom");
+  const types = v.record(typedData?.types, "types");
+  v.exactTypes(types, ["PermitTransferFrom", "TokenPermissions"]);
+  v.typesTuple(types.PermitTransferFrom, {
     field: "types.PermitTransferFrom",
     expected: PERMIT2_TRANSFER_FROM_FIELDS,
   });
-  shape.typesTuple(types.TokenPermissions, {
+  v.typesTuple(types.TokenPermissions, {
     field: "types.TokenPermissions",
     expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
   });
-  const domain = parseDomain(typedData?.domain, shapeFail);
-  shape.domainChainId(domain.chainId, ctx.chainId);
+  const domain = parseDomain(typedData?.domain, fail);
+  v.domainChainId(domain.chainId, ctx.chainId);
   const permit2 = ctx.addresses.permit2;
   if (permit2 == null || !isAddressEqual(domain.verifyingContract, permit2)) {
-    shapeFail(
+    fail(
       `Typed data domain.verifyingContract expected the chain's canonical Permit2 "${permit2 ?? "unregistered"}", got "${domain.verifyingContract}"`,
     );
   }
-  const message = shape.record(typedData?.message, "message");
-  const permitted = shape.record(message.permitted, "message.permitted");
-  const token = shape.address(permitted.token, "message.permitted.token");
-
-  const fail = mismatch(ctx);
-  const v = validators(fail);
+  const message = v.record(typedData?.message, "message");
+  const permitted = v.record(message.permitted, "message.permitted");
+  const token = v.address(permitted.token, "message.permitted.token");
 
   const amount = v.bigint(permitted.amount, "message.permitted.amount");
   const spender = v.address(message.spender, "message.spender");
@@ -437,7 +445,7 @@ const toPermit2SignatureTransfer = (
     fail,
     field: "message.spender",
     observed: spender,
-    allowed: bundlesSpenders(ctx),
+    allowed: permit2Spenders(ctx),
   });
   v.equalBigint(amount, {
     expected: action.args.amount,
@@ -506,12 +514,12 @@ const toBlueAuthorizationSignature = (
       `Authorization operator "${authorized}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
-  failUnlessRegistered({
-    fail,
-    field: "message.authorized",
-    observed: authorized,
-    allowed: authorizationOperators(ctx),
-  });
+  const blueBundles = ctx.addresses.bundles?.blueBundlesV1;
+  if (blueBundles == null || !isAddressEqual(authorized, blueBundles)) {
+    fail(
+      `Authorization message.authorized expected BlueBundlesV1 "${blueBundles ?? "unregistered"}", got "${authorized}". Only BlueBundlesV1 authorizations are signed`,
+    );
+  }
   v.equalBoolean(isAuthorized, {
     expected: action.args.isAuthorized,
     field: "message.isAuthorized",
@@ -719,7 +727,7 @@ const toBlueAuthorization = (
  */
 export function toSimulationAuthorizations(params: {
   readonly chainId: number;
-  readonly mode: "preview" | "final";
+  readonly mode: SimulationMode;
   readonly blockNumber: bigint;
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];

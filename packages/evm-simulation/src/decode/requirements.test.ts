@@ -42,6 +42,10 @@ const DEADLINE = 4_000_000_000n;
 const NONCE = 7n;
 
 const vaultBundlesV1 = getChainAddress(CHAIN_ID, "bundles.vaultBundlesV1");
+const vaultExitBundlesV1 = getChainAddress(
+  CHAIN_ID,
+  "bundles.vaultExitBundlesV1",
+);
 const blueBundlesV1 = getChainAddress(CHAIN_ID, "bundles.blueBundlesV1");
 const permit2 = getChainAddress(CHAIN_ID, "permit2");
 const morpho = getChainAddresses(CHAIN_ID).blue;
@@ -1070,6 +1074,43 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
+  test("error: AuthorizationRequestMismatchError on a Permit2 spender that only takes share permits", () => {
+    const requirement = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const tampered: ActionRequirement = {
+      ...requirement,
+      action: {
+        ...requirement.action,
+        args: { ...requirement.action.args, spender: vaultExitBundlesV1 },
+        typedData: {
+          ...requirement.action.typedData,
+          message: {
+            ...(requirement.action.typedData.message as Record<
+              string,
+              unknown
+            >),
+            spender: vaultExitBundlesV1,
+          },
+        },
+      },
+    };
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
   test("error: AuthorizationRequestMismatchError on unregistered setAuthorization operator", () => {
     expect(() =>
       toSimulationAuthorizations({
@@ -1112,7 +1153,7 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
-  test("behavior: a bound pre-liquidation operator satisfies blueAuthorization", async () => {
+  test("behavior: a bound pre-liquidation operator satisfies only the blueAuthorization call", async () => {
     const bindingMarketParams = {
       loanToken: TOKEN,
       collateralToken: OTHER,
@@ -1137,6 +1178,8 @@ describe("toSimulationAuthorizations", () => {
         preLiquidations: [binding],
       })[0]?.type,
     ).toBe("blueAuthorization");
+    // Signed authorizations only bind BlueBundlesV1; pre-liquidation
+    // operators are allowed on the call path only.
     const signature = await blueAuthorizationSignatureRequirement({});
     const tampered: ActionRequirement = {
       ...signature,
@@ -1152,7 +1195,7 @@ describe("toSimulationAuthorizations", () => {
         },
       },
     };
-    expect(
+    expect(() =>
       toSimulationAuthorizations({
         chainId: CHAIN_ID,
         mode: "final",
@@ -1160,8 +1203,136 @@ describe("toSimulationAuthorizations", () => {
         owner: OWNER,
         requirements: [tampered],
         preLiquidations: [binding],
-      })[0]?.type,
-    ).toBe("blueAuthorizationSignature");
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
+  test("error: AuthorizationRequestMismatchError on message fields diverging from action.args", async () => {
+    const call = (requirements: ActionRequirement[]) => () =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements,
+      });
+    const tamperMessage = <
+      Action extends { readonly typedData: { readonly message: unknown } },
+    >(
+      action: Action,
+      message: Record<string, unknown>,
+    ) => ({
+      ...action,
+      typedData: {
+        ...action.typedData,
+        message: {
+          ...(action.typedData.message as Record<string, unknown>),
+          ...message,
+        },
+      },
+    });
+
+    const permit = permitRequirement({});
+    expect(
+      call([
+        { ...permit, action: tamperMessage(permit.action, { value: 0n }) },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+    expect(
+      call([
+        {
+          ...permit,
+          action: tamperMessage(permit.action, { deadline: DEADLINE + 1n }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const permit2Req = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    const tamperPermit2 = (message: Record<string, unknown>) =>
+      tamperMessage(permit2Req.action, message);
+    expect(
+      call([
+        {
+          ...permit2Req,
+          action: tamperPermit2({
+            permitted: {
+              ...(
+                permit2Req.action.typedData.message as unknown as {
+                  permitted: Record<string, unknown>;
+                }
+              ).permitted,
+              amount: 124n,
+            },
+          }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+    expect(
+      call([
+        {
+          ...permit2Req,
+          action: tamperPermit2({ deadline: DEADLINE + 1n }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const signature = await blueAuthorizationSignatureRequirement({});
+    const tamperAuthorization = (message: Record<string, unknown>) =>
+      tamperMessage(signature.action, message);
+    expect(
+      call([
+        {
+          ...signature,
+          action: tamperAuthorization({ isAuthorized: false }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+    expect(
+      call([
+        {
+          ...signature,
+          action: tamperAuthorization({ deadline: DEADLINE + 1n }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    const approval = encodeErc20Approval({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 42n,
+      chainId: CHAIN_ID,
+    });
+    expect(
+      call([
+        {
+          ...approval,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [vaultBundlesV1, 43n],
+          }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
+
+    expect(
+      call([
+        blueAuthorizationCall({
+          data: encodeFunctionData({
+            abi: blueAbi,
+            functionName: "setAuthorization",
+            args: [blueBundlesV1, false],
+          }),
+        }),
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
   });
 
   test("error: UnsupportedChainError on an unregistered chain", () => {
