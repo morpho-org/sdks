@@ -155,45 +155,76 @@ export type SimulationErrorLocation =
 
 interface SimulationContextBase {
   readonly mode: "preview" | "final";
+  /** Requested chain; known before any resolution. */
   readonly chainId: number;
-  readonly blockNumber: bigint;
-  readonly blockHash?: Hex;
-  readonly blockTimestamp?: bigint;
   readonly location?: SimulationErrorLocation;
 }
 
-interface OperationContext extends SimulationContextBase {
+interface PinnedContext extends SimulationContextBase {
+  readonly blockNumber: bigint;
+  readonly blockHash?: Hex;
+  readonly blockTimestamp?: bigint;
+}
+
+interface OperationContext extends PinnedContext {
   readonly operation: DecodedOperation["type"];
   readonly subject: SimulationSubject;
   readonly comparison?: SimulationComparison;
 }
 
 /**
- * Exact readonly context on every error, keyed by stage. Contains no signatures, RPC URLs,
- * credentials, raw calldata or raw causes; `cause` stays on the error for logging only.
+ * Exact readonly context on every error, keyed by stage. Validation and transport failures may
+ * precede block pinning, so only they omit `blockNumber`; no sentinel block is ever emitted.
+ * Contains no signatures, RPC URLs, credentials, raw calldata or raw causes; `cause` stays on
+ * the error for logging only.
  * @internal
  */
 export type SimulationErrorContext =
-  | (SimulationContextBase & {
-      readonly stage: "validation" | "preparation" | "transport";
-      readonly operation?: DecodedOperation["type"];
+  | {
+      [Stage in "validation" | "transport"]: SimulationContextBase & {
+        readonly stage: Stage;
+        readonly blockNumber?: bigint;
+        readonly operation?: DecodedOperation["type"];
+        readonly subject?: SimulationSubject;
+      };
+    }["validation" | "transport"]
+  | (PinnedContext & {
+      readonly stage: "preparation";
+      readonly location: Extract<
+        SimulationErrorLocation,
+        { type: "authorization" }
+      >;
       readonly subject?: SimulationSubject;
-      readonly comparison?: SimulationComparison;
     })
-  | (OperationContext & {
-      readonly stage: "execution";
-      readonly reasonCode: SimulationExecutionReason;
-    })
-  | (OperationContext & { readonly stage: "verification" });
+  | {
+      [Stage in "execution" | "verification"]: OperationContext & {
+        readonly stage: Stage;
+      };
+    }["execution" | "verification"];
 
-/** Structural shape checked by `isSimulationPackageError` when `instanceof` fails across bundles. @internal */
-export interface SimulationErrorShape<
-  Name extends keyof SimulationErrorCodes = keyof SimulationErrorCodes,
-> {
-  readonly name: Name;
-  readonly code: SimulationErrorCodes[Name];
-  readonly context: SimulationErrorContext;
+/** Class-specific fields beside the common context; `reasonCode` follows the ADR's `SimulationRevertedError`. */
+interface SimulationErrorExtras {
+  readonly SimulationRevertedError: {
+    readonly reasonCode: SimulationExecutionReason;
+  };
 }
+
+/**
+ * Structural shape checked by `isSimulationPackageError` when `instanceof` fails across bundles.
+ * Distributive: each `name` narrows `code` to its own literal and vice versa.
+ * @internal
+ */
+export type SimulationErrorShape<
+  Name extends keyof SimulationErrorCodes = keyof SimulationErrorCodes,
+> = {
+  [N in Name]: {
+    readonly name: N;
+    readonly code: SimulationErrorCodes[N];
+    readonly context: SimulationErrorContext;
+  } & (N extends keyof SimulationErrorExtras
+    ? SimulationErrorExtras[N]
+    : unknown);
+}[Name];
 
 type ConstraintField<T> = Extract<
   keyof T,
