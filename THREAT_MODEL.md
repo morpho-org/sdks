@@ -23,7 +23,7 @@ The SDK does reject an RPC answer when it can compare it with something the RPC 
 
 ### Out of our threat model
 
-Each finding below requires the endpoint to lie, except SDKS-498, which requires a lying token. Mitigating it would require trusting or independently verifying another source of truth. Cantina ids come first; Linear ids follow in parentheses.
+Each finding below requires the endpoint to lie, unless its entry names another precondition. Mitigating it would require trusting or independently verifying another source of truth. Cantina ids come first; Linear ids follow in parentheses.
 
 #### Vault accounting read by deployless queries (`blue-sdk-viem`)
 
@@ -122,12 +122,12 @@ Backend output is the only execution evidence the retention check sees. Format c
 - **SDKS-15** (SDK-394): a truncated result fails with `ExternalServiceError`. A caller that bypasses it accepts an unsimulated bundle.
 - **SDKS-543** (SDK-783): the dropped native refund was fixed separately (SDK-798). The remaining leg is a node hiding the trace.
 - **SDKS-498** (SDK-865): a malicious token, not the endpoint, emits a fake `Transfer`. It is listed because the fix it proposes, reading balances from the node, adds nothing: a token that lies in its events can also lie in `balanceOf`.
-- **SDKS-143** (SDK-621, SDK-1136), **SDKS-541** (SDK-890), **SDKS-406** (SDK-737): the endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id, so only a wrong URL would be caught.
+- **SDKS-143** (SDK-621, SDK-1136), **SDKS-541** (SDK-890), **SDKS-406** (SDK-737): the endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id. An honest endpoint on the wrong chain means the URL is set wrong, and the integrator owns that URL-to-chain mapping.
 - **SDKS-512** (SDK-1109): results carry no chain or block provenance. The caller chooses both.
 
 #### Tenderly responses (`evm-simulation`)
 
-Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. When its answer is unusable, the SDK re-simulates on `eth_simulateV1` if `simulateV1Url` is configured and otherwise throws `ExternalServiceError`. It never uses part of the answer.
+Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. When a response fails its schema, envelope or HTTP checks, the SDK re-simulates on `eth_simulateV1` if `simulateV1Url` is configured, and otherwise throws `ExternalServiceError`. Some optional fields are dropped or defaulted instead of rejected (SDKS-156, SDKS-508, SDKS-627).
 
 - **SDKS-13** (SDK-392, SDK-1232), **SDKS-706** (SDK-816): a malformed asset amount in a success response triggers the fallback or `ExternalServiceError`. Neither path uses the malformed evidence.
 - **SDKS-41** (SDK-420, SDK-1235), **SDKS-748** (SDK-1026): an out-of-range `rawAmount` cancels native evidence. Only an endpoint that forges amounts emits one.
@@ -154,5 +154,5 @@ Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. Whe
 - **SDKS-816** (SDK-717): a provider that reports chain A while serving chain B. Only the provider can answer `eth_chainId`.
 - **SDKS-527** (SDK-770), **SDKS-689** (SDK-769): failover to another backend with the same chain id. EIP-155 bytes are valid on every node of that chain.
 - **SDKS-493** (SDK-771): the RPC-returned EOA hash is used as is. A local hash would not help: the same provider reports inclusion and receipts for it.
-- **SDKS-613** (SDK-990): `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. The integrator pairs client and transport.
+- **SDKS-613** (SDK-990): `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - **SDKS-714** (SDK-1037): a stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
