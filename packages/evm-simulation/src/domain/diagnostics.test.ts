@@ -107,6 +107,14 @@ describe("simulation diagnostics", () => {
       context: SimulationErrorContext;
       reasonCode: "UNKNOWN_REVERT";
     }>().not.toExtend<SimulationErrorShape>();
+    expectTypeOf<
+      SimulationErrorShape<"SimulationRevertedError">["context"]["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
+    expectTypeOf<
+      Extract<SimulationErrorContext, { stage: "verification" }>
+    >().not.toExtend<
+      SimulationErrorShape<"SimulationRevertedError">["context"]
+    >();
     const preparationRevert: SimulationErrorShape<"SimulationRevertedError"> = {
       name: "SimulationRevertedError",
       code: "SIMULATION_REVERTED",
