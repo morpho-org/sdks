@@ -12,6 +12,7 @@ export type {
   PendingAuthorization,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
+  SimulationAuthorization,
 } from "./authorizations.js";
 export type {
   RetainedAsset,
@@ -46,13 +47,35 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
+  BlueAuthorizationLimit,
+  BlueBorrowLimit,
   BlueMarketOperationType,
+  BlueRefinanceLimit,
+  BlueRepayLimit,
+  BlueRepayWithdrawCollateralLimit,
+  BlueSupplyCollateralBorrowLimit,
+  BlueSupplyCollateralLimit,
+  BlueSupplyLimit,
+  BlueWithdrawCollateralLimit,
+  BlueWithdrawLimit,
+  MarketMinAssets,
+  OperationLimit,
   OperationType,
+  SimulationLimits,
   SimulationOperationSubject,
+  VaultDeallocation,
+  VaultDepositLimit,
+  VaultInKindRedeemLimit,
   VaultOperationType,
+  VaultRedeemLimit,
+  VaultV1MigrateToV2Limit,
+  VaultV2ForceRedeemLimit,
+  VaultV2ForceWithdrawLimit,
+  VaultWithdrawLimit,
 } from "./limits.js";
 export { OPERATION_TYPES } from "./limits.js";
 export type {
+  SimulateParams,
   SimulationMode,
   VerifiedSimulateParams,
 } from "./params.js";

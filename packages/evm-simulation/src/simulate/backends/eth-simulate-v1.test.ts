@@ -57,6 +57,7 @@ function simulateResult(calls: CallResult[], overrides: object = {}): unknown {
       number: numberToHex(STATE_BLOCK + 1n),
       timestamp: numberToHex(1_700_000_012n),
       hash: `0x${"cd".repeat(32)}`,
+      parentHash: `0x${"ab".repeat(32)}`,
       ...overrides,
       calls,
     },
@@ -417,6 +418,18 @@ describe.sequential("executePlan", () => {
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
+  });
+
+  test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
+      .mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect((error as Error).message).not.toContain("rpc.example");
+    expect((error as Error).cause).toBeDefined();
   });
 
   test.each([

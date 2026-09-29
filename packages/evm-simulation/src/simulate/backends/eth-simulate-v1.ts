@@ -3,6 +3,7 @@ import {
   type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
+  type Hex,
   http,
   numberToHex,
 } from "viem";
@@ -83,19 +84,28 @@ export async function executePlan(params: {
     }),
   });
 
-  let stateBlock: Awaited<ReturnType<typeof client.getBlock>>;
+  let stateBlock: {
+    readonly number: bigint;
+    readonly hash: Hex;
+    readonly timestamp: bigint;
+  };
   try {
     // Resolve the state block exactly once so `latest` cannot drift.
-    stateBlock = await client.getBlock(
+    const block = await client.getBlock(
       typeof blockNumber === "bigint"
         ? { blockNumber }
         : { blockTag: blockNumber ?? "latest" },
     );
-    if (stateBlock.number === null || stateBlock.hash === null) {
+    if (block.number === null || block.hash === null) {
       throw new ExternalServiceError(
         "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
       );
     }
+    stateBlock = {
+      number: block.number,
+      hash: block.hash,
+      timestamp: block.timestamp,
+    };
 
     // The configured endpoint must serve the request's chain.
     const rpcChainId = await client.getChainId();
@@ -117,11 +127,6 @@ export async function executePlan(params: {
     throw new ExternalServiceError(
       `eth_getBlock/eth_chainId error: ${safeMessage(error)}`,
       { cause: error },
-    );
-  }
-  if (stateBlock.number === null || stateBlock.hash === null) {
-    throw new ExternalServiceError(
-      "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
     );
   }
 
@@ -198,11 +203,19 @@ export async function executePlan(params: {
       error instanceof ExecutionRevertedError ||
       (error instanceof Error &&
         "code" in error &&
-        ((error as { code: unknown }).code === 3 ||
-          (error as { code: unknown }).code === -32003 ||
+        (error.code === 3 ||
+          error.code === -32003 ||
           /insufficient funds/i.test(error.message)))
     ) {
-      throw new SimulationRevertedError(safeMessage(error), error);
+      // The execution-stage context requires an operation-keyed subject and a
+      // node-level revert precedes operation decoding, so no context attaches.
+      throw new SimulationRevertedError(
+        error instanceof BaseError
+          ? error.details || error.shortMessage
+          : error.message,
+        error,
+        "UNKNOWN_REVERT",
+      );
     }
     throw new ExternalServiceError(
       `eth_simulateV1 error: ${safeMessage(error)}`,

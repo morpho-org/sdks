@@ -4,8 +4,7 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { InvalidSimulationResponseError } from "../errors.js";
-import type { VerifiedSimulateParams } from "../params.js";
+import type { SimulateParams } from "../params.js";
 import type { SimulationConfig, SimulationResult } from "../types.js";
 
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
@@ -74,13 +73,15 @@ import { parseRequest } from "./request/index.js";
  * @throws {MissingVerificationEvidenceError} when a probe fails or its data
  *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
- *   trusted (bad shape, call-count mismatch, block behind the pinned state,
- *   or a state-block hash that changed mid-flight).
+ *   trusted (bad shape, call-count mismatch, block that is neither the pinned
+ *   state block nor its immediate successor, or a state-block hash that
+ *   changed mid-flight).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
- *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Never bypassable.
+ *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
+ *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
- *   timeout budget or reports a different chain.
+ *   timeout budget.
  * @returns A frozen {@link SimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
  *   stamped with `txIdx`), and per-account net `assetChanges`.
@@ -110,7 +111,7 @@ import { parseRequest } from "./request/index.js";
  */
 export async function simulate(
   config: SimulationConfig,
-  params: VerifiedSimulateParams,
+  params: SimulateParams,
 ): Promise<SimulationResult> {
   const request = parseRequest(params);
 
@@ -136,19 +137,6 @@ export async function simulate(
     )
     .sort((a, b) => a.planned.transactionIndex - b.planned.transactionIndex)
     .map((call) => call.result);
-  if (userCalls.length !== request.transactions.length) {
-    throw new InvalidSimulationResponseError(
-      `Execution contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
-      {
-        context: {
-          stage: "transport",
-          chainId: request.chainId,
-          mode: request.mode,
-          blockNumber: execution.block.stateBlockNumber,
-        },
-      },
-    );
-  }
 
   const transfers = parseTransfers(userCalls, {
     wNative,

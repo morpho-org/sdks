@@ -14,7 +14,8 @@ export interface EffectiveSimulationLimits {
 /** Default slippage bound, identical to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03% WAD). */
 export const DEFAULT_MAX_SLIPPAGE_WAD = DEFAULT_SLIPPAGE_TOLERANCE;
 
-/** Default LLTV safety buffer: 0.5% WAD (WAD / 200). Callers may only increase it. */
+/** Default LLTV safety buffer: 0.5% WAD (WAD / 200). Callers may only increase it.
+ * Must equal morpho-sdk's `DEFAULT_LLTV_BUFFER` (packages/morpho-sdk/src/helpers/constant.ts); the builder and verifier share this floor. */
 export const DEFAULT_MIN_LLTV_BUFFER_WAD = MathLib.WAD / 200n;
 
 /** Default maximum signature lifetime: 7200 seconds from the pinned execution timestamp. */

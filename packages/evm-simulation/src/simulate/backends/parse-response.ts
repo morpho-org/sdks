@@ -1,6 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, type Hex, isAddress, isHex } from "viem";
-import { z } from "zod";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
@@ -52,43 +51,83 @@ export interface SimulationExecution {
 }
 
 // RPC quantities are never the empty "0x" — BigInt("0x") would throw.
-const quantity = z.string().regex(/^0x[0-9a-fA-F]+$/);
-const bytes32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
-const hexData = z.string().refine(isHex);
-const address = z.string().refine(isAddress);
+const isQuantity = (value: unknown): value is string =>
+  typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value);
+const isBytes32 = (value: unknown): value is Hex =>
+  typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+const isAddressValue = (value: unknown): value is Address =>
+  typeof value === "string" && isAddress(value);
+const isObject = (value: unknown): value is object =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const readField = (object: object, key: string): unknown =>
+  Reflect.get(object, key);
 
-const responseSchema = z
-  .array(
-    z.object({
-      number: quantity,
-      timestamp: quantity,
-      hash: bytes32,
-      calls: z.array(
-        z.object({
-          status: z.enum(["0x0", "0x1"]),
-          returnData: hexData,
-          gasUsed: quantity,
-          logs: z
-            .array(
-              z.object({
-                address,
-                topics: z.array(bytes32),
-                data: hexData.optional(),
-              }),
-            )
-            .optional(),
-          error: z
-            .object({
-              code: z.number().optional(),
-              message: z.string().optional(),
-              data: z.unknown().optional(),
-            })
-            .optional(),
-        }),
-      ),
-    }),
-  )
-  .length(1);
+interface RawLogEntry {
+  readonly address: Address;
+  readonly topics: readonly Hex[];
+  readonly data?: Hex;
+}
+
+interface RawCallResult {
+  readonly status: "0x0" | "0x1";
+  readonly returnData: Hex;
+  readonly gasUsed: string;
+  readonly logs?: readonly RawLogEntry[];
+  readonly error?: {
+    readonly code?: number;
+    readonly message?: string;
+    readonly data?: unknown;
+  };
+}
+
+interface RawBlockResult {
+  readonly number: string;
+  readonly timestamp: string;
+  readonly hash: Hex;
+  readonly parentHash?: Hex;
+  readonly calls: readonly RawCallResult[];
+}
+
+/** Raw `eth_simulateV1` result: exactly one simulated block. */
+type RawSimulateV1Response = readonly [RawBlockResult];
+
+const isRawLog = (value: unknown): value is RawLogEntry => {
+  if (!isObject(value)) return false;
+  const topics = readField(value, "topics");
+  const data = readField(value, "data");
+  return (
+    isAddressValue(readField(value, "address")) &&
+    Array.isArray(topics) &&
+    topics.every(isBytes32) &&
+    (data === undefined || isHex(data))
+  );
+};
+
+const isRawCall = (value: unknown): value is RawCallResult => {
+  if (!isObject(value)) return false;
+  const status = readField(value, "status");
+  const logs = readField(value, "logs");
+  const error = readField(value, "error");
+  return (
+    (status === "0x0" || status === "0x1") &&
+    isHex(readField(value, "returnData")) &&
+    isQuantity(readField(value, "gasUsed")) &&
+    (logs === undefined || (Array.isArray(logs) && logs.every(isRawLog))) &&
+    (error === undefined || isObject(error))
+  );
+};
+
+const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
+  Array.isArray(value) &&
+  value.length === 1 &&
+  isObject(value[0]) &&
+  isQuantity(readField(value[0], "number")) &&
+  isQuantity(readField(value[0], "timestamp")) &&
+  isBytes32(readField(value[0], "hash")) &&
+  (readField(value[0], "parentHash") === undefined ||
+    isBytes32(readField(value[0], "parentHash"))) &&
+  Array.isArray(readField(value[0], "calls")) &&
+  (readField(value[0], "calls") as readonly unknown[]).every(isRawCall);
 
 /**
  * Parse a raw `eth_simulateV1` response into a {@link SimulationExecution}.
@@ -104,7 +143,8 @@ const responseSchema = z
  * @returns Deep-frozen execution: tagged calls plus one
  *   {@link NativeBalanceReading} per successful probe.
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
- *   mismatch, or a simulated block behind the pinned state block.
+ *   mismatch, or a simulated block that is neither the pinned state block nor
+ *   its immediate successor.
  * @throws {SimulationRevertedError} When a user-transaction call failed; the
  *   `details` payload carries the tagged user call results only.
  * @throws {MissingVerificationEvidenceError} When a probe call failed or its
@@ -126,15 +166,14 @@ export function parseSimulationResponse(params: {
     blockNumber: params.stateBlockNumber,
   };
 
-  const parsed = responseSchema.safeParse(response);
-  if (!parsed.success) {
+  if (!isSimulateV1Response(response)) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
-      { cause: parsed.error, context: errorContext },
+      { context: errorContext },
     );
   }
 
-  const block = parsed.data[0]!;
+  const block = response[0];
   const blockNumber = BigInt(block.number);
   const blockTimestamp = BigInt(block.timestamp);
   if (

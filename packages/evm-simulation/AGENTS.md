@@ -22,3 +22,5 @@
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer typed failures and explicit backend support rules over broad catch/fallback logic.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
+
+- `DEFAULT_MIN_LLTV_BUFFER_WAD` must equal morpho-sdk's `DEFAULT_LLTV_BUFFER`; the builder and verifier share this floor (duplicated by layering, not imported).

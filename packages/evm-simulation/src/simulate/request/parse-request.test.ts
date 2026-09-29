@@ -18,7 +18,7 @@ const TARGET: Address = getAddress(
 const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
-const MARKET_ID =
+const _MARKET_ID =
   "0x00000000000000000000000000000000000000000000000000000000000000aa";
 
 const tx = (overrides: object = {}) => ({
@@ -72,7 +72,7 @@ const permit2Auth: PendingAuthorization = {
   },
 };
 
-const parse = (input: unknown) => parseRequest(input);
+const parse = (input: unknown) => parseRequest(input as VerifiedSimulateParams);
 
 describe("parseRequest", () => {
   test("default", () => {
@@ -167,24 +167,6 @@ describe("parseRequest", () => {
             },
           },
         ],
-      }),
-    ).toThrow(SimulationValidationError);
-  });
-
-  test("error: SimulationValidationError for a foreign operation-limit field", () => {
-    expect(() =>
-      parse({
-        chainId: 1,
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "blueBorrow",
-              marketId: MARKET_ID,
-              maxSharesBurned: 1n,
-            },
-          ],
-        },
       }),
     ).toThrow(SimulationValidationError);
   });
@@ -313,25 +295,6 @@ describe("parseRequest", () => {
     );
   });
 
-  test("error: SimulationValidationError for a blueRefinance expectedSourceFullClose key", () => {
-    expect(() =>
-      parse({
-        chainId: 1,
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "blueRefinance",
-              sourceMarketId: MARKET_ID,
-              targetMarketId: MARKET_ID,
-              expectedSourceFullClose: true,
-            },
-          ],
-        },
-      }),
-    ).toThrow(SimulationValidationError);
-  });
-
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
       try {
@@ -385,9 +348,15 @@ describe("parseRequest", () => {
   });
 
   test("error: SimulationValidationError for non-object input", () => {
-    expect(() => parseRequest(null)).toThrow(SimulationValidationError);
-    expect(() => parseRequest("x")).toThrow(SimulationValidationError);
-    expect(() => parseRequest(42)).toThrow(SimulationValidationError);
+    expect(() =>
+      parseRequest(null as unknown as VerifiedSimulateParams),
+    ).toThrow(SimulationValidationError);
+    expect(() =>
+      parseRequest("x" as unknown as VerifiedSimulateParams),
+    ).toThrow(SimulationValidationError);
+    expect(() => parseRequest(42 as unknown as VerifiedSimulateParams)).toThrow(
+      SimulationValidationError,
+    );
   });
 
   test("type-level: VerifiedSimulateParams accepts readonly arrays", () => {

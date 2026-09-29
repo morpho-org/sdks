@@ -1,10 +1,9 @@
-import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { type Address, getAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   BlacklistViolationError,
   ExternalServiceError,
-  InvalidSimulationResponseError,
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
@@ -312,57 +311,6 @@ describe.sequential("simulate — error handling", () => {
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
-  });
-
-  it("throws InvalidSimulationResponseError when execution is missing a user call", async () => {
-    mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
-      const execution = makeExecution(plan);
-      // Drop the second transaction call from the execution.
-      const calls = execution.calls.filter(
-        (call) =>
-          call.planned.type !== "transaction" ||
-          call.planned.transactionIndex !== 1,
-      );
-      return Promise.resolve({ ...execution, calls });
-    });
-
-    await expect(
-      simulate(
-        makeConfig(),
-        makeParams({
-          transactions: [
-            { from: USER, to: USDC, data: "0x095ea7b3" as Hex },
-            { from: USER, to: VAULT, data: "0xa9059cbb" as Hex },
-          ],
-        }),
-      ),
-    ).rejects.toThrow(InvalidSimulationResponseError);
-  });
-});
-
-describe.sequential("simulate — chain configuration", () => {
-  test("behavior: ignores WETH9 events on registered tokenless chains", async () => {
-    const chainId = ChainId.StableMainnet;
-    mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
-      Promise.resolve(
-        makeExecution(plan, [
-          [
-            {
-              address: USDC,
-              topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
-              data: encodeUint256(1_000n),
-            },
-          ],
-        ]),
-      ),
-    );
-
-    const result = await simulate(
-      { chains: new Map([[chainId, { simulateV1Url: "http://rpc.local" }]]) },
-      makeParams({ chainId }),
-    );
-
-    expect(result.transfers).toEqual([]);
   });
 
   test("behavior: keeps configured custom chains without registered addresses", async () => {

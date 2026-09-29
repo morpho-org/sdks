@@ -54,7 +54,8 @@ legacy variants, preview mode accepts five typed authorization descriptors:
 
 ```ts
 // v4
-{ type: "approval", token, spender, amount }
+{ type: "approval", transaction }
+{ type: "signature", token, spender, amount? }
 // v5 (preview mode)
 { mode: "preview", authorizations: [{ type: "erc20Approval", token, owner, spender, amount }] }
 ```
@@ -66,7 +67,9 @@ inflation — under-funded bundles revert like on-chain), and `simulationTxs` /
 the result. Authorization preparation and consumer-limit enforcement ship in
 later PRs: passing `authorizations` or `limits` throws
 `UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call, rather
-than being silently ignored.
+than being silently ignored. `SimulationRevertedError.details` now carries the
+viem error for a node-level revert or the tagged user-call results array when a
+user transaction reverted — not the v4 raw call list.
 The [ADR](../adrs/ADR-2026-09-18-evm-simulation-calldata-verification.md)
 describes the target contract.
 
