@@ -209,11 +209,20 @@ export async function executePlan(params: {
     ) {
       // The execution-stage context requires an operation-keyed subject and a
       // node-level revert precedes operation decoding, so no context attaches.
+      // `details` carries only the URL-free code/shortMessage — the raw viem
+      // error embeds the RPC URL and stays out of the error entirely.
       throw new SimulationRevertedError(
         error instanceof BaseError
           ? error.details || error.shortMessage
           : error.message,
-        error,
+        {
+          code:
+            "code" in error && typeof error.code !== "undefined"
+              ? error.code
+              : undefined,
+          shortMessage:
+            error instanceof BaseError ? error.shortMessage : error.message,
+        },
         "UNKNOWN_REVERT",
       );
     }

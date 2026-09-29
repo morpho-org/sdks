@@ -1,4 +1,5 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
+
 import { SimulationValidationError } from "../../errors.js";
 import {
   DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS,
@@ -18,6 +19,8 @@ describe("resolveEffectiveLimits", () => {
     });
     expect(resolved.maxSlippageWad).toBe(DEFAULT_MAX_SLIPPAGE_WAD);
     expect(resolved.minLltvBufferWad).toBe(DEFAULT_MIN_LLTV_BUFFER_WAD);
+    // Must equal morpho-sdk's DEFAULT_LLTV_BUFFER (the builder/verifier floor).
+    expect(DEFAULT_MIN_LLTV_BUFFER_WAD).toBe(MathLib.WAD / 200n);
     expect(resolved.maxSignatureLifetimeSeconds).toBe(
       DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS,
     );

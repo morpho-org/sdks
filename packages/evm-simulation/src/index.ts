@@ -9,7 +9,6 @@ export type {
   Erc20ApprovalAuthorization,
   Erc2612PermitAuthorization,
   Erc2612PermitTypedData,
-  PendingAuthorization,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
   SimulationAuthorization,
@@ -77,7 +76,6 @@ export { OPERATION_TYPES } from "./limits.js";
 export type {
   SimulateParams,
   SimulationMode,
-  VerifiedSimulateParams,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
 export { simulate } from "./simulate/index.js";

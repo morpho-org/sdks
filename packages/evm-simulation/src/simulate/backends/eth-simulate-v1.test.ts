@@ -48,7 +48,7 @@ interface CallResult {
   gasUsed?: string;
   returnData?: string;
   logs?: readonly unknown[];
-  error?: { code?: number; message?: string };
+  error?: unknown;
 }
 
 function simulateResult(calls: CallResult[], overrides: object = {}): unknown {
@@ -352,6 +352,132 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(blockResult()));
     const execution = await executePlan(params);
     expect(execution.block.blockNumber).toBe(STATE_BLOCK);
+  });
+
+  test("error: InvalidSimulationResponseError when the successor parentHash is not the pinned hash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: `0x${"ef".repeat(32)}` })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+  });
+
+  test("behavior: accepts a pinned block report with a different hash (Anvil re-hashes)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        rpc(
+          simulateResult(okCalls(3), {
+            number: numberToHex(STATE_BLOCK),
+            timestamp: numberToHex(1_700_000_000n),
+            hash: `0x${"ef".repeat(32)}`,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const execution = await executePlan(params);
+    expect(execution.block.blockNumber).toBe(STATE_BLOCK);
+  });
+
+  test.each([
+    ["non-bytes32 hash", { hash: "0x1234" }],
+    ["non-bytes32 parentHash", { parentHash: "0x1234" }],
+  ])(
+    "error: InvalidSimulationResponseError for %s",
+    async (_name, overrides) => {
+      fetchMock
+        .mockResolvedValueOnce(rpc(blockResult()))
+        .mockResolvedValueOnce(rpc("0x1"))
+        .mockResolvedValueOnce(rpc(simulateResult(okCalls(3), overrides)))
+        .mockResolvedValueOnce(rpc(blockResult()));
+      await expect(executePlan(params)).rejects.toBeInstanceOf(
+        InvalidSimulationResponseError,
+      );
+    },
+  );
+
+  test("error: InvalidSimulationResponseError for a two-block response", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        rpc([...(simulateResult(okCalls(3)) as unknown[]), {}]),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+  });
+
+  test.each([
+    [
+      "non-hex returnData",
+      [{ status: "0x1", gasUsed: "0x1", returnData: "0xzz" }],
+    ],
+    [
+      "non-bytes32 topic",
+      [
+        {
+          status: "0x1",
+          gasUsed: "0x1",
+          returnData: "0x",
+          logs: [
+            {
+              address: "0x1111111111111111111111111111111111111111",
+              topics: ["0x1234"],
+              data: "0x",
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      "non-hex log data",
+      [
+        {
+          status: "0x1",
+          gasUsed: "0x1",
+          returnData: "0x",
+          logs: [
+            {
+              address: "0x1111111111111111111111111111111111111111",
+              topics: [],
+              data: "0xzz",
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      "non-object error",
+      [{ status: "0x1", gasUsed: "0x1", returnData: "0x", error: "reverted" }],
+    ],
+    [
+      "non-string error.message",
+      [
+        {
+          status: "0x1",
+          gasUsed: "0x1",
+          returnData: "0x",
+          error: { code: 3, message: 42 },
+        },
+      ],
+    ],
+  ])("error: InvalidSimulationResponseError for %s", async (_name, calls) => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(simulateResult(calls)))
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
   });
 
   test("error: InvalidSimulationResponseError for a block behind the state block", async () => {

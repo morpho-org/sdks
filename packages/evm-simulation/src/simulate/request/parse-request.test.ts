@@ -373,6 +373,466 @@ describe("parseRequest", () => {
     expectTypeOf<ParsedRequest["chainId"]>().toEqualTypeOf<number>();
   });
 
+  const permitAuth: PendingAuthorization = {
+    type: "erc2612Permit",
+    typedData: {
+      domain: {
+        name: "USD Coin",
+        version: "2",
+        chainId: 1,
+        verifyingContract: getAddress(
+          "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        ),
+      },
+      primaryType: "Permit",
+      types: {
+        Permit: [
+          { name: "owner", type: "address" },
+          { name: "spender", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      message: {
+        owner: OWNER,
+        spender: SPENDER,
+        value: 7n,
+        nonce: 0n,
+        deadline: 9_999_999n,
+      },
+    },
+  };
+
+  const blueSigAuth: PendingAuthorization = {
+    type: "blueAuthorizationSignature",
+    typedData: {
+      domain: {
+        name: "Morpho",
+        version: "1",
+        chainId: 1,
+        verifyingContract: getAddress(
+          "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        ),
+      },
+      primaryType: "Authorization",
+      types: {
+        Authorization: [
+          { name: "authorizer", type: "address" },
+          { name: "authorized", type: "address" },
+          { name: "isAuthorized", type: "bool" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      message: {
+        authorizer: OWNER,
+        authorized: SPENDER,
+        isAuthorized: true,
+        nonce: 0n,
+        deadline: 9_999_999n,
+      },
+    },
+  };
+
+  test("behavior: input objects are not returned or frozen", () => {
+    const input = {
+      chainId: 1,
+      mode: "preview",
+      transactions: [tx()],
+      authorizations: [erc20Approval, permit2Auth],
+      limits: {
+        maxSlippageWad: 1n,
+        operations: [{ type: "blueAuthorization", authorized: SPENDER }],
+      },
+    };
+    const request = parse(input);
+    expect(Object.isFrozen(input.authorizations[0])).toBe(false);
+    expect(Object.isFrozen(input.limits)).toBe(false);
+    expect(request.authorizations[0]).not.toBe(erc20Approval);
+    expect(request.authorizations[0]).toEqual(erc20Approval);
+    expect(request.authorizations[1]).not.toBe(permit2Auth);
+    expect(request.limits?.operations?.[0]).toMatchObject({
+      type: "blueAuthorization",
+      authorized: SPENDER,
+    });
+  });
+
+  test.each([
+    [
+      "unknown limit field",
+      { transactions: [tx()], limits: { maxSlipageWad: 1n } },
+    ],
+    [
+      "unknown operation field",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "blueBorrow",
+              marketId: _MARKET_ID,
+              maxLtvAftrWad: 1n,
+            },
+          ],
+        },
+      },
+    ],
+    ["unknown transaction field", { transactions: [tx({ gasPrice: 1n })] }],
+    [
+      "unknown authorization field",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [{ ...erc20Approval, nonce: 0n }],
+      },
+    ],
+  ])("error: SimulationValidationError for %s", (_name, input) => {
+    expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
+      SimulationValidationError,
+    );
+  });
+
+  test.each([
+    [
+      "null operation",
+      { transactions: [tx()], limits: { operations: [null] } },
+    ],
+    [
+      "operation transactionIndex without transactions",
+      {
+        transactions: null,
+        limits: {
+          operations: [
+            {
+              type: "blueAuthorization",
+              authorized: SPENDER,
+              transactionIndex: 0,
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "prototype-polluting type",
+      {
+        transactions: [tx()],
+        limits: { operations: [{ type: "constructor" }] },
+      },
+    ],
+    [
+      "erc2612Permit wrong primaryType",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "erc2612Permit",
+            typedData: { ...permitAuth.typedData, primaryType: "PermitX" },
+          },
+        ],
+      },
+    ],
+    [
+      "erc2612Permit reordered fields",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "erc2612Permit",
+            typedData: {
+              ...permitAuth.typedData,
+              types: {
+                Permit: [...permitAuth.typedData.types.Permit].reverse(),
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "erc2612Permit out-of-range nonce",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "erc2612Permit",
+            typedData: {
+              ...permitAuth.typedData,
+              message: { ...permitAuth.typedData.message, nonce: -1n },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "erc2612Permit out-of-range deadline",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "erc2612Permit",
+            typedData: {
+              ...permitAuth.typedData,
+              message: {
+                ...permitAuth.typedData.message,
+                deadline: maxUint256 + 1n,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "blueAuthorizationSignature non-bool isAuthorized",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "blueAuthorizationSignature",
+            typedData: {
+              ...blueSigAuth.typedData,
+              message: {
+                ...blueSigAuth.typedData.message,
+                isAuthorized: "yes",
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "blueAuthorizationSignature reordered fields",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            type: "blueAuthorizationSignature",
+            typedData: {
+              ...blueSigAuth.typedData,
+              types: {
+                Authorization: [
+                  ...blueSigAuth.typedData.types.Authorization,
+                ].reverse(),
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "permit2 TokenPermissions order",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...permit2Auth,
+            typedData: {
+              ...permit2Auth.typedData,
+              types: {
+                ...permit2Auth.typedData.types,
+                TokenPermissions: [
+                  ...permit2Auth.typedData.types.TokenPermissions,
+                ].reverse(),
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "domain bad verifyingContract",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...permit2Auth,
+            typedData: {
+              ...permit2Auth.typedData,
+              domain: {
+                ...permit2Auth.typedData.domain,
+                verifyingContract: "0xnot",
+              },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "domain bad salt",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...permit2Auth,
+            typedData: {
+              ...permit2Auth.typedData,
+              domain: { ...permit2Auth.typedData.domain, salt: "0x1234" },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "domain invalid chainId",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...permit2Auth,
+            typedData: {
+              ...permit2Auth.typedData,
+              domain: { ...permit2Auth.typedData.domain, chainId: "one" },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "unknown authorization type",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [{ type: "mystery" }],
+      },
+    ],
+    [
+      "operation bad marketId",
+      {
+        transactions: [tx()],
+        limits: { operations: [{ type: "blueBorrow", marketId: "0x12" }] },
+      },
+    ],
+    [
+      "operation bad address",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [{ type: "blueAuthorization", authorized: "0xnot" }],
+        },
+      },
+    ],
+    [
+      "operation bad uint",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "blueAuthorization",
+              authorized: SPENDER,
+              expectedIsAuthorized: true,
+              maxExpected: -2n,
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "operation bad bool",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "blueAuthorization",
+              authorized: SPENDER,
+              expectedIsAuthorized: "yes",
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "operation bad marketId array",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV1InKindRedeem",
+              vault: SPENDER,
+              expectedMarketIds: ["0x12"],
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "operation bad deallocations",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2ForceRedeem",
+              vault: SPENDER,
+              expectedDeallocations: [
+                { adapter: "0xnot", marketId: _MARKET_ID, assets: 1n },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "operation bad minSupplyByMarket",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV1InKindRedeem",
+              vault: SPENDER,
+              minSupplyAssetsByMarket: [
+                { marketId: _MARKET_ID, minSupplyAssets: -1n },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    [
+      "operation missing required address",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [{ type: "vaultV1Deposit", expectedAssets: 1n }],
+        },
+      },
+    ],
+    ["invalid mode", { mode: "draft", transactions: [tx()] }],
+    ["negative blockNumber", { blockNumber: -1n, transactions: [tx()] }],
+    ["non-hex data", { transactions: [tx({ data: "0xzz" })] }],
+    ["non-object transaction", { transactions: [42] }],
+    [
+      "non-array authorizations",
+      { mode: "preview", transactions: [tx()], authorizations: {} },
+    ],
+    ["non-object limits", { transactions: [tx()], limits: 7 }],
+    [
+      "non-array operations",
+      { transactions: [tx()], limits: { operations: {} } },
+    ],
+    [
+      "non-bigint maxSlippageWad",
+      { transactions: [tx()], limits: { maxSlippageWad: "1" } },
+    ],
+  ])("error: SimulationValidationError for %s", (_name, input) => {
+    expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
+      SimulationValidationError,
+    );
+  });
+
   test("behavior: zeroAddress from is schema-valid per the domain type", () => {
     // Address format passes; semantic zero-sender rejection is not a parser rule.
     const request = parse({

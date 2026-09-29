@@ -8,6 +8,6 @@ Export the error contract from ADR-2026-09-18: `SIMULATION_ERROR_CODES` / `Simul
 
 `SimulationRevertedError.reasonCode: SimulationExecutionReason` is the machine-readable cause of an execution failure (defaults to `"UNKNOWN_REVERT"`); `reason` stays a human-readable message that consumers must not parse.
 
-These contracts are declared ahead of the verification pipeline: in this release no code path throws one of the new verification error classes and `reasonCode` is always `"UNKNOWN_REVERT"`. Revert mapping and verification land in the follow-up PRs (SDK-1293/1294).
+The verification error classes and `reasonCode` constants are declared ahead of the full pipeline: most classes gain throwing call sites in the follow-up PRs (SDK-1293+), while `SimulationRevertedError` now carries a structured `details` payload.
 
 **Breaking:** `BlacklistViolationError.assetChanges` entries are `{ address: Address; token: Address; netRetained: bigint }` (previously optional string addresses and a decimal-string amount). `SimulationPackageError.code` is typed as `SimulationErrorCode` and the base class declares `readonly context?: SimulationErrorContext`.

@@ -69,7 +69,9 @@ import { parseRequest } from "./request/index.js";
  *   limits are supplied before their verification release.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
- * @throws {SimulationRevertedError} when a user transaction reverts.
+ * @throws {SimulationRevertedError} when a user transaction or the bundle
+ * reverts at the node (including unfundable `value`); `details` carries the
+ * URL-free revert context.
  * @throws {MissingVerificationEvidenceError} when a probe fails or its data
  *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be

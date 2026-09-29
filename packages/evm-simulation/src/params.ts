@@ -9,7 +9,7 @@ export const SIMULATION_MODES = ["preview", "final"] as const;
 /** Simulation mode: `"preview"` accepts pending authorizations, `"final"` does not. */
 export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
-/** Target `simulate()` input. `authorizations` is accepted only in "preview". */
+/** @internal Target `simulate()` input. `authorizations` is accepted only in "preview". */
 export interface VerifiedSimulateParams {
   readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
@@ -17,11 +17,12 @@ export interface VerifiedSimulateParams {
   readonly mode?: SimulationMode;
   /** Pending wallet requests, in order. Preview only; rejected in final. */
   readonly authorizations?: readonly PendingAuthorization[];
-  /** Resolved once; defaults to "latest". */
-  readonly blockNumber?: bigint | BlockTag;
+  /** Resolved once; defaults to "latest". Only canonical (mined) blocks can be
+   * pinned; `pending` has no stable hash and is rejected at runtime. */
+  readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   /** Consumers may only tighten; omitted values use SDK defaults. */
   readonly limits?: SimulationLimits;
 }
 
-/** `simulate()` input — alias of {@link VerifiedSimulateParams}. */
+/** `simulate()` input — the public name of the v5 params object. */
 export type SimulateParams = VerifiedSimulateParams;

@@ -95,7 +95,7 @@ export interface BlueAuthorizationSignature {
   readonly typedData: BlueAuthorizationTypedData;
 }
 
-/** A wallet request the user has not completed yet. */
+/** @internal A wallet request the user has not completed yet. */
 export type PendingAuthorization =
   | Erc20ApprovalAuthorization
   | Erc2612PermitAuthorization
@@ -103,5 +103,5 @@ export type PendingAuthorization =
   | BlueAuthorization
   | BlueAuthorizationSignature;
 
-/** A pending wallet request passed to `simulate()` — alias of {@link PendingAuthorization}. */
+/** A pending wallet request passed to `simulate()` — the five typed variants. */
 export type SimulationAuthorization = PendingAuthorization;

@@ -11,11 +11,18 @@ import {
   maxUint256,
 } from "viem";
 import type {
+  Eip712Domain,
   Eip712Field,
   PendingAuthorization,
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
-import type { OperationType, SimulationLimits } from "../../limits.js";
+import type {
+  MarketMinAssets,
+  OperationLimit,
+  OperationType,
+  SimulationLimits,
+  VaultDeallocation,
+} from "../../limits.js";
 import type { SimulationMode, VerifiedSimulateParams } from "../../params.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import { resolveEffectiveLimits } from "./effective-limits.js";
@@ -39,7 +46,7 @@ export interface ParsedRequest {
   readonly transactions: readonly ParsedTransaction[];
   /** Always empty in final mode. */
   readonly authorizations: readonly PendingAuthorization[];
-  readonly blockNumber?: bigint | BlockTag;
+  readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly limits?: SimulationLimits;
 }
 
@@ -98,7 +105,11 @@ interface FieldChecks {
   uint256(value: unknown, path: string): bigint | undefined;
   bool(value: unknown, path: string): boolean | undefined;
   nonNegInt(value: unknown, path: string): number | undefined;
-  domain(value: unknown, path: string): void;
+  keys(
+    value: unknown,
+    args: { readonly allow: readonly string[]; readonly path: string },
+  ): void;
+  domain(value: unknown, path: string): Eip712Domain | undefined;
   fields(args: {
     readonly actual: unknown;
     readonly expected: readonly {
@@ -108,8 +119,54 @@ interface FieldChecks {
     readonly path: string;
   }): void;
   authorization(value: unknown, path: string): PendingAuthorization | undefined;
-  operation(value: unknown, path: string): void;
+  operation(value: unknown, path: string): OperationLimit | undefined;
 }
+
+const DOMAIN_KEYS = [
+  "name",
+  "version",
+  "chainId",
+  "verifyingContract",
+  "salt",
+] as const;
+const TYPED_DATA_KEYS = ["domain", "primaryType", "types", "message"] as const;
+const ERC2612_MESSAGE_KEYS = [
+  "owner",
+  "spender",
+  "value",
+  "nonce",
+  "deadline",
+] as const;
+const PERMIT2_MESSAGE_KEYS = [
+  "permitted",
+  "spender",
+  "nonce",
+  "deadline",
+] as const;
+const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
+const BLUE_AUTHORIZATION_MESSAGE_KEYS = [
+  "authorizer",
+  "authorized",
+  "isAuthorized",
+  "nonce",
+  "deadline",
+] as const;
+const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
+const LIMITS_KEYS = [
+  "maxSlippageWad",
+  "minLltvBufferWad",
+  "maxSignatureLifetimeSeconds",
+  "operations",
+] as const;
+const DEALLOCATION_KEYS = ["adapter", "marketId", "assets"] as const;
+const MIN_SUPPLY_KEYS = ["marketId", "minAssets"] as const;
+const AUTHORIZATION_KEYS: Readonly<Record<string, readonly string[]>> = {
+  erc20Approval: ["type", "token", "owner", "spender", "amount"],
+  erc2612Permit: ["type", "typedData"],
+  permit2SignatureTransfer: ["type", "owner", "typedData"],
+  blueAuthorization: ["type", "authorizer", "authorized", "isAuthorized"],
+  blueAuthorizationSignature: ["type", "typedData"],
+};
 
 /** Field validators closing over one `errors` accumulator. @internal */
 const createChecks = (): FieldChecks => {
@@ -174,11 +231,22 @@ const createChecks = (): FieldChecks => {
       return undefined;
     },
 
+    keys: (value, { allow, path }) => {
+      if (!isRecord(value)) return;
+      for (const key of Object.keys(value)) {
+        if (!allow.includes(key)) errors.push(`${path}.${key}: unknown field`);
+      }
+    },
+
     domain: (domain, path) => {
       if (!isRecord(domain)) {
         errors.push(`${path}: must be an object`);
-        return;
+        return undefined;
       }
+      check.keys(domain, {
+        allow: DOMAIN_KEYS,
+        path,
+      });
       const name = readField(domain, "name");
       if (name !== undefined && typeof name !== "string")
         errors.push(`${path}.name: must be a string`);
@@ -193,12 +261,22 @@ const createChecks = (): FieldChecks => {
         (typeof chainId === "bigint" && chainId >= 0n && chainId <= maxUint256);
       if (!validChainId)
         errors.push(`${path}.chainId: must be a positive integer or uint256`);
-      check.address(
+      const verifyingContract = check.address(
         readField(domain, "verifyingContract"),
         `${path}.verifyingContract`,
       );
       const salt = readField(domain, "salt");
       if (salt !== undefined) check.bytes32(salt, `${path}.salt`);
+      if (!validChainId || verifyingContract === undefined) return undefined;
+      return {
+        ...(typeof name === "string" ? { name } : {}),
+        ...(typeof version === "string" ? { version } : {}),
+        chainId: chainId as number | bigint,
+        verifyingContract,
+        ...(salt !== undefined && isRecord(domain)
+          ? { salt: salt as Hex }
+          : {}),
+      };
     },
 
     fields: ({ actual, expected, path }) => {
@@ -224,22 +302,50 @@ const createChecks = (): FieldChecks => {
         errors.push(`${path}.type: must name an authorization type`);
         return undefined;
       }
+      if (!(type in AUTHORIZATION_KEYS)) {
+        errors.push(`${path}.type: unsupported authorization type "${type}"`);
+        return undefined;
+      }
+      check.keys(authorization, { allow: AUTHORIZATION_KEYS[type]!, path });
       const errorsBefore = errors.length;
       switch (type) {
         case "erc20Approval": {
-          check.address(readField(authorization, "token"), `${path}.token`);
-          check.address(readField(authorization, "owner"), `${path}.owner`);
-          check.address(readField(authorization, "spender"), `${path}.spender`);
-          check.uint256(readField(authorization, "amount"), `${path}.amount`);
-          break;
+          const token = check.address(
+            readField(authorization, "token"),
+            `${path}.token`,
+          );
+          const owner = check.address(
+            readField(authorization, "owner"),
+            `${path}.owner`,
+          );
+          const spender = check.address(
+            readField(authorization, "spender"),
+            `${path}.spender`,
+          );
+          const amount = check.uint256(
+            readField(authorization, "amount"),
+            `${path}.amount`,
+          );
+          if (
+            token === undefined ||
+            owner === undefined ||
+            spender === undefined ||
+            amount === undefined
+          )
+            return undefined;
+          return { type: "erc20Approval", token, owner, spender, amount };
         }
         case "erc2612Permit": {
           const typedData = readField(authorization, "typedData");
           if (!isRecord(typedData)) {
             errors.push(`${path}.typedData: must be an object`);
-            break;
+            return undefined;
           }
-          check.domain(
+          check.keys(typedData, {
+            allow: TYPED_DATA_KEYS,
+            path: `${path}.typedData`,
+          });
+          const domain = check.domain(
             readField(typedData, "domain"),
             `${path}.typedData.domain`,
           );
@@ -248,38 +354,87 @@ const createChecks = (): FieldChecks => {
               `${path}.typedData.primaryType: must be "Permit" (got ${String(readField(typedData, "primaryType"))})`,
             );
           const types = readField(typedData, "types");
+          const permitFields = isRecord(types)
+            ? readField(types, "Permit")
+            : undefined;
           check.fields({
-            actual: isRecord(types) ? readField(types, "Permit") : undefined,
+            actual: permitFields,
             expected: ERC2612_PERMIT_FIELDS,
             path: `${path}.typedData.types.Permit`,
           });
           const message = readField(typedData, "message");
           if (!isRecord(message)) {
             errors.push(`${path}.typedData.message: must be an object`);
-            break;
+            return undefined;
           }
           const messagePath = `${path}.typedData.message`;
-          check.address(readField(message, "owner"), `${messagePath}.owner`);
-          check.address(
+          check.keys(message, {
+            allow: ERC2612_MESSAGE_KEYS,
+            path: messagePath,
+          });
+          const owner = check.address(
+            readField(message, "owner"),
+            `${messagePath}.owner`,
+          );
+          const spender = check.address(
             readField(message, "spender"),
             `${messagePath}.spender`,
           );
-          check.uint256(readField(message, "value"), `${messagePath}.value`);
-          check.uint256(readField(message, "nonce"), `${messagePath}.nonce`);
-          check.uint256(
+          const value = check.uint256(
+            readField(message, "value"),
+            `${messagePath}.value`,
+          );
+          const nonce = check.uint256(
+            readField(message, "nonce"),
+            `${messagePath}.nonce`,
+          );
+          const deadline = check.uint256(
             readField(message, "deadline"),
             `${messagePath}.deadline`,
           );
-          break;
+          if (
+            errors.length !== errorsBefore ||
+            domain === undefined ||
+            owner === undefined ||
+            spender === undefined ||
+            value === undefined ||
+            nonce === undefined ||
+            deadline === undefined ||
+            !Array.isArray(permitFields)
+          )
+            return undefined;
+          return {
+            type: "erc2612Permit",
+            typedData: {
+              domain,
+              primaryType: "Permit",
+              types: {
+                Permit: (permitFields as readonly Eip712Field[]).map(
+                  ({ name, type: fieldType }) => ({
+                    name,
+                    type: fieldType,
+                  }),
+                ),
+              },
+              message: { owner, spender, value, nonce, deadline },
+            },
+          };
         }
         case "permit2SignatureTransfer": {
-          check.address(readField(authorization, "owner"), `${path}.owner`);
+          const owner = check.address(
+            readField(authorization, "owner"),
+            `${path}.owner`,
+          );
           const typedData = readField(authorization, "typedData");
           if (!isRecord(typedData)) {
             errors.push(`${path}.typedData: must be an object`);
-            break;
+            return undefined;
           }
-          check.domain(
+          check.keys(typedData, {
+            allow: TYPED_DATA_KEYS,
+            path: `${path}.typedData`,
+          });
+          const domain = check.domain(
             readField(typedData, "domain"),
             `${path}.typedData.domain`,
           );
@@ -288,17 +443,19 @@ const createChecks = (): FieldChecks => {
               `${path}.typedData.primaryType: must be "PermitTransferFrom" (got ${String(readField(typedData, "primaryType"))})`,
             );
           const types = readField(typedData, "types");
+          const transferFields = isRecord(types)
+            ? readField(types, "PermitTransferFrom")
+            : undefined;
+          const permissionFields = isRecord(types)
+            ? readField(types, "TokenPermissions")
+            : undefined;
           check.fields({
-            actual: isRecord(types)
-              ? readField(types, "PermitTransferFrom")
-              : undefined,
+            actual: transferFields,
             expected: PERMIT2_TRANSFER_FIELDS,
             path: `${path}.typedData.types.PermitTransferFrom`,
           });
           check.fields({
-            actual: isRecord(types)
-              ? readField(types, "TokenPermissions")
-              : undefined,
+            actual: permissionFields,
             expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
             path: `${path}.typedData.types.TokenPermissions`,
           });
@@ -310,50 +467,119 @@ const createChecks = (): FieldChecks => {
             errors.push(
               `${path}.typedData.message: must carry permitted token and amount`,
             );
-            break;
+            return undefined;
           }
           const messagePath = `${path}.typedData.message`;
-          check.address(
+          check.keys(message, {
+            allow: PERMIT2_MESSAGE_KEYS,
+            path: messagePath,
+          });
+          check.keys(permitted, {
+            allow: PERMIT2_PERMITTED_KEYS,
+            path: `${messagePath}.permitted`,
+          });
+          const permittedToken = check.address(
             readField(permitted, "token"),
             `${messagePath}.permitted.token`,
           );
-          check.uint256(
+          const permittedAmount = check.uint256(
             readField(permitted, "amount"),
             `${messagePath}.permitted.amount`,
           );
-          check.address(
+          const spender = check.address(
             readField(message, "spender"),
             `${messagePath}.spender`,
           );
-          check.uint256(readField(message, "nonce"), `${messagePath}.nonce`);
-          check.uint256(
+          const nonce = check.uint256(
+            readField(message, "nonce"),
+            `${messagePath}.nonce`,
+          );
+          const deadline = check.uint256(
             readField(message, "deadline"),
             `${messagePath}.deadline`,
           );
-          break;
+          if (
+            errors.length !== errorsBefore ||
+            domain === undefined ||
+            owner === undefined ||
+            permittedToken === undefined ||
+            permittedAmount === undefined ||
+            spender === undefined ||
+            nonce === undefined ||
+            deadline === undefined ||
+            !Array.isArray(transferFields) ||
+            !Array.isArray(permissionFields)
+          )
+            return undefined;
+          return {
+            type: "permit2SignatureTransfer",
+            owner,
+            typedData: {
+              domain,
+              primaryType: "PermitTransferFrom",
+              types: {
+                PermitTransferFrom: (
+                  transferFields as readonly Eip712Field[]
+                ).map(({ name, type: fieldType }) => ({
+                  name,
+                  type: fieldType,
+                })),
+                TokenPermissions: (
+                  permissionFields as readonly Eip712Field[]
+                ).map(({ name, type: fieldType }) => ({
+                  name,
+                  type: fieldType,
+                })),
+              },
+              message: {
+                permitted: {
+                  token: permittedToken,
+                  amount: permittedAmount,
+                },
+                spender,
+                nonce,
+                deadline,
+              },
+            },
+          };
         }
         case "blueAuthorization": {
-          check.address(
+          const authorizer = check.address(
             readField(authorization, "authorizer"),
             `${path}.authorizer`,
           );
-          check.address(
+          const authorized = check.address(
             readField(authorization, "authorized"),
             `${path}.authorized`,
           );
-          check.bool(
+          const isAuthorized = check.bool(
             readField(authorization, "isAuthorized"),
             `${path}.isAuthorized`,
           );
-          break;
+          if (
+            authorizer === undefined ||
+            authorized === undefined ||
+            isAuthorized === undefined
+          )
+            return undefined;
+          return {
+            type: "blueAuthorization",
+            authorizer,
+            authorized,
+            isAuthorized,
+          };
         }
         case "blueAuthorizationSignature": {
           const typedData = readField(authorization, "typedData");
           if (!isRecord(typedData)) {
             errors.push(`${path}.typedData: must be an object`);
-            break;
+            return undefined;
           }
-          check.domain(
+          check.keys(typedData, {
+            allow: TYPED_DATA_KEYS,
+            path: `${path}.typedData`,
+          });
+          const domain = check.domain(
             readField(typedData, "domain"),
             `${path}.typedData.domain`,
           );
@@ -362,48 +588,81 @@ const createChecks = (): FieldChecks => {
               `${path}.typedData.primaryType: must be "Authorization" (got ${String(readField(typedData, "primaryType"))})`,
             );
           const types = readField(typedData, "types");
+          const authorizationFields = isRecord(types)
+            ? readField(types, "Authorization")
+            : undefined;
           check.fields({
-            actual: isRecord(types)
-              ? readField(types, "Authorization")
-              : undefined,
+            actual: authorizationFields,
             expected: BLUE_AUTHORIZATION_FIELDS,
             path: `${path}.typedData.types.Authorization`,
           });
           const message = readField(typedData, "message");
           if (!isRecord(message)) {
             errors.push(`${path}.typedData.message: must be an object`);
-            break;
+            return undefined;
           }
           const messagePath = `${path}.typedData.message`;
-          check.address(
+          check.keys(message, {
+            allow: BLUE_AUTHORIZATION_MESSAGE_KEYS,
+            path: messagePath,
+          });
+          const authorizer = check.address(
             readField(message, "authorizer"),
             `${messagePath}.authorizer`,
           );
-          check.address(
+          const authorized = check.address(
             readField(message, "authorized"),
             `${messagePath}.authorized`,
           );
-          check.bool(
+          const isAuthorized = check.bool(
             readField(message, "isAuthorized"),
             `${messagePath}.isAuthorized`,
           );
-          check.uint256(readField(message, "nonce"), `${messagePath}.nonce`);
-          check.uint256(
+          const nonce = check.uint256(
+            readField(message, "nonce"),
+            `${messagePath}.nonce`,
+          );
+          const deadline = check.uint256(
             readField(message, "deadline"),
             `${messagePath}.deadline`,
           );
-          break;
+          if (
+            errors.length !== errorsBefore ||
+            domain === undefined ||
+            authorizer === undefined ||
+            authorized === undefined ||
+            isAuthorized === undefined ||
+            nonce === undefined ||
+            deadline === undefined ||
+            !Array.isArray(authorizationFields)
+          )
+            return undefined;
+          return {
+            type: "blueAuthorizationSignature",
+            typedData: {
+              domain,
+              primaryType: "Authorization",
+              types: {
+                Authorization: (
+                  authorizationFields as readonly Eip712Field[]
+                ).map(({ name, type: fieldType }) => ({
+                  name,
+                  type: fieldType,
+                })),
+              },
+              message: {
+                authorizer,
+                authorized,
+                isAuthorized,
+                nonce,
+                deadline,
+              },
+            },
+          };
         }
-        default: {
-          errors.push(
-            `${path}.type: unsupported authorization type "${String(type)}"`,
-          );
+        default:
           return undefined;
-        }
       }
-      return errors.length === errorsBefore
-        ? (authorization as PendingAuthorization)
-        : undefined;
     },
 
     operation: (operation, path) => {
@@ -413,100 +672,156 @@ const createChecks = (): FieldChecks => {
       if (
         !isRecord(operation) ||
         typeof type !== "string" ||
-        !(type in OPERATION_SPECS)
+        !Object.hasOwn(OPERATION_SPECS, type)
       ) {
         errors.push(
           `${path}.type: unsupported operation type "${String(type)}"`,
         );
-        return;
+        return undefined;
       }
       const spec = OPERATION_SPECS[type as OperationType];
       const requiredAddresses = new Set(
         REQUIRED_ADDRESSES[type as OperationType],
       );
-      for (const field of spec.markets)
-        check.marketId(readField(operation, field), `${path}.${field}`);
+      check.keys(operation, {
+        allow: [
+          "type",
+          "transactionIndex",
+          ...spec.markets,
+          ...spec.addresses,
+          ...spec.uints,
+          ...spec.bools,
+          ...spec.marketIdArrays,
+          ...(spec.deallocations ? ["expectedDeallocations"] : []),
+          ...(spec.minSupplyByMarket ? ["minSupplyAssetsByMarket"] : []),
+        ],
+        path,
+      });
+      const errorsBefore = errors.length;
+      const out = { ...(operation as OperationLimit) };
+      for (const field of spec.markets) {
+        const value = check.marketId(
+          readField(operation, field),
+          `${path}.${field}`,
+        );
+        if (value !== undefined) Reflect.set(out, field, value);
+      }
       for (const field of spec.addresses) {
-        const value = readField(operation, field);
-        if (value === undefined && !requiredAddresses.has(field)) continue;
-        check.address(value, `${path}.${field}`);
+        const raw = readField(operation, field);
+        if (raw === undefined && !requiredAddresses.has(field)) continue;
+        const value = check.address(raw, `${path}.${field}`);
+        if (value !== undefined) Reflect.set(out, field, value);
       }
       for (const field of spec.uints) {
-        const value = readField(operation, field);
-        if (value === undefined) continue;
-        check.uint256(value, `${path}.${field}`);
+        const raw = readField(operation, field);
+        if (raw === undefined) continue;
+        const value = check.uint256(raw, `${path}.${field}`);
+        if (value !== undefined) Reflect.set(out, field, value);
       }
       for (const field of spec.bools) {
-        const value = readField(operation, field);
-        if (value === undefined) continue;
-        check.bool(value, `${path}.${field}`);
+        const raw = readField(operation, field);
+        if (raw === undefined) continue;
+        const value = check.bool(raw, `${path}.${field}`);
+        if (value !== undefined) Reflect.set(out, field, value);
       }
       const transactionIndex = readField(operation, "transactionIndex");
-      if (transactionIndex !== undefined)
-        check.nonNegInt(transactionIndex, `${path}.transactionIndex`);
+      if (transactionIndex !== undefined) {
+        const value = check.nonNegInt(
+          transactionIndex,
+          `${path}.transactionIndex`,
+        );
+        if (value !== undefined) Reflect.set(out, "transactionIndex", value);
+      }
       for (const field of spec.marketIdArrays) {
-        const value = readField(operation, field);
-        if (value === undefined) continue;
-        if (!Array.isArray(value)) {
+        const raw = readField(operation, field);
+        if (raw === undefined) continue;
+        if (!Array.isArray(raw)) {
           errors.push(`${path}.${field}: must be an array of market ids`);
           continue;
         }
-        for (const [j, entry] of value.entries())
-          check.marketId(entry, `${path}.${field}[${j}]`);
+        const ids: MarketId[] = [];
+        for (const [j, entry] of raw.entries()) {
+          const id = check.marketId(entry, `${path}.${field}[${j}]`);
+          if (id !== undefined) ids.push(id);
+        }
+        Reflect.set(out, field, ids);
       }
       if (spec.deallocations) {
-        const value = readField(operation, "expectedDeallocations");
-        if (value !== undefined) {
-          if (!Array.isArray(value)) {
+        const raw = readField(operation, "expectedDeallocations");
+        if (raw !== undefined) {
+          if (!Array.isArray(raw)) {
             errors.push(`${path}.expectedDeallocations: must be an array`);
           } else {
-            for (const [j, entry] of value.entries()) {
+            const deallocations: VaultDeallocation[] = [];
+            for (const [j, entry] of raw.entries()) {
               const entryPath = `${path}.expectedDeallocations[${j}]`;
               if (!isRecord(entry)) {
                 errors.push(`${entryPath}: must be an object`);
                 continue;
               }
-              check.address(
+              check.keys(entry, {
+                allow: DEALLOCATION_KEYS,
+                path: entryPath,
+              });
+              const adapter = check.address(
                 readField(entry, "adapter"),
                 `${entryPath}.adapter`,
               );
-              if (readField(entry, "marketId") !== undefined)
-                check.marketId(
-                  readField(entry, "marketId"),
-                  `${entryPath}.marketId`,
-                );
-              check.uint256(readField(entry, "assets"), `${entryPath}.assets`);
+              const rawMarketId = readField(entry, "marketId");
+              const marketId =
+                rawMarketId === undefined
+                  ? undefined
+                  : check.marketId(rawMarketId, `${entryPath}.marketId`);
+              const assets = check.uint256(
+                readField(entry, "assets"),
+                `${entryPath}.assets`,
+              );
+              if (adapter !== undefined && assets !== undefined)
+                deallocations.push({
+                  adapter,
+                  ...(marketId !== undefined ? { marketId } : {}),
+                  assets,
+                });
             }
+            Reflect.set(out, "expectedDeallocations", deallocations);
           }
         }
       }
       if (spec.minSupplyByMarket) {
-        const value = readField(operation, "minSupplyAssetsByMarket");
-        if (value !== undefined) {
-          if (!Array.isArray(value)) {
+        const raw = readField(operation, "minSupplyAssetsByMarket");
+        if (raw !== undefined) {
+          if (!Array.isArray(raw)) {
             errors.push(`${path}.minSupplyAssetsByMarket: must be an array`);
           } else {
-            for (const [j, entry] of value.entries()) {
+            const minimums: MarketMinAssets[] = [];
+            for (const [j, entry] of raw.entries()) {
               const entryPath = `${path}.minSupplyAssetsByMarket[${j}]`;
               if (!isRecord(entry)) {
                 errors.push(`${entryPath}: must be an object`);
                 continue;
               }
-              check.marketId(
+              check.keys(entry, {
+                allow: MIN_SUPPLY_KEYS,
+                path: entryPath,
+              });
+              const marketId = check.marketId(
                 readField(entry, "marketId"),
                 `${entryPath}.marketId`,
               );
-              check.uint256(
+              const minAssets = check.uint256(
                 readField(entry, "minAssets"),
                 `${entryPath}.minAssets`,
               );
+              if (marketId !== undefined && minAssets !== undefined)
+                minimums.push({ marketId, minAssets });
             }
+            Reflect.set(out, "minSupplyAssetsByMarket", minimums);
           }
         }
       }
+      return errors.length === errorsBefore ? out : undefined;
     },
   };
-
   return check;
 };
 
@@ -755,6 +1070,17 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
       "input: must be a request object",
     ]);
   }
+  check.keys(input, {
+    allow: [
+      "chainId",
+      "transactions",
+      "blockNumber",
+      "mode",
+      "authorizations",
+      "limits",
+    ],
+    path: "input",
+  });
 
   // chainId
   const chainId = input.chainId;
@@ -779,6 +1105,10 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
         fieldErrors.push(`${path}: must be an object`);
         continue;
       }
+      check.keys(tx, {
+        allow: TRANSACTION_KEYS,
+        path,
+      });
       const from = check.address(readField(tx, "from"), `${path}.from`);
       const to = check.address(readField(tx, "to"), `${path}.to`);
       const data = check.hex(readField(tx, "data"), `${path}.data`);
@@ -806,7 +1136,7 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
 
   // blockNumber
   const rawBlockNumber = input.blockNumber;
-  let blockNumber: bigint | BlockTag | undefined;
+  let blockNumber: bigint | Exclude<BlockTag, "pending"> | undefined;
   if (rawBlockNumber !== undefined) {
     if (typeof rawBlockNumber === "bigint" && rawBlockNumber >= 0n) {
       blockNumber = rawBlockNumber;
@@ -814,7 +1144,7 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
       typeof rawBlockNumber === "string" &&
       (BLOCK_TAGS as readonly string[]).includes(rawBlockNumber)
     ) {
-      blockNumber = rawBlockNumber as BlockTag;
+      blockNumber = rawBlockNumber as Exclude<BlockTag, "pending">;
     } else {
       fieldErrors.push(
         'blockNumber: must be a non-negative bigint or one of "latest", "earliest", "safe", "finalized"',
@@ -846,27 +1176,51 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
 
   // limits
   const limits = input.limits;
+  const operations: OperationLimit[] = [];
+  let normalizedLimits: SimulationLimits | undefined;
   if (limits !== undefined) {
     if (!isRecord(limits)) {
       fieldErrors.push("limits: must be an object");
     } else {
+      check.keys(limits, { allow: LIMITS_KEYS, path: "limits" });
+      const parsed: Record<string, bigint> = {};
       for (const field of [
         "maxSlippageWad",
         "minLltvBufferWad",
         "maxSignatureLifetimeSeconds",
       ] as const) {
-        if (limits[field] !== undefined)
-          check.uint256(limits[field], `limits.${field}`);
-      }
-      const operations = limits.operations;
-      if (operations !== undefined) {
-        if (!Array.isArray(operations)) {
-          fieldErrors.push("limits.operations: must be an array");
-        } else {
-          for (const [i, operation] of operations.entries())
-            check.operation(operation, `limits.operations[${i}]`);
+        const raw = readField(limits, field);
+        if (raw !== undefined) {
+          const value = check.uint256(raw, `limits.${field}`);
+          if (value !== undefined) parsed[field] = value;
         }
       }
+      const rawOperations = readField(limits, "operations");
+      if (rawOperations !== undefined) {
+        if (!Array.isArray(rawOperations)) {
+          fieldErrors.push("limits.operations: must be an array");
+        } else {
+          for (const [i, operation] of rawOperations.entries()) {
+            const parsedOperation = check.operation(
+              operation,
+              `limits.operations[${i}]`,
+            );
+            if (parsedOperation !== undefined) operations.push(parsedOperation);
+          }
+        }
+      }
+      normalizedLimits = {
+        ...(parsed.maxSlippageWad !== undefined
+          ? { maxSlippageWad: parsed.maxSlippageWad }
+          : {}),
+        ...(parsed.minLltvBufferWad !== undefined
+          ? { minLltvBufferWad: parsed.minLltvBufferWad }
+          : {}),
+        ...(parsed.maxSignatureLifetimeSeconds !== undefined
+          ? { maxSignatureLifetimeSeconds: parsed.maxSignatureLifetimeSeconds }
+          : {}),
+        ...(Array.isArray(rawOperations) ? { operations } : {}),
+      };
     }
   }
 
@@ -924,8 +1278,8 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
     }
   }
 
-  if (isRecord(limits) && Array.isArray(limits.operations)) {
-    for (const [i, operation] of limits.operations.entries()) {
+  if (Array.isArray(rawTransactions)) {
+    for (const [i, operation] of operations.entries()) {
       if (
         operation.transactionIndex !== undefined &&
         operation.transactionIndex >= rawTransactions.length
@@ -970,6 +1324,6 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
     transactions,
     authorizations: mode === "preview" ? authorizations : [],
     ...(blockNumber !== undefined ? { blockNumber } : {}),
-    ...(isRecord(limits) ? { limits } : {}),
+    ...(normalizedLimits !== undefined ? { limits: normalizedLimits } : {}),
   });
 }

@@ -55,8 +55,6 @@ const isQuantity = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value);
 const isBytes32 = (value: unknown): value is Hex =>
   typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
-const isAddressValue = (value: unknown): value is Address =>
-  typeof value === "string" && isAddress(value);
 const isObject = (value: unknown): value is object =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const readField = (object: object, key: string): unknown =>
@@ -91,43 +89,64 @@ interface RawBlockResult {
 /** Raw `eth_simulateV1` result: exactly one simulated block. */
 type RawSimulateV1Response = readonly [RawBlockResult];
 
-const isRawLog = (value: unknown): value is RawLogEntry => {
-  if (!isObject(value)) return false;
-  const topics = readField(value, "topics");
-  const data = readField(value, "data");
-  return (
-    isAddressValue(readField(value, "address")) &&
-    Array.isArray(topics) &&
-    topics.every(isBytes32) &&
-    (data === undefined || isHex(data))
-  );
+const isSimulateV1Response = (
+  value: unknown,
+): value is RawSimulateV1Response => {
+  if (!Array.isArray(value) || value.length !== 1 || !isObject(value[0]))
+    return false;
+  const block = value[0];
+  if (
+    !isQuantity(readField(block, "number")) ||
+    !isQuantity(readField(block, "timestamp")) ||
+    !isBytes32(readField(block, "hash")) ||
+    (readField(block, "parentHash") !== undefined &&
+      !isBytes32(readField(block, "parentHash")))
+  )
+    return false;
+  const calls = readField(block, "calls");
+  if (!Array.isArray(calls)) return false;
+  return calls.every((call) => {
+    if (!isObject(call)) return false;
+    const status = readField(call, "status");
+    if (
+      (status !== "0x0" && status !== "0x1") ||
+      !isHex(readField(call, "returnData")) ||
+      !isQuantity(readField(call, "gasUsed"))
+    )
+      return false;
+    const logs = readField(call, "logs");
+    if (
+      logs !== undefined &&
+      (!Array.isArray(logs) ||
+        !logs.every((log) => {
+          if (!isObject(log)) return false;
+          const topics = readField(log, "topics");
+          const data = readField(log, "data");
+          const address = readField(log, "address");
+          return (
+            typeof address === "string" &&
+            isAddress(address) &&
+            Array.isArray(topics) &&
+            topics.every(isBytes32) &&
+            (data === undefined || isHex(data))
+          );
+        }))
+    )
+      return false;
+    const error = readField(call, "error");
+    if (error !== undefined) {
+      if (!isObject(error)) return false;
+      const code = readField(error, "code");
+      const message = readField(error, "message");
+      if (
+        (code !== undefined && !Number.isInteger(code)) ||
+        (message !== undefined && typeof message !== "string")
+      )
+        return false;
+    }
+    return true;
+  });
 };
-
-const isRawCall = (value: unknown): value is RawCallResult => {
-  if (!isObject(value)) return false;
-  const status = readField(value, "status");
-  const logs = readField(value, "logs");
-  const error = readField(value, "error");
-  return (
-    (status === "0x0" || status === "0x1") &&
-    isHex(readField(value, "returnData")) &&
-    isQuantity(readField(value, "gasUsed")) &&
-    (logs === undefined || (Array.isArray(logs) && logs.every(isRawLog))) &&
-    (error === undefined || isObject(error))
-  );
-};
-
-const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
-  Array.isArray(value) &&
-  value.length === 1 &&
-  isObject(value[0]) &&
-  isQuantity(readField(value[0], "number")) &&
-  isQuantity(readField(value[0], "timestamp")) &&
-  isBytes32(readField(value[0], "hash")) &&
-  (readField(value[0], "parentHash") === undefined ||
-    isBytes32(readField(value[0], "parentHash"))) &&
-  Array.isArray(readField(value[0], "calls")) &&
-  (readField(value[0], "calls") as readonly unknown[]).every(isRawCall);
 
 /**
  * Parse a raw `eth_simulateV1` response into a {@link SimulationExecution}.
@@ -182,6 +201,18 @@ export function parseSimulationResponse(params: {
   ) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block ${blockNumber} but the pinned state block is ${params.stateBlockNumber}; the node did not honor the pinned block.`,
+      { context: errorContext },
+    );
+  }
+  // Anvil re-hashes the pinned block, so only the geth-style successor can be
+  // pinned by hash: its parentHash, when reported, must be the pinned hash.
+  if (
+    blockNumber === params.stateBlockNumber + 1n &&
+    block.parentHash !== undefined &&
+    block.parentHash !== params.stateBlockHash
+  ) {
+    throw new InvalidSimulationResponseError(
+      `eth_simulateV1 reported block ${blockNumber} whose parent ${block.parentHash} is not the pinned state block hash ${params.stateBlockHash}; the node did not simulate on top of the pinned block.`,
       { context: errorContext },
     );
   }

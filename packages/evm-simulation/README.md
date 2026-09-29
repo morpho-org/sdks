@@ -59,7 +59,7 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams` (alias of `VerifiedSimulateParams`; options object with `mode: "preview" | "final"`), `SimulationMode`, `SimulationTransaction`, `SimulationAuthorization` (alias of `PendingAuthorization`: the typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes `Erc2612PermitTypedData` / `Permit2TransferTypedData` / `BlueAuthorizationTypedData` / `Eip712Domain` / `Eip712Field`), `SimulationLimits`, `OperationLimit`, `OperationType`, `VaultDeallocation`, `MarketMinAssets`, and the per-operation limit types.
+- Input types: `SimulateParams` (options object with `mode: "preview" | "final"`), `SimulationMode`, `SimulationTransaction`, `SimulationAuthorization` (the typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes `Erc2612PermitTypedData` / `Permit2TransferTypedData` / `BlueAuthorizationTypedData` / `Eip712Domain` / `Eip712Field`), `SimulationLimits`, `OperationLimit`, `OperationType`, `VaultDeallocation`, `MarketMinAssets`, and the per-operation limit types.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
@@ -72,7 +72,10 @@ Until the authorization-verification release, preview `authorizations` and `limi
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, authorizations
 encoding, the error hierarchy, retention rules, and the recipe for adding a
-chain via `SimulationConfig.chains`.
+chain via `SimulationConfig.chains` — including how native-balance probes are
+injected via `stateOverrides` code, how the state block is pinned and the
+simulated block constrained to the pin or its immediate successor, and the
+feature gate that rejects `authorizations` and `limits` until PR5/PR6 land.
 
 ## Development
 
