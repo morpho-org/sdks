@@ -29,6 +29,52 @@ export const OPERATION_TYPES = [
 /** Discriminator for decoded operations and their limits. */
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
+/** Operations acting on one Blue market. */
+export type BlueMarketOperationType = Exclude<
+  Extract<OperationType, `blue${string}`>,
+  "blueRefinance" | "blueAuthorization"
+>;
+
+/** Operations acting on one vault (V1 or V2). */
+export type VaultOperationType = Exclude<
+  Extract<OperationType, `vault${string}`>,
+  "vaultV1MigrateToV2"
+>;
+
+/** Protocol entity the failing operation acts on, keyed by `operation`. */
+export type SimulationOperationSubject =
+  | {
+      readonly operation: BlueMarketOperationType;
+      /** Blue market the operation acts on. */
+      readonly marketId: MarketId;
+    }
+  | {
+      readonly operation: "blueRefinance";
+      /** Market the refinance closes. */
+      readonly sourceMarketId: MarketId;
+      /** Market the refinance opens. */
+      readonly targetMarketId: MarketId;
+    }
+  | {
+      readonly operation: "blueAuthorization";
+      /** Operator whose Morpho authorization the operation sets. */
+      readonly authorized: Address;
+    }
+  | {
+      readonly operation: VaultOperationType;
+      /** Vault the operation acts on. */
+      readonly vault: Address;
+      /** Vault V2 adapter the operation routes through. */
+      readonly adapter?: Address;
+    }
+  | {
+      readonly operation: "vaultV1MigrateToV2";
+      /** Vault the migration exits. */
+      readonly sourceVault: Address;
+      /** Vault the migration enters. */
+      readonly targetVault: Address;
+    };
+
 /** @internal Limit for a Blue `supply` operation. */
 export interface BlueSupplyLimit {
   readonly type: "blueSupply";
