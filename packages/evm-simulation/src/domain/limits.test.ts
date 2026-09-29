@@ -4,6 +4,7 @@ import { expectTypeOf } from "vitest";
 import type {
   OperationLimit,
   OperationLimitFields,
+  SimulationDeallocation,
   SimulationLimits,
 } from "./limits.js";
 import type { DecodedOperationFields } from "./operations.js";
@@ -51,6 +52,23 @@ describe("OperationLimit", () => {
       keyof OperationLimitFields["vaultV2Deposit"]
     >();
     expectTypeOf<"metric" | "timeBasis">().not.toExtend<keyof OperationLimit>();
+  });
+
+  test("behavior: field names follow the ADR appendix", () => {
+    expectTypeOf<"maxAfterBorrowApyWad">().toExtend<
+      keyof OperationLimitFields["blueBorrow" | "blueSupplyCollateralBorrow"]
+    >();
+    expectTypeOf<"maxBorrowApyAfterWad">().not.toExtend<
+      keyof OperationLimitFields["blueBorrow"]
+    >();
+    expectTypeOf<
+      "expectedRecipient" | "expectedOnBehalf" | "expectedDeallocations"
+    >().toExtend<keyof OperationLimitFields["vaultV2ForceRedeem"]>();
+    expectTypeOf<SimulationDeallocation>().toEqualTypeOf<{
+      readonly adapter: Address;
+      readonly marketId?: MarketId;
+      readonly assets: bigint;
+    }>();
   });
 
   test("behavior: migration permits at most one amount pin", () => {
