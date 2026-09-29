@@ -37,6 +37,7 @@ function respondHappy(callCount = 3) {
           number: numberToHex(20_000_001n),
           timestamp: numberToHex(1_700_000_012n),
           hash: `0x${"cd".repeat(32)}`,
+          parentHash: `0x${"ab".repeat(32)}`,
           calls: Array.from({ length: callCount }, (_, i) => ({
             status: "0x1",
             gasUsed: "0x0",
@@ -126,6 +127,7 @@ describe.sequential("executeSimulation", () => {
             number: numberToHex(20_000_001n),
             timestamp: numberToHex(1_700_000_012n),
             hash: `0x${"cd".repeat(32)}`,
+            parentHash: `0x${"ab".repeat(32)}`,
             calls: [
               {
                 status: "0x1",

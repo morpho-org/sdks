@@ -101,12 +101,23 @@ describe("parseRequest", () => {
         },
       ],
       authorizations: [{ ...erc20Approval, owner: OWNER.toLowerCase() }],
+      limits: {
+        operations: [
+          {
+            type: "vaultV1Deposit",
+            vault: SPENDER.toLowerCase(),
+            expectedAssets: 1n,
+          },
+        ],
+      },
     });
     expect(request.mode).toBe("preview");
     expect(request.transactions[0]?.from).toBe(OWNER);
     expect(request.transactions[0]?.to).toBe(TARGET);
     expect(request.transactions[0]?.value).toBe(5n);
     expect(request.authorizations).toHaveLength(1);
+    expect((request.authorizations[0] as { owner: Address }).owner).toBe(OWNER);
+    expect(request.limits?.operations?.[0]).toMatchObject({ vault: SPENDER });
   });
 
   test("behavior: preview without authorizations parses", () => {
@@ -832,6 +843,132 @@ describe("parseRequest", () => {
       SimulationValidationError,
     );
   });
+
+  test("error: SimulationValidationError for a prototype-polluting authorization type", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [{ type: "constructor" }],
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+
+  test("behavior: accepts a blueWithdraw limit with utilization and penalty bounds", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "blueWithdraw",
+            marketId: _MARKET_ID,
+            maxUtilizationAfterWad: 1n,
+            maxReallocationPenaltyAssets: 2n,
+          },
+        ],
+      },
+    });
+    expect(request.limits?.operations).toHaveLength(1);
+  });
+
+  test("error: SimulationValidationError reports maxSlippageWad exactly once", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { maxSlippageWad: -1n },
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    const hits = (error as SimulationValidationError).fieldErrors.filter(
+      (line) => line.includes("maxSlippageWad"),
+    );
+    expect(hits).toHaveLength(1);
+  });
+
+  test("error: SimulationValidationError for a non-bigint symbol limit", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: { maxSlippageWad: Symbol("x") },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+
+  test("behavior: preview parses permit and blue signature authorizations", () => {
+    const request = parse({
+      chainId: 1,
+      mode: "preview",
+      transactions: [tx()],
+      authorizations: [permitAuth, blueSigAuth],
+    });
+    expect(request.authorizations).toHaveLength(2);
+  });
+
+  test.each([
+    [
+      "erc2612Permit",
+      {
+        type: "erc2612Permit",
+        typedData: {
+          ...permitAuth.typedData,
+          message: { ...permitAuth.typedData.message, owner: SPENDER },
+        },
+      },
+    ],
+    ["permit2SignatureTransfer", { ...permit2Auth, owner: SPENDER }],
+    [
+      "blueAuthorization",
+      {
+        type: "blueAuthorization",
+        authorizer: SPENDER,
+        authorized: TARGET,
+        isAuthorized: true,
+      },
+    ],
+    [
+      "blueAuthorizationSignature",
+      {
+        type: "blueAuthorizationSignature",
+        typedData: {
+          ...blueSigAuth.typedData,
+          message: {
+            ...blueSigAuth.typedData.message,
+            authorizer: SPENDER,
+          },
+        },
+      },
+    ],
+  ])(
+    "error: SimulationValidationError for %s owner mismatch",
+    (_name, authorization) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            mode: "preview",
+            transactions: [tx()],
+            authorizations: [authorization],
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors.some((line) =>
+          line.includes("authorizations[0]"),
+        ),
+      ).toBe(true);
+    },
+  );
 
   test("behavior: zeroAddress from is schema-valid per the domain type", () => {
     // Address format passes; semantic zero-sender rejection is not a parser rule.

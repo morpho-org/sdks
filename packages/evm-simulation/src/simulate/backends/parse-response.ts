@@ -205,14 +205,14 @@ export function parseSimulationResponse(params: {
     );
   }
   // Anvil re-hashes the pinned block, so only the geth-style successor can be
-  // pinned by hash: its parentHash, when reported, must be the pinned hash.
+  // pinned by hash: it must report a parentHash (geth always does) equal to
+  // the pinned state block hash.
   if (
     blockNumber === params.stateBlockNumber + 1n &&
-    block.parentHash !== undefined &&
     block.parentHash !== params.stateBlockHash
   ) {
     throw new InvalidSimulationResponseError(
-      `eth_simulateV1 reported block ${blockNumber} whose parent ${block.parentHash} is not the pinned state block hash ${params.stateBlockHash}; the node did not simulate on top of the pinned block.`,
+      `eth_simulateV1 reported block ${blockNumber} whose parent ${String(block.parentHash)} is not the pinned state block hash ${params.stateBlockHash}; the node did not simulate on top of the pinned block.`,
       { context: errorContext },
     );
   }

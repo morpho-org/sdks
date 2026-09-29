@@ -195,7 +195,10 @@ const createChecks = (): FieldChecks => {
       return undefined;
     },
 
-    marketId: (value, path) => check.bytes32(value, path) as MarketId,
+    marketId: (value, path) => {
+      const id = check.bytes32(value, path);
+      return id === undefined ? undefined : (id as MarketId);
+    },
 
     uint256: (value, path) => {
       if (typeof value !== "bigint") {
@@ -302,7 +305,7 @@ const createChecks = (): FieldChecks => {
         errors.push(`${path}.type: must name an authorization type`);
         return undefined;
       }
-      if (!(type in AUTHORIZATION_KEYS)) {
+      if (!Object.hasOwn(AUTHORIZATION_KEYS, type)) {
         errors.push(`${path}.type: unsupported authorization type "${type}"`);
         return undefined;
       }
@@ -661,6 +664,7 @@ const createChecks = (): FieldChecks => {
           };
         }
         default:
+          errors.push(`${path}.type: unsupported authorization type "${type}"`);
           return undefined;
       }
     },
@@ -864,7 +868,12 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
   blueWithdraw: SPEC({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
-    uints: ["minAssetsReceived", "maxSupplySharesBurned"],
+    uints: [
+      "minAssetsReceived",
+      "maxSupplySharesBurned",
+      "maxUtilizationAfterWad",
+      "maxReallocationPenaltyAssets",
+    ],
     bools: ["expectedFullClose"],
   }),
   blueSupplyCollateral: SPEC({
@@ -1301,8 +1310,10 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
   }
 
   try {
-    // Validate tightening rules; the resolved value is carried by later stages.
-    resolveEffectiveLimits(limits);
+    // Validate tightening rules on the normalized limits; skipped entirely
+    // when the limits block already produced field errors.
+    if (normalizedLimits !== undefined)
+      resolveEffectiveLimits(normalizedLimits);
   } catch (error) {
     if (error instanceof SimulationValidationError) {
       fieldErrors.push(...(error.fieldErrors ?? []));

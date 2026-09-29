@@ -354,6 +354,19 @@ describe.sequential("executePlan", () => {
     expect(execution.block.blockNumber).toBe(STATE_BLOCK);
   });
 
+  test("error: InvalidSimulationResponseError when the successor reports no parentHash", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        rpc(simulateResult(okCalls(3), { parentHash: undefined })),
+      )
+      .mockResolvedValueOnce(rpc(blockResult()));
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      InvalidSimulationResponseError,
+    );
+  });
+
   test("error: InvalidSimulationResponseError when the successor parentHash is not the pinned hash", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc(blockResult()))
@@ -457,6 +470,28 @@ describe.sequential("executePlan", () => {
     [
       "non-object error",
       [{ status: "0x1", gasUsed: "0x1", returnData: "0x", error: "reverted" }],
+    ],
+    [
+      "non-integer error.code (string)",
+      [
+        {
+          status: "0x1",
+          gasUsed: "0x1",
+          returnData: "0x",
+          error: { code: "3", message: "x" },
+        },
+      ],
+    ],
+    [
+      "non-integer error.code (float)",
+      [
+        {
+          status: "0x1",
+          gasUsed: "0x1",
+          returnData: "0x",
+          error: { code: 1.5 },
+        },
+      ],
     ],
     [
       "non-string error.message",
