@@ -1,5 +1,40 @@
 # @morpho-org/midnight-sdk
 
+## 1.8.0
+
+### Minor Changes
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Expose ratifier namespaces as `EcrecoverRatifier`, `SetterRatifier`, `PriceRatifierV1`, `RateRatifierV1`, and `Ratifier`, and rename their implementation files accordingly. Preserve all previous `*Utils` exports. Price V1, Rate V1, and Ratifier keep identity-preserving deprecated aliases. Ecrecover and Setter retain their deprecated legacy APIs alongside the new tagged-tree APIs, sharing the signing and encoding implementation.
+
+  Expose the canonical names through `/midnight/utils` and their `Midnight`-qualified counterparts through `/utils`, retaining the `Midnight`-qualified facade aliases.
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Add `RateRatifierV1Utils` and `PriceRatifierV1Utils` (leaf hashing, Merkle trees, ratifier data encoding/verification, rate price bounds, `setIsRootRatified` encoders), `priceRatifierV1Abi`/`rateRatifierV1Abi`, and V1 offer typehash constants. Add `TreeUtils.buildRootFromLeaves`/`verifyLeafProof` and the `MAX_TREE_HEIGHT` constant. Caller-provided V1 tree descriptors are fully re-validated before use, and negative rate/time bounds throw `InvalidRateRatifierV1RateError`/`InvalidRateRatifierV1TimeError`; sub-MIN_TICK rate leaves throw `InvalidRateRatifierV1TickError`, zero ratifier addresses throw `InvalidRatifierV1AddressError`, and disallowed takers throw `RatifierV1TakerNotAllowedError`. Add `TreeUtils.normalizeEntries`; `TreeUtils.mempoolValidate` and `Tree.from` also accept route-typed and V1 tree snapshots. Add `priceRatifierV1` and `rateRatifierV1` keys to `ChainAddresses` with Ethereum, Base, Arc and Robinhood mainnet registry entries, and expose the new Midnight symbols through the `morpho-sdk` facade. `mempoolValidate` on priceV1/rateV1 trees always encodes real V1 ratifier data, since the router decodes it to identify each offer. Snapshot descriptors whose padding exceeds `2**height` now throw `InvalidTreeError`, and `RateRatifierV1.priceBound` throws `RateRatifierV1BoundOverflowError` when bound arithmetic overflows uint256, matching the contract's checked math.
+
+- [#971](https://github.com/morpho-org/sdks/pull/971) [`9ac0ea5`](https://github.com/morpho-org/sdks/commit/9ac0ea55b93225a62ddeabb1c625064319be728d) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Reuse Merkle tree layers across proofs in `ratify()`; add `TreeUtils.buildProofs`. `TreeUtils.buildProof` and `TreeUtils.buildProofs` now throw `InvalidTreeError` for non-power-of-two leaf sets and `InvalidTreeHeightError` for trees above height 20.
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Expose named Ecrecover, Setter, Price V1, and Rate V1 tree creation requests as the variants of `TreeCreateRequest`. The new tagged construction API no longer depends on the legacy array-based `TreeCreateParams` contract.
+
+  Deprecate `TreeCreateParams` and the untagged `Tree.from` and `TreeUtils.buildDescriptor` overloads alongside the already-deprecated `Tree.create(entries)` overload. Keep the old and new construction interfaces available for Ecrecover and Setter without changing existing behavior. Re-export the new request types through the Midnight and qualified entity facades.
+
+  Maintain independent tagged Ecrecover and Setter APIs alongside the deprecated `EcrecoverRatifierUtils` and `SetterRatifierUtils` legacy APIs. The new `*Request` contracts require matching tagged trees or portable snapshots; the old `*Params` contracts and untagged inputs remain available. Keep codec behavior and signature/payload bytes identical, and expose request types through the protocol and qualified type facades.
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Add route-typed `Tree` construction for Ecrecover, Setter, PriceRatifierV1, and RateRatifierV1, with inferred leaf types, descriptor round-trips, and route-specific ratification and mempool validation. Preserve existing leaf hashes, roots, proofs, and ratifier payloads. Deprecate untagged `Tree.create(entries)` in favor of `Tree.create({ type, entries })`; existing untagged trees and ratifier descriptors remain supported.
+
+  Expose the new tree types through the Midnight entity facade and its qualified counterparts.
+
+  Preserve the original untagged `TreeLike`, `TreeInput`, `RatifierTreeInput`, and Price/Rate descriptor contracts. Add `TypedRatifierTreeInput<K>` for route-aware standard-ratifier inputs so existing wrapper functions continue to compile while new tagged trees receive route checks.
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Derive `RateRatifierV1` and `PriceRatifierV1` default groups from the scheme's zero-group leaf hash so SDK payloads match the router's `group_identity` check. `buildDescriptor` now assigns the content-addressed singleton group (committing `rate` + `allowedTaker` for RateRatifierV1, `tick` + `allowedTaker` for PriceRatifierV1) to leaves whose offer has no explicit `group`.
+
+  Generic content-addressed groups matching all payload leaves sharing them are re-derived with the ratifier's `groupId`; other explicit groups are committed as-is. Add `RateRatifierV1.memberHash`/`groupId`, `PriceRatifierV1.memberHash`/`groupId`, and the ratifier-agnostic `GroupUtils.hashMembers`.
+
+  `RateRatifierV1.buildDescriptor` now throws `InvalidRateRatifierV1TickError` when a leaf offer commits a nominal `tick` below `RateRatifierV1.MIN_TICK` (3372, price 0.5 WAD): the router prices Rate offers from `rate` but its gatekeeper still rejects lower committed ticks as `min_tick`.
+
+### Patch Changes
+
+- Updated dependencies [[`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723)]:
+  - @morpho-org/morpho-ts@3.1.0
+
 ## 1.7.0
 
 ### Minor Changes
