@@ -69,23 +69,49 @@ interface SimulationContextBase {
   readonly blockNumber: bigint;
 }
 
-interface SimulationOperationContext extends SimulationContextBase {
-  /** Decoded operation being executed or verified. */
-  readonly operation: OperationType;
-  /** Blue market the operation acts on. */
-  readonly marketId?: MarketId;
-  /** Market a refinance closes; set with `targetMarketId` to name the failing side. */
-  readonly sourceMarketId?: MarketId;
-  /** Market a refinance opens. */
-  readonly targetMarketId?: MarketId;
-  /** Vault the operation acts on. */
-  readonly vault?: Address;
-  /** Vault a migration exits; set with `targetVault` to name the failing side. */
-  readonly sourceVault?: Address;
-  /** Vault a migration enters. */
-  readonly targetVault?: Address;
-  /** Vault V2 adapter the operation routes through. */
-  readonly adapter?: Address;
+/** Operations acting on one Blue market. */
+export type BlueMarketOperationType = Exclude<
+  Extract<OperationType, `blue${string}`>,
+  "blueRefinance" | "blueAuthorization"
+>;
+
+/** Operations acting on one vault (V1 or V2). */
+export type VaultOperationType = Exclude<
+  Extract<OperationType, `vault${string}`>,
+  "vaultV1MigrateToV2"
+>;
+
+/** Protocol entity the failing operation acts on, keyed by `operation`. */
+type SimulationOperationSubject =
+  | {
+      readonly operation: BlueMarketOperationType;
+      /** Blue market the operation acts on. */
+      readonly marketId: MarketId;
+    }
+  | {
+      readonly operation: "blueRefinance";
+      /** Market the refinance closes. */
+      readonly sourceMarketId: MarketId;
+      /** Market the refinance opens. */
+      readonly targetMarketId: MarketId;
+    }
+  | { readonly operation: "blueAuthorization" }
+  | {
+      readonly operation: VaultOperationType;
+      /** Vault the operation acts on. */
+      readonly vault: Address;
+      /** Vault V2 adapter the operation routes through. */
+      readonly adapter?: Address;
+    }
+  | {
+      readonly operation: "vaultV1MigrateToV2";
+      /** Vault the migration exits. */
+      readonly sourceVault: Address;
+      /** Vault the migration enters. */
+      readonly targetVault: Address;
+    };
+
+interface SimulationCheckContext extends SimulationContextBase {
   /** Token whose balance, allowance or transfer was checked. */
   readonly token?: Address;
   /** Account whose position, balance or authorization was checked (usually the sender). */
@@ -102,9 +128,16 @@ interface SimulationOperationContext extends SimulationContextBase {
   readonly failedTransactionIndex?: number;
 }
 
+/** Execution/verification context: the check plus the operation's subject entity. */
+type SimulationOperationContext = SimulationCheckContext &
+  SimulationOperationSubject;
+
 /**
  * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
- * Every stage carries `mode`, `chainId` and `blockNumber`. Never contains
+ * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
+ * verification contexts are further keyed by `operation`, which fixes the
+ * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
+ * `sourceVault`/`targetVault`). Never contains
  * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
  * on the error).
  */
@@ -318,7 +351,7 @@ export class UnexpectedSimulationError extends SimulationVerificationError {
  *   carrying `name`/`message` strings, a known `code` and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
  *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
- *   known `operation` for `execution`/`verification`).
+ *   known `operation` with its subject fields for `execution`/`verification`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -355,15 +388,13 @@ export function isSimulationPackageError(
   if (context === undefined) return true;
   if (typeof context !== "object" || context === null || Array.isArray(context))
     return false;
-  const { stage, mode, chainId, blockNumber, authorizationIndex, operation } =
-    context as {
-      stage?: unknown;
-      mode?: unknown;
-      chainId?: unknown;
-      blockNumber?: unknown;
-      authorizationIndex?: unknown;
-      operation?: unknown;
-    };
+  const { stage, mode, chainId, blockNumber, authorizationIndex } = context as {
+    stage?: unknown;
+    mode?: unknown;
+    chainId?: unknown;
+    blockNumber?: unknown;
+    authorizationIndex?: unknown;
+  };
   if (
     typeof stage !== "string" ||
     !(SIMULATION_STAGES as readonly string[]).includes(stage) ||
@@ -375,9 +406,29 @@ export function isSimulationPackageError(
     return false;
   if (stage === "preparation") return typeof authorizationIndex === "number";
   if (stage === "execution" || stage === "verification")
-    return (
-      typeof operation === "string" &&
-      (OPERATION_TYPES as readonly string[]).includes(operation)
-    );
+    return hasOperationSubject(context);
   return true;
+}
+
+function hasOperationSubject(context: object): boolean {
+  const c = context as Record<string, unknown>;
+  const operation = c.operation;
+  if (
+    typeof operation !== "string" ||
+    !(OPERATION_TYPES as readonly string[]).includes(operation)
+  )
+    return false;
+  const isString = (key: string) => typeof c[key] === "string";
+  switch (operation) {
+    case "blueAuthorization":
+      return true;
+    case "blueRefinance":
+      return isString("sourceMarketId") && isString("targetMarketId");
+    case "vaultV1MigrateToV2":
+      return isString("sourceVault") && isString("targetVault");
+    default:
+      return operation.startsWith("blue")
+        ? isString("marketId")
+        : isString("vault");
+  }
 }
