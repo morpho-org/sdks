@@ -59,7 +59,8 @@ const SUBJECTS: Record<
   Record<string, unknown>
 > = Object.fromEntries(
   OPERATION_TYPES.map((operation) => {
-    if (operation === "blueAuthorization") return [operation, {}];
+    if (operation === "blueAuthorization")
+      return [operation, { authorized: A }];
     if (operation === "blueRefinance")
       return [operation, { sourceMarketId: "0xa", targetMarketId: "0xb" }];
     if (operation === "vaultV1MigrateToV2")
@@ -345,6 +346,12 @@ describe("SimulationErrorContext", () => {
     >().toExtend<SimulationErrorContext>();
     expectTypeOf<
       typeof base & { operation: "blueAuthorization" }
+    >().not.toExtend<SimulationErrorContext>();
+    expectTypeOf<
+      typeof base & {
+        operation: "blueAuthorization";
+        authorized: `0x${string}`;
+      }
     >().toExtend<SimulationErrorContext>();
   });
 
