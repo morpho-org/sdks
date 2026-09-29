@@ -5,7 +5,10 @@ import {
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { SimulateParams } from "../domain/request.js";
-import { InvalidSimulationResponseError } from "../errors.js";
+import {
+  InvalidSimulationResponseError,
+  UnsupportedVerificationFeatureError,
+} from "../errors.js";
 import type { SimulationConfig, SimulationResult } from "../types.js";
 
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
@@ -114,6 +117,27 @@ export async function simulate(
 ): Promise<SimulationResult> {
   const request = parseRequest(params);
 
+  // Feature gate at validation, before any RPC: preview authorizations and
+  // consumer limits parse and normalize, but are rejected until PR5/PR6
+  // verify them rather than silently ignored.
+  if (request.authorizations.length > 0) {
+    throw new UnsupportedVerificationFeatureError(
+      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
+      {
+        mode: request.mode,
+        stage: "validation",
+        chainId: request.chainId,
+        location: { type: "authorization", authorizationIndex: 0 },
+      },
+    );
+  }
+  if (request.limits !== undefined) {
+    throw new UnsupportedVerificationFeatureError(
+      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
+      { mode: request.mode, stage: "validation", chainId: request.chainId },
+    );
+  }
+
   const wNative = _try(
     () => getChainAddresses(request.chainId).wNative ?? null,
     UnsupportedChainIdError,
@@ -144,8 +168,6 @@ export async function simulate(
         chainId: request.chainId,
         mode: request.mode,
         blockNumber: evidence.context.stateBlockNumber,
-        blockHash: evidence.context.stateBlockHash,
-        blockTimestamp: evidence.context.stateBlockTimestamp,
       },
     );
   }

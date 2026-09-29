@@ -20,6 +20,7 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
   UnsupportedChainError,
+  UnsupportedVerificationFeatureError,
 } from "../errors.js";
 import {
   encodeUint256,
@@ -289,6 +290,46 @@ describe.sequential("simulate — modes and unsupported features", () => {
       makeParams({ mode: "preview" }),
     );
     expect(result.calls).toHaveLength(1);
+  });
+
+  it("preview with authorizations throws UnsupportedVerificationFeatureError before any RPC", async () => {
+    const error = await simulate(
+      makeConfig(),
+      makeParams({
+        mode: "preview",
+        authorizations: [
+          {
+            type: "erc20Approval",
+            token: USDC,
+            owner: USER,
+            spender: SPENDER,
+            amount: 100n,
+          },
+        ],
+      }),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      mode: "preview",
+      stage: "validation",
+      chainId: 1,
+      location: { type: "authorization", authorizationIndex: 0 },
+    });
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
+  });
+
+  it("limits throw UnsupportedVerificationFeatureError before any RPC", async () => {
+    const error = await simulate(
+      makeConfig(),
+      makeParams({ limits: { maxSlippageWad: 1n } }),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
+    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
+      mode: "final",
+      stage: "validation",
+      chainId: 1,
+    });
+    expect(mockExecuteSimulation).not.toHaveBeenCalled();
   });
 
   it("legacy signature authorization variant throws SimulationValidationError", async () => {

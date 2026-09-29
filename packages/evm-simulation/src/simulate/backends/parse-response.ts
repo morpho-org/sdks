@@ -8,6 +8,7 @@ import {
   type ExecutionEvidence,
   type ExecutionPlan,
   type ObservedSnapshot,
+  type SuccessfulCall,
 } from "../../domain/stages.js";
 import {
   InvalidSimulationResponseError,
@@ -59,11 +60,11 @@ const responseSchema = z
 /**
  * Parse a raw `eth_simulateV1` response into {@link ExecutionEvidence}.
  *
- * The response must be exactly one block at a height at or above the pinned
- * state block. Block advancement is node-specific: geth-style nodes simulate
- * on top of `base + 1` while Anvil reports the base block itself — this parser
- * records whatever the node reports in {@link ExecutionContext} and only
- * rejects a block that lies *behind* the pinned state. Consumers must read
+ * The response must be exactly one block at the pinned state block or its
+ * immediate successor. Block advancement is node-specific: geth-style nodes
+ * simulate on top of `base + 1` while Anvil reports the base block itself —
+ * this parser records whatever the node reports in {@link ExecutionContext}
+ * and rejects any other height. Consumers must read
  * `context.blockNumber`/`context.blockTimestamp` and never assume +1.
  *
  * @param params - The plan, the raw RPC `result`, and the resolved state block.
@@ -90,8 +91,6 @@ export function parseSimulationResponse(params: {
     chainId: plan.request.chainId,
     mode: plan.request.mode,
     blockNumber: params.stateBlockNumber,
-    blockHash: params.stateBlockHash,
-    blockTimestamp: params.stateBlockTimestamp,
   };
 
   const parsed = responseSchema.safeParse(response);
@@ -213,10 +212,16 @@ export function parseSimulationResponse(params: {
     deepFreeze({
       plan,
       context,
-      calls: calls.map(({ planned, result }) => ({
-        identity: planned.identity,
-        result,
-      })),
+      // Every failure was classified above: only successful calls remain.
+      calls: calls
+        .filter(
+          (entry): entry is typeof entry & { result: SuccessfulCall } =>
+            entry.result.status,
+        )
+        .map(({ planned, result }) => ({
+          identity: planned.identity,
+          result,
+        })),
       snapshots,
     }),
   );

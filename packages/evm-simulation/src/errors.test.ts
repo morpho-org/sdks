@@ -38,7 +38,6 @@ const context: SimulationErrorContext = {
     account: "0x0000000000000000000000000000000000000001",
     token: "0x0000000000000000000000000000000000000002",
   },
-  reasonCode: "UNKNOWN_REVERT",
 };
 const constraint = {
   type: "wallet",

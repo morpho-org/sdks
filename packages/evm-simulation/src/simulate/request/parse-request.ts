@@ -173,7 +173,7 @@ const tokenAmountSchema = z.strictObject({
 const deallocationSchema = z.strictObject({
   adapter: addressSchema,
   marketId: marketIdSchema.optional(),
-  amount: uint256Schema,
+  assets: uint256Schema,
 });
 
 const marketSupplyMinimumSchema = z.strictObject({
@@ -231,7 +231,7 @@ const operationLimitSchema = z.union([
     maxLtvAfterWad: uint256Schema.optional(),
     minHealthFactorAfterWad: uint256Schema.optional(),
     maxUtilizationAfterWad: uint256Schema.optional(),
-    maxBorrowApyAfterWad: uint256Schema.optional(),
+    maxAfterBorrowApyWad: uint256Schema.optional(),
     maxReallocationPenaltyAssets: uint256Schema.optional(),
     ...transactionIndexField,
   }),
@@ -246,7 +246,7 @@ const operationLimitSchema = z.union([
     maxLtvAfterWad: uint256Schema.optional(),
     minHealthFactorAfterWad: uint256Schema.optional(),
     maxUtilizationAfterWad: uint256Schema.optional(),
-    maxBorrowApyAfterWad: uint256Schema.optional(),
+    maxAfterBorrowApyWad: uint256Schema.optional(),
     maxReallocationPenaltyAssets: uint256Schema.optional(),
     ...transactionIndexField,
   }),
@@ -367,6 +367,8 @@ const operationLimitSchema = z.union([
     type: z.literal("vaultV2ForceRedeem"),
     vault: addressSchema,
     expectedShares: uint256Schema.optional(),
+    expectedRecipient: addressSchema.optional(),
+    expectedOnBehalf: addressSchema.optional(),
     expectedDeallocations: z.array(deallocationSchema).optional(),
     minAssetsReceived: uint256Schema.optional(),
     maxPenaltyShares: uint256Schema.optional(),

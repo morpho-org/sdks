@@ -64,7 +64,7 @@ All symbols below are re-exported from the package root.
 - Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 
-Until the authorization-verification release, preview `authorizations` and `limits` are rejected with `UnsupportedVerificationFeatureError` rather than silently ignored.
+Until the authorization-verification release, preview `authorizations` and `limits` are rejected at validation — before any RPC — with `UnsupportedVerificationFeatureError` rather than silently ignored.
 
 ### Deeper docs
 
