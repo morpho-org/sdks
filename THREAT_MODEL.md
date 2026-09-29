@@ -53,7 +53,7 @@ Each value comes from the same `eth_call` that returns the vault it describes. T
 - **SDKS-863** (SDK-897): a lowered `_totalAssets` widens the exact-asset withdrawal share allowance.
 - **SDKS-786** (SDK-898): forged fee rates and fee-recipient flags inflate the withdrawal share allowance.
 - **SDKS-808** (SDK-900): a lowered `totalSupply` widens the deposit `maxSharePrice`.
-- **SDKS-795** (SDK-901): a lowered `virtualShares` widens deposit and withdrawal bounds.
+- **SDKS-795** (SDK-901): a lowered `virtualShares` widens the deposit `maxSharePriceE27`, and a raised one widens the exact-asset withdrawal allowance.
 - **SDKS-814** (SDK-896): a lowered V1 `fee` widens the deadline deposit bound.
 - **SDKS-840** (SDK-758): a duplicated `withdrawQueue` id plus a lowered `totalSupply`. MetaMorpho rejects duplicate queue ids (`DuplicateMarket`), so only a forged response has one.
 - **SDKS-789** (SDK-738): a forged `market(id)` tuple plus a failed nested `lostAssets()`. A v1.1 vault only "fails" that read if the node returns selective errors.
