@@ -3023,7 +3023,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       if (signedChainId !== prepared.context.chainId) {
         throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
       }
-      // The returned hash is trusted; the same provider reports inclusion for any hash. See THREAT_MODEL.md, RPC.
+      // The returned hash is not checked against the signed bytes (accepted gap SDKS-493). See THREAT_MODEL.md, RPC.
       const hash = await client.sendRawTransaction({
         serializedTransaction,
       });

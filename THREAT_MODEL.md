@@ -21,6 +21,12 @@ The SDK does reject an RPC answer when it can compare it with something the RPC 
 - **SDKS-455** (SDK-639), **SDKS-542** (SDK-640), **SDKS-726** (SDK-657): token-paymaster mode requires `transactionMaxFee`, which bounds the fee-token approval that the paymaster quote sizes.
 - **SDKS-169** (SDK-452, SDK-1248): reads and sends go through the WDK account's own provider, so one transaction cannot be built on one chain and broadcast on another.
 
+### Accepted gaps
+
+The SDK could check these against a source the RPC cannot forge, but does not yet:
+
+- **SDKS-493** (SDK-771): the SDK returns the RPC's EOA hash as is. A `keccak256` check on the signed bytes would catch a swapped hash, but not a dropped transaction or a forged receipt.
+
 ### Out of our threat model
 
 Each finding below requires the endpoint to lie, unless its entry names another precondition. Mitigating it would require trusting or independently verifying another source of truth. Cantina ids come first; Linear ids follow in parentheses.
@@ -153,6 +159,5 @@ Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. Whe
 - **SDKS-159** (SDK-442): a fork with the same chain id passes every check. It cannot spend canonical-chain funds, and any check would ask the same endpoint.
 - **SDKS-816** (SDK-717): a provider that reports chain A while serving chain B. Only the provider can answer `eth_chainId`.
 - **SDKS-527** (SDK-770), **SDKS-689** (SDK-769): failover to another backend with the same chain id. EIP-155 bytes are valid on every node of that chain.
-- **SDKS-493** (SDK-771): the SDK returns the RPC's EOA hash as is. Checking it against `keccak256` of the signed bytes would catch a swapped hash, but not a dropped transaction or a forged receipt from the same provider.
 - **SDKS-613** (SDK-990): `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - **SDKS-714** (SDK-1037): a stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
