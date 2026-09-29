@@ -1,9 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type {
-  SimulationCall,
-  SimulationResult,
-  SimulationTransaction,
-} from "../types.js";
+import type { SimulationResult, SimulationTransaction } from "../types.js";
 import type {
   AuthorizationEvidence,
   ConversionEvidence,
@@ -11,6 +7,7 @@ import type {
   FeeEvidence,
   PermissionEvidence,
   RiskMetric,
+  SuccessfulCall,
   VerificationDiff,
   VerificationSnapshot,
 } from "./evidence.js";
@@ -156,7 +153,7 @@ export interface VerifiedSimulationResult extends SimulationResult {
   /** Exactly the caller's ordered transactions; no preparation or probes. */
   readonly simulationTxs: readonly Readonly<SimulationTransaction>[];
   /** One successful call per simulationTxs entry; a failed call is a `SimulationRevertedError`. */
-  readonly calls: readonly (SimulationCall & { readonly status: true })[];
+  readonly calls: readonly SuccessfulCall[];
   /** calls and transfers.txIdx refer only to simulationTxs; preparation is separate. */
   readonly verification: SimulationVerification;
 }
