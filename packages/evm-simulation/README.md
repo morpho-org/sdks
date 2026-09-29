@@ -57,7 +57,7 @@ All symbols below are re-exported from the package root.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationVerificationError` (abstract base of the verification errors below), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
-- Verification vocabulary: `SimulationMode`, `OperationType`.
+- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BlueMarketOperationType`, `VaultOperationType` (operation groups that key the execution/verification `SimulationErrorContext`).
 
 ### Deeper docs
 
