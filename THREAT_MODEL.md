@@ -156,7 +156,7 @@ Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. Whe
 
 #### Chain identity and transaction submission (`wdk-protocol-lending-morpho-evm`, `liquidity-sdk-viem`)
 
-- A fork with the same chain id passes every check. It cannot spend canonical-chain funds, and any check would ask the same endpoint.
+- A fork with the same chain id passes every check. A transaction signed against it is valid on the canonical chain, with bounds from forged state, so the risk is a lying RPC's; any check would ask the same endpoint.
 - A provider reports chain A while serving chain B. Only the provider can answer `eth_chainId`.
 - Failover to another backend with the same chain id is accepted. EIP-155 bytes are valid on every node of that chain.
 - `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
