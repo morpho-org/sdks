@@ -145,7 +145,12 @@ export type VaultState = {
   readonly performanceFeeWad: bigint;
   readonly allocations: readonly VaultAllocation[];
 } & (
-  | { readonly type: "vaultV1"; readonly lastTotalAssets: bigint }
+  | {
+      readonly type: "vaultV1";
+      readonly lastTotalAssets: bigint;
+      /** Realized bad debt on V1.1 vaults; absent on V1.0, which has no loss realization. */
+      readonly lostAssets?: bigint;
+    }
   | {
       readonly type: "vaultV2";
       readonly managementFeeWad: bigint;
@@ -248,13 +253,16 @@ export type ExecutionIdentity =
     }
   | ProbeIdentity;
 
+/** A call that succeeded; a failed call is a `SimulationRevertedError`, never evidence. @internal */
+export type SuccessfulCall = SimulationCall & { readonly status: true };
+
 /** Ordered preparation and observed results, or the precise permission storage override. @internal */
 export type AuthorizationPreparation =
   | {
       readonly type: "approvalCalls";
       readonly calls: readonly {
         readonly transaction: Required<Readonly<SimulationTransaction>>;
-        readonly result: SimulationCall;
+        readonly result: SuccessfulCall;
       }[];
     }
   | {

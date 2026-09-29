@@ -7,6 +7,7 @@ import type {
   ExecutionIdentity,
   PermissionChange,
   RiskMetric,
+  VaultState,
   VerificationDiff,
   VerificationSnapshot,
 } from "./evidence.js";
@@ -22,6 +23,12 @@ describe("verification evidence", () => {
     expectTypeOf<
       VerificationDiff["markets"][number]["borrowApyWad"]
     >().toEqualTypeOf<ApplicableChange<bigint>>();
+    expectTypeOf<
+      Extract<VaultState, { type: "vaultV1" }>["lostAssets"]
+    >().toEqualTypeOf<bigint | undefined>();
+    expectTypeOf<"lostAssets">().not.toExtend<
+      keyof Extract<VaultState, { type: "vaultV2" }>
+    >();
   });
 
   test("behavior: missing evidence and debt-free metrics cannot masquerade as measurements", () => {

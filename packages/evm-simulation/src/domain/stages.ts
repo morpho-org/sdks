@@ -1,11 +1,12 @@
 import type { Address } from "viem";
-import type { SimulationCall, SimulationTransaction } from "../types.js";
+import type { SimulationTransaction } from "../types.js";
 import type {
   AuthorizationEvidence,
   AuthorizationPreparation,
   EvidenceRead,
   ExecutionContext,
   ExecutionIdentity,
+  SuccessfulCall,
   VerificationSnapshot,
 } from "./evidence.js";
 import type { EffectiveSimulationLimits, OperationLimit } from "./limits.js";
@@ -77,9 +78,6 @@ export interface ObservedSnapshot {
 export interface PendingEvidence {
   readonly snapshots: readonly EvidenceRead<ObservedSnapshot>[];
 }
-
-/** A call that succeeded; a failed call never becomes evidence. @internal */
-export type SuccessfulCall = SimulationCall & { readonly status: true };
 
 /** Complete evidence after response counts, references, statuses and probe results pass. @internal */
 export interface CompleteEvidence {
