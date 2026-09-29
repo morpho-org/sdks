@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["genhtml", "mkfifo"],
+  "ignoreIssues": {
+    "packages/blue-sdk-viem/src/MetaMorphoAction.ts": ["duplicates"],
+    "packages/morpho-ts/src/addresses.ts": ["duplicates"]
+  },
+  "workspaces": {
+    ".": {
+      "ignoreDependencies": ["undici"]
+    },
+    "packages/blue-sdk-viem": {
+      "ignore": ["src/queries/**/index.ts"]
+    },
+    "packages/midnight-sdk": {
+      "ignore": ["src/queries/**/index.ts"]
+    },
+    "packages/morpho-sdk": {
+      "entry": ["examples/**/*.ts"]
+    },
+    "packages/wdk-protocol-lending-morpho-evm": {
+      "entry": ["bare.js"]
+    }
+  }
+}
