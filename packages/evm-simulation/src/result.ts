@@ -1,7 +1,7 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 import type { PendingAuthorization } from "./authorizations.js";
-import type { OperationType, SimulationLimits } from "./limits.js";
+import type { SimulationLimits, SimulationOperationSubject } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
   SimulationCall,
@@ -10,23 +10,10 @@ import type {
 } from "./types.js";
 
 /** @internal One operation decoded from the caller's transactions. */
-export interface SimulatedOperation {
-  readonly type: OperationType;
+export type SimulatedOperation = {
   /** Index into `simulationTxs`. */
   readonly transactionIndex: number;
-  /** Set for Blue operations except refinance and authorization. */
-  readonly marketId?: MarketId;
-  /** Set for refinance. */
-  readonly sourceMarketId?: MarketId;
-  readonly targetMarketId?: MarketId;
-  /** Set for vault operations except migration. */
-  readonly vault?: Address;
-  /** Set for migration. */
-  readonly sourceVault?: Address;
-  readonly targetVault?: Address;
-  /** Set for blueAuthorization. */
-  readonly authorized?: Address;
-}
+} & SimulationOperationSubject;
 
 /** @internal How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {

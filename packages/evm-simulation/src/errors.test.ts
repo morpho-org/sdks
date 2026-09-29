@@ -4,7 +4,6 @@ import {
   AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
-  type BlueMarketOperationType,
   ConsumerLimitViolationError,
   ExternalServiceError,
   FeeMismatchError,
@@ -27,14 +26,17 @@ import {
   UnsupportedChainError,
   UnsupportedOperationError,
   UnsupportedVerificationFeatureError,
-  type VaultOperationType,
 } from "./errors.js";
 import {
+  type BlueMarketOperationType,
   OPERATION_TYPES,
   type OperationLimit,
   type OperationType,
+  type SimulationOperationSubject,
+  type VaultOperationType,
 } from "./limits.js";
 import { SIMULATION_MODES } from "./params.js";
+import type { SimulatedOperation } from "./result.js";
 
 const CONTEXT: SimulationErrorContext = {
   stage: "validation",
@@ -325,6 +327,15 @@ describe("SimulationErrorContext", () => {
     expectTypeOf<
       Extract<Verification, { operation: "vaultV1MigrateToV2" }>
     >().not.toHaveProperty("vault");
+    expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
+    expectTypeOf<
+      SimulatedOperation["operation"]
+    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<{
+      transactionIndex: number;
+      operation: "blueRefinance";
+      vault: `0x${string}`;
+    }>().not.toExtend<SimulatedOperation>();
     const base = {
       stage: "verification",
       mode: "final",
@@ -456,10 +467,14 @@ describe("SIMULATION_ERROR_CODES", () => {
     );
   });
 
-  it.each(SIMULATION_ERROR_CODES)("guard accepts plain %s", (code) => {
-    expect(isSimulationPackageError({ name: "X", message: "m", code })).toBe(
-      true,
-    );
+  it.each(concrete)("guard accepts plain $name", ({ name, code }) => {
+    expect(isSimulationPackageError({ name, message: "m", code })).toBe(true);
+  });
+
+  it.each(concrete)("guard rejects $code under a foreign name", ({ code }) => {
+    expect(
+      isSimulationPackageError({ name: "FetchError", message: "m", code }),
+    ).toBe(false);
   });
 });
 
@@ -606,7 +621,7 @@ describe("isSimulationPackageError", () => {
     ).toBe(false);
   });
 
-  const base = { name: "X", message: "m", code: "FEE_MISMATCH" };
+  const base = { name: "FeeMismatchError", message: "m", code: "FEE_MISMATCH" };
   const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
 
   it("requires a known operation on execution and verification contexts", () => {
