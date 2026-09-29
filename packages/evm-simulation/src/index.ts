@@ -38,7 +38,11 @@ export type {
   SimulationOperationSubject,
   VaultOperationType,
 } from "./limits.js";
-export { OPERATION_TYPES } from "./limits.js";
+export {
+  BLUE_MARKET_OPERATION_TYPES,
+  OPERATION_TYPES,
+  VAULT_OPERATION_TYPES,
+} from "./limits.js";
 export type { SimulationMode } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
 export { simulate } from "./simulate/index.js";

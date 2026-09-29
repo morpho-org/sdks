@@ -29,17 +29,38 @@ export const OPERATION_TYPES = [
 /** Discriminator for decoded operations and their limits. */
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
+/** Operations acting on one Blue market; source of `BlueMarketOperationType`. */
+export const BLUE_MARKET_OPERATION_TYPES = [
+  "blueSupply",
+  "blueWithdraw",
+  "blueSupplyCollateral",
+  "blueBorrow",
+  "blueSupplyCollateralBorrow",
+  "blueRepay",
+  "blueWithdrawCollateral",
+  "blueRepayWithdrawCollateral",
+] as const satisfies readonly OperationType[];
+
 /** Operations acting on one Blue market. */
-export type BlueMarketOperationType = Exclude<
-  Extract<OperationType, `blue${string}`>,
-  "blueRefinance" | "blueAuthorization"
->;
+export type BlueMarketOperationType =
+  (typeof BLUE_MARKET_OPERATION_TYPES)[number];
+
+/** Operations acting on one vault (V1 or V2); source of `VaultOperationType`. */
+export const VAULT_OPERATION_TYPES = [
+  "vaultV1Deposit",
+  "vaultV2Deposit",
+  "vaultV1Withdraw",
+  "vaultV2Withdraw",
+  "vaultV1Redeem",
+  "vaultV2Redeem",
+  "vaultV2ForceWithdraw",
+  "vaultV2ForceRedeem",
+  "vaultV1InKindRedeem",
+  "vaultV2InKindRedeem",
+] as const satisfies readonly OperationType[];
 
 /** Operations acting on one vault (V1 or V2). */
-export type VaultOperationType = Exclude<
-  Extract<OperationType, `vault${string}`>,
-  "vaultV1MigrateToV2"
->;
+export type VaultOperationType = (typeof VAULT_OPERATION_TYPES)[number];
 
 /** Protocol entity the failing operation acts on, keyed by `operation`. */
 export type SimulationOperationSubject =
