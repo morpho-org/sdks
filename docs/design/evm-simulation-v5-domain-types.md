@@ -95,7 +95,7 @@ LTV, utilization and health outcomes use explicit risk states, not numeric infin
 | Effective limits and operations | `verification.limits, operations`; each VerifiedOperation ties its decoded operation to the correct typed outcome. |
 | Authorization request | `AuthorizationEvidence.authorizationIndex, request`; one entry per pending wallet request. Final mode has an empty tuple. |
 | Request policy checks | `requestChecks.owner, binding, authority`; signature requests additionally domain/nonce/deadline; Permit2 additionally canonicalPermit2Allowance. All represent completed checks. |
-| Preparation calls | `AuthorizationPreparation.type: approvalCalls`; ordered `calls[].transaction.{from,to,data,value}` and `result` (logs, status, returnData, gasUsed). No public txIdx. |
+| Preparation calls | `AuthorizationPreparation.type: approvalCalls`; ordered `calls[].transaction.{from,to,data,value}` and `result: SuccessfulCall` (logs, `status: true`, returnData, gasUsed). No public txIdx. |
 | Preparation override | `type: stateOverride, address, storageVariable, slot, value`; only allowance/isAuthorized storage, never code or signature nonce overrides. |
 | Read-back | `AuthorizationReadBack.probe, expected, observed`; permission states and internal probe identities. |
 | Snapshots | `verification.before, after` are complete VerificationSnapshot records; unchanged values are retained. |
@@ -105,7 +105,7 @@ LTV, utilization and health outcomes use explicit risk states, not numeric infin
 | Intermediate permissions | `permissionEvidence.identity, changes, logs`; captures temporary grants/revokes and allowance consumption hidden by equal endpoints. |
 | Positions | marketId, owner, supplyAssets/supplyShares, borrowAssets/borrowShares, collateralAssets, ltvWad, healthFactorWad. |
 | Markets | market binding, total supply/borrow assets/shares, lastUpdate, feeWad, liquidityAssets, utilizationWad, borrowApyWad, oracle price/value scale, per-second borrow rate, applicable preLiquidation address/preLltvWad. |
-| Vaults | vault/owner/asset, totalAssets/totalShares/ownerShares/idleAssets/sharePriceE27, performance fee/recipient, allocations; V1 lastTotalAssets; V2 management fee/recipient, rate cap, lastUpdate, recordedTotalAssets. |
+| Vaults | vault/owner/asset, totalAssets/totalShares/ownerShares/idleAssets/sharePriceE27, performance fee/recipient, allocations; V1 lastTotalAssets and lostAssets (`Applicable<bigint>`: V1.1 realized bad debt, `noLossRealization` on V1.0); V2 management fee/recipient, rate cap, lastUpdate, recordedTotalAssets. |
 | Allocations | adapter, optional marketId, assets/shares, absolute/relative caps, penaltyWad. Differences preserve every allocation's asset/share change. |
 | Conversions | Operation identity, market/vault subject, assets/shares, quoted and actual E27 price, min/max E27 bounds, rounding direction. |
 | Fees/penalties | Operation identity, referral/performance/management/exitPenalty/reallocationPenalty, token/recipient, rateWad, expectedAmount/observedAmount, assets/shares unit. |
@@ -154,7 +154,7 @@ Existing error classes and constructors are unchanged. `SimulationErrorCodes` ac
 | Stages | Error stages match the ADR: validation, preparation, execution, verification, transport. Decoding, pinned reads and limit checks report as validation or verification. |
 | Pure contracts | parseRequest → ParsedRequest; decodeAndBind → DecodedBundle; checkRequests → ValidatedAuthorizations; planExecution → ExecutionPlan; parseEvidence → CompleteEvidence; verifyEffects → VerifiedEffects; enforceLimits → ConstrainedEffects; assembleResult → VerifiedSimulationResult. |
 | I/O contracts | readPinnedInputs returns Promise<PinnedInputs>; executePlan returns Promise<unknown>. Parsing and verification cannot treat that unknown as evidence. |
-| Refinements | A private unique-symbol stage brand prevents unchecked structural assignment to parsed/pinned/complete/constrained records. `CompleteEvidence.calls[].result` and `VerifiedSimulationResult.calls[]` require `status: true`; a failed call is a `SimulationRevertedError`, never evidence. Constructors arrive with their checking implementations. No brand is required in consumer inputs. |
+| Refinements | A private unique-symbol stage brand prevents unchecked structural assignment to parsed/pinned/complete/constrained records. `CompleteEvidence.calls[].result`, `AuthorizationPreparation` approval `calls[].result` and `VerifiedSimulationResult.calls[]` share the `SuccessfulCall` alias (`status: true`); a failed call is a `SimulationRevertedError`, never evidence. Constructors arrive with their checking implementations. No brand is required in consumer inputs. |
 
 ## Validation and remaining work
 
