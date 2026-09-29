@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import {
+  createHash,
+  verify as verifySignature,
+  X509Certificate,
+} from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  listTarballEntries,
+  loadBundledTar,
+  type TarEntry,
+} from "../ci/verify-tarball-collisions.ts";
 import { getErrorMessage, sanitizeLogLine } from "./helpers.ts";
 
 // These verification values intentionally remain constants, not runtime options.
@@ -14,6 +24,7 @@ const EXPECTED = {
   repository: "https://github.com/morpho-org/sdks",
   repositoryId: "829304716",
   workflowPath: ".github/workflows/push.yml",
+  signerWorkflowPath: ".github/workflows/publish.yml",
   refs: ["refs/heads/main", "refs/heads/next"],
   builder: "https://github.com/actions/runner/github-hosted",
   event: "push",
@@ -83,9 +94,26 @@ interface Packument {
   time?: Record<string, string>;
 }
 
+interface PacoteManifestReader {
+  manifest(
+    spec: string,
+    options: { fullMetadata: boolean; fullReadJson: boolean },
+  ): Promise<unknown>;
+}
+
 interface Attestation {
   predicateType?: string;
-  bundle?: { dsseEnvelope?: { payload?: string } };
+  bundle?: {
+    dsseEnvelope?: {
+      payload?: string;
+      payloadType?: string;
+      signatures?: { sig?: string }[];
+    };
+    verificationMaterial?: {
+      certificate?: { rawBytes?: string };
+      x509CertificateChain?: { certificates?: { rawBytes?: string }[] };
+    };
+  };
 }
 
 interface ProvenancePredicate {
@@ -121,6 +149,19 @@ interface ProvenanceEvaluation {
   gitCommit: string | null;
 }
 
+interface SignatureEvaluation {
+  status: VerificationCheck["status"];
+  severity: Severity;
+  detail: string;
+  signerRef: string | null;
+}
+
+interface CheckEvaluation {
+  status: VerificationCheck["status"];
+  severity: Severity;
+  detail: string;
+}
+
 /**
  * Converts a sha512 Subresource Integrity value to its lowercase hexadecimal digest.
  *
@@ -139,6 +180,41 @@ export function integrityToSha512Hex(integrity: string): string | null {
 }
 
 /**
+ * Evaluates downloaded tarball bytes against registry integrity and origin.
+ *
+ * @param bytes Downloaded tarball bytes.
+ * @param integrity The registry's sha512 integrity value.
+ * @param tarballUrl The registry-provided tarball URL.
+ * @returns The deterministic integrity-check verdict.
+ */
+// biome-ignore lint/complexity/useMaxParams: Preserve the required pure evaluator signature.
+export function evaluateTarballIntegrity(
+  bytes: Uint8Array,
+  integrity: string,
+  tarballUrl: string,
+): CheckEvaluation {
+  try {
+    assertRegistryUrl(tarballUrl);
+  } catch (error) {
+    return {
+      status: "error",
+      severity: "HIGH",
+      detail: getErrorMessage(error),
+    };
+  }
+  const expected = integrityToSha512Hex(integrity);
+  const actual = createHash("sha512").update(bytes).digest("hex");
+  const matches = expected != null && expected === actual;
+  return {
+    status: matches ? "pass" : "fail",
+    severity: "CRITICAL",
+    detail: matches
+      ? `Downloaded tarball digest matches ${integrity}.`
+      : `Expected ${expected ?? integrity}, downloaded tarball digest is ${actual}.`,
+  };
+}
+
+/**
  * Finds the previous version by publish time, respecting stable and prerelease channels.
  *
  * @param packument The npm metadata for the package.
@@ -151,28 +227,49 @@ export function selectPreviousVersion(
 ): string | null {
   const targetTime = Date.parse(packument.time?.[version] ?? "");
   if (!Number.isFinite(targetTime)) return null;
-  const includePrereleases = version.includes("-");
-  let previous: { version: string; time: number } | undefined;
+  const eligible: { version: string; time: number }[] = [];
   for (const [candidate, publishTime] of Object.entries(packument.time ?? {})) {
     if (
       candidate === "created" ||
       candidate === "modified" ||
       candidate === version ||
-      packument.versions?.[candidate] == null ||
-      (!includePrereleases && candidate.includes("-"))
+      packument.versions?.[candidate] == null
     ) {
       continue;
     }
     const time = Date.parse(publishTime);
-    if (
-      Number.isFinite(time) &&
-      time < targetTime &&
-      (previous == null || time > previous.time)
-    ) {
-      previous = { version: candidate, time };
+    if (Number.isFinite(time) && time < targetTime) {
+      eligible.push({ version: candidate, time });
     }
   }
-  return previous?.version ?? null;
+  const mostRecent = (
+    candidates: readonly { version: string; time: number }[],
+  ): string | null =>
+    candidates.reduce<{ version: string; time: number } | undefined>(
+      (previous, candidate) =>
+        previous == null || candidate.time > previous.time
+          ? candidate
+          : previous,
+      undefined,
+    )?.version ?? null;
+
+  if (!version.includes("-")) {
+    return mostRecent(
+      eligible.filter(({ version: candidate }) => !candidate.includes("-")),
+    );
+  }
+
+  const preid = /^\d+\.\d+\.\d+-([0-9A-Za-z]+)/.exec(version)?.[1];
+  const samePreid = eligible.filter(({ version: candidate }) => {
+    if (!candidate.includes("-")) return false;
+    return /^\d+\.\d+\.\d+-([0-9A-Za-z]+)/.exec(candidate)?.[1] === preid;
+  });
+  return (
+    mostRecent(samePreid) ??
+    mostRecent(
+      eligible.filter(({ version: candidate }) => !candidate.includes("-")),
+    )
+  );
 }
 
 /**
@@ -195,6 +292,9 @@ export function evaluateProvenance(
     presentStatus: VerificationCheck["status"];
     presentSeverity: Severity;
     presentDetail: string;
+    signatureStatus: VerificationCheck["status"];
+    signatureSeverity: Severity;
+    signatureDetail: string;
     unavailableDetail: string;
   }): ProvenanceEvaluation => {
     addResult(
@@ -205,6 +305,15 @@ export function evaluateProvenance(
       options.presentStatus,
       options.presentSeverity,
       options.presentDetail,
+    );
+    addResult(
+      checks,
+      findings,
+      "provenance.signature",
+      "SLSA statement is signed by the expected workflow identity",
+      options.signatureStatus,
+      options.signatureSeverity,
+      options.signatureDetail,
     );
     addResult(
       checks,
@@ -232,40 +341,76 @@ export function evaluateProvenance(
       presentStatus: "fail",
       presentSeverity: "CRITICAL",
       presentDetail: "The published manifest has no attestations URL.",
+      signatureStatus: "fail",
+      signatureSeverity: "CRITICAL",
+      signatureDetail: "No SLSA DSSE bundle is available to verify.",
       unavailableDetail: "No SLSA statement is available to inspect.",
     });
   }
 
-  let statement: ProvenanceStatement | undefined;
+  const attestation = attestations.find(
+    ({ predicateType, bundle }) =>
+      predicateType === SLSA_PREDICATE_TYPE &&
+      bundle?.dsseEnvelope?.payload != null,
+  );
+  const payload = attestation?.bundle?.dsseEnvelope?.payload;
+  if (attestation == null || payload == null) {
+    return failNoStatement({
+      presentStatus: "fail",
+      presentSeverity: "CRITICAL",
+      presentDetail: "The attestations response contains no SLSA v1 statement.",
+      signatureStatus: "fail",
+      signatureSeverity: "CRITICAL",
+      signatureDetail: "No SLSA DSSE payload is available to verify.",
+      unavailableDetail: "No SLSA statement is available to inspect.",
+    });
+  }
+
+  let statement: ProvenanceStatement;
+  let signature = evaluateSlsaSignature(attestation);
   try {
-    for (const attestation of attestations) {
-      if (attestation.predicateType !== SLSA_PREDICATE_TYPE) continue;
-      const payload = attestation.bundle?.dsseEnvelope?.payload;
-      if (payload == null) continue;
-      statement = JSON.parse(
-        Buffer.from(payload, "base64").toString("utf8"),
-      ) as ProvenanceStatement;
-      break;
-    }
+    statement = JSON.parse(
+      Buffer.from(payload, "base64").toString("utf8"),
+    ) as ProvenanceStatement;
   } catch (error) {
     const detail = `Could not decode the SLSA statement: ${getErrorMessage(error)}`;
     return failNoStatement({
       presentStatus: "error",
       presentSeverity: "HIGH",
       presentDetail: detail,
+      signatureStatus: signature.status === "pass" ? "error" : signature.status,
+      signatureSeverity:
+        signature.status === "pass" ? "HIGH" : signature.severity,
+      signatureDetail:
+        signature.status === "pass"
+          ? `Could not bind the signature to the SLSA statement: ${getErrorMessage(error)}`
+          : signature.detail,
       unavailableDetail: "The SLSA statement could not be decoded.",
     });
   }
 
-  if (statement == null) {
-    return failNoStatement({
-      presentStatus: "fail",
-      presentSeverity: "CRITICAL",
-      presentDetail: "The attestations response contains no SLSA v1 statement.",
-      unavailableDetail: "No SLSA statement is available to inspect.",
-    });
+  if (signature.status === "pass") {
+    const workflowRef = (statement.predicate ?? statement).buildDefinition
+      ?.externalParameters?.workflow?.ref;
+    if (signature.signerRef !== workflowRef) {
+      signature = {
+        ...signature,
+        status: "fail",
+        severity: "CRITICAL",
+        detail: `Signer workflow ref expected ${workflowRef ?? "(missing)"}, got ${signature.signerRef ?? "(missing)"}.`,
+      };
+    }
   }
 
+  addResult(
+    checks,
+    findings,
+    "provenance.signature",
+    "SLSA statement is signed by the expected workflow identity",
+    signature.status,
+    signature.severity,
+    signature.detail,
+  );
   addResult(
     checks,
     findings,
@@ -292,6 +437,19 @@ export function evaluateProvenance(
       ? "The first subject's sha512 digest matches dist.integrity."
       : `Expected subject sha512 ${expectedDigest ?? "(invalid dist.integrity)"}, got ${actualDigest ?? "(missing)"}.`,
   );
+
+  if (signature.status !== "pass") {
+    addResult(
+      checks,
+      findings,
+      "provenance.source",
+      "Provenance identifies the trusted source workflow",
+      "error",
+      "HIGH",
+      "The source metadata cannot be trusted because the SLSA signature check did not pass.",
+    );
+    return { checks, findings, gitCommit: null };
+  }
 
   const provenance = statement.predicate ?? statement;
   const workflow = provenance.buildDefinition?.externalParameters?.workflow;
@@ -347,6 +505,96 @@ export function evaluateProvenance(
   return { checks, findings, gitCommit };
 }
 
+function evaluateSlsaSignature(attestation: Attestation): SignatureEvaluation {
+  const bundle = attestation.bundle;
+  const envelope = bundle?.dsseEnvelope;
+  const payload = envelope?.payload;
+  const payloadType = envelope?.payloadType;
+  const signature = envelope?.signatures?.[0]?.sig;
+  const certificateBytes =
+    bundle?.verificationMaterial?.certificate?.rawBytes ??
+    bundle?.verificationMaterial?.x509CertificateChain?.certificates?.[0]
+      ?.rawBytes;
+  if (
+    payload == null ||
+    payloadType == null ||
+    signature == null ||
+    certificateBytes == null
+  ) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail:
+        "The SLSA DSSE payload, payload type, signature, or signing certificate is missing.",
+      signerRef: null,
+    };
+  }
+
+  let certificate: X509Certificate;
+  try {
+    certificate = new X509Certificate(Buffer.from(certificateBytes, "base64"));
+  } catch (error) {
+    return {
+      status: "error",
+      severity: "HIGH",
+      detail: `Could not parse the SLSA signing certificate: ${getErrorMessage(error)}`,
+      signerRef: null,
+    };
+  }
+
+  const identityPrefix = `URI:${EXPECTED.repository}/${EXPECTED.signerWorkflowPath}@`;
+  const signerRef = EXPECTED.refs.find(
+    (ref) => certificate.subjectAltName === `${identityPrefix}${ref}`,
+  );
+  if (signerRef == null) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: `Signing certificate SAN does not match ${identityPrefix}${EXPECTED.refs.join(" or ")}, got ${certificate.subjectAltName ?? "(missing)"}.`,
+      signerRef: null,
+    };
+  }
+
+  const payloadBytes = Buffer.from(payload, "base64");
+  const pae = Buffer.concat([
+    Buffer.from(
+      `DSSEv1 ${Buffer.byteLength(payloadType)} ${payloadType} ${payloadBytes.length} `,
+    ),
+    payloadBytes,
+  ]);
+  let isValid: boolean;
+  try {
+    // npm audit signatures verifies the Fulcio certificate chain and transparency log.
+    isValid = verifySignature(
+      "sha256",
+      pae,
+      certificate.publicKey,
+      Buffer.from(signature, "base64"),
+    );
+  } catch (error) {
+    return {
+      status: "error",
+      severity: "HIGH",
+      detail: `Could not verify the SLSA DSSE signature: ${getErrorMessage(error)}`,
+      signerRef,
+    };
+  }
+  if (!isValid) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: "The SLSA DSSE signature is invalid.",
+      signerRef,
+    };
+  }
+  return {
+    status: "pass",
+    severity: "CRITICAL",
+    detail: "The SLSA DSSE signature and signing workflow identity are valid.",
+    signerRef,
+  };
+}
+
 /**
  * Compares published dependency declarations with their source manifest.
  *
@@ -376,10 +624,18 @@ export function compareManifestDependencies(
     for (const name of expectedNames) {
       const expectedSpecifier = expected[name];
       const actualSpecifier = actual[name];
-      if (
+      if (expectedSpecifier == null) continue;
+      if (/^(workspace:|catalog:)/.test(expectedSpecifier)) {
+        if (
+          actualSpecifier == null ||
+          !/^[\w.\-^~<>=|* ]+$/.test(actualSpecifier)
+        ) {
+          mismatches.push(
+            `${field}.${name} expected a published semver range, got ${actualSpecifier ?? "(missing)"}`,
+          );
+        }
+      } else if (
         actualSpecifier != null &&
-        expectedSpecifier != null &&
-        !/^(workspace:|catalog:)/.test(expectedSpecifier) &&
         expectedSpecifier !== actualSpecifier
       ) {
         mismatches.push(
@@ -389,6 +645,34 @@ export function compareManifestDependencies(
     }
   }
   return mismatches;
+}
+
+/**
+ * Reports an error when the target release has no valid npm publish timestamp.
+ *
+ * @param publishTime The target version's packument time value.
+ * @returns Timestamp validity, checks, and any finding.
+ */
+export function evaluatePublishTime(publishTime: string | undefined): {
+  valid: boolean;
+  checks: VerificationCheck[];
+  findings: VerificationFinding[];
+} {
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  const valid = Number.isFinite(Date.parse(publishTime ?? ""));
+  if (!valid) {
+    addError(
+      checks,
+      findings,
+      "manifest.identity",
+      "Package identity is unchanged from previous version",
+      new Error(
+        "The npm packument has no valid publish time for this version.",
+      ),
+    );
+  }
+  return { valid, checks, findings };
 }
 
 /**
@@ -423,6 +707,156 @@ export function compareManifestIdentity(
     }
   }
   return mismatches;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
+function isRegistryManifest(value: unknown): value is RegistryManifest {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const manifest = value as Record<string, unknown>;
+  const repository = manifest.repository;
+  return (
+    (manifest.name === undefined || typeof manifest.name === "string") &&
+    (manifest.version === undefined || typeof manifest.version === "string") &&
+    (manifest.private === undefined || typeof manifest.private === "boolean") &&
+    (manifest.scripts === undefined || isStringRecord(manifest.scripts)) &&
+    (manifest.bin === undefined ||
+      typeof manifest.bin === "string" ||
+      isStringRecord(manifest.bin)) &&
+    (manifest.gypfile === undefined || typeof manifest.gypfile === "boolean") &&
+    (manifest.dependencies === undefined ||
+      isStringRecord(manifest.dependencies)) &&
+    (manifest.peerDependencies === undefined ||
+      isStringRecord(manifest.peerDependencies)) &&
+    (manifest.optionalDependencies === undefined ||
+      isStringRecord(manifest.optionalDependencies)) &&
+    (repository === undefined ||
+      typeof repository === "string" ||
+      (typeof repository === "object" &&
+        repository !== null &&
+        "url" in repository &&
+        (repository.url === undefined ||
+          typeof repository.url === "string"))) &&
+    (manifest.license === undefined || typeof manifest.license === "string")
+  );
+}
+
+function isPacoteManifestReader(value: unknown): value is PacoteManifestReader {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "manifest" in value &&
+    typeof value.manifest === "function"
+  );
+}
+
+/**
+ * Creates a CRITICAL layout check for entries outside the package/ archive root.
+ *
+ * @param entries The paths returned by npm's bundled node-tar.
+ * @returns The layout check and any finding.
+ */
+export function evaluateTarballLayout(
+  entries: readonly Pick<TarEntry, "path">[],
+): { checks: VerificationCheck[]; findings: VerificationFinding[] } {
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  const outside = entries.filter(
+    ({ path }) => path.replaceAll("\\", "/").split("/")[0] !== "package",
+  );
+  addResult(
+    checks,
+    findings,
+    "tarball.layout",
+    "Tarball entries are rooted at package/",
+    outside.length === 0 ? "pass" : "fail",
+    "CRITICAL",
+    outside.length === 0
+      ? "Every tarball entry has package/ as its root."
+      : `Entries outside package/: ${outside.map(({ path }) => path).join(", ")}.`,
+  );
+  return { checks, findings };
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableJson(entry)).join(",")}]`;
+  }
+  return `{${Object.entries(value)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+    .join(",")}}`;
+}
+
+/**
+ * Reports registry fields that differ from the consumer-visible tarball manifest.
+ *
+ * @param registry The packument manifest.
+ * @param tarball The manifest read from the published archive through pacote.
+ * @returns Names of fields whose values differ.
+ */
+export function compareRegistryManifest(
+  registry: RegistryManifest,
+  tarball: RegistryManifest,
+): string[] {
+  const mismatches: string[] = [];
+  for (const field of [
+    "name",
+    "version",
+    "scripts",
+    "bin",
+    "gypfile",
+    "dependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ] as const) {
+    if (stableJson(registry[field]) !== stableJson(tarball[field])) {
+      mismatches.push(
+        `${field} differs between registry and tarball manifests`,
+      );
+    }
+  }
+  return mismatches;
+}
+
+/**
+ * Evaluates whether the package manifest exposed by npm matches the tarball.
+ *
+ * @param registry The packument manifest.
+ * @param tarball The manifest read from the published archive through pacote.
+ * @returns The registry-drift check and any CRITICAL finding.
+ */
+export function evaluateRegistryManifest(
+  registry: RegistryManifest,
+  tarball: RegistryManifest,
+): { checks: VerificationCheck[]; findings: VerificationFinding[] } {
+  const mismatches = compareRegistryManifest(registry, tarball);
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  addResult(
+    checks,
+    findings,
+    "manifest.registry-drift",
+    "Registry and tarball manifests agree",
+    mismatches.length === 0 ? "pass" : "fail",
+    "CRITICAL",
+    mismatches.length === 0
+      ? "The registry and consumer-visible tarball manifest fields match."
+      : mismatches.join("; "),
+  );
+  return { checks, findings };
 }
 
 /**
@@ -534,6 +968,32 @@ export function evaluateManifestBin(
 }
 
 /**
+ * Creates the report check for npm's trusted-publisher metadata.
+ *
+ * @param trustedPublisher The published manifest's trusted publisher, if present.
+ * @returns The check and any finding for trusted-publisher metadata.
+ */
+export function evaluateTrustedPublisher(
+  trustedPublisher: { id?: string } | null | undefined,
+): { checks: VerificationCheck[]; findings: VerificationFinding[] } {
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  const present = trustedPublisher != null;
+  addResult(
+    checks,
+    findings,
+    "registry.trusted-publisher",
+    "Package declares npm trusted publishing",
+    present ? "pass" : "fail",
+    "CRITICAL",
+    present
+      ? `The published manifest declares a trusted publisher (id: ${trustedPublisher.id ?? "(missing)"}).`
+      : "The published manifest has no npm trusted publisher.",
+  );
+  return { checks, findings };
+}
+
+/**
  * Returns lifecycle install hooks that would execute during a package installation.
  *
  * @param scripts The published manifest's scripts.
@@ -552,7 +1012,7 @@ export function findInstallScripts(
  *
  * @param scripts The published manifest's scripts.
  * @param gypfile The published manifest's gypfile declaration.
- * @param entries Tarball paths, including their `package/` root.
+ * @param entries Tarball paths, before or after stripping `package/`.
  * @returns Install-time execution risks.
  */
 // biome-ignore lint/complexity/useMaxParams: Keep this pure checker's inputs explicit.
@@ -562,9 +1022,13 @@ export function findInstallProblems(
   entries: readonly string[],
 ): string[] {
   const hooks = findInstallScripts(scripts);
-  const hasBindingGyp = entries.some(
-    (entry) => entry.toLowerCase() === "package/binding.gyp",
-  );
+  const hasBindingGyp = entries.some((entry) => {
+    const normalized = entry.replaceAll("\\", "/").replace(/\/+$/, "");
+    const segments = normalized.split("/");
+    const relative =
+      segments[0] === "package" ? segments.slice(1).join("/") : normalized;
+    return relative.toLowerCase() === "binding.gyp";
+  });
   return [
     ...(hooks.length > 0
       ? [`install-time lifecycle scripts: ${hooks.join(", ")}`]
@@ -732,12 +1196,67 @@ function isMissingNextRef(error: unknown): boolean {
 }
 
 function fetchReleaseRefs(cwd: string): void {
+  const unshallow =
+    execGit(["rev-parse", "--is-shallow-repository"], cwd).trim() === "true";
   try {
-    execGit(["fetch", "origin", "main", "next", "--tags", "--force"], cwd);
+    execGit(
+      [
+        "fetch",
+        ...(unshallow ? ["--unshallow"] : []),
+        "origin",
+        "main",
+        "next",
+        "--tags",
+        "--force",
+      ],
+      cwd,
+    );
   } catch (error) {
     if (!isMissingNextRef(error)) throw error;
-    execGit(["fetch", "origin", "main", "--tags", "--force"], cwd);
+    execGit(
+      [
+        "fetch",
+        ...(unshallow ? ["--unshallow"] : []),
+        "origin",
+        "main",
+        "--tags",
+        "--force",
+      ],
+      cwd,
+    );
   }
+}
+
+function hasGitRef(ref: string, cwd: string): boolean {
+  try {
+    execGit(["rev-parse", "--verify", "--quiet", ref], cwd);
+    return true;
+  } catch (error) {
+    if (
+      getErrorStatus(error) === 1 ||
+      isMissingGitPath(error) ||
+      isUnknownGitObject(error)
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Determines whether a package is published from any provided repository ref.
+ *
+ * @param name The npm package name.
+ * @param sources Package manifests loaded from release refs.
+ * @returns Whether a non-private manifest matches the package name.
+ */
+export function isPackageKnown(
+  name: string,
+  sources: readonly PackageSource[],
+): boolean {
+  return sources.some(
+    ({ manifest }) => manifest.name === name && manifest.private !== true,
+  );
 }
 
 // biome-ignore lint/complexity/useMaxParams: Keep source and report state explicit.
@@ -747,9 +1266,7 @@ function checkPackageKnown(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): void {
-  const known = sources.some(
-    ({ manifest }) => manifest.name === name && manifest.private !== true,
-  );
+  const known = isPackageKnown(name, sources);
   addResult(
     checks,
     findings,
@@ -758,9 +1275,70 @@ function checkPackageKnown(
     known ? "pass" : "fail",
     "HIGH",
     known
-      ? `${name} is a non-private package in origin/main.`
-      : `${name} is not a non-private package in origin/main.`,
+      ? `${name} is a non-private package in origin/main or origin/next.`
+      : `${name} is not a non-private package in origin/main or origin/next.`,
   );
+}
+
+/**
+ * Decides whether a provenance commit is valid and reachable from release refs.
+ *
+ * @param commit The commit recorded by SLSA provenance.
+ * @param isAncestor Whether Git confirmed it is an ancestor of main or next.
+ * @returns The deterministic git.commit verdict.
+ */
+export function evaluateGitCommitReachability(
+  commit: string | null,
+  isAncestor: boolean,
+): CheckEvaluation {
+  if (commit == null || !/^[a-f0-9]{40,64}$/i.test(commit)) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: `Provenance gitCommit is missing or invalid: ${commit ?? "(missing)"}.`,
+    };
+  }
+  return isAncestor
+    ? {
+        status: "pass",
+        severity: "CRITICAL",
+        detail: `${commit} is an ancestor of a release branch.`,
+      }
+    : {
+        status: "fail",
+        severity: "CRITICAL",
+        detail: `${commit} is not an ancestor of origin/main or origin/next.`,
+      };
+}
+
+/**
+ * Decides whether the package tag points to the SLSA provenance commit.
+ *
+ * @param options The expected tag and resolved commit values.
+ * @returns The deterministic git.tag verdict.
+ */
+export function evaluateGitTagDecision(options: {
+  tag: string;
+  taggedCommit: string | null;
+  commit: string | null;
+}): CheckEvaluation {
+  const { tag, taggedCommit, commit } = options;
+  if (taggedCommit == null) {
+    return {
+      status: "fail",
+      severity: "HIGH",
+      detail: `Tag ${tag} is missing.`,
+    };
+  }
+  const matches =
+    commit != null && taggedCommit.toLowerCase() === commit.toLowerCase();
+  return {
+    status: matches ? "pass" : "fail",
+    severity: "HIGH",
+    detail: matches
+      ? `Tag ${tag} points to ${taggedCommit}.`
+      : `Tag ${tag} points to ${taggedCommit}, expected ${commit ?? "(missing provenance gitCommit)"}.`,
+  };
 }
 
 // biome-ignore lint/complexity/useMaxParams: Keep source and report state explicit.
@@ -771,27 +1349,29 @@ function addGitCommitCheck(
   findings: VerificationFinding[],
 ): void {
   if (commit == null || !/^[a-f0-9]{40,64}$/i.test(commit)) {
+    const evaluation = evaluateGitCommitReachability(commit, false);
     addResult(
       checks,
       findings,
       "git.commit",
       "Provenance commit is reachable from a release branch",
-      "fail",
-      "CRITICAL",
-      `Provenance gitCommit is missing or invalid: ${commit ?? "(missing)"}.`,
+      evaluation.status,
+      evaluation.severity,
+      evaluation.detail,
     );
     return;
   }
   for (const ref of ["origin/main", "origin/next"]) {
     try {
       execGit(["merge-base", "--is-ancestor", commit, ref], cwd);
+      const evaluation = evaluateGitCommitReachability(commit, true);
       addResult(
         checks,
         findings,
         "git.commit",
         "Provenance commit is reachable from a release branch",
-        "pass",
-        "CRITICAL",
+        evaluation.status,
+        evaluation.severity,
         `${commit} is an ancestor of ${ref}.`,
       );
       return;
@@ -813,14 +1393,15 @@ function addGitCommitCheck(
       return;
     }
   }
+  const evaluation = evaluateGitCommitReachability(commit, false);
   addResult(
     checks,
     findings,
     "git.commit",
     "Provenance commit is reachable from a release branch",
-    "fail",
-    "CRITICAL",
-    `${commit} is not an ancestor of origin/main or origin/next.`,
+    evaluation.status,
+    evaluation.severity,
+    evaluation.detail,
   );
 }
 
@@ -857,29 +1438,31 @@ function addGitTagCheck(
       );
       return;
     }
+    const evaluation = evaluateGitTagDecision({
+      tag,
+      taggedCommit: null,
+      commit,
+    });
     addResult(
       checks,
       findings,
       "git.tag",
       "Package tag points to the provenance commit",
-      "fail",
-      "HIGH",
-      `Tag ${tag} is missing.`,
+      evaluation.status,
+      evaluation.severity,
+      evaluation.detail,
     );
     return;
   }
-  const matches =
-    commit != null && taggedCommit.toLowerCase() === commit.toLowerCase();
+  const evaluation = evaluateGitTagDecision({ tag, taggedCommit, commit });
   addResult(
     checks,
     findings,
     "git.tag",
     "Package tag points to the provenance commit",
-    matches ? "pass" : "fail",
-    "HIGH",
-    matches
-      ? `Tag ${tag} points to ${taggedCommit}.`
-      : `Tag ${tag} points to ${taggedCommit}, expected ${commit ?? "(missing provenance gitCommit)"}.`,
+    evaluation.status,
+    evaluation.severity,
+    evaluation.detail,
   );
 }
 
@@ -921,6 +1504,42 @@ function assertRegistryUrl(value: string): void {
   if (url.protocol !== "https:" || url.origin !== EXPECTED.registry) {
     throw new Error(`Expected an HTTPS npm registry URL, got ${url.origin}.`);
   }
+}
+
+/**
+ * Classifies diagnostics from a failed npm audit signatures command.
+ *
+ * @param output Combined command output.
+ * @param name The package being verified.
+ * @param version The version being verified.
+ * @returns The target-package, dependency-only, or command-error verdict.
+ */
+// biome-ignore lint/complexity/useMaxParams: Preserve the required pure evaluator signature.
+export function classifyAuditSignatures(
+  output: string,
+  name: string,
+  version: string,
+): CheckEvaluation {
+  if (output.includes(`${name}@${version}`) || output.includes(`"${name}"`)) {
+    return {
+      status: "fail",
+      severity: "CRITICAL",
+      detail: `npm reported a signature verification failure for ${name}@${version}: ${output.trim().slice(0, 1000)}`,
+    };
+  }
+  if (/signature|attestation|provenance|integrity|verified/i.test(output)) {
+    return {
+      status: "fail",
+      severity: "HIGH",
+      detail: `npm reported a signature verification failure without identifying the target package: ${output.trim().slice(0, 1000)}`,
+    };
+  }
+  return {
+    status: "error",
+    severity: "HIGH",
+    detail:
+      output.trim() || "npm audit signatures did not produce diagnostics.",
+  };
 }
 
 // biome-ignore lint/complexity/useMaxParams: Keep npm command and report inputs explicit.
@@ -992,38 +1611,26 @@ async function checkNpmSignatures(
           ? String(error.stderr)
           : "";
       output = `${stdout}\n${stderr}`;
-      if (
-        output.includes(`${name}@${version}`) ||
-        output.includes(`"${name}"`)
-      ) {
-        addResult(
-          checks,
-          findings,
-          "provenance.signatures",
-          "npm signatures verify",
-          "fail",
-          "CRITICAL",
-          `npm reported a signature verification failure for ${name}@${version}: ${output.trim().slice(0, 1000)}`,
-        );
-      } else if (
-        /signature|attestation|provenance|integrity|verified/i.test(output)
-      ) {
-        addResult(
-          checks,
-          findings,
-          "provenance.signatures",
-          "npm signatures verify",
-          "fail",
-          "HIGH",
-          `npm reported a signature verification failure without identifying the target package: ${output.trim().slice(0, 1000)}`,
-        );
-      } else {
+      const evaluation = classifyAuditSignatures(output, name, version);
+      if (evaluation.status === "error") {
         addError(
           checks,
           findings,
           "provenance.signatures",
           "npm signatures verify",
-          error,
+          new Error(`${getErrorMessage(error)}: ${evaluation.detail}`, {
+            cause: error,
+          }),
+        );
+      } else {
+        addResult(
+          checks,
+          findings,
+          "provenance.signatures",
+          "npm signatures verify",
+          evaluation.status,
+          evaluation.severity,
+          evaluation.detail,
         );
       }
     }
@@ -1046,8 +1653,10 @@ async function checkTarball(
   checks: VerificationCheck[],
   findings: VerificationFinding[],
 ): Promise<{
-  entries: string[] | null;
+  entries: TarEntry[] | null;
   irregularEntries: string[];
+  manifest: RegistryManifest | null;
+  manifestError: string | null;
   error: string | null;
 }> {
   const integrity = manifest.dist?.integrity;
@@ -1063,6 +1672,8 @@ async function checkTarball(
     return {
       entries: null,
       irregularEntries: [],
+      manifest: null,
+      manifestError: "Tarball metadata is unavailable.",
       error: "Tarball metadata is unavailable.",
     };
   }
@@ -1076,19 +1687,15 @@ async function checkTarball(
       );
     }
     bytes = Buffer.from(await response.arrayBuffer());
-    const expected = integrityToSha512Hex(integrity);
-    const actual = createHash("sha512").update(bytes).digest("hex");
-    const matches = expected != null && expected === actual;
+    const evaluation = evaluateTarballIntegrity(bytes, integrity, tarball);
     addResult(
       checks,
       findings,
       "tarball.integrity",
       "Tarball sha512 matches registry integrity",
-      matches ? "pass" : "fail",
-      "CRITICAL",
-      matches
-        ? `Downloaded tarball digest matches ${integrity}.`
-        : `Expected ${expected ?? integrity}, downloaded tarball digest is ${actual}.`,
+      evaluation.status,
+      evaluation.severity,
+      evaluation.detail,
     );
   } catch (error) {
     addError(
@@ -1101,6 +1708,8 @@ async function checkTarball(
     return {
       entries: null,
       irregularEntries: [],
+      manifest: null,
+      manifestError: getErrorMessage(error),
       error: getErrorMessage(error),
     };
   }
@@ -1112,31 +1721,60 @@ async function checkTarball(
     return {
       entries: null,
       irregularEntries: [],
+      manifest: null,
+      manifestError: getErrorMessage(error),
       error: getErrorMessage(error),
     };
   }
   try {
     const tarballPath = join(tempDir, "package.tgz");
     writeFileSync(tarballPath, bytes);
-    const listing = execFileSync("tar", ["-tzf", tarballPath], {
+    const npmRoot = execFileSync("npm", ["root", "-g"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
-    });
-    const details = execFileSync("tar", ["-tvzf", tarballPath], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const entries = listing.split("\n").filter(Boolean);
-    const irregularEntries = details
-      .split("\n")
-      .filter((line) => line !== "" && !["-", "d"].includes(line[0] ?? ""))
-      .map((line) => line.trim());
-    return { entries, irregularEntries, error: null };
+    }).trim();
+    const entries = await listTarballEntries(
+      tarballPath,
+      loadBundledTar(npmRoot),
+    );
+    const irregularEntries = entries
+      .filter(({ type }) => type !== "File" && type !== "Directory")
+      .map(({ path, type }) => `${path} (${type})`);
+    const pacoteValue: unknown = createRequire(
+      join(npmRoot, "npm", "package.json"),
+    )("pacote");
+    if (!isPacoteManifestReader(pacoteValue)) {
+      throw new Error("Bundled pacote does not expose manifest().");
+    }
+    let tarballManifest: RegistryManifest | null = null;
+    let manifestError: string | null = null;
+    try {
+      const manifestValue = await pacoteValue.manifest(`file:${tarballPath}`, {
+        fullMetadata: true,
+        fullReadJson: true,
+      });
+      if (!isRegistryManifest(manifestValue)) {
+        throw new Error("The tarball package.json is not a valid manifest.");
+      }
+      tarballManifest = manifestValue;
+    } catch (error) {
+      manifestError = getErrorMessage(error);
+    }
+    return {
+      entries,
+      irregularEntries,
+      manifest: tarballManifest,
+      manifestError,
+      error: null,
+    };
   } catch (error) {
+    const detail = getErrorMessage(error);
     return {
       entries: null,
       irregularEntries: [],
-      error: getErrorMessage(error),
+      manifest: null,
+      manifestError: detail,
+      error: detail,
     };
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
@@ -1200,6 +1838,51 @@ async function checkGithubRelease(
 }
 
 /**
+ * Produces HIGH-or-greater errors for checks blocked by a missing registry manifest.
+ *
+ * @returns The unavailable-manifest checks and findings.
+ */
+export function evaluateMissingManifest(): {
+  checks: VerificationCheck[];
+  findings: VerificationFinding[];
+} {
+  const checks: VerificationCheck[] = [];
+  const findings: VerificationFinding[] = [];
+  const unavailableChecks = [
+    ["tarball.integrity", "Tarball sha512 matches registry integrity"],
+    ["tarball.layout", "Tarball entries are rooted under package"],
+    ["provenance.present", "SLSA provenance is present"],
+    [
+      "provenance.signature",
+      "SLSA statement is signed by the expected workflow identity",
+    ],
+    ["provenance.subject", "Provenance subject matches package integrity"],
+    ["provenance.source", "Provenance identifies the trusted source workflow"],
+    ["provenance.signatures", "npm signatures verify"],
+    ["registry.trusted-publisher", "Registry declares a trusted publisher"],
+    ["manifest.registry-drift", "Tarball manifest matches registry manifest"],
+    ["manifest.install-scripts", "Package has no install-time lifecycle hooks"],
+    ["manifest.bin", "Package exposes a command-line binary"],
+    ["manifest.dependencies", "Published dependency declarations match source"],
+    ["manifest.files", "Tarball files match the source files allowlist"],
+    [
+      "manifest.identity",
+      "Package identity is unchanged from previous version",
+    ],
+  ] as const;
+  for (const [id, title] of unavailableChecks) {
+    addError(
+      checks,
+      findings,
+      id,
+      title,
+      new Error("Requested registry manifest is unavailable."),
+    );
+  }
+  return { checks, findings };
+}
+
+/**
  * Verifies registry metadata, provenance, source history, and package contents.
  *
  * @param options The package identity and optional working directory.
@@ -1242,7 +1925,15 @@ async function verifyNpmRelease(options: {
   if (refsFetched) {
     try {
       mainSources = readPackageSourcesAtRef("origin/main", cwd);
-      checkPackageKnown(name, mainSources, checks, findings);
+      const nextSources = hasGitRef("origin/next", cwd)
+        ? readPackageSourcesAtRef("origin/next", cwd)
+        : [];
+      checkPackageKnown(
+        name,
+        [...mainSources, ...nextSources],
+        checks,
+        findings,
+      );
     } catch (error) {
       addError(
         checks,
@@ -1293,38 +1984,9 @@ async function verifyNpmRelease(options: {
         `${name}@${version} is not present in the npm packument.`,
       );
     }
-    for (const [id, title] of [
-      ["tarball.integrity", "Tarball sha512 matches registry integrity"],
-      ["provenance.present", "SLSA provenance is present"],
-      ["provenance.subject", "Provenance subject matches package integrity"],
-      [
-        "provenance.source",
-        "Provenance identifies the trusted source workflow",
-      ],
-      ["provenance.signatures", "npm signatures verify"],
-      [
-        "manifest.install-scripts",
-        "Package has no install-time lifecycle hooks",
-      ],
-      ["manifest.bin", "Package exposes a command-line binary"],
-      [
-        "manifest.dependencies",
-        "Published dependency declarations match source",
-      ],
-      ["manifest.files", "Tarball files match the source files allowlist"],
-      [
-        "manifest.identity",
-        "Package identity is unchanged from previous version",
-      ],
-    ] as const) {
-      addError(
-        checks,
-        findings,
-        id,
-        title,
-        new Error("Requested registry manifest is unavailable."),
-      );
-    }
+    const unavailableEvaluation = evaluateMissingManifest();
+    checks.push(...unavailableEvaluation.checks);
+    findings.push(...unavailableEvaluation.findings);
   } else {
     addResult(
       checks,
@@ -1335,33 +1997,82 @@ async function verifyNpmRelease(options: {
       "CRITICAL",
       `${name}@${version} exists on npm.`,
     );
+    const trustedPublisherEvaluation = evaluateTrustedPublisher(
+      manifest._npmUser?.trustedPublisher,
+    );
+    checks.push(...trustedPublisherEvaluation.checks);
+    findings.push(...trustedPublisherEvaluation.findings);
     previousVersion = selectPreviousVersion(packument, version);
+    const publishTimeEvaluation = evaluatePublishTime(
+      packument.time?.[version],
+    );
+    checks.push(...publishTimeEvaluation.checks);
+    findings.push(...publishTimeEvaluation.findings);
 
     const tarballResult = await checkTarball(manifest, checks, findings);
-    const archiveEntries = tarballResult.entries;
-    if (archiveEntries == null) {
+    const tarballEntries = tarballResult.entries;
+    const archiveEntries = tarballEntries?.map(({ path }) => path) ?? null;
+    const tarballManifest = tarballResult.manifest;
+    if (tarballEntries == null) {
+      addError(
+        checks,
+        findings,
+        "tarball.layout",
+        "Tarball entries are rooted at package/",
+        new Error(
+          `Tarball entries are unavailable: ${tarballResult.error ?? "unknown error"}`,
+        ),
+      );
+    } else {
+      const layoutEvaluation = evaluateTarballLayout(tarballEntries);
+      checks.push(...layoutEvaluation.checks);
+      findings.push(...layoutEvaluation.findings);
+    }
+
+    if (tarballManifest == null) {
+      addError(
+        checks,
+        findings,
+        "manifest.registry-drift",
+        "Registry and tarball manifests agree",
+        new Error(
+          `The tarball manifest is unavailable: ${tarballResult.manifestError ?? "unknown error"}`,
+        ),
+      );
+    } else {
+      const registryManifestEvaluation = evaluateRegistryManifest(
+        manifest,
+        tarballManifest,
+      );
+      checks.push(...registryManifestEvaluation.checks);
+      findings.push(...registryManifestEvaluation.findings);
+    }
+
+    if (archiveEntries == null || tarballManifest == null) {
       addError(
         checks,
         findings,
         "manifest.install-scripts",
         "Package has no install-time lifecycle hooks",
         new Error(
-          `Tarball entries are unavailable to check for binding.gyp: ${tarballResult.error ?? "unknown error"}`,
+          `The tarball manifest or entries are unavailable: ${tarballResult.manifestError ?? tarballResult.error ?? "unknown error"}`,
         ),
       );
-      addError(
-        checks,
-        findings,
-        "manifest.files",
-        "Tarball files match the source files allowlist",
-        new Error(
-          `Tarball entries are unavailable: ${tarballResult.error ?? "unknown error"}`,
-        ),
-      );
+      if (archiveEntries == null) {
+        addError(
+          checks,
+          findings,
+          "manifest.files",
+          "Tarball files match the source files allowlist",
+          new Error(
+            `Tarball entries are unavailable: ${tarballResult.error ?? "unknown error"}`,
+          ),
+        );
+      }
     } else {
       const installProblems = findInstallProblems(
-        manifest.scripts,
-        manifest.gypfile,
+        tarballManifest.scripts,
+        tarballManifest.gypfile,
         archiveEntries,
       );
       addResult(
@@ -1377,11 +2088,23 @@ async function verifyNpmRelease(options: {
       );
     }
 
-    const manifestBinEvaluation = evaluateManifestBin(manifest.bin);
-    checks.push(...manifestBinEvaluation.checks);
-    findings.push(...manifestBinEvaluation.findings);
+    if (tarballManifest == null) {
+      addError(
+        checks,
+        findings,
+        "manifest.bin",
+        "Package exposes a command-line binary",
+        new Error(
+          `The tarball manifest is unavailable: ${tarballResult.manifestError ?? "unknown error"}`,
+        ),
+      );
+    } else {
+      const manifestBinEvaluation = evaluateManifestBin(tarballManifest.bin);
+      checks.push(...manifestBinEvaluation.checks);
+      findings.push(...manifestBinEvaluation.findings);
+    }
 
-    if (previousVersion == null) {
+    if (publishTimeEvaluation.valid && previousVersion == null) {
       addResult(
         checks,
         findings,
@@ -1391,7 +2114,7 @@ async function verifyNpmRelease(options: {
         "MEDIUM",
         "No previous version exists on the same release channel; identity comparison was skipped.",
       );
-    } else {
+    } else if (publishTimeEvaluation.valid && previousVersion != null) {
       const previousManifest = packument.versions?.[previousVersion];
       if (previousManifest == null) {
         addError(
@@ -1401,9 +2124,19 @@ async function verifyNpmRelease(options: {
           "Package identity is unchanged from previous version",
           new Error(`Previous manifest ${previousVersion} is missing.`),
         );
+      } else if (tarballManifest == null) {
+        addError(
+          checks,
+          findings,
+          "manifest.identity",
+          "Package identity is unchanged from previous version",
+          new Error(
+            `The tarball manifest is unavailable: ${tarballResult.manifestError ?? "unknown error"}`,
+          ),
+        );
       } else {
         const identityMismatches = compareManifestIdentity(
-          manifest,
+          tarballManifest,
           previousManifest,
         );
         addResult(
@@ -1458,6 +2191,13 @@ async function verifyNpmRelease(options: {
           findings,
           "provenance.present",
           "SLSA provenance lookup",
+          error,
+        );
+        addError(
+          checks,
+          findings,
+          "provenance.signature",
+          "SLSA statement is signed by the expected workflow identity",
           error,
         );
         addError(
@@ -1522,21 +2262,33 @@ async function verifyNpmRelease(options: {
         );
       }
     } else {
-      const dependencyMismatches = compareManifestDependencies(
-        manifest,
-        source.manifest,
-      );
-      addResult(
-        checks,
-        findings,
-        "manifest.dependencies",
-        "Published dependency declarations match source",
-        dependencyMismatches.length === 0 ? "pass" : "fail",
-        "HIGH",
-        dependencyMismatches.length === 0
-          ? "Dependency names and non-workspace specifiers match the provenance commit."
-          : dependencyMismatches.join("; "),
-      );
+      if (tarballManifest == null) {
+        addError(
+          checks,
+          findings,
+          "manifest.dependencies",
+          "Published dependency declarations match source",
+          new Error(
+            `The tarball manifest is unavailable: ${tarballResult.manifestError ?? "unknown error"}`,
+          ),
+        );
+      } else {
+        const dependencyMismatches = compareManifestDependencies(
+          tarballManifest,
+          source.manifest,
+        );
+        addResult(
+          checks,
+          findings,
+          "manifest.dependencies",
+          "Published dependency declarations match source",
+          dependencyMismatches.length === 0 ? "pass" : "fail",
+          "HIGH",
+          dependencyMismatches.length === 0
+            ? "Dependency names and non-workspace specifiers match the provenance commit."
+            : dependencyMismatches.join("; "),
+        );
+      }
       if (archiveEntries != null) {
         const filesResult = checkTarballFiles(
           archiveEntries,
@@ -1559,11 +2311,7 @@ async function verifyNpmRelease(options: {
             "Tarball files match the source files allowlist",
             "fail",
             "HIGH",
-            [
-              ...(filesResult.unexpected.length > 0
-                ? [`Unexpected entries: ${filesResult.unexpected.join(", ")}`]
-                : []),
-            ].join("; "),
+            `Unexpected entries: ${filesResult.unexpected.join(", ")}`,
           );
         } else {
           addResult(
@@ -1627,12 +2375,29 @@ async function verifyNpmRelease(options: {
   };
 }
 
-function parseReleaseSpec(spec: string): { name: string; version: string } {
+/**
+ * Parses a scoped Morphо npm package and strict semver release specification.
+ *
+ * @param spec The CLI argument in `<name>@<version>` form.
+ * @returns The validated package name and version.
+ */
+export function parseReleaseSpec(spec: string): {
+  name: string;
+  version: string;
+} {
   const separator = spec.lastIndexOf("@");
   if (separator <= 0 || separator === spec.length - 1) {
     throw new Error("Expected a release spec in <name>@<version> form.");
   }
-  return { name: spec.slice(0, separator), version: spec.slice(separator + 1) };
+  const name = spec.slice(0, separator);
+  const version = spec.slice(separator + 1);
+  if (!/^@morpho-org\/[a-z0-9._-]+$/.test(name)) {
+    throw new Error("Package name must be in the @morpho-org scope.");
+  }
+  if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error("Version must be a strict semver version.");
+  }
+  return { name, version };
 }
 
 function renderHumanReport(report: NpmReleaseReport): string {

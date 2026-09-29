@@ -101,14 +101,20 @@ export function renderReleaseIssueBody(release: {
   attestationsUrl: string;
   trustedPublisherPresent: boolean;
 }): string {
+  const inlineCode = (value: string): string =>
+    `\`${value.replaceAll("`", "").replace(/[\r\n]/g, "")}\``;
+  const tarball = release.tarball || "MISSING";
+  const renderedTarball = tarball.startsWith(`${REGISTRY_URL}/`)
+    ? inlineCode(tarball)
+    : `UNEXPECTED (${inlineCode(tarball)})`;
   return [
-    `- Package: \`${release.name}\``,
-    `- Version: \`${release.version}\``,
-    `- Publish time: ${release.publishTime}`,
-    `- Dist-tags pointing to this version: ${release.distTags.length > 0 ? release.distTags.join(", ") : "none"}`,
-    `- Integrity: \`${release.integrity || "MISSING"}\``,
-    `- Tarball: ${release.tarball || "MISSING"}`,
-    `- Attestations: ${release.attestationsUrl || "MISSING"}`,
+    `- Package: ${inlineCode(release.name)}`,
+    `- Version: ${inlineCode(release.version)}`,
+    `- Publish time: ${inlineCode(release.publishTime)}`,
+    `- Dist-tags pointing to this version: ${inlineCode(release.distTags.length > 0 ? release.distTags.join(", ") : "none")}`,
+    `- Integrity: ${inlineCode(release.integrity || "MISSING")}`,
+    `- Tarball: ${renderedTarball}`,
+    `- Attestations: ${inlineCode(release.attestationsUrl || "MISSING")}`,
     `- Trusted publisher present: ${release.trustedPublisherPresent ? "yes" : "no"}`,
     "",
     "Opened by npm-release-watch (SDK-1264). A Devin Automation verifies this release and comments here.",
@@ -174,9 +180,15 @@ async function readJsonResponse<T>(
   }
 }
 
-async function fetchPackument(name: string): Promise<Packument> {
+async function fetchPackument(
+  name: string,
+  fetchImpl: typeof fetch,
+): Promise<Packument | null> {
   const encodedName = name.replaceAll("/", "%2f");
-  const response = await fetch(`${REGISTRY_URL}/${encodedName}`);
+  const response = await fetchImpl(`${REGISTRY_URL}/${encodedName}`, {
+    redirect: "error",
+  });
+  if (response.status === 404) return null;
   return readJsonResponse<Packument>(
     response,
     `npm registry request for ${name}`,
@@ -187,6 +199,7 @@ async function fetchExistingIssueTitles(options: {
   repository: string;
   token: string;
   since: string;
+  fetchImpl: typeof fetch;
 }): Promise<string[]> {
   const titles: string[] = [];
   for (let page = 1; ; page += 1) {
@@ -205,6 +218,7 @@ async function fetchExistingIssueTitles(options: {
       token: options.token,
       init: { method: "GET" },
       operation: "List release issues",
+      fetchImpl: options.fetchImpl,
     });
     titles.push(
       ...issues
@@ -221,10 +235,13 @@ async function githubRequest<T>(options: {
   init: RequestInit;
   operation: string;
   allowExistingLabel?: boolean;
+  fetchImpl: typeof fetch;
 }): Promise<T> {
-  const { url, token, init, operation, allowExistingLabel } = options;
-  const response = await fetch(url, {
+  const { url, token, init, operation, allowExistingLabel, fetchImpl } =
+    options;
+  const response = await fetchImpl(url, {
     ...init,
+    redirect: "error",
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
@@ -261,10 +278,12 @@ async function githubRequest<T>(options: {
   }
 }
 
-async function ensureIssueLabel(
-  repository: string,
-  token: string,
-): Promise<void> {
+async function ensureIssueLabel(options: {
+  repository: string;
+  token: string;
+  fetchImpl: typeof fetch;
+}): Promise<void> {
+  const { repository, token, fetchImpl } = options;
   await githubRequest({
     url: new URL(`${GITHUB_API_URL}/repos/${repository}/labels`),
     token,
@@ -279,6 +298,7 @@ async function ensureIssueLabel(
     },
     operation: "Ensure npm release issue label",
     allowExistingLabel: true,
+    fetchImpl,
   });
 }
 
@@ -291,7 +311,12 @@ async function ensureIssueLabel(
  */
 export async function main(
   args: string[] = process.argv.slice(2),
-  options: { cwd?: string; nowMs?: number } = {},
+  options: {
+    cwd?: string;
+    nowMs?: number;
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: typeof fetch;
+  } = {},
 ): Promise<number> {
   let lookbackHours = DEFAULT_LOOKBACK_HOURS;
   let dryRun = false;
@@ -312,48 +337,72 @@ export async function main(
     }
   }
 
+  const env = options.env ?? process.env;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const token = env.GITHUB_TOKEN;
+  const repository = env.GITHUB_REPOSITORY;
+  if (token == null || token === "") {
+    if (!dryRun) {
+      throw new Error("GITHUB_TOKEN is required unless --dry-run is used.");
+    }
+  } else if (repository == null || repository === "") {
+    throw new Error("GITHUB_REPOSITORY is required when GITHUB_TOKEN is set.");
+  }
+
   const nowMs = options.nowMs ?? Date.now();
   const lookbackMs = lookbackHours * HOUR_MS;
   const packages = readPackages(options.cwd ?? process.cwd());
   const candidates: ReleaseCandidate[] = [];
+  const packageErrors: { name: string; detail: string }[] = [];
   for (const { name } of packages) {
-    const packument = await fetchPackument(name);
-    for (const release of selectRecentVersions(packument, nowMs, lookbackMs)) {
-      const distTags = Object.entries(packument["dist-tags"] ?? {})
-        .filter(([, version]) => version === release.version)
-        .map(([tag]) => tag);
-      candidates.push({
-        ...release,
-        name,
-        body: renderReleaseIssueBody({
+    try {
+      const packument = await fetchPackument(name, fetchImpl);
+      if (packument == null) {
+        process.stdout.write(
+          `Skipping ${name}: npm registry returned 404 (not published yet).\n`,
+        );
+        continue;
+      }
+      for (const release of selectRecentVersions(
+        packument,
+        nowMs,
+        lookbackMs,
+      )) {
+        const distTags = Object.entries(packument["dist-tags"] ?? {})
+          .filter(([, version]) => version === release.version)
+          .map(([tag]) => tag);
+        candidates.push({
+          ...release,
           name,
-          version: release.version,
-          publishTime: release.publishTime,
-          distTags,
-          integrity: release.manifest.dist?.integrity ?? "",
-          tarball: release.manifest.dist?.tarball ?? "",
-          attestationsUrl: release.manifest.dist?.attestations?.url ?? "",
-          trustedPublisherPresent:
-            release.manifest._npmUser?.trustedPublisher != null,
-        }),
+          body: renderReleaseIssueBody({
+            name,
+            version: release.version,
+            publishTime: release.publishTime,
+            distTags,
+            integrity: release.manifest.dist?.integrity ?? "",
+            tarball: release.manifest.dist?.tarball ?? "",
+            attestationsUrl: release.manifest.dist?.attestations?.url ?? "",
+            trustedPublisherPresent:
+              release.manifest._npmUser?.trustedPublisher != null,
+          }),
+        });
+      }
+    } catch (error) {
+      packageErrors.push({
+        name,
+        detail: sanitizeLogLine(getErrorMessage(error)),
       });
     }
   }
 
-  const token = process.env.GITHUB_TOKEN;
   let missing = candidates;
-  if (token != null && token !== "") {
-    const repository = process.env.GITHUB_REPOSITORY;
-    if (repository == null || repository === "") {
-      throw new Error(
-        "GITHUB_REPOSITORY is required when GITHUB_TOKEN is set.",
-      );
-    }
-    if (!dryRun) await ensureIssueLabel(repository, token);
+  if (token != null && token !== "" && repository != null) {
+    if (!dryRun) await ensureIssueLabel({ repository, token, fetchImpl });
     const existingTitles = await fetchExistingIssueTitles({
       repository,
       token,
       since: new Date(nowMs - lookbackMs - 24 * HOUR_MS).toISOString(),
+      fetchImpl,
     });
     missing = findMissingReleases(candidates, existingTitles);
   } else if (dryRun) {
@@ -371,27 +420,56 @@ export async function main(
       );
     }
   } else {
-    const repository = process.env.GITHUB_REPOSITORY as string;
+    const issueRepository = repository as string;
+    const issueToken = token as string;
+    let created = 0;
     for (const candidate of missing) {
-      await githubRequest({
-        url: new URL(`${GITHUB_API_URL}/repos/${repository}/issues`),
-        token: token as string,
-        init: {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: releaseIssueTitle(candidate.name, candidate.version),
-            body: candidate.body,
-            labels: [ISSUE_LABEL],
-          }),
-        },
-        operation: `Create release issue for ${candidate.name}@${candidate.version}`,
-      });
+      try {
+        await githubRequest({
+          url: new URL(`${GITHUB_API_URL}/repos/${issueRepository}/issues`),
+          token: issueToken,
+          init: {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: releaseIssueTitle(candidate.name, candidate.version),
+              body: candidate.body,
+              labels: [ISSUE_LABEL],
+            }),
+          },
+          operation: `Create release issue for ${candidate.name}@${candidate.version}`,
+          fetchImpl,
+        });
+        created += 1;
+      } catch (error) {
+        packageErrors.push({
+          name: `${candidate.name}@${candidate.version}`,
+          detail: sanitizeLogLine(getErrorMessage(error)),
+        });
+      }
     }
+    process.stdout.write(
+      `Checked ${packages.length} packages; found ${candidates.length} recent versions; created ${created} issues.\n`,
+    );
+    if (packageErrors.length > 0) {
+      throw new Error(
+        `${packageErrors.length} package operation(s) failed: ${packageErrors
+          .map(({ name, detail }) => `${name}: ${detail}`)
+          .join("; ")}`,
+      );
+    }
+    return candidates.length;
   }
   process.stdout.write(
-    `Checked ${packages.length} packages; found ${candidates.length} recent versions; ${dryRun ? `would create ${missing.length} issues` : `created ${missing.length} issues`}.\n`,
+    `Checked ${packages.length} packages; found ${candidates.length} recent versions; would create ${missing.length} issues.\n`,
   );
+  if (packageErrors.length > 0) {
+    throw new Error(
+      `${packageErrors.length} package operation(s) failed: ${packageErrors
+        .map(({ name, detail }) => `${name}: ${detail}`)
+        .join("; ")}`,
+    );
+  }
   return candidates.length;
 }
 

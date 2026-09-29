@@ -1,21 +1,64 @@
-import { describe, expect, test } from "vitest";
+import { execFileSync } from "node:child_process";
+import { createHash, sign as signPayload, X509Certificate } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import { beforeAll, describe, expect, test } from "vitest";
 
 import {
   aggregateSeverity,
   checkTarballFiles,
+  classifyAuditSignatures,
   compareManifestDependencies,
   compareManifestIdentity,
+  compareRegistryManifest,
+  evaluateGitCommitReachability,
+  evaluateGitTagDecision,
   evaluateManifestBin,
+  evaluateMissingManifest,
   evaluateProvenance,
+  evaluatePublishTime,
+  evaluateRegistryManifest,
+  evaluateTarballIntegrity,
+  evaluateTarballLayout,
+  evaluateTrustedPublisher,
   findInstallProblems,
   findInstallScripts,
   hasManifestBin,
   integrityToSha512Hex,
+  isPackageKnown,
+  parseReleaseSpec,
   selectPreviousVersion,
 } from "./verify-npm-release.ts";
 
 const integrity = `sha512-${Buffer.alloc(64, 42).toString("base64")}`;
 const digestHex = Buffer.alloc(64, 42).toString("hex");
+const payloadType = "application/vnd.in-toto+json";
+
+let signerKey: Buffer;
+let signerCertificate: string;
+let wrongSignerKey: Buffer;
+let wrongSignerCertificate: string;
+
+beforeAll(() => {
+  signerKey = readFileSync(
+    new URL("./test-fixtures/npm-release-test-key.fixture", import.meta.url),
+  );
+  signerCertificate = new X509Certificate(
+    readFileSync(
+      new URL("./test-fixtures/npm-release-test-main.fixture", import.meta.url),
+    ),
+  ).raw.toString("base64");
+  wrongSignerKey = signerKey;
+  wrongSignerCertificate = new X509Certificate(
+    readFileSync(
+      new URL(
+        "./test-fixtures/npm-release-test-feature.fixture",
+        import.meta.url,
+      ),
+    ),
+  ).raw.toString("base64");
+});
 
 function statement(
   overrides: {
@@ -26,6 +69,8 @@ function statement(
     event?: string;
     builder?: string;
     subjectDigest?: string;
+    workflowRef?: string;
+    omitResolvedDependencies?: boolean;
   } = {},
 ) {
   return {
@@ -34,7 +79,7 @@ function statement(
       buildDefinition: {
         externalParameters: {
           workflow: {
-            ref: overrides.ref ?? "refs/heads/main",
+            ref: overrides.workflowRef ?? overrides.ref ?? "refs/heads/main",
             repository:
               overrides.repository ?? "https://github.com/morpho-org/sdks",
             path: overrides.workflowPath ?? ".github/workflows/push.yml",
@@ -46,12 +91,14 @@ function statement(
             repository_id: overrides.repositoryId ?? "829304716",
           },
         },
-        resolvedDependencies: [
-          {
-            uri: "git+https://github.com/morpho-org/sdks@refs/heads/main",
-            digest: { gitCommit: "bedd89c1".padEnd(40, "0") },
-          },
-        ],
+        resolvedDependencies: overrides.omitResolvedDependencies
+          ? []
+          : [
+              {
+                uri: "git+https://github.com/morpho-org/sdks@refs/heads/main",
+                digest: { gitCommit: "bedd89c1".padEnd(40, "0") },
+              },
+            ],
       },
       runDetails: {
         builder: {
@@ -64,13 +111,43 @@ function statement(
   };
 }
 
-function attestations(value: ReturnType<typeof statement>) {
+function attestations(
+  value: ReturnType<typeof statement>,
+  options: {
+    payload?: Buffer;
+    wrongIdentity?: boolean;
+  } = {},
+) {
+  const payload = options.payload ?? Buffer.from(JSON.stringify(value));
+  const pae = Buffer.concat([
+    Buffer.from(
+      `DSSEv1 ${Buffer.byteLength(payloadType)} ${payloadType} ${payload.length} `,
+    ),
+    payload,
+  ]);
   return [
     {
       predicateType: "https://slsa.dev/provenance/v1",
       bundle: {
+        verificationMaterial: {
+          certificate: {
+            rawBytes: options.wrongIdentity
+              ? wrongSignerCertificate
+              : signerCertificate,
+          },
+        },
         dsseEnvelope: {
-          payload: Buffer.from(JSON.stringify(value)).toString("base64"),
+          payload: payload.toString("base64"),
+          payloadType,
+          signatures: [
+            {
+              sig: signPayload(
+                "sha256",
+                pae,
+                options.wrongIdentity ? wrongSignerKey : signerKey,
+              ).toString("base64"),
+            },
+          ],
         },
       },
     },
@@ -88,6 +165,138 @@ describe("integrityToSha512Hex", () => {
   });
 });
 
+describe("pure verifier decisions", () => {
+  test("evaluates tarball integrity and registry origin", () => {
+    const bytes = Buffer.from("package tarball");
+    const digest = createHash("sha512").update(bytes).digest("base64");
+    const url = "https://registry.npmjs.org/package/-/package-1.0.0.tgz";
+    expect(
+      evaluateTarballIntegrity(bytes, `sha512-${digest}`, url).status,
+    ).toBe("pass");
+    expect(
+      evaluateTarballIntegrity(
+        Buffer.from("tampered tarball"),
+        `sha512-${digest}`,
+        url,
+      ),
+    ).toMatchObject({ status: "fail", severity: "CRITICAL" });
+    expect(
+      evaluateTarballIntegrity(
+        bytes,
+        `sha512-${digest}`,
+        "https://evil.test/x",
+      ),
+    ).toMatchObject({ status: "error", severity: "HIGH" });
+  });
+
+  test("classifies target, dependency-only, and command failures", () => {
+    expect(
+      classifyAuditSignatures(
+        "signature verification failed for @morpho-org/blue-sdk@7.1.0",
+        "@morpho-org/blue-sdk",
+        "7.1.0",
+      ),
+    ).toMatchObject({ status: "fail", severity: "CRITICAL" });
+    expect(
+      classifyAuditSignatures(
+        "dependency signature verification failed",
+        "@morpho-org/blue-sdk",
+        "7.1.0",
+      ),
+    ).toMatchObject({ status: "fail", severity: "HIGH" });
+    expect(
+      classifyAuditSignatures(
+        "npm exited before producing audit output",
+        "@morpho-org/blue-sdk",
+        "7.1.0",
+      ),
+    ).toMatchObject({ status: "error", severity: "HIGH" });
+  });
+
+  test("decides commit ancestry and package tag outcomes", () => {
+    const commit = "a".repeat(40);
+    expect(evaluateGitCommitReachability(commit, true).status).toBe("pass");
+    expect(evaluateGitCommitReachability(commit, false)).toMatchObject({
+      status: "fail",
+      severity: "CRITICAL",
+    });
+    expect(
+      evaluateGitTagDecision({
+        tag: "@morpho-org/blue-sdk-v1.0.0",
+        taggedCommit: commit,
+        commit,
+      }).status,
+    ).toBe("pass");
+    expect(
+      evaluateGitTagDecision({
+        tag: "@morpho-org/blue-sdk-v1.0.0",
+        taggedCommit: "b".repeat(40),
+        commit,
+      }),
+    ).toMatchObject({ status: "fail", severity: "HIGH" });
+  });
+
+  test("fans out HIGH errors for every manifest-dependent check", () => {
+    const evaluation = evaluateMissingManifest();
+    const expectedIds = [
+      "tarball.integrity.error",
+      "tarball.layout.error",
+      "provenance.present.error",
+      "provenance.signature.error",
+      "provenance.subject.error",
+      "provenance.source.error",
+      "provenance.signatures.error",
+      "registry.trusted-publisher.error",
+      "manifest.registry-drift.error",
+      "manifest.install-scripts.error",
+      "manifest.bin.error",
+      "manifest.dependencies.error",
+      "manifest.files.error",
+      "manifest.identity.error",
+    ];
+    expect(evaluation.checks.map(({ id }) => id)).toEqual(expectedIds);
+    expect(evaluation.findings).toHaveLength(expectedIds.length);
+    expect(
+      evaluation.findings.every(
+        ({ severity }) => severity === "HIGH" || severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("release CLI arguments", () => {
+  const script = fileURLToPath(
+    new URL("./verify-npm-release.ts", import.meta.url),
+  );
+
+  test("accepts scoped package names and strict semver", () => {
+    expect(
+      parseReleaseSpec("@morpho-org/blue-sdk@7.1.0-next.2+build.1"),
+    ).toEqual({
+      name: "@morpho-org/blue-sdk",
+      version: "7.1.0-next.2+build.1",
+    });
+  });
+
+  test.each(["@other/blue-sdk@7.1.0", "@morpho-org/blue-sdk@7.1"])(
+    "rejects invalid release spec %s with usage exit 2",
+    (spec) => {
+      let exitCode: number | null = null;
+      try {
+        execFileSync(process.execPath, [script, spec], {
+          encoding: "utf8",
+        });
+      } catch (error) {
+        exitCode =
+          typeof error === "object" && error != null && "status" in error
+            ? Number(error.status)
+            : null;
+      }
+      expect(exitCode).toBe(2);
+    },
+  );
+});
+
 describe("evaluateProvenance", () => {
   test("accepts the expected GitHub Actions SLSA provenance shape", () => {
     const result = evaluateProvenance(
@@ -97,13 +306,123 @@ describe("evaluateProvenance", () => {
     );
     expect(result.findings).toEqual([]);
     expect(result.gitCommit).toBe("bedd89c1".padEnd(40, "0"));
+    expect(
+      result.checks.find(({ id }) => id === "provenance.signature"),
+    ).toMatchObject({ status: "pass" });
+  });
+
+  test("fails CRITICAL when the signed payload is tampered with", () => {
+    const signedAttestation = attestations(statement());
+    const envelope = signedAttestation[0]?.bundle?.dsseEnvelope;
+    if (envelope == null) throw new Error("Test DSSE envelope is missing.");
+    envelope.payload = Buffer.from(
+      JSON.stringify(
+        statement({ repository: "https://github.com/other/repo" }),
+      ),
+    ).toString("base64");
+
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      signedAttestation,
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+    expect(
+      result.checks.find(({ id }) => id === "provenance.source.error")?.status,
+    ).toBe("error");
+  });
+
+  test("fails CRITICAL when the signer SAN is not the trusted publish workflow", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement(), { wrongIdentity: true }),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL when signer and caller refs differ", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement({ workflowRef: "refs/heads/next" })),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("reports undecodable signed payloads as HIGH errors", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement(), { payload: Buffer.from("not JSON") }),
+      integrity,
+    );
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature.error" && severity === "HIGH",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL when no attestations URL is available", () => {
+    const result = evaluateProvenance(undefined, [], integrity);
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL for malformed integrity", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement()),
+      "sha512-not-a-digest",
+    );
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.subject" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not derive a commit when resolvedDependencies is absent", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement({ omitResolvedDependencies: true })),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.checks.find(({ id }) => id === "provenance.source")?.status,
+    ).toBe("pass");
   });
 
   test.each([
     ["wrong repository", { repository: "https://github.com/other/repo" }],
     ["wrong repository_id", { repositoryId: "123" }],
     ["wrong workflow path", { workflowPath: ".github/workflows/publish.yml" }],
-    ["feature ref", { ref: "refs/heads/feature" }],
     ["wrong event", { event: "pull_request" }],
     ["self-hosted builder", { builder: "https://example.com/self-hosted" }],
   ])("fails CRITICAL for %s", (_case, overrides) => {
@@ -116,6 +435,21 @@ describe("evaluateProvenance", () => {
       result.findings.some(
         ({ id, severity }) =>
           id === "provenance.source" && severity === "CRITICAL",
+      ),
+    ).toBe(true);
+  });
+
+  test("fails CRITICAL when a feature ref is not bound to the signer", () => {
+    const result = evaluateProvenance(
+      "https://registry.npmjs.org/attestations",
+      attestations(statement({ ref: "refs/heads/feature" })),
+      integrity,
+    );
+    expect(result.gitCommit).toBeNull();
+    expect(
+      result.findings.some(
+        ({ id, severity }) =>
+          id === "provenance.signature" && severity === "CRITICAL",
       ),
     ).toBe(true);
   });
@@ -217,6 +551,76 @@ describe("manifest lifecycle hooks and bins", () => {
     expect(findInstallProblems({}, false, ["package/binding.gyp"])).toContain(
       "gypfile/binding.gyp enables npm's implicit install",
     );
+    expect(findInstallProblems({}, false, ["binding.gyp"])).toContain(
+      "gypfile/binding.gyp enables npm's implicit install",
+    );
+  });
+});
+
+describe("trusted publisher metadata", () => {
+  test("requires a trusted publisher and reports its id without restricting it", () => {
+    expect(evaluateTrustedPublisher(undefined).findings).toMatchObject([
+      { id: "registry.trusted-publisher", severity: "CRITICAL" },
+    ]);
+    expect(evaluateTrustedPublisher({ id: "not-a-fixed-id" })).toEqual({
+      checks: [
+        {
+          id: "registry.trusted-publisher",
+          status: "pass",
+          detail:
+            "The published manifest declares a trusted publisher (id: not-a-fixed-id).",
+        },
+      ],
+      findings: [],
+    });
+  });
+});
+
+describe("tarball manifest provenance", () => {
+  test("detects registry and consumer-visible manifest drift", () => {
+    const registryManifest = {
+      name: "@morpho-org/blue-sdk",
+      version: "7.1.0",
+      scripts: { postinstall: "node setup.js" },
+      dependencies: { viem: "^2.0.0", zod: "^3.0.0" },
+    };
+    const tarballManifest = {
+      name: "@morpho-org/blue-sdk",
+      version: "7.1.0",
+      scripts: { postinstall: "node setup.js" },
+      dependencies: { zod: "^3.0.0", viem: "^2.0.0" },
+    };
+    expect(compareRegistryManifest(registryManifest, tarballManifest)).toEqual(
+      [],
+    );
+    expect(
+      compareRegistryManifest(registryManifest, {
+        ...tarballManifest,
+        scripts: { install: "node injected.js" },
+      }),
+    ).toContain("scripts differs between registry and tarball manifests");
+    expect(
+      evaluateRegistryManifest(registryManifest, {
+        ...tarballManifest,
+        scripts: { install: "node injected.js" },
+      }),
+    ).toMatchObject({
+      checks: [{ id: "manifest.registry-drift", status: "fail" }],
+      findings: [{ id: "manifest.registry-drift", severity: "CRITICAL" }],
+    });
+  });
+
+  test("rejects entries outside the exact package root", () => {
+    expect(
+      evaluateTarballLayout([{ path: "package/package.json" }]).findings,
+    ).toEqual([]);
+    const result = evaluateTarballLayout([{ path: "zzz/binding.gyp" }]);
+    expect(result.checks).toMatchObject([
+      { id: "tarball.layout", status: "fail" },
+    ]);
+    expect(result.findings).toMatchObject([
+      { id: "tarball.layout", severity: "CRITICAL" },
+    ]);
   });
 });
 
@@ -229,6 +633,29 @@ describe("compareManifestDependencies", () => {
       ),
     ).toEqual([]);
   });
+
+  test("allows catalog dependencies to publish as semver ranges", () => {
+    expect(
+      compareManifestDependencies(
+        { dependencies: { alpha: "^1.2.3" } },
+        { dependencies: { alpha: "catalog:" } },
+      ),
+    ).toEqual([]);
+  });
+
+  test.each(["https://evil/x.tgz", "github:a/b", "npm:evil@1"])(
+    "rejects non-range published specifier %s for workspace dependencies",
+    (specifier) => {
+      expect(
+        compareManifestDependencies(
+          { dependencies: { alpha: specifier } },
+          { dependencies: { alpha: "workspace:^" } },
+        ),
+      ).toContain(
+        `dependencies.alpha expected a published semver range, got ${specifier}`,
+      );
+    },
+  );
 
   test("detects an added published dependency", () => {
     expect(
@@ -246,6 +673,27 @@ describe("compareManifestDependencies", () => {
         { optionalDependencies: { alpha: "^1.0.0" } },
       ),
     ).toContain("optionalDependencies.alpha expected ^1.0.0, got ^2.0.0");
+  });
+});
+
+describe("publish timestamp validation", () => {
+  test.each([undefined, "not-a-date"])(
+    "reports a HIGH identity error for missing or invalid publish time %s",
+    (publishTime) => {
+      expect(evaluatePublishTime(publishTime)).toMatchObject({
+        valid: false,
+        checks: [{ id: "manifest.identity.error", status: "error" }],
+        findings: [{ id: "manifest.identity.error", severity: "HIGH" }],
+      });
+    },
+  );
+
+  test("accepts a finite publish time", () => {
+    expect(evaluatePublishTime("2026-01-01T00:00:00.000Z")).toEqual({
+      valid: true,
+      checks: [],
+      findings: [],
+    });
   });
 });
 
@@ -345,6 +793,19 @@ describe("severity aggregation", () => {
   });
 });
 
+describe("package membership", () => {
+  test("recognizes a non-private package supplied by the next ref", () => {
+    expect(
+      isPackageKnown("@morpho-org/next-only", [
+        {
+          directory: "next-only",
+          manifest: { name: "@morpho-org/next-only", private: false },
+        },
+      ]),
+    ).toBe(true);
+  });
+});
+
 describe("selectPreviousVersion", () => {
   const packument = {
     versions: {
@@ -373,6 +834,27 @@ describe("selectPreviousVersion", () => {
     expect(selectPreviousVersion(packument, "1.3.0-next.0")).toBe(
       "1.2.9-next.0",
     );
+  });
+
+  test("prereleases prefer the same preid before falling back to stable", () => {
+    const timeline = {
+      versions: {
+        "7.0.0-next.1": {},
+        "7.1.0": {},
+        "7.0.0-next.2": {},
+        "7.0.0-beta.2": {},
+      },
+      time: {
+        "7.0.0-next.1": "2026-01-01T00:00:00.000Z",
+        "7.1.0": "2026-01-02T00:00:00.000Z",
+        "7.0.0-next.2": "2026-01-03T00:00:00.000Z",
+        "7.0.0-beta.2": "2026-01-04T00:00:00.000Z",
+      },
+    };
+    expect(selectPreviousVersion(timeline, "7.0.0-next.2")).toBe(
+      "7.0.0-next.1",
+    );
+    expect(selectPreviousVersion(timeline, "7.0.0-beta.2")).toBe("7.1.0");
   });
 
   test("returns null when there is no earlier eligible version", () => {
