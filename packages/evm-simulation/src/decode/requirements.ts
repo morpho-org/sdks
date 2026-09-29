@@ -30,8 +30,8 @@ import type {
   BlueAuthorizationTypedData,
   Eip712Domain,
   Erc2612PermitTypedData,
+  PendingAuthorization,
   Permit2TransferTypedData,
-  SimulationAuthorization,
 } from "../authorizations.js";
 import {
   AuthorizationRequestMismatchError,
@@ -42,12 +42,6 @@ import {
 import type { PreLiquidationBinding } from "./operations.js";
 
 type Fail = (message: string, options?: ErrorOptions) => never;
-
-/** Flat entity fields an authorization failure is attributed to, spread into the error context. */
-type SubjectFields = Pick<
-  SimulationErrorContext,
-  "marketId" | "vault" | "adapter" | "token" | "account" | "spender"
->;
 
 interface Ctx {
   readonly chainId: number;
@@ -102,36 +96,30 @@ const authorizationOperators = (ctx: Ctx): readonly Address[] => [
   ...ctx.preLiquidations.map((binding) => binding.address),
 ];
 
-const authorizationContext = (
-  ctx: Ctx,
-  subject?: SubjectFields,
-): SimulationErrorContext => ({
+const authorizationContext = (ctx: Ctx): SimulationErrorContext => ({
   stage: "preparation",
   chainId: ctx.chainId,
   mode: ctx.mode,
   blockNumber: ctx.blockNumber,
   authorizationIndex: ctx.index,
-  ...subject,
 });
 
 const mismatch =
-  (ctx: Ctx, subject?: SubjectFields): Fail =>
+  (ctx: Ctx): Fail =>
   (message, options) => {
     throw new AuthorizationRequestMismatchError(
       `${message}. Rebuild the wallet request from getRequirements()`,
-      authorizationContext(ctx, subject),
-      options,
+      { context: authorizationContext(ctx), ...options },
     );
   };
 
 const unsupported =
-  (ctx: Ctx, subject?: SubjectFields): Fail =>
+  (ctx: Ctx): Fail =>
   (message, options) => {
-    throw new UnsupportedOperationError(
-      message,
-      authorizationContext(ctx, subject),
-      options,
-    );
+    throw new UnsupportedOperationError(message, {
+      context: authorizationContext(ctx),
+      ...options,
+    });
   };
 
 const describeValue = (value: unknown): string =>
@@ -338,14 +326,10 @@ const BLUE_AUTHORIZATION_FIELDS = [
 const toErc2612Permit = (
   action: PermitAction,
   ctx: Ctx,
-): SimulationAuthorization => {
+): PendingAuthorization => {
   const { owner } = ctx;
   const domain = parseDomain(action.typedData?.domain, mismatch(ctx));
-  const fail = mismatch(ctx, {
-    account: owner,
-    token: domain.verifyingContract,
-    spender: action.args.spender,
-  });
+  const fail = mismatch(ctx);
   const v = validators(fail);
   v.domainChainId(domain.chainId, ctx.chainId);
 
@@ -409,7 +393,7 @@ const toErc2612Permit = (
 const toPermit2SignatureTransfer = (
   action: Permit2SignatureTransferAction,
   ctx: Ctx,
-): SimulationAuthorization => {
+): PendingAuthorization => {
   const { owner } = ctx;
   const shapeFail = mismatch(ctx);
   const shape = validators(shapeFail);
@@ -437,11 +421,7 @@ const toPermit2SignatureTransfer = (
   const permitted = shape.record(message.permitted, "message.permitted");
   const token = shape.address(permitted.token, "message.permitted.token");
 
-  const fail = mismatch(ctx, {
-    account: owner,
-    token,
-    spender: action.args.spender,
-  });
+  const fail = mismatch(ctx);
   const v = validators(fail);
 
   const amount = v.bigint(permitted.amount, "message.permitted.amount");
@@ -489,12 +469,9 @@ const toPermit2SignatureTransfer = (
 const toBlueAuthorizationSignature = (
   action: AuthorizationAction,
   ctx: Ctx,
-): SimulationAuthorization => {
+): PendingAuthorization => {
   const { owner } = ctx;
-  const fail = mismatch(ctx, {
-    account: owner,
-    spender: action.args.authorized,
-  });
+  const fail = mismatch(ctx);
   const v = validators(fail);
 
   const typedData = action.typedData;
@@ -525,10 +502,7 @@ const toBlueAuthorizationSignature = (
     field: "message.authorized",
   });
   if (isMidnight(ctx, authorized)) {
-    return unsupported(ctx, {
-      account: owner,
-      spender: authorized,
-    })(
+    return unsupported(ctx)(
       `Authorization operator "${authorized}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
@@ -595,15 +569,10 @@ const decodeSetAuthorization = (data: `0x${string}`, failUnsupported: Fail) => {
 const toErc20Approval = (
   requirement: Readonly<Transaction<ERC20ApprovalAction>>,
   ctx: Ctx,
-): SimulationAuthorization => {
+): PendingAuthorization => {
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
-  const subject: SubjectFields = {
-    account: owner,
-    token: to,
-    spender: action.args.spender,
-  };
-  const fail = mismatch(ctx, subject);
+  const fail = mismatch(ctx);
 
   if (value !== 0n) {
     fail(
@@ -611,7 +580,7 @@ const toErc20Approval = (
     );
   }
 
-  const [spender, amount] = decodeErc20Approve(data, unsupported(ctx, subject));
+  const [spender, amount] = decodeErc20Approve(data, unsupported(ctx));
   const v = validators(fail);
   v.equalAddress(spender, {
     expected: action.args.spender,
@@ -622,10 +591,7 @@ const toErc20Approval = (
     field: "calldata amount",
   });
   if (isMidnight(ctx, spender)) {
-    return unsupported(
-      ctx,
-      subject,
-    )(
+    return unsupported(ctx)(
       `Approval spender "${spender}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
@@ -645,14 +611,10 @@ const toErc20Approval = (
 const toBlueAuthorization = (
   requirement: Readonly<Transaction<BlueAuthorizationAction>>,
   ctx: Ctx,
-): SimulationAuthorization => {
+): PendingAuthorization => {
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
-  const subject: SubjectFields = {
-    account: owner,
-    spender: action.args.authorized,
-  };
-  const fail = mismatch(ctx, subject);
+  const fail = mismatch(ctx);
 
   if (!isAddressEqual(to, ctx.addresses.blue)) {
     fail(
@@ -667,7 +629,7 @@ const toBlueAuthorization = (
 
   const [authorized, isAuthorized] = decodeSetAuthorization(
     data,
-    unsupported(ctx, subject),
+    unsupported(ctx),
   );
   const v = validators(fail);
   v.equalAddress(authorized, {
@@ -675,10 +637,7 @@ const toBlueAuthorization = (
     field: "calldata authorized",
   });
   if (isMidnight(ctx, authorized)) {
-    return unsupported(
-      ctx,
-      subject,
-    )(
+    return unsupported(ctx)(
       `Authorization operator "${authorized}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
@@ -722,7 +681,7 @@ const toBlueAuthorization = (
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @param params.preLiquidations - Bound pre-liquidation contracts a `blueAuthorization`
  *   requirement may authorize, mirroring {@link decodeOperations}.
- * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
+ * @returns One {@link PendingAuthorization} per input requirement, in the same order.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {AuthorizationRequestMismatchError} when decoded calldata or typed data disagrees with the
  *   requirement's action metadata, or when the payload is malformed.
@@ -754,7 +713,7 @@ const toBlueAuthorization = (
  *     owner: userAddress,
  *     requirements,
  *   });
- *   return authorizations; // readonly SimulationAuthorization[], one entry per requirement
+ *   return authorizations; // readonly PendingAuthorization[], one entry per requirement
  * }
  * ```
  */
@@ -765,7 +724,7 @@ export function toSimulationAuthorizations(params: {
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];
   readonly preLiquidations?: readonly PreLiquidationBinding[];
-}): readonly SimulationAuthorization[] {
+}): readonly PendingAuthorization[] {
   const {
     chainId,
     mode,

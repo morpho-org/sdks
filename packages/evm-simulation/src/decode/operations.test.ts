@@ -1629,7 +1629,11 @@ describe("decodeOperations", () => {
     } catch (caught) {
       expect(caught).toBeInstanceOf(ProtocolBindingMismatchError);
       expect(
-        (caught as ProtocolBindingMismatchError).context?.vault,
+        (
+          (caught as ProtocolBindingMismatchError).context as
+            | { vault?: string }
+            | undefined
+        )?.vault,
       ).toStrictEqual(unboundVault);
       return;
     }
@@ -1646,12 +1650,14 @@ describe("decodeOperations", () => {
     } catch (caught) {
       expect(caught).toBeInstanceOf(UnsupportedOperationError);
       expect((caught as UnsupportedOperationError).context).toMatchObject({
-        stage: "preparation",
+        stage: "validation",
         mode: "final",
         chainId,
         blockNumber: 23_000_000n,
-        failedTransactionIndex: 1,
       });
+      expect((caught as UnsupportedOperationError).message).toContain(
+        'Transaction "1"',
+      );
       return;
     }
     throw new Error("expected decodeOperations to throw");
@@ -1749,6 +1755,7 @@ describe("decodeOperations", () => {
     } catch (caught) {
       expect(caught).toBeInstanceOf(ProtocolBindingMismatchError);
       expect((caught as ProtocolBindingMismatchError).context).toMatchObject({
+        stage: "verification",
         operation: "vaultV2ForceWithdraw",
         vault: VAULT_V2,
       });

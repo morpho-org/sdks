@@ -32,6 +32,7 @@ import {
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
+import type { SimulationOperationSubject } from "../limits.js";
 import type { SimulationTransaction } from "../types.js";
 import type {
   DecodedOperation,
@@ -133,24 +134,16 @@ interface Env {
   readonly preLiquidations: readonly PreLiquidationBinding[];
 }
 
-/** Flat entity fields an operation failure is attributed to, spread into the error context. */
-type SubjectFields = Pick<
-  SimulationErrorContext,
-  "marketId" | "vault" | "adapter" | "token" | "account" | "spender"
->;
-
 interface Loc {
   readonly index: number;
-  readonly operation?: DecodedOperation["type"];
-  readonly subject?: SubjectFields;
+  readonly subject?: SimulationOperationSubject;
 }
 
 interface Fails {
   readonly env: Env;
   readonly loc: Loc;
   readonly with: (detail: {
-    readonly operation?: DecodedOperation["type"];
-    readonly subject?: SubjectFields;
+    readonly subject?: SimulationOperationSubject;
   }) => Fails;
   readonly mismatch: (message: string, options?: ErrorOptions) => never;
   readonly unsupported: (message: string, options?: ErrorOptions) => never;
@@ -163,35 +156,45 @@ type OperationBody = {
   } & DecodedOperationFields[Type];
 }[keyof DecodedOperationFields];
 
-const errorContext = (env: Env, loc: Loc): SimulationErrorContext => ({
-  stage: "preparation",
-  chainId: env.chainId,
-  mode: env.mode,
-  blockNumber: env.blockNumber,
-  operation: loc.operation,
-  failedTransactionIndex: loc.index,
-  ...loc.subject,
-});
+const errorContext = (env: Env, loc: Loc): SimulationErrorContext => {
+  const base = {
+    chainId: env.chainId,
+    mode: env.mode,
+    blockNumber: env.blockNumber,
+  };
+  if (loc.subject == null) {
+    return { ...base, stage: "validation" };
+  }
+  return {
+    ...base,
+    stage: "verification",
+    ...loc.subject,
+    failedTransactionIndex: loc.index,
+  };
+};
 
-const fails = (env: Env, loc: Loc): Fails => ({
-  env,
-  loc,
-  with: (detail) => fails(env, { ...loc, ...detail }),
-  mismatch: (message, options) => {
-    throw new ProtocolBindingMismatchError(
-      message,
-      errorContext(env, loc),
-      options,
-    );
-  },
-  unsupported: (message, options) => {
-    throw new UnsupportedOperationError(
-      message,
-      errorContext(env, loc),
-      options,
-    );
-  },
-});
+const fails = (env: Env, loc: Loc): Fails => {
+  // Before the operation is known the context carries no transaction index,
+  // so validation failures keep it in the message.
+  const prefix = loc.subject == null ? `Transaction "${loc.index}": ` : "";
+  return {
+    env,
+    loc,
+    with: (detail) => fails(env, { ...loc, ...detail }),
+    mismatch: (message, options) => {
+      throw new ProtocolBindingMismatchError(prefix + message, {
+        context: errorContext(env, loc),
+        ...options,
+      });
+    },
+    unsupported: (message, options) => {
+      throw new UnsupportedOperationError(prefix + message, {
+        context: errorContext(env, loc),
+        ...options,
+      });
+    },
+  };
+};
 
 const marketBinding = (params: DecodedMarketParams): MarketBinding => ({
   marketId: MarketUtils.getMarketId(params),
@@ -519,8 +522,10 @@ const decodeBlueBundles = (
       const [marketParams, assets, loanTokenPermit, pct, recipient, deadline] =
         decoded.args;
       const f = base.with({
-        operation: "blueSupply",
-        subject: { marketId: marketBinding(marketParams).marketId },
+        subject: {
+          operation: "blueSupply",
+          marketId: marketBinding(marketParams).marketId,
+        },
       });
       const tokenSignature = decodeTokenPermit(loanTokenPermit, f);
       checkPreview(f, tokenSignature);
@@ -556,8 +561,7 @@ const decodeBlueBundles = (
       ] = decoded.args;
       const market = marketBinding(marketParams);
       const f = base.with({
-        operation: "blueWithdraw",
-        subject: { marketId: market.marketId },
+        subject: { operation: "blueWithdraw", marketId: market.marketId },
       });
       rejectValue(f, { value, name: "blueBundlesV1Withdraw" });
       const hasAssets = withdrawAssets > 0n;
@@ -618,15 +622,14 @@ const decodeBlueBundles = (
         : hasBorrow
           ? "blueBorrow"
           : undefined;
-      const f = base.with({
-        operation,
-        subject: { marketId: market.marketId },
-      });
       if (operation === undefined) {
-        f.unsupported(
+        base.unsupported(
           "blueBundlesV1SupplyCollateralAndBorrow expected a non-zero collateral or borrow leg, got both zero",
         );
       }
+      const f = base.with({
+        subject: { operation, marketId: market.marketId },
+      });
       if (hasCollateral && !hasBorrow && reallocations.length > 0) {
         f.unsupported(
           `blueBundlesV1SupplyCollateralAndBorrow expected no reallocations without a borrow leg, got "${reallocations.length}". Reallocations only fund borrowing`,
@@ -724,20 +727,19 @@ const decodeBlueBundles = (
         : hasCollateral
           ? "blueWithdrawCollateral"
           : undefined;
-      const f = base.with({
-        operation,
-        subject: { marketId: market.marketId },
-      });
       if (repayAssets > 0n && repayShares > 0n) {
-        f.unsupported(
+        base.unsupported(
           `blueBundlesV1RepayAndWithdrawCollateral expected at most one of repayAssets/repayShares, got assets "${repayAssets}", shares "${repayShares}"`,
         );
       }
       if (operation === undefined) {
-        f.unsupported(
+        base.unsupported(
           "blueBundlesV1RepayAndWithdrawCollateral expected a non-zero repay or collateral leg, got both zero",
         );
       }
+      const f = base.with({
+        subject: { operation, marketId: market.marketId },
+      });
       const tokenSignature = decodeTokenPermit(loanTokenPermit, f);
       const authorizationSignature =
         decodeSignedAuthorization(signedAuthorization);
@@ -827,8 +829,11 @@ const decodeBlueBundles = (
       const sourceMarket = marketBinding(sourceMarketParams);
       const targetMarket = marketBinding(destMarketParams);
       const f = base.with({
-        operation: "blueRefinance",
-        subject: { marketId: targetMarket.marketId },
+        subject: {
+          operation: "blueRefinance",
+          sourceMarketId: sourceMarket.marketId,
+          targetMarketId: targetMarket.marketId,
+        },
       });
       rejectValue(f, {
         value,
@@ -912,10 +917,14 @@ const decodeVaultBundles = (
         recipient,
         deadline,
       ] = decoded.args;
+      const vault = boundVault(base, { address: vaultAddress });
       const f = base.with({
-        subject: { vault: vaultAddress },
+        subject: {
+          operation:
+            vault.kind === "vaultV1" ? "vaultV1Deposit" : "vaultV2Deposit",
+          vault: vault.address,
+        },
       });
-      const vault = boundVault(f, { address: vaultAddress });
       const tokenSignature = decodeTokenPermit(assetPermit, f);
       checkPreview(f, tokenSignature);
       return {
@@ -946,18 +955,28 @@ const decodeVaultBundles = (
         recipient,
         deadline,
       ] = decoded.args;
-      const f = base.with({
-        subject: { vault: vaultAddress },
-      });
-      const vault = boundVault(f, { address: vaultAddress });
-      rejectValue(f, { value, name: "vaultBundlesV1Withdraw" });
+      const vault = boundVault(base, { address: vaultAddress });
+      rejectValue(base, { value, name: "vaultBundlesV1Withdraw" });
       const hasAssets = assets > 0n;
       const hasShares = shares > 0n;
       if (hasAssets === hasShares) {
-        f.unsupported(
+        base.unsupported(
           `vaultBundlesV1Withdraw expected exactly one of assets/shares, got assets "${assets}", shares "${shares}"`,
         );
       }
+      const f = base.with({
+        subject: {
+          operation:
+            vault.kind === "vaultV1"
+              ? hasAssets
+                ? "vaultV1Withdraw"
+                : "vaultV1Redeem"
+              : hasAssets
+                ? "vaultV2Withdraw"
+                : "vaultV2Redeem",
+          vault: vault.address,
+        },
+      });
       const tokenSignature = decodeSharesPermit(sharesPermit);
       checkPreview(f, tokenSignature);
       const common = {
@@ -995,8 +1014,11 @@ const decodeVaultBundles = (
         deadline,
       ] = decoded.args;
       const f = base.with({
-        operation: "vaultV1MigrateToV2",
-        subject: { vault: destVaultAddress },
+        subject: {
+          operation: "vaultV1MigrateToV2",
+          sourceVault: sourceVaultAddress,
+          targetVault: destVaultAddress,
+        },
       });
       const sourceVault = boundVault(f, {
         address: sourceVaultAddress,
@@ -1072,8 +1094,11 @@ const decodeVaultExitBundles = (
         deadline,
       ] = decoded.args;
       const f = base.with({
-        operation: "vaultV2ForceWithdraw",
-        subject: { vault: vaultAddress },
+        subject: {
+          operation: "vaultV2ForceWithdraw",
+          vault: vaultAddress,
+          adapter,
+        },
       });
       rejectValue(f, {
         value,
@@ -1106,8 +1131,7 @@ const decodeVaultExitBundles = (
         deadline,
       ] = decoded.args;
       const f = base.with({
-        operation: "vaultV1InKindRedeem",
-        subject: { vault: vaultAddress },
+        subject: { operation: "vaultV1InKindRedeem", vault: vaultAddress },
       });
       rejectValue(f, {
         value,
@@ -1138,8 +1162,11 @@ const decodeVaultExitBundles = (
         deadline,
       ] = decoded.args;
       const f = base.with({
-        operation: "vaultV2InKindRedeem",
-        subject: { vault: vaultAddress },
+        subject: {
+          operation: "vaultV2InKindRedeem",
+          vault: vaultAddress,
+          adapter,
+        },
       });
       rejectValue(f, {
         value,
@@ -1177,8 +1204,7 @@ const decodeVaultV2Multicall = (
 ): OperationBody => {
   const { tx, vault } = spec;
   const f = base.with({
-    operation: "vaultV2ForceRedeem",
-    subject: { vault: vault.address },
+    subject: { operation: "vaultV2ForceRedeem", vault: vault.address },
   });
   if (vault.kind !== "vaultV2") {
     f.unsupported(
@@ -1304,6 +1330,9 @@ const decodeMorphoCall = (
     );
   }
   const [authorized, isAuthorized] = decoded.args;
+  const bound = f.with({
+    subject: { operation: "blueAuthorization", authorized },
+  });
 
   const operator = (() => {
     if (
@@ -1321,7 +1350,7 @@ const decodeMorphoCall = (
         market: preLiquidation.market,
       } as const;
     }
-    return f.mismatch(
+    return bound.mismatch(
       `Morpho authorization operator "${authorized}" is neither the registered BlueBundlesV1 nor a bound pre-liquidation contract. Bind it via preLiquidations`,
     );
   })();
@@ -1349,12 +1378,12 @@ const decodeTransaction = (
   const f = fails(env, loc);
   if (tx.data === "0x" || tx.data.length < 10) {
     return f.unsupported(
-      `Transaction "${loc.index}" carries no decodable calldata. Only fixed-bundles entrypoints are supported`,
+      "Transaction carries no decodable calldata. Only fixed-bundles entrypoints are supported",
     );
   }
   if (env.rejected.some((address) => isAddressEqual(address, tx.to))) {
     return f.unsupported(
-      `Transaction "${loc.index}" targets "${tx.to}", an unsupported deployment. Only BlueBundlesV1, VaultBundlesV1, VaultExitBundlesV1, bound vaults, and Morpho setAuthorization are supported`,
+      `Transaction targets "${tx.to}", an unsupported deployment. Only BlueBundlesV1, VaultBundlesV1, VaultExitBundlesV1, bound vaults, and Morpho setAuthorization are supported`,
     );
   }
   if (env.blueBundlesV1 != null && isAddressEqual(tx.to, env.blueBundlesV1)) {
@@ -1377,7 +1406,7 @@ const decodeTransaction = (
     return decodeVaultV2Multicall(f, { tx, vault });
   }
   return f.unsupported(
-    `Transaction "${loc.index}" targets "${tx.to}", which is not a supported deployment or bound vault. Only BlueBundlesV1, VaultBundlesV1, VaultExitBundlesV1, bound vaults, and Morpho setAuthorization are supported`,
+    `Transaction targets "${tx.to}", which is not a supported deployment or bound vault. Only BlueBundlesV1, VaultBundlesV1, VaultExitBundlesV1, bound vaults, and Morpho setAuthorization are supported`,
   );
 };
 
@@ -1465,11 +1494,12 @@ export function decodeOperations(
       throw new ProtocolBindingMismatchError(
         `Transaction "${index}" sender expected "${owner}", got "${transaction.from}". All transactions must share one sender`,
         {
-          stage: "preparation",
-          chainId,
-          mode,
-          blockNumber,
-          failedTransactionIndex: index,
+          context: {
+            stage: "validation",
+            chainId,
+            mode,
+            blockNumber,
+          },
         },
       );
     }
