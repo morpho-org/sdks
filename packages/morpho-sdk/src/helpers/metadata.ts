@@ -31,6 +31,18 @@ import type { Metadata } from "../types/index.js";
  * @returns The same `tx` object when `data` is missing, an empty string, or
  * canonical empty calldata (`"0x"`); otherwise, a new transaction object
  * with `data` containing any appended metadata. The input is never mutated.
+ * @example
+ * ```ts
+ * import { addTransactionMetadata } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress, type Hex } from "viem";
+ *
+ * const tx = { to: zeroAddress, value: 0n, data: "0x1234" as Hex };
+ * const result = addTransactionMetadata(tx, {
+ *   origin: "deadbeef",
+ *   timestamp: true,
+ * });
+ * // result.data = original calldata + 4-byte timestamp + 4-byte origin.
+ * ```
  */
 export function addTransactionMetadata(
   tx: { data: Hex; value: bigint; to: Address },
