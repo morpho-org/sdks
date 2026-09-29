@@ -661,9 +661,16 @@ describe.sequential("executePlan", () => {
           error: { code: 3, message: "execution reverted" },
         }),
       );
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      SimulationRevertedError,
-    );
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    if (error instanceof SimulationRevertedError) {
+      expect(error.cause).toBeInstanceOf(Error);
+      expect(error.details).toEqual({
+        code: 3,
+        shortMessage: expect.any(String),
+      });
+      expect(JSON.stringify(error.details)).not.toContain("rpc.example");
+    }
   });
 
   test.each([

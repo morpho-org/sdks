@@ -209,9 +209,9 @@ export async function executePlan(params: {
     ) {
       // The execution-stage context requires an operation-keyed subject and a
       // node-level revert precedes operation decoding, so no context attaches.
-      // `details` carries only the URL-free code/shortMessage — the raw viem
-      // error embeds the RPC URL and stays out of the error entirely.
-      throw new SimulationRevertedError(
+      // `details` carries only the URL-free code/shortMessage; the raw viem
+      // error (which embeds the RPC URL) is kept as `cause` only.
+      const reverted = new SimulationRevertedError(
         error instanceof BaseError
           ? error.details || error.shortMessage
           : error.message,
@@ -225,6 +225,8 @@ export async function executePlan(params: {
         },
         "UNKNOWN_REVERT",
       );
+      reverted.cause = error;
+      throw reverted;
     }
     throw new ExternalServiceError(
       `eth_simulateV1 error: ${safeMessage(error)}`,
