@@ -202,10 +202,17 @@ export type SimulationErrorContext =
       };
     }["execution" | "verification"];
 
-/** Class-specific fields beside the common context; `reasonCode` follows the ADR's `SimulationRevertedError`. */
+/**
+ * Class-specific fields beside the common context; `reasonCode` follows the ADR's
+ * `SimulationRevertedError`, and a revert can only carry a preparation or execution context.
+ */
 interface SimulationErrorExtras {
   readonly SimulationRevertedError: {
     readonly reasonCode: SimulationExecutionReason;
+    readonly context: Extract<
+      SimulationErrorContext,
+      { stage: "preparation" | "execution" }
+    >;
   };
 }
 
