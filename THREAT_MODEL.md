@@ -153,6 +153,6 @@ Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. Whe
 - **SDKS-159** (SDK-442): a fork with the same chain id passes every check. It cannot spend canonical-chain funds, and any check would ask the same endpoint.
 - **SDKS-816** (SDK-717): a provider that reports chain A while serving chain B. Only the provider can answer `eth_chainId`.
 - **SDKS-527** (SDK-770), **SDKS-689** (SDK-769): failover to another backend with the same chain id. EIP-155 bytes are valid on every node of that chain.
-- **SDKS-493** (SDK-771): the RPC-returned EOA hash is used as is. A local hash would not help: the same provider reports inclusion and receipts for it.
+- **SDKS-493** (SDK-771): the SDK returns the RPC's EOA hash as is. Checking it against `keccak256` of the signed bytes would catch a swapped hash, but not a dropped transaction or a forged receipt from the same provider.
 - **SDKS-613** (SDK-990): `LiquidityLoader` labels snapshots with `client.chain.id` while reading the transport's chain. This needs no lying endpoint, only a client paired with the wrong transport, and the integrator owns that pairing.
 - **SDKS-714** (SDK-1037): a stale `block.timestamp` shortens the one-hour reallocation horizon. The same node supplies the caps and balances that horizon protects.
