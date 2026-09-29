@@ -1,15 +1,6 @@
 import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
-import {
-  type Address,
-  ethAddress,
-  getAddress,
-  type Hex,
-  zeroAddress,
-} from "viem";
+import { type Address, getAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
-import type { SimulateParams } from "../params.js";
-import type { SimulationExecution } from "./backends/parse-response.js";
-import type { ExecutionPlan } from "./plan/plan-execution.js";
 import {
   BlacklistViolationError,
   ExternalServiceError,
@@ -19,14 +10,17 @@ import {
   UnsupportedChainError,
   UnsupportedVerificationFeatureError,
 } from "../errors.js";
+import type { SimulateParams } from "../params.js";
 import {
   encodeUint256,
   makeTransferLog,
   padAddress,
 } from "../test-helpers/index.js";
 import type { RawLog, SimulationConfig } from "../types.js";
+import type { SimulationExecution } from "./backends/parse-response.js";
 import { WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import type { executeSimulation } from "./pipeline/execute-simulation.js";
+import type { ExecutionPlan } from "./plan/plan-execution.js";
 import { simulate } from "./simulate.js";
 
 const mockExecuteSimulation = vi.fn<typeof executeSimulation>();

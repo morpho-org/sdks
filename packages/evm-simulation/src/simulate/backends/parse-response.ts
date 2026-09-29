@@ -179,8 +179,7 @@ export function parseSimulationResponse(params: {
 
   // A user-transaction revert belongs to the bundle, not the boundary.
   const failedUserCall = calls.find(
-    ({ planned, result }) =>
-      planned.type === "transaction" && !result.status,
+    ({ planned, result }) => planned.type === "transaction" && !result.status,
   );
   if (failedUserCall && failedUserCall.planned.type === "transaction") {
     throw new SimulationRevertedError(

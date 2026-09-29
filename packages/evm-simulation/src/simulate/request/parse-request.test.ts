@@ -308,9 +308,7 @@ describe("parseRequest", () => {
       }
     })();
     expect(error).toBeInstanceOf(SimulationValidationError);
-    expect(
-      (error as SimulationValidationError).fieldErrors,
-    ).toContainEqual(
+    expect((error as SimulationValidationError).fieldErrors).toContainEqual(
       "limits.operations[0]: set expectedAssets or expectedShares, not both",
     );
   });

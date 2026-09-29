@@ -1,6 +1,19 @@
 // Public fns (via feature-folder barrels)
 
 export type {
+  BlueAuthorization,
+  BlueAuthorizationSignature,
+  BlueAuthorizationTypedData,
+  Eip712Domain,
+  Eip712Field,
+  Erc20ApprovalAuthorization,
+  Erc2612PermitAuthorization,
+  Erc2612PermitTypedData,
+  Permit2TransferAuthorization,
+  Permit2TransferTypedData,
+  SimulationAuthorization,
+} from "./authorizations.js";
+export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
@@ -61,19 +74,6 @@ export type {
 } from "./limits.js";
 export type { SimulateParams, SimulationMode } from "./params.js";
 export { simulate } from "./simulate/index.js";
-export type {
-  BlueAuthorization,
-  BlueAuthorizationSignature,
-  BlueAuthorizationTypedData,
-  Eip712Domain,
-  Eip712Field,
-  Erc20ApprovalAuthorization,
-  Erc2612PermitAuthorization,
-  Erc2612PermitTypedData,
-  Permit2TransferAuthorization,
-  Permit2TransferTypedData,
-  SimulationAuthorization,
-} from "./authorizations.js";
 // Default limit constants
 export {
   DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS,

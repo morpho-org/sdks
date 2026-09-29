@@ -1,7 +1,7 @@
 import type { BlockTag } from "viem";
-import type { SimulationExecution } from "../backends/parse-response.js";
 import type { SimulationConfig } from "../../types.js";
 import { executePlan } from "../backends/index.js";
+import type { SimulationExecution } from "../backends/parse-response.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { resolveChain } from "./resolve-chain.js";
 

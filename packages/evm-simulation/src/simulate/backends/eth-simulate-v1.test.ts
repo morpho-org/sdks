@@ -1,6 +1,5 @@
 import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
 import { vi } from "vitest";
-import type { ExecutionPlan } from "../plan/plan-execution.js";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
@@ -9,6 +8,7 @@ import {
 } from "../../errors.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { executePlan } from "./eth-simulate-v1.js";
@@ -214,7 +214,7 @@ describe.sequential("executePlan", () => {
     expect((error as Error).message).toBe(
       "The RPC configured for chain 1 reports chain 137. Fix SimulationConfig.chains.",
     );
-    expect((error as InvalidSimulationResponseError).context.stage).toBe(
+    expect((error as InvalidSimulationResponseError).context?.stage).toBe(
       "transport",
     );
     // No eth_simulateV1 request was issued.

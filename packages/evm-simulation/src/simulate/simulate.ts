@@ -4,11 +4,11 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { SimulateParams } from "../params.js";
 import {
   InvalidSimulationResponseError,
   UnsupportedVerificationFeatureError,
 } from "../errors.js";
+import type { SimulateParams } from "../params.js";
 import type { SimulationConfig, SimulationResult } from "../types.js";
 
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
@@ -158,9 +158,7 @@ export async function simulate(
         planned: { type: "transaction"; transactionIndex: number };
       } => call.planned.type === "transaction",
     )
-    .sort(
-      (a, b) => a.planned.transactionIndex - b.planned.transactionIndex,
-    )
+    .sort((a, b) => a.planned.transactionIndex - b.planned.transactionIndex)
     .map((call) => call.result);
   if (userCalls.length !== request.transactions.length) {
     throw new InvalidSimulationResponseError(

@@ -1,10 +1,10 @@
 import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
+import { SimulationValidationError } from "../../errors.js";
 import type {
   AppliedSimulationLimits,
   SimulationLimits,
 } from "../../limits.js";
-import { SimulationValidationError } from "../../errors.js";
 
 /** Default slippage bound, identical to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03% WAD). */
 export const DEFAULT_MAX_SLIPPAGE_WAD = DEFAULT_SLIPPAGE_TOLERANCE;

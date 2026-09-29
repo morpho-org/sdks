@@ -1,6 +1,6 @@
 import { type Address, getAddress, zeroAddress } from "viem";
-import type { ParsedRequest } from "../request/parse-request.js";
 import { parseRequest } from "../request/index.js";
+import type { ParsedRequest } from "../request/parse-request.js";
 import {
   encodeNativeBalanceProbe,
   NATIVE_BALANCE_PROBE_ADDRESS,

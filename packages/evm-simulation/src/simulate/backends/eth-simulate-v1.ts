@@ -6,14 +6,14 @@ import {
   http,
   numberToHex,
 } from "viem";
-import type { ExecutionPlan } from "../plan/plan-execution.js";
-import type { SimulationExecution } from "./parse-response.js";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
   SimulationPackageError,
   SimulationRevertedError,
 } from "../../errors.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
+import type { SimulationExecution } from "./parse-response.js";
 import { parseSimulationResponse } from "./parse-response.js";
 
 /**
