@@ -8,12 +8,14 @@ import {
 import { InvalidTreeError } from "../errors.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import {
-  type RatifierTreeInput,
-  type TreeProof,
-  TreeUtils,
-} from "./TreeUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import type {
+  SetterRatifierDataRequest,
+  SetterRatifierRatifyRequest,
+} from "./ratifierRequests.js";
+import { parseStandardRatifierTree } from "./standardRatifierInternal.js";
+import type { RatifierTreeInput } from "./TreeUtils.js";
+import { type TreeProof, TreeUtils } from "./TreeUtils.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -87,6 +89,7 @@ export type DecodedSetterRatifierData = TreeProof;
  * };
  * console.log(params.leafIndex);
  * ```
+ * @deprecated Use {@link SetterRatifierDataRequest} with {@link SetterRatifier}.
  */
 export interface SetterRatifierDataParams {
   /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
@@ -120,6 +123,7 @@ export interface SetterRatifierDataVerificationParams {
  *
  * console.log(typeof SetterRatifierUtils.encodeRatifierData);
  * ```
+ * @deprecated Use {@link SetterRatifier} with a tagged tree.
  */
 export namespace SetterRatifierUtils {
   /**
@@ -191,7 +195,7 @@ export namespace SetterRatifierUtils {
   /**
    * Verifies that Setter ratifier data proves one payload offer belongs to its root.
    *
-   * This helper intentionally does not check `SetterRatifier.isRootRatified` or
+   * This helper intentionally does not check `SetterRatifierUtils.isRootRatified` or
    * `Midnight.isAuthorized` state. Consumers can query those values at their
    * own block context after local proof verification.
    *
@@ -243,7 +247,7 @@ export namespace SetterRatifierUtils {
    * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple ratifiers.
    * @example
    * ```ts
-   * import { Offer, SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer, SetterRatifier, Tree } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
    * const offer = Offer.create({
@@ -279,7 +283,7 @@ export namespace SetterRatifierUtils {
    * ```
    */
   export function ratifierData(params: SetterRatifierDataParams): Hex {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Setter",
     });
@@ -346,7 +350,7 @@ export namespace SetterRatifierUtils {
   export function ratify(params: {
     readonly tree: RatifierTreeInput;
   }): readonly Payload.Item[] {
-    const { tree } = RatifierUtils.normalizeRatifierTree({
+    const { tree } = Ratifier.normalizeRatifierTree({
       tree: params.tree,
       label: "Setter",
     });
@@ -361,4 +365,58 @@ export namespace SetterRatifierUtils {
       ratifierData: encodeRatifierData(proofs[leafIndex]!),
     }));
   }
+}
+
+/**
+ * Tagged-tree API for SetterRatifier with validated portable leaf commitments.
+ * Legacy untagged inputs remain available through {@link SetterRatifierUtils}.
+ */
+export namespace SetterRatifier {
+  /**
+   * Encodes the proof for one tagged Setter leaf.
+   * @param request.tree - Matching tagged tree or portable snapshot; commitments are validated before use.
+   * @param request.leafIndex - Leaf to prove.
+   * @returns ABI-encoded ratifier data for the requested leaf.
+   * @throws {InvalidTreeError} When the tag, commitments, or root are invalid.
+   * @throws {InvalidTreeHeightError} When the descriptor height is unsupported.
+   * @example
+   * ```ts
+   * import { SetterRatifier, type SetterRatifierDataRequest } from "@morpho-org/midnight-sdk";
+   * function execute(request: SetterRatifierDataRequest) {
+   *   return SetterRatifier.ratifierData(request);
+   * }
+   * ```
+   */
+  export function ratifierData(request: SetterRatifierDataRequest): Hex {
+    const tree = parseStandardRatifierTree(request.tree, "setter");
+    return SetterRatifierUtils.ratifierData({ ...request, tree });
+  }
+
+  /**
+   * Builds payload items for a tagged Setter tree after onchain root approval.
+   * @param request.tree - Matching tagged tree or portable snapshot; commitments are validated before use.
+   * @returns One payload item per non-padding offer, including its ratifier data.
+   * @throws {InvalidTreeError} When the tag, commitments, or root are invalid.
+   * @throws {InvalidTreeHeightError} When the descriptor height is unsupported.
+   * @example
+   * ```ts
+   * import { SetterRatifier, type SetterRatifierRatifyRequest } from "@morpho-org/midnight-sdk";
+   * function execute(request: SetterRatifierRatifyRequest) {
+   *   return SetterRatifier.ratify(request);
+   * }
+   * ```
+   */
+  export function ratify(
+    request: SetterRatifierRatifyRequest,
+  ): readonly Payload.Item[] {
+    const tree = parseStandardRatifierTree(request.tree, "setter");
+    return SetterRatifierUtils.ratify({ ...request, tree });
+  }
+
+  /** {@inheritDoc SetterRatifierUtils.encodeRatifierData} */
+  export const encodeRatifierData = SetterRatifierUtils.encodeRatifierData;
+  /** {@inheritDoc SetterRatifierUtils.decodeRatifierData} */
+  export const decodeRatifierData = SetterRatifierUtils.decodeRatifierData;
+  /** {@inheritDoc SetterRatifierUtils.verifyRatifierData} */
+  export const verifyRatifierData = SetterRatifierUtils.verifyRatifierData;
 }

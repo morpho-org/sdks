@@ -53,7 +53,7 @@ import {
 } from "./constant.js";
 
 /** @internal */
-export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
+const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   const normalizedIdA = idA.toLowerCase();
   const normalizedIdB = idB.toLowerCase();
 

@@ -20,7 +20,7 @@ import {
   IN_KIND_USER,
   IN_KIND_VAULT,
   mockMulticallResults,
-  vaultV2ExitData,
+  inKindVaultV2Data as vaultV2ExitData,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
