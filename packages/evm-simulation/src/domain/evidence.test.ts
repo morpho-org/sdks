@@ -1,5 +1,7 @@
 import { expectTypeOf } from "vitest";
+import type { SimulationCall } from "../types.js";
 import type {
+  Applicable,
   ApplicableChange,
   AuthorizationEvidence,
   AuthorizationPreparation,
@@ -7,6 +9,7 @@ import type {
   ExecutionIdentity,
   PermissionChange,
   RiskMetric,
+  SuccessfulCall,
   VaultState,
   VerificationDiff,
   VerificationSnapshot,
@@ -25,7 +28,22 @@ describe("verification evidence", () => {
     >().toEqualTypeOf<ApplicableChange<bigint>>();
     expectTypeOf<
       Extract<VaultState, { type: "vaultV1" }>["lostAssets"]
-    >().toEqualTypeOf<bigint | undefined>();
+    >().toEqualTypeOf<Applicable<bigint>>();
+    expectTypeOf<bigint | undefined>().not.toExtend<
+      Extract<VaultState, { type: "vaultV1" }>["lostAssets"]
+    >();
+    expectTypeOf<
+      Extract<
+        AuthorizationPreparation,
+        { type: "approvalCalls" }
+      >["calls"][number]["result"]
+    >().toEqualTypeOf<SuccessfulCall>();
+    expectTypeOf<SimulationCall>().not.toExtend<
+      Extract<
+        AuthorizationPreparation,
+        { type: "approvalCalls" }
+      >["calls"][number]["result"]
+    >();
     expectTypeOf<"lostAssets">().not.toExtend<
       keyof Extract<VaultState, { type: "vaultV2" }>
     >();

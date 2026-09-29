@@ -28,7 +28,11 @@ export type Applicable<T> =
   | { readonly type: "applicable"; readonly value: T }
   | {
       readonly type: "notApplicable";
-      readonly reason: "noOracle" | "noIrm" | "noPreLiquidation";
+      readonly reason:
+        | "noOracle"
+        | "noIrm"
+        | "noPreLiquidation"
+        | "noLossRealization";
     };
 
 /** Incomplete boundary evidence; this union is never accepted in a verified result. @internal */
@@ -148,8 +152,8 @@ export type VaultState = {
   | {
       readonly type: "vaultV1";
       readonly lastTotalAssets: bigint;
-      /** Realized bad debt on V1.1 vaults; absent on V1.0, which has no loss realization. */
-      readonly lostAssets?: bigint;
+      /** Realized bad debt on V1.1; `noLossRealization` on V1.0, which has none. */
+      readonly lostAssets: Applicable<bigint>;
     }
   | {
       readonly type: "vaultV2";
