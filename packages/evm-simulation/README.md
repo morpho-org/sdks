@@ -38,7 +38,8 @@ try {
   );
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
-    // branch on err.reasonCode, show err.reason to the user
+    // show err.reason to the user; err.reasonCode is "UNKNOWN_REVERT" until
+    // revert mapping lands with the verification pipeline
   }
   throw err;
 }
