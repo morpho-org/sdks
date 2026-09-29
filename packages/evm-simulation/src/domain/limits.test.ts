@@ -64,9 +64,9 @@ describe("OperationLimit", () => {
     expectTypeOf<
       "expectedRecipient" | "expectedOnBehalf" | "expectedDeallocations"
     >().toExtend<keyof OperationLimitFields["vaultV2ForceRedeem"]>();
-    expectTypeOf<`expected${string}`>().not.toExtend<
-      keyof OperationLimitFields["blueRefinance"]
-    >();
+    expectTypeOf<
+      Extract<keyof OperationLimitFields["blueRefinance"], `expected${string}`>
+    >().toBeNever();
     expectTypeOf<SimulationDeallocation>().toEqualTypeOf<{
       readonly adapter: Address;
       readonly marketId?: MarketId;
