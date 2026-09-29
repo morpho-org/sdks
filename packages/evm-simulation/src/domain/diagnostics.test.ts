@@ -42,7 +42,7 @@ describe("simulation diagnostics", () => {
     expectTypeOf<"maxSharesBurned">().not.toExtend<
       Extract<ConsumerConstraintContext, { type: "blueBorrow" }>["field"]
     >();
-    expectTypeOf<"maxBorrowApyAfterWad">().toExtend<
+    expectTypeOf<"maxAfterBorrowApyWad">().toExtend<
       Extract<ConsumerConstraintContext, { type: "blueBorrow" }>["field"]
     >();
     expectTypeOf<"txIdx">().not.toExtend<
@@ -128,5 +128,18 @@ describe("simulation diagnostics", () => {
       },
     };
     expect(preparationRevert.context.stage).toBe("preparation");
+    expectTypeOf<
+      Extract<
+        SimulationErrorShape<"SimulationRevertedError">["context"],
+        { stage: "execution" }
+      >["location"]
+    >().toEqualTypeOf<
+      Extract<SimulationErrorLocation, { type: "transaction" }>
+    >();
+    expectTypeOf<
+      Omit<Extract<SimulationErrorContext, { stage: "execution" }>, "location">
+    >().not.toExtend<
+      SimulationErrorShape<"SimulationRevertedError">["context"]
+    >();
   });
 });
