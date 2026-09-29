@@ -34,14 +34,15 @@ import type { Metadata } from "../types/index.js";
  * @example
  * ```ts
  * import { addTransactionMetadata } from "@morpho-org/morpho-sdk";
- * import { zeroAddress, type Hex } from "viem";
+ * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
+ * import type { Address, Hex } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const tx = { to: zeroAddress, value: 0n, data: "0x1234" as Hex };
- * const result = addTransactionMetadata(tx, {
- *   origin: "deadbeef",
- *   timestamp: true,
- * });
- * // result.data = original calldata + 4-byte timestamp + 4-byte origin.
+ * const { blue } = getChainAddresses(mainnet.id);
+ * const tx = { to: blue, value: 0n, data: "0x1234" as Hex };
+ * const result: { to: Address; value: bigint; data: Hex } =
+ *   addTransactionMetadata(tx, { origin: "deadbeef", timestamp: true });
+ * // => { to: blue, value: 0n, data: "0x1234" + <4-byte timestamp> + "deadbeef" }
  * ```
  */
 export function addTransactionMetadata(
