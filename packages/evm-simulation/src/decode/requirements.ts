@@ -422,6 +422,21 @@ const toPermit2SignatureTransfer = (
   });
   const domain = parseDomain(typedData?.domain, fail);
   v.domainChainId(domain.chainId, ctx.chainId);
+  if (domain.name !== "Permit2") {
+    fail(
+      `Typed data domain.name expected "Permit2", got ${describeValue(domain.name)}`,
+    );
+  }
+  if (domain.version !== undefined) {
+    fail(
+      `Typed data domain.version must be absent for Permit2, got ${describeValue(domain.version)}`,
+    );
+  }
+  if (domain.salt !== undefined) {
+    fail(
+      `Typed data domain.salt must be absent for Permit2, got ${describeValue(domain.salt)}`,
+    );
+  }
   const permit2 = ctx.addresses.permit2;
   if (permit2 == null || !isAddressEqual(domain.verifyingContract, permit2)) {
     fail(
@@ -492,6 +507,21 @@ const toBlueAuthorizationSignature = (
   });
   const domain = parseDomain(typedData?.domain, fail);
   v.domainChainId(domain.chainId, ctx.chainId);
+  if (domain.name !== undefined) {
+    fail(
+      `Typed data domain.name must be absent for Authorization, got ${describeValue(domain.name)}`,
+    );
+  }
+  if (domain.version !== undefined) {
+    fail(
+      `Typed data domain.version must be absent for Authorization, got ${describeValue(domain.version)}`,
+    );
+  }
+  if (domain.salt !== undefined) {
+    fail(
+      `Typed data domain.salt must be absent for Authorization, got ${describeValue(domain.salt)}`,
+    );
+  }
   v.equalAddress(domain.verifyingContract, {
     expected: ctx.addresses.blue,
     field: "domain.verifyingContract",

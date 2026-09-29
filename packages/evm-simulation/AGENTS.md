@@ -23,4 +23,5 @@
 - Prefer typed failures and explicit backend support rules over broad catch/fallback logic.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
 
-- `DEFAULT_MIN_LLTV_BUFFER_WAD` must equal morpho-sdk's `DEFAULT_LLTV_BUFFER`; the builder and verifier share this floor (duplicated by layering, not imported).
+- `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used only through its root, `/abis` and `/addresses` entry points for the decode adapters; every morpho-sdk bump requires the root AGENTS.md §4 dependent audit for evm-simulation.
+- `DEFAULT_MIN_LLTV_BUFFER_WAD` must equal morpho-sdk's `DEFAULT_LLTV_BUFFER`; it stays a local constant so the verifier's floor is pinned independently of the builder — a drift shows up as a failing test, not a silently moved threshold.

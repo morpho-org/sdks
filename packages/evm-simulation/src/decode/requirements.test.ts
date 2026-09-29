@@ -1335,6 +1335,64 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
+  test("error: AuthorizationRequestMismatchError on non-canonical typed data domains", async () => {
+    const call = (requirements: ActionRequirement[]) => () =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements,
+      });
+    const tamperDomain = <
+      Action extends { readonly typedData: { readonly domain?: unknown } },
+    >(
+      action: Action,
+      domain: Record<string, unknown>,
+    ) => ({
+      ...action,
+      typedData: {
+        ...action.typedData,
+        domain: {
+          ...(action.typedData.domain as Record<string, unknown>),
+          ...domain,
+        },
+      },
+    });
+
+    const signature = await blueAuthorizationSignatureRequirement({});
+    for (const domain of [
+      { name: "Authorization" },
+      { version: "1" },
+      { salt: `0x${"00".repeat(32)}` },
+    ]) {
+      expect(
+        call([
+          { ...signature, action: tamperDomain(signature.action, domain) },
+        ]),
+      ).toThrowError(AuthorizationRequestMismatchError);
+    }
+
+    const permit2Req = encodeErc20Permit2SignatureTransfer({
+      token: TOKEN,
+      spender: vaultBundlesV1,
+      amount: 123n,
+      chainId: CHAIN_ID,
+      nonce: NONCE,
+      deadline: DEADLINE,
+    });
+    for (const action of [
+      tamperDomain(permit2Req.action, { name: "NotPermit2" }),
+      tamperDomain(permit2Req.action, { name: undefined }),
+      tamperDomain(permit2Req.action, { version: "1" }),
+      tamperDomain(permit2Req.action, { salt: `0x${"00".repeat(32)}` }),
+    ]) {
+      expect(call([{ ...permit2Req, action }])).toThrowError(
+        AuthorizationRequestMismatchError,
+      );
+    }
+  });
+
   test("error: UnsupportedChainError on an unregistered chain", () => {
     expect(() =>
       toSimulationAuthorizations({
