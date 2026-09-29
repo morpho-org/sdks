@@ -72,7 +72,11 @@ export type {
   VaultV2ForceWithdrawLimit,
   VaultWithdrawLimit,
 } from "./limits.js";
-export { OPERATION_TYPES } from "./limits.js";
+export {
+  BLUE_MARKET_OPERATION_TYPES,
+  OPERATION_TYPES,
+  VAULT_OPERATION_TYPES,
+} from "./limits.js";
 export type {
   SimulateParams,
   SimulationMode,

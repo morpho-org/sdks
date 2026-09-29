@@ -886,7 +886,7 @@ describe("parseRequest", () => {
       }
     })();
     expect(error).toBeInstanceOf(SimulationValidationError);
-    const hits = (error as SimulationValidationError).fieldErrors.filter(
+    const hits = (error as SimulationValidationError).fieldErrors?.filter(
       (line) => line.includes("maxSlippageWad"),
     );
     expect(hits).toHaveLength(1);
@@ -963,7 +963,7 @@ describe("parseRequest", () => {
       })();
       expect(error).toBeInstanceOf(SimulationValidationError);
       expect(
-        (error as SimulationValidationError).fieldErrors.some((line) =>
+        (error as SimulationValidationError).fieldErrors?.some((line) =>
           line.includes("authorizations[0]"),
         ),
       ).toBe(true);
