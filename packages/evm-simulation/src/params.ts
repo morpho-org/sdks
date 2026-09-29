@@ -3,8 +3,11 @@ import type { PendingAuthorization } from "./authorizations.js";
 import type { SimulationLimits } from "./limits.js";
 import type { SimulationTransaction } from "./types.js";
 
+/** Every simulation mode; source of `SimulationMode`. */
+export const SIMULATION_MODES = ["preview", "final"] as const;
+
 /** Simulation mode: `"preview"` accepts pending authorizations, `"final"` does not. */
-export type SimulationMode = "preview" | "final";
+export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
 /** @internal Target `simulate()` input. `authorizations` is accepted only in "preview". */
 export interface VerifiedSimulateParams {
