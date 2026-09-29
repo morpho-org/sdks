@@ -27,8 +27,8 @@
 - No secret with write, publish, or signing capability is moved into the ungated `test` job — or into any job reachable from a fork-accessible trigger.
 - RPC URLs stay `env:`-bound and are never interpolated into a `run:` string. Their every-branch scope is accepted **only** because they are low-sensitivity and write-access-only; a secret that gains write capability must not inherit this posture.
 - A new secret name added to any workflow gains a row in the inventory above **in the same PR**.
+- [`zizmor.yml`](./zizmor.yml) audits every workflow on each PR and uploads findings to code scanning. A suppressed finding uses an inline `# zizmor: ignore[<audit>]` comment on the flagged line followed by the reason; a bare ignore is a finding.
 
 ## Not a finding (de-noise)
 
 - "Repo-level secrets (`*_RPC_URL`) are exposed to every branch push, not environment-gated." Known and accepted: low sensitivity, write-access-only, forks excluded, trivially rotatable. Do not re-file as high/medium — flag only a *regression* of the invariants above. Optional hardening (a GitHub Environment `ci` with a deployment-branch policy for the RPC URLs) is welcome but not required.
-- [`zizmor.yml`](./zizmor.yml) audits every workflow on each PR and uploads findings to code scanning. A suppressed finding uses an inline `# zizmor: ignore[<audit>]` comment on the flagged line followed by the reason; a bare ignore is a finding.
