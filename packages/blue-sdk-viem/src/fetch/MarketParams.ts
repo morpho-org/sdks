@@ -8,7 +8,8 @@ import { _try } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";
-import { readContractRestructured, validateMarketParamsId } from "../utils.js";
+import { readContractRestructured } from "../utils.js";
+import { validateMarketParamsId } from "./marketParamsId.js";
 
 /**
  * Fetches immutable Morpho Blue market params by market id.

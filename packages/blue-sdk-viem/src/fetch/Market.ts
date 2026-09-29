@@ -11,7 +11,8 @@ import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
 import { MarketParamsIdMismatchError } from "../error.js";
 import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
-import { readContractRestructured, validateMarketParamsId } from "../utils.js";
+import { readContractRestructured } from "../utils.js";
+import { validateMarketParamsId } from "./marketParamsId.js";
 
 /**
  * Fetches Morpho Blue market state, params, oracle price, and adaptive IRM rate.
