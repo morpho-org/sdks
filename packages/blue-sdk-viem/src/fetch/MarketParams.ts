@@ -50,6 +50,7 @@ export async function fetchMarketParams(id: MarketId, client: Client) {
       blockTag: "latest",
     });
 
+    // Throws if the RPC returned another market's params.
     validateMarketParamsId(id, params);
     config = new MarketParams(params);
   }

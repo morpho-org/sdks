@@ -78,6 +78,7 @@ export async function fetchMarket(
         args: [blue, id, adaptiveCurveIrm],
       });
 
+      // Throws if the RPC returned another market's params.
       validateMarketParamsId(id, marketParams);
 
       return new Market({
@@ -120,6 +121,7 @@ export async function fetchMarket(
     }),
   ]);
 
+  // Throws before reading the oracle if the RPC returned another market's params.
   validateMarketParamsId(id, params);
 
   const [price, rateAtTarget] = await Promise.all([
