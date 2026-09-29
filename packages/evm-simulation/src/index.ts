@@ -1,13 +1,11 @@
 // Public fns (via feature-folder barrels)
 
 export type {
-  BlueMarketOperationType,
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
   SimulationExecutionReason,
   SimulationStage,
-  VaultOperationType,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -35,7 +33,12 @@ export {
   UnsupportedOperationError,
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
-export type { OperationType } from "./limits.js";
+export type {
+  BlueMarketOperationType,
+  OperationType,
+  SimulationOperationSubject,
+  VaultOperationType,
+} from "./limits.js";
 export { OPERATION_TYPES } from "./limits.js";
 export type { SimulationMode } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";

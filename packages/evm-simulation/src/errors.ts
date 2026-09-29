@@ -1,6 +1,5 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
-import type { OperationType } from "./limits.js";
+import type { SimulationOperationSubject } from "./limits.js";
 import { OPERATION_TYPES } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import { SIMULATION_MODES } from "./params.js";
@@ -69,52 +68,6 @@ interface SimulationContextBase {
   readonly blockNumber: bigint;
 }
 
-/** Operations acting on one Blue market. */
-export type BlueMarketOperationType = Exclude<
-  Extract<OperationType, `blue${string}`>,
-  "blueRefinance" | "blueAuthorization"
->;
-
-/** Operations acting on one vault (V1 or V2). */
-export type VaultOperationType = Exclude<
-  Extract<OperationType, `vault${string}`>,
-  "vaultV1MigrateToV2"
->;
-
-/** Protocol entity the failing operation acts on, keyed by `operation`. */
-type SimulationOperationSubject =
-  | {
-      readonly operation: BlueMarketOperationType;
-      /** Blue market the operation acts on. */
-      readonly marketId: MarketId;
-    }
-  | {
-      readonly operation: "blueRefinance";
-      /** Market the refinance closes. */
-      readonly sourceMarketId: MarketId;
-      /** Market the refinance opens. */
-      readonly targetMarketId: MarketId;
-    }
-  | {
-      readonly operation: "blueAuthorization";
-      /** Operator whose Morpho authorization the operation sets. */
-      readonly authorized: Address;
-    }
-  | {
-      readonly operation: VaultOperationType;
-      /** Vault the operation acts on. */
-      readonly vault: Address;
-      /** Vault V2 adapter the operation routes through. */
-      readonly adapter?: Address;
-    }
-  | {
-      readonly operation: "vaultV1MigrateToV2";
-      /** Vault the migration exits. */
-      readonly sourceVault: Address;
-      /** Vault the migration enters. */
-      readonly targetVault: Address;
-    };
-
 interface SimulationCheckContext extends SimulationContextBase {
   /** Token whose balance, allowance or transfer was checked. */
   readonly token?: Address;
@@ -141,7 +94,7 @@ type SimulationOperationContext = SimulationCheckContext &
  * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
  * verification contexts are further keyed by `operation`, which fixes the
  * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`). Never contains
+ * `sourceVault`/`targetVault`, `authorized`). Never contains
  * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
  * on the error).
  */
@@ -210,7 +163,7 @@ export class SimulationRevertedError extends SimulationPackageError {
 export interface RetainedAsset {
   /** Restricted bundles contract that ended up holding the token. */
   readonly address: Address;
-  /** Token retained (native ETH uses the zero address). */
+  /** Token retained (native ETH uses viem's `ethAddress`). */
   readonly token: Address;
   /** Net balance increase in the token's base units; always positive. */
   readonly netRetained: bigint;
@@ -350,12 +303,36 @@ export class UnexpectedSimulationError extends SimulationVerificationError {
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
 
+const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
+  Object.freeze({
+    VALIDATION_ERROR: SimulationValidationError.name,
+    UNSUPPORTED_CHAIN: UnsupportedChainError.name,
+    EXTERNAL_SERVICE_ERROR: ExternalServiceError.name,
+    SIMULATION_REVERTED: SimulationRevertedError.name,
+    BLACKLIST_ERROR: BlacklistViolationError.name,
+    UNSUPPORTED_OPERATION: UnsupportedOperationError.name,
+    PROTOCOL_BINDING_MISMATCH: ProtocolBindingMismatchError.name,
+    UNSUPPORTED_VERIFICATION_FEATURE: UnsupportedVerificationFeatureError.name,
+    INVALID_SIMULATION_RESPONSE: InvalidSimulationResponseError.name,
+    MISSING_VERIFICATION_EVIDENCE: MissingVerificationEvidenceError.name,
+    AUTHORIZATION_REQUEST_MISMATCH: AuthorizationRequestMismatchError.name,
+    ASSET_CHANGE_MISMATCH: AssetChangeMismatchError.name,
+    PERMISSION_CHANGE_MISMATCH: PermissionChangeMismatchError.name,
+    STATE_CHANGE_MISMATCH: StateChangeMismatchError.name,
+    MARKET_CONSTRAINT_VIOLATION: MarketConstraintViolationError.name,
+    SLIPPAGE_LIMIT_EXCEEDED: SlippageLimitExceededError.name,
+    FEE_MISMATCH: FeeMismatchError.name,
+    CONSUMER_LIMIT_VIOLATION: ConsumerLimitViolationError.name,
+    UNEXPECTED_SIMULATION_ERROR: UnexpectedSimulationError.name,
+  });
+
 /**
  * Structural guard for consumers where `instanceof` fails across bundles.
  *
  * @param value - Anything caught.
  * @returns `true` for `SimulationPackageError` instances and for objects
- *   carrying `name`/`message` strings, a known `code` and an absent or
+ *   carrying a `message` string, a known `code`, the `name` of the class
+ *   owning that `code`, and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
  *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
  *   known `operation` with its subject fields for `execution`/`verification`).
@@ -386,10 +363,11 @@ export function isSimulationPackageError(
     code?: unknown;
     context?: unknown;
   };
-  if (typeof name !== "string" || typeof message !== "string") return false;
+  if (typeof message !== "string") return false;
   if (
     typeof code !== "string" ||
-    !(SIMULATION_ERROR_CODES as readonly string[]).includes(code)
+    !(SIMULATION_ERROR_CODES as readonly string[]).includes(code) ||
+    name !== ERROR_NAME_BY_CODE[code as SimulationErrorCode]
   )
     return false;
   if (context === undefined) return true;
