@@ -10,8 +10,12 @@ on:
       # to that commit afterward, so skip CI/release runs for main/next staging.
       - '!changeset-release/main-api-commit-*'
       - '!changeset-release/next-api-commit-*'
+      # Merge-queue branches are covered by the merge_group trigger below.
+      - '!gh-readonly-queue/**'
     tags-ignore:
       - '**'
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
