@@ -1,6 +1,7 @@
 import { expectTypeOf } from "vitest";
-import type { SimulationResult, simulate } from "../index.js";
+import type { SimulationCall, SimulationResult, simulate } from "../index.js";
 import type { SimulationAuthorization } from "./authorizations.js";
+import type { SuccessfulCall } from "./evidence.js";
 import type { SimulationLimits } from "./limits.js";
 import type { DecodedOperation } from "./operations.js";
 import type {
@@ -41,6 +42,15 @@ describe("VerifiedSimulationResult", () => {
     expectTypeOf<
       Awaited<ReturnType<typeof simulate>>
     >().toEqualTypeOf<SimulationResult>();
+    expectTypeOf<
+      VerifiedSimulationResult["calls"][number]
+    >().toEqualTypeOf<SuccessfulCall>();
+    expectTypeOf<
+      VerifiedSimulationResult["calls"][number]["status"]
+    >().toEqualTypeOf<true>();
+    expectTypeOf<SimulationCall>().not.toExtend<
+      VerifiedSimulationResult["calls"][number]
+    >();
   });
 
   test("behavior: nested request and output fields are readonly", () => {

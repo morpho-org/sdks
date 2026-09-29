@@ -48,7 +48,7 @@ Every row is present in `OperationLimitFields`, `DecodedOperationFields` and `Op
 | `blueRepay` | `marketId` | `expectedOnBehalf`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets` |
 | `blueWithdrawCollateral` | `marketId` | `expectedAssets`, `expectedReceiver` | `maxLtvAfterWad`, `minHealthFactorAfterWad` |
 | `blueRepayWithdrawCollateral` | `marketId` | `expectedWithdrawAssets`, `expectedOnBehalf`, `expectedReceiver`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets`, `maxLtvAfterWad`, `minHealthFactorAfterWad` |
-| `blueRefinance` | `sourceMarketId`, `targetMarketId` | `expectedSourceFullClose` | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` |
+| `blueRefinance` | `sourceMarketId`, `targetMarketId` | none (source full close is asserted unconditionally) | `maxTargetBorrowAssets`, `maxTargetBorrowSharesMinted`, `maxSourceResidualBorrowShares`, `maxTargetLtvAfterWad`, `minTargetHealthFactorAfterWad`, `maxLoanDustAssets`, `maxReallocationPenaltyAssets` |
 | `blueAuthorization` | `authorized` | `expectedIsAuthorized` | — |
 | `vaultV1Deposit` | `vault` | `expectedAssets`, `expectedReceiver` | `minSharesMinted` |
 | `vaultV2Deposit` | `vault` | `expectedAssets`, `expectedReceiver` | `minSharesMinted` |

@@ -99,7 +99,6 @@ export interface OperationLimitFields {
   readonly blueRefinance: {
     readonly sourceMarketId: MarketId;
     readonly targetMarketId: MarketId;
-    readonly expectedSourceFullClose?: boolean;
     readonly maxTargetBorrowAssets?: bigint;
     readonly maxTargetBorrowSharesMinted?: bigint;
     readonly maxSourceResidualBorrowShares?: bigint;
