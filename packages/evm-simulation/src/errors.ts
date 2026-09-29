@@ -505,7 +505,9 @@ export interface SimulationPackageErrorLike {
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
  *
- * const config = { chains: { 1: { simulateV1Url: "https://rpc.example" } } };
+ * const config = {
+ *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
+ * };
  * try {
  *   await simulate(config, { chainId: 1, transactions: [] });
  * } catch (e) {

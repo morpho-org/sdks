@@ -428,6 +428,12 @@ describe("isSimulationPackageError", () => {
     expect(
       isSimulationPackageError({
         ...base,
+        context: { mode: "bogus", chainId: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
         context: { mode: "final", chainId: "1" },
       }),
     ).toBe(false);
