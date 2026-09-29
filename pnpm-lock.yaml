@@ -250,9 +250,6 @@ importers:
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@morpho-org/test':
         specifier: workspace:^
@@ -272,6 +269,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/morpho-test:
     devDependencies:

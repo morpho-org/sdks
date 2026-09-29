@@ -100,8 +100,7 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/midnight-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "zod": "^4.4.3"
+    "@morpho-org/morpho-ts": "workspace:^"
   },
   "peerDependencies": {
     "viem": "^2.0.0"
@@ -112,7 +111,8 @@
     "fast-check": "^4.9.0",
     "typescript": "catalog:",
     "viem": "^2.55.10",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "^4.4.3"
   },
   "publishConfig": {
     "exports": {
