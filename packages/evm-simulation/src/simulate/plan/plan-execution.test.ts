@@ -1,5 +1,5 @@
 import { type Address, getAddress, zeroAddress } from "viem";
-import type { ParsedRequest } from "../../domain/stages.js";
+import type { ParsedRequest } from "../request/parse-request.js";
 import { parseRequest } from "../request/index.js";
 import {
   encodeNativeBalanceProbe,
@@ -28,32 +28,55 @@ describe("planExecution", () => {
     const plan = planExecution(makeRequest(1));
     expect(plan.owner).toBe(OWNER);
     expect(plan.calls).toHaveLength(3);
-    expect(plan.calls.map((call) => call.identity)).toEqual([
-      { type: "probe", probeId: "native-balance:before", phase: "before" },
-      { type: "transaction", transactionIndex: 0 },
-      { type: "probe", probeId: "native-balance:after:0", phase: "after" },
+    expect(plan.calls.map((call) => call.type)).toEqual([
+      "nativeBalanceProbe",
+      "transaction",
+      "nativeBalanceProbe",
     ]);
+    expect(plan.calls[0]).toMatchObject({
+      probeId: "native-balance:before",
+      phase: "before",
+    });
+    expect(plan.calls[1]).toMatchObject({ transactionIndex: 0 });
+    expect(plan.calls[2]).toMatchObject({
+      probeId: "native-balance:after:0",
+      phase: "after",
+    });
   });
 
   test("behavior: three transactions interleave intermediate probes", () => {
     const plan = planExecution(makeRequest(3));
     expect(plan.calls).toHaveLength(7);
-    expect(plan.calls.map((call) => call.identity)).toEqual([
-      { type: "probe", probeId: "native-balance:before", phase: "before" },
+    expect(
+      plan.calls.map((call) =>
+        call.type === "transaction"
+          ? { type: call.type, transactionIndex: call.transactionIndex }
+          : { type: call.type, probeId: call.probeId, phase: call.phase },
+      ),
+    ).toEqual([
+      {
+        type: "nativeBalanceProbe",
+        probeId: "native-balance:before",
+        phase: "before",
+      },
       { type: "transaction", transactionIndex: 0 },
       {
-        type: "probe",
+        type: "nativeBalanceProbe",
         probeId: "native-balance:after:0",
         phase: "intermediate",
       },
       { type: "transaction", transactionIndex: 1 },
       {
-        type: "probe",
+        type: "nativeBalanceProbe",
         probeId: "native-balance:after:1",
         phase: "intermediate",
       },
       { type: "transaction", transactionIndex: 2 },
-      { type: "probe", probeId: "native-balance:after:2", phase: "after" },
+      {
+        type: "nativeBalanceProbe",
+        probeId: "native-balance:after:2",
+        phase: "after",
+      },
     ]);
   });
 
@@ -66,9 +89,7 @@ describe("planExecution", () => {
       data: encodeNativeBalanceProbe(OWNER),
       value: 0n,
     });
-    expect(probe).toMatchObject({
-      read: { type: "nativeBalance", account: OWNER },
-    });
+    expect(probe).toMatchObject({ account: OWNER });
     expect(plan.stateOverrides).toEqual([
       {
         address: NATIVE_BALANCE_PROBE_ADDRESS,
@@ -77,7 +98,7 @@ describe("planExecution", () => {
     ]);
   });
 
-  test("behavior: user transactions default value to 0n and keep identity", () => {
+  test("behavior: user transactions default value to 0n and keep their index", () => {
     const plan = planExecution(makeRequest(1));
     const userCall = plan.calls[1]!;
     expect(userCall.transaction).toEqual({

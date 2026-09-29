@@ -4,7 +4,7 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { SimulateParams } from "../domain/request.js";
+import type { SimulateParams } from "../params.js";
 import {
   InvalidSimulationResponseError,
   UnsupportedVerificationFeatureError,
@@ -127,7 +127,7 @@ export async function simulate(
         mode: request.mode,
         stage: "validation",
         chainId: request.chainId,
-        location: { type: "authorization", authorizationIndex: 0 },
+        authorizationIndex: 0,
       },
     );
   }
@@ -144,30 +144,32 @@ export async function simulate(
   );
 
   const plan = planExecution(request);
-  const evidence = await executeSimulation({
+  const execution = await executeSimulation({
     config,
     plan,
     blockNumber: request.blockNumber,
   });
 
-  const userCalls = evidence.calls
+  const userCalls = execution.calls
     .filter(
       (
         call,
       ): call is typeof call & {
-        identity: { type: "transaction"; transactionIndex: number };
-      } => call.identity.type === "transaction",
+        planned: { type: "transaction"; transactionIndex: number };
+      } => call.planned.type === "transaction",
     )
-    .sort((a, b) => a.identity.transactionIndex - b.identity.transactionIndex)
+    .sort(
+      (a, b) => a.planned.transactionIndex - b.planned.transactionIndex,
+    )
     .map((call) => call.result);
   if (userCalls.length !== request.transactions.length) {
     throw new InvalidSimulationResponseError(
-      `Evidence contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
+      `Execution contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
       {
         stage: "transport",
         chainId: request.chainId,
         mode: request.mode,
-        blockNumber: evidence.context.stateBlockNumber,
+        blockNumber: execution.block.stateBlockNumber,
       },
     );
   }

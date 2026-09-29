@@ -1,9 +1,9 @@
 import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type {
-  EffectiveSimulationLimits,
+  AppliedSimulationLimits,
   SimulationLimits,
-} from "../../domain/limits.js";
+} from "../../limits.js";
 import { SimulationValidationError } from "../../errors.js";
 
 /** Default slippage bound, identical to blue-sdk's `DEFAULT_SLIPPAGE_TOLERANCE` (0.03% WAD). */
@@ -17,7 +17,7 @@ export const DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS = 7200n;
 
 /**
  * Resolve caller-supplied {@link SimulationLimits} into fully defaulted
- * {@link EffectiveSimulationLimits}. Resolution is tightening-only: callers may
+ * {@link AppliedSimulationLimits}. Resolution is tightening-only: callers may
  * decrease `maxSlippageWad` and `maxSignatureLifetimeSeconds` and may increase
  * `minLltvBufferWad`, never the reverse.
  *
@@ -29,7 +29,7 @@ export const DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS = 7200n;
  */
 export function resolveEffectiveLimits(
   limits?: SimulationLimits,
-): EffectiveSimulationLimits {
+): AppliedSimulationLimits {
   const fieldErrors: string[] = [];
 
   const resolve = (field: {

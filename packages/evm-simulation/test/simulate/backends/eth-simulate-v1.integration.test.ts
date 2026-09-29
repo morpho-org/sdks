@@ -1,4 +1,4 @@
-import { type Address, encodeFunctionData, ethAddress, parseEther } from "viem";
+import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
@@ -38,7 +38,7 @@ function planFor(
   );
 }
 
-describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
+describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
   test("deterministic pinned metadata", async ({ client }) => {
     // Anvil requires the eth_simulateV1 pin to equal node head and reports
     // block.number === the pin (no base+1 advancement like geth).
@@ -49,28 +49,28 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
       client.account.address,
     );
 
-    const evidence = await executePlan({
+    const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
       blockNumber: head,
     });
 
-    expect(evidence.context.chainId).toBe(mainnet.id);
-    expect(evidence.context.stateBlockNumber).toBe(head);
-    expect(evidence.context.stateBlockHash).toBe(pinned.hash);
-    expect(evidence.context.blockNumber).toBeGreaterThanOrEqual(head);
-    expect(evidence.context.blockTimestamp).toBeGreaterThanOrEqual(
-      evidence.context.stateBlockTimestamp,
+    expect(execution.block.chainId).toBe(mainnet.id);
+    expect(execution.block.stateBlockNumber).toBe(head);
+    expect(execution.block.stateBlockHash).toBe(pinned.hash);
+    expect(execution.block.blockNumber).toBeGreaterThanOrEqual(head);
+    expect(execution.block.blockTimestamp).toBeGreaterThanOrEqual(
+      execution.block.stateBlockTimestamp,
     );
 
-    // Re-running at the same pin yields deep-equal context and snapshots.
+    // Re-running at the same pin yields a deep-equal block and readings.
     const again = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
       blockNumber: head,
     });
-    expect(again.context).toEqual(evidence.context);
-    expect(again.snapshots).toEqual(evidence.snapshots);
+    expect(again.block).toEqual(execution.block);
+    expect(again.nativeBalances).toEqual(execution.nativeBalances);
 
     // "latest" on the pinned fork resolves to the same pinned block.
     const latest = await executePlan({
@@ -78,30 +78,25 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
       plan,
       blockNumber: "latest",
     });
-    expect(latest.context.stateBlockNumber).toBe(head);
+    expect(latest.block.stateBlockNumber).toBe(head);
   });
 
-  test("probe snapshots report the owner's real native balance", async ({
+  test("probe readings report the owner's real native balance", async ({
     client,
   }) => {
     const balance = await client.getBalance({
       address: client.account.address,
     });
-    const evidence = await executePlan({
+    const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan: planFor([{ to: RECIPIENT, data: "0x" }], client.account.address),
       blockNumber: await client.getBlockNumber(),
     });
 
-    expect(evidence.snapshots).toHaveLength(2);
-    for (const snapshot of evidence.snapshots) {
-      expect(snapshot.snapshot.wallet).toEqual([
-        {
-          account: client.account.address,
-          token: ethAddress,
-          assets: balance,
-        },
-      ]);
+    expect(execution.nativeBalances).toHaveLength(2);
+    for (const reading of execution.nativeBalances) {
+      expect(reading.account).toBe(client.account.address);
+      expect(reading.assets).toBe(balance);
     }
   });
 
@@ -113,7 +108,7 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
       address: client.account.address,
     });
 
-    const evidence = await executePlan({
+    const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan: planFor(
         [
@@ -139,8 +134,8 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
       blockNumber: await client.getBlockNumber(),
     });
 
-    const [before_, intermediate, after] = evidence.snapshots.map(
-      (s) => s.snapshot.wallet[0]!.assets,
+    const [before_, intermediate, after] = execution.nativeBalances.map(
+      (r) => r.assets,
     );
     expect(before_).toBe(before);
     // After the deposit the balance dropped by exactly `value` — validation:
@@ -148,6 +143,6 @@ describe.sequential("executePlan — pinned evidence on a mainnet fork", () => {
     expect(intermediate).toBe(before - amount);
     // The withdraw refunds it.
     expect(after).toBe(before);
-    expect(evidence.calls).toHaveLength(5);
+    expect(execution.calls).toHaveLength(5);
   });
 });

@@ -1,16 +1,44 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { zeroAddress } from "viem";
-import {
-  brandPlanned,
-  type ExecutionPlan,
-  type ParsedRequest,
-  type PlannedCall,
-} from "../../domain/stages.js";
+import { type Address, type Hex, zeroAddress } from "viem";
+import type {
+  ParsedRequest,
+  ParsedTransaction,
+} from "../request/parse-request.js";
 import {
   encodeNativeBalanceProbe,
   NATIVE_BALANCE_PROBE_ADDRESS,
   NATIVE_BALANCE_PROBE_BYTECODE,
 } from "./native-balance-probe.js";
+
+/** One call of an {@link ExecutionPlan}: either a user transaction or a synthetic native-balance probe.
+ * @internal
+ */
+export type PlannedCall =
+  | {
+      readonly type: "transaction";
+      readonly transactionIndex: number;
+      readonly transaction: ParsedTransaction;
+    }
+  | {
+      readonly type: "nativeBalanceProbe";
+      readonly probeId: string;
+      readonly phase: "before" | "intermediate" | "after";
+      readonly account: Address;
+      readonly transaction: ParsedTransaction;
+    };
+
+/** The output of {@link planExecution}: ordered calls plus the `stateOverrides` the probe code needs.
+ * @internal
+ */
+export interface ExecutionPlan {
+  readonly request: ParsedRequest;
+  readonly owner: Address;
+  readonly calls: readonly PlannedCall[];
+  readonly stateOverrides: readonly {
+    readonly address: Address;
+    readonly code: Hex;
+  }[];
+}
 
 /**
  * Plan the execution of a parsed request as ordered `eth_simulateV1` calls.
@@ -28,7 +56,7 @@ import {
  * deployed helper contract. The parser rejects transactions targeting the
  * probe address — it is reserved for injected code, not real calls.
  *
- * @param request - The branded, normalized request produced by `parseRequest`.
+ * @param request - The normalized request produced by `parseRequest`.
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
  *   structurally equal plans.
  * @internal
@@ -40,14 +68,16 @@ export function planExecution(request: ParsedRequest): ExecutionPlan {
     probeId: string,
     phase: "before" | "intermediate" | "after",
   ): PlannedCall => ({
-    identity: { type: "probe", probeId, phase },
+    type: "nativeBalanceProbe",
+    probeId,
+    phase,
+    account: owner,
     transaction: {
       from: zeroAddress,
       to: NATIVE_BALANCE_PROBE_ADDRESS,
       data: encodeNativeBalanceProbe(owner),
       value: 0n,
     },
-    read: { type: "nativeBalance", account: owner },
   });
 
   const calls: PlannedCall[] = [probe("native-balance:before", "before")];
@@ -55,30 +85,24 @@ export function planExecution(request: ParsedRequest): ExecutionPlan {
   for (let i = 0; i <= last; i++) {
     const transaction = request.transactions[i]!;
     calls.push({
-      identity: { type: "transaction", transactionIndex: i },
-      transaction: {
-        from: transaction.from,
-        to: transaction.to,
-        data: transaction.data,
-        value: transaction.value ?? 0n,
-      },
+      type: "transaction",
+      transactionIndex: i,
+      transaction,
     });
     calls.push(
       probe(`native-balance:after:${i}`, i === last ? "after" : "intermediate"),
     );
   }
 
-  return brandPlanned(
-    deepFreeze({
-      request,
-      owner,
-      calls,
-      stateOverrides: [
-        {
-          address: NATIVE_BALANCE_PROBE_ADDRESS,
-          code: NATIVE_BALANCE_PROBE_BYTECODE,
-        },
-      ],
-    }),
-  );
+  return deepFreeze({
+    request,
+    owner,
+    calls,
+    stateOverrides: [
+      {
+        address: NATIVE_BALANCE_PROBE_ADDRESS,
+        code: NATIVE_BALANCE_PROBE_BYTECODE,
+      },
+    ],
+  });
 }

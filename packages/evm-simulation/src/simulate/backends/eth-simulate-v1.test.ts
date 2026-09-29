@@ -1,6 +1,6 @@
 import { type Address, getAddress, numberToHex, zeroAddress } from "viem";
 import { vi } from "vitest";
-import type { ExecutionPlan } from "../../domain/stages.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
@@ -99,18 +99,18 @@ const params = {
 describe.sequential("executePlan", () => {
   test("default", async () => {
     respondHappy(okCalls(3));
-    const evidence = await executePlan(params);
-    expect(evidence.calls).toHaveLength(3);
-    expect(evidence.context.stateBlockNumber).toBe(STATE_BLOCK);
-    expect(evidence.context.blockNumber).toBe(STATE_BLOCK + 1n);
-    expect(evidence.context.chainId).toBe(1);
-    expect(evidence.snapshots).toHaveLength(2);
-    expect(evidence.snapshots[0]?.identity).toEqual({
-      type: "probe",
+    const execution = await executePlan(params);
+    expect(execution.calls).toHaveLength(3);
+    expect(execution.block.stateBlockNumber).toBe(STATE_BLOCK);
+    expect(execution.block.blockNumber).toBe(STATE_BLOCK + 1n);
+    expect(execution.block.chainId).toBe(1);
+    expect(execution.nativeBalances).toHaveLength(2);
+    expect(execution.nativeBalances[0]).toMatchObject({
       probeId: "native-balance:before",
       phase: "before",
+      account: OWNER,
     });
-    expect(Object.isFrozen(evidence)).toBe(true);
+    expect(Object.isFrozen(execution)).toBe(true);
   });
 
   test("behavior: request body carries overrides, flags and pinned block", async () => {
@@ -292,8 +292,8 @@ describe.sequential("executePlan", () => {
         ),
       )
       .mockResolvedValueOnce(rpc(blockResult()));
-    const evidence = await executePlan(params);
-    expect(evidence.context.blockNumber).toBe(STATE_BLOCK);
+    const execution = await executePlan(params);
+    expect(execution.block.blockNumber).toBe(STATE_BLOCK);
   });
 
   test("error: InvalidSimulationResponseError for a block behind the state block", async () => {
@@ -447,8 +447,8 @@ describe.sequential("executePlan", () => {
     expect(error).toBeInstanceOf(SimulationRevertedError);
     if (error instanceof SimulationRevertedError) {
       expect(error.reason).toBe("insufficient funds");
-      const details = error.details as { identity: { type: string } }[];
-      expect(details.every((d) => d.identity.type === "transaction")).toBe(
+      const details = error.details as { transactionIndex: number }[];
+      expect(details.every((d) => typeof d.transactionIndex === "number")).toBe(
         true,
       );
     }
@@ -512,7 +512,7 @@ describe.sequential("executePlan", () => {
     );
   });
 
-  test("behavior: probe snapshots carry decoded native balances", async () => {
+  test("behavior: probe readings carry decoded native balances", async () => {
     const calls = okCalls(3);
     calls[0] = { ...calls[0], returnData: encodeUint256(100n) };
     calls[2] = { ...calls[2], returnData: encodeUint256(90n) };
@@ -521,10 +521,8 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
-    const evidence = await executePlan(params);
-    expect(evidence.snapshots.map((s) => s.snapshot.wallet[0]?.assets)).toEqual(
-      [100n, 90n],
-    );
+    const execution = await executePlan(params);
+    expect(execution.nativeBalances.map((r) => r.assets)).toEqual([100n, 90n]);
   });
 
   test("behavior: user call logs are normalized into SimulationCall", async () => {
@@ -547,9 +545,9 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
-    const evidence = await executePlan(params);
-    const userCall = evidence.calls[1]!;
-    expect(userCall.identity).toEqual({
+    const execution = await executePlan(params);
+    const userCall = execution.calls[1]!;
+    expect(userCall.planned).toMatchObject({
       type: "transaction",
       transactionIndex: 0,
     });

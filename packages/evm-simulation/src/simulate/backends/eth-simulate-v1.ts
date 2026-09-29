@@ -6,7 +6,8 @@ import {
   http,
   numberToHex,
 } from "viem";
-import type { ExecutionEvidence, ExecutionPlan } from "../../domain/stages.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
+import type { SimulationExecution } from "./parse-response.js";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
@@ -17,14 +18,14 @@ import { parseSimulationResponse } from "./parse-response.js";
 
 /**
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
- * collect pinned evidence.
+ * collect the pinned execution.
  *
  * The boundary performs these steps under one shared abort/timeout budget:
  *
  * 1. **Single block resolution** — the requested `blockNumber`/tag/`latest`
  *    resolves to one concrete state block (`stateBlock*`). `latest` is
  *    therefore resolved exactly once; the simulation below pins that number
- *    so a drifting head cannot smear the evidence across blocks.
+ *    so a drifting head cannot smear the result across blocks.
  * 2. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
  *    mismatch means the configured endpoint reports the wrong chain
  *    (`InvalidSimulationResponseError`, transport stage), not a simulation
@@ -42,16 +43,16 @@ import { parseSimulationResponse } from "./parse-response.js";
  * swapped its hash mid-flight. The simulated block must be exactly
  * `stateBlockNumber` or `stateBlockNumber + 1`: geth-style nodes report the
  * former's successor while Anvil reports the pinned block itself. The
- * evidence records whatever the node returns; consumers must read
- * {@link ExecutionContext.blockNumber} and never assume +1.
+ * result records whatever the node returns; consumers must read
+ * {@link ExecutionBlock.blockNumber} and never assume +1.
  *
  * The endpoint must support `eth_simulateV1` with `stateOverrides` code
  * injection and per-call `from`; there is no fallback backend.
  *
  * @param params - RPC endpoint, the plan to execute, an optional block pin and
  *   the pipeline's abort signal.
- * @returns Deep-frozen {@link ExecutionEvidence} — tagged call results, the
- *   resolved {@link ExecutionContext}, and per-probe snapshots.
+ * @returns Deep-frozen {@link SimulationExecution} — tagged call results, the
+ *   resolved {@link ExecutionBlock}, and per-probe native-balance readings.
  * @throws {ExternalServiceError} For transport failures, timeouts,
  *   malformed JSON-RPC envelopes, or a state block without number/hash.
  * @throws {InvalidSimulationResponseError} For a chain mismatch or a
@@ -68,7 +69,7 @@ export async function executePlan(params: {
   plan: ExecutionPlan;
   blockNumber?: bigint | BlockTag;
   signal?: AbortSignal;
-}): Promise<ExecutionEvidence> {
+}): Promise<SimulationExecution> {
   const { rpcUrl, plan, blockNumber, signal } = params;
 
   const client = createPublicClient({
@@ -175,7 +176,7 @@ export async function executePlan(params: {
   }
 
   // Reorg window: the pinned state block must still carry the same hash
-  // after simulation, or the evidence may describe a different chain tip.
+  // after simulation, or the result may describe a different chain tip.
   let stateBlockAfter: Awaited<ReturnType<typeof client.getBlock>>;
   try {
     stateBlockAfter = await client.getBlock({
@@ -201,7 +202,7 @@ export async function executePlan(params: {
     );
   }
 
-  // Response parsing is evidence validation, not transport — it must reach
+  // Response parsing is validation, not transport — it must reach
   // the caller as InvalidSimulationResponseError, never ExternalServiceError.
   return parseSimulationResponse({
     plan,

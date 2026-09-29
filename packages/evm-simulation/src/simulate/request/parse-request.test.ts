@@ -1,15 +1,15 @@
 import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
-import type { SimulationAuthorization } from "../../domain/authorizations.js";
-import type {
-  FinalSimulateParams,
-  SimulateParams,
-} from "../../domain/request.js";
-import type { ParsedRequest } from "../../domain/stages.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
+import type { SimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
-import { parseRequest } from "./parse-request.js";
+import {
+  type ParsedRequest,
+  type ParsedTransaction,
+  parseRequest,
+} from "./parse-request.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const TARGET: Address = getAddress(
@@ -285,15 +285,9 @@ describe("parseRequest", () => {
     },
   );
 
-  test.each([
-    [
-      "both expectedAssets and expectedShares",
-      { expectedAssets: 1n, expectedShares: 1n },
-    ],
-  ])(
-    "error: SimulationValidationError for a vaultV1MigrateToV2 limit with %s",
-    (_name, fields) => {
-      expect(() =>
+  test("error: SimulationValidationError for a vaultV1MigrateToV2 limit with both expectedAssets and expectedShares", () => {
+    const error = (() => {
+      try {
         parse({
           chainId: 1,
           transactions: [tx()],
@@ -303,14 +297,42 @@ describe("parseRequest", () => {
                 type: "vaultV1MigrateToV2",
                 sourceVault: SPENDER,
                 targetVault: TARGET,
-                ...fields,
+                expectedAssets: 1n,
+                expectedShares: 1n,
               },
             ],
           },
-        }),
-      ).toThrow(SimulationValidationError);
-    },
-  );
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(
+      (error as SimulationValidationError).fieldErrors,
+    ).toContainEqual(
+      "limits.operations[0]: set expectedAssets or expectedShares, not both",
+    );
+  });
+
+  test("error: SimulationValidationError for a blueRefinance expectedSourceFullClose key", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "blueRefinance",
+              sourceMarketId: MARKET_ID,
+              targetMarketId: MARKET_ID,
+              expectedSourceFullClose: true,
+            },
+          ],
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
 
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
@@ -370,14 +392,6 @@ describe("parseRequest", () => {
     expect(() => parseRequest(42)).toThrow(SimulationValidationError);
   });
 
-  test("type-level: FinalSimulateParams cannot carry authorizations", () => {
-    expectTypeOf<{
-      chainId: number;
-      transactions: readonly SimulationTransaction[];
-      authorizations: readonly SimulationAuthorization[];
-    }>().not.toExtend<FinalSimulateParams>();
-  });
-
   test("type-level: SimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
       readonly chainId: number;
@@ -387,7 +401,7 @@ describe("parseRequest", () => {
 
   test("type-level: ParsedRequest fields are readonly", () => {
     expectTypeOf<ParsedRequest["transactions"]>().toEqualTypeOf<
-      readonly Readonly<SimulationTransaction>[]
+      readonly ParsedTransaction[]
     >();
     expectTypeOf<ParsedRequest["chainId"]>().toEqualTypeOf<number>();
   });

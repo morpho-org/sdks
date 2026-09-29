@@ -2,6 +2,7 @@ import type { MarketId } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
+  type BlockTag,
   getAddress,
   type Hex,
   isAddress,
@@ -10,12 +11,35 @@ import {
   maxUint256,
 } from "viem";
 import { z } from "zod";
-import type { SimulationAuthorization } from "../../domain/authorizations.js";
-import type { NormalizedSimulateParams } from "../../domain/request.js";
-import { brandParsed, type ParsedRequest } from "../../domain/stages.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
+import type { SimulationLimits } from "../../limits.js";
+import type { SimulationMode } from "../../params.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import { resolveEffectiveLimits } from "./effective-limits.js";
+
+/** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
+ * @internal
+ */
+export interface ParsedTransaction {
+  readonly from: Address;
+  readonly to: Address;
+  readonly data: Hex;
+  readonly value: bigint;
+}
+
+/** The output of {@link parseRequest}: the caller's input validated, checksummed and defaulted.
+ * @internal
+ */
+export interface ParsedRequest {
+  readonly chainId: number;
+  readonly mode: SimulationMode;
+  readonly transactions: readonly ParsedTransaction[];
+  /** Always empty in final mode. */
+  readonly authorizations: readonly SimulationAuthorization[];
+  readonly blockNumber?: bigint | BlockTag;
+  readonly limits?: SimulationLimits;
+}
 
 // ─── Scalars ──────────────────────────────────────────────────────────────────
 
@@ -63,7 +87,7 @@ const domainSchema = z.strictObject({
   salt: bytes32Schema.optional(),
 });
 
-const typedField = <N extends string, T extends string>(name: N, type: T) =>
+const typedField = (name: string, type: string) =>
   z.strictObject({ name: z.literal(name), type: z.literal(type) });
 
 const erc2612TypedDataSchema = z.strictObject({
@@ -185,15 +209,6 @@ const transactionIndexField = {
   transactionIndex: z.number().int().min(0).optional(),
 };
 
-const migrateToV2Base = {
-  type: z.literal("vaultV1MigrateToV2"),
-  sourceVault: addressSchema,
-  targetVault: addressSchema,
-  expectedReceiver: addressSchema.optional(),
-  minTargetSharesMinted: uint256Schema.optional(),
-  ...transactionIndexField,
-};
-
 const operationLimitSchema = z.union([
   z.strictObject({
     type: z.literal("blueSupply"),
@@ -289,7 +304,6 @@ const operationLimitSchema = z.union([
     type: z.literal("blueRefinance"),
     sourceMarketId: marketIdSchema,
     targetMarketId: marketIdSchema,
-    expectedSourceFullClose: z.boolean().optional(),
     maxTargetBorrowAssets: uint256Schema.optional(),
     maxTargetBorrowSharesMinted: uint256Schema.optional(),
     maxSourceResidualBorrowShares: uint256Schema.optional(),
@@ -399,16 +413,17 @@ const operationLimitSchema = z.union([
     maxResidualShareAllowance: uint256Schema.optional(),
     ...transactionIndexField,
   }),
-  // At most one expected quantity, mirroring the domain union.
+  // `expectedAssets` and `expectedShares` are both optional; supplying both is
+  // rejected by a cross-field check in `parseRequest`.
   z.strictObject({
-    ...migrateToV2Base,
+    type: z.literal("vaultV1MigrateToV2"),
+    sourceVault: addressSchema,
+    targetVault: addressSchema,
     expectedAssets: uint256Schema.optional(),
-    expectedShares: z.undefined().optional(),
-  }),
-  z.strictObject({
-    ...migrateToV2Base,
-    expectedAssets: z.undefined().optional(),
-    expectedShares: uint256Schema,
+    expectedShares: uint256Schema.optional(),
+    expectedReceiver: addressSchema.optional(),
+    minTargetSharesMinted: uint256Schema.optional(),
+    ...transactionIndexField,
   }),
 ]);
 
@@ -436,15 +451,6 @@ const requestSchema = z.strictObject({
   limits: limitsSchema.optional(),
 });
 
-// Compile-time binding: the parsed authorization output must stay assignable
-// to the SDK-1292 domain union, or the cross-field checks below stop compiling.
-type _Extends<A, B> = A extends B ? true : false;
-type _Expect<T extends true> = T;
-type _AuthorizationSchemaOutput = z.output<typeof authorizationSchema>;
-type _AssertAuthorizationSchema = _Expect<
-  _Extends<_AuthorizationSchemaOutput, SimulationAuthorization>
->;
-
 const authorizationOwner = (authorization: SimulationAuthorization): Address =>
   authorization.type === "erc20Approval"
     ? authorization.owner
@@ -466,7 +472,7 @@ const authorizationDomainChainId = (
     : undefined;
 
 /**
- * Parse and normalize raw `simulate` input into a branded {@link ParsedRequest}.
+ * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
  *
  * Strict schemas reject unknown keys — legacy `{type: "approval"}` /
  * `{type: "signature"}` authorizations and Permit2 `PermitSingle` payloads fail
@@ -544,6 +550,15 @@ export function parseRequest(input: unknown): ParsedRequest {
         `limits.operations[${i}].transactionIndex: ${operation.transactionIndex} is out of range for ${parsed.transactions.length} transaction(s)`,
       );
     }
+    if (
+      operation.type === "vaultV1MigrateToV2" &&
+      operation.expectedAssets !== undefined &&
+      operation.expectedShares !== undefined
+    ) {
+      fieldErrors.push(
+        `limits.operations[${i}]: set expectedAssets or expectedShares, not both`,
+      );
+    }
   }
 
   try {
@@ -564,20 +579,23 @@ export function parseRequest(input: unknown): ParsedRequest {
     );
   }
 
-  const normalized: NormalizedSimulateParams = deepFreeze({
+  // The annotations pin the parsed output to the public types — drift between
+  // the schemas and `SimulationAuthorization`/`SimulationLimits` fails here.
+  const parsedAuthorizations: readonly SimulationAuthorization[] =
+    authorizations ?? [];
+  const limits: SimulationLimits | undefined = parsed.limits;
+
+  return deepFreeze<ParsedRequest>({
     chainId: parsed.chainId,
+    mode,
     transactions: parsed.transactions.map((tx) => ({
       ...tx,
       value: tx.value ?? 0n,
     })),
+    authorizations: mode === "preview" ? parsedAuthorizations : [],
     ...(parsed.blockNumber !== undefined
       ? { blockNumber: parsed.blockNumber }
       : {}),
-    ...(parsed.limits !== undefined ? { limits: parsed.limits } : {}),
-    ...(mode === "preview"
-      ? { mode, authorizations: authorizations ?? [] }
-      : { mode, authorizations: [] }),
+    ...(limits !== undefined ? { limits } : {}),
   });
-
-  return brandParsed(normalized);
 }

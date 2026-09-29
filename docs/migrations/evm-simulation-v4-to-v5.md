@@ -46,9 +46,8 @@ still rejects net inbound value above 100 raw units per restricted address/token
 ## Authorization migration landed in SDK-1293
 
 SDK-1293 removed the legacy `{type: "approval"}` and `{type: "signature"}`
-authorization variants and cut the runtime over to the SDK-1292 domain types.
-Callers now pass `SimulateParams` (`PreviewSimulateParams |
-FinalSimulateParams`) with `mode` defaulting to `"final"`. Instead of the two
+authorization variants and cut the runtime over to the SDK-1292 input types.
+Callers now pass `SimulateParams` with `mode` defaulting to `"final"`. Instead of the two
 legacy variants, preview mode accepts five typed authorization descriptors:
 `erc20Approval`, `erc2612Permit`, `permit2SignatureTransfer`,
 `blueAuthorization`, and `blueAuthorizationSignature`.

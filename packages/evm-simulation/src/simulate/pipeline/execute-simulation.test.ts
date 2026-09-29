@@ -92,15 +92,15 @@ describe.sequential("executeSimulation", () => {
     },
   );
 
-  test("default: returns evidence from the boundary", async () => {
+  test("default: returns the execution from the boundary", async () => {
     respondHappy();
-    const evidence = await executeSimulation({
+    const execution = await executeSimulation({
       config,
       plan: makePlan(),
       blockNumber: 20_000_000n,
     });
-    expect(evidence.calls).toHaveLength(3);
-    expect(evidence.snapshots).toHaveLength(2);
+    expect(execution.calls).toHaveLength(3);
+    expect(execution.nativeBalances).toHaveLength(2);
   });
 
   test("error: UnsupportedChainError without an endpoint", async () => {

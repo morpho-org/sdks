@@ -1,7 +1,8 @@
 import type { BlockTag } from "viem";
-import type { ExecutionEvidence, ExecutionPlan } from "../../domain/stages.js";
+import type { SimulationExecution } from "../backends/parse-response.js";
 import type { SimulationConfig } from "../../types.js";
 import { executePlan } from "../backends/index.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { resolveChain } from "./resolve-chain.js";
 
 /** Total execution budget for a single `simulate()` call. */
@@ -13,7 +14,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
  * block resolution, and simulation request.
  * @internal
  * @param params - Configuration, the planned execution, and the resolved block pin.
- * @returns Tagged call results, the pinned execution context, and probe snapshots.
+ * @returns The executed calls, the pinned block, and probe readings.
  * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
  * @throws {ExternalServiceError} When the RPC fails or times out.
  * @throws {SimulationRevertedError} When execution reverts.
@@ -28,7 +29,7 @@ export async function executeSimulation(params: {
   readonly config: SimulationConfig;
   readonly plan: ExecutionPlan;
   readonly blockNumber?: bigint | BlockTag;
-}): Promise<ExecutionEvidence> {
+}): Promise<SimulationExecution> {
   const { config, plan, blockNumber } = params;
   const chain = resolveChain(config, plan.request.chainId);
 

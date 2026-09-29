@@ -7,12 +7,9 @@ import {
   zeroAddress,
 } from "viem";
 import { vi } from "vitest";
-import type { SimulateParams } from "../domain/request.js";
-import {
-  brandExecuted,
-  type ExecutionEvidence,
-  type ExecutionPlan,
-} from "../domain/stages.js";
+import type { SimulateParams } from "../params.js";
+import type { SimulationExecution } from "./backends/parse-response.js";
+import type { ExecutionPlan } from "./plan/plan-execution.js";
 import {
   BlacklistViolationError,
   ExternalServiceError,
@@ -37,7 +34,7 @@ const mockExecuteSimulation = vi.fn<typeof executeSimulation>();
 vi.mock("./pipeline/execute-simulation.js", () => ({
   executeSimulation: (
     ...args: Parameters<typeof executeSimulation>
-  ): Promise<ExecutionEvidence> => mockExecuteSimulation(...args),
+  ): Promise<SimulationExecution> => mockExecuteSimulation(...args),
 }));
 
 const USDC: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
@@ -48,31 +45,28 @@ const SPENDER: Address = getAddress(
 );
 
 /**
- * Build evidence for a plan: probe/user calls tagged per `plan.calls`, probe
- * snapshots reporting a zero native balance.
+ * Build an execution for a plan: probe/user calls tagged per `plan.calls`,
+ * probe readings reporting a zero native balance.
  */
-function makeEvidence(
+function makeExecution(
   plan: ExecutionPlan,
   userLogs: RawLog[][] = [],
-): ExecutionEvidence {
-  const calls = plan.calls.map((call) => {
-    const logs =
-      call.identity.type === "transaction"
-        ? (userLogs[call.identity.transactionIndex] ?? [])
-        : [];
-    return {
-      identity: call.identity,
-      result: {
-        logs,
-        status: true as const,
-        returnData: "0x" as Hex,
-        gasUsed: 0n,
-      },
-    };
-  });
-  return brandExecuted({
+): SimulationExecution {
+  const calls = plan.calls.map((planned) => ({
+    planned,
+    result: {
+      logs:
+        planned.type === "transaction"
+          ? (userLogs[planned.transactionIndex] ?? [])
+          : [],
+      status: true,
+      returnData: "0x" as Hex,
+      gasUsed: 0n,
+    },
+  }));
+  return {
     plan,
-    context: {
+    block: {
       chainId: plan.request.chainId,
       stateBlockNumber: 1n,
       stateBlockHash: `0x${"ab".repeat(32)}` as Hex,
@@ -81,27 +75,18 @@ function makeEvidence(
       blockTimestamp: 1_700_000_012n,
     },
     calls,
-    snapshots: calls
-      .filter(({ identity }) => identity.type === "probe")
-      .map(({ identity }) => ({
-        identity,
-        context: {
-          chainId: plan.request.chainId,
-          stateBlockNumber: 1n,
-          stateBlockHash: `0x${"ab".repeat(32)}` as Hex,
-          stateBlockTimestamp: 1_700_000_000n,
-          blockNumber: 2n,
-          blockTimestamp: 1_700_000_012n,
-        },
-        snapshot: {
-          wallet: [{ account: plan.owner, token: ethAddress, assets: 0n }],
-          permissions: [],
-          positions: [],
-          vaults: [],
-          markets: [],
-        },
+    nativeBalances: plan.calls
+      .filter(
+        (planned): planned is typeof planned & { type: "nativeBalanceProbe" } =>
+          planned.type === "nativeBalanceProbe",
+      )
+      .map((planned) => ({
+        probeId: planned.probeId,
+        phase: planned.phase,
+        account: planned.account,
+        assets: 0n,
       })),
-  });
+  };
 }
 
 function makeConfig(
@@ -129,7 +114,7 @@ beforeEach(() => {
     if (!config.chains.has(plan.request.chainId)) {
       return Promise.reject(new UnsupportedChainError(plan.request.chainId));
     }
-    return Promise.resolve(makeEvidence(plan));
+    return Promise.resolve(makeExecution(plan));
   });
 });
 
@@ -139,7 +124,7 @@ describe.sequential("simulate — success", () => {
       makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
     ];
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
-      Promise.resolve(makeEvidence(plan, [logs])),
+      Promise.resolve(makeExecution(plan, [logs])),
     );
 
     const result = await simulate(makeConfig(), makeParams());
@@ -159,7 +144,7 @@ describe.sequential("simulate — success", () => {
       makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
     ];
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
-      Promise.resolve(makeEvidence(plan, [logs])),
+      Promise.resolve(makeExecution(plan, [logs])),
     );
 
     const result = await simulate(makeConfig(), makeParams());
@@ -175,7 +160,7 @@ describe.sequential("simulate — success", () => {
     const TRANSFER_AMOUNT = 500_000n;
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
       Promise.resolve(
-        makeEvidence(plan, [
+        makeExecution(plan, [
           [
             makeTransferLog({
               token: USDC,
@@ -219,17 +204,17 @@ describe.sequential("simulate — success", () => {
 
   it("propagates per-call gasUsed in bundle order", async () => {
     mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
-      const evidence = makeEvidence(plan);
+      const execution = makeExecution(plan);
       let i = 0;
-      const calls = evidence.calls.map((call) =>
-        call.identity.type === "transaction"
+      const calls = execution.calls.map((call) =>
+        call.planned.type === "transaction"
           ? {
               ...call,
               result: { ...call.result, gasUsed: [21_000n, 42_000n][i++]! },
             }
           : call,
       );
-      return Promise.resolve(brandExecuted({ ...evidence, calls }));
+      return Promise.resolve({ ...execution, calls });
     });
 
     const result = await simulate(
@@ -267,7 +252,7 @@ describe.sequential("simulate — success", () => {
       }),
     ];
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
-      Promise.resolve(makeEvidence(plan, [logs])),
+      Promise.resolve(makeExecution(plan, [logs])),
     );
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
@@ -313,7 +298,7 @@ describe.sequential("simulate — modes and unsupported features", () => {
       mode: "preview",
       stage: "validation",
       chainId: 1,
-      location: { type: "authorization", authorizationIndex: 0 },
+      authorizationIndex: 0,
     });
     expect(mockExecuteSimulation).not.toHaveBeenCalled();
   });
@@ -376,16 +361,16 @@ describe.sequential("simulate — error handling", () => {
     );
   });
 
-  it("throws InvalidSimulationResponseError when evidence is missing a user call", async () => {
+  it("throws InvalidSimulationResponseError when execution is missing a user call", async () => {
     mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
-      const evidence = makeEvidence(plan);
-      // Drop the second transaction-identity call from the evidence.
-      const calls = evidence.calls.filter(
+      const execution = makeExecution(plan);
+      // Drop the second transaction call from the execution.
+      const calls = execution.calls.filter(
         (call) =>
-          call.identity.type !== "transaction" ||
-          call.identity.transactionIndex !== 1,
+          call.planned.type !== "transaction" ||
+          call.planned.transactionIndex !== 1,
       );
-      return Promise.resolve(brandExecuted({ ...evidence, calls }));
+      return Promise.resolve({ ...execution, calls });
     });
 
     await expect(
@@ -407,7 +392,7 @@ describe.sequential("simulate — chain configuration", () => {
     const chainId = ChainId.StableMainnet;
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
       Promise.resolve(
-        makeEvidence(plan, [
+        makeExecution(plan, [
           [
             {
               address: USDC,
@@ -432,7 +417,7 @@ describe.sequential("simulate — chain configuration", () => {
     const amount = 1_000n;
     mockExecuteSimulation.mockImplementationOnce(({ plan }) =>
       Promise.resolve(
-        makeEvidence(plan, [
+        makeExecution(plan, [
           [
             {
               address: USDC,

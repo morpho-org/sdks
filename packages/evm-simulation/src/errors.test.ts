@@ -1,9 +1,3 @@
-import { expectTypeOf } from "vitest";
-import type {
-  ConsumerConstraintContext,
-  SimulationErrorCodes,
-  SimulationErrorContext,
-} from "./domain/diagnostics.js";
 import {
   AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
@@ -12,10 +6,12 @@ import {
   ExternalServiceError,
   FeeMismatchError,
   InvalidSimulationResponseError,
+  isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
   PermissionChangeMismatchError,
   ProtocolBindingMismatchError,
+  type SimulationErrorContext,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
@@ -27,26 +23,11 @@ import {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 
-const context: SimulationErrorContext = {
+const CONTEXT: SimulationErrorContext = {
+  stage: "verification",
   mode: "final",
-  stage: "execution",
   chainId: 1,
-  blockNumber: 1n,
-  operation: "blueSupply",
-  subject: {
-    type: "wallet",
-    account: "0x0000000000000000000000000000000000000001",
-    token: "0x0000000000000000000000000000000000000002",
-  },
 };
-const constraint = {
-  type: "wallet",
-  field: "maxDebit",
-  account: "0x0000000000000000000000000000000000000001",
-  token: "0x0000000000000000000000000000000000000002",
-  boundAssets: 1n,
-  observedAssets: 2n,
-} satisfies ConsumerConstraintContext;
 
 describe("error hierarchy", () => {
   it("every concrete error extends SimulationPackageError", () => {
@@ -56,20 +37,6 @@ describe("error hierarchy", () => {
       new ExternalServiceError("x"),
       new SimulationValidationError("x"),
       new UnsupportedChainError(1),
-      new UnsupportedOperationError("x", context),
-      new ProtocolBindingMismatchError("x", context),
-      new UnsupportedVerificationFeatureError("x", context),
-      new InvalidSimulationResponseError("x", context),
-      new MissingVerificationEvidenceError("x", context),
-      new AuthorizationRequestMismatchError("x", context),
-      new AssetChangeMismatchError("x", context),
-      new PermissionChangeMismatchError("x", context),
-      new StateChangeMismatchError("x", context),
-      new MarketConstraintViolationError("x", context),
-      new SlippageLimitExceededError("x", context),
-      new FeeMismatchError("x", context),
-      new ConsumerLimitViolationError("x", context, constraint),
-      new UnexpectedSimulationError("x", context),
     ];
     for (const err of instances) {
       expect(err).toBeInstanceOf(SimulationPackageError);
@@ -87,53 +54,6 @@ describe("error codes", () => {
     [() => new ExternalServiceError("x"), "EXTERNAL_SERVICE_ERROR"],
     [() => new SimulationValidationError("x"), "VALIDATION_ERROR"],
     [() => new UnsupportedChainError(1), "UNSUPPORTED_CHAIN"],
-    [
-      () => new UnsupportedOperationError("x", context),
-      "UNSUPPORTED_OPERATION",
-    ],
-    [
-      () => new ProtocolBindingMismatchError("x", context),
-      "PROTOCOL_BINDING_MISMATCH",
-    ],
-    [
-      () => new UnsupportedVerificationFeatureError("x", context),
-      "UNSUPPORTED_VERIFICATION_FEATURE",
-    ],
-    [
-      () => new InvalidSimulationResponseError("x", context),
-      "INVALID_SIMULATION_RESPONSE",
-    ],
-    [
-      () => new MissingVerificationEvidenceError("x", context),
-      "MISSING_VERIFICATION_EVIDENCE",
-    ],
-    [
-      () => new AuthorizationRequestMismatchError("x", context),
-      "AUTHORIZATION_REQUEST_MISMATCH",
-    ],
-    [() => new AssetChangeMismatchError("x", context), "ASSET_CHANGE_MISMATCH"],
-    [
-      () => new PermissionChangeMismatchError("x", context),
-      "PERMISSION_CHANGE_MISMATCH",
-    ],
-    [() => new StateChangeMismatchError("x", context), "STATE_CHANGE_MISMATCH"],
-    [
-      () => new MarketConstraintViolationError("x", context),
-      "MARKET_CONSTRAINT_VIOLATION",
-    ],
-    [
-      () => new SlippageLimitExceededError("x", context),
-      "SLIPPAGE_LIMIT_EXCEEDED",
-    ],
-    [() => new FeeMismatchError("x", context), "FEE_MISMATCH"],
-    [
-      () => new ConsumerLimitViolationError("x", context, constraint),
-      "CONSUMER_LIMIT_VIOLATION",
-    ],
-    [
-      () => new UnexpectedSimulationError("x", context),
-      "UNEXPECTED_SIMULATION_ERROR",
-    ],
   ])("code is stable (%#)", (factory, expected) => {
     expect(factory().code).toBe(expected);
   });
@@ -147,47 +67,6 @@ describe("error names match class names", () => {
     [new ExternalServiceError("x"), "ExternalServiceError"],
     [new SimulationValidationError("x"), "SimulationValidationError"],
     [new UnsupportedChainError(1), "UnsupportedChainError"],
-    [new UnsupportedOperationError("x", context), "UnsupportedOperationError"],
-    [
-      new ProtocolBindingMismatchError("x", context),
-      "ProtocolBindingMismatchError",
-    ],
-    [
-      new UnsupportedVerificationFeatureError("x", context),
-      "UnsupportedVerificationFeatureError",
-    ],
-    [
-      new InvalidSimulationResponseError("x", context),
-      "InvalidSimulationResponseError",
-    ],
-    [
-      new MissingVerificationEvidenceError("x", context),
-      "MissingVerificationEvidenceError",
-    ],
-    [
-      new AuthorizationRequestMismatchError("x", context),
-      "AuthorizationRequestMismatchError",
-    ],
-    [new AssetChangeMismatchError("x", context), "AssetChangeMismatchError"],
-    [
-      new PermissionChangeMismatchError("x", context),
-      "PermissionChangeMismatchError",
-    ],
-    [new StateChangeMismatchError("x", context), "StateChangeMismatchError"],
-    [
-      new MarketConstraintViolationError("x", context),
-      "MarketConstraintViolationError",
-    ],
-    [
-      new SlippageLimitExceededError("x", context),
-      "SlippageLimitExceededError",
-    ],
-    [new FeeMismatchError("x", context), "FeeMismatchError"],
-    [
-      new ConsumerLimitViolationError("x", context, constraint),
-      "ConsumerLimitViolationError",
-    ],
-    [new UnexpectedSimulationError("x", context), "UnexpectedSimulationError"],
   ])("name (%#)", (err, expected) => {
     expect(err.name).toBe(expected);
   });
@@ -224,7 +103,13 @@ describe("SimulationRevertedError", () => {
 
 describe("BlacklistViolationError", () => {
   it("attaches assetChanges when provided", () => {
-    const changes = [{ address: "0xabc", token: "0xdef", netRetained: "100" }];
+    const changes = [
+      {
+        address: "0x00000000000000000000000000000000000000ab" as const,
+        token: "0x00000000000000000000000000000000000000cd" as const,
+        netRetained: 100n,
+      },
+    ];
     const err = new BlacklistViolationError("stuck", changes);
     expect(err.assetChanges).toBe(changes);
   });
@@ -266,71 +151,137 @@ describe("ExternalServiceError", () => {
   });
 });
 
-describe("v5 verification errors", () => {
-  it("codes satisfy the SimulationErrorCodes registry", () => {
-    const codes = {
-      SimulationValidationError: new SimulationValidationError("x").code,
-      UnsupportedChainError: new UnsupportedChainError(1).code,
-      ExternalServiceError: new ExternalServiceError("x").code,
-      SimulationRevertedError: new SimulationRevertedError("x").code,
-      BlacklistViolationError: new BlacklistViolationError("x").code,
-      UnsupportedOperationError: new UnsupportedOperationError("x", context)
-        .code,
-      ProtocolBindingMismatchError: new ProtocolBindingMismatchError(
-        "x",
-        context,
-      ).code,
-      UnsupportedVerificationFeatureError:
-        new UnsupportedVerificationFeatureError("x", context).code,
-      InvalidSimulationResponseError: new InvalidSimulationResponseError(
-        "x",
-        context,
-      ).code,
-      MissingVerificationEvidenceError: new MissingVerificationEvidenceError(
-        "x",
-        context,
-      ).code,
-      AuthorizationRequestMismatchError: new AuthorizationRequestMismatchError(
-        "x",
-        context,
-      ).code,
-      AssetChangeMismatchError: new AssetChangeMismatchError("x", context).code,
-      PermissionChangeMismatchError: new PermissionChangeMismatchError(
-        "x",
-        context,
-      ).code,
-      StateChangeMismatchError: new StateChangeMismatchError("x", context).code,
-      MarketConstraintViolationError: new MarketConstraintViolationError(
-        "x",
-        context,
-      ).code,
-      SlippageLimitExceededError: new SlippageLimitExceededError("x", context)
-        .code,
-      FeeMismatchError: new FeeMismatchError("x", context).code,
-      ConsumerLimitViolationError: new ConsumerLimitViolationError(
-        "x",
-        context,
-        constraint,
-      ).code,
-      UnexpectedSimulationError: new UnexpectedSimulationError("x", context)
-        .code,
-    } satisfies SimulationErrorCodes;
-    expectTypeOf(codes).toExtend<SimulationErrorCodes>();
-    expect(Object.keys(codes)).toHaveLength(19);
+describe("verification error classes", () => {
+  const cases = [
+    [UnsupportedOperationError, "UNSUPPORTED_OPERATION"],
+    [ProtocolBindingMismatchError, "PROTOCOL_BINDING_MISMATCH"],
+    [UnsupportedVerificationFeatureError, "UNSUPPORTED_VERIFICATION_FEATURE"],
+    [InvalidSimulationResponseError, "INVALID_SIMULATION_RESPONSE"],
+    [MissingVerificationEvidenceError, "MISSING_VERIFICATION_EVIDENCE"],
+    [AuthorizationRequestMismatchError, "AUTHORIZATION_REQUEST_MISMATCH"],
+    [AssetChangeMismatchError, "ASSET_CHANGE_MISMATCH"],
+    [PermissionChangeMismatchError, "PERMISSION_CHANGE_MISMATCH"],
+    [StateChangeMismatchError, "STATE_CHANGE_MISMATCH"],
+    [MarketConstraintViolationError, "MARKET_CONSTRAINT_VIOLATION"],
+    [SlippageLimitExceededError, "SLIPPAGE_LIMIT_EXCEEDED"],
+    [FeeMismatchError, "FEE_MISMATCH"],
+    [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
+    [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
+  ] as const;
+
+  it.each(cases)("%s has its literal code and name", (Ctor, code) => {
+    const err = new Ctor("boom", CONTEXT);
+    expect(err.code).toBe(code);
+    expect(err.name).toBe(Ctor.name);
+    expect(err).toBeInstanceOf(SimulationPackageError);
+    expect(err).toBeInstanceOf(Error);
   });
 
-  it("attaches the error context and forwards cause", () => {
-    const cause = new Error("probe timeout");
-    const err = new MissingVerificationEvidenceError("missing", context, {
-      cause,
-    });
-    expect(err.context).toBe(context);
+  it.each(cases)("%s stores a frozen copy of the context", (Ctor) => {
+    const context: SimulationErrorContext = {
+      stage: "execution",
+      mode: "preview",
+      chainId: 1,
+      failedTransactionIndex: 2,
+    };
+    const err = new Ctor("boom", context);
+    expect(err.context).toEqual(context);
+    expect(err.context).not.toBe(context);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it.each(cases)("%s keeps the cause", (Ctor) => {
+    const cause = new Error("root");
+    const err = new Ctor("boom", CONTEXT, { cause });
     expect(err.cause).toBe(cause);
   });
+});
 
-  it("ConsumerLimitViolationError carries the bound constraint", () => {
-    const err = new ConsumerLimitViolationError("over", context, constraint);
-    expect(err.constraint).toBe(constraint);
-    expect(err.context).toBe(context);
+describe("SimulationPackageError.context", () => {
+  it("is undefined on legacy constructors called without context", () => {
+    expect(new SimulationRevertedError("x").context).toBeUndefined();
+    expect(new BlacklistViolationError("x").context).toBeUndefined();
+    expect(new ExternalServiceError("x").context).toBeUndefined();
+    expect(new SimulationValidationError("x").context).toBeUndefined();
+    expect(new UnsupportedChainError(1).context).toBeUndefined();
+  });
+
+  it("is stored frozen when supplied to a legacy constructor", () => {
+    const err = new UnsupportedChainError(1, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it("is not forwarded into Error options", () => {
+    const err = new SimulationValidationError("x", undefined, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(err.cause).toBeUndefined();
+  });
+});
+
+describe("SimulationRevertedError.reasonCode", () => {
+  it('defaults to "UNKNOWN_REVERT"', () => {
+    expect(new SimulationRevertedError("x").reasonCode).toBe("UNKNOWN_REVERT");
+    expect(new SimulationRevertedError(undefined).reasonCode).toBe(
+      "UNKNOWN_REVERT",
+    );
+  });
+
+  it("accepts an explicit reason code", () => {
+    const err = new SimulationRevertedError(
+      "x",
+      undefined,
+      "INSUFFICIENT_BALANCE",
+    );
+    expect(err.reasonCode).toBe("INSUFFICIENT_BALANCE");
+  });
+});
+
+describe("isSimulationPackageError", () => {
+  it("is true for instances", () => {
+    expect(isSimulationPackageError(new SimulationRevertedError("x"))).toBe(
+      true,
+    );
+    expect(isSimulationPackageError(new FeeMismatchError("x", CONTEXT))).toBe(
+      true,
+    );
+  });
+
+  it("is true for a plain object with a known code", () => {
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        code: "FEE_MISMATCH",
+        context: { stage: "verification", mode: "final", chainId: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  it("is true for a plain object without context", () => {
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        code: "FEE_MISMATCH",
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for an unknown code", () => {
+    expect(
+      isSimulationPackageError({ name: "Foo", code: "NOPE", context: {} }),
+    ).toBe(false);
+  });
+
+  it("is false for null, plain Errors and non-object context", () => {
+    expect(isSimulationPackageError(null)).toBe(false);
+    expect(isSimulationPackageError(undefined)).toBe(false);
+    expect(isSimulationPackageError(new Error("x"))).toBe(false);
+    expect(
+      isSimulationPackageError({
+        name: "FeeMismatchError",
+        code: "FEE_MISMATCH",
+        context: "nope",
+      }),
+    ).toBe(false);
   });
 });
