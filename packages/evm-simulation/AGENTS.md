@@ -14,7 +14,7 @@
 - Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
 
-- The unreleased v5 stack follows the narrow lifecycle exception in root `AGENTS.md` §7. SDK-1291 retires the backend; SDK-1293 replaced the legacy authorization variants and cut the runtime over to the domain types.
+- The unreleased v5 stack follows the narrow lifecycle exception in root `AGENTS.md` §7, which covers both the SDK-1291 Tenderly backend removal and the SDK-1293 legacy authorization-variant removal; SDK-1293 replaced the legacy authorization variants and cut the runtime over to the domain types.
 
 ## Continuous Improvement
 
