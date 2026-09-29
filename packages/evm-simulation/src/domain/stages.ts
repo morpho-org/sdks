@@ -78,13 +78,16 @@ export interface PendingEvidence {
   readonly snapshots: readonly EvidenceRead<ObservedSnapshot>[];
 }
 
+/** A call that succeeded; a failed call never becomes evidence. @internal */
+export type SuccessfulCall = SimulationCall & { readonly status: true };
+
 /** Complete evidence after response counts, references, statuses and probe results pass. @internal */
 export interface CompleteEvidence {
   readonly [stage]: "complete";
   readonly plan: ExecutionPlan;
   readonly calls: readonly {
     readonly identity: ExecutionIdentity;
-    readonly result: SimulationCall;
+    readonly result: SuccessfulCall;
   }[];
   readonly snapshots: readonly ObservedSnapshot[];
   readonly authorizations: readonly AuthorizationEvidence[];

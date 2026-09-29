@@ -3,6 +3,7 @@ import type {
   DecodedOperation,
   OperationAmount,
   OperationFunding,
+  OperationSignature,
 } from "./operations.js";
 
 describe("DecodedOperation", () => {
@@ -19,6 +20,28 @@ describe("DecodedOperation", () => {
     expectTypeOf<
       "midnightBorrow" | "bluePartialRefinance" | "aaveMigrate"
     >().not.toExtend<DecodedOperation["type"]>();
+  });
+
+  test("behavior: pure Blue legs only carry the signature their ABI accepts", () => {
+    type None = Extract<OperationSignature, { type: "none" }>;
+    expectTypeOf<
+      Extract<
+        DecodedOperation,
+        { type: "blueSupply" | "blueSupplyCollateral" | "blueRepay" }
+      >["authorizationSignature"]
+    >().toEqualTypeOf<None>();
+    expectTypeOf<
+      Extract<
+        DecodedOperation,
+        { type: "blueWithdraw" | "blueBorrow" | "blueWithdrawCollateral" }
+      >["tokenSignature"]
+    >().toEqualTypeOf<None>();
+    expectTypeOf<
+      Extract<
+        DecodedOperation,
+        { type: "blueSupplyCollateralBorrow" | "blueRepayWithdrawCollateral" }
+      >["tokenSignature" | "authorizationSignature"]
+    >().toEqualTypeOf<OperationSignature>();
   });
 
   test("behavior: amount modes are exclusive and deposits require funding", () => {

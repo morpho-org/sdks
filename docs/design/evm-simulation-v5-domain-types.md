@@ -43,8 +43,8 @@ Every row is present in `OperationLimitFields`, `DecodedOperationFields` and `Op
 | `blueSupply` | `marketId` | `expectedAssets`, `expectedOnBehalf` | `minSupplySharesMinted` |
 | `blueWithdraw` | `marketId` | `expectedReceiver`, `expectedFullClose` | `minAssetsReceived`, `maxSupplySharesBurned`, `maxUtilizationAfterWad`, `maxReallocationPenaltyAssets` |
 | `blueSupplyCollateral` | `marketId` | `expectedAssets`, `expectedOnBehalf` | `maxLtvAfterWad` |
-| `blueBorrow` | `marketId` | `expectedAssets`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxBorrowApyAfterWad`, `maxReallocationPenaltyAssets` |
-| `blueSupplyCollateralBorrow` | `marketId` | `expectedCollateralAssets`, `expectedBorrowAssets`, `expectedOnBehalf`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxBorrowApyAfterWad`, `maxReallocationPenaltyAssets` |
+| `blueBorrow` | `marketId` | `expectedAssets`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxAfterBorrowApyWad`, `maxReallocationPenaltyAssets` |
+| `blueSupplyCollateralBorrow` | `marketId` | `expectedCollateralAssets`, `expectedBorrowAssets`, `expectedOnBehalf`, `expectedReceiver` | `maxBorrowSharesMinted`, `maxLtvAfterWad`, `minHealthFactorAfterWad`, `maxUtilizationAfterWad`, `maxAfterBorrowApyWad`, `maxReallocationPenaltyAssets` |
 | `blueRepay` | `marketId` | `expectedOnBehalf`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets` |
 | `blueWithdrawCollateral` | `marketId` | `expectedAssets`, `expectedReceiver` | `maxLtvAfterWad`, `minHealthFactorAfterWad` |
 | `blueRepayWithdrawCollateral` | `marketId` | `expectedWithdrawAssets`, `expectedOnBehalf`, `expectedReceiver`, `expectedFullClose` | `maxAssetsPaid`, `minBorrowSharesBurned`, `maxResidualBorrowShares`, `minRefundAssets`, `maxLtvAfterWad`, `minHealthFactorAfterWad` |
@@ -57,12 +57,12 @@ Every row is present in `OperationLimitFields`, `DecodedOperationFields` and `Op
 | `vaultV1Redeem` | `vault` | `expectedShares`, `expectedReceiver` | `minAssetsReceived` |
 | `vaultV2Redeem` | `vault` | `expectedShares`, `expectedReceiver` | `minAssetsReceived` |
 | `vaultV2ForceWithdraw` | `vault` | `expectedExitAssets`, `expectedAdapter` | `maxSharesBurned`, `minAssetsReceived`, `maxPenaltyAssets` |
-| `vaultV2ForceRedeem` | `vault` | `expectedShares`, `expectedDeallocations` | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` |
+| `vaultV2ForceRedeem` | `vault` | `expectedShares`, `expectedRecipient`, `expectedOnBehalf`, `expectedDeallocations` | `minAssetsReceived`, `maxPenaltyShares`, `maxPenaltyAssets` |
 | `vaultV1InKindRedeem` | `vault` | `expectedAssets`, `expectedMarketIds` | `maxSharesBurned`, `minIdleAssetsReceived`, `minSupplyAssetsByMarket`, `maxPenaltyAssets`, `maxResidualShareAllowance` |
 | `vaultV2InKindRedeem` | `vault` | `expectedAssets`, `expectedMarketIds` | `maxSharesBurned`, `minIdleAssetsReceived`, `minSupplyAssetsByMarket`, `maxPenaltyAssets`, `maxResidualShareAllowance` |
 | `vaultV1MigrateToV2` | `sourceVault`, `targetVault` | `expectedAssets OR expectedShares`, `expectedReceiver` | `minTargetSharesMinted` |
 
-`expectedDeallocations` preserves ordered `{ adapter, marketId?, amount }` records.
+`expectedDeallocations` preserves ordered `{ adapter, marketId?, assets }` records.
 `expectedMarketIds` preserves market order. `minSupplyAssetsByMarket` contains
 `{ marketId, minAssets }` records. Migration accepts at most one assets/shares pin.
 Outcome records drop the min/max prefix (`minSharesMinted → sharesMinted`, etc.);
@@ -145,7 +145,7 @@ Existing error classes and constructors are unchanged. `SimulationErrorCodes` ac
 | --- | --- |
 | Legacy fields | Existing reason/details, fieldErrors and retention assetChanges.{address, token, netRetained} string amounts are preserved in errors.ts; `txIdx` stays a `transfers` result field and is not an error field. |
 | Error contract | `SimulationErrorCode` is the complete literal union of catalog codes; `SimulationErrorShape<Name>` is a distributive `{ name, code, context }` union, so each class name narrows to its own code and a mismatched pair does not type-check. `isSimulationPackageError` narrows to it. The guard and the new classes are runtime work owned by SDK-1293. |
-| Execution reason | `SimulationExecutionReason`: INSUFFICIENT_BALANCE, INSUFFICIENT_ALLOWANCE, INSUFFICIENT_LIQUIDITY, POSITION_UNHEALTHY, SLIPPAGE_EXCEEDED, SIGNATURE_EXPIRED, SIGNATURE_INVALID, NONCE_ALREADY_USED, CAP_EXCEEDED, ACCESS_RESTRICTED, UNKNOWN_REVERT. Required as `reasonCode` on `SimulationErrorShape<"SimulationRevertedError">`, whose context is narrowed to the preparation and execution stages, so a reverted preparation call carries it without a decoded operation and no revert can claim a validation, transport or verification context; `reason` stays human-readable. |
+| Execution reason | `SimulationExecutionReason`: INSUFFICIENT_BALANCE, INSUFFICIENT_ALLOWANCE, INSUFFICIENT_LIQUIDITY, POSITION_UNHEALTHY, SLIPPAGE_EXCEEDED, SIGNATURE_EXPIRED, SIGNATURE_INVALID, NONCE_ALREADY_USED, CAP_EXCEEDED, ACCESS_RESTRICTED, UNKNOWN_REVERT. Required as `reasonCode` on `SimulationErrorShape<"SimulationRevertedError">`, whose context is narrowed to the preparation and execution stages, so a reverted preparation call carries it without a decoded operation, an execution revert must carry a `transaction` location, and no revert can claim a validation, transport or verification context; `reason` stays human-readable. |
 | Common context | `SimulationErrorContext` is keyed by stage (validation, preparation, execution, verification, transport). Every stage carries mode and the requested chainId. Preparation, execution and verification run after the block is pinned and require blockNumber; preparation requires an authorization location; execution and verification require the decoded operation and subject and may carry a fixed-unit comparison. Validation and transport failures can precede pinning (unconfigured chain, failed `latest` resolution), so their blockNumber is optional rather than a sentinel. This is the one deliberate refinement of the ADR's "every stage carries blockNumber" wording. |
 | Identity | `failedTransactionIndex`/callPath (always indexing the caller's transactions), authorizationIndex/preparationCallIndex, or probeId. |
 | Subject | Wallet/token, allowance owner/token/spender, Morpho operator, market, source/target refinance, vault, migration, adapter, deployment. |
@@ -154,7 +154,7 @@ Existing error classes and constructors are unchanged. `SimulationErrorCodes` ac
 | Stages | Error stages match the ADR: validation, preparation, execution, verification, transport. Decoding, pinned reads and limit checks report as validation or verification. |
 | Pure contracts | parseRequest → ParsedRequest; decodeAndBind → DecodedBundle; checkRequests → ValidatedAuthorizations; planExecution → ExecutionPlan; parseEvidence → CompleteEvidence; verifyEffects → VerifiedEffects; enforceLimits → ConstrainedEffects; assembleResult → VerifiedSimulationResult. |
 | I/O contracts | readPinnedInputs returns Promise<PinnedInputs>; executePlan returns Promise<unknown>. Parsing and verification cannot treat that unknown as evidence. |
-| Refinements | A private unique-symbol stage brand prevents unchecked structural assignment to parsed/pinned/complete/constrained records. Constructors arrive with their checking implementations. No brand is required in consumer inputs. |
+| Refinements | A private unique-symbol stage brand prevents unchecked structural assignment to parsed/pinned/complete/constrained records. `CompleteEvidence.calls[].result` and `VerifiedSimulationResult.calls[]` require `status: true`; a failed call is a `SimulationRevertedError`, never evidence. Constructors arrive with their checking implementations. No brand is required in consumer inputs. |
 
 ## Validation and remaining work
 
@@ -163,7 +163,7 @@ mode exclusion, all operation-category key sets, fixed-unit bigint fields, route
 deep readonly properties, separate identities, missing evidence and stage refinements, and the
 existing five error codes. Compiler fixtures must emit the expected diagnostics for final
 authorizations, PermitSingle, wrong limit fields, incorrect typed-data schemas, mutable output
-writes/arrays and incomplete results; no suppression directives are used.
+writes/arrays, failed calls as complete evidence and incomplete results; no suppression directives are used.
 
 No onchain behavior changed, so this PR adds no fork fixtures. SDK-1293 owns runtime parsing,
 error implementations and public cutover; SDK-1294 owns requirement/calldata parsing; SDK-1295
