@@ -1442,19 +1442,20 @@ const decodeTransaction = (
  *   function, permit kind, leg combination, or consumes a signature in preview mode.
  * @example
  * ```ts
+ * import { MarketParams } from "@morpho-org/blue-sdk";
  * import { decodeOperations } from "@morpho-org/evm-simulation";
  * import { blueSupply } from "@morpho-org/morpho-sdk";
  * import { getAddress, type Address } from "viem";
  * import { mainnet } from "viem/chains";
  *
  * const owner = getAddress("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045") as Address;
- * const marketParams = {
+ * const marketParams = new MarketParams({
  *   loanToken: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
  *   collateralToken: getAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
  *   oracle: getAddress("0xd48ae1c530183bcebc59a25924f09829fbd27bb1"),
  *   irm: getAddress("0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC"),
  *   lltv: 860_000000000000000n,
- * };
+ * });
  * const tx = blueSupply({
  *   market: { chainId: mainnet.id, marketParams },
  *   args: { userAddress: owner, assets: 1_000_000n, deadline: 1_900_000_000n },
