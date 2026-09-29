@@ -291,8 +291,8 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
   it("maps a checksummed native sentinel in contractAddress to the eth sentinel", async () => {
     // SDKS-102/46: Tenderly may echo the native sentinel (checksummed) as an
     // asset change's contractAddress. It must still key native ETH by the exact
-    // `ethAddress` constant so a Bundler3 native residual is not silently dropped
-    // by `assertNoBundlerRetention`.
+    // `ethAddress` constant so a bundles native residual is not silently dropped
+    // by `assertNoBundlesRetention`.
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>

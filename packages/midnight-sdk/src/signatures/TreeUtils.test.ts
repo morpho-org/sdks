@@ -1,5 +1,13 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
-import { createWalletClient, type Hex, http, zeroAddress } from "viem";
+import * as fc from "fast-check";
+import {
+  bytesToHex,
+  createWalletClient,
+  type Hex,
+  http,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
@@ -11,16 +19,17 @@ import type { MidnightApiFetch } from "../api/index.js";
 import {
   InvalidMarketParameterError,
   InvalidTreeError,
+  InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifierUtils } from "./EcrecoverRatifier.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
-import { RatifierUtils } from "./RatifierUtils.js";
-import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
+import { SetterRatifierUtils } from "./SetterRatifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -146,6 +155,19 @@ describe("Tree.create", () => {
     expect(tree.offers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).not.toBe(staleGroup);
+  });
+});
+
+describe("TreeUtils.normalizeEntries", () => {
+  test("default: flattens groups and assigns singleton group ids", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([baseOffer({ maxAssets: 0n, maxUnits: 7n })]);
+    const normalized = TreeUtils.normalizeEntries([group, offer]);
+
+    expect(normalized).toHaveLength(2);
+    expect(normalized[0]).toBe(group.offers[0]);
+    expect(normalized[0]!.group).toBe(group.id);
+    expect(normalized[1]!.group).toBe(GroupUtils.hash([offer]));
   });
 });
 
@@ -520,6 +542,142 @@ describe("TreeUtils.mempoolValidate", () => {
     expect(decoded[0]!.ratifierData).toBe("0x");
   });
 
+  test("behavior: standard snapshots resume without rewriting committed groups", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const group = Group.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+      baseOffer({
+        tick: 5_004n,
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+    const snapshot = Tree.create({
+      type: "setter",
+      entries: [group],
+    }).toDescriptor();
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: snapshot,
+      fetch,
+      ratification: { type: "setter" },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = SetterRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded).toHaveLength(2);
+    for (const item of decoded) {
+      expect(item.offer.group).toBe(group.id);
+    }
+    expect(ratifierData.root).toBe(snapshot.root);
+  });
+
+  test("error: InvalidTreeError for a V1 snapshot with a tampered root", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = {
+      ...Tree.create({
+        type: "rateV1",
+        entries: [
+          {
+            offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+            rate: 100n,
+            allowedTaker: zeroAddress,
+          },
+        ],
+      }).toDescriptor(),
+      root: zeroHash,
+    };
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification does not match the snapshot route", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const snapshot = Tree.create({
+      type: "rateV1",
+      entries: [
+        {
+          offer: baseOffer({ tick: 5_000n, maxAssets: 0n }),
+          rate: 100n,
+          allowedTaker: zeroAddress,
+        },
+      ],
+    }).toDescriptor();
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: snapshot,
+        fetch,
+        ratification: { type: "priceV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidTreeError when a V1 ratification is used with a standard tree", async () => {
+    const fetch = vi.fn<MidnightApiFetch>();
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [offer],
+        fetch,
+        ratification: { type: "rateV1" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("error: InvalidTreeError for empty plain input before API validation", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -827,15 +985,172 @@ describe("TreeUtils.buildProof", () => {
       InvalidTreeError,
     );
   });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaves = [
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "0x4444444444444444444444444444444444444444444444444444444444444444",
+    ] as const;
+
+    expect(() =>
+      TreeUtils.buildProof({
+        tree: { leaves, root: zeroHash },
+        leafIndex: 0n,
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProof({
+        tree: { leaves, root: zeroHash },
+        leafIndex: 0n,
+      }),
+    ).toThrow(InvalidTreeHeightError);
+  });
 });
 
-describe("RatifierUtils.normalizeRatifierTree", () => {
+describe("TreeUtils.buildProofs", () => {
+  test("default: equals buildProof for each leaf index", () => {
+    const tree = Tree.create(
+      Array.from({ length: 5 }, (_, i) =>
+        baseOffer({ maxAssets: 0n, maxUnits: BigInt(i + 1) }),
+      ),
+    );
+
+    const proofs = TreeUtils.buildProofs({ tree });
+    expect(proofs).toHaveLength(8);
+    for (let leafIndex = 0; leafIndex < tree.leaves.length; leafIndex++) {
+      expect(proofs[leafIndex]).toEqual(
+        TreeUtils.buildProof({ tree, leafIndex: BigInt(leafIndex) }),
+      );
+    }
+  });
+
+  test("behavior: count defaults to leaves.length", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(TreeUtils.buildProofs({ tree })).toHaveLength(tree.leaves.length);
+  });
+
+  test("behavior: count 0 returns an empty array", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(TreeUtils.buildProofs({ tree, count: 0 })).toEqual([]);
+  });
+
+  test("behavior: count below leaves.length returns only leading proofs", () => {
+    const tree = Tree.create(
+      Array.from({ length: 5 }, (_, i) =>
+        baseOffer({ maxAssets: 0n, maxUnits: BigInt(i + 1) }),
+      ),
+    );
+
+    const proofs = TreeUtils.buildProofs({ tree, count: tree.offers.length });
+    expect(proofs).toHaveLength(5);
+    for (let i = 0; i < 5; i++) {
+      expect(proofs[i]).toEqual(
+        TreeUtils.buildProof({ tree, leafIndex: BigInt(i) }),
+      );
+    }
+  });
+
+  test("behavior: height-0 tree returns one empty proof", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const proofs = TreeUtils.buildProofs({
+      tree: { leaves: [leaf], root: leaf },
+    });
+
+    expect(proofs).toEqual([{ root: leaf, leafIndex: 0n, proof: [] }]);
+  });
+
+  test("error: InvalidTreeError for a count above the leaf count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() =>
+      TreeUtils.buildProofs({ tree, count: tree.leaves.length + 1 }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError for a negative count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() => TreeUtils.buildProofs({ tree, count: -1 })).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("error: InvalidTreeError for a non-integer count", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() => TreeUtils.buildProofs({ tree, count: 1.5 })).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaves = [
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "0x4444444444444444444444444444444444444444444444444444444444444444",
+    ] as const;
+
+    expect(() =>
+      TreeUtils.buildProofs({ tree: { leaves, root: zeroHash } }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeHeightError above height 20", () => {
+    const leaves = new Array(2 ** 21).fill(zeroHash);
+
+    expect(() =>
+      TreeUtils.buildProofs({
+        tree: { leaves, root: zeroHash },
+        count: 1,
+      }),
+    ).toThrow(InvalidTreeHeightError);
+  });
+
+  test("behavior: random leaf lists produce proofs identical to buildProof", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.uint8Array({ minLength: 32, maxLength: 32 }).map(bytesToHex),
+          { minLength: 1, maxLength: 64 },
+        ),
+        (rawLeaves) => {
+          const leafCount = 2 ** Math.ceil(Math.log2(rawLeaves.length));
+          const leaves = [
+            ...rawLeaves,
+            ...Array.from(
+              { length: leafCount - rawLeaves.length },
+              () => zeroHash,
+            ),
+          ];
+          const tree = { leaves, root: zeroHash };
+
+          expect(TreeUtils.buildProofs({ tree })).toEqual(
+            leaves.map((_, leafIndex) =>
+              TreeUtils.buildProof({ tree, leafIndex }),
+            ),
+          );
+        },
+      ),
+    );
+  });
+});
+
+describe("Ratifier.normalizeRatifierTree", () => {
   test("behavior: accepts grouped offer input", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
 
     expect(
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: [group],
         label: "Ecrecover",
       }).ratifier,
@@ -844,7 +1159,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
   test("error: InvalidTreeError for malformed empty tree-like input", () => {
     expect(() =>
-      RatifierUtils.normalizeRatifierTree({
+      Ratifier.normalizeRatifierTree({
         tree: {
           offers: [],
           paddedOffers: [],
@@ -926,6 +1241,43 @@ describe("TreeUtils.verifyProof", () => {
         proof: [],
       }),
     ).toBe(false);
+  });
+
+  test("behavior: builds a root from leaf hashes", () => {
+    const left =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const right =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const result = TreeUtils.buildRootFromLeaves([left, right]);
+
+    expect(result.height).toBe(1);
+    expect(result.root).toBe(TreeUtils.hashNode(left, right));
+  });
+
+  test("error: InvalidTreeError for a non-power-of-two leaf count", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+
+    expect(() => TreeUtils.buildRootFromLeaves([leaf, leaf, leaf])).toThrow(
+      InvalidTreeError,
+    );
+  });
+
+  test("behavior: verifies a proof from a leaf hash", () => {
+    const leaf =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const sibling =
+      "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+    const proofRoot = TreeUtils.hashNode(leaf, sibling);
+
+    expect(
+      TreeUtils.verifyLeafProof({
+        leaf,
+        root: proofRoot,
+        leafIndex: 0n,
+        proof: [sibling],
+      }),
+    ).toBe(true);
   });
 
   test("behavior: verifies proofs for plain offer objects", () => {

@@ -167,6 +167,17 @@ export class Offer {
 
   private cachedHash: Hash | undefined;
 
+  /**
+   * Whether the group id was supplied at construction rather than derived.
+   *
+   * Ratifier-specific tree builders only substitute their scheme's
+   * content-addressed singleton group when this is `false`; an explicit
+   * group is always committed as-is.
+   *
+   * @internal
+   */
+  public readonly hasExplicitGroup: boolean;
+
   /** Optional maker callback. */
   public readonly callback: Address;
 
@@ -201,7 +212,11 @@ export class Offer {
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
-    this.cachedGroup = offer.group;
+    this.hasExplicitGroup =
+      offer instanceof Offer
+        ? offer.hasExplicitGroup
+        : offer.group !== undefined;
+    this.cachedGroup = this.hasExplicitGroup ? offer.group : undefined;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;
@@ -594,7 +609,7 @@ export class Offer {
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
-   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `0n` (fail-closed: no market continuous fee accepted unless set explicitly).
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @param params.callback - Optional callback address; defaults to the zero address.

@@ -15,14 +15,10 @@ export {
   morphoVaultV1AdapterFactoryAbi,
   permissionedErc20WrapperAbi,
   permit2Abi,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   preLiquidationAbi,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   preLiquidationFactoryAbi,
-  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi`. */
-  publicAllocatorAbi,
-  vaultV1AdapterAbi,
-  vaultV1AdapterFactoryAbi,
-  /** @deprecated Vault V1 PublicAllocator support will be removed in the next major. Use `vaultV2BluePublicAllocatorAbi`. */
-  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,

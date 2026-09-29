@@ -150,92 +150,92 @@ The take-side starts from API book, quote, or maker takeable-offer responses. `M
 router response into ABI-ready take objects: each item has `offer`, `ratifierData`, and `units` for
 `IMidnight.take`, plus `marketId` metadata from the API. Book `asks` are maker sell offers, while
 book `bids` are maker buy offers.
-For a quote that spans several offers, execute the returned takes in order with `Midnight.take` and
-clamp each take to the remaining target instead of submitting every returned cap blindly.
+The quote's `averageWorstPrice` is an **aggregate** guard over the requested target: a favorable
+offer can compensate for a worse one, and the worse offer does not satisfy the guard on its own.
+That guard only holds if every returned offer settles together, so execute a quote through
+`MidnightBundlesV1` in a single transaction. The bundle skips offers that became stale since the
+quote, reverts unless the exact target is reached, and enforces one aggregate consideration bound
+(`maxBuyerAssets` for asks, `minSellerAssets` for bids). Never split a quote into independent
+`Midnight.take` transactions: a stale first leg reverts but still consumes its nonce, so the
+remaining legs settle at a price the quote never authorized. The high-level
+`@morpho-org/morpho-sdk` `client.morpho.midnight(chainId)` flows already route through the bundle
+and resolve approvals for you; the recipe below shows the same route with this package's raw ABI.
 
 ```ts
-import { addresses } from "@morpho-org/morpho-ts";
+import { getChainAddress, MathLib } from "@morpho-org/morpho-ts";
+import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import {
-  MidnightApi,
-  type MidnightApiTake,
-} from "@morpho-org/midnight-sdk/api";
-import { midnightAbi } from "@morpho-org/midnight-sdk";
-import {
+  maxUint256,
   parseUnits,
   zeroAddress,
   type Address,
   type Hash,
   type WalletClient,
 } from "viem";
+import { base } from "viem/chains";
 
-const chainId = 8453;
-const midnight = addresses[chainId].midnight!;
+const chainId = base.id;
+const midnightBundles = getChainAddress(chainId, "midnightBundles");
 
-async function buildAskQuoteTakes(marketId: Hash, targetUnits: bigint) {
+export async function takeAskQuoteAtomically(params: {
+  readonly walletClient: WalletClient;
+  readonly taker: Address;
+  readonly marketId: Hash;
+  readonly deadline: bigint;
+}) {
+  const targetUnits = parseUnits("50", 18);
   const quote = await MidnightApi.fetchBookQuote({
-    marketId,
+    marketId: params.marketId,
     side: "asks",
     units: targetUnits,
     slippage: "0.5",
   });
 
-  return quote.data;
-}
+  // Keep the caller's target and the quote's aggregate guard as two independent inputs.
+  // Do not substitute `quote.data.availableUnits` for the target: it is fallback capacity,
+  // not what the caller asked for.
+  const maxBuyerAssets = MathLib.wMulUp(targetUnits, quote.data.averageWorstPrice);
 
-export async function takeOneOffer(params: {
-  readonly walletClient: WalletClient;
-  readonly taker: Address;
-  readonly receiverIfTakerIsSeller: Address;
-  readonly take: MidnightApiTake;
-}) {
+  // Two confirmed prerequisites before this call: the taker has approved `midnightBundles`
+  // to spend `maxBuyerAssets` of the loan token (or passes an ERC-2612/Permit2 payload as
+  // `loanTokenPermit`), and has authorized the bundle on Midnight via
+  // `Midnight.setIsAuthorized(midnightBundles, true, taker)` so it can act on the taker's
+  // behalf (`@morpho-org/morpho-sdk`'s `getMidnightAuthorizationRequirement` resolves this
+  // for you).
   return params.walletClient.writeContract({
     account: params.taker,
-    address: midnight,
-    abi: midnightAbi,
-    functionName: "take",
+    chain: base,
+    address: midnightBundles,
+    abi: midnightBundlesAbi,
+    functionName: "midnightBundlesV1BuyWithUnitsTargetAndWithdrawCollateral",
     args: [
-      params.take.offer,
-      params.take.ratifierData,
-      params.take.units,
+      targetUnits,
+      maxBuyerAssets,
       params.taker,
-      params.receiverIfTakerIsSeller,
-      zeroAddress,
-      "0x",
+      false, // reduceOnly
+      { kind: 0, data: "0x" }, // loanTokenPermit: none
+      quote.data.takeableOffers, // { offer, units, ratifierData }[] straight from the quote
+      [], // collateralWithdrawals
+      zeroAddress, // collateralReceiver
+      0n, // referralFeePct
+      zeroAddress, // referralFeeRecipient
+      maxUint256, // maxContinuousFee: bound this to the fee the caller accepts
+      params.deadline,
     ],
   });
 }
-
-export async function takeAskQuoteSequentially(params: {
-  readonly walletClient: WalletClient;
-  readonly taker: Address;
-  readonly receiverIfTakerIsSeller: Address;
-  readonly marketId: Hash;
-}) {
-  const targetUnits = parseUnits("50", 18);
-  const quote = await buildAskQuoteTakes(params.marketId, targetUnits);
-  const transactionHashes: Hash[] = [];
-  let remainingUnits = targetUnits;
-
-  for (const take of quote.takeableOffers) {
-    if (remainingUnits === 0n) break;
-
-    const units = take.units < remainingUnits ? take.units : remainingUnits;
-    if (units === 0n) continue;
-
-    transactionHashes.push(
-      await takeOneOffer({
-        walletClient: params.walletClient,
-        taker: params.taker,
-        receiverIfTakerIsSeller: params.receiverIfTakerIsSeller,
-        take: { ...take, units },
-      }),
-    );
-    remainingUnits -= units;
-  }
-
-  return { remainingUnits, transactionHashes };
-}
 ```
+
+Bids mirror this with `midnightBundlesV1SupplyCollateralAndSellWithUnitsTarget` and a
+`minSellerAssets` floor derived from the same `averageWorstPrice`. Prefer the `*WithAssetsTarget*`
+variants when the caller fixes the asset amount instead of the unit amount.
+
+If you must submit `Midnight.take` directly (for example from a contract that performs its own
+atomic price check), treat each transaction as an independent fill: await and validate its receipt
+before reducing the remaining target, stop on any revert, refresh offer consumption, and re-quote
+the remaining target so a fresh aggregate guard covers what is left. An aggregate guard for the
+full quote does not apply to any subset of it.
 
 ## Midnight API
 

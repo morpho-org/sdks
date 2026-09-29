@@ -17,8 +17,8 @@ describe("normalizeAssetToken", () => {
 
   test("behavior: collapses the checksummed native sentinel to ethAddress", () => {
     // Security invariant (SDKS-102/46): a checksummed sentinel must still key
-    // native ETH by the exact `ethAddress` constant, otherwise a Bundler3 native
-    // residual lands on a separate map key and escapes `assertNoBundlerRetention`.
+    // native ETH by the exact `ethAddress` constant, otherwise a bundles native
+    // residual lands on a separate map key and escapes `assertNoBundlesRetention`.
     const checksummed = getAddress(ethAddress);
     expect(checksummed).not.toBe(ethAddress);
     expect(normalizeAssetToken(checksummed)).toBe(ethAddress);

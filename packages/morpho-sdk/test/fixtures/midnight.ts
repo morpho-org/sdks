@@ -11,7 +11,7 @@ import type { Address, Hex } from "viem";
 import { zeroAddress } from "viem";
 
 export const midnightChainId = ChainId.BaseMainnet;
-export const midnightLiquidationCursor = 250000000000000000n;
+const midnightLiquidationCursor = 250000000000000000n;
 
 export const midnightAddresses = {
   midnight: getChainAddress(midnightChainId, "midnight"),

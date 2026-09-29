@@ -16,14 +16,17 @@ export {
   UnknownVaultConfigError,
   UnsupportedChainIdError,
   UnsupportedMarketIrmError,
+  /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
   UnsupportedPreLiquidationParamsError,
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
 export {
   getUnsupportedVaultV2Adapter,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError,
+  MarketParamsIdMismatchError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";

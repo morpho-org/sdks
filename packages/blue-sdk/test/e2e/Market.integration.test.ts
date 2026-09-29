@@ -10,7 +10,7 @@ import {
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";
 
-const { morpho, usdc, wstEth, adaptiveCurveIrm } =
+const { blue, usdc, wstEth, adaptiveCurveIrm } =
   addressesRegistry[ChainId.EthMainnet];
 
 const params = new MarketParams({
@@ -32,17 +32,17 @@ describe("Market", () => {
     });
     await client.approve({
       address: params.collateralToken,
-      args: [morpho, collateral],
+      args: [blue, collateral],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "supplyCollateral",
       args: [params, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "borrow",
       args: [
         { ...params },
@@ -64,7 +64,7 @@ describe("Market", () => {
       fee,
     ] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "market",
       args: [params.id],
     });
@@ -94,7 +94,7 @@ describe("Market", () => {
 
     const [, borrowShares] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "position",
       args: [params.id, client.account.address],
     });
@@ -109,7 +109,7 @@ describe("Market", () => {
     await expect(
       client.writeContract({
         abi: blueAbi,
-        address: morpho,
+        address: blue,
         functionName: "borrow",
         args: [
           { ...params },
@@ -123,7 +123,7 @@ describe("Market", () => {
 
     const hash = await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "borrow",
       args: [
         { ...params },
@@ -149,17 +149,17 @@ describe("Market", () => {
     });
     await client.approve({
       address: params.collateralToken,
-      args: [morpho, collateral],
+      args: [blue, collateral],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "supplyCollateral",
       args: [params, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "borrow",
       args: [
         { ...params },
@@ -181,7 +181,7 @@ describe("Market", () => {
       fee,
     ] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "market",
       args: [params.id],
     });
@@ -209,7 +209,7 @@ describe("Market", () => {
 
     const [, borrowShares] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "position",
       args: [params.id, client.account.address],
     });
@@ -225,11 +225,11 @@ describe("Market", () => {
     });
     await client.approve({
       address: params.loanToken,
-      args: [morpho, maxBorrowable],
+      args: [blue, maxBorrowable],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "supply",
       args: [params, maxBorrowable, 0n, client.account.address, "0x"],
     });
@@ -238,7 +238,7 @@ describe("Market", () => {
 
     const hash = await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "borrow",
       args: [
         { ...params },
@@ -259,7 +259,7 @@ describe("Market", () => {
   }) => {
     const owner = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "owner",
     });
     const fee = parseUnits("10", 16);
@@ -268,7 +268,7 @@ describe("Market", () => {
     await client.writeContract({
       account: owner,
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "setFee",
       args: [{ ...params }, fee],
     });
@@ -284,7 +284,7 @@ describe("Market", () => {
       marketFee,
     ] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "market",
       args: [params.id],
     });
@@ -315,7 +315,7 @@ describe("Market", () => {
     await client.setNextBlockTimestamp({ timestamp });
     await client.writeContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "accrueInterest",
       args: [{ ...params }],
     });
@@ -329,7 +329,7 @@ describe("Market", () => {
       onchainFee,
     ] = await client.readContract({
       abi: blueAbi,
-      address: morpho,
+      address: blue,
       functionName: "market",
       args: [params.id],
     });

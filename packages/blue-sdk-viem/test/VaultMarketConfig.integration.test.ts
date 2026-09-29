@@ -1,12 +1,7 @@
-import {
-  addressesRegistry,
-  ChainId,
-  VaultMarketPublicAllocatorConfig,
-} from "@morpho-org/blue-sdk";
+import { ChainId } from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { describe, expect } from "vitest";
 import { VaultMarketConfig } from "../src/augment/VaultMarketConfig.js";
-import { metaMorphoAbi, vaultV1PublicAllocatorAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
@@ -14,46 +9,6 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/VaultMarketConfig", () => {
   test("should fetch vault market data", async ({ client }) => {
-    const owner = await client.readContract({
-      address: steakUsdc.address,
-      abi: metaMorphoAbi,
-      functionName: "owner",
-    });
-
-    await client.setBalance({ address: owner, value: BigInt(1e18) });
-    await client.writeContract({
-      account: owner,
-      address: steakUsdc.address,
-      abi: metaMorphoAbi,
-      functionName: "setIsAllocator",
-      args: [
-        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
-        true,
-      ],
-    });
-    await client.writeContract({
-      account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "setFee",
-      args: [steakUsdc.address, 1n],
-    });
-    await client.writeContract({
-      account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
-      abi: vaultV1PublicAllocatorAbi,
-      functionName: "setFlowCaps",
-      args: [
-        steakUsdc.address,
-        [
-          {
-            id: usdc_wstEth.id,
-            caps: { maxIn: 2n, maxOut: 3n },
-          },
-        ],
-      ],
-    });
-
     const expectedData = new VaultMarketConfig({
       vault: steakUsdc.address,
       marketId: usdc_wstEth.id,
@@ -63,12 +18,6 @@ describe("augment/VaultMarketConfig", () => {
         value: 0n,
         validAt: 0n,
       },
-      publicAllocatorConfig: new VaultMarketPublicAllocatorConfig({
-        vault: steakUsdc.address,
-        marketId: usdc_wstEth.id,
-        maxIn: 2n,
-        maxOut: 3n,
-      }),
       removableAt: 0n,
     });
 

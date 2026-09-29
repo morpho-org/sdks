@@ -1,11 +1,8 @@
 {
   "name": "@morpho-org/blue-sdk",
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
-  "version": "6.11.0",
+  "version": "7.1.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": [
-    "Rubilmax <rmilon@gmail.com>"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/morpho-org/sdks.git",
@@ -20,7 +17,8 @@
   "type": "module",
   "main": "src/index.ts",
   "files": [
-    "lib"
+    "lib",
+    "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
@@ -30,10 +28,10 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0"
+    "@noble/hashes": "^2.4.0"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.10.0"
+    "@morpho-org/morpho-ts": "^3.0.0"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",

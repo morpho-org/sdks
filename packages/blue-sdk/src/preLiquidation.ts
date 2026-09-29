@@ -2,7 +2,11 @@ import { parseEther } from "viem";
 import { UnsupportedPreLiquidationParamsError } from "./errors.js";
 import type { BigIntish } from "./types.js";
 
-/** Default PreLiquidation parameter registry keyed by Morpho Blue LLTV. */
+/**
+ * Default PreLiquidation parameter registry keyed by Morpho Blue LLTV.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export const defaultPreLiquidationParamsRegistry = new Map([
   [
     parseEther("0.385"),
@@ -89,6 +93,7 @@ export const defaultPreLiquidationParamsRegistry = new Map([
 /**
  * Returns default PreLiquidation params for a supported Morpho Blue LLTV.
  *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
  * @param lltv - The Morpho Blue liquidation loan-to-value, scaled by WAD.
  * @returns The default PreLiquidation parameter set for `lltv`.
  * @throws {UnsupportedPreLiquidationParamsError} when no default parameters exist for `lltv`.

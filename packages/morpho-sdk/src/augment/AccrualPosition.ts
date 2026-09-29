@@ -7,6 +7,7 @@ import {
 declare module "@morpho-org/blue-sdk" {
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     let fetchPreLiquidation: typeof fetchPreLiquidationPosition;
   }
 }

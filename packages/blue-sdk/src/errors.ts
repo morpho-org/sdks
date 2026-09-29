@@ -74,7 +74,11 @@ export class UnknownMarketAllocationError extends UnknownDataError {
   }
 }
 
-/** Error thrown when no default pre-liquidation params exist for an LLTV. */
+/**
+ * Error thrown when no default pre-liquidation params exist for an LLTV.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export class UnsupportedPreLiquidationParamsError extends Error {
   constructor(public readonly lltv: bigint) {
     super(

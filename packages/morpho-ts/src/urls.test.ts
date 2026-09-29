@@ -2,12 +2,9 @@ import { describe, expect, test } from "vitest";
 import {
   BLUE_API_BASE_URL,
   BLUE_API_GRAPHQL_URL,
-  CDN_BASE_URL,
   DOCS_BASE_URL,
   getSubdomainBaseUrl,
   MORPHO_DOMAIN,
-  OPTIMIZERS_API_BASE_URL,
-  OPTIMIZERS_BASE_URL,
   REWARDS_BASE_URL,
 } from "./urls.js";
 
@@ -33,9 +30,6 @@ describe("urls", () => {
   });
 
   describe("exported subdomain URLs", () => {
-    test("CDN_BASE_URL points to cdn", () => {
-      expect(CDN_BASE_URL).toBe("https://cdn.morpho.org");
-    });
     test("DOCS_BASE_URL points to docs", () => {
       expect(DOCS_BASE_URL).toBe("https://docs.morpho.org");
     });
@@ -44,12 +38,6 @@ describe("urls", () => {
     });
     test("REWARDS_BASE_URL points to campaigns", () => {
       expect(REWARDS_BASE_URL).toBe("https://campaigns.morpho.org");
-    });
-    test("OPTIMIZERS_BASE_URL points to optimizers", () => {
-      expect(OPTIMIZERS_BASE_URL).toBe("https://optimizers.morpho.org");
-    });
-    test("OPTIMIZERS_API_BASE_URL aliases the api subdomain", () => {
-      expect(OPTIMIZERS_API_BASE_URL).toBe("https://api.morpho.org");
     });
   });
 

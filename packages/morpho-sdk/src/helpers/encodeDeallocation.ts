@@ -29,6 +29,7 @@ function encodeDeallocateData(deallocation: Deallocation): Hex {
  * @param onBehalf - The address from which the penalty is taken (share owner).
  * @returns The ABI-encoded calldata for `VaultV2.forceDeallocate`.
  * @throws {NonPositiveInputError} when `deallocation.amount <= 0n`.
+ * @internal
  */
 export function encodeForceDeallocateCall(
   deallocation: Deallocation,

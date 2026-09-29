@@ -1,6 +1,8 @@
 import {
   blueMarketParamsAbi,
   midnightEcrecoverRatifierAbi,
+  midnightPriceRatifierV1Abi,
+  midnightRateRatifierV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
 import { addresses } from "@morpho-org/morpho-sdk/addresses";
 import { marketParamsAbi as rawBlueMarketParamsAbi } from "@morpho-org/morpho-sdk/blue/abis";
@@ -14,8 +16,10 @@ import {
   DivisionByZeroError as RawBlueDivisionByZeroError,
   InvalidBitLengthError as RawBlueInvalidBitLengthError,
   InvalidMarketParamsError as RawBlueInvalidMarketParamsError,
+  InvalidNumberError as RawBlueInvalidNumberError,
   InvalidPermitDomainChainIdError as RawBlueInvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
+  MarketParamsIdMismatchError as RawBlueMarketParamsIdMismatchError,
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownDataError as RawBlueUnknownDataError,
   UnknownFactory as RawBlueUnknownFactory,
@@ -33,7 +37,6 @@ import {
 import { fetchPosition as rawFetchBluePosition } from "@morpho-org/morpho-sdk/blue/fetch";
 import type {
   AuthorizationArgs as RawBlueAuthorizationArgs,
-  DaiPermitArgs as RawBlueDaiPermitArgs,
   DeploylessFetchParameters as RawBlueDeploylessFetchParameters,
   FetchParameters as RawBlueFetchParameters,
   InputAllocation as RawBlueInputAllocation,
@@ -48,27 +51,34 @@ import {
   MetaMorphoAction as RawBlueMetaMorphoAction,
   defaultPreLiquidationParamsRegistry as rawBlueDefaultPreLiquidationParamsRegistry,
   getDefaultPreLiquidationParams as rawGetBlueDefaultPreLiquidationParams,
-  getDaiPermitTypedData as rawGetDaiPermitTypedData,
+  getPermit2PermitTypedData as rawGetPermit2PermitTypedData,
 } from "@morpho-org/morpho-sdk/blue/utils";
 import {
   BLUE_LIQUIDATION_CURSOR,
   ERC20_ALLOWANCE_RECIPIENTS,
   MIDNIGHT_CBP,
+  MIDNIGHT_MAX_TREE_HEIGHT,
+  MIDNIGHT_PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+  MIDNIGHT_RATE_RATIFIER_V1_OFFER_TYPEHASH,
 } from "@morpho-org/morpho-sdk/constants";
+import { BlueMarket, MidnightMarket } from "@morpho-org/morpho-sdk/entities";
 import {
-  BlueMarket,
-  Market as LegacyBlueMarket,
-  MidnightMarket,
-} from "@morpho-org/morpho-sdk/entities";
-import {
+  BlueMarketParamsIdMismatchError,
   DivisionByZeroError,
   getBlueUnsupportedVaultV2Adapter,
   InvalidBitLengthError,
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
+  InvalidMidnightRateRatifierV1RateError,
+  InvalidMidnightRateRatifierV1TickError,
+  InvalidMidnightRateRatifierV1TimeError,
+  InvalidMidnightRatifierV1AddressError,
+  InvalidNumberError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isBlueUnknownOfFactoryError,
+  MidnightRateRatifierV1BoundOverflowError,
+  MidnightRatifierV1TakerNotAllowedError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   UnknownBlueDataError,
@@ -86,16 +96,46 @@ import {
   fetchBluePosition,
   fetchMidnightPosition,
 } from "@morpho-org/morpho-sdk/fetch";
-import { ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi } from "@morpho-org/morpho-sdk/midnight/abis";
-import { CBP as rawMidnightCbp } from "@morpho-org/morpho-sdk/midnight/constants";
+import {
+  ecrecoverRatifierAbi as rawMidnightEcrecoverRatifierAbi,
+  priceRatifierV1Abi as rawMidnightPriceRatifierV1Abi,
+  rateRatifierV1Abi as rawMidnightRateRatifierV1Abi,
+} from "@morpho-org/morpho-sdk/midnight/abis";
+import {
+  CBP as rawMidnightCbp,
+  MAX_TREE_HEIGHT as rawMidnightMaxTreeHeight,
+  PRICE_RATIFIER_V1_OFFER_TYPEHASH as rawMidnightPriceRatifierV1OfferTypehash,
+  RATE_RATIFIER_V1_OFFER_TYPEHASH as rawMidnightRateRatifierV1OfferTypehash,
+} from "@morpho-org/morpho-sdk/midnight/constants";
 import { Market as RawMidnightMarket } from "@morpho-org/morpho-sdk/midnight/entities";
-import { InvalidOfferGroupError as RawMidnightInvalidOfferGroupError } from "@morpho-org/morpho-sdk/midnight/errors";
+import {
+  InvalidOfferGroupError as RawMidnightInvalidOfferGroupError,
+  InvalidRateRatifierV1RateError as RawMidnightInvalidRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError as RawMidnightInvalidRateRatifierV1TickError,
+  InvalidRateRatifierV1TimeError as RawMidnightInvalidRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError as RawMidnightInvalidRatifierV1AddressError,
+  RateRatifierV1BoundOverflowError as RawMidnightRateRatifierV1BoundOverflowError,
+  RatifierV1TakerNotAllowedError as RawMidnightRatifierV1TakerNotAllowedError,
+} from "@morpho-org/morpho-sdk/midnight/errors";
 import { fetchPosition as rawFetchMidnightPosition } from "@morpho-org/morpho-sdk/midnight/fetch";
 import type {
   DeploylessFetchParameters as RawMidnightDeploylessFetchParameters,
+  RateRatifierV1Leaf as RawMidnightRateRatifierV1Leaf,
   RatifierInfo as RawMidnightRatifierInfo,
 } from "@morpho-org/morpho-sdk/midnight/types";
-import { MarketUtils as RawMidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
+import {
+  EcrecoverRatifier as RawMidnightEcrecoverRatifier,
+  EcrecoverRatifierUtils as RawMidnightEcrecoverRatifierUtils,
+  MarketUtils as RawMidnightMarketUtils,
+  PriceRatifierV1 as RawMidnightPriceRatifierV1,
+  PriceRatifierV1Utils as RawMidnightPriceRatifierV1Utils,
+  RateRatifierV1 as RawMidnightRateRatifierV1,
+  RateRatifierV1Utils as RawMidnightRateRatifierV1Utils,
+  Ratifier as RawMidnightRatifier,
+  RatifierUtils as RawMidnightRatifierUtils,
+  SetterRatifier as RawMidnightSetterRatifier,
+  SetterRatifierUtils as RawMidnightSetterRatifierUtils,
+} from "@morpho-org/morpho-sdk/midnight/utils";
 import type {
   BlueAuthorizationTypedDataArgs,
   BlueDeploylessFetchParameters,
@@ -103,8 +143,8 @@ import type {
   BlueInputAllocation,
   BlueMarketId,
   BlueMetaMorphoCall,
-  DaiPermitArgs,
   MidnightDeploylessFetchParameters,
+  MidnightRateRatifierV1Leaf,
   MidnightRatifierInfo,
   Permit2PermitArgs,
   Permit2TransferFromArgs,
@@ -115,8 +155,18 @@ import {
   BlueMetaMorphoAction,
   blueDefaultPreLiquidationParamsRegistry,
   getBlueDefaultPreLiquidationParams,
-  getDaiPermitTypedData,
+  getPermit2PermitTypedData,
+  MidnightEcrecoverRatifier,
+  MidnightEcrecoverRatifierUtils,
   MidnightMarketUtils,
+  MidnightPriceRatifierV1,
+  MidnightPriceRatifierV1Utils,
+  MidnightRateRatifierV1,
+  MidnightRateRatifierV1Utils,
+  MidnightRatifier,
+  MidnightRatifierUtils,
+  MidnightSetterRatifier,
+  MidnightSetterRatifierUtils,
 } from "@morpho-org/morpho-sdk/utils";
 import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
@@ -135,15 +185,16 @@ describe("protocol facades", () => {
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
     [ERC20_ALLOWANCE_RECIPIENTS, rawBlueErc20AllowanceRecipients],
     [BlueMarket, RawBlueMarket],
-    [LegacyBlueMarket, RawBlueMarket],
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
     [DivisionByZeroError, RawBlueDivisionByZeroError],
     [InvalidBitLengthError, RawBlueInvalidBitLengthError],
+    [InvalidNumberError, RawBlueInvalidNumberError],
     [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],
     [
       InvalidPermitDomainVerifyingContractError,
       RawBlueInvalidPermitDomainVerifyingContractError,
     ],
+    [BlueMarketParamsIdMismatchError, RawBlueMarketParamsIdMismatchError],
     [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
     [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],
@@ -170,15 +221,63 @@ describe("protocol facades", () => {
       rawBlueDefaultPreLiquidationParamsRegistry,
     ],
     [getBlueDefaultPreLiquidationParams, rawGetBlueDefaultPreLiquidationParams],
-    [getDaiPermitTypedData, rawGetDaiPermitTypedData],
+    [getPermit2PermitTypedData, rawGetPermit2PermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
     [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
+    [midnightPriceRatifierV1Abi, rawMidnightPriceRatifierV1Abi],
+    [midnightRateRatifierV1Abi, rawMidnightRateRatifierV1Abi],
     [MIDNIGHT_CBP, rawMidnightCbp],
+    [MIDNIGHT_MAX_TREE_HEIGHT, rawMidnightMaxTreeHeight],
+    [
+      MIDNIGHT_PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+      rawMidnightPriceRatifierV1OfferTypehash,
+    ],
+    [
+      MIDNIGHT_RATE_RATIFIER_V1_OFFER_TYPEHASH,
+      rawMidnightRateRatifierV1OfferTypehash,
+    ],
     [MidnightMarket, RawMidnightMarket],
     [InvalidMidnightOfferGroupError, RawMidnightInvalidOfferGroupError],
+    [
+      InvalidMidnightRateRatifierV1RateError,
+      RawMidnightInvalidRateRatifierV1RateError,
+    ],
+    [
+      InvalidMidnightRateRatifierV1TickError,
+      RawMidnightInvalidRateRatifierV1TickError,
+    ],
+    [
+      InvalidMidnightRateRatifierV1TimeError,
+      RawMidnightInvalidRateRatifierV1TimeError,
+    ],
+    [
+      InvalidMidnightRatifierV1AddressError,
+      RawMidnightInvalidRatifierV1AddressError,
+    ],
+    [
+      MidnightRatifierV1TakerNotAllowedError,
+      RawMidnightRatifierV1TakerNotAllowedError,
+    ],
+    [
+      MidnightRateRatifierV1BoundOverflowError,
+      RawMidnightRateRatifierV1BoundOverflowError,
+    ],
     [fetchMidnightPosition, rawFetchMidnightPosition],
     [MidnightMarketUtils, RawMidnightMarketUtils],
+    [MidnightEcrecoverRatifier, RawMidnightEcrecoverRatifier],
+    [MidnightSetterRatifier, RawMidnightSetterRatifier],
+    [MidnightRatifier, MidnightRatifierUtils],
+    [MidnightEcrecoverRatifierUtils, RawMidnightEcrecoverRatifierUtils],
+    [MidnightSetterRatifierUtils, RawMidnightSetterRatifierUtils],
+    [MidnightRatifierUtils, RawMidnightRatifierUtils],
+    [MidnightPriceRatifierV1, RawMidnightPriceRatifierV1],
+    [MidnightRateRatifierV1, RawMidnightRateRatifierV1],
+    [MidnightRatifier, RawMidnightRatifier],
+    [MidnightPriceRatifierV1, MidnightPriceRatifierV1Utils],
+    [MidnightRateRatifierV1, MidnightRateRatifierV1Utils],
+    [MidnightPriceRatifierV1Utils, RawMidnightPriceRatifierV1Utils],
+    [MidnightRateRatifierV1Utils, RawMidnightRateRatifierV1Utils],
   ])("preserves runtime identity", (facade, raw) => {
     expect(facade).toBe(raw);
   });
@@ -186,6 +285,10 @@ describe("protocol facades", () => {
   test("preserves type identities", () => {
     const blue: Equal<BlueMarketId, RawBlueMarketId> = true;
     const midnight: Equal<MidnightRatifierInfo, RawMidnightRatifierInfo> = true;
+    const midnightRateLeaf: Equal<
+      MidnightRateRatifierV1Leaf,
+      RawMidnightRateRatifierV1Leaf
+    > = true;
     const blueFetch: Equal<BlueFetchParameters, RawBlueFetchParameters> = true;
     const blueDeployless: Equal<
       BlueDeploylessFetchParameters,
@@ -206,7 +309,6 @@ describe("protocol facades", () => {
     const blueMetaMorphoCall: Equal<BlueMetaMorphoCall, RawBlueMetaMorphoCall> =
       true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
-    const daiPermit: Equal<DaiPermitArgs, RawBlueDaiPermitArgs> = true;
     const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
     const permit2Transfer: Equal<
       Permit2TransferFromArgs,
@@ -216,6 +318,7 @@ describe("protocol facades", () => {
     expect({
       blue,
       midnight,
+      midnightRateLeaf,
       blueFetch,
       blueDeployless,
       midnightDeployless,
@@ -223,12 +326,12 @@ describe("protocol facades", () => {
       blueInputAllocation,
       blueMetaMorphoCall,
       permit,
-      daiPermit,
       permit2,
       permit2Transfer,
     }).toEqual({
       blue: true,
       midnight: true,
+      midnightRateLeaf: true,
       blueFetch: true,
       blueDeployless: true,
       midnightDeployless: true,
@@ -236,7 +339,6 @@ describe("protocol facades", () => {
       blueInputAllocation: true,
       blueMetaMorphoCall: true,
       permit: true,
-      daiPermit: true,
       permit2: true,
       permit2Transfer: true,
     });

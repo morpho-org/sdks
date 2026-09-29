@@ -8,7 +8,6 @@ import {
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { Holding } from "../src/augment/Holding.js";
-import { permit2Abi } from "../src/index.js";
 import {
   abi as getHoldingAbi,
   code as getHoldingCode,
@@ -16,8 +15,7 @@ import {
 import { test } from "./setup.js";
 
 const {
-  morpho,
-  bundler3: { generalAdapter1 },
+  blue: morpho,
   permit2,
   wNative,
   wbC3M,
@@ -29,14 +27,8 @@ describe("augment/Holding", () => {
       token: wNative,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 1n,
+        blue: 1n,
         permit2: 3n,
-        "bundler3.generalAdapter1": 2n,
-      },
-      permit2BundlerAllowance: {
-        amount: 7n,
-        expiration: MathLib.MAX_UINT_48 - 2n,
-        nonce: 0n,
       },
       balance: 10n * MathLib.WAD,
       canTransfer: true,
@@ -48,29 +40,11 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wNative,
-      args: [morpho, expectedData.erc20Allowances.morpho],
-    });
-    await client.approve({
-      address: wNative,
-      args: [
-        generalAdapter1,
-        expectedData.erc20Allowances["bundler3.generalAdapter1"],
-      ],
+      args: [morpho, expectedData.erc20Allowances.blue],
     });
     await client.approve({
       address: wNative,
       args: [permit2, expectedData.erc20Allowances.permit2],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wNative,
-        generalAdapter1,
-        expectedData.permit2BundlerAllowance.amount,
-        Number(expectedData.permit2BundlerAllowance.expiration),
-      ],
     });
 
     const value = await Holding.fetch(client.account.address, wNative, client);
@@ -83,14 +57,8 @@ describe("augment/Holding", () => {
       token: wNative,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 1n,
+        blue: 1n,
         permit2: 3n,
-        "bundler3.generalAdapter1": 2n,
-      },
-      permit2BundlerAllowance: {
-        amount: 7n,
-        expiration: MathLib.MAX_UINT_48 - 2n,
-        nonce: 0n,
       },
       balance: 10n * MathLib.WAD,
       canTransfer: true,
@@ -102,29 +70,11 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wNative,
-      args: [morpho, expectedData.erc20Allowances.morpho],
-    });
-    await client.approve({
-      address: wNative,
-      args: [
-        generalAdapter1,
-        expectedData.erc20Allowances["bundler3.generalAdapter1"],
-      ],
+      args: [morpho, expectedData.erc20Allowances.blue],
     });
     await client.approve({
       address: wNative,
       args: [permit2, expectedData.erc20Allowances.permit2],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wNative,
-        generalAdapter1,
-        expectedData.permit2BundlerAllowance.amount,
-        Number(expectedData.permit2BundlerAllowance.expiration),
-      ],
     });
 
     const value = await Holding.fetch(client.account.address, wNative, client, {
@@ -141,14 +91,8 @@ describe("augment/Holding", () => {
       token,
       user: client.account.address,
       erc20Allowances: {
-        morpho: maxUint256,
+        blue: maxUint256,
         permit2: maxUint256,
-        "bundler3.generalAdapter1": maxUint256,
-      },
-      permit2BundlerAllowance: {
-        amount: 0n,
-        expiration: 0n,
-        nonce: 0n,
       },
       balance: 10000000000000000000000n,
       canTransfer: undefined,
@@ -166,14 +110,8 @@ describe("augment/Holding", () => {
       token: wbC3M,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 6n,
+        blue: 6n,
         permit2: 5n,
-        "bundler3.generalAdapter1": 4n,
-      },
-      permit2BundlerAllowance: {
-        amount: 8n,
-        expiration: MathLib.MAX_UINT_48 - 7n,
-        nonce: 0n,
       },
       balance: 2853958n,
       erc2612Nonce: 0n,
@@ -186,29 +124,11 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wbC3M,
-      args: [morpho, expectedData.erc20Allowances.morpho],
-    });
-    await client.approve({
-      address: wbC3M,
-      args: [
-        generalAdapter1,
-        expectedData.erc20Allowances["bundler3.generalAdapter1"],
-      ],
+      args: [morpho, expectedData.erc20Allowances.blue],
     });
     await client.approve({
       address: wbC3M,
       args: [permit2, expectedData.erc20Allowances.permit2],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wbC3M,
-        generalAdapter1,
-        expectedData.permit2BundlerAllowance.amount,
-        Number(expectedData.permit2BundlerAllowance.expiration),
-      ],
     });
 
     const value = await Holding.fetch(client.account.address, wbC3M, client);
@@ -223,14 +143,8 @@ describe("augment/Holding", () => {
       token: wbC3M,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 6n,
+        blue: 6n,
         permit2: 5n,
-        "bundler3.generalAdapter1": 4n,
-      },
-      permit2BundlerAllowance: {
-        amount: 8n,
-        expiration: MathLib.MAX_UINT_48 - 7n,
-        nonce: 0n,
       },
       balance: 2853958n,
       erc2612Nonce: 0n,
@@ -243,29 +157,11 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wbC3M,
-      args: [morpho, expectedData.erc20Allowances.morpho],
-    });
-    await client.approve({
-      address: wbC3M,
-      args: [
-        generalAdapter1,
-        expectedData.erc20Allowances["bundler3.generalAdapter1"],
-      ],
+      args: [morpho, expectedData.erc20Allowances.blue],
     });
     await client.approve({
       address: wbC3M,
       args: [permit2, expectedData.erc20Allowances.permit2],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wbC3M,
-        generalAdapter1,
-        expectedData.permit2BundlerAllowance.amount,
-        Number(expectedData.permit2BundlerAllowance.expiration),
-      ],
     });
 
     const value = await Holding.fetch(client.account.address, wbC3M, client, {
@@ -279,14 +175,13 @@ describe("augment/Holding", () => {
     client,
   }) => {
     // Some chains have no Permit2 deployment; `fetchHolding` then passes `address(0)`.
-    // The deployless query must skip both Permit2 reads instead of reverting on an
-    // addressless contract, leaving the Permit2 ERC20 allowance and the bundler allowance
-    // at zero so it matches the multicall fallback (which returns 0 without any read). The
-    // other recipients' allowances must still be reported. Exercised here on mainnet by
+    // The deployless query must skip the Permit2 allowance read instead of reverting on an
+    // addressless contract, leaving its ERC20 allowance at zero so it matches the multicall
+    // fallback (which returns 0 without any read). The Morpho allowance must still be
+    // reported. Exercised here on mainnet by
     // passing `zeroAddress` directly as the Permit2 argument.
     await client.deal({ erc20: wNative, amount: 10n * MathLib.WAD });
     await client.approve({ address: wNative, args: [morpho, 6n] });
-    await client.approve({ address: wNative, args: [generalAdapter1, 4n] });
 
     const res = await client.readContract({
       abi: getHoldingAbi,
@@ -297,7 +192,6 @@ describe("augment/Holding", () => {
         client.account.address,
         morpho,
         zeroAddress,
-        generalAdapter1,
         false,
         false,
       ],
@@ -305,14 +199,8 @@ describe("augment/Holding", () => {
 
     expect(res.balance).toBe(10n * MathLib.WAD);
     expect(res.erc20Allowances).toEqual({
-      morpho: 6n,
+      blue: 6n,
       permit2: 0n,
-      generalAdapter1: 4n,
-    });
-    expect(res.permit2BundlerAllowance).toEqual({
-      amount: 0n,
-      expiration: 0,
-      nonce: 0,
     });
   });
 });

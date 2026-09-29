@@ -10,6 +10,9 @@ import type { FetchParameters } from "../../types.js";
 /**
  * Fetches BluePublicAllocator permission and cap state for one Vault V2 adapter-market pair.
  *
+ * Reads `BluePublicAllocator.absoluteCap(...)` and `BluePublicAllocator.canPullFromMarket(...)` for
+ * the adapter-market pair.
+ *
  * @param vault - Vault V2 address.
  * @param adapter - MorphoMarketV1AdapterV2 address.
  * @param adapterMarketCapId - Adapter-scoped market cap id.
@@ -18,8 +21,7 @@ import type { FetchParameters } from "../../types.js";
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
- * @returns Hydrated adapter-market config with max-in calculation.
+ * @returns The hydrated `VaultV2BlueMarketPublicAllocatorConfig` entity with max-in calculation.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when one of the contract reads fails.
@@ -53,7 +55,7 @@ export async function fetchVaultV2BlueMarketPublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2BlueMarketPublicAllocatorConfig> {
-  const chainId = parameters.chainId ?? (await getChainId(client));
+  const chainId = await getChainId(client);
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {

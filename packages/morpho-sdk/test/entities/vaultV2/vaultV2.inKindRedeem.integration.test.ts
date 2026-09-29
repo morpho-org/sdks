@@ -1,5 +1,6 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddress,
   getChainAddresses,
   MathLib,
   marketParamsAbi,
@@ -9,6 +10,7 @@ import {
   morphoMarketV1AdapterV2FactoryAbi,
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -243,12 +245,16 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
 
     expect(vaultData.forceDeallocatePenalties[adapterAddress]).toBe(penalty);
     expect(marketParamsList).toHaveLength(2);
+    // The permit deadline is freshness-checked against the wall clock, not the
+    // (stale) pinned fork timestamp.
+    const deadline = Time.timestamp() + 7_200n;
     const exit = withChainTimestamp(await client.timestamp(), () =>
       vault.inKindRedeem({
         amount,
         marketParamsList,
         vaultData,
         userAddress: client.account.address,
+        deadline,
       }),
     );
     const [permitRequirement] = await withChainTimestamp(
@@ -304,9 +310,7 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       initialSupplyShares.reduce((total, shares) => total + shares, 0n),
     );
 
-    const { blue = getChainAddresses(mainnet.id).morpho } = getChainAddresses(
-      mainnet.id,
-    );
+    const blue = getChainAddress(mainnet.id, "blue");
     await client.deal({ erc20: USDC, account: blue, amount: 0n });
     const balanceLimitedVaultData = await vault.getData();
     const balanceLimitedExit = withChainTimestamp(

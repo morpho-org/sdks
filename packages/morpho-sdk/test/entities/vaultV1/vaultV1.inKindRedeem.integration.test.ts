@@ -1,4 +1,5 @@
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -140,12 +141,16 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       args: [client.account.address],
     });
 
+    // The permit deadline is freshness-checked against the wall clock, not the
+    // (stale) pinned fork timestamp.
+    const deadline = Time.timestamp() + 7_200n;
     const exit = withChainTimestamp(await client.timestamp(), () =>
       vault.inKindRedeem({
         amount,
         marketParamsList,
         vaultData,
         userAddress: client.account.address,
+        deadline,
       }),
     );
     const [permitRequirement] = await withChainTimestamp(

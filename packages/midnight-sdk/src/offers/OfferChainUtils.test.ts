@@ -1,9 +1,11 @@
-import { Time } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { formatUnits } from "viem";
 import { describe, expect, test } from "vitest";
+import { addresses, createFixtures } from "../__test__/fixtures.js";
 import { InvalidOfferParameterError } from "../errors.js";
 import { TickLib } from "../math/index.js";
+import { Offer } from "./Offer.js";
 import { OfferChainUtils } from "./OfferChainUtils.js";
 
 const YEAR = Time.s.from.y(1n);
@@ -30,6 +32,43 @@ const chainBuilders = {
 } as const;
 
 describe("OfferChainUtils fixed-rate offer-chain builders", () => {
+  test.each(["borrow", "lend"] as const)(
+    "behavior: maps spacing-2 %s legs to offers",
+    (side) => {
+      const tickSpacing = 2n;
+      const ratifier = getChainAddress(
+        ChainId.BaseMainnet,
+        "ecrecoverRatifier",
+      );
+      const { baseMarketParamsInput } = createFixtures({
+        midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+        ecrecoverRatifier: ratifier,
+      });
+      const legs = chainBuilders[side]({
+        ...defaultParams,
+        targetRate: 0.08,
+        tickSpacing,
+      });
+      expect(legs.some((leg) => leg.tick % 4n !== 0n)).toBe(true);
+      const offers = legs.map((leg) =>
+        Offer.create({
+          market: { ...baseMarketParamsInput(), maturity: MATURITY },
+          maker: addresses.maker,
+          ratifier,
+          maxAssets: 100n,
+          buy: side === "lend",
+          tick: leg.tick,
+          tickSpacing,
+          start: leg.startTimestamp,
+          expiry: leg.expiryTimestamp,
+        }),
+      );
+      expect(offers.map((offer) => offer.tick)).toEqual(
+        legs.map((leg) => leg.tick),
+      );
+    },
+  );
+
   test("default", () => {
     const chain = OfferChainUtils.buildLendFixedRateOfferChain(defaultParams);
 

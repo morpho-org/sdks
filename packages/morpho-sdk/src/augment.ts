@@ -10,5 +10,4 @@ import "./augment/Vault.js";
 import "./augment/VaultConfig.js";
 import "./augment/VaultMarketAllocation.js";
 import "./augment/VaultMarketConfig.js";
-import "./augment/VaultMarketPublicAllocatorConfig.js";
 import "./augment/VaultUser.js";

@@ -11,20 +11,6 @@
 export type BigIntish = bigint | string | number | boolean;
 
 /**
- * Adds a string `id` field to a type.
- *
- * @deprecated This utility is unused in the monorepo. Use an explicit intersection type instead.
- */
-export type WithId<T> = T & { id: string };
-
-/**
- * Adds a numeric `index` field to a type.
- *
- * @deprecated This utility is unused in the monorepo. Use an explicit intersection type instead.
- */
-export type WithIndex<T> = T & { index: number };
-
-/**
  * Recursively marks every field of a type as optional.
  */
 export type DeepPartial<T> = {

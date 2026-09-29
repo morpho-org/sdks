@@ -8,8 +8,8 @@ import { _try } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";
-import type { FetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
+import { validateMarketParamsId } from "./marketParamsId.js";
 
 /**
  * Fetches immutable Morpho Blue market params by market id.
@@ -19,8 +19,10 @@ import { readContractRestructured } from "../utils.js";
  *
  * @param id - Market id whose params should be resolved.
  * @param client - Viem client used for the fallback on-chain read.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)` when an on-chain read is needed.
  * @returns The resolved `MarketParams` entity.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry
+ * (on-chain fallback only; ids found in the local `MarketParams` registry skip the lookup).
+ * @throws {MarketParamsIdMismatchError} when fetched params hash to another market id.
  * @example
  * ```ts
  * import type { MarketId, MarketParams } from "@morpho-org/blue-sdk";
@@ -35,29 +37,23 @@ import { readContractRestructured } from "../utils.js";
  * const params: MarketParams = await fetchMarketParams(marketId, client);
  * ```
  */
-// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-export async function fetchMarketParams(
-  id: MarketId,
-  client: Client,
-  { chainId }: Pick<FetchParameters, "chainId"> = {},
-) {
+export async function fetchMarketParams(id: MarketId, client: Client) {
   let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
-    chainId ??= await getChainId(client);
+    const { blue } = getChainAddresses(await getChainId(client));
+    const params = await readContractRestructured(client, {
+      address: blue,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+      // Always fetch at latest block because config is immutable.
+      blockTag: "latest",
+    });
 
-    const { morpho } = getChainAddresses(chainId);
-
-    config = new MarketParams(
-      await readContractRestructured(client, {
-        address: morpho,
-        abi: blueAbi,
-        functionName: "idToMarketParams",
-        args: [id],
-        // Always fetch at latest block because config is immutable.
-        blockTag: "latest",
-      }),
-    );
+    // Throws if the RPC returned another market's params.
+    validateMarketParamsId(id, params);
+    config = new MarketParams(params);
   }
 
   return config;

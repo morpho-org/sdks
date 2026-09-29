@@ -19,6 +19,7 @@ declare module "@morpho-org/blue-sdk" {
   // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
+    /** @deprecated Pre-liquidation support is deprecated and will be removed in the next major. */
     let fetchPreLiquidation: typeof fetchPreLiquidationPosition;
   }
 }

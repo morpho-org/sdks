@@ -5,7 +5,11 @@ import { MathLib, SharesMath } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 import { AccrualPosition, type IAccrualPosition } from "./Position.js";
 
-/** Plain input shape for PreLiquidation contract parameters. */
+/**
+ * Plain input shape for PreLiquidation contract parameters.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export interface IPreLiquidationParams {
   preLltv: BigIntish;
   preLCF1: BigIntish;
@@ -15,7 +19,11 @@ export interface IPreLiquidationParams {
   preLiquidationOracle: Address;
 }
 
-/** Represents PreLiquidation contract parameters and factor interpolation helpers. */
+/**
+ * Represents PreLiquidation contract parameters and factor interpolation helpers.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export class PreLiquidationParams implements IPreLiquidationParams {
   public readonly preLltv: bigint;
   public readonly preLCF1: bigint;
@@ -53,7 +61,11 @@ export class PreLiquidationParams implements IPreLiquidationParams {
   }
 }
 
-/** Plain input shape for a position associated with a PreLiquidation contract. */
+/**
+ * Plain input shape for a position associated with a PreLiquidation contract.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export interface IPreLiquidationPosition extends IAccrualPosition {
   /**
    * The pre-liquidation parameters of the associated PreLiquidation contract.
@@ -70,7 +82,11 @@ export interface IPreLiquidationPosition extends IAccrualPosition {
   preLiquidationOraclePrice?: BigIntish;
 }
 
-/** Represents a position evaluated under PreLiquidation-specific risk parameters. */
+/**
+ * Represents a position evaluated under PreLiquidation-specific risk parameters.
+ *
+ * @deprecated Pre-liquidation support is deprecated and will be removed in the next major.
+ */
 export class PreLiquidationPosition
   extends AccrualPosition
   implements IPreLiquidationPosition
