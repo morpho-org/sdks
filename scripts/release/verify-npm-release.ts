@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { loadBundledPacote } from "../ci/read-tarball-identity.ts";
 import {
   listTarballEntries,
   loadBundledTar,
@@ -92,13 +93,6 @@ interface RegistryManifest {
 interface Packument {
   versions?: Record<string, RegistryManifest>;
   time?: Record<string, string>;
-}
-
-interface PacoteManifestReader {
-  manifest(
-    spec: string,
-    options: { fullMetadata: boolean; fullReadJson: boolean },
-  ): Promise<unknown>;
 }
 
 interface Attestation {
@@ -824,15 +818,6 @@ function isRegistryManifest(value: unknown): value is RegistryManifest {
         (repository.url === undefined ||
           typeof repository.url === "string"))) &&
     (manifest.license === undefined || typeof manifest.license === "string")
-  );
-}
-
-function isPacoteManifestReader(value: unknown): value is PacoteManifestReader {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "manifest" in value &&
-    typeof value.manifest === "function"
   );
 }
 
@@ -1805,16 +1790,11 @@ async function checkTarball(
     const irregularEntries = entries
       .filter(({ type }) => type !== "File" && type !== "Directory")
       .map(({ path, type }) => `${path} (${type})`);
-    const pacoteValue: unknown = createRequire(
-      join(npmRoot, "npm", "package.json"),
-    )("pacote");
-    if (!isPacoteManifestReader(pacoteValue)) {
-      throw new Error("Bundled pacote does not expose manifest().");
-    }
+    const pacote = loadBundledPacote(npmRoot);
     let tarballManifest: RegistryManifest | null = null;
     let manifestError: string | null = null;
     try {
-      const manifestValue = await pacoteValue.manifest(`file:${tarballPath}`, {
+      const manifestValue = await pacote.manifest(`file:${tarballPath}`, {
         fullMetadata: true,
         fullReadJson: true,
       });
