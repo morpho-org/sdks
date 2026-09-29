@@ -1,6 +1,5 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
-import type { OperationType } from "./limits.js";
+import type { SimulationOperationSubject } from "./limits.js";
 import { OPERATION_TYPES } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import { SIMULATION_MODES } from "./params.js";
@@ -69,52 +68,6 @@ interface SimulationContextBase {
   readonly blockNumber: bigint;
 }
 
-/** Operations acting on one Blue market. */
-export type BlueMarketOperationType = Exclude<
-  Extract<OperationType, `blue${string}`>,
-  "blueRefinance" | "blueAuthorization"
->;
-
-/** Operations acting on one vault (V1 or V2). */
-export type VaultOperationType = Exclude<
-  Extract<OperationType, `vault${string}`>,
-  "vaultV1MigrateToV2"
->;
-
-/** Protocol entity the failing operation acts on, keyed by `operation`. */
-type SimulationOperationSubject =
-  | {
-      readonly operation: BlueMarketOperationType;
-      /** Blue market the operation acts on. */
-      readonly marketId: MarketId;
-    }
-  | {
-      readonly operation: "blueRefinance";
-      /** Market the refinance closes. */
-      readonly sourceMarketId: MarketId;
-      /** Market the refinance opens. */
-      readonly targetMarketId: MarketId;
-    }
-  | {
-      readonly operation: "blueAuthorization";
-      /** Operator whose Morpho authorization the operation sets. */
-      readonly authorized: Address;
-    }
-  | {
-      readonly operation: VaultOperationType;
-      /** Vault the operation acts on. */
-      readonly vault: Address;
-      /** Vault V2 adapter the operation routes through. */
-      readonly adapter?: Address;
-    }
-  | {
-      readonly operation: "vaultV1MigrateToV2";
-      /** Vault the migration exits. */
-      readonly sourceVault: Address;
-      /** Vault the migration enters. */
-      readonly targetVault: Address;
-    };
-
 interface SimulationCheckContext extends SimulationContextBase {
   /** Token whose balance, allowance or transfer was checked. */
   readonly token?: Address;
@@ -141,7 +94,7 @@ type SimulationOperationContext = SimulationCheckContext &
  * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
  * verification contexts are further keyed by `operation`, which fixes the
  * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`). Never contains
+ * `sourceVault`/`targetVault`, `authorized`). Never contains
  * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
  * on the error).
  */
@@ -175,7 +128,6 @@ export abstract class SimulationPackageError extends Error {
   ) {
     const { context, ...errorOptions } = options ?? {};
     super(message, errorOptions);
-    this.name = this.constructor.name;
     if (context !== undefined) {
       this.context = Object.freeze({ ...context });
     }
@@ -184,6 +136,7 @@ export abstract class SimulationPackageError extends Error {
 
 /** Transaction would revert on-chain. Not bypassable. */
 export class SimulationRevertedError extends SimulationPackageError {
+  override readonly name = "SimulationRevertedError";
   readonly code = "SIMULATION_REVERTED";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -210,7 +163,7 @@ export class SimulationRevertedError extends SimulationPackageError {
 export interface RetainedAsset {
   /** Restricted bundles contract that ended up holding the token. */
   readonly address: Address;
-  /** Token retained (native ETH uses the zero address). */
+  /** Token retained (native ETH uses viem's `ethAddress`). */
   readonly token: Address;
   /** Net balance increase in the token's base units; always positive. */
   readonly netRetained: bigint;
@@ -222,6 +175,7 @@ export interface RetainedAsset {
  * pass-through flows and net outflows are allowed. Never bypassable.
  */
 export class BlacklistViolationError extends SimulationPackageError {
+  override readonly name = "BlacklistViolationError";
   readonly code = "BLACKLIST_ERROR";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -237,11 +191,13 @@ export class BlacklistViolationError extends SimulationPackageError {
 
 /** RPC service is down or unreachable. Bypassable — user can proceed. */
 export class ExternalServiceError extends SimulationPackageError {
+  override readonly name = "ExternalServiceError";
   readonly code = "EXTERNAL_SERVICE_ERROR";
 }
 
 /** Bad input to the simulation functions. Not bypassable. */
 export class SimulationValidationError extends SimulationPackageError {
+  override readonly name = "SimulationValidationError";
   readonly code = "VALIDATION_ERROR";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -256,6 +212,7 @@ export class SimulationValidationError extends SimulationPackageError {
 
 /** Chain ID not configured for any simulation method. Not bypassable. */
 export class UnsupportedChainError extends SimulationPackageError {
+  override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
 
   constructor(
@@ -266,96 +223,120 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** Base for verification failures: the context is required and carries where the check failed. */
-export abstract class SimulationVerificationError extends SimulationPackageError {
-  declare readonly context: SimulationErrorContext;
-
-  // biome-ignore lint/complexity/useMaxParams: public error constructor signature
-  constructor(
-    message: string,
-    context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, { ...options, context });
-  }
-}
-
 /** A decoded transaction maps to no supported operation. */
-export class UnsupportedOperationError extends SimulationVerificationError {
+export class UnsupportedOperationError extends SimulationPackageError {
+  override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";
 }
 
 /** An operation does not match the protocol entity it was bound to. */
-export class ProtocolBindingMismatchError extends SimulationVerificationError {
+export class ProtocolBindingMismatchError extends SimulationPackageError {
+  override readonly name = "ProtocolBindingMismatchError";
   readonly code = "PROTOCOL_BINDING_MISMATCH";
 }
 
 /** The request requires a verification feature this version does not support. */
-export class UnsupportedVerificationFeatureError extends SimulationVerificationError {
+export class UnsupportedVerificationFeatureError extends SimulationPackageError {
+  override readonly name = "UnsupportedVerificationFeatureError";
   readonly code = "UNSUPPORTED_VERIFICATION_FEATURE";
 }
 
 /** The simulation backend returned a response that cannot be parsed. */
-export class InvalidSimulationResponseError extends SimulationVerificationError {
+export class InvalidSimulationResponseError extends SimulationPackageError {
+  override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
 }
 
 /** State needed to verify an operation could not be fetched or derived. */
-export class MissingVerificationEvidenceError extends SimulationVerificationError {
+export class MissingVerificationEvidenceError extends SimulationPackageError {
+  override readonly name = "MissingVerificationEvidenceError";
   readonly code = "MISSING_VERIFICATION_EVIDENCE";
 }
 
 /** A pending authorization does not match the request it was prepared for. */
-export class AuthorizationRequestMismatchError extends SimulationVerificationError {
+export class AuthorizationRequestMismatchError extends SimulationPackageError {
+  override readonly name = "AuthorizationRequestMismatchError";
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
 }
 
 /** An observed asset change violates the expected bounds. */
-export class AssetChangeMismatchError extends SimulationVerificationError {
+export class AssetChangeMismatchError extends SimulationPackageError {
+  override readonly name = "AssetChangeMismatchError";
   readonly code = "ASSET_CHANGE_MISMATCH";
 }
 
 /** An observed permission change (allowance or authorization) violates the expected bounds. */
-export class PermissionChangeMismatchError extends SimulationVerificationError {
+export class PermissionChangeMismatchError extends SimulationPackageError {
+  override readonly name = "PermissionChangeMismatchError";
   readonly code = "PERMISSION_CHANGE_MISMATCH";
 }
 
 /** An observed state change violates the expected bounds. */
-export class StateChangeMismatchError extends SimulationVerificationError {
+export class StateChangeMismatchError extends SimulationPackageError {
+  override readonly name = "StateChangeMismatchError";
   readonly code = "STATE_CHANGE_MISMATCH";
 }
 
 /** An operation left a market outside its allowed constraints. */
-export class MarketConstraintViolationError extends SimulationVerificationError {
+export class MarketConstraintViolationError extends SimulationPackageError {
+  override readonly name = "MarketConstraintViolationError";
   readonly code = "MARKET_CONSTRAINT_VIOLATION";
 }
 
 /** An asset/share conversion exceeded the allowed slippage. */
-export class SlippageLimitExceededError extends SimulationVerificationError {
+export class SlippageLimitExceededError extends SimulationPackageError {
+  override readonly name = "SlippageLimitExceededError";
   readonly code = "SLIPPAGE_LIMIT_EXCEEDED";
 }
 
 /** An observed fee differs from the expected amount. */
-export class FeeMismatchError extends SimulationVerificationError {
+export class FeeMismatchError extends SimulationPackageError {
+  override readonly name = "FeeMismatchError";
   readonly code = "FEE_MISMATCH";
 }
 
 /** A consumer-supplied limit was violated. */
-export class ConsumerLimitViolationError extends SimulationVerificationError {
+export class ConsumerLimitViolationError extends SimulationPackageError {
+  override readonly name = "ConsumerLimitViolationError";
   readonly code = "CONSUMER_LIMIT_VIOLATION";
 }
 
 /** The simulation failed for a reason that fits no other code. */
-export class UnexpectedSimulationError extends SimulationVerificationError {
+export class UnexpectedSimulationError extends SimulationPackageError {
+  override readonly name = "UnexpectedSimulationError";
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
+
+const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
+  Object.freeze({
+    VALIDATION_ERROR: "SimulationValidationError",
+    UNSUPPORTED_CHAIN: "UnsupportedChainError",
+    EXTERNAL_SERVICE_ERROR: "ExternalServiceError",
+    SIMULATION_REVERTED: "SimulationRevertedError",
+    BLACKLIST_ERROR: "BlacklistViolationError",
+    UNSUPPORTED_OPERATION: "UnsupportedOperationError",
+    PROTOCOL_BINDING_MISMATCH: "ProtocolBindingMismatchError",
+    UNSUPPORTED_VERIFICATION_FEATURE: "UnsupportedVerificationFeatureError",
+    INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
+    MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
+    AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
+    ASSET_CHANGE_MISMATCH: "AssetChangeMismatchError",
+    PERMISSION_CHANGE_MISMATCH: "PermissionChangeMismatchError",
+    STATE_CHANGE_MISMATCH: "StateChangeMismatchError",
+    MARKET_CONSTRAINT_VIOLATION: "MarketConstraintViolationError",
+    SLIPPAGE_LIMIT_EXCEEDED: "SlippageLimitExceededError",
+    FEE_MISMATCH: "FeeMismatchError",
+    CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
+    UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
+  });
 
 /**
  * Structural guard for consumers where `instanceof` fails across bundles.
  *
  * @param value - Anything caught.
  * @returns `true` for `SimulationPackageError` instances and for objects
- *   carrying `name`/`message` strings, a known `code` and an absent or
+ *   carrying a `message` string, a known `code`, the `name` of the class
+ *   owning that `code`, and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
  *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
  *   known `operation` with its subject fields for `execution`/`verification`).
@@ -386,10 +367,11 @@ export function isSimulationPackageError(
     code?: unknown;
     context?: unknown;
   };
-  if (typeof name !== "string" || typeof message !== "string") return false;
+  if (typeof message !== "string") return false;
   if (
     typeof code !== "string" ||
-    !(SIMULATION_ERROR_CODES as readonly string[]).includes(code)
+    !(SIMULATION_ERROR_CODES as readonly string[]).includes(code) ||
+    name !== ERROR_NAME_BY_CODE[code as SimulationErrorCode]
   )
     return false;
   if (context === undefined) return true;

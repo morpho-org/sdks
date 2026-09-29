@@ -140,10 +140,12 @@ export async function simulate(
     throw new InvalidSimulationResponseError(
       `Execution contains ${userCalls.length} user call result(s) for ${request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
       {
-        stage: "transport",
-        chainId: request.chainId,
-        mode: request.mode,
-        blockNumber: execution.block.stateBlockNumber,
+        context: {
+          stage: "transport",
+          chainId: request.chainId,
+          mode: request.mode,
+          blockNumber: execution.block.stateBlockNumber,
+        },
       },
     );
   }

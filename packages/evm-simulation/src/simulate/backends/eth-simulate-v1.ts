@@ -103,10 +103,12 @@ export async function executePlan(params: {
       throw new InvalidSimulationResponseError(
         `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
         {
-          stage: "transport",
-          chainId: plan.request.chainId,
-          mode: plan.request.mode,
-          blockNumber: stateBlock.number,
+          context: {
+            stage: "transport",
+            chainId: plan.request.chainId,
+            mode: plan.request.mode,
+            blockNumber: stateBlock.number,
+          },
         },
       );
     }
@@ -131,11 +133,13 @@ export async function executePlan(params: {
     throw new UnsupportedVerificationFeatureError(
       "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
       {
-        stage: "preparation",
-        mode: plan.request.mode,
-        chainId: plan.request.chainId,
-        blockNumber: stateBlock.number,
-        authorizationIndex: 0,
+        context: {
+          stage: "preparation",
+          mode: plan.request.mode,
+          chainId: plan.request.chainId,
+          blockNumber: stateBlock.number,
+          authorizationIndex: 0,
+        },
       },
     );
   }
@@ -143,10 +147,12 @@ export async function executePlan(params: {
     throw new UnsupportedVerificationFeatureError(
       "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
       {
-        stage: "validation",
-        mode: plan.request.mode,
-        chainId: plan.request.chainId,
-        blockNumber: stateBlock.number,
+        context: {
+          stage: "validation",
+          mode: plan.request.mode,
+          chainId: plan.request.chainId,
+          blockNumber: stateBlock.number,
+        },
       },
     );
   }
@@ -223,10 +229,12 @@ export async function executePlan(params: {
     throw new InvalidSimulationResponseError(
       `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
       {
-        stage: "transport",
-        chainId: plan.request.chainId,
-        mode: plan.request.mode,
-        blockNumber: stateBlock.number,
+        context: {
+          stage: "transport",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: stateBlock.number,
+        },
       },
     );
   }

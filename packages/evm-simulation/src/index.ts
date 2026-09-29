@@ -14,13 +14,11 @@ export type {
   Permit2TransferTypedData,
 } from "./authorizations.js";
 export type {
-  BlueMarketOperationType,
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
   SimulationExecutionReason,
   SimulationStage,
-  VaultOperationType,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -40,7 +38,6 @@ export {
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -49,28 +46,10 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
-  BlueAuthorizationLimit,
-  BlueBorrowLimit,
-  BlueRefinanceLimit,
-  BlueRepayLimit,
-  BlueRepayWithdrawCollateralLimit,
-  BlueSupplyCollateralBorrowLimit,
-  BlueSupplyCollateralLimit,
-  BlueSupplyLimit,
-  BlueWithdrawCollateralLimit,
-  BlueWithdrawLimit,
-  MarketMinAssets,
-  OperationLimit,
+  BlueMarketOperationType,
   OperationType,
-  SimulationLimits,
-  VaultDeallocation,
-  VaultDepositLimit,
-  VaultInKindRedeemLimit,
-  VaultRedeemLimit,
-  VaultV1MigrateToV2Limit,
-  VaultV2ForceRedeemLimit,
-  VaultV2ForceWithdrawLimit,
-  VaultWithdrawLimit,
+  SimulationOperationSubject,
+  VaultOperationType,
 } from "./limits.js";
 export { OPERATION_TYPES } from "./limits.js";
 export type {

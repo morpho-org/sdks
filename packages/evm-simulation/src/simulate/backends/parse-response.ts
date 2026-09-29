@@ -130,8 +130,7 @@ export function parseSimulationResponse(params: {
   if (!parsed.success) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
-      errorContext,
-      { cause: parsed.error },
+      { cause: parsed.error, context: errorContext },
     );
   }
 
@@ -144,20 +143,20 @@ export function parseSimulationResponse(params: {
   ) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block ${blockNumber} but the pinned state block is ${params.stateBlockNumber}; the node did not honor the pinned block.`,
-      errorContext,
+      { context: errorContext },
     );
   }
   if (blockTimestamp < params.stateBlockTimestamp) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 reported block timestamp ${blockTimestamp}, behind the pinned state block timestamp ${params.stateBlockTimestamp}. Check that the endpoint executes on top of the requested block.`,
-      errorContext,
+      { context: errorContext },
     );
   }
 
   if (block.calls.length !== plan.calls.length) {
     throw new InvalidSimulationResponseError(
       `eth_simulateV1 returned ${block.calls.length} call result(s) for ${plan.calls.length} planned call(s). Refusing to map the response with mismatched lengths.`,
-      errorContext,
+      { context: errorContext },
     );
   }
 
@@ -215,14 +214,14 @@ export function parseSimulationResponse(params: {
     if (!result.status) {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${planned.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
-        probeContext,
+        { context: probeContext },
       );
     }
     const assets = decodeNativeBalanceProbe(call.returnData as Hex);
     if (assets === null) {
       throw new MissingVerificationEvidenceError(
         `Native balance probe "${planned.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
-        probeContext,
+        { context: probeContext },
       );
     }
     nativeBalances.push({
