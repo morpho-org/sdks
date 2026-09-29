@@ -1,11 +1,13 @@
 import { expectTypeOf } from "vitest";
 import type {
+  ApplicableChange,
   AuthorizationEvidence,
   AuthorizationPreparation,
   EvidenceRead,
   ExecutionIdentity,
   PermissionChange,
   RiskMetric,
+  VerificationDiff,
   VerificationSnapshot,
 } from "./evidence.js";
 
@@ -17,6 +19,9 @@ describe("verification evidence", () => {
     expectTypeOf<ExecutionIdentity["type"]>().toEqualTypeOf<
       "transaction" | "authorization" | "probe"
     >();
+    expectTypeOf<
+      VerificationDiff["markets"][number]["borrowApyWad"]
+    >().toEqualTypeOf<ApplicableChange<bigint>>();
   });
 
   test("behavior: missing evidence and debt-free metrics cannot masquerade as measurements", () => {

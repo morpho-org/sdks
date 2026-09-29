@@ -54,6 +54,14 @@ const value: Permit2SignatureTransferTypedData = {
 };`,
       },
       {
+        name: "failed-call-evidence",
+        code: 2322,
+        source: `import type { CompleteEvidence } from "${domain}stages.js";
+declare const evidence: CompleteEvidence;
+declare const call: CompleteEvidence["calls"][number];
+const value: CompleteEvidence = { ...evidence, calls: [{ ...call, result: { ...call.result, status: false } }] };`,
+      },
+      {
         name: "incomplete-result",
         code: 2741,
         source: `import type { VerifiedSimulationResult } from "${domain}result.js";

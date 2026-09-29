@@ -11,7 +11,7 @@ export interface TokenAmount {
 export interface SimulationDeallocation {
   readonly adapter: Address;
   readonly marketId?: MarketId;
-  readonly amount: bigint;
+  readonly assets: bigint;
 }
 
 /** Minimum verified supply credit for one selected in-kind market, in loan assets. @internal */
@@ -51,7 +51,7 @@ export interface OperationLimitFields {
     readonly maxLtvAfterWad?: bigint;
     readonly minHealthFactorAfterWad?: bigint;
     readonly maxUtilizationAfterWad?: bigint;
-    readonly maxBorrowApyAfterWad?: bigint;
+    readonly maxAfterBorrowApyWad?: bigint;
     readonly maxReallocationPenaltyAssets?: bigint;
   };
   readonly blueSupplyCollateralBorrow: {
@@ -64,7 +64,7 @@ export interface OperationLimitFields {
     readonly maxLtvAfterWad?: bigint;
     readonly minHealthFactorAfterWad?: bigint;
     readonly maxUtilizationAfterWad?: bigint;
-    readonly maxBorrowApyAfterWad?: bigint;
+    readonly maxAfterBorrowApyWad?: bigint;
     readonly maxReallocationPenaltyAssets?: bigint;
   };
   readonly blueRepay: {
@@ -144,6 +144,8 @@ export interface OperationLimitFields {
   readonly vaultV2ForceRedeem: {
     readonly vault: Address;
     readonly expectedShares?: bigint;
+    readonly expectedRecipient?: Address;
+    readonly expectedOnBehalf?: Address;
     readonly expectedDeallocations?: readonly SimulationDeallocation[];
     readonly minAssetsReceived?: bigint;
     readonly maxPenaltyShares?: bigint;
