@@ -38,7 +38,7 @@ try {
   );
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
-    // show err.reason to the user
+    // branch on err.reasonCode, show err.reason to the user
   }
   throw err;
 }
@@ -55,8 +55,7 @@ All symbols below are re-exported from the package root.
 - Input types: `SimulateParams`, `SimulationTransaction`, `SimulationAuthorization`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationVerificationError` (abstract base of the verification errors below), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
-- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageErrorLike`), `RetainedAsset`.
-- Revert catalog: `SimulationRevertReason` (decoded Morpho revert on `SimulationRevertedError.revert`, keyed by contract — Blue, Vault V1, Vault V2, Vault V2 adapters, VaultBundlesV1, VaultExitBundlesV1, Permit2), with the `*_REVERT_REASONS` catalogs (`BLUE_`, `VAULT_V1_`, `VAULT_V2_`, `VAULT_V2_ADAPTER_`, `VAULT_BUNDLES_V1_`, `VAULT_EXIT_BUNDLES_V1_`, `PERMIT2_`), local copies of the pinned ABIs' error names.
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
 - Verification vocabulary: `SimulationMode`, `OperationType`.
 
 ### Deeper docs
