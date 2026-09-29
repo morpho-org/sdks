@@ -17,6 +17,17 @@ describe("parseReleaseSpec", () => {
       version: "7.1.0-next.2+build.1",
     });
   });
+
+  test.each([
+    "blue-sdk",
+    "@morpho-org/blue-sdk@",
+    "@other/blue-sdk@7.1.0",
+    "@morpho-org/blue-sdk@7.1",
+    "@morpho-org/blue-sdk@https://x/y.tgz",
+    "@morpho-org/blue-sdk@github:morpho-org/sdks",
+  ])("rejects invalid release specs: %s", (spec) => {
+    expect(() => parseReleaseSpec(spec)).toThrow();
+  });
 });
 
 describe("getErrorMessage", () => {

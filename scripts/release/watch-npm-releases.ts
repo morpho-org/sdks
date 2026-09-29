@@ -15,7 +15,7 @@ const GITHUB_API_URL = "https://api.github.com";
 const LOOKBACK_MS = 48 * 60 * 60 * 1000;
 const DEDUP_WINDOW_MS = LOOKBACK_MS + 24 * 60 * 60 * 1000;
 
-/** Packages once published from this repository and still installable from npm. */
+/** Former packages/* names of this repository, watched in case one is published again. */
 const RETIRED_PACKAGES = [
   "@morpho-org/blue-api-sdk",
   "@morpho-org/blue-sdk-ethers",
@@ -24,11 +24,14 @@ const RETIRED_PACKAGES = [
   "@morpho-org/blue-sdk-viem-bundler",
   "@morpho-org/blue-sdk-viem-simulation",
   "@morpho-org/blue-sdk-wagmi",
+  "@morpho-org/bundler-sdk",
   "@morpho-org/bundler-sdk-ethers",
   "@morpho-org/bundler-sdk-viem",
+  "@morpho-org/examples",
   "@morpho-org/liquidation-sdk-viem",
   "@morpho-org/liquidity-sdk-ethers",
   "@morpho-org/migration-sdk-viem",
+  "@morpho-org/prool-viemtest",
   "@morpho-org/simulation-sdk",
   "@morpho-org/simulation-sdk-wagmi",
   "@morpho-org/test-ethers",
@@ -45,13 +48,13 @@ type Packument = {
  * Selects published versions from the fixed 48-hour lookback window.
  * @param packument npm registry package metadata.
  * @param nowMs The current time in milliseconds.
- * @returns Matching versions in ascending publish-time order.
- * @throws If the packument does not contain plain version and time objects with valid publish times.
+ * @returns Timed recent versions in ascending publish-time order and untimed versions in packument order.
+ * @throws If the packument does not contain plain version and time objects.
  */
 export function selectRecentVersions(
   packument: Packument,
   nowMs: number,
-): string[] {
+): { recent: string[]; untimed: string[] } {
   const { time, versions } = packument;
   if (
     time == null ||
@@ -65,19 +68,25 @@ export function selectRecentVersions(
   }
 
   const lowerBound = nowMs - LOOKBACK_MS;
-  return Object.entries(versions)
-    .map(([version]) => {
-      const publishTime = time[version];
-      const publishTimeMs =
-        typeof publishTime === "string" ? Date.parse(publishTime) : NaN;
-      if (!Number.isFinite(publishTimeMs)) {
-        throw new Error(`Missing or unparsable publish time for ${version}.`);
-      }
-      return { version, publishTimeMs };
-    })
-    .filter(({ publishTimeMs }) => publishTimeMs >= lowerBound)
-    .sort((left, right) => left.publishTimeMs - right.publishTimeMs)
-    .map(({ version }) => version);
+  const recent: { version: string; publishTimeMs: number }[] = [];
+  const untimed: string[] = [];
+  for (const version of Object.keys(versions)) {
+    const publishTime = time[version];
+    const publishTimeMs =
+      typeof publishTime === "string" ? Date.parse(publishTime) : NaN;
+    if (!Number.isFinite(publishTimeMs)) {
+      untimed.push(version);
+      continue;
+    }
+    if (publishTimeMs >= lowerBound) recent.push({ version, publishTimeMs });
+  }
+
+  return {
+    recent: recent
+      .sort((left, right) => left.publishTimeMs - right.publishTimeMs)
+      .map(({ version }) => version),
+    untimed,
+  };
 }
 
 /**
@@ -144,8 +153,14 @@ export async function main(
         throw new Error(`npm registry request failed (${response.status}).`);
       }
       const packument = (await response.json()) as Packument;
-      const versions = selectRecentVersions(packument, nowMs);
+      const { recent: versions, untimed } = selectRecentVersions(
+        packument,
+        nowMs,
+      );
       recentVersionCount += versions.length;
+      for (const version of untimed) {
+        errors.push(`${name}@${version}: Missing or unparsable publish time.`);
+      }
       for (const version of versions) {
         try {
           candidates.push(parseReleaseSpec(`${name}@${version}`));

@@ -80,16 +80,28 @@ describe("selectRecentVersions", () => {
         },
         NOW_MS,
       ),
-    ).toEqual(["1.0.3", "1.0.0"]);
+    ).toEqual({ recent: ["1.0.3", "1.0.0"], untimed: [] });
   });
 
   test.each([
     ["missing", {}],
     ["unparsable", { "1.0.0": "not-a-date" }],
-  ])("throws for a %s publish time", (_case, time) => {
-    expect(() =>
+  ])("returns a %s publish time as untimed", (_case, time) => {
+    expect(
       selectRecentVersions({ versions: { "1.0.0": {} }, time }, NOW_MS),
-    ).toThrow("Missing or unparsable publish time for 1.0.0.");
+    ).toEqual({ recent: [], untimed: ["1.0.0"] });
+  });
+
+  test("keeps timed recent versions when another version is untimed", () => {
+    expect(
+      selectRecentVersions(
+        {
+          versions: { "1.0.0": {}, "2.0.0": {} },
+          time: { "2.0.0": new Date(NOW_MS - 1_000).toISOString() },
+        },
+        NOW_MS,
+      ),
+    ).toEqual({ recent: ["2.0.0"], untimed: ["1.0.0"] });
   });
 
   test("requires plain time and versions objects", () => {
@@ -334,7 +346,12 @@ describe("release issues", () => {
             const url = String(input);
             if (url.startsWith("https://registry.npmjs.org/")) {
               if (url.endsWith(missingTime.replaceAll("/", "%2f"))) {
-                return jsonResponse({ versions: { "1.0.0": {} }, time: {} });
+                return jsonResponse({
+                  versions: { "1.0.0": {}, "1.0.1": {} },
+                  time: {
+                    "1.0.1": new Date(NOW_MS - 1_000).toISOString(),
+                  },
+                });
               }
               return url.endsWith(healthy.replaceAll("/", "%2f"))
                 ? jsonResponse(releasePackument(NOW_MS))
@@ -347,8 +364,16 @@ describe("release issues", () => {
             return jsonResponse([]);
           },
         }),
-      ).rejects.toThrow("Missing or unparsable publish time for 1.0.0.");
-      expect(createdTitles).toEqual([releaseIssueTitle(healthy, "1.2.3")]);
+      ).rejects.toThrow(
+        `${missingTime}@1.0.0: Missing or unparsable publish time.`,
+      );
+      expect(createdTitles).toHaveLength(2);
+      expect(createdTitles).toEqual(
+        expect.arrayContaining([
+          releaseIssueTitle(missingTime, "1.0.1"),
+          releaseIssueTitle(healthy, "1.2.3"),
+        ]),
+      );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
