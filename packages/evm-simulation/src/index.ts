@@ -34,7 +34,9 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type { OperationType } from "./limits.js";
+export { OPERATION_TYPES } from "./limits.js";
 export type { SimulationMode } from "./params.js";
+export { SIMULATION_MODES } from "./params.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {

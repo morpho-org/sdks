@@ -506,6 +506,46 @@ describe("isSimulationPackageError", () => {
     ).toBe(false);
   });
 
+  it("is false without a name string", () => {
+    expect(
+      isSimulationPackageError({ message: "m", code: "FEE_MISMATCH" }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({ name: 1, message: "m", code: "FEE_MISMATCH" }),
+    ).toBe(false);
+  });
+
+  it("requires a known operation on execution and verification contexts", () => {
+    const base = { name: "X", message: "m", code: "FEE_MISMATCH" };
+    const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
+    for (const stage of ["execution", "verification"]) {
+      expect(
+        isSimulationPackageError({ ...base, context: { ...ctx, stage } }),
+      ).toBe(false);
+      expect(
+        isSimulationPackageError({
+          ...base,
+          context: { ...ctx, stage, operation: "bogus" },
+        }),
+      ).toBe(false);
+      expect(
+        isSimulationPackageError({
+          ...base,
+          context: { ...ctx, stage, operation: "blueSupply" },
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { ...ctx, stage: "transport" },
+      }),
+    ).toBe(true);
+    expect(isSimulationPackageError({ ...base, context: EXECUTION })).toBe(
+      true,
+    );
+  });
+
   it("is false for an unknown code", () => {
     expect(
       isSimulationPackageError({
