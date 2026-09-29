@@ -47,13 +47,16 @@ export type SimulationExecutionReason =
   | "ACCESS_RESTRICTED"
   | "UNKNOWN_REVERT";
 
+const SIMULATION_STAGES = [
+  "validation",
+  "preparation",
+  "execution",
+  "verification",
+  "transport",
+] as const;
+
 /** Pipeline stage a failure belongs to; `transport` covers RPC and response failures. */
-export type SimulationStage =
-  | "validation"
-  | "preparation"
-  | "execution"
-  | "verification"
-  | "transport";
+export type SimulationStage = (typeof SIMULATION_STAGES)[number];
 
 interface SimulationContextBase {
   /** Request mode the failure happened in. */
@@ -69,8 +72,16 @@ interface SimulationOperationContext extends SimulationContextBase {
   readonly operation: OperationType;
   /** Blue market the operation acts on. */
   readonly marketId?: MarketId;
+  /** Market a refinance closes; set with `targetMarketId` to name the failing side. */
+  readonly sourceMarketId?: MarketId;
+  /** Market a refinance opens. */
+  readonly targetMarketId?: MarketId;
   /** Vault the operation acts on. */
   readonly vault?: Address;
+  /** Vault a migration exits; set with `targetVault` to name the failing side. */
+  readonly sourceVault?: Address;
+  /** Vault a migration enters. */
+  readonly targetVault?: Address;
   /** Vault V2 adapter the operation routes through. */
   readonly adapter?: Address;
   /** Token whose balance, allowance or transfer was checked. */
@@ -297,21 +308,14 @@ export class UnexpectedSimulationError extends SimulationVerificationError {
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
 
-const SIMULATION_STAGES: readonly string[] = [
-  "validation",
-  "preparation",
-  "execution",
-  "verification",
-  "transport",
-];
-
 /**
  * Structural guard for consumers where `instanceof` fails across bundles.
  *
  * @param value - Anything caught.
  * @returns `true` for `SimulationPackageError` instances and for objects
  *   carrying `name`/`message` strings, a known `code` and an absent or
- *   well-formed `context` (known `stage`, `mode`, numeric `chainId`).
+ *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
+ *   `bigint` `blockNumber`, and `authorizationIndex` for `preparation`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
@@ -323,7 +327,8 @@ const SIMULATION_STAGES: readonly string[] = [
  *   await simulate(config, { chainId: 1, transactions: [] });
  * } catch (e) {
  *   if (!isSimulationPackageError(e)) throw e;
- *   if (e instanceof SimulationRevertedError) console.log(e.reasonCode);
+ *   if (e.code !== "SIMULATION_REVERTED") throw e;
+ *   console.log(e.context?.stage, e.message);
  * }
  * ```
  */
@@ -347,15 +352,20 @@ export function isSimulationPackageError(
   if (context === undefined) return true;
   if (typeof context !== "object" || context === null || Array.isArray(context))
     return false;
-  const { stage, mode, chainId } = context as {
+  const { stage, mode, chainId, blockNumber, authorizationIndex } = context as {
     stage?: unknown;
     mode?: unknown;
     chainId?: unknown;
+    blockNumber?: unknown;
+    authorizationIndex?: unknown;
   };
-  return (
-    typeof stage === "string" &&
-    SIMULATION_STAGES.includes(stage) &&
-    (mode === "preview" || mode === "final") &&
-    typeof chainId === "number"
-  );
+  if (
+    typeof stage !== "string" ||
+    !(SIMULATION_STAGES as readonly string[]).includes(stage) ||
+    (mode !== "preview" && mode !== "final") ||
+    typeof chainId !== "number" ||
+    typeof blockNumber !== "bigint"
+  )
+    return false;
+  return stage !== "preparation" || typeof authorizationIndex === "number";
 }
