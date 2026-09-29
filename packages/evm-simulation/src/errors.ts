@@ -1,5 +1,13 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type { Address, Hex } from "viem";
+import type {
+  metaMorphoAbi,
+  morphoMarketV1AdapterAbi,
+  morphoMarketV1AdapterV2Abi,
+  morphoVaultV1AdapterAbi,
+  permit2Abi,
+  vaultV2Abi,
+} from "@morpho-org/morpho-ts/abis";
+import type { Abi, Address, Hex } from "viem";
 import type { OperationType } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 
@@ -29,34 +37,124 @@ export const SIMULATION_ERROR_CODES = [
 /** Stable string discriminator for log aggregation and external mapping. */
 export type SimulationErrorCode = (typeof SIMULATION_ERROR_CODES)[number];
 
-/** Coarse classification of why a simulated transaction reverted. */
-export type SimulationRevertReason =
-  | "INSUFFICIENT_BALANCE"
-  | "INSUFFICIENT_ALLOWANCE"
-  | "INSUFFICIENT_LIQUIDITY"
-  | "POSITION_UNHEALTHY"
-  | "SLIPPAGE_EXCEEDED"
-  | "SIGNATURE_EXPIRED"
-  | "SIGNATURE_INVALID"
-  | "NONCE_ALREADY_USED"
-  | "CAP_EXCEEDED"
-  | "ACCESS_RESTRICTED"
-  | "UNKNOWN_REVERT";
+/** Names of the custom errors declared by an ABI. */
+type AbiErrorName<abi extends Abi> = Extract<
+  abi[number],
+  { type: "error" }
+>["name"];
 
-/** Pipeline stage where a simulation failed. */
-export type SimulationErrorStage =
-  | "validation"
-  | "preparation"
-  | "execution"
-  | "verification"
-  | "transport";
+/** Morpho Blue `require` revert strings (Morpho Blue `ErrorsLib`). */
+export const BLUE_REVERT_REASONS = [
+  "not owner",
+  "max LLTV exceeded",
+  "max fee exceeded",
+  "already set",
+  "IRM not enabled",
+  "LLTV not enabled",
+  "market already created",
+  "no code",
+  "market not created",
+  "inconsistent input",
+  "zero assets",
+  "zero address",
+  "unauthorized",
+  "insufficient collateral",
+  "insufficient liquidity",
+  "position is healthy",
+  "invalid signature",
+  "signature expired",
+  "invalid nonce",
+  "transfer reverted",
+  "transfer returned false",
+  "transferFrom reverted",
+  "transferFrom returned false",
+  "max uint128 exceeded",
+] as const;
+
+/** VaultBundlesV1 custom error names (mirrors `vaultBundlesV1Abi` in `@morpho-org/morpho-sdk`). */
+export const VAULT_BUNDLES_V1_REVERT_REASONS = [
+  "AlreadyInitiated",
+  "DeadlinePassed",
+  "InconsistentAssets",
+  "NotExactlyOneZero",
+  "PctExceeded",
+  "SlippageExceeded",
+] as const;
+
+/** VaultExitBundlesV1 custom error names (mirrors `vaultExitBundlesV1Abi` in `@morpho-org/morpho-sdk`). */
+export const VAULT_EXIT_BUNDLES_V1_REVERT_REASONS = [
+  "AdapterNotPartOfVault",
+  "AlreadyInitiated",
+  "ApproveReturnedFalse",
+  "DeadlinePassed",
+  "InvalidAdaptersLength",
+  "MorphoMismatch",
+  "NoCode",
+  "PctExceeded",
+  "SlippageExceeded",
+  "TransferReturnedFalse",
+  "UnauthorizedCallback",
+] as const;
+
+/**
+ * Decoded revert of a Morpho contract, keyed by the contract that raised it.
+ * `name` is the `require` string for Blue and the custom error name elsewhere;
+ * `args` are the decoded custom-error arguments (e.g. the market `id` of
+ * `SupplyCapExceeded(bytes32 id)`). Vault V1/V2 names include the OpenZeppelin
+ * ERC-20/ERC-4626/ERC-2612 errors those contracts inherit.
+ */
+export type SimulationRevertReason =
+  | {
+      readonly contract: "blue";
+      readonly name: (typeof BLUE_REVERT_REASONS)[number];
+    }
+  | {
+      readonly contract: "vaultV1";
+      readonly name: AbiErrorName<typeof metaMorphoAbi>;
+      readonly args?: readonly unknown[];
+    }
+  | {
+      readonly contract: "vaultV2";
+      readonly name: AbiErrorName<typeof vaultV2Abi>;
+      readonly args?: readonly unknown[];
+    }
+  | {
+      readonly contract: "vaultV2Adapter";
+      readonly name: AbiErrorName<
+        | typeof morphoVaultV1AdapterAbi
+        | typeof morphoMarketV1AdapterAbi
+        | typeof morphoMarketV1AdapterV2Abi
+      >;
+      readonly args?: readonly unknown[];
+    }
+  | {
+      readonly contract: "vaultBundlesV1";
+      readonly name: (typeof VAULT_BUNDLES_V1_REVERT_REASONS)[number];
+      readonly args?: readonly unknown[];
+    }
+  | {
+      readonly contract: "vaultExitBundlesV1";
+      readonly name: (typeof VAULT_EXIT_BUNDLES_V1_REVERT_REASONS)[number];
+      readonly args?: readonly unknown[];
+    }
+  | {
+      readonly contract: "permit2";
+      readonly name: AbiErrorName<typeof permit2Abi>;
+      readonly args?: readonly unknown[];
+    }
+  /** Revert outside the Morpho catalog (e.g. a token's own ERC-20 error). */
+  | {
+      readonly contract: "other";
+      readonly name?: string;
+      readonly args?: readonly unknown[];
+      readonly data?: Hex;
+    };
 
 /**
  * Where and why a simulation failed. Never contains signatures, RPC URLs,
  * credentials, raw calldata or raw causes (`cause` stays on the error).
  */
 export interface SimulationErrorContext {
-  readonly stage: SimulationErrorStage;
   readonly mode: SimulationMode;
   readonly chainId: number;
   /** Unset when the failure happens before the block is resolved. */
@@ -110,9 +208,12 @@ export class SimulationRevertedError extends SimulationPackageError {
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
   constructor(
+    /** Raw revert string as reported by the backend, when any. */
     public readonly reason: string | undefined,
     public readonly details?: unknown,
-    public readonly reasonCode: SimulationRevertReason = "UNKNOWN_REVERT",
+    /** Decoded Morpho revert; undefined when the revert data could not be decoded. */
+    public readonly revert?: SimulationRevertReason,
+    /** Which transaction/authorization reverted and the operation it belonged to. */
     context?: SimulationErrorContext,
   ) {
     super(
@@ -122,11 +223,11 @@ export class SimulationRevertedError extends SimulationPackageError {
   }
 }
 
-/** Per-asset net retained amount keyed by restricted contract and token. */
+/** Per-asset net retained amount keyed by restricted contract and token; `netRetained` is a decimal string. */
 export interface RetainedAsset {
-  readonly address: Address;
-  readonly token: Address;
-  readonly netRetained: bigint;
+  readonly address: string | undefined;
+  readonly token: string | undefined;
+  readonly netRetained: string;
 }
 
 /**
@@ -141,7 +242,7 @@ export class BlacklistViolationError extends SimulationPackageError {
   constructor(
     message: string,
     /** Per-asset net retained amounts keyed by restricted contract and token. */
-    public readonly assetChanges?: RetainedAsset[],
+    public readonly assetChanges?: readonly RetainedAsset[],
     context?: SimulationErrorContext,
   ) {
     super(message, { context });
@@ -375,22 +476,39 @@ export class UnexpectedSimulationError extends SimulationPackageError {
   }
 }
 
+/** What `isSimulationPackageError` guarantees: the serializable core of a `SimulationPackageError`. */
+export interface SimulationPackageErrorLike {
+  readonly name: string;
+  readonly message: string;
+  readonly code: SimulationErrorCode;
+  readonly context?: SimulationErrorContext;
+}
+
 /**
- * Structural guard for consumers where `instanceof` fails across bundles:
- * true for `SimulationPackageError` instances and for plain objects carrying a
- * `name` string, a known `code`, and an absent or object `context`.
+ * Structural guard for consumers where `instanceof` fails across bundles or
+ * after (de)serialization.
+ *
+ * @param value - Anything caught or received.
+ * @returns `true` for `SimulationPackageError` instances and for objects
+ *   carrying `name`/`message` strings, a known `code` and an absent or object
+ *   `context`.
+ * @example
+ * try { await simulate(config, params); } catch (e) {
+ *   if (isSimulationPackageError(e) && e.code === "SIMULATION_REVERTED") log(e.context);
+ * }
  */
 export function isSimulationPackageError(
   value: unknown,
-): value is SimulationPackageError {
+): value is SimulationPackageErrorLike {
   if (value instanceof SimulationPackageError) return true;
   if (typeof value !== "object" || value === null) return false;
-  const { name, code, context } = value as {
+  const { name, message, code, context } = value as {
     name?: unknown;
+    message?: unknown;
     code?: unknown;
     context?: unknown;
   };
-  if (typeof name !== "string") return false;
+  if (typeof name !== "string" || typeof message !== "string") return false;
   if (
     typeof code !== "string" ||
     !(SIMULATION_ERROR_CODES as readonly string[]).includes(code)
