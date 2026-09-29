@@ -81,7 +81,8 @@ describes the target contract.
 The user-approved exception dated 2026-09-24 permits `evm-simulation` 5.0.0 to
 remove only `TenderlyRpcConfig`, `ChainSimulationConfig.tenderlyRpc`,
 Tenderly/provider-fallback behavior (SDK-1291), and the two legacy
-authorization variants of `SimulateParams.authorizations` (SDK-1293) without
+authorization variants of `SimulateParams.authorizations`, and narrowing
+`SimulateParams.blockNumber` to exclude `"pending"` (SDK-1293) without
 the prior successor-introduction, `@deprecated`, and published
 deprecation-minor/coexistence steps. No other removal inherits this exception.
 See root `AGENTS.md` §7 and its `module-api-architecture` review persona.

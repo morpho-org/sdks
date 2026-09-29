@@ -339,37 +339,14 @@ const createChecks = (): FieldChecks => {
           return { type: "erc20Approval", token, owner, spender, amount };
         }
         case "erc2612Permit": {
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "Permit",
+            fields: ERC2612_PERMIT_FIELDS,
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "Permit")
-            errors.push(
-              `${path}.typedData.primaryType: must be "Permit" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const permitFields = isRecord(types)
-            ? readField(types, "Permit")
-            : undefined;
-          check.fields({
-            actual: permitFields,
-            expected: ERC2612_PERMIT_FIELDS,
-            path: `${path}.typedData.types.Permit`,
-          });
-          const message = readField(typedData, "message");
-          if (!isRecord(message)) {
-            errors.push(`${path}.typedData.message: must be an object`);
-            return undefined;
-          }
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: permitFields } = envelope;
           const messagePath = `${path}.typedData.message`;
           check.keys(message, {
             allow: ERC2612_MESSAGE_KEYS,
@@ -412,12 +389,7 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Permit",
               types: {
-                Permit: (permitFields as readonly Eip712Field[]).map(
-                  ({ name, type: fieldType }) => ({
-                    name,
-                    type: fieldType,
-                  }),
-                ),
+                Permit: copyFields(permitFields as readonly Eip712Field[]),
               },
               message: { owner, spender, value, nonce, deadline },
             },
@@ -428,45 +400,29 @@ const createChecks = (): FieldChecks => {
             readField(authorization, "owner"),
             `${path}.owner`,
           );
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "PermitTransferFrom",
+            fields: PERMIT2_TRANSFER_FIELDS,
+            messageError: "must carry permitted token and amount",
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "PermitTransferFrom")
-            errors.push(
-              `${path}.typedData.primaryType: must be "PermitTransferFrom" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const transferFields = isRecord(types)
-            ? readField(types, "PermitTransferFrom")
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: transferFields } = envelope;
+          const rawTypedData = readField(authorization, "typedData");
+          const types = isRecord(rawTypedData)
+            ? readField(rawTypedData, "types")
             : undefined;
           const permissionFields = isRecord(types)
             ? readField(types, "TokenPermissions")
             : undefined;
           check.fields({
-            actual: transferFields,
-            expected: PERMIT2_TRANSFER_FIELDS,
-            path: `${path}.typedData.types.PermitTransferFrom`,
-          });
-          check.fields({
             actual: permissionFields,
             expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
             path: `${path}.typedData.types.TokenPermissions`,
           });
-          const message = readField(typedData, "message");
-          const permitted = isRecord(message)
-            ? readField(message, "permitted")
-            : undefined;
-          if (!isRecord(message) || !isRecord(permitted)) {
+          const permitted = readField(message, "permitted");
+          if (!isRecord(permitted)) {
             errors.push(
               `${path}.typedData.message: must carry permitted token and amount`,
             );
@@ -521,18 +477,12 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "PermitTransferFrom",
               types: {
-                PermitTransferFrom: (
-                  transferFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
-                TokenPermissions: (
-                  permissionFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
+                PermitTransferFrom: copyFields(
+                  transferFields as readonly Eip712Field[],
+                ),
+                TokenPermissions: copyFields(
+                  permissionFields as readonly Eip712Field[],
+                ),
               },
               message: {
                 permitted: {
@@ -573,37 +523,14 @@ const createChecks = (): FieldChecks => {
           };
         }
         case "blueAuthorizationSignature": {
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "Authorization",
+            fields: BLUE_AUTHORIZATION_FIELDS,
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "Authorization")
-            errors.push(
-              `${path}.typedData.primaryType: must be "Authorization" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const authorizationFields = isRecord(types)
-            ? readField(types, "Authorization")
-            : undefined;
-          check.fields({
-            actual: authorizationFields,
-            expected: BLUE_AUTHORIZATION_FIELDS,
-            path: `${path}.typedData.types.Authorization`,
-          });
-          const message = readField(typedData, "message");
-          if (!isRecord(message)) {
-            errors.push(`${path}.typedData.message: must be an object`);
-            return undefined;
-          }
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: authorizationFields } = envelope;
           const messagePath = `${path}.typedData.message`;
           check.keys(message, {
             allow: BLUE_AUTHORIZATION_MESSAGE_KEYS,
@@ -646,12 +573,9 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Authorization",
               types: {
-                Authorization: (
-                  authorizationFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
+                Authorization: copyFields(
+                  authorizationFields as readonly Eip712Field[],
+                ),
               },
               message: {
                 authorizer,
@@ -826,6 +750,58 @@ const createChecks = (): FieldChecks => {
       return errors.length === errorsBefore ? out : undefined;
     },
   };
+  const copyFields = (fields: readonly Eip712Field[]): Eip712Field[] =>
+    fields.map(({ name, type: fieldType }) => ({ name, type: fieldType }));
+
+  /** Shared typed-data envelope guard: domain, primaryType, primary field list
+   * and message record; message-specific checks stay in each branch. */
+  const typedDataEnvelope = (options: {
+    value: unknown;
+    path: string;
+    primaryType: string;
+    fields: readonly Eip712Field[];
+    messageError?: string;
+  }):
+    | {
+        domain: Eip712Domain | undefined;
+        message: object;
+        fields: unknown;
+      }
+    | undefined => {
+    const typedDataPath = `${options.path}.typedData`;
+    const value = options.value;
+    if (!isRecord(value)) {
+      errors.push(`${typedDataPath}: must be an object`);
+      return undefined;
+    }
+    check.keys(value, { allow: TYPED_DATA_KEYS, path: typedDataPath });
+    const domain = check.domain(
+      readField(value, "domain"),
+      `${typedDataPath}.domain`,
+    );
+    if (readField(value, "primaryType") !== options.primaryType)
+      errors.push(
+        `${typedDataPath}.primaryType: must be "${options.primaryType}" (got ${String(readField(value, "primaryType"))})`,
+      );
+    const types = readField(value, "types");
+    const fields = isRecord(types)
+      ? readField(types, options.primaryType)
+      : undefined;
+    check.fields({
+      actual: fields,
+      expected: options.fields,
+      path: `${typedDataPath}.types.${options.primaryType}`,
+    });
+    const message = readField(value, "message");
+    if (!isRecord(message)) {
+      errors.push(
+        `${typedDataPath}.message: ${options.messageError ?? "must be an object"}`,
+      );
+      return undefined;
+    }
+    return { domain, message, fields };
+  };
+
   return check;
 };
 

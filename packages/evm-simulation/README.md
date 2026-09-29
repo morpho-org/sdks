@@ -70,8 +70,8 @@ Until the authorization-verification release, preview `authorizations` and `limi
 
 ### Deeper docs
 
-See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, authorizations
-encoding, the error hierarchy, retention rules, and the recipe for adding a
+See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, the preview-authorization/limits feature
+gate, the error hierarchy, retention rules, and the recipe for adding a
 chain via `SimulationConfig.chains` — including how native-balance probes are
 injected via `stateOverrides` code, how the state block is pinned and the
 simulated block constrained to the pin or its immediate successor, and the

@@ -254,6 +254,20 @@ describe.sequential("simulate — success", () => {
 });
 
 describe.sequential("simulate — modes and unsupported features", () => {
+  it("forwards blockNumber to executeSimulation", async () => {
+    await simulate(makeConfig(), makeParams({ blockNumber: 20000000n }));
+    expect(mockExecuteSimulation).toHaveBeenCalledWith(
+      expect.objectContaining({ blockNumber: 20000000n }),
+    );
+  });
+
+  it("forwards a block tag to executeSimulation", async () => {
+    await simulate(makeConfig(), makeParams({ blockNumber: "finalized" }));
+    expect(mockExecuteSimulation).toHaveBeenCalledWith(
+      expect.objectContaining({ blockNumber: "finalized" }),
+    );
+  });
+
   it("defaults to final mode", async () => {
     await simulate(makeConfig(), makeParams());
     const plan = mockExecuteSimulation.mock.calls[0]![0].plan;
