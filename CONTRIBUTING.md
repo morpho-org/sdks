@@ -83,6 +83,23 @@ After changes land on `main` or `next`, the push workflow runs lint, build, and 
 
 Before merging `next` back into `main`, run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 
+## Deprecating and removing a package
+
+Public packages leave the monorepo in this order ([ADR-2026-05-13](./docs/adrs/ADR-2026-05-13-sdk-package-deprecation-lifecycle.md)):
+
+1. **Extract features.** Move still-supported public features into the replacement package, or document that they have no replacement, and point the package README at that decision.
+2. **Tell integrators.** Tell known integrators which package is going, its replacement or that there is none, and when the npm notice and the source removal are planned. Update the public docs to match.
+3. **Deprecate on npm.** Someone with write access to the package runs `npm deprecate` on every published version. No CI workflow does this. The message names the replacement or says there is none:
+
+   ```sh
+   npm deprecate @morpho-org/<package> "Use @morpho-org/<replacement>. <What> is no longer a supported public SDK surface."
+   npm deprecate @morpho-org/<package> "No replacement package. <What> is no longer a supported public SDK surface."
+   ```
+
+   Check it with `npm view @morpho-org/<package> deprecated`.
+4. **Wait out the deprecation period:** three months from the npm notice.
+5. **Remove the source.** Delete `packages/<package>` and its workspace, lockfile, CI, test, typedoc, and lint references, remove it from the root README package list, and add it to the README's "Deprecated / removed packages" table. Keep other packages' `CHANGELOG.md` history as is.
+
 ## Listing a New Chain to Support
 
 Use this checklist when adding a chain to the SDKs.

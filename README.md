@@ -30,7 +30,6 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 #### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
-- [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Deprecated Vault V1 PublicAllocator liquidity planner; use the Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk`
 - [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)
@@ -50,6 +49,22 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 - [**`@morpho-org/test`**](./packages/test/): Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes
 
 - [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
+
+### Deprecated / removed packages
+
+These packages are deprecated on npm and no longer live in this repository. Their published versions stay installable.
+
+| Package | Replacement |
+| --- | --- |
+| `@morpho-org/liquidity-sdk-viem`, `@morpho-org/liquidity-sdk-ethers` | Vault V2 BluePublicAllocator APIs in `@morpho-org/morpho-sdk` |
+| `@morpho-org/bundler-sdk-viem`, `@morpho-org/blue-sdk-viem-bundler`, `@morpho-org/bundler-sdk-ethers` | `@morpho-org/morpho-sdk` |
+| `@morpho-org/simulation-sdk`, `@morpho-org/blue-sdk-simulation` | Reallocation helpers in `@morpho-org/morpho-sdk`; no replacement for the simulation engine |
+| `@morpho-org/liquidation-sdk-viem`, `@morpho-org/blue-sdk-ethers-liquidation` | `@morpho-org/morpho-sdk` for protocol primitives; no replacement for liquidation bot helpers |
+| `@morpho-org/blue-sdk-ethers` | `@morpho-org/blue-sdk-viem` |
+| `@morpho-org/test-ethers`, `@morpho-org/test-viem` | `@morpho-org/test` |
+| `@morpho-org/blue-sdk-wagmi`, `@morpho-org/simulation-sdk-wagmi`, `@morpho-org/blue-sdk-viem-simulation`, `@morpho-org/test-wagmi` | None |
+| `@morpho-org/migration-sdk-viem` | None |
+| `@morpho-org/blue-api-sdk` | None; query the Morpho GraphQL API directly |
 
 ### Test coverage
 
