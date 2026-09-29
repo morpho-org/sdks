@@ -6,35 +6,17 @@ export type {
   Failable,
   Fetchable,
   InputMarketParams as BlueInputMarketParams,
-  /** @deprecated Use `BlueInputMarketParams` or the raw `/blue/types` subpath. */
-  InputMarketParams,
-  IPermit2Allowance,
   Loadable,
   MarketId as BlueMarketId,
-  /** @deprecated Use `BlueMarketId` or the raw `/blue/types` subpath. */
-  MarketId,
   MaxBorrowOptions as BlueMaxBorrowOptions,
-  /** @deprecated Use `BlueMaxBorrowOptions` or the raw `/blue/types` subpath. */
-  MaxBorrowOptions,
   MaxPositionCapacities as BlueMaxPositionCapacities,
-  /** @deprecated Use `BlueMaxPositionCapacities` or the raw `/blue/types` subpath. */
-  MaxPositionCapacities,
   MaxWithdrawCollateralOptions as BlueMaxWithdrawCollateralOptions,
-  /** @deprecated Use `BlueMaxWithdrawCollateralOptions` or the raw `/blue/types` subpath. */
-  MaxWithdrawCollateralOptions,
   Pending,
-  Permit2Allowance,
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs as BlueAuthorizationTypedDataArgs,
-  /** @deprecated Args for the deprecated getDaiPermitTypedData; scheduled for removal in the next major. */
-  DaiPermitArgs,
   DeploylessFetchParameters as BlueDeploylessFetchParameters,
-  /** @deprecated Use `BlueDeploylessFetchParameters` or the raw `/blue/types` subpath. */
-  DeploylessFetchParameters,
   FetchParameters as BlueFetchParameters,
-  /** @deprecated Use `BlueFetchParameters` or the raw `/blue/types` subpath. */
-  FetchParameters,
   InputAllocation as BlueInputAllocation,
   MetaMorphoCall as BlueMetaMorphoCall,
   Permit2PermitArgs,
@@ -44,23 +26,39 @@ export type {
 export type {
   BuildFixedRateOfferChainParams as MidnightBuildFixedRateOfferChainParams,
   DecodedEcrecoverRatifierData as MidnightDecodedEcrecoverRatifierData,
+  DecodedPriceRatifierV1Data as MidnightDecodedPriceRatifierV1Data,
+  DecodedRateRatifierV1Data as MidnightDecodedRateRatifierV1Data,
   DecodedSetterRatifierData as MidnightDecodedSetterRatifierData,
   DeploylessFetchParameters as MidnightDeploylessFetchParameters,
   EcrecoverRatificationTypedData as MidnightEcrecoverRatificationTypedData,
   EcrecoverRatifierDataDigestParams as MidnightEcrecoverRatifierDataDigestParams,
   EcrecoverRatifierDataParams as MidnightEcrecoverRatifierDataParams,
+  EcrecoverRatifierDataRequest as MidnightEcrecoverRatifierDataRequest,
   EcrecoverRatifierDataVerificationParams as MidnightEcrecoverRatifierDataVerificationParams,
   EcrecoverRatifierRatifyParams as MidnightEcrecoverRatifierRatifyParams,
+  EcrecoverRatifierRatifyRequest as MidnightEcrecoverRatifierRatifyRequest,
   EcrecoverRatifierRootDigestParams as MidnightEcrecoverRatifierRootDigestParams,
+  EcrecoverRatifierSignRequest as MidnightEcrecoverRatifierSignRequest,
   EcrecoverRatifierTypedDataParams as MidnightEcrecoverRatifierTypedDataParams,
+  EcrecoverRatifierTypedDataRequest as MidnightEcrecoverRatifierTypedDataRequest,
   EcrecoverSignatureInput as MidnightEcrecoverSignatureInput,
   FixedRateOfferChainLeg as MidnightFixedRateOfferChainLeg,
   GetRatifierInfoParams as MidnightGetRatifierInfoParams,
   MidnightCallParameters,
   MidnightFetchParams,
+  PriceRatifierV1Leaf as MidnightPriceRatifierV1Leaf,
+  PriceRatifierV1LeafStruct as MidnightPriceRatifierV1LeafStruct,
+  PriceRatifierV1TreeDescriptor as MidnightPriceRatifierV1TreeDescriptor,
+  PriceRatifierV1TreeInput as MidnightPriceRatifierV1TreeInput,
+  RateRatifierV1Leaf as MidnightRateRatifierV1Leaf,
+  RateRatifierV1LeafStruct as MidnightRateRatifierV1LeafStruct,
+  RateRatifierV1TreeDescriptor as MidnightRateRatifierV1TreeDescriptor,
+  RateRatifierV1TreeInput as MidnightRateRatifierV1TreeInput,
   RatifierInfo as MidnightRatifierInfo,
   SetterRatifierDataParams as MidnightSetterRatifierDataParams,
+  SetterRatifierDataRequest as MidnightSetterRatifierDataRequest,
   SetterRatifierDataVerificationParams as MidnightSetterRatifierDataVerificationParams,
+  SetterRatifierRatifyRequest as MidnightSetterRatifierRatifyRequest,
   VerifiedEcrecoverRatifierData as MidnightVerifiedEcrecoverRatifierData,
 } from "@morpho-org/midnight-sdk";
 export type { ChainMetadata } from "@morpho-org/morpho-ts";

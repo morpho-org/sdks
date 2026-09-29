@@ -65,7 +65,7 @@ the guidance changes:
 | Over-scoped `permissions:` (`contents: write` / `id-token: write` where unneeded) | **High** |
 | `secrets.*` interpolated into a `run:` block instead of bound via `env:` | **High** |
 | `secrets: inherit` to a reusable workflow without an explicit list | **Medium** |
-| New secret name with no entry in `SECURITY.md` (when the repo documents secrets) | **Medium** |
+| New secret name with no row in the workflow secret inventory (`.github/workflows/AGENTS.md`) | **Medium** |
 | Self-hosted runner label on a public-repo workflow | **Medium** (note the fork-PR risk) |
 
 ## How to fix

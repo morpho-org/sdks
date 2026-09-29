@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   addresses,
   addressesRegistry,
+  blueDeployments,
   type ChainAddresses,
   type ChainDeployments,
   deployments,
@@ -37,16 +38,14 @@ const createMidnightAddresses = () => ({
   ecrecoverRatifier: randomAddress(),
   ecrecoverAuthorizer: randomAddress(),
   setterRatifier: randomAddress(),
+  priceRatifierV1: randomAddress(),
+  rateRatifierV1: randomAddress(),
   permit2: randomAddress(),
 });
 
 const createBlueAddresses = () =>
   ({
-    morpho: randomAddress(),
-    bundler3: {
-      bundler3: randomAddress(),
-      generalAdapter1: randomAddress(),
-    },
+    blue: randomAddress(),
     adaptiveCurveIrm: randomAddress(),
   }) satisfies ChainAddresses;
 
@@ -62,16 +61,14 @@ const createMidnightDeployments = () => ({
   ecrecoverRatifier: 4n,
   ecrecoverAuthorizer: 5n,
   setterRatifier: 6n,
+  priceRatifierV1: 8n,
+  rateRatifierV1: 9n,
   permit2: 7n,
 });
 
 const createBlueDeployments = () =>
   ({
-    morpho: 7n,
-    bundler3: {
-      bundler3: 8n,
-      generalAdapter1: 9n,
-    },
+    blue: 7n,
     adaptiveCurveIrm: 10n,
   }) satisfies ChainDeployments;
 
@@ -82,9 +79,9 @@ const createChainDeployments = () => ({
 
 describe("getChainAddress", () => {
   test("default", () => {
-    expect(
-      getChainAddress(ChainId.EthMainnet, "bundler3.generalAdapter1"),
-    ).toBe(addressesRegistry[ChainId.EthMainnet].bundler3.generalAdapter1);
+    expect(getChainAddress(ChainId.EthMainnet, "blue")).toBe(
+      addressesRegistry[ChainId.EthMainnet].blue,
+    );
   });
 
   test("behavior: reads a custom Midnight address", () => {
@@ -129,16 +126,6 @@ describe("getChainAddress", () => {
 describe("addressesRegistry", () => {
   test("default", () => {
     expect("midnight" in addressesRegistry[ChainId.EthMainnet]).toBe(true);
-  });
-
-  test("behavior: keeps the deprecated Vault V1 PublicAllocator alias", () => {
-    const { publicAllocator, vaultV1PublicAllocator } =
-      addressesRegistry[ChainId.EthMainnet];
-
-    expect(publicAllocator).toBe(vaultV1PublicAllocator);
-    expect(getChainAddress(ChainId.EthMainnet, "publicAllocator")).toBe(
-      vaultV1PublicAllocator,
-    );
   });
 
   test.each([
@@ -514,6 +501,54 @@ describe("addressesRegistry", () => {
       65_366_296n,
     ],
     [
+      ChainId.EthMainnet,
+      "priceRatifierV1",
+      "0x5A7CbC4458344fd11E1ED81D7834082a1138f975",
+      26_046_045n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "rateRatifierV1",
+      "0x14A4cd3D7a28d90D37fd0917EDeaa496E5931095",
+      26_046_045n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "priceRatifierV1",
+      "0x08a0e69772315652165921D722B3caAea4C326e6",
+      51_724_088n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "rateRatifierV1",
+      "0x3B2FbA901C88f026BF50A12c8B28484Cd81F9526",
+      51_724_088n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "priceRatifierV1",
+      "0x55163660Ff35955712339d465dc6D9D583dA8ac2",
+      22_490_623n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "rateRatifierV1",
+      "0x9b11e691E79d6978c78BF8de8B898CDeb89bEADf",
+      22_490_623n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "priceRatifierV1",
+      "0xF65E0be166AAF2F8993e617189beFB452bf38DB1",
+      71_228_891n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "rateRatifierV1",
+      "0xDd0588d7D3Aaa76a33A7d054B0b107eB3bCD3F11",
+      71_228_891n,
+    ],
+    [
       ChainId.ScrollMainnet,
       "vaultV2Factory",
       "0x474cdCF6B3be2eb770065b88d2F7c57A9BC609E0",
@@ -731,12 +766,6 @@ describe("addressesRegistry", () => {
     ],
     [
       ChainId.BscMainnet,
-      "bundler3.paraswapAdapter",
-      "0xBb12B012Fa31f7FE418236cAf625713Edc852F82",
-      54_346_558n,
-    ],
-    [
-      ChainId.BscMainnet,
       "vaultV2Factory",
       "0x29955201601630f686beAF47b0B03be7b86d160F",
       76_966_373n,
@@ -890,36 +919,34 @@ describe("addressesRegistry", () => {
   test.each([
     {
       chainId: ChainId.MorphMainnet,
-      morpho: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
+      blue: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
       wNative: "0x5300000000000000000000000000000000000011",
-      morphoDeployment: 23_180_020n,
+      blueDeployment: 23_180_020n,
       wNativeDeployment: 0n,
     },
     {
       chainId: ChainId.MegaEthMainnet,
-      morpho: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
+      blue: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
       wNative: "0x4200000000000000000000000000000000000006",
-      morphoDeployment: 16_408_957n,
+      blueDeployment: 16_408_957n,
       wNativeDeployment: 0n,
     },
     {
       chainId: ChainId.RobinhoodMainnet,
-      morpho: "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010",
+      blue: "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010",
       wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-      morphoDeployment: 286n,
+      blueDeployment: 286n,
       wNativeDeployment: 2n,
     },
   ])(
     "behavior: exposes era-2 addresses for chain $chainId",
-    ({ chainId, morpho, wNative, morphoDeployment, wNativeDeployment }) => {
+    ({ chainId, blue, wNative, blueDeployment, wNativeDeployment }) => {
       expect(addressesRegistry[chainId]).toMatchObject({
-        blue: morpho,
-        morpho,
+        blue,
         wNative,
       });
       expect(deployments[chainId]).toMatchObject({
-        blue: morphoDeployment,
-        morpho: morphoDeployment,
+        blue: blueDeployment,
         wNative: wNativeDeployment,
       });
       expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
@@ -931,12 +958,7 @@ describe("addressesRegistry", () => {
   test("behavior: exposes Robinhood deployment blocks", () => {
     expect(deployments[ChainId.RobinhoodMainnet]).toMatchObject({
       blue: 286n,
-      morpho: 286n,
       permit2: 0n,
-      bundler3: {
-        bundler3: 286n,
-        generalAdapter1: 286n,
-      },
       adaptiveCurveIrm: 286n,
       vaultV2Factory: 288n,
       morphoMarketV1AdapterV2Factory: 289n,
@@ -968,48 +990,6 @@ describe("addressesRegistry", () => {
     expect(addressesRegistry[chainId]).toMatchObject(blueAddresses);
     expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
   });
-
-  test("behavior: duplicates blue to deprecated morpho for custom addresses", () => {
-    const chainId = 31_337_010;
-    const blue = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: {
-          blue,
-          bundler3: {
-            bundler3: randomAddress(),
-            generalAdapter1: randomAddress(),
-          },
-          adaptiveCurveIrm: randomAddress(),
-        },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.blue).toBe(blue);
-    expect(addressesRegistry[chainId]?.morpho).toBe(blue);
-  });
-
-  test("behavior: duplicates deprecated morpho to blue for custom addresses", () => {
-    const chainId = 31_337_011;
-    const morpho = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: {
-          morpho,
-          bundler3: {
-            bundler3: randomAddress(),
-            generalAdapter1: randomAddress(),
-          },
-          adaptiveCurveIrm: randomAddress(),
-        },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.blue).toBe(morpho);
-    expect(addressesRegistry[chainId]?.morpho).toBe(morpho);
-  });
 });
 
 describe("deployments", () => {
@@ -1019,43 +999,23 @@ describe("deployments", () => {
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = deployments[ChainId.PolygonMainnet];
+    const polygonDeployments = deployments[ChainId.PolygonMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
-      permit2: blueDeployments.permit2,
+      permit2: polygonDeployments.permit2,
     };
 
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          ...blueDeployments,
+          ...polygonDeployments,
           ...chainDeployments,
         },
       },
     });
 
-    expect(deployments[chainId]).toMatchObject(blueDeployments);
+    expect(deployments[chainId]).toMatchObject(polygonDeployments);
     expect(deployments[chainId]).toMatchObject(chainDeployments);
-  });
-
-  test("behavior: duplicates blue to deprecated morpho for custom deployments", () => {
-    const chainId = 31_337_105;
-
-    registerCustomAddresses({
-      deployments: {
-        [chainId]: {
-          blue: 1n,
-          bundler3: {
-            bundler3: 2n,
-            generalAdapter1: 3n,
-          },
-          adaptiveCurveIrm: 4n,
-        },
-      },
-    });
-
-    expect(deployments[chainId]?.blue).toBe(1n);
-    expect(deployments[chainId]?.morpho).toBe(1n);
   });
 });
 
@@ -1136,46 +1096,6 @@ describe("registerCustomAddresses", () => {
     expect(() => getChainAddress(chainId, "midnightBundles")).toThrow(
       UnknownAddressError,
     );
-  });
-
-  test("behavior: normalizes Vault V1 PublicAllocator aliases", () => {
-    const chainId = 31_337_013;
-    const publicAllocator = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: { ...createBlueAddresses(), publicAllocator },
-      },
-      deployments: {
-        [chainId]: { ...createBlueDeployments(), publicAllocator: 11n },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.vaultV1PublicAllocator).toBe(
-      publicAllocator,
-    );
-    expect(addressesRegistry[chainId]?.publicAllocator).toBe(publicAllocator);
-    expect(deployments[chainId]?.vaultV1PublicAllocator).toBe(11n);
-    expect(deployments[chainId]?.publicAllocator).toBe(11n);
-  });
-
-  test("behavior: backfills deprecated PublicAllocator aliases", () => {
-    const chainId = 31_337_014;
-    const vaultV1PublicAllocator = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: { ...createBlueAddresses(), vaultV1PublicAllocator },
-      },
-      deployments: {
-        [chainId]: { ...createBlueDeployments(), vaultV1PublicAllocator: 11n },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.publicAllocator).toBe(
-      vaultV1PublicAllocator,
-    );
-    expect(deployments[chainId]?.publicAllocator).toBe(11n);
   });
 
   test("error: RegistryValueAlreadyRegisteredError for addresses", () => {
@@ -1289,22 +1209,6 @@ describe("registerCustomAddresses", () => {
     }
   });
 
-  test("error: conflicting PublicAllocator addresses", () => {
-    const chainId = 31_337_015;
-
-    expect(() =>
-      registerCustomAddresses({
-        addresses: {
-          [chainId]: {
-            ...createBlueAddresses(),
-            vaultV1PublicAllocator: randomAddress(),
-            publicAllocator: randomAddress(),
-          },
-        },
-      }),
-    ).toThrow(RegistryValueAlreadyRegisteredError);
-  });
-
   test("error: IncompleteChainRegistryError for custom-chain addresses", () => {
     const chainId = 31_337_012;
     const partialAddresses = createMidnightAddresses() as ChainAddresses;
@@ -1404,26 +1308,9 @@ describe("registerCustomAddresses", () => {
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
   });
 
-  test("error: conflicting PublicAllocator deployments", () => {
-    const chainId = 31_337_108;
-
-    expect(() =>
-      registerCustomAddresses({
-        deployments: {
-          [chainId]: {
-            ...createBlueDeployments(),
-            vaultV1PublicAllocator: 11n,
-            publicAllocator: 12n,
-          },
-        },
-      }),
-    ).toThrow(RegistryValueAlreadyRegisteredError);
-  });
-
   test("behavior: does not freeze caller-owned nested inputs", () => {
     const chainId = 31_337_106;
     const chainAddresses = createChainAddresses();
-    const registeredBundler = chainAddresses.bundler3.bundler3;
     const wrappedToken = randomAddress();
     const unwrappedToken = randomAddress();
     const unwrappedTokens = {
@@ -1440,17 +1327,96 @@ describe("registerCustomAddresses", () => {
     });
 
     expect(Object.isFrozen(chainAddresses)).toBe(false);
-    expect(Object.isFrozen(chainAddresses.bundler3)).toBe(false);
     expect(Object.isFrozen(unwrappedTokens)).toBe(false);
 
     expect(() => {
-      chainAddresses.bundler3.bundler3 = randomAddress();
       unwrappedTokens[wrappedToken] = randomAddress();
     }).not.toThrow();
 
-    expect(addressesRegistry[chainId]?.bundler3.bundler3).toBe(
-      registeredBundler,
+    expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
+  });
+
+  test("behavior: leaves addresses unchanged when a deployment patch in the same call is rejected", () => {
+    const chainId = 31_337_300;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+    });
+
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: {
+            ...chainDeployments,
+            midnight: chainDeployments.midnight + 1n,
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
     );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+  });
+
+  test("behavior: leaves addresses and deployments unchanged when an unwrappedTokens patch in the same call is rejected", () => {
+    const chainId = 31_337_301;
+    const chainAddresses = createChainAddresses();
+    const chainDeployments = createChainDeployments();
+    const preLiquidationFactory = randomAddress();
+    const wrappedToken = randomAddress();
+    const unwrappedToken = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+      unwrappedTokens: {
+        [chainId]: { [wrappedToken]: unwrappedToken },
+      },
+    });
+
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: { ...chainAddresses, preLiquidationFactory },
+        },
+        deployments: {
+          [chainId]: { ...chainDeployments, wNative: 1n },
+        },
+        unwrappedTokens: {
+          [chainId]: { [wrappedToken]: randomAddress() },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(() => getChainAddress(chainId, "preLiquidationFactory")).toThrow(
+      UnknownAddressError,
+    );
+    expect(addresses[chainId]?.preLiquidationFactory).toBeUndefined();
+    expect(deployments[chainId]?.wNative).toBeUndefined();
+    expect(blueDeployments[chainId]).toBe(deployments[chainId]);
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
 });

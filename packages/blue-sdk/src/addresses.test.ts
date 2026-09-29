@@ -26,9 +26,6 @@ describe("addresses helpers", () => {
     expect(chainAddresses.blue).toBe(
       "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     );
-    expect(chainAddresses.morpho).toBe(
-      "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-    );
   });
 
   test("getChainAddress returns a flattened registry address", () => {
@@ -44,12 +41,9 @@ describe("addresses helpers", () => {
   });
 
   test("getChainAddress throws for unknown labels", () => {
-    expect(() =>
-      getChainAddress(
-        ChainId.BaseMainnet,
-        "bundler3.compoundV2MigrationAdapter",
-      ),
-    ).toThrow(UnknownAddressError);
+    expect(() => getChainAddress(ChainId.BaseMainnet, "dai")).toThrow(
+      UnknownAddressError,
+    );
   });
 
   test("getUnwrappedToken resolves known wrapped native tokens", () => {
@@ -85,12 +79,8 @@ describe("addresses helpers", () => {
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          morpho: 1n,
+          blue: 1n,
           permit2: 2n,
-          bundler3: {
-            bundler3: 3n,
-            generalAdapter1: 4n,
-          },
           adaptiveCurveIrm: 5n,
           vaultV2Factory: 6n,
           morphoMarketV1AdapterV2Factory: 7n,
@@ -109,14 +99,10 @@ describe("addresses helpers", () => {
   });
 
   test("registerCustomAddresses extends an existing chain without changing existing entries", () => {
-    const aaveV2MigrationAdapter = randomAddress();
     const stEth = randomAddress();
     const wrappedToken = randomAddress();
     const unwrappedToken = randomAddress();
 
-    expect(
-      getChainAddresses(ChainId.BaseMainnet).bundler3.aaveV2MigrationAdapter,
-    ).toBeUndefined();
     expect(getChainAddresses(ChainId.BaseMainnet).stEth).toBeUndefined();
     expect(
       getUnwrappedToken(wrappedToken, ChainId.BaseMainnet),
@@ -125,9 +111,6 @@ describe("addresses helpers", () => {
     registerCustomAddresses({
       addresses: {
         [ChainId.BaseMainnet]: {
-          bundler3: {
-            aaveV2MigrationAdapter,
-          },
           stEth,
         },
       },
@@ -138,9 +121,6 @@ describe("addresses helpers", () => {
       },
     });
 
-    expect(
-      getChainAddresses(ChainId.BaseMainnet).bundler3.aaveV2MigrationAdapter,
-    ).toBe(aaveV2MigrationAdapter);
     expect(getChainAddresses(ChainId.BaseMainnet).stEth).toBe(stEth);
     expect(getUnwrappedToken(wrappedToken, ChainId.BaseMainnet)).toBe(
       unwrappedToken,
@@ -150,11 +130,7 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses extends address metadata", () => {
     const chainId = 888_000_002;
     const chainAddresses = {
-      morpho: "0x0000000000000000000000000000000000000001",
-      bundler3: {
-        bundler3: "0x0000000000000000000000000000000000000002",
-        generalAdapter1: "0x0000000000000000000000000000000000000003",
-      },
+      blue: "0x0000000000000000000000000000000000000001",
       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
       wNative: "0x0000000000000000000000000000000000000005",
     } satisfies ChainAddresses;
@@ -166,7 +142,7 @@ describe("addresses helpers", () => {
     });
 
     expect(getChainAddresses(chainId)).toMatchObject(chainAddresses);
-    expect(getChainAddresses(chainId).blue).toBe(chainAddresses.morpho);
+    expect(getChainAddresses(chainId).blue).toBe(chainAddresses.blue);
   });
 
   test("shared registration updates legacy Blue live aliases", () => {
@@ -174,11 +150,6 @@ describe("addresses helpers", () => {
     const blue = randomAddress();
     const chainAddresses = {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: randomAddress(),
-        generalAdapter1: randomAddress(),
-      },
       adaptiveCurveIrm: randomAddress(),
     } satisfies ChainAddresses;
 
@@ -199,11 +170,6 @@ describe("addresses helpers", () => {
     const blue = randomAddress();
     const chainAddresses = {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: randomAddress(),
-        generalAdapter1: randomAddress(),
-      },
       adaptiveCurveIrm: randomAddress(),
       midnight: randomAddress(),
       midnightBundles: randomAddress(),
@@ -252,7 +218,7 @@ describe("addresses helpers", () => {
       registerCustomAddresses({
         deployments: {
           [ChainId.EthMainnet]: {
-            morpho: 999n,
+            blue: 999n,
           },
         },
       }),
@@ -262,73 +228,71 @@ describe("addresses helpers", () => {
   test.each([
     {
       chainId: 685_689,
-      morpho: "0x8c45B34999883FF4B47cD3be095D585682cd9227",
+      blue: "0x8c45B34999883FF4B47cD3be095D585682cd9227",
       wNative: "0x4200000000000000000000000000000000000006",
-      morphoDeployment: 7_520_470n,
+      blueDeployment: 7_520_470n,
       wNativeDeployment: 0n,
     },
     {
       chainId: 1_672,
-      morpho: "0x18573fA18fd17dDfD790B4a5B5b2977aad3b4Efb",
+      blue: "0x18573fA18fd17dDfD790B4a5B5b2977aad3b4Efb",
       wNative: "0x52C48d4213107b20bC583832b0d951FB9CA8F0B0",
-      morphoDeployment: 4_202_147n,
+      blueDeployment: 4_202_147n,
       wNativeDeployment: 1_617_294n,
     },
     {
       chainId: 714,
-      morpho: "0xF050a2BB0468FF23cF2964AC182196C94D6815C3",
+      blue: "0xF050a2BB0468FF23cF2964AC182196C94D6815C3",
       wNative: "0x00000000000000000000000000000000ce1E571a",
-      morphoDeployment: 53_363_569n,
+      blueDeployment: 53_363_569n,
       wNativeDeployment: 0n,
     },
     {
       chainId: 14,
-      morpho: "0xF4346F5132e810f80a28487a79c7559d9797E8B0",
+      blue: "0xF4346F5132e810f80a28487a79c7559d9797E8B0",
       wNative: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d",
-      morphoDeployment: 52_378_788n,
+      blueDeployment: 52_378_788n,
       wNativeDeployment: 39n,
     },
     {
       chainId: 50,
-      morpho: "0xEa49B0fE898aF913A3826F9f462eE2cDcb854fD9",
+      blue: "0xEa49B0fE898aF913A3826F9f462eE2cDcb854fD9",
       wNative: "0x951857744785E80e2De051c32EE7b25f9c458C42",
-      morphoDeployment: 101_757_515n,
+      blueDeployment: 101_757_515n,
       wNativeDeployment: 42_776_215n,
     },
     {
       chainId: 8_217,
-      morpho: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
+      blue: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
       wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
-      morphoDeployment: 208_021_118n,
+      blueDeployment: 208_021_118n,
       wNativeDeployment: 104_802_159n,
     },
     {
       chainId: 2_818,
-      morpho: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
+      blue: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
       wNative: "0x5300000000000000000000000000000000000011",
-      morphoDeployment: 23_180_020n,
+      blueDeployment: 23_180_020n,
       wNativeDeployment: 0n,
     },
     {
       chainId: 4_326,
-      morpho: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
+      blue: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
       wNative: "0x4200000000000000000000000000000000000006",
-      morphoDeployment: 16_408_957n,
+      blueDeployment: 16_408_957n,
       wNativeDeployment: 0n,
     },
   ])(
     "exposes era-2 addresses and deployments for chain $chainId",
-    ({ chainId, morpho, wNative, morphoDeployment, wNativeDeployment }) => {
+    ({ chainId, blue, wNative, blueDeployment, wNativeDeployment }) => {
       expect(getChainAddresses(chainId)).toMatchObject({
-        blue: morpho,
-        morpho,
+        blue,
         wNative,
       });
       expect(
         (deployments as Record<number, ChainDeployments>)[chainId],
       ).toMatchObject({
-        blue: morphoDeployment,
-        morpho: morphoDeployment,
+        blue: blueDeployment,
         wNative: wNativeDeployment,
       });
       expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
@@ -341,14 +305,12 @@ describe("addresses helpers", () => {
     const chainAddresses = getChainAddresses(5_042);
     expect(chainAddresses).toMatchObject({
       blue: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
-      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     });
     expect(chainAddresses.wNative).toBeUndefined();
     expect(
       (deployments as Record<number, ChainDeployments>)[5_042],
     ).toMatchObject({
       blue: 1_208_685n,
-      morpho: 1_208_685n,
     });
     expect(
       (deployments as Record<number, Record<string, unknown>>)[5_042]?.wNative,
@@ -358,17 +320,13 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses rejects overriding existing addresses and unwrapped tokens", () => {
     const address = randomAddress();
 
-    expect(
-      getChainAddresses(ChainId.EthMainnet).bundler3.bundler3,
-    ).toBeDefined();
+    expect(getChainAddresses(ChainId.EthMainnet).blue).toBeDefined();
 
     expect(() =>
       registerCustomAddresses({
         addresses: {
           [ChainId.EthMainnet]: {
-            bundler3: {
-              bundler3: address,
-            },
+            blue: address,
           },
         },
       }),
@@ -391,11 +349,6 @@ describe("addresses helpers", () => {
     const blue = randomAddress();
     const chainAddresses = {
       blue,
-      morpho: blue,
-      bundler3: {
-        bundler3: randomAddress(),
-        generalAdapter1: randomAddress(),
-      },
       adaptiveCurveIrm: randomAddress(),
       wNative: address,
     } satisfies ChainAddresses;
@@ -431,11 +384,7 @@ describe("addresses helpers", () => {
 
   test("addresses registry prevents manual overrides", () => {
     const chainAddresses = {
-      morpho: randomAddress(),
-      bundler3: {
-        bundler3: randomAddress(),
-        generalAdapter1: randomAddress(),
-      },
+      blue: randomAddress(),
       adaptiveCurveIrm: randomAddress(),
       wstEth: randomAddress(),
       stEth: randomAddress(),
@@ -446,12 +395,7 @@ describe("addresses helpers", () => {
     }).toThrow();
 
     expect(() => {
-      addresses[ChainId.EthMainnet]!.morpho = chainAddresses.morpho;
-    }).toThrow();
-
-    expect(() => {
-      addresses[ChainId.EthMainnet]!.bundler3.bundler3 =
-        chainAddresses.bundler3.bundler3;
+      addresses[ChainId.EthMainnet]!.blue = chainAddresses.blue;
     }).toThrow();
   });
 });

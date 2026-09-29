@@ -1,291 +1,50 @@
-import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
-import { parseUnits } from "viem";
+import { MarketParams } from "@morpho-org/blue-sdk";
+import { decodeFunctionData, getAddress, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
-import { UsdcEurcvBlue, WethUsdsBlue } from "../../../test/fixtures/blue.js";
-import { test } from "../../../test/unit.js";
-import {
-  isRequirementApproval,
-  isRequirementSignature,
-  NativeAmountOnNonWNativeAssetError,
-  NegativeInputError,
-  NonPositiveInputError,
-} from "../../types/index.js";
-import { getGeneralAdapterRequirements } from "../requirements/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { describe, expect, test } from "vitest";
+import { blueBundlesV1Abi } from "../../abis.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
+import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
-describe("blueSupplyCollateral unit tests", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+const market = {
+  chainId: mainnet.id,
+  marketParams: new MarketParams({
+    loanToken: getAddress("0x0000000000000000000000000000000000000011"),
+    collateralToken: getAddress("0x0000000000000000000000000000000000000012"),
+    oracle: getAddress("0x0000000000000000000000000000000000000013"),
+    irm: getAddress("0x0000000000000000000000000000000000000014"),
+    lltv: 860000000000000000n,
+  }),
+};
+const userAddress = getAddress("0x00000000000000000000000000000000000000A1");
 
-  const { wNative } = addressesRegistry[mainnet.id];
-  const {
-    bundler3: { bundler3 },
-  } = getChainAddresses(mainnet.id);
-
-  /** Market params with wNative as collateral — enables native wrapping tests. */
-  const wNativeCollateralMarketParams = {
-    ...WethUsdsBlue,
-    collateralToken: wNative,
-  };
-
-  test("should create direct supply collateral transaction (no native)", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 18);
-
-    const tx = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount,
-        onBehalf: client.account.address,
-      },
+describe("blueSupplyCollateral", () => {
+  test("default", () => {
+    const args = {
+      userAddress,
+      collateralAssets: 1_000_000_000_000_000_000n,
+      deadline: 1_900_000_000n,
+    } as const;
+    const transaction = blueSupplyCollateral({ market, args });
+    const combined = blueSupplyCollateralBorrow({
+      market,
+      args: { ...args, borrowAssets: 0n, maxLtv: maxUint256 },
     });
 
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("blueSupplyCollateral");
-    expect(tx.action.args.market).toBe(WethUsdsBlue.id);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.onBehalf).toBe(client.account.address);
-    expect(tx.action.args.nativeAmount).toBeUndefined();
-    expect(tx.to).toBe(bundler3);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should create bundler supply collateral with native wrapping", async ({
-    client,
-  }) => {
-    const nativeAmount = parseUnits("1", 18);
-
-    const tx = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
-      args: {
-        nativeAmount,
-        onBehalf: client.account.address,
-      },
+    expect(transaction).toEqual({
+      ...combined,
+      action: { ...combined.action, type: "blueSupplyCollateral" },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("blueSupplyCollateral");
-    expect(tx.action.args.amount).toBe(nativeAmount);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-    expect(tx.to).toBe(bundler3);
-  });
-
-  test("should create bundler tx with both ERC20 amount and native amount", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const totalCollateral = amount + nativeAmount;
-
-    const tx = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
-      args: {
-        amount,
-        nativeAmount,
-        onBehalf: client.account.address,
-      },
+    const decoded = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: transaction.data,
     });
-
-    expect(tx.action.args.amount).toBe(totalCollateral);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should create bundler tx with permit2 signature and native wrapping", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-
-    const requirements = await getGeneralAdapterRequirements(client, {
-      address: wNative,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount,
-        from: client.account.address,
-      },
-    });
-
-    const approvalPermit2 = requirements[0];
-    if (!isRequirementApproval(approvalPermit2)) {
-      throw new Error("Approval requirement not found");
-    }
-
-    const permit2Requirement = requirements[1];
-    if (!isRequirementSignature(permit2Requirement)) {
-      throw new Error("Permit2 requirement not found");
-    }
-
-    const requirementSignature = await permit2Requirement.sign(
-      client,
-      client.account.address,
-    );
-
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    const tx = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
-      args: {
-        amount,
-        nativeAmount,
-        onBehalf: client.account.address,
-        requirementSignature,
-      },
-    });
-
-    expect(localSpy).toHaveBeenCalled();
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("blueSupplyCollateral");
-    expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should call getTokenRequirementActions without requirementSignature", async ({
-    client,
-  }) => {
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount: parseUnits("1", 18),
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(localSpy).toHaveBeenCalled();
-  });
-
-  test("should throw NegativeInputError when amount is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: -1n,
-          onBehalf: client.account.address,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw NonPositiveInputError when total collateral is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: 0n,
-          onBehalf: client.account.address,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NegativeInputError when nativeAmount is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: wNativeCollateralMarketParams,
-        },
-        args: {
-          nativeAmount: -1n,
-          onBehalf: client.account.address,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: UsdcEurcvBlue,
-        },
-        args: {
-          nativeAmount: parseUnits("1", 18),
-          onBehalf: client.account.address,
-        },
-      }),
-    ).toThrow(NativeAmountOnNonWNativeAssetError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount: parseUnits("1", 18),
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 18);
-
-    const txWith = blueSupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.action.type).toBe("blueSupplyCollateral");
-    expect(txWith.data.includes("a1b2c3d4")).toBe(true);
+    expect(decoded.functionName).toBe("blueBundlesV1SupplyCollateralAndBorrow");
+    expect(decoded.args?.[2]).toBe(0n);
+    expect(decoded.args?.[3]).toBe(maxUint256);
+    expect(transaction.action.type).toBe("blueSupplyCollateral");
+    expect(Object.isFrozen(transaction)).toBe(true);
+    expect(Object.isFrozen(transaction.action)).toBe(true);
+    expect(Object.isFrozen(transaction.action.args)).toBe(true);
   });
 });

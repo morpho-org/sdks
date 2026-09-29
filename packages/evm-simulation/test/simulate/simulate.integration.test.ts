@@ -31,10 +31,10 @@ describe.sequential("simulate — registered wrapped-native events", () => {
     client,
   }) => {
     const amount = parseEther("1");
-    const bundler = getChainAddresses(mainnet.id).bundler3.bundler3;
+    const bundles = getChainAddresses(mainnet.id).bundles!.vaultExitBundlesV1;
     await client.deal({ erc20: WETH, amount });
 
-    // Runtime bytecode that emits Withdrawal(bundler, amount) without moving
+    // Runtime bytecode that emits Withdrawal(bundles, amount) without moving
     // value. The log is produced by a real EVM execution through eth_simulateV1.
     await client.setCode({
       address: LOOKALIKE_TOKEN,
@@ -43,7 +43,7 @@ describe.sequential("simulate — registered wrapped-native events", () => {
         padHex(toHex(amount), { size: 32 }),
         "0x5f52",
         "0x73",
-        bundler,
+        bundles,
         "0x7f",
         WITHDRAWAL_TOPIC,
         "0x60205fa200",

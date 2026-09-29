@@ -168,6 +168,11 @@ export default defineConfig({
         test: {
           name: "liquidity-sdk-viem",
           include: ["packages/liquidity-sdk-viem/src/**/*.test.ts"],
+          server: {
+            deps: {
+              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
+            },
+          },
         },
       },
       {
@@ -177,6 +182,11 @@ export default defineConfig({
           include: [
             "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
           ],
+          server: {
+            deps: {
+              inline: ["@morpho-org/morpho-sdk", "@morpho-org/blue-sdk"],
+            },
+          },
           ...forkTestConfig,
         },
       },

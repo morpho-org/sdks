@@ -44,14 +44,7 @@ function accrualVault({
 
 describe("Vault", () => {
   test("constructor stores all vault fields", () => {
-    const input = vaultInput({
-      publicAllocatorConfig: {
-        admin: USER,
-        fee: 1n,
-        accruedFee: 2n,
-      },
-      lostAssets: 3n,
-    });
+    const input = vaultInput({ lostAssets: 3n });
     const vault = new Vault(input);
 
     expect(vault.owner).toBe(USER);
@@ -68,9 +61,6 @@ describe("Vault", () => {
     expect(vault.withdrawQueue).toStrictEqual([]);
     expect(vault.lastTotalAssets).toBe(900n);
     expect(vault.lostAssets).toBe(3n);
-    expect(vault.publicAllocatorConfig).toStrictEqual(
-      input.publicAllocatorConfig,
-    );
   });
 
   test("totalInterest floors at zero and conversions use vault token math", () => {
@@ -115,10 +105,14 @@ describe("AccrualVault", () => {
     expect(allocation?.marketId).toBe(marketId);
     expect(vault.totalAssets).toBe(150n);
     expect(vault.collateralAllocations.size).toBe(1);
+    const collateralAllocation = vault.collateralAllocations.get(
+      allocation?.position.market.params.collateralToken ?? RECIPIENT,
+    );
     expect(
-      vault.collateralAllocations.get(
-        allocation?.position.market.params.collateralToken ?? RECIPIENT,
-      )?.proportion,
+      [...(collateralAllocation?.markets ?? [])].reduce(
+        (total, id) => total + vault.getAllocationProportion(id),
+        0n,
+      ),
     ).toBe(MathLib.WAD - 1n);
   });
 
@@ -243,14 +237,6 @@ describe("AccrualVault", () => {
     });
   });
 
-  test("deprecated deposit capacity alias delegates to maxDeposit", () => {
-    const vault = accrualVault();
-
-    expect(vault.getDepositCapacityLimit(50n)).toStrictEqual(
-      vault.maxDeposit(50n),
-    );
-  });
-
   test("maxWithdraw is liquidity limited or balance limited", () => {
     expect(accrualVault().maxWithdraw(100n)).toStrictEqual({
       value: 10n,
@@ -260,14 +246,6 @@ describe("AccrualVault", () => {
       value: 100n,
       limiter: CapacityLimitReason.liquidity,
     });
-  });
-
-  test("deprecated withdraw capacity alias delegates to maxWithdraw", () => {
-    const vault = accrualVault();
-
-    expect(vault.getWithdrawCapacityLimit(100n)).toStrictEqual(
-      vault.maxWithdraw(100n),
-    );
   });
 
   test("accrueInterest keeps withdraw queue order and mints fee shares", () => {
@@ -371,9 +349,7 @@ describe("AccrualVault", () => {
 
     expect(accrued.totalAssets).toBe(allocatedAssets + 10n);
     expect(accrued.lostAssets).toBe(10n);
-    const proportion = accrued.collateralAllocations.get(
-      position.market.params.collateralToken,
-    )?.proportion;
+    const proportion = accrued.getAllocationProportion(position.marketId);
     expect(proportion).toBe(accrued.getAllocationProportion(position.marketId));
     expect(proportion).toBe(
       MathLib.wDivDown(allocatedAssets, allocatedAssets + 10n),

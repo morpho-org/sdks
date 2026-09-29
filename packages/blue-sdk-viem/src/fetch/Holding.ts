@@ -20,7 +20,6 @@ import { getBalance, getChainId, readContract } from "viem/actions";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
-  permit2Abi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
 } from "../abis.js";
@@ -34,8 +33,9 @@ export const optionalBoolean = [undefined, false, true] as const;
  * Fetches a user's token holding, allowances, permit nonce, and transfer permission state.
  *
  * Reads native balances directly for `NATIVE_ADDRESS`. For ERC20 tokens, uses the deployless
- * `GetHolding` query by default and falls back to individual ERC20, Permit2, ERC-2612, Backed, and
- * permissioned-wrapper contract reads when allowed.
+ * `GetHolding` query by default and falls back to individual ERC20, ERC-2612, Backed, and
+ * permissioned-wrapper contract reads, plus ERC-20 allowances to Morpho Blue and Permit2, when
+ * allowed.
  *
  * @param user - Address whose holding is fetched.
  * @param token - Token address, or `NATIVE_ADDRESS` for the native asset.
@@ -44,9 +44,10 @@ export const optionalBoolean = [undefined, false, true] as const;
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
  * @returns The hydrated `Holding` entity for `user` and `token`.
+ * @throws {UnsupportedChainIdError} when the client's chain is absent from the address registry.
+ *   (any ERC-20 token; native-asset reads skip the registry lookup).
  * @example
  * ```ts
  * import { NATIVE_ADDRESS, type Holding } from "@morpho-org/blue-sdk";
@@ -67,7 +68,7 @@ export async function fetchHolding(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
+  const chainId = await getChainId(client);
 
   if (isAddressEqual(token, NATIVE_ADDRESS))
     return new Holding({
@@ -76,12 +77,7 @@ export async function fetchHolding(
       erc20Allowances: fromEntries(
         ERC20_ALLOWANCE_RECIPIENTS.map((label) => [label, maxUint256]),
       ),
-      permit2BundlerAllowance: {
-        amount: 0n,
-        expiration: 0n,
-        nonce: 0n,
-      },
-      balance: ChainUtils.hasReliableNativeBalance(parameters.chainId!)
+      balance: ChainUtils.hasReliableNativeBalance(chainId)
         ? await getBalance(client, {
             // biome-ignore lint/suspicious/noExplicitAny: flattened union type
             ...(parameters as any),
@@ -91,54 +87,36 @@ export async function fetchHolding(
     });
 
   const isPermissionedBackedToken = [
-    ...(permissionedBackedTokens[parameters.chainId] ?? []),
+    ...(permissionedBackedTokens[chainId] ?? []),
   ].some((registered) => isAddressEqual(registered, token));
   const isPermissionedWrapperToken = [
-    ...(permissionedWrapperTokens[parameters.chainId] ?? []),
+    ...(permissionedWrapperTokens[chainId] ?? []),
   ].some((registered) => isAddressEqual(registered, token));
 
   if (deployless) {
-    const {
-      morpho,
-      permit2 = zeroAddress,
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(parameters.chainId);
+    const { blue, permit2 = zeroAddress } = getChainAddresses(chainId);
 
     try {
-      const {
-        balance,
-        erc20Allowances: {
-          generalAdapter1: generalAdapter1Erc20Allowance,
-          ...erc20Allowances
-        },
-        permit2BundlerAllowance,
-        isErc2612,
-        erc2612Nonce,
-        canTransfer,
-      } = await readContract(client, {
-        ...parameters,
-        abi,
-        code,
-        functionName: "query",
-        args: [
-          token,
-          user,
-          morpho,
-          permit2,
-          generalAdapter1,
-          isPermissionedBackedToken,
-          isPermissionedWrapperToken,
-        ],
-      });
+      const { balance, erc20Allowances, isErc2612, erc2612Nonce, canTransfer } =
+        await readContract(client, {
+          ...parameters,
+          abi,
+          code,
+          functionName: "query",
+          args: [
+            token,
+            user,
+            blue,
+            permit2,
+            isPermissionedBackedToken,
+            isPermissionedWrapperToken,
+          ],
+        });
 
       return new Holding({
         user,
         token,
-        erc20Allowances: {
-          "bundler3.generalAdapter1": generalAdapter1Erc20Allowance,
-          ...erc20Allowances,
-        },
-        permit2BundlerAllowance,
+        erc20Allowances,
         erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
         balance,
         canTransfer: optionalBoolean[canTransfer],
@@ -149,12 +127,11 @@ export async function fetchHolding(
     }
   }
 
-  const chainAddresses = getChainAddresses(parameters.chainId);
+  const chainAddresses = getChainAddresses(chainId);
 
   const [
     balance,
     erc20Allowances,
-    permit2BundlerAllowance,
     erc2612Nonce,
     whitelistControllerAggregator,
     hasErc20WrapperPermission,
@@ -183,19 +160,6 @@ export async function fetchHolding(
         ] as const;
       }),
     ),
-    chainAddresses.permit2 != null
-      ? readContract(client, {
-          ...parameters,
-          abi: permit2Abi,
-          address: chainAddresses.permit2,
-          functionName: "allowance",
-          args: [user, token, chainAddresses.bundler3.generalAdapter1],
-        }).then(([amount, expiration, nonce]) => ({
-          amount,
-          expiration: BigInt(expiration),
-          nonce: BigInt(nonce),
-        }))
-      : { amount: 0n, expiration: 0n, nonce: 0n },
     readContract(client, {
       ...parameters,
       abi: erc2612Abi,
@@ -224,7 +188,6 @@ export async function fetchHolding(
     user,
     token,
     erc20Allowances: fromEntries(erc20Allowances),
-    permit2BundlerAllowance,
     erc2612Nonce,
     balance,
     canTransfer: hasErc20WrapperPermission,

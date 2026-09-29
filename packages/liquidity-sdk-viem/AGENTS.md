@@ -10,6 +10,10 @@
 - `apiSdk` is a singleton `GraphQLClient` bound to `BLUE_API_GRAPHQL_URL`.
 - Batch expensive market requests by chunking IDs before paginating.
 - Keep loader output deterministic: return `withdrawals`, `startState`, `endState`, and utilization.
+- Keep workspace installs pinned through scoped pnpm overrides to the final compatible majors:
+  `blue-sdk@6.7.0`, `blue-sdk-viem@5.5.0`, `midnight-sdk@1.3.1`,
+  `morpho-sdk@5.9.0`, and `morpho-ts@2.11.1`. This frozen package uses Vault V1 APIs removed from
+  their next majors.
 
 ## Continuous Improvement
 

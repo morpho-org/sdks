@@ -147,11 +147,7 @@ export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
  * registerCustomAddresses({
  *   addresses: {
  *     31337: {
- *       morpho: "0x0000000000000000000000000000000000000001",
- *       bundler3: {
- *         bundler3: "0x0000000000000000000000000000000000000002",
- *         generalAdapter1: "0x0000000000000000000000000000000000000003",
- *       },
+ *       blue: "0x0000000000000000000000000000000000000001",
  *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
  *       midnight: "0x0000000000000000000000000000000000001000",
  *     },
@@ -286,11 +282,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * registerCustomAddresses({
    *   addresses: {
    *     31337: {
-   *       morpho: "0x0000000000000000000000000000000000000001",
-   *       bundler3: {
-   *         bundler3: "0x0000000000000000000000000000000000000002",
-   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
-   *       },
+   *       blue: "0x0000000000000000000000000000000000000001",
    *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
    *       midnight: "0x0000000000000000000000000000000000001000",
    *     },
@@ -365,11 +357,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * registerCustomAddresses({
    *   addresses: {
    *     31337: {
-   *       morpho: "0x0000000000000000000000000000000000000001",
-   *       bundler3: {
-   *         bundler3: "0x0000000000000000000000000000000000000002",
-   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
-   *       },
+   *       blue: "0x0000000000000000000000000000000000000001",
    *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
    *       midnight: "0x0000000000000000000000000000000000001000",
    *     },
@@ -438,11 +426,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * registerCustomAddresses({
    *   addresses: {
    *     31337: {
-   *       morpho: "0x0000000000000000000000000000000000000001",
-   *       bundler3: {
-   *         bundler3: "0x0000000000000000000000000000000000000002",
-   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
-   *       },
+   *       blue: "0x0000000000000000000000000000000000000001",
    *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
    *       midnight: "0x0000000000000000000000000000000000001000",
    *     },
@@ -511,11 +495,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * registerCustomAddresses({
    *   addresses: {
    *     31337: {
-   *       morpho: "0x0000000000000000000000000000000000000001",
-   *       bundler3: {
-   *         bundler3: "0x0000000000000000000000000000000000000002",
-   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
-   *       },
+   *       blue: "0x0000000000000000000000000000000000000001",
    *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
    *       midnight: "0x0000000000000000000000000000000000001000",
    *     },

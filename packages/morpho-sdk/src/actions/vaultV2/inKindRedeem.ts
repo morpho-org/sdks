@@ -3,6 +3,7 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   type Metadata,
   NonPositiveInputError,
@@ -10,7 +11,7 @@ import {
   type Transaction,
   type VaultV2InKindRedeemAction,
 } from "../../types/index.js";
-import { getVaultExitBundlesV1PermitStruct } from "../signatures/getVaultExitBundlesV1PermitStruct.js";
+import { getBundlesSharesPermit } from "../bundles/common.js";
 
 /** Parameters for {@link vaultV2InKindRedeem}. */
 export interface VaultV2InKindRedeemParams {
@@ -39,18 +40,21 @@ export interface VaultV2InKindRedeemParams {
  * @param params.args.amount - Penalty-inclusive, asset-denominated amount to exit.
  * @param params.args.marketParamsList - Ordered markets consumed greedily after idle assets. May be
  *   empty when the vault's idle balance covers `amount`.
- * @param params.args.userAddress - Expected transaction sender, recorded in action metadata only.
- *   VaultExitBundlesV1 burns `msg.sender`'s vault shares, so the submitting account must equal this
- *   address.
+ * @param params.args.userAddress - Redeeming account, recorded in action metadata and validated as
+ *   the expected owner of an optional `requirementSignature` permit. VaultExitBundlesV1 burns
+ *   `msg.sender`'s vault shares, so the submitting account must equal this address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.requirementSignature - Optional bounded Vault V2 shares permit.
  * @param params.metadata - Optional analytics metadata.
  * @returns A deep-frozen `Readonly<Transaction<VaultV2InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when the bundle or permit deadline exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
+ * @throws {BundlesPermitMismatchError} when the requirement has the wrong permit kind, asset, owner,
+ *   spender, or signature encoding, or when its signed and action amounts, deadlines, or a supplied
+ *   action nonce disagree.
  * @example
  * ```ts
  * import { vaultV2InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -70,8 +74,7 @@ export const vaultV2InKindRedeem = ({
   Transaction<VaultV2InKindRedeemAction>
 > => {
   if (args.amount <= 0n) throw new NonPositiveInputError("amount", args.amount);
-  if (args.deadline <= 0n)
-    throw new NonPositiveInputError("deadline", args.deadline);
+  validateDeadline(args.deadline);
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const marketParamsList = args.marketParamsList.map((marketParams) => ({
     loanToken: marketParams.loanToken,
@@ -80,9 +83,11 @@ export const vaultV2InKindRedeem = ({
     irm: marketParams.irm,
     lltv: marketParams.lltv,
   }));
-  const sharesPermit = getVaultExitBundlesV1PermitStruct({
+  const sharesPermit = getBundlesSharesPermit({
     vault: vault.address,
     deadline: args.deadline,
+    owner: args.userAddress,
+    spender: to,
     requirementSignature: args.requirementSignature,
   });
   let tx = {

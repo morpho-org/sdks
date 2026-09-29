@@ -1,5 +1,31 @@
-import type { Address, ChainId } from "@morpho-org/blue-sdk";
+import type { Address, ChainId, MarketId } from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
+
+/** Thrown when a decimal string cannot be parsed into token units. */
+export class InvalidNumberError extends Error {
+  constructor(public readonly value: string) {
+    super(
+      `Invalid number "${value}": expected a decimal string such as "1.25" or "-0.5".`,
+    );
+  }
+}
+
+/** Thrown when fetched Morpho Blue market params do not hash to the requested market id; the RPC returned another market's params. */
+export class MarketParamsIdMismatchError extends Error {
+  /**
+   * @param marketId - Requested market id.
+   * @param receivedMarketId - Market id computed from the fetched params.
+   */
+  constructor(
+    public readonly marketId: MarketId,
+    public readonly receivedMarketId: MarketId,
+  ) {
+    super(
+      `Market params fetched for market "${marketId}" hash to market "${receivedMarketId}". Check the RPC endpoint: it returned params for another market.`,
+    );
+    this.name = "MarketParamsIdMismatchError";
+  }
+}
 
 /** Thrown when a permit domain targets another chain; consumers should not sign it. */
 export class InvalidPermitDomainChainIdError extends Error {

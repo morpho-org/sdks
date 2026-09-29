@@ -76,7 +76,7 @@ export class NegativeValueError extends Error {
  * import { RegistryValueAlreadyRegisteredError } from "@morpho-org/morpho-ts";
  *
  * throw new RegistryValueAlreadyRegisteredError({
- *   label: "1.blue.morpho",
+ *   label: "1.blue",
  *   registeredValue: "0x0000000000000000000000000000000000000001",
  *   requestedValue: "0x0000000000000000000000000000000000000002",
  *   type: "address",
@@ -127,7 +127,7 @@ export class IncompleteChainRegistryError extends Error {
     type: string;
   }) {
     super(
-      `Registry ${type} for chain id "${chainId}" is missing required entries. Register morpho/blue, Bundler3 executor and general adapter, and AdaptiveCurveIrm, or use a supported chain.`,
+      `Registry ${type} for chain id "${chainId}" is missing required entries. Register Morpho Blue and AdaptiveCurveIrm, or use a supported chain.`,
     );
     this.chainId = chainId;
     this.type = type;

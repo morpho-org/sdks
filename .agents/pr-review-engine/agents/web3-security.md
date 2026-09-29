@@ -47,7 +47,7 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 ### Token approval flows
 
 - **Unbounded `approve(spender, MAX_UINT256)`** when the operation is single-shot — prefer exact-amount approvals, or `Permit2` if integrated.
-- **Approval to `spender` set from caller input** without an allowlist of known protocol contracts (`bundler3`, `GeneralAdapter1`, `MetaMorpho`, etc.).
+- **Approval to `spender` set from caller input** without an allowlist of known protocol contracts (`BlueBundlesV1`, `VaultBundlesV1`, `VaultExitBundlesV1`, `MetaMorpho`, etc.).
 - **Missing revocation** in a recovery / error path that issued a high-value approval.
 
 ### Race conditions + onchain async

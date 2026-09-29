@@ -15,7 +15,6 @@ import {IOracle} from "../interfaces/IOracle.sol";
 import {IAdaptiveCurveIrm} from "../interfaces/IAdaptiveCurveIrm.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {IERC20Permit, Eip5267Domain} from "../interfaces/IERC20Permit.sol";
-import {IPublicAllocator, FlowCaps} from "../interfaces/IPublicAllocator.sol";
 
 error UnknownOfFactory(address factory, address vault);
 error UnsupportedVaultV2Adapter(address adapter);
@@ -61,15 +60,6 @@ struct VaultV1Config {
     Eip5267Domain eip5267Domain;
 }
 
-/// @dev The vault's PublicAllocator configuration. Only populated when the queried chain has a
-/// PublicAllocator and the vault has set it as an allocator; the caller maps a zeroed struct to
-/// `undefined` when no PublicAllocator is configured for the chain (mirroring `GetVault`).
-struct PublicAllocatorConfig {
-    address admin;
-    uint256 fee;
-    uint256 accruedFee;
-}
-
 /// @dev MetaMorpho V1 governance and accounting state wrapped by a `MorphoVaultV1Adapter`.
 /// `totalAssets` is omitted because `AccrualVault` recomputes it from the sum of allocations' supply
 /// assets.
@@ -91,12 +81,9 @@ struct VaultV1Response {
     uint256 lostAssets;
     Id[] supplyQueue;
     Id[] withdrawQueue;
-    bool hasPublicAllocator;
-    PublicAllocatorConfig publicAllocatorConfig;
 }
 
-/// @dev One MetaMorpho V1 market allocation: cap config, the vault's position, market state, and the
-/// per-market PublicAllocator flow caps (populated only when a PublicAllocator is configured).
+/// @dev One MetaMorpho V1 market allocation: cap config, the vault's position, and market state.
 struct VaultV1MarketAllocation {
     uint256 cap;
     bool enabled;
@@ -104,8 +91,6 @@ struct VaultV1MarketAllocation {
     PendingUint192 pendingCap;
     Position position;
     MarketResponse market;
-    uint128 flowCapMaxIn;
-    uint128 flowCapMaxOut;
 }
 
 /// @dev One `MorphoMarketV1Adapter` market: the adapter's configured market params (read from the
@@ -179,8 +164,7 @@ contract GetAccrualVaultV2 {
         IMorphoMarketV1AdapterFactory morphoMarketV1AdapterFactory,
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
         IMorpho morpho,
-        IAdaptiveCurveIrm adaptiveCurveIrm,
-        IPublicAllocator publicAllocator
+        IAdaptiveCurveIrm adaptiveCurveIrm
     ) external view returns (AccrualVaultV2Response memory res) {
         if (!vaultV2Factory.isVaultV2(address(vault))) {
             revert UnknownOfFactory(address(vaultV2Factory), address(vault));
@@ -219,8 +203,7 @@ contract GetAccrualVaultV2 {
                 morphoMarketV1AdapterFactory,
                 morphoMarketV1AdapterV2Factory,
                 morpho,
-                adaptiveCurveIrm,
-                publicAllocator
+                adaptiveCurveIrm
             );
         }
 
@@ -234,8 +217,7 @@ contract GetAccrualVaultV2 {
                 morphoMarketV1AdapterFactory,
                 morphoMarketV1AdapterV2Factory,
                 morpho,
-                adaptiveCurveIrm,
-                publicAllocator
+                adaptiveCurveIrm
             );
         }
     }
@@ -295,8 +277,7 @@ contract GetAccrualVaultV2 {
         IMorphoMarketV1AdapterFactory morphoMarketV1AdapterFactory,
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory,
         IMorpho morpho,
-        IAdaptiveCurveIrm adaptiveCurveIrm,
-        IPublicAllocator publicAllocator
+        IAdaptiveCurveIrm adaptiveCurveIrm
     ) private view returns (AdapterResponse memory res) {
         res.adapter = adapter;
         res.forceDeallocatePenalty = parentVault.forceDeallocatePenalty(adapter);
@@ -312,13 +293,13 @@ contract GetAccrualVaultV2 {
             res.morphoVaultV1 = typed.morphoVaultV1();
 
             IMetaMorpho vaultV1 = IMetaMorpho(res.morphoVaultV1);
-            res.vaultV1 = _queryVaultV1(vaultV1, publicAllocator);
+            res.vaultV1 = _queryVaultV1(vaultV1);
 
             uint256 length = res.vaultV1.withdrawQueue.length;
             res.vaultV1Allocations = new VaultV1MarketAllocation[](length);
             for (uint256 i; i < length; ++i) {
                 res.vaultV1Allocations[i] =
-                    _queryVaultV1Allocation(vaultV1, res.vaultV1.withdrawQueue[i], morpho, adaptiveCurveIrm, publicAllocator);
+                    _queryVaultV1Allocation(vaultV1, res.vaultV1.withdrawQueue[i], morpho, adaptiveCurveIrm);
             }
 
             res.vaultV1Shares = IERC20(res.morphoVaultV1).balanceOf(adapter);
@@ -365,11 +346,7 @@ contract GetAccrualVaultV2 {
     }
 
     /// @dev Reads a MetaMorpho V1 vault's governance, accounting, and queue state.
-    function _queryVaultV1(IMetaMorpho vault, IPublicAllocator publicAllocator)
-        private
-        view
-        returns (VaultV1Response memory res)
-    {
+    function _queryVaultV1(IMetaMorpho vault) private view returns (VaultV1Response memory res) {
         res.config = VaultV1Config({
             asset: vault.asset(),
             symbol: vault.symbol(),
@@ -411,25 +388,14 @@ contract GetAccrualVaultV2 {
         for (uint256 i; i < withdrawQueueLength; ++i) {
             res.withdrawQueue[i] = vault.withdrawQueue(i);
         }
-
-        if (address(publicAllocator) != address(0) && vault.isAllocator(address(publicAllocator))) {
-            res.hasPublicAllocator = true;
-            res.publicAllocatorConfig = PublicAllocatorConfig({
-                admin: publicAllocator.admin(address(vault)),
-                fee: publicAllocator.fee(address(vault)),
-                accruedFee: publicAllocator.accruedFee(address(vault))
-            });
-        }
     }
 
-    /// @dev Reads one MetaMorpho V1 market allocation: cap config, the vault's position, market state,
-    /// and the per-market PublicAllocator flow caps when a PublicAllocator is configured.
+    /// @dev Reads one MetaMorpho V1 market allocation: cap config, the vault's position, and market state.
     function _queryVaultV1Allocation(
         IMetaMorpho vault,
         Id id,
         IMorpho morpho,
-        IAdaptiveCurveIrm adaptiveCurveIrm,
-        IPublicAllocator publicAllocator
+        IAdaptiveCurveIrm adaptiveCurveIrm
     ) private view returns (VaultV1MarketAllocation memory res) {
         MarketConfig memory config = vault.config(id);
         res.cap = config.cap;
@@ -438,12 +404,6 @@ contract GetAccrualVaultV2 {
         res.pendingCap = vault.pendingCap(id);
         res.position = morpho.position(id, address(vault));
         res.market = _queryMarket(morpho, id, adaptiveCurveIrm);
-
-        if (address(publicAllocator) != address(0)) {
-            FlowCaps memory flowCaps = publicAllocator.flowCaps(address(vault), id);
-            res.flowCapMaxIn = flowCaps.maxIn;
-            res.flowCapMaxOut = flowCaps.maxOut;
-        }
     }
 
     /// @dev Reads a Morpho Blue market's params, accounting, oracle price, and adaptive IRM rate.

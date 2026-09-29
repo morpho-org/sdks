@@ -12,7 +12,6 @@ import { type Hex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
   fetchAccrualVaultV2,
-  fetchAccrualVaultV2Deployless,
   fetchVault,
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
@@ -86,30 +85,22 @@ function expectSameOutcome<T>(actualFn: () => T, expectedFn: () => T) {
 }
 
 /**
- * Extracts the nested MetaMorpho V1 fields the deployless query now reads at parity with the
- * multicall path — the vault's EIP-5267 domain and PublicAllocator config (vault-level and
- * per-market) — so they can be compared directly. Returns `undefined` for non-`MorphoVaultV1`
- * adapters, which have no nested vault.
+ * Extracts the nested MetaMorpho V1 fields read by both fetch paths. Returns `undefined` for
+ * non-`MorphoVaultV1` adapters, which have no nested vault.
  */
-function vaultV1PublicFields(adapter: IAccrualVaultV2Adapter | undefined) {
+function vaultV1Fields(adapter: IAccrualVaultV2Adapter | undefined) {
   if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter))
     return undefined;
   const vault = adapter.accrualVaultV1;
   return {
     parentAllocation: adapter.parentAllocation,
     eip5267Domain: vault.eip5267Domain,
-    publicAllocatorConfig: vault.publicAllocatorConfig,
-    marketPublicAllocatorConfigs: [...vault.allocations.values()].map(
-      ({ config }) => config.publicAllocatorConfig,
-    ),
   };
 }
 
 /**
  * Asserts the deployless one-call reader is behaviourally identical to the multicall
- * (`deployless: false`) reader. The nested MetaMorpho V1 vault's `eip5267Domain` and
- * `publicAllocatorConfig` (vault-level and per-market) are read in the same single call, so they
- * are compared for exact parity alongside every accounting and capacity output.
+ * (`deployless: false`) reader, including the nested MetaMorpho V1 vault's EIP-5267 domain.
  */
 function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.address).toBe(expected.address);
@@ -145,13 +136,13 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
     expect(adapter.realAssets(ACCRUAL_TIMESTAMP)).toBe(
       expected.accrualAdapters[i]?.realAssets(ACCRUAL_TIMESTAMP),
     );
-    expect(vaultV1PublicFields(adapter)).toStrictEqual(
-      vaultV1PublicFields(expected.accrualAdapters[i]),
+    expect(vaultV1Fields(adapter)).toStrictEqual(
+      vaultV1Fields(expected.accrualAdapters[i]),
     );
   });
 
-  expect(vaultV1PublicFields(actual.accrualLiquidityAdapter)).toStrictEqual(
-    vaultV1PublicFields(expected.accrualLiquidityAdapter),
+  expect(vaultV1Fields(actual.accrualLiquidityAdapter)).toStrictEqual(
+    vaultV1Fields(expected.accrualLiquidityAdapter),
   );
 
   expect(
@@ -199,7 +190,7 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   );
 }
 
-describe("fetchAccrualVaultV2Deployless", () => {
+describe("fetchAccrualVaultV2 deployless path", () => {
   vaultV2Test(
     "skips a reverting shares gate when both fees are zero",
     async ({ client }) => {
@@ -219,7 +210,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       });
 
       const [deployless, multicall] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client),
         fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
       ]);
 
@@ -321,7 +312,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
         });
 
         const [deployless, multicall, onchainAccrual] = await Promise.all([
-          fetchAccrualVaultV2Deployless(vaultAddress, client),
+          fetchAccrualVaultV2(vaultAddress, client),
           fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
           client.readContract({
             address: vaultAddress,
@@ -357,7 +348,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     "matches fetchAccrualVaultV2 for a MorphoVaultV1 liquidity adapter",
     async ({ client }) => {
       const [deployless, multicall] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultV2VaultV1, client),
+        fetchAccrualVaultV2(vaultV2VaultV1, client),
         fetchAccrualVaultV2(vaultV2VaultV1, client, { deployless: false }),
       ]);
 
@@ -403,7 +394,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       });
       const block = await client.getBlock();
       const [deploylessVault, sequentialVault] = await Promise.all([
-        fetchAccrualVaultV2Deployless(parentVault, client, {
+        fetchAccrualVaultV2(parentVault, client, {
           blockNumber: block.number,
         }),
         fetchAccrualVaultV2(parentVault, client, {
@@ -460,7 +451,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       );
 
       const [deployless, multicall] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client),
         fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
       ]);
 
@@ -480,7 +471,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
       const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
 
       const [deployless, multicall] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client),
         fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
       ]);
 
@@ -495,7 +486,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
     "matches fetchAccrualVaultV2 for a MorphoMarketV1AdapterV2 liquidity adapter",
     async ({ client }) => {
       const [deployless, multicall] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultV2MarketV1V2, client),
+        fetchAccrualVaultV2(vaultV2MarketV1V2, client),
         fetchAccrualVaultV2(vaultV2MarketV1V2, client, { deployless: false }),
       ]);
 

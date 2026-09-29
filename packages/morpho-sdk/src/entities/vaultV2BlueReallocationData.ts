@@ -24,9 +24,9 @@ import { type Address, type Hash, isAddressEqual } from "viem";
 import {
   DEFAULT_MAX_REALLOCATION_PENALTY,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
-  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   MAX_REALLOCATION_PENALTY,
 } from "../helpers/constant.js";
+import { resolveMaxWithdrawalUtilization } from "../helpers/utilization.js";
 import type {
   VaultV2BluePublicAllocatorOptions,
   VaultV2BlueReallocation,
@@ -183,19 +183,6 @@ const getAdapterIds = (
   return ids;
 };
 
-const resolveMaxWithdrawalUtilization = (value: bigint | undefined) => {
-  const utilization = value ?? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION;
-  if (utilization < 0n)
-    throw new NegativeInputError("maxWithdrawalUtilization", utilization);
-  if (utilization > MathLib.WAD)
-    throw new InputExceedsMaxError({
-      field: "maxWithdrawalUtilization",
-      value: utilization,
-      max: MathLib.WAD,
-    });
-  return utilization;
-};
-
 const resolveMaxPenalty = (value: bigint | undefined) => {
   const penalty = value ?? DEFAULT_MAX_REALLOCATION_PENALTY;
   if (penalty < 0n) throw new NegativeInputError("maxPenalty", penalty);
@@ -229,19 +216,11 @@ const cloneAccrualVault = (
       pendingTimelock: { ...vault.pendingTimelock },
       pendingGuardian: { ...vault.pendingGuardian },
       supplyQueue: [...vault.supplyQueue],
-      publicAllocatorConfig:
-        vault.publicAllocatorConfig == null
-          ? undefined
-          : { ...vault.publicAllocatorConfig },
     },
     [...vault.allocations.values()].map(({ config, position }) => ({
       config: {
         ...config,
         pendingCap: { ...config.pendingCap },
-        publicAllocatorConfig:
-          config.publicAllocatorConfig == null
-            ? undefined
-            : { ...config.publicAllocatorConfig },
       },
       position: clonePosition(position, markets),
     })),

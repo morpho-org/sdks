@@ -26,6 +26,7 @@ const authorizationTypes = {
  * @param args - Authorization message fields.
  * @param chainId - Chain id whose Morpho Blue deployment verifies the signature.
  * @returns Typed data ready to pass to a wallet for signing.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @example
  * ```ts
  * import { ChainId } from "@morpho-org/blue-sdk";
@@ -50,7 +51,7 @@ export const getAuthorizationTypedData = (
   return {
     domain: {
       chainId: chainId,
-      verifyingContract: getChainAddresses(chainId).morpho,
+      verifyingContract: getChainAddresses(chainId).blue,
     },
     types: authorizationTypes,
     message: {

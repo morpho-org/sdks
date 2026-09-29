@@ -1,6 +1,6 @@
 /**
  * Integration fixtures for parseTransfers, modeled after realistic Morpho
- * transaction flows (bundler3 vault deposit, WETH wrap/unwrap,
+ * transaction flows (vault deposit, WETH wrap/unwrap,
  * supply-collateral+borrow). When changing `parseTransfers`, these must stay
  * green.
  */
@@ -24,7 +24,7 @@ describe("integration: vault V2 deposit", () => {
   const USER: Address = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
   const ADAPTER: Address = "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB";
 
-  // Realistic log sequence for a bundler3 vault deposit:
+  // Realistic log sequence for a batched vault deposit:
   // 1. USDC Transfer: user → adapter (erc20TransferFrom)
   // 2. USDC Transfer: adapter → vault (deposit)
   // 3. bbqUSDC Transfer: zero → user (mint shares)

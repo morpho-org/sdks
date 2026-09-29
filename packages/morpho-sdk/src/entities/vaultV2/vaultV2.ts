@@ -2,19 +2,24 @@ import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  getChainAddresses,
   type MarketParams,
   MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual } from "viem";
+import { _try, getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
+import {
+  getBundlesReferralFeeAssets,
+  normalizeBundlesCommonParams,
+  resolveBundlesFunding,
+  selectBundlesSharesPermitSignature,
+  selectBundlesTokenRequirementSignature,
+} from "../../actions/bundles/common.js";
 import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
-  getGeneralAdapterRequirements,
   vaultV2Deposit,
   vaultV2ForceRedeem,
   vaultV2ForceWithdraw,
@@ -23,122 +28,314 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import {
+  computeMinForceWithdrawSharePrice,
+  computeVaultMaxShareAllowance,
+  computeVaultMaxSharePrice,
+  computeVaultV2ForceWithdrawFeeSharesMinted,
+  computeVaultV2ForceWithdrawMinSharesBurnt,
+  computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
+  MAX_SLIPPAGE_TOLERANCE,
+  resolveVaultV2ForceWithdrawEligibility,
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import {
+  validateDeadline,
+  validateNativeVaultAsset,
+  validateReferralFee,
+  validateUint256Field,
+} from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
   type ActionRequirement,
   AdapterNotPartOfVaultError,
-  ChainIdMismatchError,
-  ChainWNativeMissingError,
+  type BundlesFundingArgs,
+  type BundlesTokenRequirementsOptions,
   type Deallocation,
-  type DepositAmountArgs,
   EmptyMarketParamsListError,
-  type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
-  InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   type MorphoClientType,
-  NativeAmountOnNonWNativeVaultError,
-  NegativeInputError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
-  type Requirement,
   type RequirementSignature,
-  selectRequirementSignatures,
   type Transaction,
-  UnsupportedInKindAdapterError,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
   type VaultV2ForceRedeemAction,
   type VaultV2ForceWithdrawAction,
+  VaultV2ForceWithdrawCoverageError,
+  VaultV2ForceWithdrawFeeSharesExceedBurnError,
+  VaultV2ForceWithdrawSharePriceBelowFloorError,
+  VaultV2ForceWithdrawZeroSharePriceError,
+  VaultV2ForceWithdrawZeroWithdrawalError,
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
+  VaultV2SingleAdapterRequiredError,
+  VaultV2UndecodableLiquidityDataError,
+  VaultV2UnsupportedExitAdapterError,
+  VaultV2UnsupportedLiquidityAdapterError,
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
+import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
+import { getBundlesTokenRequirements } from "../requirements/index.js";
 
+// Maximum accepted deadline horizon; the on-chain management fee is capped at 5%/yr so the
+// accrual model stays well-defined inside it.
+const VAULT_V2_FEE_PROJECTION_HORIZON = Time.s.from.y(1n);
+
+/**
+ * Action surface for Vault V2 reads and writes; writes route through VaultBundlesV1 and
+ * VaultExitBundlesV1, except `forceRedeem`, which uses the vault's native multicall.
+ */
 export interface VaultV2Actions {
   /**
-   * Fetches the latest vault data.
+   * Fetches the latest accrual snapshot of the vault.
    *
-   * This function fetches the latest vault data from the blockchain.
-   * @param {FetchParameters} [parameters] - The parameters for the fetch operation.
+   * Reads the Vault V2 state through `fetchAccrualVaultV2` on the entity's client.
    *
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>} The latest vault data.
+   * @param parameters - Optional viem fetch parameters (block number, block tag, state override).
+   * @returns The hydrated `AccrualVaultV2` snapshot.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownBlueFactory} when the configured chain has no VaultV2 factory.
+   * @throws {UnknownBlueOfFactory} when the vault is not a VaultV2 from the configured factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when the vault or one of its adapters uses an
+   *   unsupported adapter class.
    */
   getData: (
     parameters?: FetchParameters,
   ) => Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>;
   /**
-   * Prepares a deposit transaction for the VaultV2 contract.
+   * Prepares a Vault V2 deposit through the registered VaultBundlesV1 contract.
    *
-   * This function constructs the transaction data required to deposit a specified amount of assets into the vault.
-   * Uses pre-fetched vault data for accurate calculations of slippage and asset address,
-   * then returns the prepared deposit transaction and a function for retrieving all required approval transactions.
-   * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
+   * Uses the supplied vault snapshot to compute the deadline-accrued `maxSharePrice`.
+   * `getRequirements()` reads the asset allowance and, when enabled, the selected ERC-2612 or
+   * Permit2 nonce state. Native funding is exclusive and skips token requirements. Shares are
+   * always minted to the transaction sender, which must be `userAddress`.
+   * Concurrent requirement reads share the first caller's options; later calls refresh on-chain
+   * state using their own options.
    *
-   * @param {Object} params - The deposit parameters.
-   * @param {bigint} [params.amount=0n] - Amount of ERC-20 assets to deposit. At least one of amount or nativeAmount must be provided.
-   * @param {Address} params.userAddress - User address initiating the deposit.
-   * @param {AccrualVaultV2} params.vaultData - Pre-fetched vault data with asset address and share conversion.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
-   * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @param params.userAddress - Account that funds, signs, submits, and receives the vault shares.
+   * @param params.vaultData - Pre-fetched Vault V2 snapshot used for asset and share conversion.
+   * @param params.amount - Optional gross ERC-20 assets; exclusive with `nativeAmount`.
+   * @param params.nativeAmount - Optional gross native assets; exclusive with `amount` and valid
+   *   only for a wNative vault.
+   * @param params.slippageTolerance - Optional WAD-scaled tolerance; defaults to 0.03% and cannot
+   *   exceed 10%.
+   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%, deducted before
+   *   the vault deposit.
+   * @param params.referralFeeRecipient - Non-zero recipient required for a positive referral fee.
+   * @param params.deadline - Optional execution and permit deadline in Unix seconds; defaults to
+   *   two hours from handle creation.
+   * @returns Lazy token prerequisite resolution and a synchronous deep-frozen VaultBundlesV1
+   *   transaction builder.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
    * @throws {UnsupportedBlueMarketIrmError} when an underlying market with positive debt uses an unsupported IRM.
+   * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
+   * @throws {ExpiredDeadlineError} when the deadline is stale at creation or requirement resolution.
+   * @throws {MixedBundlesFundingError} when ERC-20 and native funding are both supplied.
+   * @throws {NegativeInputError} when funding, slippage, the referral fee, or a Permit2 nonce is negative.
+   * @throws {NonPositiveInputError} when funding or the previewed vault shares are not positive.
+   * @throws {ExcessiveSlippageToleranceError} when slippage tolerance exceeds the SDK maximum.
+   * @throws {ReferralFeePctExceededError} when the referral fee is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no recipient.
+   * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
+   * @throws {NativeAmountOnNonWNativeVaultError} when native funding targets a non-wNative vault.
+   * @throws {NoUnusedPermit2NonceError} from `getRequirements()` when every Permit2 nonce for the
+   *   owner is consumed and none was passed explicitly.
+   * @throws {Permit2SignatureTransferNonceAlreadyUsedError} from `getRequirements()` when the
+   *   explicit Permit2 nonce is consumed.
+   * @throws {InputExceedsMaxError} when funding or the deadline exceeds uint256, or from
+   *   `getRequirements()` when the Permit2 nonce exceeds uint256.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
+   *   deadline differ from this operation's, or when the signature's carried action nonce is
+   *   inconsistent with its signed nonce.
+   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
+   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the vault asset.
+   * @throws {BundlesRequirementSignatureMismatchError} from `buildTx()` when signature metadata is malformed.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
+   * @example
+   * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, type Address, zeroAddress } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const keyrockUsdcVaultV2 =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const vault = client.morpho.vaultV2(keyrockUsdcVaultV2, mainnet.id);
+   * const vaultData = await vault.getData();
+   * const action = vault.deposit({
+   *   amount: 1_000_000n,
+   *   userAddress: zeroAddress,
+   *   vaultData,
+   * });
+   * const requirements = await action.getRequirements(); // Satisfy these first.
+   * const tx = action.buildTx(); // For a client configured with supportSignature: false.
+   * // tx satisfies Readonly<Transaction<VaultV2DepositAction>>
+   * ```
    */
   deposit: (
     params: {
-      userAddress: Address;
-      vaultData: AccrualVaultV2;
-      slippageTolerance?: bigint;
-    } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV2DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+      readonly userAddress: Address;
+      readonly vaultData: AccrualVaultV2;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & BundlesFundingArgs,
+  ) => ActionOutput<
+    VaultV2DepositAction,
+    readonly RequirementSignature[],
+    BundlesTokenRequirementsOptions
+  >;
   /**
-   * Prepares a withdraw transaction for the VaultV2 contract.
+   * Prepares an exact-assets Vault V2 withdrawal through VaultBundlesV1.
    *
-   * This function constructs the transaction data required to withdraw a specified amount of assets from the vault.
+   * Derives the share-burn cap from the supplied `vaultData` snapshot at handle creation, then
+   * reads the live vault-share allowance and, when a signature is needed, the permit nonce on
+   * each `getRequirements()` call. Captures the requested amount and owner at creation, so later
+   * changes to `params` do not change this handle's requirements or transaction.
    *
-   * @param {Object} params - The withdraw parameters.
-   * @param {bigint} params.amount - The amount of assets to withdraw.
-   * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
+   * @param params.amount - Positive gross withdrawal in underlying asset base units, before fees.
+   * @param params.userAddress - Share owner that must sign and submit; receives the net assets.
+   * @param params.vaultData - Pre-fetched Vault V2 snapshot used to derive the share cap.
+   * @param params.slippageTolerance - Optional WAD-scaled share-price loss tolerance applied to
+   *   the share cap.
+   *   Defaults to 0.03% and cannot exceed 10%.
+   * @param params.referralFeePct - Optional WAD-scaled fee in [0, 1e18), defaulting to zero;
+   *   rounded down and deducted from the gross withdrawn assets.
+   * @param params.referralFeeRecipient - Optional nonzero recipient required for a positive fee.
+   * @param params.deadline - Optional execution and share-permit deadline in Unix seconds;
+   *   defaults to two hours from handle creation.
+   * @returns A frozen handle with lazy `getRequirements()` and synchronous `buildTx(signatures?)`,
+   *   which returns a deep-frozen `Transaction<VaultV2WithdrawAction>`. Requirements are empty
+   *   when the allowance equals the cap; an oversized allowance is always reset with an exact
+   *   onchain approval, and an insufficient one is raised by an approval or, with signature
+   *   support, an ERC-2612 request. The cap is fixed at handle creation while each call re-reads
+   *   the allowance. Confirm the approval or pass its signed permit to `buildTx`.
+   * @remarks VaultBundlesV1 skips a share permit whose nonce was already consumed and proceeds
+   *   under the live allowance, so execute every requirement returned by the latest
+   *   `getRequirements()` — including the oversized-allowance reset — before submitting.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain.
+   * @throws {NonPositiveInputError} when `amount` or the computed share cap is not positive.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   at any `getRequirements()` call.
+   * @throws {InputExceedsMaxError} when `amount` or `deadline` exceeds uint256 at handle creation.
+   * @throws {NegativeInputError} when `referralFeePct` or `slippageTolerance` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is at least WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive referral fee has no nonzero recipient.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds 10%.
+   * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple permits are supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the share permit is malformed or
+   *   its spender, amount or deadline differ from this operation's.
+   * @throws {viem.BaseError} when an allowance or nonce read or transaction encoding fails.
+   * @example
+   * ```ts
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import { createPublicClient, http, type Address } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * export async function prepareUsdcWithdrawal(userAddress: Address) {
+   *   const vaultAddress = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+   *   const client = createPublicClient({ chain: mainnet, transport: http() })
+   *     .extend(morphoViemExtension({ supportSignature: false }));
+   *   const vault = client.morpho.vaultV2(vaultAddress, mainnet.id);
+   *   const vaultData = await vault.getData();
+   *   const action = vault.withdraw({ amount: 1_000_000n, userAddress, vaultData });
+   *   const requirements = await action.getRequirements();
+   *   // Send and confirm each approval before calling action.buildTx().
+   *   // action.buildTx() returns Readonly<Transaction<VaultV2WithdrawAction>>.
+   *   return { action, requirements }; // Prepared handle and its outstanding share approvals.
+   * }
+   * ```
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2WithdrawAction>>;
-  };
+  withdraw: (params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly vaultData: AccrualVaultV2;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2WithdrawAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
-   * Prepares a redeem transaction for the VaultV2 contract.
+   * Prepares an exact-shares Vault V2 redemption through VaultBundlesV1.
    *
-   * This function constructs the transaction data required to redeem a specified amount of shares from the vault.
+   * Captures `shares` and `userAddress` at handle creation for both requirements and `buildTx()`.
+   * The caller must satisfy the exact vault-share allowance returned by `getRequirements()` before
+   * `buildTx()`; every requirement resolution re-reads the live allowance and checks the deadline.
    *
-   * @param {Object} params - The redeem parameters.
-   * @param {bigint} params.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
+   * @param params - The redeem parameters.
+   * @param params.shares - Exact vault shares to burn.
+   * @param params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets; must be below WAD.
+   * @param [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {NonPositiveInputError} when `shares` is not positive.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   requirement resolution.
+   * @throws {InputExceedsMaxError} when `shares` or `deadline` exceeds uint256.
+   * @throws {NegativeInputError} when `referralFeePct` is negative.
+   * @throws {ReferralFeePctExceededError} when `referralFeePct` is not below WAD.
+   * @throws {ReferralFeeRecipientMissingError} when a positive fee has no non-zero recipient.
+   * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+   * @throws {UnknownAddressError} when VaultBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} from `getRequirements()` when an allowance or nonce read fails.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the signature's spender, amount or
+   *   deadline differ from this operation's.
+   * @example
+   * ```ts
+   * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+   *
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const redemption = vault.redeem({ shares: 1_000_000n, userAddress });
+   * const signatures = [];
+   * for (const requirement of await redemption.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(walletClient, userAddress));
+   *   } else {
+   *     const hash = await walletClient.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = redemption.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV2RedeemAction>>
+   * ```
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
-  };
+  redeem: (params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2RedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares an illiquid Vault V2 exit into idle assets and Morpho Blue supply positions.
    *
@@ -155,6 +352,10 @@ export interface VaultV2Actions {
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
+   * In-kind exits require an exact vault-share allowance for the computed cap. An ERC-2612 permit
+   * is emitted only to raise an insufficient allowance; an oversized allowance is always reset
+   * with an onchain approval before the exit.
+   *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
    * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets;
@@ -167,15 +368,16 @@ export interface VaultV2Actions {
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {UnsupportedBlueMarketIrmError} when an adapter-listed market with positive debt uses an unsupported IRM.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `amount` is not positive.
+   * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
    * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
    *   penalty-adjusted amount rounds to zero deallocated assets.
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256`.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
-   * @throws {InKindRedeemRequiresSingleAdapterError} when the vault does not have one adapter.
+   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have one adapter.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
-   * @throws {UnsupportedInKindAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
+   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
    * @throws {InKindRedeemCoverageError} when the deduplicated list cannot cover the exit.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -183,7 +385,9 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the supplied permit is not ERC-2612, has
+   *   the wrong asset, owner, or signature encoding, or names another spender, amount, or deadline
+   *   than the prepared cap.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -222,27 +426,147 @@ export interface VaultV2Actions {
     undefined
   >;
   /**
-   * Prepares a force withdraw transaction for the VaultV2 contract using the vault's native multicall.
+   * Prepares a Vault V2 force withdrawal through VaultExitBundlesV1.
    *
-   * This function encodes one or more on-chain forceDeallocate calls followed by a single withdraw,
-   * executed atomically via VaultV2's multicall. This allows a user to free liquidity from multiple
-   * illiquid markets and withdraw the resulting assets in one transaction.
+   * The contract withdraws everything the vault can pay without a penalty — its idle assets plus
+   * the liquidity available through its liquidity adapter — then force-deallocates the remainder by
+   * looping over the adapter's markets. It computes the deallocations itself: the caller supplies
+   * neither a market list nor an order.
    *
-   * @param {Object} params - The force withdraw parameters.
-   * @param {readonly Deallocation[]} params.deallocations - The typed list of deallocations to perform.
-   * @param {Object} params.withdraw - The withdraw parameters applied after deallocations.
-   * @param {bigint} params.withdraw.amount - The amount of assets to withdraw.
-   * @param {Address} params.userAddress - User address (penalty source and withdraw recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceWithdrawAction>>} returns.buildTx The prepared multicall transaction.
+   * `exitAssets` is **penalty-inclusive**, matching `inKindRedeem`. The contract debits it from the
+   * user's position but pays out only
+   * `assetsToWithdraw + floor((exitAssets - assetsToWithdraw) * WAD / (WAD + penalty))`, minus the
+   * referral fee. Quote the split with `previewVaultV2ForceWithdraw`.
+   *
+   * The vault must have exactly one `MorphoMarketV1AdapterV2` and route liquidity through that same
+   * adapter or none at all. Call `getRequirements()` before `buildTx()` so the vault-share allowance
+   * and permit nonce are read on-chain.
+   *
+   * The SDK derives a conservative lower bound on the realized exit share price from the snapshot
+   * and `slippageTolerance`: the floor is priced off whichever of the raw snapshot or its accrual
+   * to `now` burns more shares, so neither pending fee mints nor interest the chain has not yet
+   * accrued can lift it above the realized price. A supplied `minSharePriceE27` replaces the
+   * tolerance-derived bound (it may be tighter or looser) but must be at least the floor derived
+   * at `MAX_SLIPPAGE_TOLERANCE`, so an override can never disable meaningful protection.
+   * The bound rejects a share price drop, a penalty increase, and liquidity shifting from the
+   * penalty-free leg to the penalised leg. It does **not** cover the referral fee, which the
+   * contract deducts afterwards.
+   *
+   * Vault gates are enforced by the final transaction and are not preflighted: the receive-assets
+   * gate must allow VaultExitBundlesV1 and may depend on its transient initiator, while a
+   * send-shares gate is arbitrary code re-evaluated after each penalty burn. The SDK also does not
+   * validate the user's share balance. Per-market penalties and each vault withdrawal round the
+   * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
+   * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` so a
+   * full-balance exit does not revert for insufficient shares. The approved share allowance this
+   * handle returns covers a burn at least one `slippageTolerance` step below the price floor
+   * whenever the floor exceeds one RAY unit and, in any case, at least one share above the burn
+   * at the floor, so a price within that headroom below the floor reverts on the contract's
+   * `minSharePriceE27` check rather than on the allowance; a deeper drop can still surface as an
+   * ERC-20 allowance underflow.
+   *
+   * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
+   * an on-chain revert remains possible if vault state changes between preparation and inclusion.
+   * A fee-recipient `userAddress` gets a floor from the larger of the raw snapshot burn and the
+   * `now` burn net of its own fee mints, and a guard against fee mints reaching the lower burn
+   * bound by the deadline. Its allowance includes the projected fee shares through that same
+   * deadline. Deadlines beyond one year after handle creation are rejected, so the guard and
+   * allowance cover the whole accepted window.
+   *
+   * @param params - Force withdrawal parameters.
+   * @param params.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
+   * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
+   * @param params.userAddress - Account that signs and submits the exit, and receives the assets.
+   * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
+   * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
+   *   Deadlines more than one year after handle creation are rejected.
+   * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
+   *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
+   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. It replaces
+   *   the tolerance-derived bound and may be tighter or looser, but must be at least the floor
+   *   derived at `MAX_SLIPPAGE_TOLERANCE`. When that floor rounds down to zero (dust exits) it is
+   *   clamped to `1`, so any positive override is accepted.
+   * @param params.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
+   *   `referralFeeRecipient`. Defaults to `0n`.
+   * @param params.referralFeeRecipient - Optional referral fee recipient, required when
+   *   `referralFeePct` is positive.
+   * @returns Lazy prerequisite resolution and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client and entity target different chains.
+   * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
+   * @throws {NonPositiveInputError} when `exitAssets`, `deadline`, or a supplied
+   *   `minSharePriceE27` is not positive.
+   * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
+   * @throws {InputExceedsMaxError} when `exitAssets`, `deadline`, or the effective
+   *   `minSharePriceE27` (supplied or derived) exceeds `uint256`, or when `referralFeePct` is not
+   *   below WAD, or when `deadline` is more than one year after handle creation.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   requirement resolution.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have exactly one adapter.
+   * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
+   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
+   * @throws {VaultV2UnsupportedLiquidityAdapterError} when the vault routes liquidity through
+   *   another adapter.
+   * @throws {VaultV2UndecodableLiquidityDataError} when the vault's `liquidityData` does not decode
+   *   as `MarketParams`.
+   * @throws {VaultV2ForceWithdrawZeroWithdrawalError} when the exit would withdraw nothing.
+   * @throws {VaultV2ForceWithdrawCoverageError} when the adapter's markets cannot cover the exit,
+   *   which would overrun the contract's unbounded loop.
+   * @throws {VaultV2ForceWithdrawZeroSharePriceError} when the derived share-price floor rounds down
+   *   to zero, which the contract would read as no bound at all.
+   * @throws {VaultV2ForceWithdrawSharePriceBelowFloorError} when a supplied `minSharePriceE27`
+   *   is below the floor derived at `MAX_SLIPPAGE_TOLERANCE`.
+   * @throws {VaultV2ForceWithdrawFeeSharesExceedBurnError} when fee shares are minted to a
+   *   fee-recipient `userAddress` and reach the lower-bound share burn at the deadline.
+   * @throws {ReferralFeeRecipientMissingError} when a positive `referralFeePct` has no recipient.
+   * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+   * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the permit's spender, amount, or
+   *   deadline differs from this operation. Any handle built from the same inputs accepts the
+   *   permit; a permit whose nonce was consumed is skipped onchain and the live allowance applies.
+   * @throws {BundlesPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
+   * @example
+   * ```ts
+   * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+   *
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const vaultData = await vault.getData();
+   * const exit = vault.forceWithdraw({
+   *   exitAssets: 1_000_000n,
+   *   vaultData,
+   *   userAddress,
+   * });
+   * const signatures = [];
+   * for (const requirement of await exit.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(walletClient, userAddress));
+   *   } else {
+   *     const hash = await walletClient.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = exit.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV2ForceWithdrawAction>>
+   * ```
    */
-  forceWithdraw: (params: {
-    deallocations: readonly Deallocation[];
-    withdraw: { amount: bigint };
-    userAddress: Address;
-  }) => {
-    buildTx: () => Readonly<Transaction<VaultV2ForceWithdrawAction>>;
-  };
+  readonly forceWithdraw: (params: {
+    readonly exitAssets: bigint;
+    readonly vaultData: AccrualVaultV2;
+    readonly userAddress: Address;
+    readonly adapter?: Address;
+    readonly deadline?: bigint;
+    readonly slippageTolerance?: bigint;
+    readonly minSharePriceE27?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+  }) => ActionOutput<
+    VaultV2ForceWithdrawAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares a force redeem transaction for the VaultV2 contract using the vault's native multicall.
    *
@@ -257,13 +581,27 @@ export interface VaultV2Actions {
    * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
    * amounts to account for share-price drift between submission and execution.
    *
-   * @param {Object} params - The force redeem parameters.
-   * @param {readonly Deallocation[]} params.deallocations - The typed list of deallocations to perform.
-   * @param {Object} params.redeem - The redeem parameters applied after deallocations.
-   * @param {bigint} params.redeem.shares - The amount of shares to redeem.
-   * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.buildTx The prepared multicall transaction.
+   * @param params.deallocations - Typed list of `forceDeallocate` calls to perform before the redeem.
+   * @param params.redeem.shares - Amount of vault shares to redeem after the deallocations.
+   * @param params.userAddress - Account that pays the deallocation penalties and receives the redeemed assets.
+   * @returns An object whose `buildTx()` returns a deep-frozen `Transaction<VaultV2ForceRedeemAction>`
+   *   encoding the vault `multicall`.
+   * @throws {ChainIdMismatchError} when the connected client targets another chain or has no chain.
+   * @throws {EmptyDeallocationsError} from `buildTx()` when `deallocations` is empty.
+   * @throws {NonPositiveInputError} from `buildTx()` when `redeem.shares <= 0n` or any deallocation
+   *   amount is non-positive.
+   * @example
+   * ```ts
+   * const vault = client.morpho.vaultV2(vaultAddress, 1);
+   * const tx = vault
+   *   .forceRedeem({
+   *     deallocations: [{ adapter, marketParams, amount: 1_000_000n }],
+   *     redeem: { shares: 500_000n },
+   *     userAddress,
+   *   })
+   *   .buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV2ForceRedeemAction>>
+   * ```
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];
@@ -274,6 +612,7 @@ export interface VaultV2Actions {
   };
 }
 
+/** Binds a viem client to a Vault V2 vault's action builders. */
 export class MorphoVaultV2 implements VaultV2Actions {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
@@ -283,158 +622,256 @@ export class MorphoVaultV2 implements VaultV2Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
       ...parameters,
-      chainId: this.chainId,
       deployless: this.client.options.supportDeployless,
     });
   }
 
-  deposit({
-    amount = 0n,
-    userAddress,
-    vaultData,
-    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
-    nativeAmount,
-  }: {
-    userAddress: Address;
-    vaultData: AccrualVaultV2;
-    slippageTolerance?: bigint;
-  } & DepositAmountArgs) {
+  /** {@inheritDoc VaultV2Actions.deposit} */
+  deposit(
+    params: {
+      readonly userAddress: Address;
+      readonly vaultData: AccrualVaultV2;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & BundlesFundingArgs,
+  ) {
+    const { userAddress, vaultData } = params;
+    const { asset: vaultAsset } = vaultData;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
-
-    if (amount < 0n) {
-      throw new NegativeInputError("amount", amount);
-    }
-
-    if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeInputError("nativeAmount", nativeAmount);
-    }
-
-    let wNative: Address | undefined;
-    if (nativeAmount) {
-      ({ wNative } = getChainAddresses(this.chainId));
-      if (!wNative) {
-        throw new ChainWNativeMissingError(this.chainId);
-      }
-    }
-
-    validateSlippageTolerance(slippageTolerance);
-
-    if (nativeAmount && wNative) {
-      if (!isAddressEqual(vaultData.asset, wNative)) {
-        throw new NativeAmountOnNonWNativeVaultError(vaultData.asset, wNative);
-      }
-    }
-
-    const totalAssets = amount + (nativeAmount ?? 0n);
-    if (totalAssets === 0n) {
-      throw new NonPositiveInputError("totalAssets", totalAssets);
-    }
-
-    // Accrue interest forward to bound the on-chain share price at execution.
-    // Mirrors blue repay's 2h forward-accrual buffer.
-    const accrualTimestamp =
-      MathLib.max(Time.timestamp(), vaultData.lastUpdate) + Time.s.from.h(2n);
-    const { vault: accruedVault } = vaultData.accrueInterest(accrualTimestamp);
-
-    const shares = accruedVault.toShares(totalAssets);
-    if (shares <= 0n) {
-      throw new NonPositiveInputError("shares", shares);
-    }
-
-    const maxSharePrice = MathLib.min(
-      MathLib.mulDivUp(
-        totalAssets,
-        MathLib.wToRay(MathLib.WAD + slippageTolerance),
-        shares,
-      ),
-      MathLib.RAY * 100n,
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const funding = resolveBundlesFunding(params);
+    // Reject overflow before share-price math or native-only prerequisite resolution.
+    validateUint256Field(
+      funding.value > 0n ? "nativeAmount" : "amount",
+      funding.assets,
     );
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getGeneralAdapterRequirements(this.client.viemClient, {
-          address: vaultData.asset,
-          chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
-          useSimplePermit: params?.useSimplePermit,
-          args: {
-            amount,
-            from: userAddress,
-          },
-        }),
-
+    if (funding.value > 0n) {
+      // The native path must target the chain's registered wrapped-native asset.
+      validateNativeVaultAsset(this.chainId, vaultAsset);
+    }
+    const referralFeeAssets = getBundlesReferralFeeAssets(
+      funding.assets,
+      common.referralFeePct,
+    );
+    const maxSharePrice = computeVaultMaxSharePrice({
+      vaultData,
+      deadline,
+      assets: funding.assets - referralFeeAssets,
+      slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+    const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let pendingRequirements: Promise<readonly ActionRequirement[]> | undefined;
+    return Object.freeze({
+      getRequirements: async (
+        requirementOptions?: BundlesTokenRequirementsOptions,
+      ) => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        if (pendingRequirements != null) return await pendingRequirements;
+        // Memoize the in-flight promise so concurrent callers share one round of
+        // allowance/nonce reads.
+        const pending =
+          funding.value > 0n
+            ? Promise.resolve<readonly ActionRequirement[]>([])
+            : getBundlesTokenRequirements(this.client.viemClient, {
+                token: vaultAsset,
+                spender,
+                amount: funding.assets,
+                owner: userAddress,
+                chainId: this.chainId,
+                deadline,
+                supportSignature: this.client.options.supportSignature,
+                supportDeployless: this.client.options.supportDeployless,
+                useSimplePermit: requirementOptions?.useSimplePermit,
+                permit2Nonce: requirementOptions?.permit2Nonce,
+              });
+        pendingRequirements = pending;
+        try {
+          return await pending;
+        } finally {
+          // Later calls must re-read live allowances/nonces and honor their own options.
+          if (pendingRequirements === pending) pendingRequirements = undefined;
+        }
+      },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
-        });
-
+        // The pure deposit action rejects a token signature supplied alongside native funding.
+        const requirementSignature = selectBundlesTokenRequirementSignature(
+          signatures,
+          { spender, amount: funding.assets, deadline },
+        );
         return vaultV2Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: vaultData.asset,
+            asset: vaultAsset,
           },
           args: {
-            amount,
+            ...(funding.value > 0n
+              ? { nativeAmount: funding.assets }
+              : { amount: funding.assets }),
             maxSharePrice,
-            recipient: userAddress,
-            requirementSignature: permit,
-            nativeAmount,
+            userAddress,
+            requirementSignature,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
-  withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
+  withdraw(params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly vaultData: AccrualVaultV2;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
+    const { amount, userAddress, vaultData } = params;
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    return {
-      buildTx: () =>
-        vaultV2Withdraw({
-          vault: { address: this.vault },
+    if (!isAddressEqual(vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, vaultData.address);
+    }
+    if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
+    // Reject values outside the ABI range before resolving any requirements.
+    validateUint256Field("amount", amount);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const slippageTolerance =
+      params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
+    validateSlippageTolerance(slippageTolerance);
+    // Resolve the spender eagerly so an unregistered VaultBundlesV1 fails at handle creation.
+    const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    const requiredShareAllowance = computeVaultMaxShareAllowance({
+      vaultData,
+      deadline,
+      assets: amount,
+      slippageTolerance,
+    });
+    return Object.freeze({
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        // Re-read the live share allowance on every call instead of caching the resolved
+        // requirements: the allowance is the sole cap on the burn, so a caller that executed the
+        // returned approval must see it satisfied on the next call, and an allowance revoked or
+        // raised afterwards must resurface as an outstanding requirement. The cap derived from
+        // `vaultData` is pinned at handle creation, so re-reading cannot move it.
+        return getVaultBundlesSharesRequirements(this.client.viemClient, {
+          vaultData,
+          version: "vaultV2",
+          owner: userAddress,
+          chainId: this.chainId,
+          requiredShareAllowance,
+          deadline,
+          supportSignature: this.client.options.supportSignature,
+        });
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender,
+          amount: requiredShareAllowance,
+          deadline,
+        });
+        return vaultV2Withdraw({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
             amount,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
-  redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
+  /** {@inheritDoc VaultV2Actions.redeem} */
+  redeem(params: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-
-    return {
-      buildTx: () =>
-        vaultV2Redeem({
-          vault: { address: this.vault },
+    const { shares, userAddress } = params;
+    if (shares <= 0n) throw new NonPositiveInputError("shares", shares);
+    const createdAt = Time.timestamp();
+    const deadline = params.deadline ?? createdAt + Time.s.from.h(2n);
+    if (deadline <= createdAt)
+      throw new ExpiredDeadlineError(deadline, createdAt);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    return Object.freeze({
+      getRequirements: async () => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        return getVaultBundlesSharesRequirements(this.client.viemClient, {
+          vaultData: await this.getData(),
+          version: "vaultV2",
+          owner: userAddress,
+          chainId: this.chainId,
+          requiredShareAllowance: shares,
+          deadline,
+          supportSignature: this.client.options.supportSignature,
+        });
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender,
+          amount: shares,
+          deadline,
+        });
+        return vaultV2Redeem({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
             shares,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   /** {@inheritDoc VaultV2Actions.inKindRedeem} */
@@ -477,9 +914,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    // Reject the same bounds the action enforces, before `getRequirements()` can walk the caller
+    // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
+    validateDeadline(deadline);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
     if (vaultData.accrualAdapters.length !== 1) {
-      throw new InKindRedeemRequiresSingleAdapterError(
+      throw new VaultV2SingleAdapterRequiredError(
         this.vault,
         vaultData.accrualAdapters.length,
       );
@@ -487,14 +927,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const soleAdapter = vaultData.accrualAdapters[0];
     if (soleAdapter == null) {
-      throw new InKindRedeemRequiresSingleAdapterError(this.vault, 0);
+      throw new VaultV2SingleAdapterRequiredError(this.vault, 0);
     }
     const adapter = adapterOverride ?? soleAdapter.address;
     if (!isAddressEqual(adapter, soleAdapter.address)) {
       throw new AdapterNotPartOfVaultError(this.vault, adapter);
     }
     if (!(soleAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
-      throw new UnsupportedInKindAdapterError(adapter);
+      throw new VaultV2UnsupportedExitAdapterError(adapter);
     }
 
     const penalty =
@@ -576,8 +1016,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       this.chainId,
       "bundles.vaultExitBundlesV1",
     );
-    const addresses = getChainAddresses(this.chainId);
-    const blue = addresses.blue ?? addresses.morpho;
+    const blue = getChainAddress(this.chainId, "blue");
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
@@ -625,8 +1064,15 @@ export class MorphoVaultV2 implements VaultV2Actions {
             required: peak,
           });
         }
-        if (allowance >= requiredShareAllowance) return [];
-        if (this.client.options.supportSignature) {
+        // In-kind withdrawals carry no onchain share cap, so the allowance itself is the cap. A
+        // larger leftover allowance would let a share-price loss burn past `requiredShareAllowance`.
+        if (allowance === requiredShareAllowance) return [];
+        // A lowering permit can be skipped after its nonce is consumed, so oversized allowances
+        // must be reset with an onchain approval.
+        if (
+          allowance < requiredShareAllowance &&
+          this.client.options.supportSignature
+        ) {
           return [
             encodeVaultSharesPermit({
               vault: vaultData,
@@ -650,8 +1096,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
         ];
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
         });
         return vaultV2InKindRedeem({
           vault: { chainId: this.chainId, address: this.vault },
@@ -669,31 +1117,324 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
+  /** {@inheritDoc VaultV2Actions.forceWithdraw} */
   forceWithdraw({
-    deallocations,
-    withdraw,
+    exitAssets,
+    vaultData,
     userAddress,
+    adapter: adapterOverride,
+    deadline: deadlineOverride,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    minSharePriceE27: minSharePriceE27Override,
+    referralFeePct = 0n,
+    referralFeeRecipient,
   }: {
-    deallocations: readonly Deallocation[];
-    withdraw: { amount: bigint };
-    userAddress: Address;
-  }) {
+    readonly exitAssets: bigint;
+    readonly vaultData: AccrualVaultV2;
+    readonly userAddress: Address;
+    readonly adapter?: Address;
+    readonly deadline?: bigint;
+    readonly slippageTolerance?: bigint;
+    readonly minSharePriceE27?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+  }): ActionOutput<
+    VaultV2ForceWithdrawAction,
+    readonly RequirementSignature[],
+    undefined
+  > {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (!isAddressEqual(vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, vaultData.address);
+    }
+    if (exitAssets <= 0n)
+      throw new NonPositiveInputError("exitAssets", exitAssets);
+    validateUint256Field("exitAssets", exitAssets);
+    validateSlippageTolerance(slippageTolerance);
+    // Called for its throws only: the raw pair is forwarded to the action, which normalizes it
+    // again on the encode path so a direct action caller gets the same guarantees.
+    validateReferralFee({ referralFeePct, referralFeeRecipient });
+    if (minSharePriceE27Override != null) {
+      // An unbounded override reopens the exact hole this path closes: the contract reads
+      // `minSharePriceE27 == 0` as "no bound".
+      if (minSharePriceE27Override <= 0n) {
+        throw new NonPositiveInputError(
+          "minSharePriceE27",
+          minSharePriceE27Override,
+        );
+      }
+      // And an override the uint256 slot cannot hold must fail here rather than after
+      // `getRequirements()` has already asked for an approval or a permit signature.
+      validateUint256Field("minSharePriceE27", minSharePriceE27Override);
+    }
+
+    const now = Time.timestamp();
+    const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    // Reject the same bounds the action enforces, before `getRequirements()` can walk the caller
+    // through a vault-share approval or an EIP-712 permit for a deadline `buildTx()` cannot encode.
+    validateDeadline(deadline);
+    if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+    const maxDeadline = now + VAULT_V2_FEE_PROJECTION_HORIZON;
+    if (deadline > maxDeadline) {
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: deadline,
+        max: maxDeadline,
+      });
+    }
+
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(
+      vaultData,
+      adapterOverride,
+    );
+    switch (eligibility.type) {
+      case "eligible":
+        break;
+      case "adapterCount":
+        throw new VaultV2SingleAdapterRequiredError(
+          this.vault,
+          eligibility.adapters,
+        );
+      case "adapterMismatch":
+        throw new AdapterNotPartOfVaultError(this.vault, eligibility.adapter);
+      case "unsupportedAdapter":
+        throw new VaultV2UnsupportedExitAdapterError(eligibility.adapter);
+      case "unsupportedLiquidityAdapter":
+        throw new VaultV2UnsupportedLiquidityAdapterError({
+          vault: this.vault,
+          liquidityAdapter: eligibility.liquidityAdapter,
+          adapter: eligibility.adapter,
+        });
+      case "undecodableLiquidityData":
+        throw new VaultV2UndecodableLiquidityDataError({
+          vault: this.vault,
+          liquidityAdapter: eligibility.liquidityAdapter,
+          liquidityData: eligibility.liquidityData,
+          cause: eligibility.cause,
+        });
+    }
+
+    const { adapter: accrualAdapter, liquidityMarketId } = eligibility;
+    const adapter = accrualAdapter.address;
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: accrualAdapter,
+      liquidityMarketId,
+      exitAssets,
+      timestamp: now,
+    });
+
+    if (plan.withdrawnAssets <= 0n) {
+      throw new VaultV2ForceWithdrawZeroWithdrawalError({
+        vault: this.vault,
+        exitAssets,
+        penalty: plan.penalty,
+      });
+    }
+    // The contract's force-deallocation loop is unbounded: under-coverage panics on-chain.
+    if (plan.coveredAssets < plan.assetsToDeallocate) {
+      throw new VaultV2ForceWithdrawCoverageError({
+        required: plan.assetsToDeallocate,
+        covered: plan.coveredAssets,
+        maxExitAssets: plan.maxExitAssets,
+      });
+    }
+
+    const projectionTimestamp = deadline;
+    // VaultExitBundlesV1 measures shares as `sharesBefore - balanceAfter`; its first withdrawal
+    // accrues the vault before burning. The realized price sits between the raw snapshot price
+    // (pending fee mints not yet diluting it) and the `now` projection (interest the chain may not
+    // have accrued yet, e.g. when the wall clock runs ahead of the chain). Price the floor off the
+    // larger *net* burn of the two endpoints — the raw snapshot mints no fee shares, the `now`
+    // accrual mints `feeSharesNow` — so it never exceeds either, and use the projected deadline
+    // accrual for the fee-mint guard.
+    const { vault: nowVaultData } = vaultData.accrueInterest(
+      MathLib.max(now, vaultData.lastUpdate),
+    );
+    const { vault: projectedVaultData } = vaultData.accrueInterest(
+      MathLib.max(projectionTimestamp, vaultData.lastUpdate),
+    );
+    const sharesBurntRaw = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData,
+      deadlineVaultData: vaultData,
+      plan,
+    });
+    const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: nowVaultData,
+      deadlineVaultData: nowVaultData,
+      plan,
+    });
+    const feeSharesNow = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: now,
+    });
+    const feeSharesProjected = computeVaultV2ForceWithdrawFeeSharesMinted({
+      vaultData,
+      owner: userAddress,
+      timestamp: projectionTimestamp,
+    });
+    const minSharesBurntProjected = computeVaultV2ForceWithdrawMinSharesBurnt({
+      vaultData: projectedVaultData,
+      plan,
+    });
+    // When fee shares are minted, the projected pair bounds every execution time in the window.
+    if (
+      feeSharesProjected > 0n &&
+      feeSharesProjected >= minSharesBurntProjected
+    ) {
+      throw new VaultV2ForceWithdrawFeeSharesExceedBurnError({
+        vault: this.vault,
+        userAddress,
+        sharesBurnt: minSharesBurntProjected,
+        feeShares: feeSharesProjected,
+      });
+    }
+    // sharesBurntNow ≥ minSharesBurntNow ≥ minSharesBurntProjected > feeSharesProjected ≥ feeSharesNow
+    const sharesBurntForFloor = MathLib.max(
+      sharesBurntRaw,
+      sharesBurntNow - feeSharesNow,
+    );
+    if (minSharePriceE27Override != null) {
+      // The maximum-slippage threshold only bounds the override; unlike the transaction floor it
+      // may round to zero, in which case every positive override is acceptable.
+      const minAllowedSharePriceE27 =
+        _try(
+          () =>
+            computeMinForceWithdrawSharePrice({
+              withdrawnAssets: plan.withdrawnAssets,
+              sharesBurnt: sharesBurntForFloor,
+              slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+            }),
+          VaultV2ForceWithdrawZeroSharePriceError,
+        ) ?? 1n;
+      if (minSharePriceE27Override < minAllowedSharePriceE27) {
+        throw new VaultV2ForceWithdrawSharePriceBelowFloorError({
+          minSharePriceE27: minSharePriceE27Override,
+          floorE27: minAllowedSharePriceE27,
+        });
+      }
+    }
+    const minSharePriceE27 =
+      minSharePriceE27Override ??
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: sharesBurntForFloor,
+        slippageTolerance,
+      });
+    // The floor is deliberately *not* capped at `MAX_ABSOLUTE_SHARE_PRICE` (100 assets/share):
+    // lowering a lower bound weakens it, so any vault whose share price grew past that would be left
+    // with no real protection. Its two sibling `computeMin*SharePrice` helpers cap nothing either —
+    // only the `computeMax*` ones do, where capping relaxes an upper bound and is safe.
+    validateUint256Field("minSharePriceE27", minSharePriceE27);
+    // The allowance is only a spend cap, never the price protection: the bundle checks
+    // `minSharePriceE27` after its last withdrawal, so an allowance sized exactly to the floor
+    // underflows `_spendAllowance` (panic 0x11) on a below-floor price before that check runs. Size
+    // it for a price at least one tolerance step below the floor so the miss surfaces as the
+    // bundle's own revert instead, and, in any case, for at least one share above the at-floor
+    // burn — a burn of `atFloor + 1` shares prices strictly below the floor since
+    // `atFloor >= exitAssets * RAY / floor`. The `minSharePriceE27 - 1` branch keeps the
+    // denominator strictly below the floor whenever the floor exceeds 1, so even
+    // `slippageTolerance: 0n` leaves price-space headroom; a deeper drop still exhausts the
+    // allowance first. Add the fee shares the first withdrawal mints since the burn measured
+    // on-chain includes them. Saturated at `maxUint256` as an ABI-slot guard.
+    const allowanceSharePriceE27 = MathLib.max(
+      MathLib.min(
+        MathLib.mulDivDown(
+          minSharePriceE27,
+          MathLib.WAD - slippageTolerance,
+          MathLib.WAD,
+        ),
+        minSharePriceE27 - 1n,
+      ),
+      1n,
+    );
+    const requiredShareAllowance = MathLib.min(
+      MathLib.max(
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, allowanceSharePriceE27),
+        MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27) + 1n,
+      ) + feeSharesProjected,
+      maxUint256,
+    );
+
+    const vaultExitBundlesV1 = getChainAddress(
+      this.chainId,
+      "bundles.vaultExitBundlesV1",
+    );
 
     return {
-      buildTx: () =>
-        vaultV2ForceWithdraw({
-          vault: { address: this.vault },
-          args: {
-            deallocations,
-            withdraw: {
-              amount: withdraw.amount,
-              recipient: userAddress,
+      getRequirements: async (): Promise<readonly ActionRequirement[]> => {
+        const requirementsTimestamp = Time.timestamp();
+        if (deadline <= requirementsTimestamp) {
+          throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
+        }
+        // Vault gates are intentionally left to the final transaction: the receive-assets gate may
+        // inspect VaultExitBundlesV1's transient `initiator`, and a send-shares gate is arbitrary
+        // external code re-evaluated after each intermediate penalty burn, so neither is
+        // execution-equivalent from a standalone read. Unlike in-kind redemption, this exit never
+        // supplies into Morpho Blue, so no Blue token-balance check is needed.
+        const [allowance, nonce] = await multicall(this.client.viemClient, {
+          allowFailure: false,
+          contracts: [
+            {
+              address: this.vault,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [userAddress, vaultExitBundlesV1],
             },
-            onBehalf: userAddress,
+            {
+              address: this.vault,
+              abi: erc2612Abi,
+              functionName: "nonces",
+              args: [userAddress],
+            },
+          ],
+        });
+
+        if (allowance >= requiredShareAllowance) return [];
+        if (this.client.options.supportSignature) {
+          const requirement = encodeVaultSharesPermit({
+            vault: vaultData,
+            version: "vaultV2",
+            spender: vaultExitBundlesV1,
+            owner: userAddress,
+            chainId: this.chainId,
+            nonce,
+            amount: requiredShareAllowance,
+            deadline,
+          });
+          return [requirement];
+        }
+        return [
+          encodeErc20Approval({
+            token: this.vault,
+            spender: vaultExitBundlesV1,
+            amount: requiredShareAllowance,
+            chainId: this.chainId,
+          }),
+        ];
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesPermitSignature(signatures, {
+          spender: vaultExitBundlesV1,
+          amount: requiredShareAllowance,
+          deadline,
+        });
+        return vaultV2ForceWithdraw({
+          vault: { chainId: this.chainId, address: this.vault },
+          args: {
+            adapter,
+            exitAssets,
+            minSharePriceE27,
+            userAddress,
+            deadline,
+            referralFeePct,
+            referralFeeRecipient,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

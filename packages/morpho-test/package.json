@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-test",
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks.",
-  "version": "4.0.3",
+  "version": "4.0.4",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -26,8 +26,8 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.0.0",
-    "@morpho-org/morpho-ts": "^2.7.0",
+    "@morpho-org/blue-sdk": "^6.0.0 || ^7.0.0",
+    "@morpho-org/morpho-ts": "^2.7.0 || ^3.0.0",
     "@morpho-org/test": "^2.8.0",
     "viem": "^2.21.10"
   },

@@ -12,7 +12,7 @@ import type {
 
 import { parseTransfers } from "./parsing/index.js";
 import {
-  assertNoBundlerRetention,
+  assertNoBundlesRetention,
   buildSimulationTxs,
   executeSimulation,
   validateInput,
@@ -26,7 +26,8 @@ import {
  * budget → parses ERC20 transfers and WETH9 events from per-tx logs, restricting WETH9
  * events to the registered wrapped-native token, rejecting them on known tokenless chains,
  * and retaining signature-based parsing for unknown chains → asserts no funds are retained
- * by `bundler3` or the standalone `bundles` periphery contracts → returns the full result
+ * by the restricted standalone bundles contracts (VaultExitBundlesV1, VaultBundlesV1,
+ * BlueBundlesV1, MidnightBundlesV1) → returns the full result
  * set. The caller reads whichever fields they need:
  *
  * - `transfers` → user-facing preview / server-side verification.
@@ -53,8 +54,8 @@ import {
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
  * @throws {SimulationRevertedError} when the bundle reverts on either backend.
  * @throws {BlacklistViolationError} when the simulation leaves value retained beyond
- *   the dust threshold by a restricted `bundler3` address or a `bundles` periphery
- *   contract (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Never bypassable.
+ *   the dust threshold by a `bundles` periphery contract (VaultExitBundlesV1,
+ *   VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1). Never bypassable.
  * @throws {ExternalServiceError} (a) when both backends are unavailable within the
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
@@ -113,7 +114,7 @@ export async function simulate(
     logger: config.logger,
   });
 
-  assertNoBundlerRetention({
+  assertNoBundlesRetention({
     chainId: params.chainId,
     transfers,
     assetChanges: result.assetChanges,

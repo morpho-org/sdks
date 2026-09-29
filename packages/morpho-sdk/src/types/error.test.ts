@@ -1,9 +1,10 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
+  InputExceedsMaxError,
   NegativeInputError,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
   NonPositiveInputError,
+  ReferralFeePctExceededError,
 } from "./error.js";
 
 describe("NegativeInputError", () => {
@@ -19,7 +20,6 @@ describe("NegativeInputError", () => {
     );
   });
 });
-
 describe("NonPositiveInputError", () => {
   test("default", () => {
     const error = new NonPositiveInputError("assets", 0n);
@@ -31,16 +31,23 @@ describe("NonPositiveInputError", () => {
     expect(error.message).toBe('Input "assets" must be positive, got "0".');
   });
 });
+describe("ReferralFeePctExceededError", () => {
+  test("default", () => {
+    const error = new ReferralFeePctExceededError(MathLib.WAD);
 
-describe("deprecated scalar input error aliases", () => {
-  test("behavior: aliases preserve canonical constructor identity", () => {
-    expect(NegativeNativeAmountError).toBe(NegativeInputError);
-    expect(NonPositiveAssetAmountError).toBe(NonPositiveInputError);
-    expect(new NegativeInputError("nativeAmount", -1n)).toBeInstanceOf(
-      NegativeNativeAmountError,
+    expect(error.name).toBe("ReferralFeePctExceededError");
+    expect(error.referralFeePct).toBe(MathLib.WAD);
+    expect(error.message).toBe(
+      'Referral fee percentage "1000000000000000000" must be below WAD. Reduce referralFeePct or disable the referral fee.',
     );
-    expect(new NonPositiveInputError("assets", 0n)).toBeInstanceOf(
-      NonPositiveAssetAmountError,
-    );
+  });
+
+  test("behavior: stays catchable as the generic maximum-bound error", () => {
+    const error = new ReferralFeePctExceededError(MathLib.WAD);
+
+    expect(error).toBeInstanceOf(InputExceedsMaxError);
+    expect(error.field).toBe("referralFeePct");
+    expect(error.value).toBe(MathLib.WAD);
+    expect(error.max).toBe(MathLib.WAD - 1n);
   });
 });

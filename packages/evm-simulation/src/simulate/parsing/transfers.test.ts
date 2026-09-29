@@ -202,6 +202,51 @@ describe("parseTransfers", () => {
     expect(result[0]!.to).toBe(getAddress(USER));
   });
 
+  test("behavior: matches event signatures and pairs case-insensitively", () => {
+    const upper = (hex: Hex): Hex => `0x${hex.slice(2).toUpperCase()}`;
+    const amount = parseEther("1");
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [upper(TRANSFER_TOPIC), padAddress(USER), padAddress(VAULT)],
+        data: upper(encodeUint256(1000000n)),
+      },
+      {
+        address: WETH,
+        topics: [upper(WITHDRAWAL_TOPIC), upper(padAddress(USER))],
+        data: upper(encodeUint256(amount)),
+      },
+      {
+        address: WETH,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(amount),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+
+    expect(result).toEqual([
+      {
+        token: getAddress(USDC),
+        from: getAddress(USER),
+        to: getAddress(VAULT),
+        amount: 1000000n,
+        txIdx: 0,
+      },
+      {
+        token: getAddress(WETH),
+        from: getAddress(USER),
+        to: zeroAddress,
+        amount,
+        txIdx: 0,
+      },
+    ]);
+  });
+
   test("behavior: ignores WETH9-shaped events from unregistered tokens", () => {
     const logs: RawLog[] = [
       {
@@ -457,7 +502,7 @@ describe("parseTransfers", () => {
     // per-tx scoping now keeps both as distinct events. The token is
     // wnative-shaped (it emitted a Withdrawal somewhere in the bundle), so the
     // dedup miss surfaces a warn — giving us observability before
-    // assertNoBundlerRetention can false-positive.
+    // assertNoBundlesRetention can false-positive.
     const calls = [
       makeCall([
         {

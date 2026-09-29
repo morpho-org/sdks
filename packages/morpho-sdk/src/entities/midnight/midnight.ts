@@ -68,6 +68,7 @@ import {
   NegativeInputError,
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
+  type RequirementTypedData,
   selectRequirementSignatures,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
@@ -1135,37 +1136,43 @@ export class MorphoMidnight {
 
     if (data.ratifierType === "ecrecover") {
       const chainId = this.chainId;
-      const action: MidnightOfferRootSignatureAction = {
+      // The offer-tree EIP-712 payload is signed over the tree, not the signer, so it is fully
+      // determined at build time and stored on the action for external signing.
+      const treeTypedData = EcrecoverRatifierUtils.typedData({
+        tree: data.tree,
+        chainId,
+      });
+      const typedData: TypedDataDefinition<
+        Record<string, unknown>,
+        "OfferTree"
+      > = deepFreeze({
+        domain: treeTypedData.domain,
+        types: treeTypedData.types,
+        primaryType: treeTypedData.primaryType,
+        message: treeTypedData.message,
+      });
+      const action: MidnightOfferRootSignatureAction & {
+        readonly typedData: RequirementTypedData;
+      } = {
         type: "midnightOfferRootSignature",
         args: {
           root: data.tree.root,
           ratifier: data.ratifier,
           offers: data.tree.offers.length,
         },
+        typedData,
       };
 
       requirements.push({
         action,
         async sign(client: WalletClient, userAddress: Address) {
-          const typedData = EcrecoverRatifierUtils.typedData({
-            tree: data.tree,
-            chainId,
-          });
-          const typedDataDefinition: TypedDataDefinition<
-            Record<string, unknown>,
-            "OfferTree"
-          > = {
-            domain: typedData.domain,
-            types: typedData.types,
-            primaryType: typedData.primaryType,
-            message: typedData.message,
-          };
           const signature = await signAndVerifyTypedData({
             client,
             userAddress,
-            typedData: typedDataDefinition,
+            typedData,
           });
 
+          // Derive the ratification payload `buildTx()` submits.
           const items = await EcrecoverRatifierUtils.ratify({
             tree: data.tree,
             account: userAddress,
