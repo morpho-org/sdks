@@ -30,7 +30,10 @@ The optional `logger` continues to receive parsing and retention warnings.
 
 Keep handling `SimulationRevertedError`, `BlacklistViolationError`,
 `ExternalServiceError`, `SimulationValidationError`, and `UnsupportedChainError`
-by class identity. Their constructors, codes and fields are preserved.
+by class identity. Their constructors, codes and fields are preserved. One
+reclassification: an endpoint reporting a different `chainId` than configured
+now throws `InvalidSimulationResponseError` (non-bypassable) instead of
+`ExternalServiceError`.
 Failures and timeouts reject the call; they do not produce a successful result.
 
 `simulationTxs`, `calls`, `transfers`, and `assetChanges` retain their shapes in
@@ -64,7 +67,7 @@ inflation — under-funded bundles revert like on-chain), and `simulationTxs` /
 the result. Authorization preparation and consumer-limit enforcement ship in
 later PRs: passing `authorizations` or `limits` throws
 `UnsupportedVerificationFeatureError` rather than being silently ignored.
-The [proposed TIB](../tibs/TIB-2026-09-18-evm-simulation-calldata-verification.md)
+The [ADR](../adrs/ADR-2026-09-18-evm-simulation-calldata-verification.md)
 describes the target contract.
 
 ## Release exception and audit

@@ -5,6 +5,7 @@ import {
   getAddress,
   type Hex,
   isAddress,
+  isAddressEqual,
   isHex,
   maxUint256,
 } from "viem";
@@ -494,12 +495,12 @@ export function parseRequest(input: unknown): ParsedRequest {
 
   const owner = parsed.transactions[0]!.from;
   for (const [i, tx] of parsed.transactions.entries()) {
-    if (tx.from !== owner) {
+    if (!isAddressEqual(tx.from, owner)) {
       fieldErrors.push(
         `transactions[${i}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
       );
     }
-    if (tx.to === NATIVE_BALANCE_PROBE_ADDRESS) {
+    if (isAddressEqual(tx.to, NATIVE_BALANCE_PROBE_ADDRESS)) {
       fieldErrors.push(
         `transactions[${i}].to: ${NATIVE_BALANCE_PROBE_ADDRESS} is reserved for the native-balance probe whose code is injected into the simulation; it cannot be a transaction target`,
       );
@@ -516,7 +517,7 @@ export function parseRequest(input: unknown): ParsedRequest {
 
   for (const [i, authorization] of (authorizations ?? []).entries()) {
     const authorizationOwnerAddress = authorizationOwner(authorization);
-    if (authorizationOwnerAddress !== owner) {
+    if (!isAddressEqual(authorizationOwnerAddress, owner)) {
       fieldErrors.push(
         `authorizations[${i}]: owner must equal the bundle sender ${owner} (got ${authorizationOwnerAddress})`,
       );

@@ -106,9 +106,12 @@ export function parseSimulationResponse(params: {
   const block = parsed.data[0]!;
   const blockNumber = BigInt(block.number);
   const blockTimestamp = BigInt(block.timestamp);
-  if (blockNumber < params.stateBlockNumber) {
+  if (
+    blockNumber !== params.stateBlockNumber &&
+    blockNumber !== params.stateBlockNumber + 1n
+  ) {
     throw new InvalidSimulationResponseError(
-      `eth_simulateV1 simulated at block ${blockNumber}, behind the pinned state block ${params.stateBlockNumber}. Check that the endpoint executes on top of the requested block.`,
+      `eth_simulateV1 reported block ${blockNumber} but the pinned state block is ${params.stateBlockNumber}; the node did not honor the pinned block.`,
       errorContext,
     );
   }

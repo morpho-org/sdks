@@ -23,7 +23,6 @@ const rpc = (result: unknown) =>
 
 function respondHappy(callCount = 3) {
   fetchMock
-    .mockResolvedValueOnce(rpc("0x1"))
     .mockResolvedValueOnce(
       rpc({
         number: numberToHex(20_000_000n),
@@ -31,6 +30,7 @@ function respondHappy(callCount = 3) {
         timestamp: numberToHex(1_700_000_000n),
       }),
     )
+    .mockResolvedValueOnce(rpc("0x1"))
     .mockResolvedValueOnce(
       rpc([
         {
@@ -84,7 +84,7 @@ describe.sequential("executeSimulation", () => {
         plan: makePlan(),
       });
       expect(timeout).toHaveBeenCalledWith(timeoutMs ?? 5000);
-      // One shared signal across chainId, getBlock, eth_simulateV1 and the
+      // One shared signal across getBlock, chainId, eth_simulateV1 and the
       // reorg-check getBlock.
       const signals = fetchMock.mock.calls.map((call) => call[1]?.signal);
       expect(signals).toHaveLength(4);
@@ -112,7 +112,6 @@ describe.sequential("executeSimulation", () => {
 
   test("error: propagates SimulationRevertedError from the boundary", async () => {
     fetchMock
-      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc({
           number: numberToHex(20_000_000n),
@@ -120,6 +119,7 @@ describe.sequential("executeSimulation", () => {
           timestamp: numberToHex(1_700_000_000n),
         }),
       )
+      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc([
           {
