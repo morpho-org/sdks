@@ -73,7 +73,7 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 - **SDKS-182** (SDK-465): a wrong factory classification picks the wrong adapter decoder. Factory membership is read from the same node.
 - **SDKS-199** (SDK-482): a forged `isAllocator` bit authorizes a custom allocator.
 - **SDKS-716** (SDK-761): a truncated inner market list drops a funded market.
-- **SDKS-810** (SDK-763): accrual and allocator config come from two queries. Pinning both to one block would still trust the node.
+- **SDKS-810** (SDK-763): a forged `supplyShares` in the accrual query resizes the reallocation. Binding the allocator query to that snapshot would not help, because the same node answers both.
 - **SDKS-861** (SDK-797): a foreign nested V1 vault with an omitted parent allocation. The allocation leg is handled on `main`.
 - **SDKS-762** (SDK-870): a shortened `adaptersLength()` in the sequential fallback omits funded adapters.
 - **SDKS-658** (SDK-871), **SDKS-649** (SDK-974): repeated adapter entries double-count, or point planning at the wrong adapter.
@@ -121,7 +121,7 @@ Backend output is the only execution evidence the retention check sees. Format c
 - **SDKS-801** (SDK-782): a result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
 - **SDKS-15** (SDK-394): a truncated result fails with `ExternalServiceError`. A caller that bypasses it accepts an unsimulated bundle.
 - **SDKS-543** (SDK-783): the dropped native refund was fixed separately (SDK-798). The remaining leg is a node hiding the trace.
-- **SDKS-498** (SDK-865): a token emits a fake `Transfer`. A token that lies in its events can also lie in `balanceOf`.
+- **SDKS-498** (SDK-865): a malicious token, not the endpoint, emits a fake `Transfer`. It is listed because the fix it proposes, reading balances from the node, adds nothing: a token that lies in its events can also lie in `balanceOf`.
 - **SDKS-143** (SDK-621, SDK-1136), **SDKS-541** (SDK-890), **SDKS-406** (SDK-737): the endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id, so only a wrong URL would be caught.
 - **SDKS-512** (SDK-1109): results carry no chain or block provenance. The caller chooses both.
 
