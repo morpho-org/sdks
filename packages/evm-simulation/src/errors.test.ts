@@ -15,10 +15,12 @@ import {
   ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
+  type SimulationExecutionContext,
   type SimulationExecutionReason,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
+  type SimulationVerificationContext,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -45,7 +47,7 @@ const CONTEXT: SimulationErrorContext = {
   chainId: 1,
   blockNumber: 100n,
 };
-const EXECUTION: Extract<SimulationErrorContext, { stage: "execution" }> = {
+const EXECUTION: SimulationExecutionContext = {
   stage: "execution",
   mode: "preview",
   chainId: 1,
@@ -311,23 +313,28 @@ describe("SimulationErrorContext", () => {
   });
 
   it("keys execution/verification contexts by operation group", () => {
-    type Verification = Extract<
-      SimulationErrorContext,
-      { stage: "verification" }
-    >;
-    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
     expectTypeOf<
-      Extract<Verification, { marketId: MarketId }>["operation"]
-    >().toEqualTypeOf<BlueMarketOperationType>();
+      SimulationVerificationContext["operation"]
+    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<SimulationVerificationContext>().toExtend<SimulationErrorContext>();
+    const base = {
+      stage: "verification",
+      mode: "final",
+      chainId: 1,
+      blockNumber: 1n,
+    } as const;
     expectTypeOf<
-      Extract<Verification, { operation: "blueRefinance" }>
-    >().not.toHaveProperty("marketId");
+      typeof base & { operation: BlueMarketOperationType; marketId: MarketId }
+    >().toExtend<SimulationVerificationContext>();
     expectTypeOf<
-      Extract<Verification, { vault: `0x${string}` }>["operation"]
-    >().toEqualTypeOf<VaultOperationType>();
+      typeof base & { operation: "blueRefinance"; marketId: MarketId }
+    >().not.toExtend<SimulationVerificationContext>();
     expectTypeOf<
-      Extract<Verification, { operation: "vaultV1MigrateToV2" }>
-    >().not.toHaveProperty("vault");
+      typeof base & { operation: VaultOperationType; vault: `0x${string}` }
+    >().toExtend<SimulationVerificationContext>();
+    expectTypeOf<
+      typeof base & { operation: "vaultV1MigrateToV2"; vault: `0x${string}` }
+    >().not.toExtend<SimulationVerificationContext>();
     expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
     expectTypeOf<
       SimulatedOperation["operation"]
@@ -337,12 +344,6 @@ describe("SimulationErrorContext", () => {
       operation: "blueRefinance";
       vault: `0x${string}`;
     }>().not.toExtend<SimulatedOperation>();
-    const base = {
-      stage: "verification",
-      mode: "final",
-      chainId: 1,
-      blockNumber: 1n,
-    } as const;
     expectTypeOf<
       typeof base & { operation: "blueSupply" }
     >().not.toExtend<SimulationErrorContext>();

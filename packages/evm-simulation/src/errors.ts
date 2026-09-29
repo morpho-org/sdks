@@ -1,6 +1,10 @@
 import type { Address, Hash } from "viem";
 import type { SimulationOperationSubject } from "./limits.js";
-import { OPERATION_TYPES } from "./limits.js";
+import {
+  BLUE_MARKET_OPERATION_TYPES,
+  OPERATION_TYPES,
+  VAULT_OPERATION_TYPES,
+} from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import { SIMULATION_MODES } from "./params.js";
 
@@ -85,9 +89,32 @@ interface SimulationCheckContext extends SimulationContextBase {
   readonly failedTransactionIndex?: number;
 }
 
-/** Execution/verification context: the check plus the operation's subject entity. */
-type SimulationOperationContext = SimulationCheckContext &
-  SimulationOperationSubject;
+/** Context of a failure while validating the request. */
+export type SimulationValidationContext = SimulationContextBase & {
+  readonly stage: "validation";
+};
+
+/** Context of a failure while reaching the `eth_simulateV1` backend. */
+export type SimulationTransportContext = SimulationContextBase & {
+  readonly stage: "transport";
+};
+
+/** Context of a failure while preparing a preview authorization. */
+export type SimulationPreparationContext = SimulationContextBase & {
+  readonly stage: "preparation";
+  /** Index into `authorizations`. */
+  readonly authorizationIndex: number;
+  /** Index into that authorization's preparation calls. */
+  readonly preparationCallIndex?: number;
+};
+
+/** Context of a revert while executing a bundle transaction. */
+export type SimulationExecutionContext = SimulationCheckContext &
+  SimulationOperationSubject & { readonly stage: "execution" };
+
+/** Context of a verification check that did not hold. */
+export type SimulationVerificationContext = SimulationCheckContext &
+  SimulationOperationSubject & { readonly stage: "verification" };
 
 /**
  * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
@@ -99,17 +126,11 @@ type SimulationOperationContext = SimulationCheckContext &
  * on the error).
  */
 export type SimulationErrorContext =
-  | (SimulationContextBase & { readonly stage: "validation" })
-  | (SimulationContextBase & { readonly stage: "transport" })
-  | (SimulationContextBase & {
-      readonly stage: "preparation";
-      /** Index into `authorizations`. */
-      readonly authorizationIndex: number;
-      /** Index into that authorization's preparation calls. */
-      readonly preparationCallIndex?: number;
-    })
-  | (SimulationOperationContext & { readonly stage: "execution" })
-  | (SimulationOperationContext & { readonly stage: "verification" });
+  | SimulationValidationContext
+  | SimulationTransportContext
+  | SimulationPreparationContext
+  | SimulationExecutionContext
+  | SimulationVerificationContext;
 
 /**
  * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.
@@ -147,10 +168,7 @@ export class SimulationRevertedError extends SimulationPackageError {
     /** Machine-readable cause; `UNKNOWN_REVERT` when the revert maps to no known Morpho condition. */
     public readonly reasonCode: SimulationExecutionReason = "UNKNOWN_REVERT",
     /** Which transaction/authorization reverted and the operation it belonged to. */
-    context?: Extract<
-      SimulationErrorContext,
-      { stage: "preparation" | "execution" }
-    >,
+    context?: SimulationPreparationContext | SimulationExecutionContext,
   ) {
     super(
       reason ?? "Transaction simulation reverted",
@@ -403,16 +421,14 @@ export function isSimulationPackageError(
   )
     return false;
   const isString = (key: string) => typeof c[key] === "string";
-  switch (operation) {
-    case "blueAuthorization":
-      return isString("authorized");
-    case "blueRefinance":
-      return isString("sourceMarketId") && isString("targetMarketId");
-    case "vaultV1MigrateToV2":
-      return isString("sourceVault") && isString("targetVault");
-    default:
-      return operation.startsWith("blue")
-        ? isString("marketId")
-        : isString("vault");
-  }
+  if (operation === "blueAuthorization") return isString("authorized");
+  if (operation === "blueRefinance")
+    return isString("sourceMarketId") && isString("targetMarketId");
+  if (operation === "vaultV1MigrateToV2")
+    return isString("sourceVault") && isString("targetVault");
+  if ((BLUE_MARKET_OPERATION_TYPES as readonly string[]).includes(operation))
+    return isString("marketId");
+  if ((VAULT_OPERATION_TYPES as readonly string[]).includes(operation))
+    return isString("vault");
+  return false;
 }

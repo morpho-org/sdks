@@ -16,20 +16,27 @@ export type SimulatedOperation = {
 } & SimulationOperationSubject;
 
 /** @internal How a pending authorization was modeled in preview. */
-export interface AuthorizationPreparation {
+export type AuthorizationPreparation = {
   readonly authorizationIndex: number;
   readonly authorization: PendingAuthorization;
-  /** Approval calls simulated before the user transactions; empty when a state override was used. */
-  readonly calls: readonly {
-    readonly transaction: SimulationTransaction;
-    readonly result: SimulationCall;
-  }[];
-  readonly stateOverride?: {
-    readonly address: Address;
-    readonly slot: Hex;
-    readonly value: Hex;
-  };
-}
+} & (
+  | {
+      readonly type: "approvalCalls";
+      /** Approval calls simulated before the user transactions. */
+      readonly calls: readonly {
+        readonly transaction: SimulationTransaction;
+        readonly result: SimulationCall;
+      }[];
+    }
+  | {
+      readonly type: "stateOverride";
+      readonly address: Address;
+      /** Contract storage variable the override writes (e.g. `allowance`, `nonces`). */
+      readonly storageVariable: string;
+      readonly slot: Hex;
+      readonly value: Hex;
+    }
+);
 
 /** @internal One account's balance of one token. */
 export interface TokenBalance {
