@@ -20,12 +20,14 @@ export {
   isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
+  PERMIT2_REVERT_REASONS,
   PermissionChangeMismatchError,
   ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
+  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -34,6 +36,9 @@ export {
   UnsupportedVerificationFeatureError,
   VAULT_BUNDLES_V1_REVERT_REASONS,
   VAULT_EXIT_BUNDLES_V1_REVERT_REASONS,
+  VAULT_V1_REVERT_REASONS,
+  VAULT_V2_ADAPTER_REVERT_REASONS,
+  VAULT_V2_REVERT_REASONS,
 } from "./errors.js";
 export type { OperationType } from "./limits.js";
 export type { SimulationMode } from "./params.js";

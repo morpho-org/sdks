@@ -2,6 +2,14 @@ import {
   vaultBundlesV1Abi,
   vaultExitBundlesV1Abi,
 } from "@morpho-org/morpho-sdk/abis";
+import {
+  metaMorphoAbi,
+  morphoMarketV1AdapterAbi,
+  morphoMarketV1AdapterV2Abi,
+  morphoVaultV1AdapterAbi,
+  permit2Abi,
+  vaultV2Abi,
+} from "@morpho-org/morpho-ts/abis";
 import type { Abi } from "viem";
 import { expectTypeOf } from "vitest";
 import {
@@ -15,6 +23,7 @@ import {
   isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
+  PERMIT2_REVERT_REASONS,
   PermissionChangeMismatchError,
   ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
@@ -23,6 +32,7 @@ import {
   SimulationRevertedError,
   type SimulationRevertReason,
   SimulationValidationError,
+  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -31,6 +41,9 @@ import {
   UnsupportedVerificationFeatureError,
   VAULT_BUNDLES_V1_REVERT_REASONS,
   VAULT_EXIT_BUNDLES_V1_REVERT_REASONS,
+  VAULT_V1_REVERT_REASONS,
+  VAULT_V2_ADAPTER_REVERT_REASONS,
+  VAULT_V2_REVERT_REASONS,
 } from "./errors.js";
 
 const CONTEXT: SimulationErrorContext = { mode: "final", chainId: 1 };
@@ -279,15 +292,61 @@ describe("SimulationRevertedError.revert", () => {
     }>().not.toExtend<SimulationRevertReason>();
   });
 
-  it("bundles catalogs match the morpho-sdk ABIs", () => {
-    const names = (abi: Abi) =>
-      abi.flatMap((e) => (e.type === "error" ? [e.name] : [])).sort();
-    expect([...VAULT_BUNDLES_V1_REVERT_REASONS].sort()).toEqual(
+  const names = (...abis: Abi[]) =>
+    [
+      ...new Set(
+        abis.flatMap((abi) =>
+          abi.flatMap((e) => (e.type === "error" ? [e.name] : [])),
+        ),
+      ),
+    ].sort();
+  const sorted = (xs: readonly string[]) => [...xs].sort();
+
+  it("catalogs match the pinned ABIs", () => {
+    expect(sorted(VAULT_V1_REVERT_REASONS)).toEqual(names(metaMorphoAbi));
+    expect(sorted(VAULT_V2_REVERT_REASONS)).toEqual(names(vaultV2Abi));
+    expect(sorted(VAULT_V2_ADAPTER_REVERT_REASONS)).toEqual(
+      names(
+        morphoVaultV1AdapterAbi,
+        morphoMarketV1AdapterAbi,
+        morphoMarketV1AdapterV2Abi,
+      ),
+    );
+    expect(sorted(VAULT_BUNDLES_V1_REVERT_REASONS)).toEqual(
       names(vaultBundlesV1Abi),
     );
-    expect([...VAULT_EXIT_BUNDLES_V1_REVERT_REASONS].sort()).toEqual(
+    expect(sorted(VAULT_EXIT_BUNDLES_V1_REVERT_REASONS)).toEqual(
       names(vaultExitBundlesV1Abi),
     );
+    expect(sorted(PERMIT2_REVERT_REASONS)).toEqual(names(permit2Abi));
+  });
+});
+
+describe("context on legacy errors", () => {
+  it("SimulationRevertedError keeps cause and freezes context", () => {
+    const cause = new Error("inner");
+    const err = new SimulationRevertedError("x", cause, undefined, CONTEXT);
+    expect(err.cause).toBe(cause);
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(
+      new SimulationRevertedError("x", "raw", undefined, CONTEXT).context,
+    ).toEqual(CONTEXT);
+  });
+
+  it("BlacklistViolationError stores context", () => {
+    const err = new BlacklistViolationError("x", undefined, CONTEXT);
+    expect(err.context).toEqual(CONTEXT);
+    expect(Object.isFrozen(err.context)).toBe(true);
+  });
+
+  it("verification errors extend SimulationVerificationError with required context", () => {
+    const err = new FeeMismatchError("x", CONTEXT);
+    expect(err).toBeInstanceOf(SimulationVerificationError);
+    expectTypeOf(err.context).toEqualTypeOf<SimulationErrorContext>();
+    expectTypeOf(new SimulationRevertedError("x").context).toEqualTypeOf<
+      SimulationErrorContext | undefined
+    >();
   });
 });
 
@@ -354,6 +413,28 @@ describe("isSimulationPackageError", () => {
         name: "FeeMismatchError",
         message: "boom",
         code: "FEE_MISMATCH",
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for a malformed context", () => {
+    const base = {
+      name: "FeeMismatchError",
+      message: "m",
+      code: "FEE_MISMATCH",
+    };
+    expect(isSimulationPackageError({ ...base, context: {} })).toBe(false);
+    expect(isSimulationPackageError({ ...base, context: [] })).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { mode: "final", chainId: "1" },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: { mode: "final", chainId: 1 },
       }),
     ).toBe(true);
   });
