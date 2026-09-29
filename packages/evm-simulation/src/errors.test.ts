@@ -277,6 +277,28 @@ describe("SimulationErrorContext", () => {
     }>().not.toExtend<SimulationErrorContext>();
   });
 
+  it("names both sides of two-subject operations", () => {
+    type Verification = Extract<
+      SimulationErrorContext,
+      { stage: "verification" }
+    >;
+    expectTypeOf<Verification["sourceMarketId"]>().toEqualTypeOf<
+      Verification["targetMarketId"]
+    >();
+    expectTypeOf<Verification["sourceVault"]>().toEqualTypeOf<
+      Verification["targetVault"]
+    >();
+    expectTypeOf<{
+      stage: "verification";
+      mode: "final";
+      chainId: 1;
+      blockNumber: 1n;
+      operation: "vaultV1MigrateToV2";
+      sourceVault: `0x${string}`;
+      targetVault: `0x${string}`;
+    }>().toExtend<SimulationErrorContext>();
+  });
+
   it("SimulationRevertedError only accepts preparation or execution contexts", () => {
     expectTypeOf<
       NonNullable<
@@ -366,7 +388,12 @@ describe("isSimulationPackageError", () => {
         name: "FeeMismatchError",
         message: "boom",
         code: "FEE_MISMATCH",
-        context: { stage: "validation", mode: "final", chainId: 1 },
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
       }),
     ).toBe(true);
   });
@@ -392,25 +419,80 @@ describe("isSimulationPackageError", () => {
     expect(
       isSimulationPackageError({
         ...base,
-        context: { stage: "bogus", mode: "final", chainId: 1 },
+        context: { stage: "bogus", mode: "final", chainId: 1, blockNumber: 1n },
       }),
     ).toBe(false);
     expect(
       isSimulationPackageError({
         ...base,
-        context: { stage: "validation", mode: "bogus", chainId: 1 },
+        context: {
+          stage: "validation",
+          mode: "bogus",
+          chainId: 1,
+          blockNumber: 1n,
+        },
       }),
     ).toBe(false);
     expect(
       isSimulationPackageError({
         ...base,
-        context: { stage: "validation", mode: "final", chainId: "1" },
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: "1",
+          blockNumber: 1n,
+        },
       }),
     ).toBe(false);
     expect(
       isSimulationPackageError({
         ...base,
         context: { stage: "validation", mode: "final", chainId: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: "1",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "preparation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "preparation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+          authorizationIndex: 0,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isSimulationPackageError({
+        ...base,
+        context: {
+          stage: "validation",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+        },
       }),
     ).toBe(true);
   });
