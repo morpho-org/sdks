@@ -25,7 +25,6 @@ export {
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  SimulationVerificationError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,

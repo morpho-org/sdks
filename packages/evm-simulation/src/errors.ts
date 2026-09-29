@@ -128,7 +128,6 @@ export abstract class SimulationPackageError extends Error {
   ) {
     const { context, ...errorOptions } = options ?? {};
     super(message, errorOptions);
-    this.name = this.constructor.name;
     if (context !== undefined) {
       this.context = Object.freeze({ ...context });
     }
@@ -137,6 +136,7 @@ export abstract class SimulationPackageError extends Error {
 
 /** Transaction would revert on-chain. Not bypassable. */
 export class SimulationRevertedError extends SimulationPackageError {
+  override readonly name = "SimulationRevertedError";
   readonly code = "SIMULATION_REVERTED";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -175,6 +175,7 @@ export interface RetainedAsset {
  * pass-through flows and net outflows are allowed. Never bypassable.
  */
 export class BlacklistViolationError extends SimulationPackageError {
+  override readonly name = "BlacklistViolationError";
   readonly code = "BLACKLIST_ERROR";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -190,11 +191,13 @@ export class BlacklistViolationError extends SimulationPackageError {
 
 /** RPC service is down or unreachable. Bypassable — user can proceed. */
 export class ExternalServiceError extends SimulationPackageError {
+  override readonly name = "ExternalServiceError";
   readonly code = "EXTERNAL_SERVICE_ERROR";
 }
 
 /** Bad input to the simulation functions. Not bypassable. */
 export class SimulationValidationError extends SimulationPackageError {
+  override readonly name = "SimulationValidationError";
   readonly code = "VALIDATION_ERROR";
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
@@ -209,6 +212,7 @@ export class SimulationValidationError extends SimulationPackageError {
 
 /** Chain ID not configured for any simulation method. Not bypassable. */
 export class UnsupportedChainError extends SimulationPackageError {
+  override readonly name = "UnsupportedChainError";
   readonly code = "UNSUPPORTED_CHAIN";
 
   constructor(
@@ -219,111 +223,111 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** Base for verification failures: the context is required and carries where the check failed. */
-export abstract class SimulationVerificationError extends SimulationPackageError {
-  declare readonly context: SimulationErrorContext;
-
-  // biome-ignore lint/complexity/useMaxParams: public error constructor signature
-  constructor(
-    message: string,
-    context: SimulationErrorContext,
-    options?: ErrorOptions,
-  ) {
-    super(message, { ...options, context });
-  }
-}
-
 /** A decoded transaction maps to no supported operation. */
-export class UnsupportedOperationError extends SimulationVerificationError {
+export class UnsupportedOperationError extends SimulationPackageError {
+  override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";
 }
 
 /** An operation does not match the protocol entity it was bound to. */
-export class ProtocolBindingMismatchError extends SimulationVerificationError {
+export class ProtocolBindingMismatchError extends SimulationPackageError {
+  override readonly name = "ProtocolBindingMismatchError";
   readonly code = "PROTOCOL_BINDING_MISMATCH";
 }
 
 /** The request requires a verification feature this version does not support. */
-export class UnsupportedVerificationFeatureError extends SimulationVerificationError {
+export class UnsupportedVerificationFeatureError extends SimulationPackageError {
+  override readonly name = "UnsupportedVerificationFeatureError";
   readonly code = "UNSUPPORTED_VERIFICATION_FEATURE";
 }
 
 /** The simulation backend returned a response that cannot be parsed. */
-export class InvalidSimulationResponseError extends SimulationVerificationError {
+export class InvalidSimulationResponseError extends SimulationPackageError {
+  override readonly name = "InvalidSimulationResponseError";
   readonly code = "INVALID_SIMULATION_RESPONSE";
 }
 
 /** State needed to verify an operation could not be fetched or derived. */
-export class MissingVerificationEvidenceError extends SimulationVerificationError {
+export class MissingVerificationEvidenceError extends SimulationPackageError {
+  override readonly name = "MissingVerificationEvidenceError";
   readonly code = "MISSING_VERIFICATION_EVIDENCE";
 }
 
 /** A pending authorization does not match the request it was prepared for. */
-export class AuthorizationRequestMismatchError extends SimulationVerificationError {
+export class AuthorizationRequestMismatchError extends SimulationPackageError {
+  override readonly name = "AuthorizationRequestMismatchError";
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
 }
 
 /** An observed asset change violates the expected bounds. */
-export class AssetChangeMismatchError extends SimulationVerificationError {
+export class AssetChangeMismatchError extends SimulationPackageError {
+  override readonly name = "AssetChangeMismatchError";
   readonly code = "ASSET_CHANGE_MISMATCH";
 }
 
 /** An observed permission change (allowance or authorization) violates the expected bounds. */
-export class PermissionChangeMismatchError extends SimulationVerificationError {
+export class PermissionChangeMismatchError extends SimulationPackageError {
+  override readonly name = "PermissionChangeMismatchError";
   readonly code = "PERMISSION_CHANGE_MISMATCH";
 }
 
 /** An observed state change violates the expected bounds. */
-export class StateChangeMismatchError extends SimulationVerificationError {
+export class StateChangeMismatchError extends SimulationPackageError {
+  override readonly name = "StateChangeMismatchError";
   readonly code = "STATE_CHANGE_MISMATCH";
 }
 
 /** An operation left a market outside its allowed constraints. */
-export class MarketConstraintViolationError extends SimulationVerificationError {
+export class MarketConstraintViolationError extends SimulationPackageError {
+  override readonly name = "MarketConstraintViolationError";
   readonly code = "MARKET_CONSTRAINT_VIOLATION";
 }
 
 /** An asset/share conversion exceeded the allowed slippage. */
-export class SlippageLimitExceededError extends SimulationVerificationError {
+export class SlippageLimitExceededError extends SimulationPackageError {
+  override readonly name = "SlippageLimitExceededError";
   readonly code = "SLIPPAGE_LIMIT_EXCEEDED";
 }
 
 /** An observed fee differs from the expected amount. */
-export class FeeMismatchError extends SimulationVerificationError {
+export class FeeMismatchError extends SimulationPackageError {
+  override readonly name = "FeeMismatchError";
   readonly code = "FEE_MISMATCH";
 }
 
 /** A consumer-supplied limit was violated. */
-export class ConsumerLimitViolationError extends SimulationVerificationError {
+export class ConsumerLimitViolationError extends SimulationPackageError {
+  override readonly name = "ConsumerLimitViolationError";
   readonly code = "CONSUMER_LIMIT_VIOLATION";
 }
 
 /** The simulation failed for a reason that fits no other code. */
-export class UnexpectedSimulationError extends SimulationVerificationError {
+export class UnexpectedSimulationError extends SimulationPackageError {
+  override readonly name = "UnexpectedSimulationError";
   readonly code = "UNEXPECTED_SIMULATION_ERROR";
 }
 
 const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
   Object.freeze({
-    VALIDATION_ERROR: SimulationValidationError.name,
-    UNSUPPORTED_CHAIN: UnsupportedChainError.name,
-    EXTERNAL_SERVICE_ERROR: ExternalServiceError.name,
-    SIMULATION_REVERTED: SimulationRevertedError.name,
-    BLACKLIST_ERROR: BlacklistViolationError.name,
-    UNSUPPORTED_OPERATION: UnsupportedOperationError.name,
-    PROTOCOL_BINDING_MISMATCH: ProtocolBindingMismatchError.name,
-    UNSUPPORTED_VERIFICATION_FEATURE: UnsupportedVerificationFeatureError.name,
-    INVALID_SIMULATION_RESPONSE: InvalidSimulationResponseError.name,
-    MISSING_VERIFICATION_EVIDENCE: MissingVerificationEvidenceError.name,
-    AUTHORIZATION_REQUEST_MISMATCH: AuthorizationRequestMismatchError.name,
-    ASSET_CHANGE_MISMATCH: AssetChangeMismatchError.name,
-    PERMISSION_CHANGE_MISMATCH: PermissionChangeMismatchError.name,
-    STATE_CHANGE_MISMATCH: StateChangeMismatchError.name,
-    MARKET_CONSTRAINT_VIOLATION: MarketConstraintViolationError.name,
-    SLIPPAGE_LIMIT_EXCEEDED: SlippageLimitExceededError.name,
-    FEE_MISMATCH: FeeMismatchError.name,
-    CONSUMER_LIMIT_VIOLATION: ConsumerLimitViolationError.name,
-    UNEXPECTED_SIMULATION_ERROR: UnexpectedSimulationError.name,
+    VALIDATION_ERROR: "SimulationValidationError",
+    UNSUPPORTED_CHAIN: "UnsupportedChainError",
+    EXTERNAL_SERVICE_ERROR: "ExternalServiceError",
+    SIMULATION_REVERTED: "SimulationRevertedError",
+    BLACKLIST_ERROR: "BlacklistViolationError",
+    UNSUPPORTED_OPERATION: "UnsupportedOperationError",
+    PROTOCOL_BINDING_MISMATCH: "ProtocolBindingMismatchError",
+    UNSUPPORTED_VERIFICATION_FEATURE: "UnsupportedVerificationFeatureError",
+    INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
+    MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
+    AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
+    ASSET_CHANGE_MISMATCH: "AssetChangeMismatchError",
+    PERMISSION_CHANGE_MISMATCH: "PermissionChangeMismatchError",
+    STATE_CHANGE_MISMATCH: "StateChangeMismatchError",
+    MARKET_CONSTRAINT_VIOLATION: "MarketConstraintViolationError",
+    SLIPPAGE_LIMIT_EXCEEDED: "SlippageLimitExceededError",
+    FEE_MISMATCH: "FeeMismatchError",
+    CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
+    UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
   });
 
 /**
