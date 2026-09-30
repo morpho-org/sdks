@@ -18,6 +18,7 @@ import {
   type SimulationExecutionContext,
   type SimulationExecutionReason,
   SimulationPackageError,
+  type SimulationPreparationContext,
   SimulationRevertedError,
   SimulationValidationError,
   type SimulationVerificationContext,
@@ -418,6 +419,38 @@ describe("SimulationErrorContext", () => {
         ConstructorParameters<typeof SimulationRevertedError>[3]
       >["stage"]
     >().toEqualTypeOf<"preparation" | "execution">();
+    expectTypeOf<
+      NonNullable<SimulationRevertedError["context"]>["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
+  });
+
+  it("SimulationRevertedError stores a frozen preparation context", () => {
+    const preparation: SimulationPreparationContext = {
+      stage: "preparation",
+      mode: "preview",
+      chainId: 1,
+      blockNumber: 100n,
+      authorizationIndex: 1,
+      preparationCallIndex: 0,
+    };
+    const err = new SimulationRevertedError(
+      "x",
+      undefined,
+      "UNKNOWN_REVERT",
+      preparation,
+    );
+    expect(err.context).toEqual(preparation);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
+});
+
+describe("SimulationPackageError.name", () => {
+  it("falls back to the subclass name for consumer subclasses", () => {
+    class ConsumerError extends SimulationPackageError {
+      readonly code = "FEE_MISMATCH" as const;
+    }
+    expect(new ConsumerError("m").name).toBe("ConsumerError");
   });
 });
 
