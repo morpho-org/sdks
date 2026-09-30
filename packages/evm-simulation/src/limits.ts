@@ -62,39 +62,54 @@ export const VAULT_OPERATION_TYPES = [
 /** Operations acting on one vault (V1 or V2). */
 export type VaultOperationType = (typeof VAULT_OPERATION_TYPES)[number];
 
+/** Subject of an operation acting on one Blue market. */
+export interface BlueMarketOperationSubject {
+  readonly operation: BlueMarketOperationType;
+  /** Blue market the operation acts on. */
+  readonly marketId: MarketId;
+}
+
+/** Subject of a Blue refinance between two markets. */
+export interface BlueRefinanceSubject {
+  readonly operation: "blueRefinance";
+  /** Market the refinance closes. */
+  readonly sourceMarketId: MarketId;
+  /** Market the refinance opens. */
+  readonly targetMarketId: MarketId;
+}
+
+/** Subject of a Morpho authorization change. */
+export interface BlueAuthorizationSubject {
+  readonly operation: "blueAuthorization";
+  /** Operator whose Morpho authorization the operation sets. */
+  readonly authorized: Address;
+}
+
+/** Subject of an operation acting on one vault (V1 or V2). */
+export interface VaultOperationSubject {
+  readonly operation: VaultOperationType;
+  /** Vault the operation acts on. */
+  readonly vault: Address;
+  /** Vault V2 adapter the operation routes through. */
+  readonly adapter?: Address;
+}
+
+/** Subject of a Vault V1 → V2 migration. */
+export interface VaultV1MigrateToV2Subject {
+  readonly operation: "vaultV1MigrateToV2";
+  /** Vault the migration exits. */
+  readonly sourceVault: Address;
+  /** Vault the migration enters. */
+  readonly targetVault: Address;
+}
+
 /** Protocol entity the failing operation acts on, keyed by `operation`. */
 export type SimulationOperationSubject =
-  | {
-      readonly operation: BlueMarketOperationType;
-      /** Blue market the operation acts on. */
-      readonly marketId: MarketId;
-    }
-  | {
-      readonly operation: "blueRefinance";
-      /** Market the refinance closes. */
-      readonly sourceMarketId: MarketId;
-      /** Market the refinance opens. */
-      readonly targetMarketId: MarketId;
-    }
-  | {
-      readonly operation: "blueAuthorization";
-      /** Operator whose Morpho authorization the operation sets. */
-      readonly authorized: Address;
-    }
-  | {
-      readonly operation: VaultOperationType;
-      /** Vault the operation acts on. */
-      readonly vault: Address;
-      /** Vault V2 adapter the operation routes through. */
-      readonly adapter?: Address;
-    }
-  | {
-      readonly operation: "vaultV1MigrateToV2";
-      /** Vault the migration exits. */
-      readonly sourceVault: Address;
-      /** Vault the migration enters. */
-      readonly targetVault: Address;
-    };
+  | BlueMarketOperationSubject
+  | BlueRefinanceSubject
+  | BlueAuthorizationSubject
+  | VaultOperationSubject
+  | VaultV1MigrateToV2Subject;
 
 /** Limit for a Blue `supply` operation. */
 export interface BlueSupplyLimit {
