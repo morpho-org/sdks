@@ -1,5 +1,18 @@
 # @morpho-org/blue-sdk
 
+## 7.1.0
+
+### Minor Changes
+
+- [#1111](https://github.com/morpho-org/sdks/pull/1111) [`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723) Thanks [@jinmel](https://github.com/jinmel)! - Add `RateRatifierV1Utils` and `PriceRatifierV1Utils` (leaf hashing, Merkle trees, ratifier data encoding/verification, rate price bounds, `setIsRootRatified` encoders), `priceRatifierV1Abi`/`rateRatifierV1Abi`, and V1 offer typehash constants. Add `TreeUtils.buildRootFromLeaves`/`verifyLeafProof` and the `MAX_TREE_HEIGHT` constant. Caller-provided V1 tree descriptors are fully re-validated before use, and negative rate/time bounds throw `InvalidRateRatifierV1RateError`/`InvalidRateRatifierV1TimeError`; sub-MIN_TICK rate leaves throw `InvalidRateRatifierV1TickError`, zero ratifier addresses throw `InvalidRatifierV1AddressError`, and disallowed takers throw `RatifierV1TakerNotAllowedError`. Add `TreeUtils.normalizeEntries`; `TreeUtils.mempoolValidate` and `Tree.from` also accept route-typed and V1 tree snapshots. Add `priceRatifierV1` and `rateRatifierV1` keys to `ChainAddresses` with Ethereum, Base, Arc and Robinhood mainnet registry entries, and expose the new Midnight symbols through the `morpho-sdk` facade. `mempoolValidate` on priceV1/rateV1 trees always encodes real V1 ratifier data, since the router decodes it to identify each offer. Snapshot descriptors whose padding exceeds `2**height` now throw `InvalidTreeError`, and `RateRatifierV1.priceBound` throws `RateRatifierV1BoundOverflowError` when bound arithmetic overflows uint256, matching the contract's checked math.
+
+### Patch Changes
+
+- [#1190](https://github.com/morpho-org/sdks/pull/1190) [`5894246`](https://github.com/morpho-org/sdks/commit/5894246106cab21e635848d82720ad080bf2b8d5) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Bump `@noble/hashes` runtime dependency to `^2.4.0` (faster keccak-256, stricter argument checks, option-mutation protection).
+
+- Updated dependencies [[`cb863fd`](https://github.com/morpho-org/sdks/commit/cb863fd37b02af080dd26aa9701568d1aa913723)]:
+  - @morpho-org/morpho-ts@3.1.0
+
 ## 7.0.0
 
 ### Major Changes

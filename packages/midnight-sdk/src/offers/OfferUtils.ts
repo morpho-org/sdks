@@ -74,6 +74,9 @@ export namespace OfferUtils {
    * This is the bridge from SDK/domain objects
    * into Merkle leaf hashing, payload items, and take calldata encoding.
    *
+   * The struct carries a materialized group (the generic default when omitted);
+   * V1 tree builders re-derive that generic default under their scheme.
+   *
    * @param params.offer - Offer class or plain offer input to encode.
    * @param params.group - Optional protocol group id override encoded into the ABI offer.
    * @returns ABI-compatible offer.

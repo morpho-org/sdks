@@ -1,5 +1,11 @@
 # @morpho-org/blue-sdk-viem
 
+## 6.1.0
+
+### Minor Changes
+
+- [#1202](https://github.com/morpho-org/sdks/pull/1202) [`dbde9b9`](https://github.com/morpho-org/sdks/commit/dbde9b9a6570d83fc7e4e669ac04723a49874506) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarketParams` and `fetchMarket` (and callers that go through them) now throw `MarketParamsIdMismatchError` when RPC-returned market params do not hash to the requested id; all-zero params for uncreated markets remain accepted. Markets built directly from Vault V2 deployless query results are not covered by this check yet. `morpho-sdk` re-exports the error as `MarketParamsIdMismatchError` from `/blue/errors` and `BlueMarketParamsIdMismatchError` from `/errors`.
+
 ## 6.0.0
 
 ### Major Changes
