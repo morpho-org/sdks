@@ -9,13 +9,13 @@ import type {
   SimulationTransaction,
 } from "./types.js";
 
-/** @internal One operation decoded from the caller's transactions. */
+/** One operation decoded from the caller's transactions. */
 export type SimulatedOperation = {
   /** Index into `simulationTxs`. */
   readonly transactionIndex: number;
 } & SimulationOperationSubject;
 
-/** @internal Approval calls simulated before the user transactions for one pending authorization. */
+/** Approval calls simulated before the user transactions for one pending authorization. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
   readonly authorization: PendingAuthorization;
@@ -25,14 +25,14 @@ export interface AuthorizationPreparation {
   }[];
 }
 
-/** @internal One account's balance of one token. */
+/** One account's balance of one token. */
 export interface TokenBalance {
   readonly account: Address;
   readonly token: Address;
   readonly assets: bigint;
 }
 
-/** @internal One ERC-20 allowance. */
+/** One ERC-20 allowance. */
 export interface TokenAllowance {
   readonly token: Address;
   readonly owner: Address;
@@ -40,7 +40,7 @@ export interface TokenAllowance {
   readonly amount: bigint;
 }
 
-/** @internal One Morpho `isAuthorized` flag before and after the bundle. */
+/** One Morpho `isAuthorized` flag before and after the bundle. */
 export interface MorphoAuthorizationChange {
   readonly authorizer: Address;
   readonly authorized: Address;
@@ -48,7 +48,7 @@ export interface MorphoAuthorizationChange {
   readonly after: boolean;
 }
 
-/** @internal One sequential signature nonce before and after the bundle. */
+/** One sequential signature nonce before and after the bundle. */
 export interface SequentialNonceChange {
   readonly type: "erc2612" | "blueAuthorization";
   /** Token for erc2612, Morpho for blueAuthorization. */
@@ -58,7 +58,7 @@ export interface SequentialNonceChange {
   readonly after: bigint;
 }
 
-/** @internal One Permit2 `nonceBitmap(owner, nonce >> 8n)` word before and after the bundle. */
+/** One Permit2 `nonceBitmap(owner, nonce >> 8n)` word before and after the bundle. */
 export interface Permit2NonceChange {
   readonly type: "permit2";
   readonly verifyingContract: Address;
@@ -69,11 +69,11 @@ export interface Permit2NonceChange {
   readonly after: bigint;
 }
 
-/** @internal One signature nonce before and after the bundle. */
+/** One signature nonce before and after the bundle. */
 export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
 
 /**
- * @internal Everything the bundle changed, including preparation calls and
+ * Everything the bundle changed, including preparation calls and
  * interest accrual. Numeric entries are signed differences (after − before);
  * authorizations and nonces carry both values.
  */
@@ -108,7 +108,7 @@ export interface SimulationStateChange {
   }[];
 }
 
-/** @internal A fee charged during the simulation. */
+/** A fee charged during the simulation. */
 export interface Fee {
   readonly type:
     | "referral"
@@ -121,7 +121,7 @@ export interface Fee {
   readonly amount: bigint;
 }
 
-/** @internal Verification report attached to a verified simulation result. */
+/** Verification report attached to a verified simulation result. */
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
@@ -136,7 +136,7 @@ export interface SimulationVerification {
   readonly fees: readonly Fee[];
 }
 
-/** @internal `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
+/** `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }

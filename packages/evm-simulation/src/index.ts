@@ -1,6 +1,19 @@
 // Public fns (via feature-folder barrels)
 
 export type {
+  BlueAuthorization,
+  BlueAuthorizationSignature,
+  BlueAuthorizationTypedData,
+  Eip712Domain,
+  Eip712Field,
+  Erc20ApprovalAuthorization,
+  Erc2612PermitAuthorization,
+  Erc2612PermitTypedData,
+  PendingAuthorization,
+  Permit2TransferAuthorization,
+  Permit2TransferTypedData,
+} from "./authorizations.js";
+export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
@@ -38,15 +51,36 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
+  BlueAuthorizationLimit,
   BlueAuthorizationSubject,
+  BlueBorrowLimit,
   BlueMarketOperationSubject,
   BlueMarketOperationType,
+  BlueRefinanceLimit,
   BlueRefinanceSubject,
+  BlueRepayLimit,
+  BlueRepayWithdrawCollateralLimit,
+  BlueSupplyCollateralBorrowLimit,
+  BlueSupplyCollateralLimit,
+  BlueSupplyLimit,
+  BlueWithdrawCollateralLimit,
+  BlueWithdrawLimit,
+  MarketMinAssets,
+  OperationLimit,
   OperationType,
+  SimulationLimits,
   SimulationOperationSubject,
+  VaultDeallocation,
+  VaultDepositLimit,
+  VaultInKindRedeemLimit,
   VaultOperationSubject,
   VaultOperationType,
+  VaultRedeemLimit,
+  VaultV1MigrateToV2Limit,
   VaultV1MigrateToV2Subject,
+  VaultV2ForceRedeemLimit,
+  VaultV2ForceWithdrawLimit,
+  VaultWithdrawLimit,
 } from "./limits.js";
 export {
   BLUE_MARKET_OPERATION_TYPES,
@@ -55,6 +89,20 @@ export {
 } from "./limits.js";
 export type { SimulateParams, SimulationMode } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
+export type {
+  AuthorizationPreparation,
+  Fee,
+  MorphoAuthorizationChange,
+  Permit2NonceChange,
+  SequentialNonceChange,
+  SignatureNonceChange,
+  SimulatedOperation,
+  SimulationStateChange,
+  SimulationVerification,
+  TokenAllowance,
+  TokenBalance,
+  VerifiedSimulationResult,
+} from "./result.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
