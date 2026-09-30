@@ -54,6 +54,7 @@ export async function executeSimulation(params: {
     const tenderlyTimeout = Math.floor(timeoutMs * TENDERLY_BUDGET_RATIO);
 
     try {
+      // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
       return await simulateTenderlyRpc({
         config: chain.tenderlyRpc,
         transactions,

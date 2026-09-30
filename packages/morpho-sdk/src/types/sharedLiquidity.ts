@@ -6,8 +6,27 @@ export interface VaultV2BluePublicAllocatorOptions {
   /** Whether Vault V2 public allocator discovery is enabled. */
   readonly enabled?: boolean;
 
-  /** Timestamp at which market and Vault V2 interest is evaluated. */
+  /**
+   * Timestamp at which market and Vault V2 state is evaluated. Canonical state
+   * and the returned post-state stay at this timestamp; only target-market cap
+   * checks reserve interest on the vault's existing allocation through this
+   * timestamp plus `capAccrualBuffer`. For market-source reallocations the
+   * source position's interest is also reserved on cap ids shared with the
+   * target, and reserves persist across every leg of a plan.
+   */
   readonly timestamp?: BigIntish;
+
+  /**
+   * Seconds beyond `timestamp` through which target-market cap checks reserve
+   * interest on the vault's existing allocation. For market-source
+   * reallocations the source position's interest is also reserved on cap ids
+   * shared with the target, and reserves persist across every leg of a plan.
+   * Market and Vault V2 state, including the returned post-state, stay at
+   * `timestamp`. Set to `0n` to disable.
+   *
+   * @default DEFAULT_CAP_ACCRUAL_BUFFER (2h)
+   */
+  readonly capAccrualBuffer?: BigIntish;
 
   /**
    * Vault V2 addresses to consider. Arrays, readonly arrays, sets, and other
