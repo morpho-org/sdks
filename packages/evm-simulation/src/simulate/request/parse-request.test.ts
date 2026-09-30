@@ -321,6 +321,35 @@ describe("parseRequest", () => {
     ).toBe(true);
   });
 
+  test("error: same-sender errors name the raw transaction index", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [
+            tx({ to: "0xnotanaddress" }),
+            tx(),
+            tx({ from: SPENDER }),
+          ],
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    const fieldErrors = (error as SimulationValidationError).fieldErrors ?? [];
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[0].to")),
+    ).toBe(true);
+    // The rejected first transaction must not shift the reported index.
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[2].from")),
+    ).toBe(true);
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[1].from")),
+    ).toBe(false);
+  });
+
   test("behavior: accepts blockNumber 'finalized'", () => {
     const request = parse({
       chainId: 1,

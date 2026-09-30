@@ -1077,6 +1077,9 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   // transactions
   const rawTransactions = input.transactions;
   const transactions: ParsedTransaction[] = [];
+  // Raw index of each accepted transaction, so cross-field errors name the
+  // caller's index rather than the filtered position.
+  const transactionIndices: number[] = [];
   if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
     fieldErrors.push("transactions: must be a non-empty array");
   } else {
@@ -1098,6 +1101,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         rawValue === undefined ? 0n : check.uint256(rawValue, `${path}.value`);
       if (from !== undefined && to !== undefined && data !== undefined) {
         transactions.push({ from, to, data, value: value ?? 0n });
+        transactionIndices.push(i);
       }
     }
   }
@@ -1212,7 +1216,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
     for (const [i, tx] of transactions.entries()) {
       if (!isAddressEqual(tx.from, owner)) {
         fieldErrors.push(
-          `transactions[${i}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
+          `transactions[${transactionIndices[i]}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
         );
       }
     }
