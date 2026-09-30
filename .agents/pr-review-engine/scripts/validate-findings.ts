@@ -119,7 +119,7 @@ function readFileSafe(path: string): string | null {
   }
 }
 
-export function schemaOk(finding: unknown): finding is ValidatedFinding {
+function schemaOk(finding: unknown): finding is ValidatedFinding {
   if (!isRecord(finding)) return false;
   const severity = finding.severity;
   if (typeof severity !== "string" || !VALID_SEVERITIES.has(severity))
@@ -168,7 +168,7 @@ export function nearestChangedLine(
  * empty. Derived from `nearestChangedLine` so the scan + tie-break live in one
  * place; the distance is the same regardless of the tie-break.
  */
-export function distanceToNearest(
+function distanceToNearest(
   line: number,
   changedLines: readonly number[],
 ): number | null {
@@ -181,7 +181,7 @@ export function distanceToNearest(
  * 1..(line-1) — a finding cited ON a fence line itself is treated as outside
  * the block, per the scope-filter contract. `lines` is the file already split.
  */
-export function isInsideFence(lines: readonly string[], line: number): boolean {
+function isInsideFence(lines: readonly string[], line: number): boolean {
   let fenceCount = 0;
   for (const raw of lines.slice(0, Math.max(line - 1, 0))) {
     if (FENCE_RE.test(raw)) fenceCount += 1;
@@ -416,7 +416,7 @@ export function validateFindingsFromText(
   return { kept, dropped, counts, failed };
 }
 
-export class UsageError extends Error {}
+class UsageError extends Error {}
 
 type CliArgs = {
   findings?: string;
@@ -426,7 +426,7 @@ type CliArgs = {
   lineTolerance: number;
 };
 
-export function parseArgs(argv: readonly string[]): CliArgs {
+function parseArgs(argv: readonly string[]): CliArgs {
   const args = [...argv];
   let i = 0;
   const valueAt = (flag: string): string => {

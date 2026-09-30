@@ -1,0 +1,4 @@
+{
+  "$comment": "Suppressions for the Devin dependency-maintenance automation. Each entry blocks re-opening a PR for the given dependency/target until `until` (ISO date). The automation may re-open earlier only if severity increased, a new advisory appeared, the target version changed materially, or `reason` no longer applies. Maintainers edit this file; the automation reads it.",
+  "suppressions": []
+}

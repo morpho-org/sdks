@@ -22,10 +22,18 @@ import type {
   SimulationConfig,
 } from "../types.js";
 import type { simulateV1 } from "./backends/eth-simulate-v1.js";
+import type { simulateTenderlyRpc } from "./backends/tenderly-rpc.js";
 import { WITHDRAWAL_TOPIC } from "./parsing/transfers.js";
 import { simulate } from "./simulate.js";
 
+const mockTenderlyRpc = vi.fn<typeof simulateTenderlyRpc>();
 const mockSimulateV1 = vi.fn<typeof simulateV1>();
+
+vi.mock("./backends/tenderly-rpc", () => ({
+  simulateTenderlyRpc: (
+    ...args: Parameters<typeof simulateTenderlyRpc>
+  ): Promise<RawSimulationResult> => mockTenderlyRpc(...args),
+}));
 
 vi.mock("./backends/eth-simulate-v1", () => ({
   simulateV1: (
@@ -52,7 +60,15 @@ function makeConfig(
   overrides: Partial<SimulationConfig> = {},
 ): SimulationConfig {
   return {
-    chains: new Map([[1, { simulateV1Url: "http://localhost:8545" }]]),
+    chains: new Map([
+      [
+        1,
+        {
+          tenderlyRpc: { rpcUrl: "https://mainnet.gateway.tenderly.co/key" },
+          simulateV1Url: "http://localhost:8545",
+        },
+      ],
+    ]),
     timeoutMs: 5000,
     ...overrides,
   };
@@ -76,7 +92,7 @@ describe.sequential("simulate — success", () => {
     const logs = [
       makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult(logs));
 
     const params = makeParams();
     const result = await simulate(makeConfig(), params);
@@ -102,7 +118,9 @@ describe.sequential("simulate — success", () => {
         changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 1000000n }],
       },
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs, assetChanges));
+    mockTenderlyRpc.mockResolvedValueOnce(
+      makeSuccessResult(logs, assetChanges),
+    );
 
     const result = await simulate(makeConfig(), makeParams());
 
@@ -113,7 +131,7 @@ describe.sequential("simulate — success", () => {
     const APPROVE_AMOUNT = 1_000_000n;
     const TRANSFER_AMOUNT = 500_000n;
 
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [
         {
           logs: [
@@ -176,7 +194,7 @@ describe.sequential("simulate — success", () => {
   });
 
   it("propagates per-call gasUsed in bundle order", async () => {
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [
         { logs: [], status: true, returnData: "0x", gasUsed: 21_000n },
         { logs: [], status: true, returnData: "0x", gasUsed: 42_000n },
@@ -208,14 +226,15 @@ describe.sequential("simulate — success", () => {
         amount: 1_000_000n,
       }),
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult(logs));
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       BlacklistViolationError,
     );
   });
 
-  it("throws BlacklistViolationError end-to-end when native ETH retention is reported only via assetChanges only (finding 1440)", async () => {
+  it("throws BlacklistViolationError end-to-end when Tenderly reports native ETH retention via assetChanges only (finding 1440)", async () => {
+    // Tenderly derives native ETH into assetChanges and emits no transfer log.
     // With logs empty, only assetChanges carries the retained ETH — the guard
     // must still fire. Before the fix, simulate() resolved instead of throwing.
     const bundles = getChainAddresses(1).bundles!.vaultExitBundlesV1;
@@ -225,7 +244,7 @@ describe.sequential("simulate — success", () => {
         changes: [{ token: ethAddress, diff: 1_000000000000000000n }],
       },
     ];
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult([], assetChanges));
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult([], assetChanges));
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       BlacklistViolationError,
@@ -241,7 +260,7 @@ describe.sequential("simulate — authorizations", () => {
       to: VAULT,
       amount: 1000000n,
     });
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
@@ -257,18 +276,18 @@ describe.sequential("simulate — authorizations", () => {
       makeParams({ authorizations: auths }),
     );
 
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
+    const callArgs = mockTenderlyRpc.mock.calls[0]![0];
     expect(callArgs.transactions.length).toBe(2);
     expect(result.simulationTxs.length).toBe(2);
   });
 
-  it("simulates directly (1 tx) without authorizations", async () => {
-    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult([]));
+  it("simulates directly (1 tx to Tenderly) without authorizations", async () => {
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult([]));
 
     const result = await simulate(makeConfig(), makeParams());
     expect(result.transfers).toEqual([]);
 
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
+    const callArgs = mockTenderlyRpc.mock.calls[0]![0];
     expect(callArgs.transactions.length).toBe(1);
   });
 
@@ -279,7 +298,7 @@ describe.sequential("simulate — authorizations", () => {
       to: VAULT,
       amount: 1000000n,
     });
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
@@ -312,14 +331,14 @@ describe.sequential("simulate — authorizations", () => {
     );
 
     expect(result.transfers).toHaveLength(1);
-    const callArgs = mockSimulateV1.mock.calls[0]![0];
+    const callArgs = mockTenderlyRpc.mock.calls[0]![0];
     expect(callArgs.transactions.length).toBe(3);
   });
 });
 
 describe.sequential("simulate — error handling", () => {
   it("throws SimulationRevertedError on revert", async () => {
-    mockSimulateV1.mockRejectedValueOnce(
+    mockTenderlyRpc.mockRejectedValueOnce(
       new SimulationRevertedError("ERC20: transfer amount exceeds balance"),
     );
 
@@ -328,7 +347,10 @@ describe.sequential("simulate — error handling", () => {
     );
   });
 
-  it("throws ExternalServiceError when the RPC is down", async () => {
+  it("throws ExternalServiceError when all services are down", async () => {
+    mockTenderlyRpc.mockRejectedValueOnce(
+      new ExternalServiceError("Tenderly down"),
+    );
     mockSimulateV1.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
@@ -337,7 +359,7 @@ describe.sequential("simulate — error handling", () => {
   });
 
   it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
       assetChanges: [],
     });
@@ -352,7 +374,7 @@ describe.sequential("simulate — error handling", () => {
   });
 
   it("throws SimulationRevertedError even when signature authorizations are present", async () => {
-    mockSimulateV1.mockRejectedValueOnce(
+    mockTenderlyRpc.mockRejectedValueOnce(
       new SimulationRevertedError("USDT revert"),
     );
 
@@ -364,11 +386,89 @@ describe.sequential("simulate — error handling", () => {
       simulate(makeConfig(), makeParams({ authorizations: auths })),
     ).rejects.toThrow(SimulationRevertedError);
 
-    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+    expect(mockTenderlyRpc).toHaveBeenCalledTimes(1);
   });
 });
 
-describe.sequential("simulate — wrapped-native handling", () => {
+describe.sequential("simulate — backend fallback", () => {
+  it("falls back to eth_simulateV1 when Tenderly fails", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    mockTenderlyRpc.mockRejectedValueOnce(
+      new ExternalServiceError("Tenderly 502"),
+    );
+    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    const result = await simulate(makeConfig(), makeParams());
+
+    expect(result.transfers).toHaveLength(1);
+    expect(mockSimulateV1).toHaveBeenCalled();
+  });
+
+  it("falls back successfully when Tenderly times out within budget", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 500000n }),
+    ];
+    mockTenderlyRpc.mockRejectedValueOnce(
+      new ExternalServiceError("Tenderly timeout"),
+    );
+    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    const result = await simulate(
+      makeConfig({ timeoutMs: 10000 }),
+      makeParams(),
+    );
+
+    expect(result.transfers).toHaveLength(1);
+    expect(mockSimulateV1).toHaveBeenCalled();
+  });
+
+  it("still attempts fallback even when Tenderly ate the whole time budget", async () => {
+    mockTenderlyRpc.mockRejectedValueOnce(
+      new ExternalServiceError("Tenderly timeout"),
+    );
+    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult([]));
+
+    const result = await simulate(makeConfig({ timeoutMs: 1 }), makeParams());
+
+    expect(result).toBeDefined();
+    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses Tenderly only when chain has no fallback", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    const config: SimulationConfig = {
+      chains: new Map([
+        [1, { tenderlyRpc: { rpcUrl: "https://gateway.tenderly.co/key" } }],
+      ]),
+    };
+    const result = await simulate(config, makeParams());
+
+    expect(result.transfers).toHaveLength(1);
+    expect(mockSimulateV1).not.toHaveBeenCalled();
+  });
+
+  it("uses simulateV1 directly when chain has no Tenderly", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    mockSimulateV1.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    const config: SimulationConfig = {
+      chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
+    };
+    const result = await simulate(config, makeParams());
+
+    expect(result.transfers).toHaveLength(1);
+    expect(mockTenderlyRpc).not.toHaveBeenCalled();
+    expect(mockSimulateV1).toHaveBeenCalled();
+  });
+
   test("behavior: ignores WETH9 events on registered tokenless chains", async () => {
     const chainId = ChainId.StableMainnet;
     mockSimulateV1.mockResolvedValueOnce(
@@ -475,7 +575,7 @@ describe.sequential("simulate — validation", () => {
     const lower = checksum.toLowerCase() as Address;
     expect(checksum).not.toBe(lower);
 
-    mockSimulateV1.mockResolvedValueOnce({
+    mockTenderlyRpc.mockResolvedValueOnce({
       calls: [
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
@@ -529,7 +629,7 @@ describe.sequential("simulate — validation", () => {
 
 describe.sequential("simulate — timeout", () => {
   it("throws ExternalServiceError when simulation exceeds timeoutMs", async () => {
-    mockSimulateV1.mockImplementationOnce(async () => {
+    mockTenderlyRpc.mockImplementationOnce(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       throw new ExternalServiceError("timeout");
     });

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/evm-simulation",
   "description": "EVM simulation engine for Morpho transactions.",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "author": "Morpho Association <contact@morpho.org>",
   "repository": {
     "type": "git",
@@ -30,7 +30,8 @@
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "viem": "^2.0.0"

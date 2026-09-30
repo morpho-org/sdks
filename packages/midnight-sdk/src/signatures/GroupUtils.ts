@@ -161,8 +161,11 @@ export namespace GroupUtils {
   /**
    * Derives the deterministic content-addressed id for a group of offers.
    *
-   * This mirrors the router implementation: hash each offer with `group = 0`,
-   * sort those hashes, concatenate them, then keccak the result.
+   * Hashes each offer with `group = 0` using the protocol offer hash, sorts
+   * those hashes, concatenates them, then keccaks the result. This matches the
+   * router for Ecrecover and Setter offers only; RateRatifierV1 and
+   * PriceRatifierV1 commit to scheme leaf hashes, so use
+   * `RateRatifierV1.groupId` / `PriceRatifierV1.groupId` for those.
    *
    * @param offers - Offers to hash as one group.
    * @returns Content-addressed group id.
@@ -209,9 +212,67 @@ export namespace GroupUtils {
       );
     }
 
-    const offerHashes = offerInputs.map((offer) => OfferUtils.groupHash(offer));
-    const sorted =
-      offerHashes.length > 1 ? [...offerHashes].sort() : offerHashes;
+    return hashMembers(offerInputs.map((offer) => OfferUtils.groupHash(offer)));
+  }
+
+  /**
+   * Derives a content-addressed group id from ratifier-specific member hashes.
+   *
+   * This is the ratifier-agnostic core of {@link hash}: each member hash must
+   * commit the offer with `group = 0` under the scheme the offer is ratified
+   * with (the protocol offer hash for Ecrecover/Setter, the zero-group leaf
+   * hash for `RateRatifierV1`/`PriceRatifierV1`). Hashes are lowercased,
+   * sorted, concatenated, then keccak'd, so neither member order nor hex
+   * casing affects the id.
+   *
+   * @param memberHashes - Zero-group member hashes of one consumption group.
+   * @returns Content-addressed group id.
+   * @throws {InvalidOfferGroupError} when `memberHashes` is empty.
+   * @example
+   * ```ts
+   * import { GroupUtils, Offer, RateRatifierV1 } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x000000000000000000000000000000000000a111",
+   *   maxUnits: 100n,
+   * });
+   * const id = GroupUtils.hashMembers([
+   *   RateRatifierV1.memberHash({ offer, rate: 50_000_000_000_000_000n }),
+   * ]);
+   * console.log(id);
+   * ```
+   */
+  export function hashMembers(memberHashes: Iterable<Hash>): Hash {
+    const hashes = Array.from(memberHashes, (h) => h.toLowerCase() as Hash);
+    if (hashes.length === 0) {
+      throw new InvalidOfferGroupError(
+        "Provide at least one member hash in the group.",
+      );
+    }
+
+    const sorted = hashes.length > 1 ? [...hashes].sort() : hashes;
 
     return keccak256(concat(sorted));
   }

@@ -1,8 +1,31 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { InputExceedsMaxError, NegativeInputError } from "../types/index.js";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
-import { resolveMaxWithdrawalUtilization } from "./utilization.js";
+import {
+  DEFAULT_CAP_ACCRUAL_BUFFER,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+} from "./constant.js";
+import {
+  resolveCapAccrualBuffer,
+  resolveMaxWithdrawalUtilization,
+} from "./utilization.js";
+
+describe("resolveCapAccrualBuffer", () => {
+  test("default", () => {
+    expect(resolveCapAccrualBuffer()).toBe(DEFAULT_CAP_ACCRUAL_BUFFER);
+  });
+  test("behavior: accepts a custom value", () => {
+    expect(resolveCapAccrualBuffer(123n)).toBe(123n);
+  });
+  test("error: NegativeInputError", () => {
+    expect(() => resolveCapAccrualBuffer(-1n)).toThrow(NegativeInputError);
+    try {
+      resolveCapAccrualBuffer(-1n);
+    } catch (error) {
+      expect(error).toMatchObject({ field: "capAccrualBuffer", value: -1n });
+    }
+  });
+});
 
 describe("resolveMaxWithdrawalUtilization", () => {
   test.each([

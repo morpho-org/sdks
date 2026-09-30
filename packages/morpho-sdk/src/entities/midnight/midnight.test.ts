@@ -1344,6 +1344,69 @@ describe("MorphoMidnight", () => {
       });
     });
 
+    test.each([
+      {
+        method: "makeLend",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(true, offerSignerAccount.address);
+          return entity.makeLend({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+            loanToken: midnightAddresses.loanToken,
+            loanAssets: 1_000n,
+          });
+        },
+      },
+      {
+        method: "makeBorrow",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(false, offerSignerAccount.address);
+          return entity.makeBorrow({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+          });
+        },
+      },
+      {
+        method: "supplyCollateralMakeBorrow",
+        prepare: (entity: MorphoMidnight) => {
+          const data = offersData(false, offerSignerAccount.address);
+          return entity.supplyCollateralMakeBorrow({
+            accountAddress: data.accountAddress,
+            offers: data.tree,
+            validation: offerValidation,
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            collateralAssets: 1_000n,
+          });
+        },
+      },
+    ])(
+      "behavior: $method signature prepared on one handle finalizes on a fresh handle",
+      async ({ prepare }) => {
+        const mockHandle = (): MidnightMockHandle => {
+          const handle = createMockClient(midnightTestChain);
+          for (const token of [
+            midnightAddresses.loanToken,
+            midnightAddresses.collateralToken,
+          ]) {
+            mockAllowance({ handle, token, result: maxUint256 });
+          }
+          mockMidnightAuthorization(handle, true);
+          return handle;
+        };
+        const outputA = await prepare(midnightWithHandle(mockHandle()));
+        const signature = await signOfferRootRequirement(
+          await outputA.getRequirements(),
+        );
+
+        const outputB = await prepare(midnightWithHandle(mockHandle()));
+        expect(outputB.buildTx(signature)).toEqual(outputA.buildTx(signature));
+        expect(outputB.buildTx(signature).data).toBe(signature.args.payload);
+      },
+    );
+
     test("behavior: signs reviewable offer tree typed data", async () => {
       const account = privateKeyToAccount(
         "0x0000000000000000000000000000000000000000000000000000000000000001",

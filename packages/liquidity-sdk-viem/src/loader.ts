@@ -204,6 +204,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,
+                // block.timestamp comes from the RPC, like the caps this horizon protects. See THREAT_MODEL.md, RPC.
                 timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
                 enabled: true,
               });
