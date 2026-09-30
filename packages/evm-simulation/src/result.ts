@@ -1,5 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type { Address, Hex } from "viem";
+import type { Address } from "viem";
 import type { PendingAuthorization } from "./authorizations.js";
 import type { SimulationLimits, SimulationOperationSubject } from "./limits.js";
 import type { SimulationMode } from "./params.js";
@@ -15,28 +15,15 @@ export type SimulatedOperation = {
   readonly transactionIndex: number;
 } & SimulationOperationSubject;
 
-/** @internal How a pending authorization was modeled in preview. */
-export type AuthorizationPreparation = {
+/** @internal Approval calls simulated before the user transactions for one pending authorization. */
+export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
   readonly authorization: PendingAuthorization;
-} & (
-  | {
-      readonly type: "approvalCalls";
-      /** Approval calls simulated before the user transactions. */
-      readonly calls: readonly {
-        readonly transaction: SimulationTransaction;
-        readonly result: SimulationCall;
-      }[];
-    }
-  | {
-      readonly type: "stateOverride";
-      readonly address: Address;
-      /** Contract storage variable the override writes (e.g. `allowance`, `nonces`). */
-      readonly storageVariable: string;
-      readonly slot: Hex;
-      readonly value: Hex;
-    }
-);
+  readonly calls: readonly {
+    readonly transaction: SimulationTransaction;
+    readonly result: SimulationCall;
+  }[];
+}
 
 /** @internal One account's balance of one token. */
 export interface TokenBalance {

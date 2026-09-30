@@ -1,6 +1,9 @@
 import { getAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams, SimulationTransaction } from "../../types.js";
+import type {
+  LegacySimulateParams,
+  SimulationTransaction,
+} from "../../types.js";
 import { resolveAuthorizations } from "../authorizations/index.js";
 
 /**
@@ -19,7 +22,7 @@ import { resolveAuthorizations } from "../authorizations/index.js";
  * from prepending a tx on behalf of an unexpected address.
  */
 export function buildSimulationTxs(
-  params: SimulateParams,
+  params: LegacySimulateParams,
 ): SimulationTransaction[] {
   const { transactions, authorizations } = params;
   if (!authorizations || authorizations.length === 0) {

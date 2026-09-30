@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { ExternalServiceError } from "../errors.js";
 import type {
-  SimulateParams,
+  LegacySimulateParams,
   SimulationConfig,
   SimulationResult,
 } from "../types.js";
@@ -83,7 +83,7 @@ import {
  */
 export async function simulate(
   config: SimulationConfig,
-  params: SimulateParams,
+  params: LegacySimulateParams,
 ): Promise<SimulationResult> {
   validateInput(params);
 
