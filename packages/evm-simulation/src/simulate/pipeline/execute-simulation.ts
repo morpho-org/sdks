@@ -18,6 +18,10 @@ const DEFAULT_TIMEOUT_MS = 5000;
  * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
  * @throws {ExternalServiceError} When the RPC fails or times out.
  * @throws {SimulationRevertedError} When execution reverts.
+ * @throws {InvalidSimulationResponseError} When the node response cannot be
+ *   trusted.
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
  * @example
  * ```ts
  * import { executeSimulation } from "./execute-simulation.js";

@@ -25,8 +25,9 @@ export interface ExecutionPlan {
 /**
  * Plan the execution of a parsed request as ordered `eth_simulateV1` calls.
  *
- * The plan is one `blockStateCalls` entry per user transaction, 1:1 and in
- * order: `transactionIndex` matches the caller's transaction position. ETH
+ * The plan is one call per user transaction, 1:1 and in order, all executed
+ * in a single `blockStateCalls` entry: `transactionIndex` matches the
+ * caller's transaction position. ETH
  * movements are observed through `traceTransfers` logs on the raw calls, so
  * the plan needs no synthetic calls or `stateOverrides`.
  *

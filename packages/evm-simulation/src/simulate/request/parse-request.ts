@@ -117,7 +117,7 @@ interface FieldChecks {
       readonly type: string;
     }[];
     readonly path: string;
-  }): void;
+  }): readonly Eip712Field[] | undefined;
   authorization(value: unknown, path: string): PendingAuthorization | undefined;
   operation(value: unknown, path: string): OperationLimit | undefined;
 }
@@ -130,27 +130,12 @@ const DOMAIN_KEYS = [
   "salt",
 ] as const;
 const TYPED_DATA_KEYS = ["domain", "primaryType", "types", "message"] as const;
-const ERC2612_MESSAGE_KEYS = [
-  "owner",
-  "spender",
-  "value",
-  "nonce",
-  "deadline",
-] as const;
-const PERMIT2_MESSAGE_KEYS = [
-  "permitted",
-  "spender",
-  "nonce",
-  "deadline",
-] as const;
+const ERC2612_MESSAGE_KEYS = ERC2612_PERMIT_FIELDS.map((field) => field.name);
+const PERMIT2_MESSAGE_KEYS = PERMIT2_TRANSFER_FIELDS.map((field) => field.name);
 const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
-const BLUE_AUTHORIZATION_MESSAGE_KEYS = [
-  "authorizer",
-  "authorized",
-  "isAuthorized",
-  "nonce",
-  "deadline",
-] as const;
+const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
+  (field) => field.name,
+);
 const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
 const LIMITS_KEYS = [
   "maxSlippageWad",
@@ -291,10 +276,13 @@ const createChecks = (): FieldChecks => {
           (field, i) =>
             fields[i]?.name === field.name && fields[i]?.type === field.type,
         );
-      if (!equal)
+      if (!equal) {
         errors.push(
           `${path}: must list exactly ${expected.map((f) => `${f.name}: ${f.type}`).join(", ")}`,
         );
+        return undefined;
+      }
+      return fields;
     },
 
     authorization: (authorization, path) => {
@@ -380,7 +368,7 @@ const createChecks = (): FieldChecks => {
             value === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(permitFields)
+            permitFields === undefined
           )
             return undefined;
           return {
@@ -389,7 +377,7 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Permit",
               types: {
-                Permit: copyFields(permitFields as readonly Eip712Field[]),
+                Permit: copyFields(permitFields),
               },
               message: { owner, spender, value, nonce, deadline },
             },
@@ -416,7 +404,7 @@ const createChecks = (): FieldChecks => {
           const permissionFields = isRecord(types)
             ? readField(types, "TokenPermissions")
             : undefined;
-          check.fields({
+          const checkedPermissionFields = check.fields({
             actual: permissionFields,
             expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
             path: `${path}.typedData.types.TokenPermissions`,
@@ -466,8 +454,8 @@ const createChecks = (): FieldChecks => {
             spender === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(transferFields) ||
-            !Array.isArray(permissionFields)
+            transferFields === undefined ||
+            checkedPermissionFields === undefined
           )
             return undefined;
           return {
@@ -477,12 +465,8 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "PermitTransferFrom",
               types: {
-                PermitTransferFrom: copyFields(
-                  transferFields as readonly Eip712Field[],
-                ),
-                TokenPermissions: copyFields(
-                  permissionFields as readonly Eip712Field[],
-                ),
+                PermitTransferFrom: copyFields(transferFields),
+                TokenPermissions: copyFields(checkedPermissionFields),
               },
               message: {
                 permitted: {
@@ -564,7 +548,7 @@ const createChecks = (): FieldChecks => {
             isAuthorized === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(authorizationFields)
+            authorizationFields === undefined
           )
             return undefined;
           return {
@@ -573,9 +557,7 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Authorization",
               types: {
-                Authorization: copyFields(
-                  authorizationFields as readonly Eip712Field[],
-                ),
+                Authorization: copyFields(authorizationFields),
               },
               message: {
                 authorizer,
@@ -765,7 +747,7 @@ const createChecks = (): FieldChecks => {
     | {
         domain: Eip712Domain | undefined;
         message: object;
-        fields: unknown;
+        fields: readonly Eip712Field[] | undefined;
       }
     | undefined => {
     const typedDataPath = `${options.path}.typedData`;
@@ -787,7 +769,7 @@ const createChecks = (): FieldChecks => {
     const fields = isRecord(types)
       ? readField(types, options.primaryType)
       : undefined;
-    check.fields({
+    const checkedFields = check.fields({
       actual: fields,
       expected: options.fields,
       path: `${typedDataPath}.types.${options.primaryType}`,
@@ -799,7 +781,7 @@ const createChecks = (): FieldChecks => {
       );
       return undefined;
     }
-    return { domain, message, fields };
+    return { domain, message, fields: checkedFields };
   };
 
   return check;

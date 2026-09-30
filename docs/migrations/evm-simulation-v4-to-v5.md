@@ -30,7 +30,8 @@ The optional `logger` continues to receive parsing and retention warnings.
 
 Keep handling `SimulationRevertedError`, `BlacklistViolationError`,
 `ExternalServiceError`, `SimulationValidationError`, and `UnsupportedChainError`
-by class identity. Their constructors, codes and fields are preserved. One
+by class identity. Their class identities and codes are preserved; see the
+SDK-1293 section for the changed `SimulationRevertedError.details` shape. One
 reclassification: an endpoint reporting a different `chainId` than configured
 now throws `InvalidSimulationResponseError` (non-bypassable) instead of
 `ExternalServiceError`.
@@ -71,8 +72,8 @@ later PRs: passing `authorizations` or `limits` throws
 `UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call, rather
 than being silently ignored. `SimulationRevertedError.details` now carries a
 URL-free `{ code, shortMessage }` record for a node-level revert (with the viem
-error on `cause`) or the tagged user-call results array when a user transaction
-reverted — not the v4 raw call list.
+error on `cause`) or the frozen `{ transactionIndex, result }[]` of the user
+transactions when one of them reverted — not the v4 raw call list.
 The [ADR](../adrs/ADR-2026-09-18-evm-simulation-calldata-verification.md)
 describes the target contract.
 

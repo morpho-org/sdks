@@ -529,6 +529,22 @@ describe.sequential("executePlan", () => {
     },
   );
 
+  test("error: ExternalServiceError for code -32003 without an insufficient-funds message", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(
+        Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          error: { code: -32003, message: "transaction rejected" },
+        }),
+      );
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      ExternalServiceError,
+    );
+  });
+
   test("error: ExternalServiceError for an aborted/timeout fetch", async () => {
     fetchMock.mockRejectedValueOnce(
       Object.assign(new Error("aborted"), { name: "AbortError" }),

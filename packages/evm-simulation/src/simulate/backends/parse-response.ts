@@ -102,8 +102,9 @@ const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
  *   mismatch, or a simulated block that is neither the pinned state block nor
  *   its immediate successor.
- * @throws {SimulationRevertedError} When a user-transaction call failed; the
- *   `details` payload carries the tagged user call results only.
+ * @throws {SimulationRevertedError} When a user-transaction call failed;
+ *   `details` carries the frozen `{ transactionIndex, result }[]` of the
+ *   user transactions.
  * @internal
  */
 export function parseSimulationResponse(params: {

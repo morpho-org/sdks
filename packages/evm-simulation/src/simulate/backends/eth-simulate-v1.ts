@@ -20,17 +20,14 @@ import { parseSimulationResponse } from "./parse-response.js";
 /**
  * Classify a node-level revert: viem's `ExecutionRevertedError`, or a raw
  * JSON-RPC error — code 3 for "execution reverted", plus an "insufficient
- * funds" failure for an unfundable `value` transfer under real native
- * funding (the code varies by node: -32003 on geth-flavored Anvil, -32000 on
- * others).
+ * funds" message for an unfundable `value` transfer under real native
+ * funding (the numeric code varies by node, so the message is matched).
  */
 const isNodeRevert = (error: unknown): error is Error =>
   error instanceof ExecutionRevertedError ||
   (error instanceof Error &&
     "code" in error &&
-    (error.code === 3 ||
-      error.code === -32003 ||
-      /insufficient funds/i.test(error.message)));
+    (error.code === 3 || /insufficient funds/i.test(error.message)));
 
 /**
  * Trim a caught error to a safe message: viem's `shortMessage` drops the
@@ -40,9 +37,12 @@ const isNodeRevert = (error: unknown): error is Error =>
 const safeMessage = (error: unknown): string =>
   error instanceof BaseError ? error.shortMessage : String(error);
 
+/** The JSON-RPC methods this boundary calls. */
+type RpcLabel = "eth_getBlock" | "eth_chainId" | "eth_simulateV1";
+
 /** Map a caught error to the boundary's typed failure for `label`. */
 const toBoundaryError = (
-  label: string,
+  label: RpcLabel,
   error: unknown,
 ): SimulationPackageError => {
   if (error instanceof SimulationPackageError) return error;
@@ -75,7 +75,7 @@ const toBoundaryError = (
 };
 
 /** Run one RPC call; anything thrown becomes a typed boundary error. */
-const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
+const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
   try {
     return await call();
   } catch (error) {
@@ -125,7 +125,10 @@ const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
  *   response that cannot be trusted (bad shape, call-count mismatch, block
  *   other than the pinned state block or its successor, or a state-block
  *   hash that changed mid-flight).
- * @throws {SimulationRevertedError} When a user transaction reverts.
+ * @throws {SimulationRevertedError} When a user transaction reverts or the
+ *   node reports a bundle-level revert (code 3 / insufficient funds).
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
  * @internal
  */
 export async function executePlan(params: {

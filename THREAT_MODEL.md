@@ -7,7 +7,7 @@ This file states what the Morpho SDKs defend against and what they deliberately 
 The SDKs trust every endpoint the integrator configures:
 
 - the JSON-RPC node behind the viem client or WDK account, including deployless `eth_call` queries, multicall reads, `eth_getCode`, `eth_chainId` and `eth_sendRawTransaction`;
-- the Tenderly and `eth_simulateV1` endpoints configured in `evm-simulation`;
+- the `eth_simulateV1` endpoints configured in `evm-simulation`;
 - the ERC-4337 bundler and paymaster endpoints configured on the WDK account.
 
 A dishonest endpoint can return any state that decodes correctly, and it can keep that state consistent across calls. A second read, a fallback path or a cross-check through the same endpoint therefore adds no evidence. Detecting forgery would need a source the endpoint does not control, such as a light client with storage proofs or several independently operated nodes. The SDKs include neither.
@@ -113,46 +113,22 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 - Forged `eth_getCode` suggests a `Setter` ratifier. The caller still chooses the ratifier on `Offer.create`.
 - A forged Vault V2 snapshot inflates share authority for an in-kind target. It also needs an attacker-registered `vaultExitBundlesV1` address in the integrator's own registry.
 
-#### `eth_simulateV1` responses and simulation chain (`evm-simulation`)
+#### `eth_simulateV1` responses (`evm-simulation`)
 
-Backend output is the only execution evidence the retention check sees. Format checks catch clumsy lies, but a lying endpoint can return a clean, well-formed success.
+The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below only catch what the endpoint cannot fake.
 
-- A `status: success` call with attached error data is treated as success.
-- Omitted `logs` are treated as no transfers. The spec requires `logs` on every successful call.
-- Incomplete ERC-20 logs hide retained tokens.
-- A node that ignores `traceTransfers` hides native transfers.
-- Malformed amount data can cancel a real residual. A node that forges data can omit the log instead.
-- Native `assetChanges` and logs disagree. That needs contradictory output from the node.
+- The state block is pinned once and re-fetched after the call; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
+- The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`.
+- A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
+- Transport failures, timeouts and malformed envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated.
+- Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
+- Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.
+- A forged `status`/`returnData` shapes the reported outcome; no check can tell it from a real one.
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
 - A truncated result fails with `ExternalServiceError`. A caller that bypasses it accepts an unsimulated bundle.
-- A dropped adapter refund plus a lost fallback trace hides native residue. The refund is fixed; what remains is a node hiding the trace.
-- A malicious token, not the endpoint, emits a fake `Transfer`. It is listed because the fix it proposes, reading balances from the node, adds nothing: a token that lies in its events can also lie in `balanceOf`.
+- A malicious token, not the endpoint, emits a fake `Transfer`. Reading balances from the node adds nothing: a token that lies in its events can also lie in `balanceOf`.
 - The endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id. An honest endpoint on the wrong chain means the URL is set wrong, and the integrator owns that URL-to-chain mapping.
-- Results carry no chain or block provenance. The caller chooses both.
-
-#### Tenderly responses (`evm-simulation`)
-
-Tenderly is a configured simulation endpoint, trusted like `eth_simulateV1`. When a response fails its schema, envelope or HTTP checks, the SDK re-simulates on `eth_simulateV1` if `simulateV1Url` is configured, and otherwise throws `ExternalServiceError`. Some optional fields are dropped or defaulted instead of rejected, as listed below.
-
-- A malformed asset amount in a success response triggers the fallback or `ExternalServiceError`. Neither path uses the malformed evidence.
-- An out-of-range `rawAmount` cancels native evidence. Only an endpoint that forges amounts emits one.
-- A truncated bundle result becomes a bypassable `ExternalServiceError`. Bypassing it is the caller's choice to proceed unsimulated.
-- Results are not correlated by JSON-RPC `id`. Separate responses mix only if the endpoint is compromised.
-- A malformed or mixed revert envelope triggers the fallback or `ExternalServiceError`. The fallback re-simulates, so a real revert reverts again.
-- A non-2xx body is treated as a service failure. Tenderly returns reverts with HTTP 200.
-- Tenderly and fallback errors are each discarded. Both halves need non-compliant responses, and the fallback re-derives the revert.
-- Partial native `assetChanges` rows hide inflows. The same endpoint writes the logs, so it can hide the transfer there too.
-- Omitted `assetChanges` hide native flows. Omitting them for a value-moving bundle is malformed endpoint output.
-- Omitted ERC-20 `assetChanges` become an empty ledger. ERC-20 retention reads `Transfer` logs, not `assetChanges`.
-- Malformed log entries are dropped. An endpoint that forges logs could just as well omit them.
-- An unexpected asset-change `type` cancels native evidence. Tenderly reports `Transfer`, `Mint` and `Burn`, and all three are normalized.
-- A missing or zero `contractAddress` merges ERC-20 and native flows. Tenderly does not emit such rows.
-- A success with no logs and no `assetChanges` is accepted. That is the real shape of a bundle that moves no value.
-- A 206 or 207 reply is accepted as complete. Tenderly answers 200; other 2xx codes come from a proxy the integrator runs.
-- Missing return data becomes `0x`, or non-root output becomes return data. No safety decision reads `returnData`.
-- `assetChanges` are not reconciled with logs. Both come from the same endpoint.
-- `status: true` with an error is treated as success. Only a non-compliant endpoint returns both.
 
 #### Chain identity and transaction submission (`wdk-protocol-lending-morpho-evm`, `liquidity-sdk-viem`)
 
