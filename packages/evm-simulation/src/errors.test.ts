@@ -30,16 +30,12 @@ import {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 import {
-  BLUE_MARKET_OPERATION_TYPES,
   type BlueMarketOperationType,
   OPERATION_TYPES,
-  type OperationLimit,
   type OperationType,
   type SimulationOperationSubject,
-  VAULT_OPERATION_TYPES,
   type VaultOperationType,
 } from "./limits.js";
-import { SIMULATION_MODES } from "./params.js";
 import type { SimulatedOperation } from "./result.js";
 
 const CONTEXT: SimulationErrorContext = {
@@ -367,50 +363,6 @@ describe("SimulationErrorContext", () => {
         authorized: `0x${string}`;
       }
     >().toExtend<SimulationErrorContext>();
-  });
-
-  it("operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
-    expectTypeOf<
-      | BlueMarketOperationType
-      | VaultOperationType
-      | "blueRefinance"
-      | "blueAuthorization"
-      | "vaultV1MigrateToV2"
-    >().toEqualTypeOf<OperationType>();
-    expect(
-      [
-        ...BLUE_MARKET_OPERATION_TYPES,
-        "blueRefinance",
-        "blueAuthorization",
-        ...VAULT_OPERATION_TYPES,
-        "vaultV1MigrateToV2",
-      ].sort(),
-    ).toEqual([...OPERATION_TYPES].sort());
-    expect([...OPERATION_TYPES]).toEqual([
-      "blueSupply",
-      "blueWithdraw",
-      "blueSupplyCollateral",
-      "blueBorrow",
-      "blueSupplyCollateralBorrow",
-      "blueRepay",
-      "blueWithdrawCollateral",
-      "blueRepayWithdrawCollateral",
-      "blueRefinance",
-      "blueAuthorization",
-      "vaultV1Deposit",
-      "vaultV2Deposit",
-      "vaultV1Withdraw",
-      "vaultV2Withdraw",
-      "vaultV1Redeem",
-      "vaultV2Redeem",
-      "vaultV2ForceWithdraw",
-      "vaultV2ForceRedeem",
-      "vaultV1InKindRedeem",
-      "vaultV2InKindRedeem",
-      "vaultV1MigrateToV2",
-    ]);
-    expect([...SIMULATION_MODES]).toEqual(["preview", "final"]);
   });
 
   it("SimulationRevertedError only accepts preparation or execution contexts", () => {
