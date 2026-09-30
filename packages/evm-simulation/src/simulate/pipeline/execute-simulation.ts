@@ -29,6 +29,7 @@ export async function executeSimulation(params: {
   const { config, chainId, transactions, blockNumber, wNative } = params;
   const { simulateV1Url } = resolveChain(config, chainId);
 
+  // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
   return await simulateV1({
     rpcUrl: simulateV1Url,
     chainId,
