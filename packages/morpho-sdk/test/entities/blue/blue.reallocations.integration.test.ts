@@ -212,7 +212,7 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
 
       const result = reallocationData.computeVaultV2BlueReallocations(
         baseTargetMarket.id,
-        { timestamp: block.timestamp },
+        { timestamp: block.timestamp, capAccrualBuffer: 0n },
       );
       expect(result.reallocations).toHaveLength(1);
       expect(result.reallocations[0]?.assets).toBe(expectedMaximum);
