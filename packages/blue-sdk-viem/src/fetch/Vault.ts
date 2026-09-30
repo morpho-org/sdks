@@ -62,6 +62,7 @@ export async function fetchVault(
 
   if (deployless) {
     try {
+      // The RPC is trusted: queue, allocation and accounting data are not cross-checked. See THREAT_MODEL.md, RPC.
       const {
         config,
         owner,

@@ -9,7 +9,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, type Block, type Chain, erc4626Abi } from "viem";
 import { expect } from "vitest";
 
-export interface MarketInvariant {
+interface MarketInvariant {
   block: Block;
   morphoLoanTokenBalance: bigint;
   morphoCollateralTokenBalance: bigint;
@@ -21,7 +21,7 @@ export interface MarketInvariant {
   bundleCollateralTokenBalances: bigint[];
 }
 
-export interface VaultInvariant {
+interface VaultInvariant {
   block: Block;
   vaultBalance: bigint;
   morphoAssetBalance: bigint;
@@ -37,30 +37,30 @@ export interface VaultInvariant {
   bundleSharesBalances: bigint[];
 }
 
-export interface HoldingInvariant {
+interface HoldingInvariant {
   block: Block;
   morphoBalance: bigint;
   userBalance: bigint;
   bundleBalances: bigint[];
 }
 
-export type MarketParamsMap<T extends string = string> = {
+type MarketParamsMap<T extends string = string> = {
   [K in T]: MarketParams;
 };
-export interface VaultParams {
+interface VaultParams {
   address: Address;
   asset: Address;
 }
 
-export type VaultParamsMap<T extends string = string> = {
+type VaultParamsMap<T extends string = string> = {
   [K in T]: VaultParams;
 };
 
-export type HoldingParamsMap<T extends string = string> = {
+type HoldingParamsMap<T extends string = string> = {
   [K in T]: Address;
 };
 
-export interface ActionParams<
+interface ActionParams<
   TMarketName extends string = string,
   TVaultName extends string = string,
   THoldingName extends string = string,
@@ -70,32 +70,32 @@ export interface ActionParams<
   holdings?: HoldingParamsMap<THoldingName>;
 }
 
-export interface MarketInvariantResult {
+interface MarketInvariantResult {
   initialState: MarketInvariant;
   finalState: MarketInvariant;
   accruedInterest: bigint;
   marketAccruedInterest: bigint;
 }
 
-export interface VaultInvariantResult {
+interface VaultInvariantResult {
   initialState: VaultInvariant;
   finalState: VaultInvariant;
 }
 
-export interface HoldingInvariantResult {
+interface HoldingInvariantResult {
   initialState: HoldingInvariant;
   finalState: HoldingInvariant;
 }
 
-export type MarketInvariantResults<T extends string> = {
+type MarketInvariantResults<T extends string> = {
   [K in T]: MarketInvariantResult;
 };
 
-export type VaultInvariantResults<T extends string> = {
+type VaultInvariantResults<T extends string> = {
   [K in T]: VaultInvariantResult;
 };
 
-export type HoldingInvariantResults<T extends string> = {
+type HoldingInvariantResults<T extends string> = {
   [K in T]: HoldingInvariantResult;
 };
 

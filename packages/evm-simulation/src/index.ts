@@ -23,5 +23,6 @@ export type {
   SimulationLogger,
   SimulationResult,
   SimulationTransaction,
+  TenderlyRpcConfig,
   Transfer,
 } from "./types.js";

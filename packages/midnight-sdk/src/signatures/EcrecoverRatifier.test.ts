@@ -18,6 +18,8 @@ import {
   EIP712_DOMAIN_TYPEHASH,
   MARKET_TYPEHASH,
   OFFER_TYPEHASH,
+  PRICE_RATIFIER_V1_OFFER_TYPEHASH,
+  RATE_RATIFIER_V1_OFFER_TYPEHASH,
 } from "../constants.js";
 import {
   ChainIdMismatchError,
@@ -26,9 +28,9 @@ import {
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
 } from "../errors.js";
-import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { EcrecoverRatifierUtils } from "./EcrecoverRatifier.js";
 import { GroupUtils } from "./GroupUtils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import { Ratifier } from "./Ratifier.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -58,6 +60,10 @@ const offerType =
   "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 const eip712DomainType =
   "EIP712Domain(uint256 chainId,address verifyingContract)";
+const rateRatifierV1OfferType =
+  "RateRatifierV1Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 rate,address allowedTaker,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
+const priceRatifierV1OfferType =
+  "PriceRatifierV1Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,address allowedTaker,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 
 const typeHash = (type: string) => keccak256(stringToHex(type));
 const offerTreeType = (height: number) =>
@@ -176,7 +182,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     const account = privateKeyToAccount(privateKey);
     const tree = ecrecoverTree(3);
     const signature = await signTree(tree, account);
-    const normalize = vi.spyOn(RatifierUtils, "normalizeRatifierTree");
+    const normalize = vi.spyOn(Ratifier, "normalizeRatifierTree");
 
     try {
       await EcrecoverRatifierUtils.ratify({ tree, account, signature });
@@ -419,11 +425,11 @@ describe("EcrecoverRatifierUtils.digest", () => {
     );
   });
 
-  test("behavior: pinned EcrecoverRatifier digest fixture", () => {
+  test("behavior: pinned EcrecoverRatifierUtils digest fixture", () => {
     const tree = ecrecoverTree(4);
     const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
 
-    // Captured from the Solidity EcrecoverRatifier digest formula at
+    // Captured from the Solidity EcrecoverRatifierUtils digest formula at
     // morpho-org/midnight@336b924a2bb378d810ef6d35b6dd3486759af8bd.
     expect(digest).toBe(
       "0x30fa6f2d2a3c44224e9c3132d392652b0d597ebf6ff76b9283d4718d95c68d9f",
@@ -641,6 +647,16 @@ describe("EcrecoverRatifierUtils typehash constants", () => {
       typeHash(`${offerType}${collateralParamsType}${marketType}`),
     );
     expect(EIP712_DOMAIN_TYPEHASH).toBe(typeHash(eip712DomainType));
+    expect(RATE_RATIFIER_V1_OFFER_TYPEHASH).toBe(
+      typeHash(
+        `${rateRatifierV1OfferType}${collateralParamsType}${marketType}`,
+      ),
+    );
+    expect(PRICE_RATIFIER_V1_OFFER_TYPEHASH).toBe(
+      typeHash(
+        `${priceRatifierV1OfferType}${collateralParamsType}${marketType}`,
+      ),
+    );
   });
 });
 

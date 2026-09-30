@@ -7,7 +7,7 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-export function validateEnv(): Env {
+function validateEnv(): Env {
   try {
     return envSchema.parse(process.env);
   } catch (error) {
