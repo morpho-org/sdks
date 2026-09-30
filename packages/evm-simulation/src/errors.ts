@@ -160,6 +160,9 @@ export abstract class SimulationPackageError extends Error {
 export class SimulationRevertedError extends SimulationPackageError {
   override readonly name = "SimulationRevertedError";
   readonly code = "SIMULATION_REVERTED";
+  declare readonly context?:
+    | SimulationPreparationContext
+    | SimulationExecutionContext;
 
   // biome-ignore lint/complexity/useMaxParams: public error constructor signature
   constructor(
