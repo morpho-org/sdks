@@ -53,7 +53,7 @@ export {
   OPERATION_TYPES,
   VAULT_OPERATION_TYPES,
 } from "./limits.js";
-export type { SimulationMode } from "./params.js";
+export type { SimulateParams, SimulationMode } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
 export { simulate } from "./simulate/index.js";
 // Types
@@ -62,7 +62,6 @@ export type {
   AssetChange,
   ChainSimulationConfig,
   RawLog,
-  SimulateParams,
   SimulationAuthorization,
   SimulationCall,
   SimulationConfig,

@@ -1,6 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams } from "../../types.js";
+import type { LegacySimulateParams } from "../../types.js";
 import { validateAuthorizations } from "../authorizations/index.js";
 
 /**
@@ -11,7 +11,7 @@ import { validateAuthorizations } from "../authorizations/index.js";
  * bad `chainId`, or mixed senders (all txs in a bundle must share the same `from`).
  * Also runs `validateAuthorizations` on the optional authorizations array.
  */
-export function validateInput(params: SimulateParams): void {
+export function validateInput(params: LegacySimulateParams): void {
   const errors: string[] = [];
 
   if (!Number.isInteger(params.chainId) || params.chainId <= 0) {
