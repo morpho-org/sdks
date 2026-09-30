@@ -24,7 +24,6 @@ describe("planExecution", () => {
     expect(plan.owner).toBe(OWNER);
     expect(plan.calls).toHaveLength(1);
     expect(plan.calls[0]).toMatchObject({
-      type: "transaction",
       transactionIndex: 0,
     });
   });
@@ -32,7 +31,6 @@ describe("planExecution", () => {
   test("behavior: three transactions map 1:1 in order", () => {
     const plan = planExecution(makeRequest(3));
     expect(plan.calls.map((call) => call.transactionIndex)).toEqual([0, 1, 2]);
-    expect(plan.calls.every((call) => call.type === "transaction")).toBe(true);
   });
 
   test("behavior: user transactions default value to 0n", () => {

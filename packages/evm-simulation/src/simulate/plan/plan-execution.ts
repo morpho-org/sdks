@@ -9,7 +9,6 @@ import type {
  * @internal
  */
 export interface PlannedTransaction {
-  readonly type: "transaction";
   readonly transactionIndex: number;
   readonly transaction: ParsedTransaction;
 }
@@ -43,7 +42,6 @@ export function planExecution(request: ParsedRequest): ExecutionPlan {
     request,
     owner,
     calls: request.transactions.map((transaction, i) => ({
-      type: "transaction" as const,
       transactionIndex: i,
       transaction,
     })),

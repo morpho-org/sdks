@@ -43,21 +43,15 @@ function makeExecution(
   plan: ExecutionPlan,
   userLogs: RawLog[][] = [],
 ): SimulationExecution {
-  const transactions = plan.calls.flatMap((planned) =>
-    planned.type === "transaction"
-      ? [
-          {
-            transactionIndex: planned.transactionIndex,
-            result: {
-              logs: userLogs[planned.transactionIndex] ?? [],
-              status: true,
-              returnData: "0x" as Hex,
-              gasUsed: 0n,
-            },
-          },
-        ]
-      : [],
-  );
+  const transactions = plan.calls.map((planned) => ({
+    transactionIndex: planned.transactionIndex,
+    result: {
+      logs: userLogs[planned.transactionIndex] ?? [],
+      status: true,
+      returnData: "0x" as Hex,
+      gasUsed: 0n,
+    },
+  }));
   return {
     plan,
     block: {
