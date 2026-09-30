@@ -30,7 +30,7 @@ export const isAddress = (value: string): value is `0x${string}` =>
  *
  * @param address - The address to checksum (any hex casing).
  * @returns The same address in EIP-55 mixed-case checksum form.
- * @throws InvalidAddressError when the input is not a 20-byte hex address, or
+ * @throws {InvalidAddressError} when the input is not a 20-byte hex address, or
  *         when it carries an invalid mixed-case checksum.
  * @example
  * ```ts
