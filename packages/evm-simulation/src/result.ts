@@ -61,16 +61,30 @@ export interface MorphoAuthorizationChange {
   readonly after: boolean;
 }
 
-/** @internal One signature nonce before and after the bundle. */
-export interface SignatureNonceChange {
-  readonly type: "erc2612" | "blueAuthorization" | "permit2";
-  /** Token for erc2612, Morpho for blueAuthorization, Permit2 for permit2. */
+/** @internal One sequential signature nonce before and after the bundle. */
+export interface SequentialNonceChange {
+  readonly type: "erc2612" | "blueAuthorization";
+  /** Token for erc2612, Morpho for blueAuthorization. */
   readonly verifyingContract: Address;
   readonly owner: Address;
-  /** Sequential nonce for erc2612/blueAuthorization; the unordered nonce word for permit2. */
   readonly before: bigint;
   readonly after: bigint;
 }
+
+/** @internal One Permit2 `nonceBitmap(owner, wordPosition)` word before and after the bundle. */
+export interface Permit2NonceChange {
+  readonly type: "permit2";
+  readonly verifyingContract: Address;
+  readonly owner: Address;
+  /** Signed unordered nonce; its word is `nonce >> 8n` and its bit `nonce & 0xffn`. */
+  readonly nonce: bigint;
+  readonly wordPosition: bigint;
+  readonly before: bigint;
+  readonly after: bigint;
+}
+
+/** @internal One signature nonce before and after the bundle. */
+export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
 
 /**
  * @internal Everything the bundle changed, including preparation calls and
