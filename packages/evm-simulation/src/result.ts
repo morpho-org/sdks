@@ -71,75 +71,15 @@ export interface SignatureNonce {
   readonly used?: boolean;
 }
 
-/** @internal One user's position in one Blue market. */
-export interface PositionState {
-  readonly marketId: MarketId;
-  readonly user: Address;
-  readonly supplyAssets: bigint;
-  readonly supplyShares: bigint;
-  readonly borrowAssets: bigint;
-  readonly borrowShares: bigint;
-  readonly collateral: bigint;
-  /** Undefined when the position has no debt. */
-  readonly ltvWad?: bigint;
-  /** Undefined when the position has no debt. */
-  readonly healthFactorWad?: bigint;
-}
-
-/** @internal One Blue market's state. */
-export interface MarketState {
-  readonly marketId: MarketId;
-  readonly totalSupplyAssets: bigint;
-  readonly totalSupplyShares: bigint;
-  readonly totalBorrowAssets: bigint;
-  readonly totalBorrowShares: bigint;
-  readonly liquidityAssets: bigint;
-  readonly lastUpdate: bigint;
-  readonly feeWad: bigint;
-  /** Undefined when the market has no supply. */
-  readonly utilizationWad?: bigint;
-  /** Undefined when the market has no IRM. */
-  readonly borrowApyWad?: bigint;
-  /** Undefined when the market has no oracle. */
-  readonly oraclePrice?: bigint;
-}
-
-/** @internal One vault allocation. */
-export interface VaultAllocation {
-  /** Set for Vault V2. */
-  readonly adapter?: Address;
-  readonly marketId?: MarketId;
-  readonly assets: bigint;
-}
-
-/** @internal One Vault V1 (MetaMorpho) or Vault V2 vault's state. */
-export interface VaultState {
-  readonly vault: Address;
-  readonly version: "v1" | "v2";
-  readonly asset: Address;
-  readonly totalAssets: bigint;
-  readonly totalShares: bigint;
-  /** Shares held by the transactions' sender. */
-  readonly userShares: bigint;
-  readonly idleAssets: bigint;
-  readonly allocations: readonly VaultAllocation[];
-}
-
-/** @internal Full state at one point; unchanged entries are included. */
-export interface SimulationState {
+/**
+ * @internal Signed differences (after − before) over the whole bundle,
+ * including preparation calls and interest accrual.
+ */
+export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
   readonly morphoAuthorizations: readonly MorphoAuthorizationState[];
   readonly nonces: readonly SignatureNonce[];
-  readonly positions: readonly PositionState[];
-  readonly markets: readonly MarketState[];
-  readonly vaults: readonly VaultState[];
-}
-
-/** @internal Signed differences (after − before) of the amounts in `SimulationState`. */
-export interface SimulationStateChange {
-  readonly balances: readonly TokenBalance[];
-  readonly allowances: readonly TokenAllowance[];
   readonly positions: readonly {
     readonly marketId: MarketId;
     readonly user: Address;
@@ -166,22 +106,8 @@ export interface SimulationStateChange {
   }[];
 }
 
-/** @internal An asset/share conversion and the bounds it was checked against. */
-export interface Conversion {
-  readonly transactionIndex: number;
-  readonly marketId?: MarketId;
-  readonly vault?: Address;
-  readonly assets: bigint;
-  readonly shares: bigint;
-  readonly quotedSharePriceE27: bigint;
-  readonly actualSharePriceE27: bigint;
-  readonly minSharePriceE27: bigint;
-  readonly maxSharePriceE27: bigint;
-}
-
-/** @internal A fee observed during the simulation. */
+/** @internal A fee charged during the simulation. */
 export interface Fee {
-  readonly transactionIndex: number;
   readonly type:
     | "referral"
     | "performance"
@@ -190,8 +116,7 @@ export interface Fee {
     | "reallocationPenalty";
   readonly token: Address;
   readonly recipient: Address;
-  readonly expectedAmount: bigint;
-  readonly observedAmount: bigint;
+  readonly amount: bigint;
 }
 
 /** @internal Verification report attached to a verified simulation result. */
@@ -205,13 +130,7 @@ export interface SimulationVerification {
   readonly operations: readonly SimulatedOperation[];
   /** Preview only; always empty in final. */
   readonly authorizations: readonly AuthorizationPreparation[];
-  readonly before: SimulationState;
-  readonly after: SimulationState;
-  /** Everything that changed, including preparation and interest accrual. */
   readonly diff: SimulationStateChange;
-  /** Changes caused by the user's transactions only. */
-  readonly actionDiff: SimulationStateChange;
-  readonly conversions: readonly Conversion[];
   readonly fees: readonly Fee[];
 }
 
