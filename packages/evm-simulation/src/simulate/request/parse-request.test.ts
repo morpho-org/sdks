@@ -2,7 +2,7 @@ import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
 import type { PendingAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
-import type { VerifiedSimulateParams } from "../../params.js";
+import type { SimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
 import {
   type ParsedRequest,
@@ -71,7 +71,7 @@ const permit2Auth: PendingAuthorization = {
   },
 };
 
-const parse = (input: unknown) => parseRequest(input as VerifiedSimulateParams);
+const parse = (input: unknown) => parseRequest(input as SimulateParams);
 
 describe("parseRequest", () => {
   test("default", () => {
@@ -349,22 +349,22 @@ describe("parseRequest", () => {
   });
 
   test("error: SimulationValidationError for non-object input", () => {
-    expect(() =>
-      parseRequest(null as unknown as VerifiedSimulateParams),
-    ).toThrow(SimulationValidationError);
-    expect(() =>
-      parseRequest("x" as unknown as VerifiedSimulateParams),
-    ).toThrow(SimulationValidationError);
-    expect(() => parseRequest(42 as unknown as VerifiedSimulateParams)).toThrow(
+    expect(() => parseRequest(null as unknown as SimulateParams)).toThrow(
+      SimulationValidationError,
+    );
+    expect(() => parseRequest("x" as unknown as SimulateParams)).toThrow(
+      SimulationValidationError,
+    );
+    expect(() => parseRequest(42 as unknown as SimulateParams)).toThrow(
       SimulationValidationError,
     );
   });
 
-  test("type-level: VerifiedSimulateParams accepts readonly arrays", () => {
+  test("type-level: SimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
-    }>().toExtend<VerifiedSimulateParams>();
+    }>().toExtend<SimulateParams>();
   });
 
   test("type-level: ParsedRequest fields are readonly", () => {

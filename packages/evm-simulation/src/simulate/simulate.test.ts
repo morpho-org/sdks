@@ -8,7 +8,7 @@ import {
   SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
-import type { VerifiedSimulateParams } from "../params.js";
+import type { SimulateParams } from "../params.js";
 import {
   encodeUint256,
   makeTransferLog,
@@ -76,13 +76,13 @@ function makeConfig(
   };
 }
 
-function makeParams(overrides: object = {}): VerifiedSimulateParams {
+function makeParams(overrides: object = {}): SimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
     ...overrides,
-  } as VerifiedSimulateParams;
+  } as SimulateParams;
 }
 
 beforeEach(() => {

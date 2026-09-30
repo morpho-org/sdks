@@ -23,7 +23,7 @@ import type {
   SimulationLimits,
   VaultDeallocation,
 } from "../../limits.js";
-import type { SimulationMode, VerifiedSimulateParams } from "../../params.js";
+import type { SimulateParams, SimulationMode } from "../../params.js";
 
 import { resolveEffectiveLimits } from "./effective-limits.js";
 
@@ -1040,13 +1040,13 @@ const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
  * authorization owner must be the same checksummed address, typed-data domains
  * must bind to `chainId`, and `mode: "final"` rejects authorizations outright.
  *
- * @param input - Caller input (`VerifiedSimulateParams`-shaped).
+ * @param input - Caller input (`SimulateParams`-shaped).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
  * @throws {SimulationValidationError} On any value or cross-field violation.
  * @internal
  */
-export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
+export function parseRequest(input: SimulateParams): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 

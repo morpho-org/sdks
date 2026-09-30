@@ -9,8 +9,8 @@ export const SIMULATION_MODES = ["preview", "final"] as const;
 /** Simulation mode: `"preview"` accepts pending authorizations, `"final"` does not. */
 export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
-/** @internal Target `simulate()` input. `authorizations` is accepted only in "preview". */
-export interface VerifiedSimulateParams {
+/** `simulate()` input. `authorizations` is accepted only in "preview". */
+export interface SimulateParams {
   readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
   /** Defaults to "final". */
@@ -23,6 +23,3 @@ export interface VerifiedSimulateParams {
   /** Consumers may only tighten; omitted values use SDK defaults. */
   readonly limits?: SimulationLimits;
 }
-
-/** `simulate()` input — the public name of the v5 params object. */
-export type SimulateParams = VerifiedSimulateParams;
