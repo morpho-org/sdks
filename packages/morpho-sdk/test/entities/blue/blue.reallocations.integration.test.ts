@@ -210,12 +210,23 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
       expect(block.timestamp).toBe(vaultData.lastUpdate);
       expect(realTotalAssets).toBeLessThan(vaultData._totalAssets);
 
-      const result = reallocationData.computeVaultV2BlueReallocations(
+      const exactMaximumResult =
+        reallocationData.computeVaultV2BlueReallocations(baseTargetMarket.id, {
+          timestamp: block.timestamp,
+          capAccrualBuffer: 0n,
+        });
+      expect(exactMaximumResult.reallocations).toHaveLength(1);
+      expect(exactMaximumResult.reallocations[0]?.assets).toBe(expectedMaximum);
+
+      const bufferedResult = reallocationData.computeVaultV2BlueReallocations(
         baseTargetMarket.id,
-        { timestamp: block.timestamp, capAccrualBuffer: 0n },
+        { timestamp: block.timestamp },
       );
-      expect(result.reallocations).toHaveLength(1);
-      expect(result.reallocations[0]?.assets).toBe(expectedMaximum);
+      expect(bufferedResult.reallocations).toHaveLength(1);
+      expect(bufferedResult.reallocations[0]!.assets).toBeGreaterThan(0n);
+      expect(bufferedResult.reallocations[0]!.assets).toBeLessThanOrEqual(
+        expectedMaximum,
+      );
 
       await client.writeContract({
         address: allocator,
@@ -225,7 +236,7 @@ describe("MorphoBlue Vault V2 reallocation integration", () => {
           vault,
           targetAdapter,
           baseTargetMarket,
-          result.reallocations[0]!.assets,
+          bufferedResult.reallocations[0]!.assets,
           0n,
         ],
       });
