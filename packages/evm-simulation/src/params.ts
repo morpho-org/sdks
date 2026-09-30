@@ -9,7 +9,10 @@ export const SIMULATION_MODES = ["preview", "final"] as const;
 /** Simulation mode: `"preview"` accepts pending authorizations, `"final"` does not. */
 export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
-/** `simulate()` input. `authorizations` is accepted only in "preview". */
+/**
+ * v5 verified-simulation input; `simulate()` accepts it once SDK-1293 cuts the
+ * pipeline over. `authorizations` is accepted only in "preview".
+ */
 export interface SimulateParams {
   readonly chainId: number;
   readonly transactions: readonly SimulationTransaction[];
