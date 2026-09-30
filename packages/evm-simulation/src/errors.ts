@@ -362,7 +362,11 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";
+ * import type { Address, Hex } from "viem";
  *
+ * declare const user: Address;
+ * declare const vault: Address;
+ * declare const encodedDeposit: Hex;
  * const config = {
  *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
  * };
