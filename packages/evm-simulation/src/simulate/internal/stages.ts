@@ -6,10 +6,18 @@ import type {
 } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
 import type {
+  DecodedOperation,
+  OperationSignature,
+} from "../../decode/operation.js";
+import type {
   PreLiquidationBinding,
   VaultBinding,
-} from "../decode/operations.js";
-import type { SimulationCall, SimulationTransaction } from "../types.js";
+} from "../../decode/operations.js";
+import type { OperationLimit } from "../../limits.js";
+import type { VerifiedSimulationResult } from "../../result.js";
+import type { SimulationCall, SimulationTransaction } from "../../types.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
+import type { ParsedRequest } from "../request/parse-request.js";
 import type {
   AuthorizationEvidence,
   EvidenceRead,
@@ -19,13 +27,8 @@ import type {
   ProbeIdentity,
   VerificationSnapshot,
 } from "./evidence.js";
-import type { EffectiveSimulationLimits, OperationLimit } from "./limits.js";
-import type { DecodedOperation, OperationSignature } from "./operations.js";
-import type { NormalizedSimulateParams } from "./request.js";
-import type {
-  SimulationVerification,
-  VerifiedSimulationResult,
-} from "./result.js";
+import type { LimitOf } from "./limits.js";
+import type { SimulationVerification } from "./result.js";
 
 declare const stage: unique symbol;
 
@@ -71,21 +74,7 @@ export type ExpectedRequest =
       readonly satisfiedByEarlierOp: boolean;
     };
 
-/** Parsed immutable input; only the future boundary parser constructs this refinement. @internal */
-export type ParsedRequest = NormalizedSimulateParams & {
-  readonly [stage]: "parsed";
-};
-
-/**
- * Stamp a normalized request with the `parsed` refinement. Only callable from
- * inside the request pipeline — the brand keeps unvalidated input out of the
- * planning and boundary stages.
- * @internal
- */
-/** Stamp a parsed request; only the request parser may call this. @internal */
-export function brandParsed(request: NormalizedSimulateParams): ParsedRequest {
-  return request as ParsedRequest;
-}
+export type { ParsedRequest } from "../request/parse-request.js";
 
 /**
  * Stamp a planner output with the `planned` refinement. The brand keeps
@@ -425,7 +414,7 @@ export interface VerifiedEffects {
 export type BoundOperationLimit = {
   [Type in OperationLimit["type"]]: {
     readonly operation: Extract<DecodedOperation, { readonly type: Type }>;
-    readonly limit: Extract<OperationLimit, { readonly type: Type }>;
+    readonly limit: LimitOf<Type>;
   };
 }[OperationLimit["type"]];
 

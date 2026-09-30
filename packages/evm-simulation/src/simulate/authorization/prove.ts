@@ -1,22 +1,22 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
+import {
+  MissingVerificationEvidenceError,
+  PermissionChangeMismatchError,
+} from "../../errors.js";
+import { preparationContext } from "../internal/error-context.js";
 import type {
   AuthorizationEvidence,
   AuthorizationReadBack,
   PermissionState,
-} from "../../domain/evidence.js";
+} from "../internal/evidence.js";
 import type {
   CompleteEvidence,
   DecodedProbeRead,
   ExecutionEvidence,
   ValidatedAuthorizations,
-} from "../../domain/stages.js";
-import { brandComplete } from "../../domain/stages.js";
-import {
-  MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
-} from "../../errors.js";
+} from "../internal/stages.js";
+import { brandComplete } from "../internal/stages.js";
 import { probeId } from "../plan/probes.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
@@ -118,11 +118,10 @@ export function proveAuthorizations(
   evidence: ExecutionEvidence,
   validated: ValidatedAuthorizations,
 ): CompleteEvidence {
-  const context: SimulationErrorContext = {
-    stage: "verification",
-    chainId: evidence.plan.request.chainId,
-    mode: evidence.plan.request.mode,
-  };
+  const mode = evidence.plan.request.mode;
+  const at = (authorizationIndex: number) => ({
+    context: preparationContext(evidence.context, mode, authorizationIndex),
+  });
 
   const authorizations = validated.inputs.bundle.request.authorizations;
   const authorizationsEvidence: AuthorizationEvidence[] = [];
@@ -133,10 +132,7 @@ export function proveAuthorizations(
     if (request == null) {
       throw new MissingVerificationEvidenceError(
         `Preparation for authorizationIndex "${authorizationIndex}" has no authorization`,
-        {
-          ...context,
-          location: { type: "authorization", authorizationIndex },
-        },
+        at(authorizationIndex),
       );
     }
 
@@ -147,10 +143,7 @@ export function proveAuthorizations(
     if (results.length !== preparation.calls.length) {
       throw new MissingVerificationEvidenceError(
         `Preparation for authorizationIndex "${authorizationIndex}" returned ${results.length} result(s) for ${preparation.calls.length} planned call(s)`,
-        {
-          ...context,
-          location: { type: "authorization", authorizationIndex },
-        },
+        at(authorizationIndex),
       );
     }
 
@@ -160,13 +153,7 @@ export function proveAuthorizations(
         if (read == null) {
           throw new MissingVerificationEvidenceError(
             `Prepared phase has no read-back for permission "${expected.type}"`,
-            {
-              ...context,
-              location: {
-                type: "authorization",
-                authorizationIndex,
-              },
-            },
+            at(authorizationIndex),
           );
         }
         const identity = evidence.plan.calls.find(
@@ -179,13 +166,7 @@ export function proveAuthorizations(
         if (identity == null || identity.type !== "probe") {
           throw new MissingVerificationEvidenceError(
             `No prepared probe identity for read "${probeId(read)}"`,
-            {
-              ...context,
-              location: {
-                type: "authorization",
-                authorizationIndex,
-              },
-            },
+            at(authorizationIndex),
           );
         }
         const observed = observedPermission(read, expected);
@@ -204,13 +185,7 @@ export function proveAuthorizations(
       if (!same) {
         throw new PermissionChangeMismatchError(
           `Preparation read-back disagrees: expected ${describe(expected)}, observed ${describe(observed)}`,
-          {
-            ...context,
-            location: {
-              type: "authorization",
-              authorizationIndex,
-            },
-          },
+          at(authorizationIndex),
         );
       }
     }

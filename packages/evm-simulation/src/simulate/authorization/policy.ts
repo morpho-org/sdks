@@ -12,51 +12,56 @@ import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { APPROVE_ONLY_ONCE_TOKENS } from "@morpho-org/morpho-sdk/constants";
 import { _try, deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, getAddress, isAddressEqual, maxUint256 } from "viem";
-import type {
-  ExecutionContext,
-  PermissionState,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { ExpectedRequest } from "../../domain/stages.js";
-import {
-  brandValidated,
-  type DecodedBundle,
-  type PinnedInputs,
-  type ValidatedAuthorizations,
-} from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AuthorizationRequestMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../../errors.js";
+import type { SimulationMode } from "../../params.js";
+import {
+  type At,
+  operationContext,
+  preparationContext,
+  verificationContext,
+} from "../internal/error-context.js";
+import type {
+  ExecutionContext,
+  PermissionState,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type { ExpectedRequest } from "../internal/stages.js";
+import {
+  brandValidated,
+  type DecodedBundle,
+  type PinnedInputs,
+  type ValidatedAuthorizations,
+} from "../internal/stages.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 import { preparePreviewAuthorizations } from "./prepare.js";
 
-export type { ExpectedRequest } from "../../domain/stages.js";
+export type { ExpectedRequest } from "../internal/stages.js";
 
-const opLocation = (op: DecodedOperation) =>
-  ({
-    type: "transaction",
-    txIdx: op.transactionIndex,
-    callPath: op.callPath,
-  }) as const;
-
-const requirementMismatch = (op: DecodedOperation, message: string): never => {
+// biome-ignore lint/complexity/useMaxParams: error helpers read clearest with positional arguments
+const requirementMismatch = (
+  at: At,
+  op: DecodedOperation,
+  message: string,
+): never => {
   throw new AuthorizationRequestMismatchError(message, {
-    stage: "authorization",
-    location: opLocation(op),
+    context: operationContext(at.context, at.mode, op),
   });
 };
 
+// biome-ignore lint/complexity/useMaxParams: error helpers read clearest with positional arguments
 const authorizationMismatch = (
+  at: At,
   authorizationIndex: number,
   message: string,
 ): never => {
   throw new AuthorizationRequestMismatchError(message, {
-    stage: "authorization",
-    location: { type: "authorization", authorizationIndex },
+    context: preparationContext(at.context, at.mode, authorizationIndex),
   });
 };
 
@@ -158,9 +163,11 @@ const shareCap = (
   deadline: bigint,
   limits: EffectiveSimulationLimits,
 ): bigint => {
+  const at = { context: inputs.context, mode: inputs.bundle.request.mode };
   const vaultData = inputs.internals.vaultData.get(getAddress(vault));
   if (vaultData == null) {
     return requirementMismatch(
+      at,
       op,
       `Vault "${vault}" has no pinned entity data; cannot derive the exact share allowance`,
     );
@@ -193,9 +200,11 @@ const forceWithdrawShareCap = (
   deadline: bigint,
   limits: EffectiveSimulationLimits,
 ): bigint => {
+  const at = { context: inputs.context, mode: inputs.bundle.request.mode };
   const vaultData = inputs.internals.vaultData.get(getAddress(vault));
   if (!(vaultData instanceof AccrualVaultV2)) {
     return requirementMismatch(
+      at,
       op,
       `Vault "${vault}" has no pinned Vault V2 entity data; cannot derive the exact share allowance`,
     );
@@ -241,9 +250,11 @@ const inKindRedeemShareCap = (
   amount: bigint,
   deadline: bigint,
 ): bigint => {
+  const at = { context: inputs.context, mode: inputs.bundle.request.mode };
   const vaultData = inputs.internals.vaultData.get(getAddress(op.vault));
   if (!(vaultData instanceof AccrualVaultV2)) {
     return requirementMismatch(
+      at,
       op,
       `Vault "${op.vault}" has no pinned Vault V2 entity data; cannot derive the exact share allowance`,
     );
@@ -255,6 +266,7 @@ const inKindRedeemShareCap = (
     !isAddressEqual(soleAdapter.address, op.adapter)
   ) {
     return requirementMismatch(
+      at,
       op,
       `Vault "${op.vault}" does not have a single decodable Blue adapter at "${op.adapter}"; cannot derive the exact share allowance`,
     );
@@ -300,12 +312,13 @@ const inKindRedeemShareCap = (
 
 type Route = DecodedOperation["route"];
 
-// biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
+// biome-ignore lint/complexity/useMaxParams: call sites pass the decoded op through unchanged
 const bundleSpender = (
   route: Route,
   bundles: NonNullable<ReturnType<typeof getChainAddresses>["bundles"]> | null,
   chainId: number,
   op: DecodedOperation,
+  at: At,
 ): Address => {
   const address =
     route === "blueBundlesV1"
@@ -318,7 +331,7 @@ const bundleSpender = (
   if (address == null) {
     throw new UnsupportedOperationError(
       `Chain "${chainId}" registers no bundle address for route "${route}"; cannot derive the pull spender`,
-      { stage: "authorization", location: opLocation(op) },
+      { context: operationContext(at.context, at.mode, op) },
     );
   }
   return address;
@@ -335,7 +348,8 @@ export function deriveExpectedRequests(params: {
   readonly limits: EffectiveSimulationLimits;
   readonly context: ExecutionContext;
 }): readonly ExpectedRequest[] {
-  const { bundle, inputs, limits } = params;
+  const { bundle, inputs, limits, context } = params;
+  const at = { context, mode: bundle.request.mode };
   const chainId = bundle.request.chainId;
   const owner = bundle.owner;
 
@@ -369,7 +383,7 @@ export function deriveExpectedRequests(params: {
           push({
             token: op.funding.token,
             owner,
-            spender: bundleSpender(op.route, bundles, chainId, op),
+            spender: bundleSpender(op.route, bundles, chainId, op, at),
             amount: op.funding.assets,
             signature: op.tokenSignature,
           });
@@ -383,10 +397,10 @@ export function deriveExpectedRequests(params: {
             type: "blueOperatorAuthority",
             operationIndex,
             authorizer: owner,
-            authorized: bundleSpender(op.route, bundles, chainId, op),
+            authorized: bundleSpender(op.route, bundles, chainId, op, at),
             signature: op.authorizationSignature,
             satisfiedByEarlierOp: grantedAuthorized.has(
-              getAddress(bundleSpender(op.route, bundles, chainId, op)),
+              getAddress(bundleSpender(op.route, bundles, chainId, op, at)),
             ),
           });
         }
@@ -395,7 +409,7 @@ export function deriveExpectedRequests(params: {
       case "blueWithdraw":
       case "blueBorrow":
       case "blueWithdrawCollateral": {
-        const authorized = bundleSpender(op.route, bundles, chainId, op);
+        const authorized = bundleSpender(op.route, bundles, chainId, op, at);
         expected.push({
           type: "blueOperatorAuthority",
           operationIndex,
@@ -407,7 +421,7 @@ export function deriveExpectedRequests(params: {
         break;
       }
       case "blueRefinance": {
-        const authorized = bundleSpender(op.route, bundles, chainId, op);
+        const authorized = bundleSpender(op.route, bundles, chainId, op, at);
         expected.push({
           type: "blueOperatorAuthority",
           operationIndex,
@@ -431,7 +445,7 @@ export function deriveExpectedRequests(params: {
           push({
             token: op.funding.token,
             owner,
-            spender: bundleSpender(op.route, bundles, chainId, op),
+            spender: bundleSpender(op.route, bundles, chainId, op, at),
             amount: op.funding.assets,
             signature: op.tokenSignature,
           });
@@ -443,7 +457,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.vault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount: shareCap(
             inputs,
             op,
@@ -461,7 +475,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.vault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount: op.shares,
           signature: op.tokenSignature,
         });
@@ -471,7 +485,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.vault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount: forceWithdrawShareCap(
             inputs,
             op,
@@ -495,7 +509,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.vault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount: shareCap(
             inputs,
             op,
@@ -512,7 +526,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.vault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount: inKindRedeemShareCap(inputs, op, op.assets, op.deadline),
           signature: op.tokenSignature,
         });
@@ -522,7 +536,7 @@ export function deriveExpectedRequests(params: {
         push({
           token: op.sourceVault,
           owner,
-          spender: bundleSpender(op.route, bundles, chainId, op),
+          spender: bundleSpender(op.route, bundles, chainId, op, at),
           amount:
             op.amount.type === "shares"
               ? op.amount.shares
@@ -548,29 +562,35 @@ export function deriveExpectedRequests(params: {
   return expected;
 }
 
-// biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
+// biome-ignore lint/complexity/useMaxParams: deadline checks need op, deadline, context and mode
 const checkSignatureDeadline = (
   op: DecodedOperation,
   deadline: bigint,
   context: ExecutionContext,
+  mode: SimulationMode,
 ): void => {
+  const at = { context, mode };
   if (deadline <= context.stateBlockTimestamp) {
     requirementMismatch(
+      at,
       op,
       `Signature deadline "${deadline}" is not after the pinned timestamp "${context.stateBlockTimestamp}"`,
     );
   }
 };
 
-// biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
+// biome-ignore lint/complexity/useMaxParams: deadline checks need index, deadline, context, limits and mode
 const checkAuthorizationDeadline = (
   authorizationIndex: number,
   deadline: bigint,
   context: ExecutionContext,
   limits: EffectiveSimulationLimits,
+  mode: SimulationMode,
 ): void => {
+  const at = { context, mode };
   if (deadline <= context.stateBlockTimestamp) {
     authorizationMismatch(
+      at,
       authorizationIndex,
       `Signature deadline "${deadline}" is not after the pinned timestamp "${context.stateBlockTimestamp}"`,
     );
@@ -579,6 +599,7 @@ const checkAuthorizationDeadline = (
     context.stateBlockTimestamp + limits.maxSignatureLifetimeSeconds;
   if (deadline > bound) {
     authorizationMismatch(
+      at,
       authorizationIndex,
       `Signature deadline "${deadline}" exceeds the allowed lifetime bound "${bound}"`,
     );
@@ -604,8 +625,10 @@ const chainEnv = (chainId: number): ChainEnv => {
   };
 };
 
+// biome-ignore lint/complexity/useMaxParams: deadline checks need op, deadline, context and mode
 const requirePermit2 = (
   env: ChainEnv,
+  at: At,
   authorizationIndex?: number,
 ): Address => {
   if (env.permit2 == null) {
@@ -613,7 +636,7 @@ const requirePermit2 = (
     if (authorizationIndex == null) {
       throw new UnsupportedChainError(env.chainId);
     }
-    return authorizationMismatch(authorizationIndex, message);
+    return authorizationMismatch(at, authorizationIndex, message);
   }
   return env.permit2;
 };
@@ -635,6 +658,7 @@ export function checkRequests(params: {
   const authorizations = bundle.request.authorizations;
   const mode = bundle.request.mode;
 
+  const at = { context, mode };
   const env = chainEnv(bundle.request.chainId);
   const expected = deriveExpectedRequests({
     bundle,
@@ -647,7 +671,11 @@ export function checkRequests(params: {
     if (operation == null) {
       throw new UnexpectedSimulationError(
         `Expected request references operation index "${request.operationIndex}" that does not exist`,
-        { stage: "authorization" },
+        {
+          context: verificationContext(context, mode, {
+            field: "operationIndex",
+          }),
+        },
       );
     }
     return operation;
@@ -656,6 +684,7 @@ export function checkRequests(params: {
   if (mode === "final") {
     if (authorizations.length > 0) {
       authorizationMismatch(
+        at,
         0,
         "Final-mode requests carry no pending authorizations; requirements must be satisfied by pinned state or embedded signatures",
       );
@@ -674,6 +703,7 @@ export function checkRequests(params: {
               ) < request.amount
             ) {
               requirementMismatch(
+                at,
                 operation,
                 `Allowance ${request.owner}→${request.spender} on "${request.token}" is below the required "${request.amount}"`,
               );
@@ -692,21 +722,33 @@ export function checkRequests(params: {
               signature.nonce !== pinned
             ) {
               requirementMismatch(
+                at,
                 operation,
                 `ERC-2612 nonce must equal the pinned nonce "${pinned}", got "${signature.nonce}"`,
               );
             }
-            checkSignatureDeadline(operation, signature.deadline, context);
+            checkSignatureDeadline(
+              operation,
+              signature.deadline,
+              context,
+              mode,
+            );
             break;
           }
           case "permit2SignatureTransfer": {
             const signature = request.signature;
-            const permit2 = requirePermit2(env);
-            checkSignatureDeadline(operation, signature.deadline, context);
+            const permit2 = requirePermit2(env, at);
+            checkSignatureDeadline(
+              operation,
+              signature.deadline,
+              context,
+              mode,
+            );
             if (
               permit2BitUsed(before, permit2, request.owner, signature.nonce)
             ) {
               requirementMismatch(
+                at,
                 operation,
                 `Permit2 nonce "${signature.nonce}" is already used at the pinned block`,
               );
@@ -716,6 +758,7 @@ export function checkRequests(params: {
               request.amount
             ) {
               requirementMismatch(
+                at,
                 operation,
                 `Permit2 transfer requires allowance ${request.owner}→${permit2} on "${request.token}" of at least "${request.amount}"`,
               );
@@ -736,6 +779,7 @@ export function checkRequests(params: {
               )
             ) {
               requirementMismatch(
+                at,
                 operation,
                 `Morpho authorization ${request.authorizer}→${request.authorized} is not granted at the pinned block`,
               );
@@ -750,11 +794,17 @@ export function checkRequests(params: {
             );
             if (pinned != null && signature.nonce !== pinned) {
               requirementMismatch(
+                at,
                 operation,
                 `Morpho authorization nonce must equal the pinned nonce "${pinned}", got "${signature.nonce}"`,
               );
             }
-            checkSignatureDeadline(operation, signature.deadline, context);
+            checkSignatureDeadline(
+              operation,
+              signature.deadline,
+              context,
+              mode,
+            );
             break;
           }
         }
@@ -840,6 +890,7 @@ export function checkRequests(params: {
             return;
           }
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Zero approval for "${auth.token}" is only accepted immediately before the exact approval, on an approve-only-once token, with a non-zero pinned allowance`,
           );
@@ -850,12 +901,14 @@ export function checkRequests(params: {
           if (request?.type !== "tokenPull") return;
           if (satisfied[i]) {
             return authorizationMismatch(
+              at,
               authorizationIndex,
               `Approval for "${auth.token}"→"${auth.spender}" is redundant: pinned state already satisfies the requirement`,
             );
           }
           if (auth.amount !== request.amount) {
             return authorizationMismatch(
+              at,
               authorizationIndex,
               `ERC-20 approval amount must be exact: expected "${request.amount}", got "${auth.amount}"`,
             );
@@ -887,6 +940,7 @@ export function checkRequests(params: {
           }
         }
         return authorizationMismatch(
+          at,
           authorizationIndex,
           `ERC-20 approval for token "${auth.token}" spender "${auth.spender}" matches no decoded requirement`,
         );
@@ -900,6 +954,7 @@ export function checkRequests(params: {
         );
         if (i < 0) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `ERC-2612 permit for "${domain.verifyingContract}" spender "${message.spender}" matches no decoded requirement`,
           );
@@ -908,24 +963,28 @@ export function checkRequests(params: {
         if (request?.type !== "tokenPull") return;
         if (satisfied[i]) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "ERC-2612 permit is redundant: pinned state already satisfies the requirement",
           );
         }
         if (BigInt(domain.chainId) !== BigInt(env.chainId)) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit domain chainId "${domain.chainId}" differs from request chain "${env.chainId}"`,
           );
         }
         if (!eq(message.owner, request.owner)) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit owner "${message.owner}" differs from the bundle owner "${request.owner}"`,
           );
         }
         if (message.value !== request.amount) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit value must be exact: expected "${request.amount}", got "${message.value}"`,
           );
@@ -937,6 +996,7 @@ export function checkRequests(params: {
         );
         if (pinnedNonce != null && message.nonce !== pinnedNonce) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit nonce must equal the pinned nonce "${pinnedNonce}", got "${message.nonce}"`,
           );
@@ -946,13 +1006,14 @@ export function checkRequests(params: {
           message.deadline,
           context,
           limits,
+          mode,
         );
         recordMatch(authorizationIndex, i);
         return;
       }
       case "permit2SignatureTransfer": {
         const { domain, message } = auth.typedData;
-        const permit2 = requirePermit2(env, authorizationIndex);
+        const permit2 = requirePermit2(env, at, authorizationIndex);
         const i = findPull(
           message.permitted.token,
           auth.owner,
@@ -960,6 +1021,7 @@ export function checkRequests(params: {
         );
         if (i < 0) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit2 transfer for "${message.permitted.token}" spender "${message.spender}" matches no decoded requirement`,
           );
@@ -968,24 +1030,28 @@ export function checkRequests(params: {
         if (request?.type !== "tokenPull") return;
         if (satisfied[i]) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "Permit2 transfer is redundant: pinned state already satisfies the requirement",
           );
         }
         if (!eq(domain.verifyingContract, permit2)) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit2 domain must name canonical Permit2 "${permit2}", got "${domain.verifyingContract}"`,
           );
         }
         if (!eq(auth.owner, request.owner)) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit2 owner "${auth.owner}" differs from the bundle owner "${request.owner}"`,
           );
         }
         if (message.permitted.amount !== request.amount) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit2 amount must be exact: expected "${request.amount}", got "${message.permitted.amount}"`,
           );
@@ -995,9 +1061,11 @@ export function checkRequests(params: {
           message.deadline,
           context,
           limits,
+          mode,
         );
         if (permit2BitUsed(before, permit2, auth.owner, message.nonce)) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Permit2 nonce "${message.nonce}" is already used at the pinned block`,
           );
@@ -1024,6 +1092,7 @@ export function checkRequests(params: {
           );
           if (j < 0) {
             return authorizationMismatch(
+              at,
               authorizationIndex,
               `Permit2 pull of "${request.amount}" on "${request.token}" lacks the canonical Permit2 allowance or a pending approval`,
             );
@@ -1043,18 +1112,21 @@ export function checkRequests(params: {
         );
         if (i < 0) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Morpho authorization ${auth.authorizer}→"${auth.authorized}" matches no decoded requirement`,
           );
         }
         if (satisfied[i]) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "Morpho authorization is redundant: pinned state or an earlier operation already grants it",
           );
         }
         if (auth.isAuthorized !== true) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "Morpho authorization must grant (isAuthorized=true)",
           );
@@ -1073,12 +1145,14 @@ export function checkRequests(params: {
         );
         if (i < 0) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Morpho authorization signature for "${message.authorized}" matches no decoded requirement`,
           );
         }
         if (satisfied[i]) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "Morpho authorization signature is redundant: pinned state or an earlier operation already grants it",
           );
@@ -1088,12 +1162,14 @@ export function checkRequests(params: {
           !eq(domain.verifyingContract, env.morpho)
         ) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Morpho authorization domain must be the chain's Morpho "${env.morpho}"`,
           );
         }
         if (message.isAuthorized !== true) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             "Morpho authorization signature must grant (isAuthorized=true)",
           );
@@ -1105,6 +1181,7 @@ export function checkRequests(params: {
         );
         if (pinnedNonce != null && message.nonce !== pinnedNonce) {
           return authorizationMismatch(
+            at,
             authorizationIndex,
             `Morpho authorization nonce must equal the pinned nonce "${pinnedNonce}", got "${message.nonce}"`,
           );
@@ -1114,6 +1191,7 @@ export function checkRequests(params: {
           message.deadline,
           context,
           limits,
+          mode,
         );
         recordMatch(authorizationIndex, i);
         return;
@@ -1125,6 +1203,7 @@ export function checkRequests(params: {
   expected.forEach((request, i) => {
     if (matched[i] || satisfied[i]) return;
     requirementMismatch(
+      at,
       op(request),
       `Requirement "${request.type}" at operation ${request.operationIndex} is not covered by any pending authorization or pinned state`,
     );

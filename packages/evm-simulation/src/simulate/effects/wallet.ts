@@ -2,14 +2,15 @@ import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress } from "viem";
-import type { VerificationDiff, WalletBalance } from "../../domain/evidence.js";
-import type { DecodedBundle } from "../../domain/stages.js";
 import {
   AssetChangeMismatchError,
   SlippageLimitExceededError,
   UnsupportedChainError,
 } from "../../errors.js";
 import type { SimulationLogger, Transfer } from "../../types.js";
+import { type At, verificationContext } from "../internal/error-context.js";
+import type { VerificationDiff, WalletBalance } from "../internal/evidence.js";
+import type { DecodedBundle } from "../internal/stages.js";
 import { assertNoBundlesRetention } from "../pipeline/bundles-retention.js";
 
 /**
@@ -34,6 +35,7 @@ export function verifyWallet(params: {
   readonly actionDiff: VerificationDiff;
   readonly transfers: readonly Transfer[];
   readonly logger?: SimulationLogger;
+  readonly at: At;
   /**
    * Expected owner debit overrides keyed `account:token` (lowercased) for ops
    * whose funding amount is a cap refunded at execution — repay legs pull
@@ -45,7 +47,7 @@ export function verifyWallet(params: {
   readonly assetChanges: readonly WalletBalance[];
   readonly retention: "passed";
 } {
-  const { bundle, actionDiff, transfers, logger, fundingDebitOverrides } =
+  const { bundle, actionDiff, transfers, logger, at, fundingDebitOverrides } =
     params;
   const owner = bundle.owner;
   const chainId = bundle.request.chainId;
@@ -139,7 +141,11 @@ export function verifyWallet(params: {
     if (!knownAccounts.has(change.account.toLowerCase())) {
       throw new AssetChangeMismatchError(
         `Unexplained balance change on account "${change.account}" token "${change.token}": "${change.assets}". Only the owner, receivers, referral recipients, bundles, morpho and bound vaults may move.`,
-        { stage: "verification" },
+        {
+          context: verificationContext(at.context, at.mode, {
+            field: "walletDiff",
+          }),
+        },
       );
     }
     const expected = expectedDebits.get(key);
@@ -147,7 +153,11 @@ export function verifyWallet(params: {
       if (change.assets !== -expected) {
         throw new AssetChangeMismatchError(
           `Owner debit on "${change.token}" was "${-change.assets}", expected exactly "${expected}"`,
-          { stage: "verification" },
+          {
+            context: verificationContext(at.context, at.mode, {
+              field: "ownerDebit",
+            }),
+          },
         );
       }
       expectedDebits.delete(key);
@@ -158,7 +168,11 @@ export function verifyWallet(params: {
       if (change.assets < credit) {
         throw new SlippageLimitExceededError(
           `Receiver credit on "${change.token}" was "${change.assets}", below the expected "${credit}"`,
-          { stage: "verification" },
+          {
+            context: verificationContext(at.context, at.mode, {
+              field: "receiverCredit",
+            }),
+          },
         );
       }
       expectedCredits.delete(key);
@@ -168,7 +182,11 @@ export function verifyWallet(params: {
     const [account, token] = key.split(":");
     throw new AssetChangeMismatchError(
       `Expected owner debit of "${expected}" on token "${token}" for account "${account}" was not observed in the action diff`,
-      { stage: "verification" },
+      {
+        context: verificationContext(at.context, at.mode, {
+          field: "ownerDebit",
+        }),
+      },
     );
   }
 

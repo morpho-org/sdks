@@ -2,13 +2,13 @@ import type { MarketId } from "@morpho-org/blue-sdk";
 import fc from "fast-check";
 import { type Address, ethAddress, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
+import { MissingVerificationEvidenceError } from "../../errors.js";
 import type {
   MarketState,
   PermissionState,
   VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { DecodedProbeRead } from "../../domain/stages.js";
-import { MissingVerificationEvidenceError } from "../../errors.js";
+} from "../../simulate/internal/evidence.js";
+import type { DecodedProbeRead } from "../../simulate/internal/stages.js";
 import { accrueSnapshot } from "./accrue.js";
 import { buildSnapshot, diffSnapshots } from "./snapshot.js";
 
@@ -137,7 +137,13 @@ const reads = (
 
 describe("buildSnapshot", () => {
   test("default: overlays dynamic fields from reads", () => {
-    const after = buildSnapshot(template(), reads());
+    const after = buildSnapshot(template(), reads(), {
+      stage: "verification",
+      chainId: 1,
+      mode: "final",
+      blockNumber: 20_000_000n,
+      field: "snapshot",
+    });
     expect(after.wallet[0]).toEqual({
       account: OWNER,
       token: ethAddress,
@@ -167,9 +173,15 @@ describe("buildSnapshot", () => {
     const partial = reads().filter(
       (r) => !(r.type === "erc20Balance" && r.token === TOKEN),
     );
-    expect(() => buildSnapshot(template(), partial)).toThrow(
-      MissingVerificationEvidenceError,
-    );
+    expect(() =>
+      buildSnapshot(template(), partial, {
+        stage: "verification",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 20_000_000n,
+        field: "snapshot",
+      }),
+    ).toThrow(MissingVerificationEvidenceError);
   });
 });
 
@@ -191,7 +203,13 @@ describe("diffSnapshots", () => {
 
   test("wallet diffs are signed", () => {
     const before = template();
-    const after = buildSnapshot(before, reads());
+    const after = buildSnapshot(before, reads(), {
+      stage: "verification",
+      chainId: 1,
+      mode: "final",
+      blockNumber: 20_000_000n,
+      field: "snapshot",
+    });
     const diff = diffSnapshots(before, after);
     const tokenDiff = diff.wallet.find((w) => w.token === TOKEN);
     expect(tokenDiff?.assets).toBe(700_000n - 1_000_000n);

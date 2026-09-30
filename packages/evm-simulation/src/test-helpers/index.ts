@@ -1,4 +1,5 @@
 export { encodeUint256 } from "./encode-uint256.js";
+export { FIXTURE_EXECUTION_CONTEXT, fixtureAt } from "./fixture-at.js";
 export { makeCall } from "./make-call.js";
 export { makeTransferLog } from "./make-transfer-log.js";
 export { makeValidated } from "./make-validated.js";

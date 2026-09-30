@@ -1,41 +1,31 @@
 import { type Address, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type {
-  VaultState,
-  VerificationDiff,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type {
-  DecodedOperation,
-  OperationIdentity,
-} from "../../domain/operations.js";
-import type { VerifiedOperation } from "../../domain/result.js";
-import type { DecodedBundle, PinnedInputs } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MissingVerificationEvidenceError,
   StateChangeMismatchError,
 } from "../../errors.js";
+import { type At, operationContext } from "../internal/error-context.js";
+import type {
+  VaultState,
+  VerificationDiff,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type { VerifiedOperation } from "../internal/result.js";
+import type { DecodedBundle, PinnedInputs } from "../internal/stages.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 import { verifyExitOperation } from "./exits.js";
 import { verifyReferralFee } from "./fees.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
 interface Ctx {
-  readonly context: SimulationErrorContext;
-  readonly identity: OperationIdentity;
+  readonly at: At;
+  readonly operation: DecodedOperation;
 }
 
-const locationOf = (identity: OperationIdentity) => ({
-  type: "transaction" as const,
-  txIdx: identity.transactionIndex,
-  callPath: identity.callPath,
-});
-
-const fail = (message: string, { context, identity }: Ctx): never => {
+const fail = (message: string, { at, operation }: Ctx): never => {
   throw new StateChangeMismatchError(message, {
-    ...context,
-    location: locationOf(identity),
+    context: operationContext(at.context, at.mode, operation),
   });
 };
 
@@ -117,19 +107,13 @@ export function verifyVaultOperation(params: {
   readonly after: VerificationSnapshot;
   readonly actionDiff: VerificationDiff;
   readonly limits: EffectiveSimulationLimits;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): {
   readonly operation: VerifiedOperation;
   readonly referralEvidence: ReturnType<typeof verifyReferralFee>;
 } {
-  const { operation, accruedBefore, after, actionDiff, context } = params;
-  const ctx: Ctx = {
-    context,
-    identity: {
-      transactionIndex: operation.transactionIndex,
-      callPath: operation.callPath,
-    },
-  };
+  const { operation, accruedBefore, after, actionDiff, at } = params;
+  const ctx: Ctx = { at, operation };
 
   const referral =
     "referralFee" in operation
@@ -143,7 +127,7 @@ export function verifyVaultOperation(params: {
                 ? operation.exitAssets
                 : 0n,
           actionDiff,
-          context,
+          at,
         })
       : null;
 
@@ -275,7 +259,7 @@ export function verifyVaultOperation(params: {
       const _exhaustive: never = operation;
       throw new MissingVerificationEvidenceError(
         `verifyVaultOperation received ${JSON.stringify(_exhaustive)}`,
-        context,
+        { context: operationContext(at.context, at.mode, operation) },
       );
     }
   }

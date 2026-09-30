@@ -1,12 +1,12 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { type Address, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { FeeEvidence, VerificationDiff } from "../../domain/evidence.js";
 import type {
   DecodedOperation,
   OperationIdentity,
-} from "../../domain/operations.js";
+} from "../../decode/operation.js";
 import { FeeMismatchError } from "../../errors.js";
+import { type At, operationContext } from "../internal/error-context.js";
+import type { FeeEvidence, VerificationDiff } from "../internal/evidence.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
@@ -31,9 +31,9 @@ export function verifyReferralFee(params: {
   readonly asset: Address;
   readonly grossAssets: bigint;
   readonly actionDiff: VerificationDiff;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): FeeEvidence | null {
-  const { operation, asset, grossAssets, actionDiff, context } = params;
+  const { operation, asset, grossAssets, actionDiff, at } = params;
   const referralFee =
     "referralFee" in operation
       ? operation.referralFee
@@ -54,7 +54,7 @@ export function verifyReferralFee(params: {
   if (observed !== expectedAmount) {
     throw new FeeMismatchError(
       `Referral fee credit for ${referralFee.recipient} was "${observed}", expected "${expectedAmount}" (${referralFee.rateWad} WAD of "${grossAssets}"). Check the decoded fee recipient and rate.`,
-      context,
+      { context: operationContext(at.context, at.mode, operation) },
     );
   }
   if (expectedAmount === 0n) return null;

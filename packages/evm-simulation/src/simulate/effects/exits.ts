@@ -1,40 +1,30 @@
 import { AccrualVaultV2, MathLib } from "@morpho-org/blue-sdk";
 import { type Address, getAddress, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type {
-  VaultState,
-  VerificationDiff,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type {
-  DecodedOperation,
-  OperationIdentity,
-} from "../../domain/operations.js";
-import type { VerifiedOperation } from "../../domain/result.js";
-import type { DecodedBundle, PinnedInputs } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AssetChangeMismatchError,
   StateChangeMismatchError,
 } from "../../errors.js";
+import { type At, operationContext } from "../internal/error-context.js";
+import type {
+  VaultState,
+  VerificationDiff,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type { VerifiedOperation } from "../internal/result.js";
+import type { DecodedBundle, PinnedInputs } from "../internal/stages.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
 interface Ctx {
-  readonly context: SimulationErrorContext;
-  readonly identity: OperationIdentity;
+  readonly at: At;
+  readonly operation: DecodedOperation;
 }
 
-const locationOf = (identity: OperationIdentity) => ({
-  type: "transaction" as const,
-  txIdx: identity.transactionIndex,
-  callPath: identity.callPath,
-});
-
-const fail = (message: string, { context, identity }: Ctx): never => {
+const fail = (message: string, { at, operation }: Ctx): never => {
   throw new StateChangeMismatchError(message, {
-    ...context,
-    location: locationOf(identity),
+    context: operationContext(at.context, at.mode, operation),
   });
 };
 
@@ -94,17 +84,10 @@ export function verifyExitOperation(params: {
   readonly after: VerificationSnapshot;
   readonly actionDiff: VerificationDiff;
   readonly limits: EffectiveSimulationLimits;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): VerifiedOperation {
-  const { operation, inputs, accruedBefore, after, actionDiff, context } =
-    params;
-  const ctx: Ctx = {
-    context,
-    identity: {
-      transactionIndex: operation.transactionIndex,
-      callPath: operation.callPath,
-    },
-  };
+  const { operation, inputs, accruedBefore, after, actionDiff, at } = params;
+  const ctx: Ctx = { at, operation };
 
   switch (operation.type) {
     case "vaultV1MigrateToV2": {
@@ -152,7 +135,7 @@ export function verifyExitOperation(params: {
       if (walletNet !== 0n)
         throw new AssetChangeMismatchError(
           `Migration moved "${walletNet}" wallet assets — migrated assets must route vault-to-vault`,
-          { ...context, location: locationOf(ctx.identity) },
+          { context: operationContext(at.context, at.mode, operation) },
         );
       return {
         operation,
@@ -210,7 +193,7 @@ export function verifyExitOperation(params: {
               ctx,
             );
           penaltyAssets += MathLib.wMulUp(
-            leg.amount,
+            leg.assets,
             vaultEntity instanceof AccrualVaultV2
               ? (vaultEntity.forceDeallocatePenalties[leg.adapter] ?? 0n)
               : 0n,
@@ -224,12 +207,12 @@ export function verifyExitOperation(params: {
             ctx,
           );
         consumedAllocations.add(prior);
-        if (prior.assets - observed.assets !== leg.amount)
+        if (prior.assets - observed.assets !== leg.assets)
           fail(
-            `Adapter "${leg.adapter}" allocation moved "${prior.assets - observed.assets}", expected "${leg.amount}"`,
+            `Adapter "${leg.adapter}" allocation moved "${prior.assets - observed.assets}", expected "${leg.assets}"`,
             ctx,
           );
-        penaltyAssets += MathLib.wMulUp(leg.amount, prior.penaltyWad);
+        penaltyAssets += MathLib.wMulUp(leg.assets, prior.penaltyWad);
       }
       for (const allocation of next.allocations) {
         // Identity pairing by adapter+marketId first, then adapter alone.
@@ -413,7 +396,7 @@ export function verifyExitOperation(params: {
       const _exhaustive: never = operation;
       throw new StateChangeMismatchError(
         `verifyExitOperation received ${JSON.stringify(_exhaustive)}`,
-        context,
+        { context: operationContext(at.context, at.mode, operation) },
       );
     }
   }

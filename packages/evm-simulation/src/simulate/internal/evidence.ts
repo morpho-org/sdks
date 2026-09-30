@@ -1,8 +1,11 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
-import type { SimulationCall, SimulationTransaction } from "../types.js";
-import type { SimulationAuthorization } from "./authorizations.js";
-import type { MarketBinding, OperationIdentity } from "./operations.js";
+import type { PendingAuthorization } from "../../authorizations.js";
+import type {
+  MarketBinding,
+  OperationIdentity,
+} from "../../decode/operation.js";
+import type { SimulationCall, SimulationTransaction } from "../../types.js";
 
 /**
  * Resolved state anchor and execution metadata.
@@ -318,9 +321,9 @@ export type AuthorizationRequestChecks = {
 
 /** Successful request proof, indexed separately from user transactions. @internal */
 export type AuthorizationEvidence = {
-  [Type in SimulationAuthorization["type"]]: {
+  [Type in PendingAuthorization["type"]]: {
     readonly authorizationIndex: number;
-    readonly request: Extract<SimulationAuthorization, { readonly type: Type }>;
+    readonly request: Extract<PendingAuthorization, { readonly type: Type }>;
     readonly preparation: AuthorizationPreparation;
     readonly requestChecks: Extract<
       AuthorizationRequestChecks,
@@ -334,7 +337,7 @@ export type AuthorizationEvidence = {
     >;
     readonly readBack: readonly AuthorizationReadBack[];
   };
-}[SimulationAuthorization["type"]];
+}[PendingAuthorization["type"]];
 
 /** Verified conversion with pinned quote, actual rate, rounding and intersected bounds. @internal */
 export interface ConversionEvidence extends OperationIdentity {

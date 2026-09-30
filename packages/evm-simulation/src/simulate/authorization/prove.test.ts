@@ -1,20 +1,21 @@
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { SimulationAuthorization } from "../../domain/authorizations.js";
-import type { PermissionState } from "../../domain/evidence.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
+import {
+  MissingVerificationEvidenceError,
+  PermissionChangeMismatchError,
+} from "../../errors.js";
+import type { PermissionState } from "../../simulate/internal/evidence.js";
 import type {
   CompleteEvidence,
   DecodedBundle,
   ExecutionEvidence,
   PinnedInputs,
   ValidatedAuthorizations,
-} from "../../domain/stages.js";
-import { brandPinned, brandValidated } from "../../domain/stages.js";
-import {
-  MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
-} from "../../errors.js";
+} from "../../simulate/internal/stages.js";
+import { brandPinned, brandValidated } from "../../simulate/internal/stages.js";
+import { fixtureAt } from "../../test-helpers/index.js";
 import { verifyPermissions } from "../effects/permissions.js";
 import { proveAuthorizations } from "./prove.js";
 
@@ -150,7 +151,6 @@ const validated = (
       maxSlippageWad: 10n ** 15n,
       minLltvBufferWad: 0n,
       maxSignatureLifetimeSeconds: 7_200n,
-      wallet: { maxDebit: [], minCredit: [] },
       operations: [],
     },
     preparations: [
@@ -202,7 +202,6 @@ describe("proveAuthorizations", () => {
         maxSlippageWad: 10n ** 15n,
         minLltvBufferWad: 0n,
         maxSignatureLifetimeSeconds: 7_200n,
-        wallet: { maxDebit: [], minCredit: [] },
         operations: [],
       },
       preparations: [],
@@ -272,6 +271,7 @@ describe("verifyPermissions", () => {
     const complete = {} as CompleteEvidence;
     expect(
       verifyPermissions({
+        at: fixtureAt(),
         validated: validated(),
         evidence: complete,
         before: snapshot(600_000n),
@@ -284,6 +284,7 @@ describe("verifyPermissions", () => {
     const complete = {} as CompleteEvidence;
     expect(() =>
       verifyPermissions({
+        at: fixtureAt(),
         validated: validated(),
         evidence: complete,
         before: snapshot(100_000n),

@@ -1,19 +1,20 @@
 import { type Address, encodeFunctionResult, erc20Abi, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type {
-  DecodedBundle,
-  ParsedRequest,
-  ValidatedAuthorizations,
-} from "../../domain/stages.js";
-import { brandPinned, brandValidated } from "../../domain/stages.js";
 import {
   MissingVerificationEvidenceError,
   PermissionChangeMismatchError,
   SimulationRevertedError,
 } from "../../errors.js";
+import type {
+  DecodedBundle,
+  ParsedRequest,
+  ValidatedAuthorizations,
+} from "../../simulate/internal/stages.js";
+import { brandPinned, brandValidated } from "../../simulate/internal/stages.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { parseSimulationResponse } from "./parse-response.js";
+import { toExecutionEvidence } from "./to-execution-evidence.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const TARGET: Address = getAddress(
@@ -29,7 +30,9 @@ const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 
 const request = {
   chainId: 1,
-  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+  transactions: [
+    { from: OWNER, to: TARGET, data: "0x12345678" as `0x${string}` },
+  ],
 };
 
 const parsed: ParsedRequest = parseRequest(request);
@@ -70,7 +73,6 @@ const validated = (withPreparation: boolean): ValidatedAuthorizations =>
       maxSlippageWad: 0n,
       minLltvBufferWad: 0n,
       maxSignatureLifetimeSeconds: 0n,
-      wallet: { maxDebit: [], minCredit: [] },
       operations: [],
     },
     preparations: withPreparation
@@ -116,6 +118,7 @@ const buildResponse = (
     number: "0x16e3601",
     timestamp: `0x${NOW.toString(16)}`,
     hash: `0x${"cd".repeat(32)}`,
+    parentHash: `0x${"ab".repeat(32)}`,
     calls: plan.calls.map((call, index) => {
       const override = overrides[index] ?? {};
       const defaultReturn =
@@ -151,7 +154,7 @@ describe("parseSimulationResponse", () => {
       full: [erc20Read],
       permissions: [erc20Read],
     });
-    const evidence = parse(plan, buildResponse(plan));
+    const evidence = toExecutionEvidence(parse(plan, buildResponse(plan)));
     expect(evidence.probeReads.before.length).toBeGreaterThan(0);
     // prepared phase carries the permissions reads plus the native probe.
     expect(evidence.probeReads.prepared).toHaveLength(2);
@@ -193,8 +196,11 @@ describe("parseSimulationResponse", () => {
     const prepIndex = plan.calls.findIndex(
       (c) => c.identity.type === "authorization",
     );
+
     expect(() =>
-      parse(plan, buildResponse(plan, { [prepIndex]: { status: "0x0" } })),
+      toExecutionEvidence(
+        parse(plan, buildResponse(plan, { [prepIndex]: { status: "0x0" } })),
+      ),
     ).toThrow(PermissionChangeMismatchError);
   });
 
@@ -205,7 +211,9 @@ describe("parseSimulationResponse", () => {
     });
     const probeIndex = plan.calls.findIndex((c) => c.identity.type === "probe");
     expect(() =>
-      parse(plan, buildResponse(plan, { [probeIndex]: { status: "0x0" } })),
+      toExecutionEvidence(
+        parse(plan, buildResponse(plan, { [probeIndex]: { status: "0x0" } })),
+      ),
     ).toThrow(MissingVerificationEvidenceError);
   });
 
@@ -221,9 +229,11 @@ describe("parseSimulationResponse", () => {
         c.read.type === "erc20Allowance",
     );
     expect(() =>
-      parse(
-        plan,
-        buildResponse(plan, { [probeIndex]: { returnData: "0xdead" } }),
+      toExecutionEvidence(
+        parse(
+          plan,
+          buildResponse(plan, { [probeIndex]: { returnData: "0xdead" } }),
+        ),
       ),
     ).toThrow(MissingVerificationEvidenceError);
   });

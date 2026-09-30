@@ -2,8 +2,12 @@ import type { Address } from "viem";
 import type {
   ParsedRequest,
   ValidatedAuthorizations,
-} from "../domain/stages.js";
-import { brandDecoded, brandPinned, brandValidated } from "../domain/stages.js";
+} from "../simulate/internal/stages.js";
+import {
+  brandDecoded,
+  brandPinned,
+  brandValidated,
+} from "../simulate/internal/stages.js";
 
 /**
  * Minimal `ValidatedAuthorizations` for transport/evidence tests: no
@@ -42,7 +46,6 @@ export function makeValidated(params: {
       maxSlippageWad: 0n,
       minLltvBufferWad: 0n,
       maxSignatureLifetimeSeconds: 0n,
-      wallet: { maxDebit: [], minCredit: [] },
       operations: [],
     },
     preparations: [],

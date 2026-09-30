@@ -2,25 +2,26 @@ import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, maxUint256 } from "viem";
-import type {
-  PermissionEvidence,
-  PermissionState,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type {
-  CompleteEvidence,
-  ValidatedAuthorizations,
-} from "../../domain/stages.js";
 import {
   PermissionChangeMismatchError,
   UnsupportedChainError,
 } from "../../errors.js";
+import { type At, verificationContext } from "../internal/error-context.js";
+import type {
+  PermissionEvidence,
+  PermissionState,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type {
+  CompleteEvidence,
+  ValidatedAuthorizations,
+} from "../internal/stages.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
-const mismatch = (message: string): never => {
+const mismatch = (message: string, at: At): never => {
   throw new PermissionChangeMismatchError(message, {
-    stage: "verification",
+    context: verificationContext(at.context, at.mode, { field: "permissions" }),
   });
 };
 
@@ -95,8 +96,9 @@ export function verifyPermissions(params: {
   readonly evidence: CompleteEvidence;
   readonly before: VerificationSnapshot;
   readonly after: VerificationSnapshot;
+  readonly at: At;
 }): readonly PermissionEvidence[] {
-  const { validated, before, after } = params;
+  const { validated, before, after, at } = params;
   const { bundle } = validated.inputs;
   const mode = bundle.request.mode;
 
@@ -129,6 +131,7 @@ export function verifyPermissions(params: {
     if (observed == null) {
       return mismatch(
         `Permission "${permissionKey(permission)}" vanished from the after snapshot`,
+        at,
       );
     }
     if (!permissionEqual(permission, observed)) {
@@ -280,6 +283,7 @@ export function verifyPermissions(params: {
         if (observed.amount < prior.amount) continue;
         return mismatch(
           `Unexplained allowance increase on "${prior.token}" ${prior.owner}→${prior.spender}: "${prior.amount}" → "${observed.amount}"`,
+          at,
         );
       }
       case "permit2Nonce": {
@@ -287,6 +291,7 @@ export function verifyPermissions(params: {
         if (observed.bitmap !== prior.bitmap)
           return mismatch(
             `Unexplained Permit2 bitmap change for ${prior.owner} word "${prior.wordPosition}"`,
+            at,
           );
         break;
       }
@@ -299,6 +304,7 @@ export function verifyPermissions(params: {
         ) {
           return mismatch(
             `Unexplained nonce change on "${permissionKey(prior)}": "${prior.nonce}" → "${observed.nonce}"`,
+            at,
           );
         }
         break;
@@ -314,6 +320,7 @@ export function verifyPermissions(params: {
           if (!observed.isAuthorized) {
             return mismatch(
               `Unexplained Morpho authorization revoke ${prior.authorizer}→${prior.authorized}`,
+              at,
             );
           }
           continue;

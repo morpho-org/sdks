@@ -51,7 +51,6 @@ export async function resolvePinnedBlock(params: {
     if (block.number === null || block.hash === null) {
       throw new InvalidSimulationResponseError(
         "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-        { stage: "pinnedReads" },
       );
     }
     return {

@@ -1,17 +1,20 @@
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { VerificationDiff } from "../../domain/evidence.js";
-import type { DecodedOperation } from "../../domain/operations.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import { FeeMismatchError } from "../../errors.js";
-import { FIXTURE_NOW, FIXTURE_TOKEN } from "../../test-helpers/index.js";
+import type { VerificationDiff } from "../../simulate/internal/evidence.js";
+import {
+  FIXTURE_NOW,
+  FIXTURE_TOKEN,
+  fixtureAt,
+} from "../../test-helpers/index.js";
 import { verifyReferralFee } from "./fees.js";
+
+const at = fixtureAt();
 
 const RECIPIENT: Address = getAddress(
   "0x7777777777777777777777777777777777777777",
 );
-
-const context: SimulationErrorContext = { stage: "verification" };
 
 const op = (
   rateWad: bigint,
@@ -21,6 +24,7 @@ const op = (
     type: "blueSupply",
     transactionIndex: 0,
     callPath: [],
+    market: { marketId: `0x${"11".repeat(32)}`, params: {} },
     referralFee: { rateWad, recipient },
     deadline: FIXTURE_NOW + 3600n,
   }) as unknown as DecodedOperation;
@@ -47,7 +51,7 @@ describe("verifyReferralFee", () => {
           vaults: [],
           markets: [],
         },
-        context,
+        at,
       }),
     ).toBeNull();
   });
@@ -59,7 +63,7 @@ describe("verifyReferralFee", () => {
       asset: FIXTURE_TOKEN,
       grossAssets: 10_000n,
       actionDiff: diff(RECIPIENT, 100n),
-      context,
+      at,
     });
     expect(evidence?.type).toBe("referral");
     expect(evidence?.expectedAmount).toBe(100n);
@@ -74,7 +78,7 @@ describe("verifyReferralFee", () => {
         asset: FIXTURE_TOKEN,
         grossAssets: 10_000n,
         actionDiff: diff(RECIPIENT, 50n),
-        context,
+        at,
       }),
     ).toThrow(FeeMismatchError);
   });
@@ -86,7 +90,7 @@ describe("verifyReferralFee", () => {
         asset: FIXTURE_TOKEN,
         grossAssets: 10_000n,
         actionDiff: diff(RECIPIENT, 50n),
-        context,
+        at,
       }),
     ).toThrow(FeeMismatchError);
   });

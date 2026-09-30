@@ -1,35 +1,34 @@
 import { SharesMath } from "@morpho-org/blue-sdk";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { VerificationDiff } from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
   StateChangeMismatchError,
 } from "../../errors.js";
+import type { VerificationDiff } from "../../simulate/internal/evidence.js";
+import type { DecodedBundle } from "../../simulate/internal/stages.js";
+import type { EffectiveSimulationLimits } from "../../simulate/request/effective-limits.js";
 import {
   FIXTURE_NOW,
   FIXTURE_OWNER,
   FIXTURE_TOKEN,
+  fixtureAt,
   fixtureMarket,
   fixturePosition,
   fixtureSnapshot,
 } from "../../test-helpers/index.js";
 import { checkUnrelatedState, verifyBlueOperation } from "./blue.js";
 
+const at = fixtureAt();
+
 const limits: EffectiveSimulationLimits = {
   maxSlippageWad: 10n ** 15n,
   minLltvBufferWad: 5n * 10n ** 15n,
   maxSignatureLifetimeSeconds: 7_200n,
-  wallet: { maxDebit: [], minCredit: [] },
   operations: [],
 };
-
-const context: SimulationErrorContext = { stage: "verification" };
 
 const bundle = (operations: readonly DecodedOperation[]): DecodedBundle =>
   ({
@@ -82,7 +81,7 @@ const verify = (
     after,
     actionDiff: emptyDiff,
     limits,
-    context,
+    at,
   });
 
 describe("blueSupply", () => {
@@ -349,7 +348,7 @@ describe("checkUnrelatedState", () => {
         accruedBefore: snapshot,
         after: snapshot,
         touchedMarketIds: new Set(),
-        context,
+        at,
       }),
     ).not.toThrow();
   });
@@ -366,7 +365,7 @@ describe("checkUnrelatedState", () => {
         accruedBefore: before,
         after,
         touchedMarketIds: new Set(),
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });

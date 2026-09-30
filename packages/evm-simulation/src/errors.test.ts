@@ -315,7 +315,9 @@ describe("SimulationErrorContext", () => {
       SimulationErrorContext,
       { stage: "verification" }
     >;
-    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
+    expectTypeOf<
+      Exclude<Verification["operation"], undefined>
+    >().toEqualTypeOf<OperationType>();
     expectTypeOf<
       Extract<Verification, { marketId: MarketId }>["operation"]
     >().toEqualTypeOf<BlueMarketOperationType>();

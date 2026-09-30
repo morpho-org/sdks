@@ -1,5 +1,5 @@
 import { Market } from "@morpho-org/blue-sdk";
-import type { MarketState } from "../../domain/evidence.js";
+import type { MarketState } from "../internal/evidence.js";
 
 /**
  * Rebuild a blue-sdk {@link Market} entity from a snapshot state so SDK

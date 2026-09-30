@@ -8,8 +8,8 @@ import {
   numberToHex,
   zeroAddress,
 } from "viem";
-import type { ProbeRead } from "../../domain/stages.js";
 import { InvalidSimulationResponseError } from "../../errors.js";
+import type { ProbeRead } from "../internal/stages.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "./native-balance-probe.js";
 import { decodeProbeResult, encodeProbeCall, probeId } from "./probes.js";
 

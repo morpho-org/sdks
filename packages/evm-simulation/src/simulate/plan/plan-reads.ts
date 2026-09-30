@@ -2,12 +2,12 @@ import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try } from "@morpho-org/morpho-ts";
 import { ethAddress, isAddressEqual, zeroAddress } from "viem";
+import { UnsupportedChainError } from "../../errors.js";
 import type {
   PermissionState,
   VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { DecodedBundle, ProbeRead } from "../../domain/stages.js";
-import { UnsupportedChainError } from "../../errors.js";
+} from "../internal/evidence.js";
+import type { DecodedBundle, ProbeRead } from "../internal/stages.js";
 import { probeId } from "./probes.js";
 
 const PERMISSION_READ_TYPES = new Set<ProbeRead["type"]>([

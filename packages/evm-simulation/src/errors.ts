@@ -109,7 +109,14 @@ export type SimulationErrorContext =
       readonly preparationCallIndex?: number;
     })
   | (SimulationOperationContext & { readonly stage: "execution" })
-  | (SimulationOperationContext & { readonly stage: "verification" });
+  | (SimulationOperationContext & { readonly stage: "verification" })
+  // Checks not bound to one operation (wallet limits, probe evidence, snapshot
+  // comparisons) carry the check fields and must name the checked field.
+  | (SimulationCheckContext & {
+      readonly stage: "verification";
+      readonly field: string;
+      readonly operation?: never;
+    });
 
 /**
  * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.

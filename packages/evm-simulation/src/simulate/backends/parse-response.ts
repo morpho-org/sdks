@@ -248,9 +248,13 @@ export function parseSimulationResponse(params: {
 
   // A user-transaction revert belongs to the bundle, not the boundary.
   const failedUserCall = calls.find(
-    ({ planned, result }) => planned.type === "transaction" && !result.status,
+    ({ planned, result }) =>
+      planned.identity.type === "transaction" && !result.status,
   );
-  if (failedUserCall && failedUserCall.planned.type === "transaction") {
+  if (
+    failedUserCall &&
+    failedUserCall.planned.identity.type === "transaction"
+  ) {
     throw new SimulationRevertedError(
       failedUserCall.call.error?.message ?? "Simulation failed",
       deepFreeze(
@@ -259,11 +263,13 @@ export function parseSimulationResponse(params: {
             (
               entry,
             ): entry is typeof entry & {
-              planned: PlannedCall & { type: "transaction" };
-            } => entry.planned.type === "transaction",
+              planned: PlannedCall & {
+                identity: { type: "transaction"; transactionIndex: number };
+              };
+            } => entry.planned.identity.type === "transaction",
           )
           .map(({ planned, result }) => ({
-            transactionIndex: planned.transactionIndex,
+            transactionIndex: planned.identity.transactionIndex,
             result,
           })),
       ),
@@ -280,24 +286,33 @@ export function parseSimulationResponse(params: {
 
   const nativeBalances: NativeBalanceReading[] = [];
   for (const { planned, result, call } of calls) {
-    if (planned.type !== "nativeBalanceProbe") continue;
+    if (
+      planned.identity.type !== "probe" ||
+      !("read" in planned) ||
+      planned.read.type !== "nativeBalance"
+    )
+      continue;
+    const phase =
+      planned.identity.phase === "prepared"
+        ? "intermediate"
+        : planned.identity.phase;
     if (!result.status) {
       throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
+        `Native balance probe "${planned.identity.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
         { context: probeContext },
       );
     }
     const assets = decodeNativeBalanceProbe(call.returnData as Hex);
     if (assets === null) {
       throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
+        `Native balance probe "${planned.identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
         { context: probeContext },
       );
     }
     nativeBalances.push({
-      probeId: planned.probeId,
-      phase: planned.phase,
-      account: planned.account,
+      probeId: planned.identity.probeId,
+      phase,
+      account: planned.read.account,
       assets,
     });
   }

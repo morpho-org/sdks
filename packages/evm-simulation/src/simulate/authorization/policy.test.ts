@@ -1,12 +1,15 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { type Address, getAddress } from "viem";
-import type { SimulationAuthorization } from "../../domain/authorizations.js";
-import type { VerificationSnapshot } from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle, PinnedInputs } from "../../domain/stages.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import { AuthorizationRequestMismatchError } from "../../errors.js";
+import type { VerificationSnapshot } from "../../simulate/internal/evidence.js";
+import type {
+  DecodedBundle,
+  PinnedInputs,
+} from "../../simulate/internal/stages.js";
+import type { EffectiveSimulationLimits } from "../../simulate/request/effective-limits.js";
 import { checkRequests, deriveExpectedRequests } from "./policy.js";
 
 const addresses = getChainAddresses(1);
@@ -38,7 +41,6 @@ const limits: EffectiveSimulationLimits = {
   maxSlippageWad: 10n ** 15n,
   minLltvBufferWad: 5n * 10n ** 15n,
   maxSignatureLifetimeSeconds: 7_200n,
-  wallet: { maxDebit: [], minCredit: [] },
   operations: [],
 };
 
@@ -302,7 +304,9 @@ const blueAuthorizationSignature = (
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const expectMismatch = (
   fn: () => unknown,
-  location: unknown,
+  location:
+    | { type: "authorization"; authorizationIndex: number }
+    | { type: "transaction"; txIdx: number; callPath: readonly number[] },
   messagePart?: string,
 ): void => {
   try {
@@ -310,9 +314,22 @@ const expectMismatch = (
     expect.unreachable();
   } catch (error) {
     expect(error).toBeInstanceOf(AuthorizationRequestMismatchError);
-    expect(
-      (error as AuthorizationRequestMismatchError).context.location,
-    ).toEqual(location);
+    const context = (error as AuthorizationRequestMismatchError).context;
+    if (location.type === "authorization") {
+      expect(context?.stage).toBe("preparation");
+      expect(
+        context && "authorizationIndex" in context
+          ? context.authorizationIndex
+          : undefined,
+      ).toBe(location.authorizationIndex);
+    } else {
+      expect(context?.stage).toBe("verification");
+      expect(
+        context && "failedTransactionIndex" in context
+          ? context.failedTransactionIndex
+          : undefined,
+      ).toBe(location.txIdx);
+    }
     if (messagePart != null)
       expect((error as Error).message).toContain(messagePart);
   }

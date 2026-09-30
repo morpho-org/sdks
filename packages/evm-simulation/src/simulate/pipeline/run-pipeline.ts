@@ -1,22 +1,23 @@
 import { decodeOperations } from "../../decode/operations.js";
-import type { VerifiedSimulationResult } from "../../domain/result.js";
-import type { CompleteEvidence, ParsedRequest } from "../../domain/stages.js";
-import { brandDecoded } from "../../domain/stages.js";
 import { InvalidSimulationResponseError } from "../../errors.js";
+import type { VerifiedSimulationResult } from "../../result.js";
 import type { SimulationConfig, Transfer } from "../../types.js";
 import { checkRequests } from "../authorization/policy.js";
 import { proveAuthorizations } from "../authorization/prove.js";
-import {
-  createSimulationClient,
-  executePlan,
-  readBindings,
-  readPinnedInputs,
-  resolvePinnedBlock,
-} from "../backends/index.js";
+import { createSimulationClient } from "../backends/client.js";
+import { executePlan } from "../backends/index.js";
+import { readBindings } from "../backends/read-bindings.js";
+import { readPinnedInputs } from "../backends/read-pinned-state.js";
+import { resolvePinnedBlock } from "../backends/resolve-pinned-block.js";
+import { toExecutionEvidence } from "../backends/to-execution-evidence.js";
 import { verifyEffects } from "../effects/verify-effects.js";
+import { transportContext } from "../internal/error-context.js";
+import type { CompleteEvidence, ParsedRequest } from "../internal/stages.js";
+import { brandDecoded } from "../internal/stages.js";
 import { enforceLimits } from "../limits/enforce-limits.js";
 import { parseTransfers } from "../parsing/index.js";
-import { planExecution, planProbeReads } from "../plan/index.js";
+import { planExecution } from "../plan/index.js";
+import { planProbeReads } from "../plan/plan-reads.js";
 import { resolveEffectiveLimits } from "../request/effective-limits.js";
 import { assembleResult } from "../result/assemble-result.js";
 import { resolveChain } from "./resolve-chain.js";
@@ -64,6 +65,7 @@ export async function runPipeline(params: {
   const decoded = decodeOperations({
     chainId: request.chainId,
     mode: request.mode,
+    blockNumber: pinnedBlock.number,
     transactions: request.transactions,
     vaults: bindings.vaults,
     preLiquidations: bindings.preLiquidations,
@@ -86,12 +88,13 @@ export async function runPipeline(params: {
 
   // executePlan performs the boundary: chain-id check, reorg re-check, and
   // evidence parsing (probe decode, preparation pairing, revert mapping).
-  const evidence = await executePlan({
+  const execution = await executePlan({
     rpcUrl: chain.simulateV1Url,
     plan,
-    pinnedBlock,
+    blockNumber: pinnedBlock.number,
     signal,
   });
+  const evidence = toExecutionEvidence(execution);
 
   const complete = proveAuthorizations(evidence, validated);
 
@@ -118,9 +121,7 @@ function extractUserTransfers(evidence: CompleteEvidence): readonly Transfer[] {
     throw new InvalidSimulationResponseError(
       `Evidence contains ${userCalls.length} user call result(s) for ${evidence.plan.request.transactions.length} transaction(s) — refusing to map transfers with mismatched lengths`,
       {
-        stage: "evidence",
-        chainId: evidence.plan.request.chainId,
-        mode: evidence.plan.request.mode,
+        context: transportContext(evidence.context, evidence.plan.request.mode),
       },
     );
   }

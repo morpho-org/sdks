@@ -12,8 +12,8 @@ import type {
   RiskMetric,
   VaultState,
   VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { PinnedInputs } from "../../domain/stages.js";
+} from "../internal/evidence.js";
+import type { PinnedInputs } from "../internal/stages.js";
 import { toMarketEntity } from "./market-entity.js";
 
 const MAX_LLTV_WAD = MathLib.WAD;

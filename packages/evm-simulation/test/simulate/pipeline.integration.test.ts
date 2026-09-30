@@ -94,9 +94,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
     expect(result.verification.mode).toBe("final");
     expect(result.verification.authorizations).toEqual([]);
     expect(result.verification.operations).toHaveLength(1);
-    expect(result.verification.operations[0]!.operation.type).toBe(
-      "blueSupply",
-    );
+    expect(result.verification.operations[0]!.operation).toBe("blueSupply");
   }, 60_000);
 
   test("preview mode: erc20Approval authorization prepares and verifies", async ({
@@ -119,6 +117,8 @@ describe.sequential("simulate pipeline — blue supply", () => {
 
     const authorizations = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements,
     });
@@ -142,9 +142,7 @@ describe.sequential("simulate pipeline — blue supply", () => {
       authorizations.length,
     );
     expect(result.simulationTxs).toHaveLength(1);
-    expect(result.verification.operations[0]!.operation.type).toBe(
-      "blueSupply",
-    );
+    expect(result.verification.operations[0]!.operation).toBe("blueSupply");
   }, 60_000);
 });
 
@@ -172,6 +170,8 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     const requirements = await action.getRequirements();
     const authorizations = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements,
     });
@@ -193,7 +193,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
+    expect(result.verification.operations[0]!.operation).toBe(
       "blueSupplyCollateralBorrow",
     );
     expect(result.verification.authorizations.length).toBe(
@@ -252,7 +252,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       ],
     });
     expect(
-      repayResult.verification.operations.map((o) => o.operation.type),
+      repayResult.verification.operations.map((o) => o.operation),
     ).toContain("blueRepayWithdrawCollateral");
   }, 120_000);
 
@@ -410,6 +410,8 @@ describe.sequential("simulate pipeline — negatives", () => {
     const requirements = await action.getRequirements();
     const authorizations = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements,
     }).map((a) => (a.type === "erc20Approval" ? { ...a, amount: 1n } : a));
@@ -460,7 +462,7 @@ describe.sequential("simulate pipeline — negatives", () => {
     ).rejects.toBeInstanceOf(AuthorizationRequestMismatchError);
   }, 60_000);
 
-  test("error: ConsumerLimitViolationError for wallet.maxDebit below funding", async ({
+  test("error: ConsumerLimitViolationError for an operation bound above the simulated outcome", async ({
     client,
   }) => {
     const morpho = client
@@ -488,7 +490,13 @@ describe.sequential("simulate pipeline — negatives", () => {
       simulate(configFor(client), {
         chainId: mainnet.id,
         limits: {
-          wallet: { maxDebit: [{ token: USDC, amount: assets - 1n }] },
+          operations: [
+            {
+              type: "blueSupply",
+              marketId: CbbtcUsdcBlue.id,
+              minSupplySharesMinted: maxUint256,
+            },
+          ],
         },
         transactions: [
           {
@@ -604,7 +612,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
         },
       ],
     });
-    expect(depositResult.verification.operations[0]!.operation.type).toBe(
+    expect(depositResult.verification.operations[0]!.operation).toBe(
       "vaultV1Deposit",
     );
 
@@ -644,6 +652,8 @@ describe.sequential("simulate pipeline — vault V1", () => {
     const withdrawReqs = await withdraw.getRequirements();
     const withdrawAuths = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements: withdrawReqs,
     });
@@ -661,7 +671,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
         },
       ],
     });
-    expect(withdrawResult.verification.operations[0]!.operation.type).toBe(
+    expect(withdrawResult.verification.operations[0]!.operation).toBe(
       "vaultV1Withdraw",
     );
 
@@ -693,7 +703,7 @@ describe.sequential("simulate pipeline — vault V1", () => {
         },
       ],
     });
-    expect(redeemResult.verification.operations[0]!.operation.type).toBe(
+    expect(redeemResult.verification.operations[0]!.operation).toBe(
       "vaultV1Redeem",
     );
   }, 180_000);
@@ -763,6 +773,8 @@ describe.sequential("simulate pipeline — vault V2", () => {
     const exitReqs = await exit.getRequirements();
     const exitAuths = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements: exitReqs,
     });
@@ -780,7 +792,7 @@ describe.sequential("simulate pipeline — vault V2", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
+    expect(result.verification.operations[0]!.operation).toBe(
       "vaultV2ForceWithdraw",
     );
   }, 240_000);
@@ -878,6 +890,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
     });
     const auths = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements: await migration.getRequirements(),
     });
@@ -895,7 +909,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
+    expect(result.verification.operations[0]!.operation).toBe(
       "vaultV1MigrateToV2",
     );
   }, 240_000);
@@ -963,7 +977,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
+    expect(result.verification.operations[0]!.operation).toBe(
       "vaultV2ForceRedeem",
     );
   }, 240_000);
@@ -992,6 +1006,8 @@ describe.sequential("simulate pipeline — vault exits", () => {
     });
     const auths = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements: await exit.getRequirements(),
     });
@@ -1009,7 +1025,7 @@ describe.sequential("simulate pipeline — vault exits", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
+    expect(result.verification.operations[0]!.operation).toBe(
       "vaultV2InKindRedeem",
     );
   }, 240_000);
@@ -1073,6 +1089,8 @@ describe.sequential("simulate pipeline — blue refinance", () => {
     });
     const authorizations = toSimulationAuthorizations({
       chainId: mainnet.id,
+      mode: "preview",
+      blockNumber: 25_832_676n,
       owner: client.account.address,
       requirements: await refinance.getRequirements(),
     });
@@ -1090,8 +1108,6 @@ describe.sequential("simulate pipeline — blue refinance", () => {
         },
       ],
     });
-    expect(result.verification.operations[0]!.operation.type).toBe(
-      "blueRefinance",
-    );
+    expect(result.verification.operations[0]!.operation).toBe("blueRefinance");
   }, 240_000);
 });

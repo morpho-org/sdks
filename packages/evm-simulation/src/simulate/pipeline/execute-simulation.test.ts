@@ -5,7 +5,7 @@ import {
   SimulationRevertedError,
   UnsupportedChainError,
 } from "../../errors.js";
-import { encodeUint256 } from "../../test-helpers/index.js";
+import { encodeUint256, makeValidated } from "../../test-helpers/index.js";
 import type { SimulationConfig } from "../../types.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
@@ -23,6 +23,7 @@ const rpc = (result: unknown) =>
 
 function respondHappy(callCount = 3) {
   fetchMock
+    // Pinned block resolution runs first, then the boundary's chain check.
     .mockResolvedValueOnce(
       rpc({
         number: numberToHex(20_000_000n),
@@ -57,13 +58,16 @@ function respondHappy(callCount = 3) {
     );
 }
 
-const makePlan = () =>
-  planExecution(
-    parseRequest({
-      chainId: 1,
-      transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
-    }),
-  );
+const makePlan = () => {
+  const request = parseRequest({
+    chainId: 1,
+    transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+  });
+  return planExecution(makeValidated({ request, owner: OWNER }), {
+    full: [],
+    permissions: [],
+  });
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -85,7 +89,7 @@ describe.sequential("executeSimulation", () => {
         plan: makePlan(),
       });
       expect(timeout).toHaveBeenCalledWith(timeoutMs ?? 5000);
-      // One shared signal across getBlock, chainId, eth_simulateV1 and the
+      // One shared signal across chainId, getBlock, eth_simulateV1 and the
       // reorg-check getBlock.
       const signals = fetchMock.mock.calls.map((call) => call[1]?.signal);
       expect(signals).toHaveLength(4);
@@ -93,15 +97,15 @@ describe.sequential("executeSimulation", () => {
     },
   );
 
-  test("default: returns the execution from the boundary", async () => {
+  test("default: returns evidence from the boundary", async () => {
     respondHappy();
-    const execution = await executeSimulation({
+    const evidence = await executeSimulation({
       config,
       plan: makePlan(),
       blockNumber: 20_000_000n,
     });
-    expect(execution.calls).toHaveLength(3);
-    expect(execution.nativeBalances).toHaveLength(2);
+    expect(evidence.calls).toHaveLength(3);
+    expect(evidence.nativeBalances).toHaveLength(2);
   });
 
   test("error: UnsupportedChainError without an endpoint", async () => {

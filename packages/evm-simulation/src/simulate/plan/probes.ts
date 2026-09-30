@@ -18,9 +18,9 @@ import {
   numberToHex,
   zeroAddress,
 } from "viem";
-import type { DecodedProbeRead, ProbeRead } from "../../domain/stages.js";
 import { InvalidSimulationResponseError } from "../../errors.js";
 import type { SimulationTransaction } from "../../types.js";
+import type { DecodedProbeRead, ProbeRead } from "../internal/stages.js";
 import {
   encodeNativeBalanceProbe,
   NATIVE_BALANCE_PROBE_ADDRESS,
@@ -199,7 +199,6 @@ export function encodeProbeCall(
 const failDecode = (read: ProbeRead, cause?: unknown): never => {
   throw new InvalidSimulationResponseError(
     `Probe "${probeId(read)}" returned undecodable data`,
-    { stage: "evidence", location: { type: "probe", probeId: probeId(read) } },
     { cause },
   );
 };

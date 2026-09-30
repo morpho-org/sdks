@@ -1,13 +1,14 @@
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { type Address, ethAddress, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { VerificationDiff } from "../../domain/evidence.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AssetChangeMismatchError,
   SlippageLimitExceededError,
 } from "../../errors.js";
+import type { VerificationDiff } from "../../simulate/internal/evidence.js";
+import type { DecodedBundle } from "../../simulate/internal/stages.js";
+import { fixtureAt } from "../../test-helpers/index.js";
 import type { Transfer } from "../../types.js";
 import { verifyWallet } from "./wallet.js";
 
@@ -69,6 +70,7 @@ describe("verifyWallet", () => {
       wallet: [{ account: OWNER, token: TOKEN, assets: -1_000_000n }],
     };
     const result = verifyWallet({
+      at: fixtureAt(),
       bundle: bundle([depositOp()]),
       totalDiff: emptyDiff(),
       actionDiff,
@@ -84,6 +86,7 @@ describe("verifyWallet", () => {
     };
     expect(() =>
       verifyWallet({
+        at: fixtureAt(),
         bundle: bundle([depositOp()]),
         totalDiff: emptyDiff(),
         actionDiff,
@@ -95,6 +98,7 @@ describe("verifyWallet", () => {
   test("error: AssetChangeMismatchError on missing owner debit", () => {
     expect(() =>
       verifyWallet({
+        at: fixtureAt(),
         bundle: bundle([depositOp()]),
         totalDiff: emptyDiff(),
         actionDiff: emptyDiff(),
@@ -113,6 +117,7 @@ describe("verifyWallet", () => {
     };
     expect(() =>
       verifyWallet({
+        at: fixtureAt(),
         bundle: bundle([depositOp()]),
         totalDiff: emptyDiff(),
         actionDiff,
@@ -133,6 +138,7 @@ describe("verifyWallet", () => {
       wallet: [{ account: RECEIVER, token: TOKEN, assets: 820_000n }],
     };
     const result = verifyWallet({
+      at: fixtureAt(),
       bundle: bundle([withdrawOp]),
       totalDiff: emptyDiff(),
       actionDiff,
@@ -154,6 +160,7 @@ describe("verifyWallet", () => {
     };
     expect(() =>
       verifyWallet({
+        at: fixtureAt(),
         bundle: bundle([withdrawOp]),
         totalDiff: emptyDiff(),
         actionDiff,
@@ -176,6 +183,7 @@ describe("verifyWallet", () => {
       wallet: [{ account: OWNER, token: ethAddress, assets: -(10n ** 17n) }],
     };
     const result = verifyWallet({
+      at: fixtureAt(),
       bundle: bundle([nativeOp]),
       totalDiff: emptyDiff(),
       actionDiff,

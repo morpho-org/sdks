@@ -1,10 +1,10 @@
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
-import type { SimulationAuthorization } from "../../domain/authorizations.js";
-import type { PermissionState } from "../../domain/evidence.js";
-import type { PlannedPreparation } from "../../domain/stages.js";
+import type { PendingAuthorization } from "../../authorizations.js";
 import type { SimulationTransaction } from "../../types.js";
+import type { PermissionState } from "../internal/evidence.js";
+import type { PlannedPreparation } from "../internal/stages.js";
 
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const approvalTx = (
@@ -57,7 +57,7 @@ const blueAuthorizationTx = (
  * @internal
  */
 export function preparePreviewAuthorizations(params: {
-  readonly authorizations: readonly SimulationAuthorization[];
+  readonly authorizations: readonly PendingAuthorization[];
   readonly owner: Address;
   readonly morpho: Address;
 }): readonly PlannedPreparation[] {

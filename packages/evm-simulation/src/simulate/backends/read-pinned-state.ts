@@ -37,25 +37,25 @@ import type {
   VaultBinding,
 } from "../../decode/index.js";
 import type {
+  DecodedOperation,
+  MarketBinding,
+  OperationFunding,
+} from "../../decode/operation.js";
+import {
+  ExternalServiceError,
+  SimulationPackageError,
+  UnsupportedChainError,
+} from "../../errors.js";
+import type {
   MarketState,
   PermissionState,
   PositionState,
   RiskMetric,
   VaultState,
   VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type {
-  DecodedOperation,
-  MarketBinding,
-  OperationFunding,
-} from "../../domain/operations.js";
-import type { DecodedBundle, PinnedInputs } from "../../domain/stages.js";
-import { brandPinned } from "../../domain/stages.js";
-import {
-  ExternalServiceError,
-  SimulationPackageError,
-  UnsupportedChainError,
-} from "../../errors.js";
+} from "../internal/evidence.js";
+import type { DecodedBundle, PinnedInputs } from "../internal/stages.js";
+import { brandPinned } from "../internal/stages.js";
 import type { PinnedBlock } from "./resolve-pinned-block.js";
 
 const MAX_LLTV_WAD = MathLib.WAD;

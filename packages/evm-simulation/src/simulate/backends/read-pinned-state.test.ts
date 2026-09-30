@@ -2,9 +2,9 @@ import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, getAddress, isAddressEqual } from "viem";
 import { mainnet } from "viem/chains";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import { ExternalServiceError } from "../../errors.js";
+import type { DecodedBundle } from "../internal/stages.js";
 import { readPinnedInputs } from "./read-pinned-state.js";
 
 const addresses = getChainAddresses(1);

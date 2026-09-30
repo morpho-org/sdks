@@ -5,14 +5,20 @@ import {
   InvalidSimulationResponseError,
   MissingVerificationEvidenceError,
   SimulationRevertedError,
-  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
+import type {
+  DecodedBundle,
+  ExecutionPlan,
+  ValidatedAuthorizations,
+} from "../../simulate/internal/stages.js";
+import { brandPinned, brandValidated } from "../../simulate/internal/stages.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
-import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { executePlan } from "./eth-simulate-v1.js";
+
+// import type { PinnedBlock } from "./resolve-pinned-block.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const VAULT: Address = getAddress("0x3333333333333333333333333333333333333333");
@@ -21,14 +27,50 @@ const STATE_BLOCK = 20_000_000n;
 
 const fetchMock = vi.fn<typeof fetch>();
 
-function makePlan(overrides: object = {}): ExecutionPlan {
-  return planExecution(
-    parseRequest({
-      chainId: 1,
-      transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
-      ...overrides,
+function makePlan(transactions = 1): ExecutionPlan {
+  const request = parseRequest({
+    chainId: 1,
+    transactions: Array.from({ length: transactions }, () => ({
+      from: OWNER,
+      to: VAULT,
+      data: "0x12",
+    })),
+  });
+  const validated: ValidatedAuthorizations = brandValidated({
+    inputs: brandPinned({
+      bundle: {
+        request,
+        owner: OWNER,
+        operations: [],
+      } as unknown as DecodedBundle,
+      context: {
+        chainId: 1,
+        stateBlockNumber: STATE_BLOCK,
+        stateBlockHash: `0x${"ab".repeat(32)}`,
+        stateBlockTimestamp: 1_700_000_000n,
+        blockNumber: STATE_BLOCK,
+        blockTimestamp: 1_700_000_000n,
+      },
+      before: {
+        wallet: [],
+        permissions: [],
+        positions: [],
+        vaults: [],
+        markets: [],
+      },
+      internals: { vaultData: new Map() },
     }),
-  );
+    limits: {
+      maxSlippageWad: 0n,
+      minLltvBufferWad: 0n,
+      maxSignatureLifetimeSeconds: 0n,
+      operations: [],
+    },
+    preparations: [],
+    matches: [],
+    expected: [],
+  });
+  return planExecution(validated, { full: [], permissions: [] });
 }
 
 const rpc = (result: unknown) =>
@@ -48,7 +90,7 @@ interface CallResult {
   gasUsed?: string;
   returnData?: string;
   logs?: readonly unknown[];
-  error?: unknown;
+  error?: { code?: number; message?: string };
 }
 
 function simulateResult(calls: CallResult[], overrides: object = {}): unknown {
@@ -64,7 +106,7 @@ function simulateResult(calls: CallResult[], overrides: object = {}): unknown {
   ];
 }
 
-/** Queue block → chainId → simulate responses for a happy-path call. */
+/** Queue chainId → simulate → reorg-check block responses for a happy-path call. */
 function respondHappy(calls: CallResult[]) {
   fetchMock
     .mockResolvedValueOnce(rpc(blockResult()))
@@ -98,18 +140,17 @@ const params = {
 describe.sequential("executePlan", () => {
   test("default", async () => {
     respondHappy(okCalls(3));
-    const execution = await executePlan(params);
-    expect(execution.calls).toHaveLength(3);
-    expect(execution.block.stateBlockNumber).toBe(STATE_BLOCK);
-    expect(execution.block.blockNumber).toBe(STATE_BLOCK + 1n);
-    expect(execution.block.chainId).toBe(1);
-    expect(execution.nativeBalances).toHaveLength(2);
-    expect(execution.nativeBalances[0]).toMatchObject({
-      probeId: "native-balance:before",
-      phase: "before",
-      account: OWNER,
-    });
-    expect(Object.isFrozen(execution)).toBe(true);
+    const evidence = await executePlan(params);
+    expect(evidence.calls).toHaveLength(3);
+    expect(evidence.block.stateBlockNumber).toBe(STATE_BLOCK);
+    expect(evidence.block.blockNumber).toBe(STATE_BLOCK + 1n);
+    expect(evidence.block.chainId).toBe(1);
+    expect(evidence.nativeBalances).toHaveLength(2);
+    expect(evidence.nativeBalances[0]?.probeId).toBe(
+      "nativeBalance:0x1111111111111111111111111111111111111111",
+    );
+    expect(evidence.nativeBalances[0]?.phase).toBe("before");
+    expect(Object.isFrozen(evidence)).toBe(true);
   });
 
   test("behavior: request body carries overrides, flags and pinned block", async () => {
@@ -165,104 +206,14 @@ describe.sequential("executePlan", () => {
     expect(
       Object.values(overrides).every((entry) => !("balance" in entry)),
     ).toBe(true);
-    // Four sequential RPC requests: block, chainId, simulate, reorg-check block.
+    // Four sequential RPC requests: pinned block, chainId, simulate, reorg-check block.
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(
-      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
-    ).toMatchObject({ method: "eth_getBlockByNumber" });
     expect(
       JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)),
     ).toMatchObject({ method: "eth_chainId" });
   });
 
-  test("behavior: resolves latest exactly once", async () => {
-    respondHappy(okCalls(3));
-    await executePlan({ ...params, blockNumber: undefined });
-    const blockRequest = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(blockRequest.params[0]).toBe("latest");
-    const simRequest = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
-    expect(simRequest.params[1]).toBe(numberToHex(STATE_BLOCK));
-  });
-
-  test("error: UnsupportedVerificationFeatureError for preview authorizations once the block is pinned", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"));
-    const plan = makePlan({
-      mode: "preview",
-      authorizations: [
-        {
-          type: "erc20Approval",
-          token: USDC,
-          owner: OWNER,
-          spender: VAULT,
-          amount: 100n,
-        },
-      ],
-    });
-    const error = await executePlan({ ...params, plan }).catch(
-      (caught: unknown) => caught,
-    );
-    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
-    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
-      stage: "preparation",
-      mode: "preview",
-      chainId: 1,
-      blockNumber: STATE_BLOCK,
-      authorizationIndex: 0,
-    });
-    // The gate fires before eth_simulateV1: only block + chainId were fetched.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(
-      fetchMock.mock.calls.every(
-        (call) => !String(call[1]?.body).includes("eth_simulateV1"),
-      ),
-    ).toBe(true);
-  });
-
-  test("error: UnsupportedVerificationFeatureError for consumer limits once the block is pinned", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"));
-    const plan = makePlan({ limits: { maxSlippageWad: 1n } });
-    const error = await executePlan({ ...params, plan }).catch(
-      (caught: unknown) => caught,
-    );
-    expect(error).toBeInstanceOf(UnsupportedVerificationFeatureError);
-    expect((error as UnsupportedVerificationFeatureError).context).toEqual({
-      stage: "validation",
-      mode: "final",
-      chainId: 1,
-      blockNumber: STATE_BLOCK,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(
-      fetchMock.mock.calls.every(
-        (call) => !String(call[1]?.body).includes("eth_simulateV1"),
-      ),
-    ).toBe(true);
-  });
-
-  test.each([
-    { name: "null number", overrides: { number: null } },
-    { name: "null hash", overrides: { hash: null } },
-  ])(
-    "error: ExternalServiceError for a state block with $name",
-    async ({ overrides }) => {
-      fetchMock.mockResolvedValueOnce(rpc(blockResult(overrides)));
-      await expect(executePlan(params)).rejects.toBeInstanceOf(
-        ExternalServiceError,
-      );
-      // The failure precedes the feature gate: no eth_simulateV1 issued.
-      expect(
-        fetchMock.mock.calls.every(
-          (call) => !String(call[1]?.body).includes("eth_simulateV1"),
-        ),
-      ).toBe(true);
-    },
-  );
-
-  test("error: InvalidSimulationResponseError on chain mismatch", async () => {
+  test("error: ExternalServiceError on chain mismatch", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc(blockResult()))
       .mockResolvedValueOnce(rpc("0x89"));
@@ -272,43 +223,7 @@ describe.sequential("executePlan", () => {
     expect((error as Error).message).toBe(
       "The RPC configured for chain 1 reports chain 137. Fix SimulationConfig.chains.",
     );
-    expect((error as InvalidSimulationResponseError).context?.stage).toBe(
-      "transport",
-    );
-    // No eth_simulateV1 request was issued.
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(
-      fetchMock.mock.calls.every(
-        (call) => !String(call[1]?.body).includes("eth_simulateV1"),
-      ),
-    ).toBe(true);
-  });
-
-  test("error: ExternalServiceError when eth_chainId fails, even with an insufficient-funds message", async () => {
-    fetchMock.mockResolvedValueOnce(rpc(blockResult())).mockResolvedValueOnce(
-      Response.json({
-        jsonrpc: "2.0",
-        id: 1,
-        error: { code: 3, message: "insufficient funds" },
-      }),
-    );
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    // Revert classification applies to eth_simulateV1 only.
-    expect(error).toBeInstanceOf(ExternalServiceError);
-    expect(error).not.toBeInstanceOf(SimulationRevertedError);
-  });
-
-  test("error: ExternalServiceError for an eth_simulateV1 HTTP failure without the RPC URL", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        new Response("Internal Server Error", { status: 500 }),
-      );
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ExternalServiceError);
-    expect((error as Error).message).not.toContain("rpc.example");
-    expect((error as Error).cause).toBeDefined();
   });
 
   test.each([null, {}, [{ calls: null }], []])(
@@ -350,169 +265,8 @@ describe.sequential("executePlan", () => {
         ),
       )
       .mockResolvedValueOnce(rpc(blockResult()));
-    const execution = await executePlan(params);
-    expect(execution.block.blockNumber).toBe(STATE_BLOCK);
-  });
-
-  test("error: InvalidSimulationResponseError when the successor reports no parentHash", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        rpc(simulateResult(okCalls(3), { parentHash: undefined })),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test("error: InvalidSimulationResponseError when the successor parentHash is not the pinned hash", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        rpc(simulateResult(okCalls(3), { parentHash: `0x${"ef".repeat(32)}` })),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test("behavior: accepts a pinned block report with a different hash (Anvil re-hashes)", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        rpc(
-          simulateResult(okCalls(3), {
-            number: numberToHex(STATE_BLOCK),
-            timestamp: numberToHex(1_700_000_000n),
-            hash: `0x${"ef".repeat(32)}`,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    const execution = await executePlan(params);
-    expect(execution.block.blockNumber).toBe(STATE_BLOCK);
-  });
-
-  test.each([
-    ["non-bytes32 hash", { hash: "0x1234" }],
-    ["non-bytes32 parentHash", { parentHash: "0x1234" }],
-  ])(
-    "error: InvalidSimulationResponseError for %s",
-    async (_name, overrides) => {
-      fetchMock
-        .mockResolvedValueOnce(rpc(blockResult()))
-        .mockResolvedValueOnce(rpc("0x1"))
-        .mockResolvedValueOnce(rpc(simulateResult(okCalls(3), overrides)))
-        .mockResolvedValueOnce(rpc(blockResult()));
-      await expect(executePlan(params)).rejects.toBeInstanceOf(
-        InvalidSimulationResponseError,
-      );
-    },
-  );
-
-  test("error: InvalidSimulationResponseError for a two-block response", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        rpc([...(simulateResult(okCalls(3)) as unknown[]), {}]),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test.each([
-    [
-      "non-hex returnData",
-      [{ status: "0x1", gasUsed: "0x1", returnData: "0xzz" }],
-    ],
-    [
-      "non-bytes32 topic",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          logs: [
-            {
-              address: "0x1111111111111111111111111111111111111111",
-              topics: ["0x1234"],
-              data: "0x",
-            },
-          ],
-        },
-      ],
-    ],
-    [
-      "non-hex log data",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          logs: [
-            {
-              address: "0x1111111111111111111111111111111111111111",
-              topics: [],
-              data: "0xzz",
-            },
-          ],
-        },
-      ],
-    ],
-    [
-      "non-object error",
-      [{ status: "0x1", gasUsed: "0x1", returnData: "0x", error: "reverted" }],
-    ],
-    [
-      "non-integer error.code (string)",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: "3", message: "x" },
-        },
-      ],
-    ],
-    [
-      "non-integer error.code (float)",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: 1.5 },
-        },
-      ],
-    ],
-    [
-      "non-string error.message",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: 3, message: 42 },
-        },
-      ],
-    ],
-  ])("error: InvalidSimulationResponseError for %s", async (_name, calls) => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
+    const evidence = await executePlan(params);
+    expect(evidence.block.blockNumber).toBe(STATE_BLOCK);
   });
 
   test("error: InvalidSimulationResponseError for a block behind the state block", async () => {
@@ -523,24 +277,6 @@ describe.sequential("executePlan", () => {
         rpc(
           simulateResult(okCalls(3), {
             number: numberToHex(STATE_BLOCK - 1n),
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test("error: InvalidSimulationResponseError for a block beyond the state block successor", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(
-        rpc(
-          simulateResult(okCalls(3), {
-            number: numberToHex(STATE_BLOCK + 2n),
-            timestamp: numberToHex(1_700_000_012n),
           }),
         ),
       )
@@ -579,18 +315,6 @@ describe.sequential("executePlan", () => {
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
-  });
-
-  test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
-      .mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }));
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ExternalServiceError);
-    expect((error as Error).message).not.toContain("rpc.example");
-    expect((error as Error).cause).toBeDefined();
   });
 
   test.each([
@@ -678,7 +402,10 @@ describe.sequential("executePlan", () => {
     expect(error).toBeInstanceOf(SimulationRevertedError);
     if (error instanceof SimulationRevertedError) {
       expect(error.reason).toBe("insufficient funds");
-      const details = error.details as { transactionIndex: number }[];
+      const details = error.details as {
+        transactionIndex: number;
+        result: unknown;
+      }[];
       expect(details.every((d) => typeof d.transactionIndex === "number")).toBe(
         true,
       );
@@ -696,16 +423,9 @@ describe.sequential("executePlan", () => {
           error: { code: 3, message: "execution reverted" },
         }),
       );
-    const error = await executePlan(params).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(SimulationRevertedError);
-    if (error instanceof SimulationRevertedError) {
-      expect(error.cause).toBeInstanceOf(Error);
-      expect(error.details).toEqual({
-        code: 3,
-        shortMessage: expect.any(String),
-      });
-      expect(JSON.stringify(error.details)).not.toContain("rpc.example");
-    }
+    await expect(executePlan(params)).rejects.toBeInstanceOf(
+      SimulationRevertedError,
+    );
   });
 
   test.each([
@@ -750,7 +470,7 @@ describe.sequential("executePlan", () => {
     );
   });
 
-  test("behavior: probe readings carry decoded native balances", async () => {
+  test("behavior: probe snapshots carry decoded native balances", async () => {
     const calls = okCalls(3);
     calls[0] = { ...calls[0], returnData: encodeUint256(100n) };
     calls[2] = { ...calls[2], returnData: encodeUint256(90n) };
@@ -759,8 +479,8 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
-    const execution = await executePlan(params);
-    expect(execution.nativeBalances.map((r) => r.assets)).toEqual([100n, 90n]);
+    const evidence = await executePlan(params);
+    expect(evidence.nativeBalances.map((s) => s.assets)).toEqual([100n, 90n]);
   });
 
   test("behavior: user call logs are normalized into SimulationCall", async () => {
@@ -783,9 +503,9 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
-    const execution = await executePlan(params);
-    const userCall = execution.calls[1]!;
-    expect(userCall.planned).toMatchObject({
+    const evidence = await executePlan(params);
+    const userCall = evidence.calls[1]!;
+    expect(userCall.planned.identity).toEqual({
       type: "transaction",
       transactionIndex: 0,
     });

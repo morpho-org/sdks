@@ -1,108 +1,142 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, zeroAddress } from "viem";
-import type {
-  ParsedRequest,
-  ParsedTransaction,
-} from "../request/parse-request.js";
+import type { ProbeIdentity } from "../internal/evidence.js";
 import {
-  encodeNativeBalanceProbe,
+  brandPlanned,
+  type ExecutionPlan,
+  type PlannedCall,
+  type ProbeRead,
+  type ValidatedAuthorizations,
+} from "../internal/stages.js";
+
+export type { ExecutionPlan, PlannedCall } from "../internal/stages.js";
+
+import {
   NATIVE_BALANCE_PROBE_ADDRESS,
   NATIVE_BALANCE_PROBE_BYTECODE,
 } from "./native-balance-probe.js";
+import { encodeProbeCall, probeId } from "./probes.js";
 
-/** One call of an {@link ExecutionPlan}: either a user transaction or a synthetic native-balance probe.
- * @internal
- */
-export type PlannedCall =
-  | {
-      readonly type: "transaction";
-      readonly transactionIndex: number;
-      readonly transaction: ParsedTransaction;
-    }
-  | {
-      readonly type: "nativeBalanceProbe";
-      readonly probeId: string;
-      readonly phase: "before" | "intermediate" | "after";
-      readonly account: Address;
-      readonly transaction: ParsedTransaction;
-    };
-
-/** The output of {@link planExecution}: ordered calls plus the `stateOverrides` the probe code needs.
- * @internal
- */
-export interface ExecutionPlan {
-  readonly request: ParsedRequest;
-  readonly owner: Address;
-  readonly calls: readonly PlannedCall[];
-  readonly stateOverrides: readonly {
-    readonly address: Address;
-    readonly code: Hex;
-  }[];
-}
+const NATIVE_READ = (owner: `0x${string}`): ProbeRead => ({
+  type: "nativeBalance",
+  account: owner,
+});
 
 /**
- * Plan the execution of a parsed request as ordered `eth_simulateV1` calls.
+ * Plan the execution of a validated request as ordered `eth_simulateV1` calls.
  *
- * The sequence interleaves a synthetic native-balance probe between every user
- * transaction: one `before` probe, then for each user transaction the
- * transaction itself followed by a probe (phase `intermediate`, or `after`
- * after the last transaction). Probe identities carry their own index space —
- * user `transactionIndex` values match the caller's transaction positions and
- * never shift with the plan's array offsets.
+ * Sequence (design §9):
+ * `[before probes]` → preparation calls → `[prepared probes]` →
+ * for each user tx: `tx` then `[intermediate probes]`, except the last tx is
+ * followed by the full `[after probes]`.
  *
- * Probe calls are sent `from` the zero address against
- * {@link NATIVE_BALANCE_PROBE_ADDRESS}, whose minimal `BALANCE`-reading
- * bytecode is injected through `stateOverrides`, so the plan depends on no
- * deployed helper contract. The parser rejects transactions targeting the
- * probe address — it is reserved for injected code, not real calls.
+ * - `before`/`after` carry every {@link ProbeRead} in `reads.full` plus the
+ *   owner's native-balance probe.
+ * - `prepared` (emitted only when preparations exist) and `intermediate`
+ *   carry `reads.permissions` plus the owner's native-balance probe.
+ * - Preparation calls run `from` the owner; probes run `from` `zeroAddress`.
  *
- * @param request - The normalized request produced by `parseRequest`.
+ * Identities are independent of array offsets: user calls keep the caller's
+ * `transactionIndex`; preparation calls carry
+ * `{ type: "authorization", authorizationIndex, preparationCallIndex }`;
+ * probes carry `{ type: "probe", probeId, phase }`.
+ *
+ * @param validated - Policy-checked request with ordered preparations.
+ * @param reads - The planned probe reads, `full` for boundary snapshots and
+ *   `permissions` for the read-back phases between state changes.
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
  *   structurally equal plans.
  * @internal
  */
-export function planExecution(request: ParsedRequest): ExecutionPlan {
-  const owner = request.transactions[0]!.from;
+export function planExecution(
+  validated: ValidatedAuthorizations,
+  reads: {
+    readonly full: readonly ProbeRead[];
+    readonly permissions: readonly ProbeRead[];
+  },
+): ExecutionPlan {
+  const { inputs, preparations } = validated;
+  const { bundle } = inputs;
+  const request = bundle.request;
+  const owner = bundle.owner;
 
+  const seen = new Set<string>();
   const probe = (
-    probeId: string,
-    phase: "before" | "intermediate" | "after",
-  ): PlannedCall => ({
-    type: "nativeBalanceProbe",
-    probeId,
-    phase,
-    account: owner,
-    transaction: {
-      from: zeroAddress,
-      to: NATIVE_BALANCE_PROBE_ADDRESS,
-      data: encodeNativeBalanceProbe(owner),
-      value: 0n,
-    },
-  });
+    read: ProbeRead,
+    phase: ProbeIdentity["phase"],
+  ): PlannedCall => {
+    seen.add(`${phase}:${probeId(read)}`);
+    return {
+      identity: { type: "probe", probeId: probeId(read), phase },
+      transaction: encodeProbeCall(read),
+      read,
+    };
+  };
 
-  const calls: PlannedCall[] = [probe("native-balance:before", "before")];
+  const probeSet = (
+    list: readonly ProbeRead[],
+    phase: ProbeIdentity["phase"],
+  ): PlannedCall[] => {
+    const calls: PlannedCall[] = [];
+    const native = NATIVE_READ(owner);
+    calls.push(probe(native, phase));
+    for (const read of list) {
+      const id = probeId(read);
+      if (seen.has(`${phase}:${id}`)) continue;
+      calls.push(probe(read, phase));
+    }
+    return calls;
+  };
+
+  const calls: PlannedCall[] = [...probeSet(reads.full, "before")];
+
+  for (const preparation of preparations) {
+    preparation.calls.forEach((transaction, preparationCallIndex) => {
+      calls.push({
+        identity: {
+          type: "authorization",
+          authorizationIndex: preparation.authorizationIndex,
+          preparationCallIndex,
+        },
+        transaction,
+      });
+    });
+  }
+
+  if (preparations.length > 0) {
+    calls.push(...probeSet(reads.permissions, "prepared"));
+  }
+
   const last = request.transactions.length - 1;
   for (let i = 0; i <= last; i++) {
     const transaction = request.transactions[i]!;
     calls.push({
-      type: "transaction",
-      transactionIndex: i,
-      transaction,
+      identity: { type: "transaction", transactionIndex: i },
+      transaction: {
+        from: transaction.from,
+        to: transaction.to,
+        data: transaction.data,
+        value: transaction.value ?? 0n,
+      },
     });
     calls.push(
-      probe(`native-balance:after:${i}`, i === last ? "after" : "intermediate"),
+      ...probeSet(
+        i === last ? reads.full : reads.permissions,
+        i === last ? "after" : "intermediate",
+      ),
     );
   }
 
-  return deepFreeze({
-    request,
-    owner,
-    calls,
-    stateOverrides: [
-      {
-        address: NATIVE_BALANCE_PROBE_ADDRESS,
-        code: NATIVE_BALANCE_PROBE_BYTECODE,
-      },
-    ],
-  });
+  return brandPlanned(
+    deepFreeze({
+      request,
+      owner,
+      calls,
+      stateOverrides: [
+        {
+          address: NATIVE_BALANCE_PROBE_ADDRESS,
+          code: NATIVE_BALANCE_PROBE_BYTECODE,
+        },
+      ],
+    }),
+  );
 }

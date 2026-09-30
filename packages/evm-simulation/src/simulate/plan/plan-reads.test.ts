@@ -1,9 +1,9 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { type Address, ethAddress, getAddress, zeroAddress } from "viem";
-import type { VerificationSnapshot } from "../../domain/evidence.js";
-import type { DecodedBundle } from "../../domain/stages.js";
 import { UnsupportedChainError } from "../../errors.js";
+import type { VerificationSnapshot } from "../internal/evidence.js";
+import type { DecodedBundle } from "../internal/stages.js";
 import { planProbeReads } from "./plan-reads.js";
 import { probeId } from "./probes.js";
 

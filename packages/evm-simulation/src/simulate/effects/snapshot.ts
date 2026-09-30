@@ -1,7 +1,8 @@
 import { MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
+import type { SimulationErrorContext } from "../../errors.js";
+import { MissingVerificationEvidenceError } from "../../errors.js";
 import type {
   Applicable,
   MarketState,
@@ -11,9 +12,8 @@ import type {
   VerificationDiff,
   VerificationSnapshot,
   WalletBalance,
-} from "../../domain/evidence.js";
-import type { DecodedProbeRead } from "../../domain/stages.js";
-import { MissingVerificationEvidenceError } from "../../errors.js";
+} from "../internal/evidence.js";
+import type { DecodedProbeRead } from "../internal/stages.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
@@ -27,7 +27,7 @@ const isExtracted = <T extends DecodedProbeRead["type"]>(
 const missing = (context: SimulationErrorContext, subject: string): never => {
   throw new MissingVerificationEvidenceError(
     `Snapshot subject "${subject}" has no probe observation. Planned reads must cover every snapshot field.`,
-    context,
+    { context },
   );
 };
 
@@ -49,9 +49,8 @@ const missing = (context: SimulationErrorContext, subject: string): never => {
 export function buildSnapshot(
   template: VerificationSnapshot,
   reads: readonly DecodedProbeRead[],
-  context?: SimulationErrorContext,
+  ctx: SimulationErrorContext,
 ): VerificationSnapshot {
-  const ctx: SimulationErrorContext = context ?? { stage: "verification" };
   const find = <T extends DecodedProbeRead["type"]>(
     type: T,
     matches: (read: Extract<DecodedProbeRead, { readonly type: T }>) => boolean,

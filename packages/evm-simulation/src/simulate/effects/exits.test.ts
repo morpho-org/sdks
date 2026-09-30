@@ -1,14 +1,13 @@
 import { type Address, getAddress, zeroAddress } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { VerificationDiff } from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle } from "../../domain/stages.js";
-import { brandPinned } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AssetChangeMismatchError,
   StateChangeMismatchError,
 } from "../../errors.js";
+import type { VerificationDiff } from "../../simulate/internal/evidence.js";
+import type { DecodedBundle } from "../../simulate/internal/stages.js";
+import { brandPinned } from "../../simulate/internal/stages.js";
+import type { EffectiveSimulationLimits } from "../../simulate/request/effective-limits.js";
 import {
   FIXTURE_ADAPTER,
   FIXTURE_MARKET_ID,
@@ -17,23 +16,19 @@ import {
   FIXTURE_TOKEN,
   FIXTURE_VAULT,
   FIXTURE_VAULT_V2,
+  fixtureAt,
   fixturePosition,
   fixtureSnapshot,
   fixtureVault,
 } from "../../test-helpers/index.js";
 import { verifyExitOperation } from "./exits.js";
 
-const context: SimulationErrorContext = {
-  stage: "verification",
-  chainId: 1,
-  mode: "final",
-};
+const at = fixtureAt();
 
 const limits: EffectiveSimulationLimits = {
   maxSlippageWad: 10n ** 15n,
   minLltvBufferWad: 0n,
   maxSignatureLifetimeSeconds: 7200n,
-  wallet: { maxDebit: [], minCredit: [] },
   operations: [],
 };
 
@@ -139,7 +134,7 @@ describe("verifyExitOperation", () => {
       after,
       actionDiff: emptyDiff,
       limits,
-      context,
+      at,
     });
     expect(
       (result.outcome as { targetSharesMinted: bigint }).targetSharesMinted,
@@ -183,7 +178,7 @@ describe("verifyExitOperation", () => {
         after,
         actionDiff: diff,
         limits,
-        context,
+        at,
       }),
     ).toThrow(AssetChangeMismatchError);
   });
@@ -225,7 +220,7 @@ describe("verifyExitOperation", () => {
           {
             adapter: FIXTURE_ADAPTER,
             marketId: FIXTURE_MARKET_ID,
-            amount: 600n,
+            assets: 600n,
           },
         ],
         minSharePriceE27: 0n,
@@ -238,7 +233,7 @@ describe("verifyExitOperation", () => {
       after,
       actionDiff: diff,
       limits,
-      context,
+      at,
     });
     expect((result.outcome as { assetsReceived: bigint }).assetsReceived).toBe(
       600n,
@@ -290,7 +285,7 @@ describe("verifyExitOperation", () => {
             {
               adapter: FIXTURE_ADAPTER,
               marketId: FIXTURE_MARKET_ID,
-              amount: 600n,
+              assets: 600n,
             },
           ],
           minSharePriceE27: 0n,
@@ -303,7 +298,7 @@ describe("verifyExitOperation", () => {
         after,
         actionDiff: diff,
         limits,
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });
@@ -332,7 +327,7 @@ describe("verifyExitOperation", () => {
       after,
       actionDiff: emptyDiff,
       limits,
-      context,
+      at,
     });
     expect((result.outcome as { sharesBurned: bigint }).sharesBurned).toBe(
       400n,
@@ -368,7 +363,7 @@ describe("verifyExitOperation", () => {
         after,
         actionDiff: diff,
         limits,
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });

@@ -1,16 +1,16 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { ethAddress } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { FeeEvidence, PermissionEvidence } from "../../domain/evidence.js";
-import type { VerifiedOperation } from "../../domain/result.js";
+import { UnsupportedOperationError } from "../../errors.js";
+import type { SimulationLogger, Transfer } from "../../types.js";
+import { type At, verificationContext } from "../internal/error-context.js";
+import type { FeeEvidence, PermissionEvidence } from "../internal/evidence.js";
+import type { VerifiedOperation } from "../internal/result.js";
 import {
   brandVerified,
   type CompleteEvidence,
   type ValidatedAuthorizations,
   type VerifiedEffects,
-} from "../../domain/stages.js";
-import { UnsupportedOperationError } from "../../errors.js";
-import type { SimulationLogger, Transfer } from "../../types.js";
+} from "../internal/stages.js";
 import { accrueSnapshot } from "./accrue.js";
 import { checkUnrelatedState, verifyBlueOperation } from "./blue.js";
 import { toMarketEntity } from "./market-entity.js";
@@ -41,14 +41,13 @@ export function verifyEffects(
   const { inputs, limits } = validated;
   const { bundle } = inputs;
 
-  const context: SimulationErrorContext = {
-    stage: "verification",
-    chainId: bundle.request.chainId,
-    mode: bundle.request.mode,
-  };
+  const at: At = { context: evidence.context, mode: bundle.request.mode };
+  const context = verificationContext(at.context, at.mode, {
+    field: "snapshot",
+  });
 
   const before = inputs.before;
-  const after = buildSnapshot(before, evidence.probeReads.after);
+  const after = buildSnapshot(before, evidence.probeReads.after, context);
   const accruedBefore = accrueSnapshot(
     before,
     evidence.context.blockTimestamp,
@@ -62,6 +61,7 @@ export function verifyEffects(
     evidence,
     before,
     after,
+    at,
   });
 
   const fundingDebitOverrides = new Map<string, bigint>();
@@ -94,6 +94,7 @@ export function verifyEffects(
     actionDiff,
     transfers,
     logger,
+    at,
     fundingDebitOverrides,
   });
 
@@ -128,7 +129,7 @@ export function verifyEffects(
             after,
             actionDiff,
             limits,
-            context,
+            at,
           }),
         );
         break;
@@ -162,7 +163,7 @@ export function verifyEffects(
           after,
           actionDiff,
           limits,
-          context,
+          at,
         });
         operations.push(verified.operation);
         if (verified.referralEvidence != null)
@@ -172,12 +173,12 @@ export function verifyEffects(
       default:
         throw new UnsupportedOperationError(
           `Operation type has no verification contract`,
-          context,
+          { context },
         );
     }
   }
 
-  checkUnrelatedState({ accruedBefore, after, touchedMarketIds, context });
+  checkUnrelatedState({ accruedBefore, after, touchedMarketIds, at });
 
   const verificationBase = {
     ...evidence.context,

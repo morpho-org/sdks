@@ -5,46 +5,36 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { type Address, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type {
-  MarketState,
-  PositionState,
-  RiskMetric,
-  VerificationDiff,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type {
-  DecodedOperation,
-  OperationIdentity,
-} from "../../domain/operations.js";
-import type { VerifiedOperation } from "../../domain/result.js";
-import type { DecodedBundle } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MarketConstraintViolationError,
   ProtocolBindingMismatchError,
   SlippageLimitExceededError,
   StateChangeMismatchError,
 } from "../../errors.js";
+import { type At, operationContext } from "../internal/error-context.js";
+import type {
+  MarketState,
+  PositionState,
+  RiskMetric,
+  VerificationDiff,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type { VerifiedOperation } from "../internal/result.js";
+import type { DecodedBundle } from "../internal/stages.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 import { toMarketEntity } from "./market-entity.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
 interface Ctx {
-  readonly context: SimulationErrorContext;
-  readonly identity: OperationIdentity;
+  readonly at: At;
+  readonly operation: DecodedOperation;
 }
 
-const locationOf = (identity: OperationIdentity) => ({
-  type: "transaction" as const,
-  txIdx: identity.transactionIndex,
-  callPath: identity.callPath,
-});
-
-const fail = (message: string, { context, identity }: Ctx): never => {
+const fail = (message: string, { at, operation }: Ctx): never => {
   throw new StateChangeMismatchError(message, {
-    ...context,
-    location: locationOf(identity),
+    context: operationContext(at.context, at.mode, operation),
   });
 };
 
@@ -119,17 +109,10 @@ export function verifyRefinanceOperation(params: {
   readonly after: VerificationSnapshot;
   readonly actionDiff: VerificationDiff;
   readonly limits: EffectiveSimulationLimits;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): VerifiedOperation {
-  const { operation, accruedBefore, after, actionDiff, limits, context } =
-    params;
-  const ctx: Ctx = {
-    context,
-    identity: {
-      transactionIndex: operation.transactionIndex,
-      callPath: operation.callPath,
-    },
-  };
+  const { operation, accruedBefore, after, actionDiff, limits, at } = params;
+  const ctx: Ctx = { at, operation };
 
   // Bindings: the decoded markets must be bound markets present in evidence.
   const sourceMarket = operation.sourceMarket;
@@ -137,12 +120,12 @@ export function verifyRefinanceOperation(params: {
   if (!after.markets.some((m) => m.market.marketId === sourceMarket.marketId))
     throw new ProtocolBindingMismatchError(
       `Refinance source market "${sourceMarket.marketId}" is not in the verified market set`,
-      { ...context, location: locationOf(ctx.identity) },
+      { context: operationContext(at.context, at.mode, operation) },
     );
   if (!after.markets.some((m) => m.market.marketId === targetMarket.marketId))
     throw new ProtocolBindingMismatchError(
       `Refinance target market "${targetMarket.marketId}" is not in the verified market set`,
-      { ...context, location: locationOf(ctx.identity) },
+      { context: operationContext(at.context, at.mode, operation) },
     );
 
   const sourceBefore = findPosition(
@@ -219,14 +202,14 @@ export function verifyRefinanceOperation(params: {
     if (targetAfter.collateralAssets === 0n)
       throw new MarketConstraintViolationError(
         `Refinance target ${targetMarket.marketId} holds debt with zero collateral`,
-        { ...context, location: locationOf(ctx.identity) },
+        { context: operationContext(at.context, at.mode, operation) },
       );
     if (risk.ltvWad.type === "finite") {
       const bound = targetMarket.params.lltv - limits.minLltvBufferWad;
       if (risk.ltvWad.valueWad > bound)
         throw new MarketConstraintViolationError(
           `Refinance target LTV "${risk.ltvWad.valueWad}" exceeds LLTV "${targetMarket.params.lltv}" minus buffer "${limits.minLltvBufferWad}"`,
-          { ...context, location: locationOf(ctx.identity) },
+          { context: operationContext(at.context, at.mode, operation) },
         );
     }
   }
@@ -241,7 +224,7 @@ export function verifyRefinanceOperation(params: {
   if (loanDust > dustBound)
     throw new SlippageLimitExceededError(
       `Refinance loan dust "${loanDust}" exceeds the slippage bound "${dustBound}" (${limits.maxSlippageWad} WAD of new debt "${newDebt}")`,
-      { ...context, location: locationOf(ctx.identity) },
+      { context: operationContext(at.context, at.mode, operation) },
     );
 
   return {

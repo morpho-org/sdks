@@ -7,57 +7,47 @@ import {
   SECONDS_PER_YEAR,
 } from "@morpho-org/blue-sdk";
 import { type Address, isAddressEqual } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type {
-  MarketState,
-  PositionState,
-  RiskMetric,
-  VerificationDiff,
-  VerificationSnapshot,
-} from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type {
-  DecodedOperation,
-  OperationIdentity,
-} from "../../domain/operations.js";
-import type { VerifiedOperation } from "../../domain/result.js";
-import type { DecodedBundle } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
 } from "../../errors.js";
+import {
+  type At,
+  operationContext,
+  verificationContext,
+} from "../internal/error-context.js";
+import type {
+  MarketState,
+  PositionState,
+  RiskMetric,
+  VerificationDiff,
+  VerificationSnapshot,
+} from "../internal/evidence.js";
+import type { VerifiedOperation } from "../internal/result.js";
+import type { DecodedBundle } from "../internal/stages.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 import { toMarketEntity } from "./market-entity.js";
 import { verifyRefinanceOperation } from "./refinance.js";
 
 const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
 interface OpContext {
-  readonly context: SimulationErrorContext;
-  readonly identity: OperationIdentity;
+  readonly at: At;
+  readonly operation: DecodedOperation;
 }
 
-const locationOf = (identity: OperationIdentity) => ({
-  type: "transaction" as const,
-  txIdx: identity.transactionIndex,
-  callPath: identity.callPath,
-});
-
-const fail = (message: string, { context, identity }: OpContext): never => {
+const fail = (message: string, { at, operation }: OpContext): never => {
   throw new StateChangeMismatchError(message, {
-    ...context,
-    location: locationOf(identity),
+    context: operationContext(at.context, at.mode, operation),
   });
 };
 
-const constraint = (
-  message: string,
-  { context, identity }: OpContext,
-): never => {
+const constraint = (message: string, { at, operation }: OpContext): never => {
   throw new MarketConstraintViolationError(message, {
-    ...context,
-    location: locationOf(identity),
+    context: operationContext(at.context, at.mode, operation),
   });
 };
 
@@ -201,16 +191,10 @@ export function verifyBlueOperation(params: {
   readonly after: VerificationSnapshot;
   readonly actionDiff: VerificationDiff;
   readonly limits: EffectiveSimulationLimits;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): VerifiedOperation {
-  const { operation, accruedBefore, after, limits, context } = params;
-  const ctx: OpContext = {
-    context,
-    identity: {
-      transactionIndex: operation.transactionIndex,
-      callPath: operation.callPath,
-    },
-  };
+  const { operation, accruedBefore, after, limits, at } = params;
+  const ctx: OpContext = { at, operation };
 
   if (operation.type === "blueAuthorization") {
     return {
@@ -344,7 +328,7 @@ export function verifyBlueOperation(params: {
       if (!oraclePresent || !irmPresent)
         throw new MissingVerificationEvidenceError(
           `Borrow on market "${marketId}" requires oracle and IRM reads; one is notApplicable`,
-          context,
+          { context: operationContext(at.context, at.mode, operation) },
         );
       const shares = market.toBorrowShares(operation.borrowAssets, "Up");
       if (next.borrowShares !== before.borrowShares + shares)
@@ -431,7 +415,7 @@ export function verifyBlueOperation(params: {
       if (operation.fullClose && next.borrowShares !== 0n)
         throw new StateChangeMismatchError(
           `Full repay left "${next.borrowShares}" borrow shares`,
-          context,
+          { context: operationContext(at.context, at.mode, operation) },
         );
       if (operation.type === "blueRepayWithdrawCollateral") {
         if (
@@ -480,7 +464,7 @@ export function verifyBlueOperation(params: {
       const _exhaustive: never = operation;
       throw new UnexpectedSimulationError(
         `verifyBlueOperation received an unhandled operation type: ${JSON.stringify(_exhaustive)}`,
-        context,
+        { context: operationContext(at.context, at.mode, operation) },
       );
     }
   }
@@ -495,9 +479,9 @@ export function checkUnrelatedState(params: {
   readonly accruedBefore: VerificationSnapshot;
   readonly after: VerificationSnapshot;
   readonly touchedMarketIds: ReadonlySet<MarketId>;
-  readonly context: SimulationErrorContext;
+  readonly at: At;
 }): void {
-  const { accruedBefore, after, touchedMarketIds, context } = params;
+  const { accruedBefore, after, touchedMarketIds, at } = params;
   for (const position of after.positions) {
     if (touchedMarketIds.has(position.marketId)) continue;
     const prior = accruedBefore.positions.find(
@@ -511,7 +495,11 @@ export function checkUnrelatedState(params: {
     ) {
       throw new StateChangeMismatchError(
         `Unrelated position ${position.marketId}:${position.owner} changed during the bundle`,
-        context,
+        {
+          context: verificationContext(at.context, at.mode, {
+            field: "unrelatedState",
+          }),
+        },
       );
     }
   }
@@ -529,7 +517,11 @@ export function checkUnrelatedState(params: {
     ) {
       throw new StateChangeMismatchError(
         `Unrelated market ${market.market.marketId} totals changed during the bundle`,
-        context,
+        {
+          context: verificationContext(at.context, at.mode, {
+            field: "unrelatedState",
+          }),
+        },
       );
     }
   }

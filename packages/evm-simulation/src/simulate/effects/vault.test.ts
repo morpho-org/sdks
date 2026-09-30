@@ -1,33 +1,28 @@
 import { type Address, getAddress } from "viem";
-import type { SimulationErrorContext } from "../../domain/diagnostics.js";
-import type { VerificationDiff } from "../../domain/evidence.js";
-import type { EffectiveSimulationLimits } from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { DecodedBundle } from "../../domain/stages.js";
-import { brandPinned } from "../../domain/stages.js";
+import type { DecodedOperation } from "../../decode/operation.js";
 import { StateChangeMismatchError } from "../../errors.js";
+import type { VerificationDiff } from "../../simulate/internal/evidence.js";
+import type { DecodedBundle } from "../../simulate/internal/stages.js";
+import { brandPinned } from "../../simulate/internal/stages.js";
+import type { EffectiveSimulationLimits } from "../../simulate/request/effective-limits.js";
 import {
   FIXTURE_NOW,
   FIXTURE_OWNER,
   FIXTURE_TOKEN,
   FIXTURE_VAULT,
   FIXTURE_VAULT_V2,
+  fixtureAt,
   fixtureSnapshot,
   fixtureVault,
 } from "../../test-helpers/index.js";
 import { verifyVaultOperation } from "./vault.js";
 
-const context: SimulationErrorContext = {
-  stage: "verification",
-  chainId: 1,
-  mode: "final",
-};
+const at = fixtureAt();
 
 const limits: EffectiveSimulationLimits = {
   maxSlippageWad: 10n ** 15n,
   minLltvBufferWad: 0n,
   maxSignatureLifetimeSeconds: 7200n,
-  wallet: { maxDebit: [], minCredit: [] },
   operations: [],
 };
 
@@ -125,7 +120,7 @@ describe("verifyVaultOperation", () => {
       after,
       actionDiff: emptyDiff,
       limits,
-      context,
+      at,
     });
     expect(
       (result.operation.outcome as { sharesMinted: bigint }).sharesMinted,
@@ -156,7 +151,7 @@ describe("verifyVaultOperation", () => {
         after,
         actionDiff: emptyDiff,
         limits,
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });
@@ -187,7 +182,7 @@ describe("verifyVaultOperation", () => {
       after,
       actionDiff: diff,
       limits,
-      context,
+      at,
     });
     expect(
       (result.operation.outcome as { sharesBurned: bigint }).sharesBurned,
@@ -214,7 +209,7 @@ describe("verifyVaultOperation", () => {
         after,
         actionDiff: emptyDiff, // no credit observed
         limits,
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });
@@ -240,7 +235,7 @@ describe("verifyVaultOperation", () => {
       after,
       actionDiff: diff,
       limits,
-      context,
+      at,
     });
     expect(
       (result.operation.outcome as { assetsReceived: bigint }).assetsReceived,
@@ -262,7 +257,7 @@ describe("verifyVaultOperation", () => {
         after,
         actionDiff: emptyDiff,
         limits,
-        context,
+        at,
       }),
     ).toThrow(StateChangeMismatchError);
   });
@@ -321,7 +316,7 @@ describe("verifyVaultOperation", () => {
       after,
       actionDiff: emptyDiff,
       limits,
-      context,
+      at,
     });
     expect(
       (result.operation.outcome as { sharesMinted: bigint }).sharesMinted,

@@ -17,7 +17,7 @@ import type {
   PreLiquidationBinding,
   VaultBinding,
 } from "../../decode/index.js";
-import type { MarketBinding } from "../../domain/operations.js";
+import type { MarketBinding } from "../../decode/operation.js";
 import {
   ExternalServiceError,
   SimulationPackageError,

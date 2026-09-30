@@ -5,7 +5,7 @@ import type {
   PositionState,
   VaultState,
   VerificationSnapshot,
-} from "../domain/evidence.js";
+} from "../simulate/internal/evidence.js";
 
 /** Shared fixture accounts for effect-verification unit tests. @internal */
 export const FIXTURE_OWNER: Address = getAddress(

@@ -1,5 +1,6 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type { SimulationResult, SimulationTransaction } from "../types.js";
+import type { DecodedOperation } from "../../decode/operation.js";
+import type { EffectiveSimulationLimits } from "../request/effective-limits.js";
 import type {
   AuthorizationEvidence,
   ConversionEvidence,
@@ -10,8 +11,6 @@ import type {
   VerificationDiff,
   VerificationSnapshot,
 } from "./evidence.js";
-import type { EffectiveSimulationLimits } from "./limits.js";
-import type { DecodedOperation } from "./operations.js";
 
 /** Verified operation outcomes corresponding to the appendix's inclusive bounds. @internal */
 export interface OperationOutcomeFields {
@@ -142,15 +141,3 @@ export type SimulationVerification = VerificationBase &
       }
     | { readonly mode: "final"; readonly authorizations: readonly [] }
   );
-
-/**
- * Target successful result, preserving every legacy field with user-only indices.
- * This declaration is not a claim that the current simulator performs verification.
- * @internal
- */
-export interface VerifiedSimulationResult extends SimulationResult {
-  /** Exactly the caller's ordered transactions; no preparation or probes. */
-  readonly simulationTxs: readonly Readonly<SimulationTransaction>[];
-  /** calls and transfers.txIdx refer only to simulationTxs; preparation is separate. */
-  readonly verification: SimulationVerification;
-}

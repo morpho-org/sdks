@@ -1,26 +1,24 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import type {
-  ConsumerConstraintContext,
-  SimulationErrorContext,
-} from "../../domain/diagnostics.js";
-import type { RiskMetric } from "../../domain/evidence.js";
-import type {
-  MarketSupplyMinimum,
-  OperationLimit,
-  OperationLimitFields,
-} from "../../domain/limits.js";
-import type { DecodedOperation } from "../../domain/operations.js";
-import type { VerifiedOperation } from "../../domain/result.js";
+import type { DecodedOperation } from "../../decode/operation.js";
+import {
+  ConsumerLimitViolationError,
+  UnexpectedSimulationError,
+} from "../../errors.js";
+import type { MarketMinAssets, OperationLimit } from "../../limits.js";
+import {
+  type At,
+  type CheckFields,
+  verificationContext,
+} from "../internal/error-context.js";
+import type { RiskMetric } from "../internal/evidence.js";
+import type { LimitOf, OperationLimitFields } from "../internal/limits.js";
+import type { VerifiedOperation } from "../internal/result.js";
 import {
   type BoundOperationLimit,
   brandConstrained,
   type ConstrainedEffects,
   type VerifiedEffects,
-} from "../../domain/stages.js";
-import {
-  ConsumerLimitViolationError,
-  UnexpectedSimulationError,
-} from "../../errors.js";
+} from "../internal/stages.js";
 
 type OperationType = keyof OperationLimitFields;
 
@@ -129,7 +127,7 @@ const BINDINGS: {
       kind: "max",
       read: (outcome) => outcome.utilizationAfterWad,
     },
-    maxBorrowApyAfterWad: {
+    maxAfterBorrowApyWad: {
       kind: "max",
       read: (outcome) => outcome.borrowApyAfterWad,
     },
@@ -163,7 +161,7 @@ const BINDINGS: {
       kind: "max",
       read: (outcome) => outcome.utilizationAfterWad,
     },
-    maxBorrowApyAfterWad: {
+    maxAfterBorrowApyWad: {
       kind: "max",
       read: (outcome) => outcome.borrowApyAfterWad,
     },
@@ -236,10 +234,6 @@ const BINDINGS: {
     targetMarketId: {
       kind: "equals",
       read: (op) => op.targetMarket.marketId,
-    },
-    expectedSourceFullClose: {
-      kind: "equals",
-      read: (op) => op.sourceFullClose,
     },
     maxTargetBorrowAssets: {
       kind: "max",
@@ -357,6 +351,8 @@ const BINDINGS: {
   vaultV2ForceRedeem: {
     vault: { kind: "equals", read: (op) => op.vault },
     expectedShares: { kind: "equals", read: (op) => op.shares },
+    expectedRecipient: { kind: "equals", read: (op) => op.receiver },
+    expectedOnBehalf: { kind: "equals", read: (op) => op.onBehalf },
     expectedDeallocations: {
       kind: "equals",
       read: (op) => op.deallocations,
@@ -464,7 +460,15 @@ const isDeallocationLike = (
   "adapter" in value &&
   "amount" in value;
 
-const isSupplyMinimum = (value: unknown): value is MarketSupplyMinimum =>
+/** Keep only scalar bound values the check context accepts. @internal */
+const scalar = (key: "expected" | "observed", value: unknown): CheckFields =>
+  typeof value === "bigint" ||
+  typeof value === "boolean" ||
+  (typeof value === "string" && value.startsWith("0x"))
+    ? { [key]: value as bigint | boolean | `0x${string}` }
+    : {};
+
+const isSupplyMinimum = (value: unknown): value is MarketMinAssets =>
   typeof value === "object" &&
   value !== null &&
   "marketId" in value &&
@@ -502,19 +506,14 @@ const describe = (value: unknown): string => {
   return String(value);
 };
 
-const unmatched = (
-  limit: OperationLimit,
-  context: SimulationErrorContext,
-): never => {
+const unmatched = (limit: OperationLimit, at: At): never => {
   throw new ConsumerLimitViolationError(
     `No verified operation matches operation limit type "${limit.type}"${limit.transactionIndex === undefined ? "" : ` at transaction ${limit.transactionIndex}`}. Check the limit list against the bundle's decoded operations.`,
-    context,
     {
-      type: "operation",
-      operationIndex: limit.transactionIndex ?? -1,
-      limit: limit.type,
-      expected: "a decoded operation of this type",
-      observed: "none",
+      context: verificationContext(at.context, at.mode, {
+        field: limit.type,
+        failedTransactionIndex: limit.transactionIndex,
+      }),
     },
   );
 };
@@ -531,52 +530,10 @@ const unmatched = (
 export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
   const { verification } = effects;
   const { limits } = verification;
-  const context: SimulationErrorContext = {
-    stage: "limits",
-    chainId: verification.chainId,
+  const at: At = {
+    context: effects.evidence.context,
     mode: verification.mode,
   };
-
-  const owner = effects.evidence.plan.owner;
-  const net = new Map<string, bigint>();
-  for (const change of verification.diff.wallet) {
-    if (change.account.toLowerCase() !== owner.toLowerCase()) continue;
-    const key = change.token.toLowerCase();
-    net.set(key, (net.get(key) ?? 0n) + change.assets);
-  }
-
-  for (const bound of limits.wallet.maxDebit) {
-    const observed = -(net.get(bound.token.toLowerCase()) ?? 0n);
-    if (observed > bound.amount)
-      throw new ConsumerLimitViolationError(
-        `Net debit "${observed}" of "${bound.token}" exceeds maxDebit bound "${bound.amount}". Increase the bound or reduce the withdrawn amount.`,
-        context,
-        {
-          type: "wallet",
-          field: "maxDebit",
-          account: owner,
-          token: bound.token,
-          boundAssets: bound.amount,
-          observedAssets: observed,
-        },
-      );
-  }
-  for (const bound of limits.wallet.minCredit) {
-    const observed = net.get(bound.token.toLowerCase()) ?? 0n;
-    if (observed < bound.amount)
-      throw new ConsumerLimitViolationError(
-        `Net credit "${observed}" of "${bound.token}" is below minCredit bound "${bound.amount}". Decrease the bound or verify the receiver credit.`,
-        context,
-        {
-          type: "wallet",
-          field: "minCredit",
-          account: owner,
-          token: bound.token,
-          boundAssets: bound.amount,
-          observedAssets: observed,
-        },
-      );
-  }
 
   const boundLimits: BoundOperationLimit[] = [];
   const findVerified = <T extends OperationType>(
@@ -595,12 +552,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueSupply": {
         const verified =
           findVerified("blueSupply", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -608,12 +566,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueWithdraw": {
         const verified =
           findVerified("blueWithdraw", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -621,12 +580,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueSupplyCollateral": {
         const verified =
           findVerified("blueSupplyCollateral", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -634,12 +594,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueBorrow": {
         const verified =
           findVerified("blueBorrow", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -647,12 +608,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueSupplyCollateralBorrow": {
         const verified =
           findVerified("blueSupplyCollateralBorrow", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -660,12 +622,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueRepay": {
         const verified =
           findVerified("blueRepay", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -673,12 +636,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueWithdrawCollateral": {
         const verified =
           findVerified("blueWithdrawCollateral", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -686,12 +650,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueRepayWithdrawCollateral": {
         const verified =
           findVerified("blueRepayWithdrawCollateral", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -699,12 +664,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueRefinance": {
         const verified =
           findVerified("blueRefinance", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -712,12 +678,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "blueAuthorization": {
         const verified =
           findVerified("blueAuthorization", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -725,12 +692,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV1Deposit": {
         const verified =
           findVerified("vaultV1Deposit", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -738,12 +706,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2Deposit": {
         const verified =
           findVerified("vaultV2Deposit", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -751,12 +720,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV1Withdraw": {
         const verified =
           findVerified("vaultV1Withdraw", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -764,12 +734,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2Withdraw": {
         const verified =
           findVerified("vaultV2Withdraw", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -777,12 +748,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV1Redeem": {
         const verified =
           findVerified("vaultV1Redeem", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -790,12 +762,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2Redeem": {
         const verified =
           findVerified("vaultV2Redeem", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -803,12 +776,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2ForceWithdraw": {
         const verified =
           findVerified("vaultV2ForceWithdraw", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -816,12 +790,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2ForceRedeem": {
         const verified =
           findVerified("vaultV2ForceRedeem", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -829,12 +804,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV1InKindRedeem": {
         const verified =
           findVerified("vaultV1InKindRedeem", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -842,12 +818,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV2InKindRedeem": {
         const verified =
           findVerified("vaultV2InKindRedeem", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -855,12 +832,13 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
       case "vaultV1MigrateToV2": {
         const verified =
           findVerified("vaultV1MigrateToV2", limit.transactionIndex) ??
-          unmatched(limit, context);
+          unmatched(limit, at);
         checkOperationLimit(
           verified.operation,
           verified.outcome,
           limit,
-          context,
+          limit.type,
+          at,
         );
         boundLimits.push({ operation: verified.operation, limit });
         break;
@@ -869,7 +847,11 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
         const _exhaustive: never = limit;
         throw new UnexpectedSimulationError(
           `Unhandled operation limit type "${JSON.stringify(_exhaustive)}"`,
-          context,
+          {
+            context: verificationContext(at.context, at.mode, {
+              field: "operationLimit",
+            }),
+          },
         );
       }
     }
@@ -890,13 +872,11 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
 function checkOperationLimit<T extends OperationType>(
   operation: OpOf<T>,
   outcome: OutcomeOf<T>,
-  limit: OperationLimitFields[T] & {
-    readonly type: T;
-    readonly transactionIndex?: number;
-  },
-  context: SimulationErrorContext,
+  limit: LimitOf<T>,
+  type: T,
+  at: At,
 ): void {
-  const table = BINDINGS[limit.type];
+  const table = BINDINGS[type];
   const operationIndex = operation.transactionIndex;
 
   // biome-ignore lint/complexity/useMaxParams: violation reports need field, bound, observed and hint
@@ -907,20 +887,21 @@ function checkOperationLimit<T extends OperationType>(
     hint: string,
   ): ConsumerLimitViolationError =>
     new ConsumerLimitViolationError(
-      `Operation limit "${limit.type}.${String(field)}" expected "${describe(expected)}", observed "${describe(observed)}". ${hint}`,
-      context,
+      `Operation limit "${type}.${String(field)}" expected "${describe(expected)}", observed "${describe(observed)}". ${hint}`,
       {
-        type: "operation",
-        operationIndex,
-        limit: `${limit.type}.${String(field)}`,
-        expected: describe(expected),
-        observed: describe(observed),
-      } satisfies ConsumerConstraintContext,
+        context: verificationContext(at.context, at.mode, {
+          field: `${type}.${String(field)}`,
+          ...scalar("expected", expected),
+          ...scalar("observed", observed),
+          failedTransactionIndex: operationIndex,
+        }),
+      },
     );
 
+  const { type: _type, transactionIndex: _index, ...declared } = limit;
   const fields = keysOf(table) as (keyof OperationLimitFields[T])[];
   for (const field of fields) {
-    const bound = limit[field];
+    const bound: unknown = Reflect.get(declared, field);
     if (bound === undefined) continue;
     const binding = table[field];
 
@@ -958,8 +939,12 @@ function checkOperationLimit<T extends OperationType>(
 
     if (typeof bound !== "bigint") {
       throw new UnexpectedSimulationError(
-        `Bound for "${limit.type}.${String(field)}" is not numeric; min*/max* limits must declare bigint values`,
-        context,
+        `Bound for "${type}.${String(field)}" is not numeric; min*/max* limits must declare bigint values`,
+        {
+          context: verificationContext(at.context, at.mode, {
+            field: `${type}.${String(field)}`,
+          }),
+        },
       );
     }
     const observed = binding.read(outcome);

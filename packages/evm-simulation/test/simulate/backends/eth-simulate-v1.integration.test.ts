@@ -4,6 +4,7 @@ import { expect } from "vitest";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
+import { makeValidated } from "../../../src/test-helpers/index.js";
 import { test } from "../../setup.js";
 
 const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -31,10 +32,14 @@ function planFor(
   owner: Address,
 ) {
   return planExecution(
-    parseRequest({
-      chainId: mainnet.id,
-      transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+    makeValidated({
+      request: parseRequest({
+        chainId: mainnet.id,
+        transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+      }),
+      owner,
     }),
+    { full: [], permissions: [] },
   );
 }
 

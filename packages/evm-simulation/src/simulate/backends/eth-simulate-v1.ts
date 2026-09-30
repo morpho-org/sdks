@@ -12,7 +12,6 @@ import {
   InvalidSimulationResponseError,
   SimulationPackageError,
   SimulationRevertedError,
-  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import type { SimulationExecution } from "./parse-response.js";
@@ -127,38 +126,6 @@ export async function executePlan(params: {
     throw new ExternalServiceError(
       `eth_getBlock/eth_chainId error: ${safeMessage(error)}`,
       { cause: error },
-    );
-  }
-
-  // Feature gate once the state block is pinned (every error context carries
-  // `blockNumber`): preview authorizations and consumer limits parse and
-  // normalize, but are rejected until PR5/PR6 verify them rather than
-  // silently ignored.
-  if (plan.request.authorizations.length > 0) {
-    throw new UnsupportedVerificationFeatureError(
-      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
-      {
-        context: {
-          stage: "preparation",
-          mode: plan.request.mode,
-          chainId: plan.request.chainId,
-          blockNumber: stateBlock.number,
-          authorizationIndex: 0,
-        },
-      },
-    );
-  }
-  if (plan.request.limits !== undefined) {
-    throw new UnsupportedVerificationFeatureError(
-      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
-      {
-        context: {
-          stage: "validation",
-          mode: plan.request.mode,
-          chainId: plan.request.chainId,
-          blockNumber: stateBlock.number,
-        },
-      },
     );
   }
 
