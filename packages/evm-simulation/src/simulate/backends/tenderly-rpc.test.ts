@@ -740,6 +740,28 @@ describe.sequential("simulateTenderlyRpc — errors", () => {
     ).rejects.toThrow(ExternalServiceError);
   });
 
+  it("redacts the Tenderly RPC URL from fetch error messages", async () => {
+    const fetchMock = vi
+      .fn<MockFetch>()
+      .mockRejectedValueOnce(
+        new Error(`Failed to parse URL from ${CONFIG.rpcUrl}`),
+      );
+    installFetchMock(fetchMock);
+
+    let thrown: unknown;
+    try {
+      await simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(ExternalServiceError);
+    expect(thrown).toBeInstanceOf(Error);
+    if (!(thrown instanceof Error)) return;
+    expect(thrown.message).toContain("<tenderly-rpc-url>");
+    expect(thrown.message).not.toContain(CONFIG.rpcUrl);
+  });
+
   it("wraps non-Error fetch failures in ExternalServiceError", async () => {
     const fetchMock = vi.fn<MockFetch>().mockRejectedValueOnce("fetch down");
     installFetchMock(fetchMock);

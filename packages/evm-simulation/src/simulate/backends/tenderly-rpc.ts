@@ -174,8 +174,9 @@ export async function simulateTenderlyRpc(params: {
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
     throw new ExternalServiceError(
-      `Tenderly RPC error: ${error instanceof Error ? error.message : String(error)}`,
+      `Tenderly RPC error: ${message.replaceAll(config.rpcUrl, "<tenderly-rpc-url>")}`,
       { cause: error },
     );
   }

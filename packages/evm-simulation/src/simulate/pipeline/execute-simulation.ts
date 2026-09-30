@@ -4,6 +4,7 @@ import type {
   RawSimulationResult,
   SimulationConfig,
   SimulationTransaction,
+  TenderlyRpcConfig,
 } from "../../types.js";
 import { simulateTenderlyRpc, simulateV1 } from "../backends/index.js";
 import { resolveChain } from "./resolve-chain.js";
@@ -11,32 +12,26 @@ import { resolveChain } from "./resolve-chain.js";
 /** Total budget for a single `simulate()` call across both backends. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
-/** Fraction of `timeoutMs` given to Tenderly before falling back to `eth_simulateV1`. */
-const TENDERLY_BUDGET_RATIO = 0.6;
+/** Fraction of `timeoutMs` Tenderly runs alone before the backends are hedged. */
+const TENDERLY_HEDGE_RATIO = 0.4;
 
 /**
- * Minimum budget (ms) handed to the `eth_simulateV1` fallback when Tenderly fails.
+ * Minimum budget (ms) handed to `eth_simulateV1` when it starts.
  *
- * Without a floor, if Tenderly exhausts its slice and dies at the deadline, the
- * fallback would get ~0 ms and abort immediately — turning a degraded-Tenderly
- * scenario into a total outage even when the fallback backend is healthy. A
- * modest floor keeps the fallback viable at the cost of the overall
- * `timeoutMs` being treated as a soft ceiling.
+ * The floor keeps the fallback viable when little or no overall time remains,
+ * at the cost of treating `timeoutMs` as a soft ceiling.
  */
 const FALLBACK_MIN_BUDGET_MS = 1500;
 
 /**
  * Stage 4 of the simulate() pipeline.
  *
- * Dispatches the transaction bundle to the available backend with a shared timeout
- * budget:
- * - If a Tenderly RPC URL is configured for the chain, it gets
- *   `TENDERLY_BUDGET_RATIO` (60%) of the timeout. On `ExternalServiceError`,
- *   falls back to `eth_simulateV1` with `max(remaining, FALLBACK_MIN_BUDGET_MS)`
- *   so the fallback still has a viable window when Tenderly eats its full slice.
- *   `SimulationRevertedError` (contract revert) propagates immediately without
- *   retry — a revert is a property of the bundle, not the backend.
- * - If only `eth_simulateV1` is configured, it gets the full timeout.
+ * Tenderly runs alone for the first 40% of `timeoutMs`, then both backends run
+ * in parallel. The first definitive result wins: a success or a non-service
+ * error. A backend's `ExternalServiceError` waits for the other backend, and
+ * if both fail that way the fallback error is thrown. The fallback receives
+ * at least `FALLBACK_MIN_BUDGET_MS`. Tenderly-only chains get the full budget;
+ * simulateV1-only chains are unchanged.
  */
 export async function executeSimulation(params: {
   config: SimulationConfig;
@@ -48,44 +43,28 @@ export async function executeSimulation(params: {
   const { config, chainId, transactions, blockNumber, wNative } = params;
   const chain = resolveChain(config, chainId);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const deadline = Date.now() + timeoutMs;
+
+  if (chain.tenderlyRpc && chain.simulateV1Url) {
+    return await executeHedgedSimulation({
+      config,
+      chainId,
+      tenderlyRpc: chain.tenderlyRpc,
+      simulateV1Url: chain.simulateV1Url,
+      transactions,
+      blockNumber,
+      wNative,
+      timeoutMs,
+    });
+  }
 
   if (chain.tenderlyRpc) {
-    const tenderlyTimeout = Math.floor(timeoutMs * TENDERLY_BUDGET_RATIO);
-
-    try {
-      // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
-      return await simulateTenderlyRpc({
-        config: chain.tenderlyRpc,
-        transactions,
-        blockNumber,
-        signal: AbortSignal.timeout(tenderlyTimeout),
-      });
-    } catch (error) {
-      if (!(error instanceof ExternalServiceError)) throw error;
-
-      config.logger?.warn("Tenderly simulation failed, attempting fallback", {
-        chainId,
-        error: error.message,
-        cause: error.cause,
-      });
-
-      if (!chain.simulateV1Url) throw error;
-
-      const fallbackBudget = Math.max(
-        deadline - Date.now(),
-        FALLBACK_MIN_BUDGET_MS,
-      );
-
-      return await simulateV1({
-        rpcUrl: chain.simulateV1Url,
-        chainId,
-        transactions,
-        blockNumber,
-        wNative,
-        signal: AbortSignal.timeout(fallbackBudget),
-      });
-    }
+    // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
+    return await simulateTenderlyRpc({
+      config: chain.tenderlyRpc,
+      transactions,
+      blockNumber,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   }
 
   /* v8 ignore next: resolveChain rejects this state before executeSimulation reaches the fallback path. */
@@ -101,4 +80,167 @@ export async function executeSimulation(params: {
     wNative,
     signal: AbortSignal.timeout(timeoutMs),
   });
+}
+
+type Backend = "tenderly" | "eth_simulateV1";
+type FallbackReason = "tenderly_slow" | "tenderly_error";
+
+type BackendOutcome =
+  | {
+      backend: Backend;
+      type: "success";
+      result: RawSimulationResult;
+    }
+  | {
+      backend: Backend;
+      type: "error";
+      error: unknown;
+    };
+
+function toBackendOutcome(
+  backend: Backend,
+  promise: Promise<RawSimulationResult>,
+): Promise<BackendOutcome> {
+  return promise.then(
+    (result) => ({ backend, type: "success", result }),
+    (error: unknown) => ({ backend, type: "error", error }),
+  );
+}
+
+async function executeHedgedSimulation(params: {
+  config: SimulationConfig;
+  chainId: number;
+  tenderlyRpc: TenderlyRpcConfig;
+  simulateV1Url: string;
+  transactions: SimulationTransaction[];
+  blockNumber?: bigint | BlockTag;
+  wNative?: Address | null;
+  timeoutMs: number;
+}): Promise<RawSimulationResult> {
+  const {
+    config,
+    chainId,
+    tenderlyRpc,
+    simulateV1Url,
+    transactions,
+    blockNumber,
+    wNative,
+    timeoutMs,
+  } = params;
+  const start = Date.now();
+  const deadline = start + timeoutMs;
+  const hedgeDelayMs = Math.floor(timeoutMs * TENDERLY_HEDGE_RATIO);
+  const tenderlyController = new AbortController();
+  const fallbackController = new AbortController();
+  const pending = new Map<Backend, Promise<BackendOutcome>>();
+  let fallbackReason: FallbackReason | undefined;
+  let tenderlyError: ExternalServiceError | undefined;
+  let fallbackError: ExternalServiceError | undefined;
+  let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const tenderlyPromise = toBackendOutcome(
+    "tenderly",
+    simulateTenderlyRpc({
+      config: tenderlyRpc,
+      transactions,
+      blockNumber,
+      signal: AbortSignal.any([
+        tenderlyController.signal,
+        AbortSignal.timeout(timeoutMs),
+      ]),
+    }),
+  );
+  pending.set("tenderly", tenderlyPromise);
+
+  const startFallback = (reason: FallbackReason) => {
+    if (fallbackReason !== undefined) return;
+
+    fallbackReason = reason;
+    if (hedgeTimer !== undefined) clearTimeout(hedgeTimer);
+    const fallbackPromise = toBackendOutcome(
+      "eth_simulateV1",
+      simulateV1({
+        rpcUrl: simulateV1Url,
+        chainId,
+        transactions,
+        blockNumber,
+        wNative,
+        signal: AbortSignal.any([
+          fallbackController.signal,
+          AbortSignal.timeout(
+            Math.max(deadline - Date.now(), FALLBACK_MIN_BUDGET_MS),
+          ),
+        ]),
+      }),
+    );
+    pending.set("eth_simulateV1", fallbackPromise);
+  };
+
+  hedgeTimer = setTimeout(() => {
+    if (!pending.has("tenderly")) return;
+
+    config.logger?.info(
+      "Tenderly simulation slow, starting eth_simulateV1 in parallel",
+      { chainId, hedgeDelayMs },
+    );
+    startFallback("tenderly_slow");
+  }, hedgeDelayMs);
+
+  try {
+    while (pending.size > 0) {
+      const outcome = await Promise.race(pending.values());
+      pending.delete(outcome.backend);
+
+      if (
+        outcome.type === "success" ||
+        !(outcome.error instanceof ExternalServiceError)
+      ) {
+        if (outcome.backend === "tenderly") {
+          fallbackController.abort();
+        } else {
+          tenderlyController.abort();
+        }
+
+        if (fallbackReason !== undefined) {
+          config.logger?.info("Simulation backend selected", {
+            chainId,
+            backend: outcome.backend,
+            fallbackReason,
+            outcome: outcome.type === "success" ? "success" : "error",
+            elapsedMs: Date.now() - start,
+          });
+        }
+
+        if (outcome.type === "success") return outcome.result;
+        throw outcome.error;
+      }
+
+      if (outcome.backend === "tenderly") {
+        tenderlyError = outcome.error;
+        config.logger?.warn("Tenderly simulation failed, attempting fallback", {
+          chainId,
+          error: outcome.error.message,
+          fallbackReason: "tenderly_error",
+          elapsedMs: Date.now() - start,
+        });
+        startFallback("tenderly_error");
+      } else {
+        fallbackError = outcome.error;
+      }
+
+      if (tenderlyError && fallbackError) {
+        config.logger?.warn("Simulation fallback failed", {
+          chainId,
+          fallbackReason,
+          error: fallbackError.message,
+          elapsedMs: Date.now() - start,
+        });
+        throw fallbackError;
+      }
+    }
+
+    throw fallbackError ?? tenderlyError;
+  } finally {
+    if (hedgeTimer !== undefined) clearTimeout(hedgeTimer);
+  }
 }

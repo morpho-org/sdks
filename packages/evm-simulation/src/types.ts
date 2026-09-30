@@ -41,8 +41,10 @@ export interface SimulationConfig {
   chains: Map<number, ChainSimulationConfig>;
   logger?: SimulationLogger;
   /**
-   * Overall timeout budget in ms (default 5000). Tenderly gets ~60% of budget.
-   * On timeout/failure, fallback gets remaining time (deadline - now).
+   * Overall timeout budget in ms (default 5000). With both backends configured,
+   * Tenderly runs alone for the first 40%, then both run in parallel and the
+   * first definitive result wins. The fallback gets at least 1.5s. Tenderly-only
+   * chains get the full timeout.
    */
   timeoutMs?: number;
 }
