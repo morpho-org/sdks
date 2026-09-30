@@ -100,7 +100,7 @@ describe.sequential("executeSimulation", () => {
       plan: makePlan(),
       blockNumber: 20_000_000n,
     });
-    expect(execution.calls).toHaveLength(3);
+    expect(execution.transactions).toHaveLength(1);
     expect(execution.nativeBalances).toHaveLength(2);
   });
 

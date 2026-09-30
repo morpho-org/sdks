@@ -3,7 +3,6 @@ import {
   type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
-  type Hex,
   http,
   numberToHex,
 } from "viem";
@@ -17,6 +16,72 @@ import {
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import type { SimulationExecution } from "./parse-response.js";
 import { parseSimulationResponse } from "./parse-response.js";
+
+/**
+ * Classify a node-level revert: viem's `ExecutionRevertedError`, or a raw
+ * JSON-RPC error — code 3 for "execution reverted", plus an "insufficient
+ * funds" failure for an unfundable `value` transfer under real native
+ * funding (the code varies by node: -32003 on geth-flavored Anvil, -32000 on
+ * others).
+ */
+const isNodeRevert = (error: unknown): error is Error =>
+  error instanceof ExecutionRevertedError ||
+  (error instanceof Error &&
+    "code" in error &&
+    (error.code === 3 ||
+      error.code === -32003 ||
+      /insufficient funds/i.test(error.message)));
+
+/**
+ * Trim a caught error to a safe message: viem's `shortMessage` drops the
+ * URL/request-body details its `message` embeds. The original error is always
+ * kept as `cause` for logging.
+ */
+const safeMessage = (error: unknown): string =>
+  error instanceof BaseError ? error.shortMessage : String(error);
+
+/** Map a caught error to the boundary's typed failure for `label`. */
+const toBoundaryError = (
+  label: string,
+  error: unknown,
+): SimulationPackageError => {
+  if (error instanceof SimulationPackageError) return error;
+  // A node-level revert is a property of the bundle, not the backend. The
+  // execution-stage context requires an operation-keyed subject and a
+  // node-level revert precedes operation decoding, so no context attaches.
+  // `details` carries only the URL-free code/shortMessage; the raw viem
+  // error (which embeds the RPC URL) is kept as `cause` only.
+  if (label === "eth_simulateV1" && isNodeRevert(error)) {
+    const reverted = new SimulationRevertedError(
+      error instanceof BaseError
+        ? error.details || error.shortMessage
+        : error.message,
+      {
+        code:
+          "code" in error && typeof error.code !== "undefined"
+            ? error.code
+            : undefined,
+        shortMessage:
+          error instanceof BaseError ? error.shortMessage : error.message,
+      },
+      "UNKNOWN_REVERT",
+    );
+    reverted.cause = error;
+    return reverted;
+  }
+  return new ExternalServiceError(`${label} error: ${safeMessage(error)}`, {
+    cause: error,
+  });
+};
+
+/** Run one RPC call; anything thrown becomes a typed boundary error. */
+const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
+  try {
+    return await call();
+  } catch (error) {
+    throw toBoundaryError(label, error);
+  }
+};
 
 /**
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
@@ -84,49 +149,38 @@ export async function executePlan(params: {
     }),
   });
 
-  let stateBlock: {
-    readonly number: bigint;
-    readonly hash: Hex;
-    readonly timestamp: bigint;
-  };
-  try {
-    // Resolve the state block exactly once so `latest` cannot drift.
-    const block = await client.getBlock(
+  // Resolve the state block exactly once so `latest` cannot drift.
+  const block = await rpc("eth_getBlock", () =>
+    client.getBlock(
       typeof blockNumber === "bigint"
         ? { blockNumber }
         : { blockTag: blockNumber ?? "latest" },
-    );
-    if (block.number === null || block.hash === null) {
-      throw new ExternalServiceError(
-        "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-      );
-    }
-    stateBlock = {
-      number: block.number,
-      hash: block.hash,
-      timestamp: block.timestamp,
-    };
-
-    // The configured endpoint must serve the request's chain.
-    const rpcChainId = await client.getChainId();
-    if (rpcChainId !== plan.request.chainId) {
-      throw new InvalidSimulationResponseError(
-        `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
-        {
-          context: {
-            stage: "transport",
-            chainId: plan.request.chainId,
-            mode: plan.request.mode,
-            blockNumber: stateBlock.number,
-          },
-        },
-      );
-    }
-  } catch (error) {
-    if (error instanceof SimulationPackageError) throw error;
+    ),
+  );
+  if (block.number === null || block.hash === null) {
     throw new ExternalServiceError(
-      `eth_getBlock/eth_chainId error: ${safeMessage(error)}`,
-      { cause: error },
+      "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
+    );
+  }
+  const stateBlock = {
+    number: block.number,
+    hash: block.hash,
+    timestamp: block.timestamp,
+  };
+
+  // The configured endpoint must serve the request's chain.
+  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
+  if (rpcChainId !== plan.request.chainId) {
+    throw new InvalidSimulationResponseError(
+      `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
+      {
+        context: {
+          stage: "transport",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: stateBlock.number,
+        },
+      },
     );
   }
 
@@ -164,9 +218,8 @@ export async function executePlan(params: {
 
   // Raw request: per-call `from` is honored and the response is parsed by
   // this package — not by viem's simulateCalls/simulateBlocks wrappers.
-  let response: unknown;
-  try {
-    response = await client.request({
+  const response = await rpc("eth_simulateV1", () =>
+    client.request({
       method: "eth_simulateV1",
       params: [
         {
@@ -191,64 +244,14 @@ export async function executePlan(params: {
         },
         numberToHex(stateBlock.number),
       ],
-    });
-  } catch (error) {
-    // A node-level revert is a property of the bundle, not the backend. The
-    // raw request surfaces it as a JSON-RPC error — code 3 for "execution
-    // reverted", plus an "insufficient funds" failure for an unfundable
-    // `value` transfer under real native funding (the code varies by node:
-    // -32003 on geth-flavored Anvil, -32000 on others) — rather than viem's
-    // ExecutionRevertedError.
-    if (
-      error instanceof ExecutionRevertedError ||
-      (error instanceof Error &&
-        "code" in error &&
-        (error.code === 3 ||
-          error.code === -32003 ||
-          /insufficient funds/i.test(error.message)))
-    ) {
-      // The execution-stage context requires an operation-keyed subject and a
-      // node-level revert precedes operation decoding, so no context attaches.
-      // `details` carries only the URL-free code/shortMessage; the raw viem
-      // error (which embeds the RPC URL) is kept as `cause` only.
-      const reverted = new SimulationRevertedError(
-        error instanceof BaseError
-          ? error.details || error.shortMessage
-          : error.message,
-        {
-          code:
-            "code" in error && typeof error.code !== "undefined"
-              ? error.code
-              : undefined,
-          shortMessage:
-            error instanceof BaseError ? error.shortMessage : error.message,
-        },
-        "UNKNOWN_REVERT",
-      );
-      reverted.cause = error;
-      throw reverted;
-    }
-    throw new ExternalServiceError(
-      `eth_simulateV1 error: ${safeMessage(error)}`,
-      { cause: error },
-    );
-  }
+    }),
+  );
 
   // Reorg window: the pinned state block must still carry the same hash
   // after simulation, or the result may describe a different chain tip.
-  let stateBlockAfter: Awaited<ReturnType<typeof client.getBlock>>;
-  try {
-    stateBlockAfter = await client.getBlock({
-      blockNumber: stateBlock.number,
-    });
-  } catch (error) {
-    throw new ExternalServiceError(
-      `eth_getBlock error: ${safeMessage(error)}`,
-      {
-        cause: error,
-      },
-    );
-  }
+  const stateBlockAfter = await rpc("eth_getBlock", () =>
+    client.getBlock({ blockNumber: stateBlock.number }),
+  );
   if (stateBlockAfter.hash !== stateBlock.hash) {
     throw new InvalidSimulationResponseError(
       `State block ${stateBlock.number} hash changed during simulation (reorg): ${stateBlock.hash} became ${stateBlockAfter.hash}. Re-submit the simulation.`,
@@ -273,15 +276,3 @@ export async function executePlan(params: {
     stateBlockTimestamp: stateBlock.timestamp,
   });
 }
-
-/**
- * Trim a caught error to a safe message: viem's `shortMessage` drops the
- * URL/request-body details its `message` embeds. The original error is always
- * kept as `cause` for logging.
- */
-const safeMessage = (error: unknown): string =>
-  error instanceof BaseError
-    ? error.shortMessage
-    : error instanceof Error
-      ? error.message
-      : String(error);

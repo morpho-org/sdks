@@ -129,16 +129,10 @@ export async function simulate(
     blockNumber: request.blockNumber,
   });
 
-  const userCalls = execution.calls
-    .filter(
-      (
-        call,
-      ): call is typeof call & {
-        planned: { type: "transaction"; transactionIndex: number };
-      } => call.planned.type === "transaction",
-    )
-    .sort((a, b) => a.planned.transactionIndex - b.planned.transactionIndex)
-    .map((call) => call.result);
+  // Plan order is transactionIndex order, so no re-sort is needed.
+  const userCalls = execution.transactions.map(
+    (transaction) => transaction.result,
+  );
 
   const transfers = parseTransfers(userCalls, {
     wNative,

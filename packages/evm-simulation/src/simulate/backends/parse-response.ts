@@ -1,5 +1,5 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, isAddress, isHex } from "viem";
+import type { Address, Hex } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
@@ -8,7 +8,7 @@ import {
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
 import { decodeNativeBalanceProbe } from "../plan/native-balance-probe.js";
-import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
@@ -22,11 +22,11 @@ export interface ExecutionBlock {
   readonly blockTimestamp: bigint;
 }
 
-/** A planned call and its normalized result. Only successful calls are carried.
+/** A user transaction and its normalized result. Only successful calls are carried.
  * @internal
  */
-export interface ExecutedCall {
-  readonly planned: PlannedCall;
+export interface ExecutedTransaction {
+  readonly transactionIndex: number;
   readonly result: SimulationCall;
 }
 
@@ -40,21 +40,20 @@ export interface NativeBalanceReading {
   readonly assets: bigint;
 }
 
-/** The output of {@link parseSimulationResponse}: the plan, its block, successful calls and probe readings.
+/** The output of {@link parseSimulationResponse}: the plan, its block, successful user transactions and probe readings.
  * @internal
  */
 export interface SimulationExecution {
   readonly plan: ExecutionPlan;
   readonly block: ExecutionBlock;
-  readonly calls: readonly ExecutedCall[];
+  /** User transactions in `transactionIndex` order, successful calls only. */
+  readonly transactions: readonly ExecutedTransaction[];
   readonly nativeBalances: readonly NativeBalanceReading[];
 }
 
 // RPC quantities are never the empty "0x" — BigInt("0x") would throw.
 const isQuantity = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value);
-const isBytes32 = (value: unknown): value is Hex =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
 const isObject = (value: unknown): value is object =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const readField = (object: object, key: string): unknown =>
@@ -89,64 +88,16 @@ interface RawBlockResult {
 /** Raw `eth_simulateV1` result: exactly one simulated block. */
 type RawSimulateV1Response = readonly [RawBlockResult];
 
-const isSimulateV1Response = (
-  value: unknown,
-): value is RawSimulateV1Response => {
-  if (!Array.isArray(value) || value.length !== 1 || !isObject(value[0]))
-    return false;
-  const block = value[0];
-  if (
-    !isQuantity(readField(block, "number")) ||
-    !isQuantity(readField(block, "timestamp")) ||
-    !isBytes32(readField(block, "hash")) ||
-    (readField(block, "parentHash") !== undefined &&
-      !isBytes32(readField(block, "parentHash")))
-  )
-    return false;
-  const calls = readField(block, "calls");
-  if (!Array.isArray(calls)) return false;
-  return calls.every((call) => {
-    if (!isObject(call)) return false;
-    const status = readField(call, "status");
-    if (
-      (status !== "0x0" && status !== "0x1") ||
-      !isHex(readField(call, "returnData")) ||
-      !isQuantity(readField(call, "gasUsed"))
-    )
-      return false;
-    const logs = readField(call, "logs");
-    if (
-      logs !== undefined &&
-      (!Array.isArray(logs) ||
-        !logs.every((log) => {
-          if (!isObject(log)) return false;
-          const topics = readField(log, "topics");
-          const data = readField(log, "data");
-          const address = readField(log, "address");
-          return (
-            typeof address === "string" &&
-            isAddress(address) &&
-            Array.isArray(topics) &&
-            topics.every(isBytes32) &&
-            (data === undefined || isHex(data))
-          );
-        }))
-    )
-      return false;
-    const error = readField(call, "error");
-    if (error !== undefined) {
-      if (!isObject(error)) return false;
-      const code = readField(error, "code");
-      const message = readField(error, "message");
-      if (
-        (code !== undefined && !Number.isInteger(code)) ||
-        (message !== undefined && typeof message !== "string")
-      )
-        return false;
-    }
-    return true;
-  });
-};
+// Only the block envelope is checked: per-call fields are trusted — the node
+// is the caller's own configured endpoint.
+const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
+  Array.isArray(value) &&
+  value.length === 1 &&
+  isObject(value[0]) &&
+  isQuantity(readField(value[0], "number")) &&
+  isQuantity(readField(value[0], "timestamp")) &&
+  typeof readField(value[0], "hash") === "string" &&
+  Array.isArray(readField(value[0], "calls"));
 
 /**
  * Parse a raw `eth_simulateV1` response into a {@link SimulationExecution}.
@@ -230,76 +181,76 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  const calls = block.calls.map((call, index) => {
+  // One pass over the raw calls, split by planned-call kind. Plan order is
+  // call order, so transactions land in transactionIndex order.
+  const transactions: { transactionIndex: number; result: SimulationCall }[] =
+    [];
+  const nativeBalances: NativeBalanceReading[] = [];
+  // Reason of the first failed user transaction, if any.
+  let revertReason: string | undefined;
+
+  for (const [index, call] of block.calls.entries()) {
     const planned = plan.calls[index]!;
     const logs: RawLog[] = (call.logs ?? []).map((log) => ({
-      address: log.address as Address,
-      topics: log.topics as readonly Hex[],
-      data: (log.data ?? "0x") as Hex,
+      address: log.address,
+      topics: log.topics,
+      data: log.data ?? "0x",
     }));
     const result: SimulationCall = {
       logs,
       status: call.status === "0x1",
-      returnData: call.returnData as Hex,
+      returnData: call.returnData,
       gasUsed: BigInt(call.gasUsed),
     };
-    return { planned, result, call };
-  });
 
-  // A user-transaction revert belongs to the bundle, not the boundary.
-  const failedUserCall = calls.find(
-    ({ planned, result }) => planned.type === "transaction" && !result.status,
-  );
-  if (failedUserCall && failedUserCall.planned.type === "transaction") {
-    throw new SimulationRevertedError(
-      failedUserCall.call.error?.message ?? "Simulation failed",
-      deepFreeze(
-        calls
-          .filter(
-            (
-              entry,
-            ): entry is typeof entry & {
-              planned: PlannedCall & { type: "transaction" };
-            } => entry.planned.type === "transaction",
-          )
-          .map(({ planned, result }) => ({
-            transactionIndex: planned.transactionIndex,
-            result,
-          })),
-      ),
-      "UNKNOWN_REVERT",
-    );
+    switch (planned.type) {
+      case "transaction": {
+        transactions.push({
+          transactionIndex: planned.transactionIndex,
+          result,
+        });
+        if (!result.status && revertReason === undefined)
+          revertReason = call.error?.message ?? "Simulation failed";
+        break;
+      }
+      case "nativeBalanceProbe": {
+        const probeContext: SimulationErrorContext = {
+          stage: "transport",
+          mode: plan.request.mode,
+          chainId: plan.request.chainId,
+          blockNumber: params.stateBlockNumber,
+        };
+        if (!result.status) {
+          throw new MissingVerificationEvidenceError(
+            `Native balance probe "${planned.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
+            { context: probeContext },
+          );
+        }
+        const assets = decodeNativeBalanceProbe(call.returnData);
+        if (assets === null) {
+          throw new MissingVerificationEvidenceError(
+            `Native balance probe "${planned.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
+            { context: probeContext },
+          );
+        }
+        nativeBalances.push({
+          probeId: planned.probeId,
+          phase: planned.phase,
+          account: planned.account,
+          assets,
+        });
+        break;
+      }
+    }
   }
 
-  const probeContext: SimulationErrorContext = {
-    stage: "transport",
-    mode: plan.request.mode,
-    chainId: plan.request.chainId,
-    blockNumber: params.stateBlockNumber,
-  };
-
-  const nativeBalances: NativeBalanceReading[] = [];
-  for (const { planned, result, call } of calls) {
-    if (planned.type !== "nativeBalanceProbe") continue;
-    if (!result.status) {
-      throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
-        { context: probeContext },
-      );
-    }
-    const assets = decodeNativeBalanceProbe(call.returnData as Hex);
-    if (assets === null) {
-      throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
-        { context: probeContext },
-      );
-    }
-    nativeBalances.push({
-      probeId: planned.probeId,
-      phase: planned.phase,
-      account: planned.account,
-      assets,
-    });
+  // A user-transaction revert belongs to the bundle, not the boundary.
+  if (revertReason !== undefined) {
+    throw new SimulationRevertedError(
+      revertReason,
+      deepFreeze(transactions),
+      "UNKNOWN_REVERT",
+    );
   }
 
   return deepFreeze<SimulationExecution>({
@@ -313,9 +264,7 @@ export function parseSimulationResponse(params: {
       blockTimestamp,
     },
     // Every failure was classified above: only successful calls remain.
-    calls: calls
-      .filter((entry) => entry.result.status)
-      .map(({ planned, result }) => ({ planned, result })),
+    transactions,
     nativeBalances,
   });
 }

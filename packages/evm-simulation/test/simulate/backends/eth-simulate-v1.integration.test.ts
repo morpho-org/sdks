@@ -143,6 +143,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     expect(intermediate).toBe(before - amount);
     // The withdraw refunds it.
     expect(after).toBe(before);
-    expect(execution.calls).toHaveLength(5);
+    expect(execution.transactions).toHaveLength(3);
   });
 });

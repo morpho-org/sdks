@@ -44,18 +44,21 @@ function makeExecution(
   plan: ExecutionPlan,
   userLogs: RawLog[][] = [],
 ): SimulationExecution {
-  const calls = plan.calls.map((planned) => ({
-    planned,
-    result: {
-      logs:
-        planned.type === "transaction"
-          ? (userLogs[planned.transactionIndex] ?? [])
-          : [],
-      status: true,
-      returnData: "0x" as Hex,
-      gasUsed: 0n,
-    },
-  }));
+  const transactions = plan.calls.flatMap((planned) =>
+    planned.type === "transaction"
+      ? [
+          {
+            transactionIndex: planned.transactionIndex,
+            result: {
+              logs: userLogs[planned.transactionIndex] ?? [],
+              status: true,
+              returnData: "0x" as Hex,
+              gasUsed: 0n,
+            },
+          },
+        ]
+      : [],
+  );
   return {
     plan,
     block: {
@@ -66,7 +69,7 @@ function makeExecution(
       blockNumber: 2n,
       blockTimestamp: 1_700_000_012n,
     },
-    calls,
+    transactions,
     nativeBalances: plan.calls
       .filter(
         (planned): planned is typeof planned & { type: "nativeBalanceProbe" } =>
@@ -198,15 +201,11 @@ describe.sequential("simulate — success", () => {
     mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
       const execution = makeExecution(plan);
       let i = 0;
-      const calls = execution.calls.map((call) =>
-        call.planned.type === "transaction"
-          ? {
-              ...call,
-              result: { ...call.result, gasUsed: [21_000n, 42_000n][i++]! },
-            }
-          : call,
-      );
-      return Promise.resolve({ ...execution, calls });
+      const transactions = execution.transactions.map((transaction) => ({
+        ...transaction,
+        result: { ...transaction.result, gasUsed: [21_000n, 42_000n][i++]! },
+      }));
+      return Promise.resolve({ ...execution, transactions });
     });
 
     const result = await simulate(

@@ -99,7 +99,7 @@ describe.sequential("executePlan", () => {
   test("default", async () => {
     respondHappy(okCalls(3));
     const execution = await executePlan(params);
-    expect(execution.calls).toHaveLength(3);
+    expect(execution.transactions).toHaveLength(1);
     expect(execution.block.stateBlockNumber).toBe(STATE_BLOCK);
     expect(execution.block.blockNumber).toBe(STATE_BLOCK + 1n);
     expect(execution.block.chainId).toBe(1);
@@ -398,23 +398,6 @@ describe.sequential("executePlan", () => {
     expect(execution.block.blockNumber).toBe(STATE_BLOCK);
   });
 
-  test.each([
-    ["non-bytes32 hash", { hash: "0x1234" }],
-    ["non-bytes32 parentHash", { parentHash: "0x1234" }],
-  ])(
-    "error: InvalidSimulationResponseError for %s",
-    async (_name, overrides) => {
-      fetchMock
-        .mockResolvedValueOnce(rpc(blockResult()))
-        .mockResolvedValueOnce(rpc("0x1"))
-        .mockResolvedValueOnce(rpc(simulateResult(okCalls(3), overrides)))
-        .mockResolvedValueOnce(rpc(blockResult()));
-      await expect(executePlan(params)).rejects.toBeInstanceOf(
-        InvalidSimulationResponseError,
-      );
-    },
-  );
-
   test("error: InvalidSimulationResponseError for a two-block response", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc(blockResult()))
@@ -422,93 +405,6 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(
         rpc([...(simulateResult(okCalls(3)) as unknown[]), {}]),
       )
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
-  });
-
-  test.each([
-    [
-      "non-hex returnData",
-      [{ status: "0x1", gasUsed: "0x1", returnData: "0xzz" }],
-    ],
-    [
-      "non-bytes32 topic",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          logs: [
-            {
-              address: "0x1111111111111111111111111111111111111111",
-              topics: ["0x1234"],
-              data: "0x",
-            },
-          ],
-        },
-      ],
-    ],
-    [
-      "non-hex log data",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          logs: [
-            {
-              address: "0x1111111111111111111111111111111111111111",
-              topics: [],
-              data: "0xzz",
-            },
-          ],
-        },
-      ],
-    ],
-    [
-      "non-object error",
-      [{ status: "0x1", gasUsed: "0x1", returnData: "0x", error: "reverted" }],
-    ],
-    [
-      "non-integer error.code (string)",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: "3", message: "x" },
-        },
-      ],
-    ],
-    [
-      "non-integer error.code (float)",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: 1.5 },
-        },
-      ],
-    ],
-    [
-      "non-string error.message",
-      [
-        {
-          status: "0x1",
-          gasUsed: "0x1",
-          returnData: "0x",
-          error: { code: 3, message: 42 },
-        },
-      ],
-    ],
-  ])("error: InvalidSimulationResponseError for %s", async (_name, calls) => {
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
@@ -591,48 +487,6 @@ describe.sequential("executePlan", () => {
     expect(error).toBeInstanceOf(ExternalServiceError);
     expect((error as Error).message).not.toContain("rpc.example");
     expect((error as Error).cause).toBeDefined();
-  });
-
-  test.each([
-    [
-      "empty gasUsed quantity",
-      okCalls(3).map((c) => ({ ...c, gasUsed: "0x" })),
-    ],
-    ["garbage status", okCalls(3).map((c) => ({ ...c, status: "0xdead" }))],
-  ])(
-    "error: InvalidSimulationResponseError for %s at the schema boundary",
-    async (_name, calls) => {
-      fetchMock
-        .mockResolvedValueOnce(rpc(blockResult()))
-        .mockResolvedValueOnce(rpc("0x1"))
-        .mockResolvedValueOnce(rpc(simulateResult(calls)))
-        .mockResolvedValueOnce(rpc(blockResult()));
-      await expect(executePlan(params)).rejects.toBeInstanceOf(
-        InvalidSimulationResponseError,
-      );
-    },
-  );
-
-  test("error: InvalidSimulationResponseError for a bad log address", async () => {
-    const calls = okCalls(3);
-    calls[1] = {
-      ...calls[1],
-      logs: [
-        {
-          address: "0xnotanaddress",
-          topics: [`0x${"ab".repeat(32)}`],
-          data: "0x",
-        },
-      ],
-    };
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      InvalidSimulationResponseError,
-    );
   });
 
   test("error: MissingVerificationEvidenceError when a probe fails", async () => {
@@ -784,11 +638,8 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
     const execution = await executePlan(params);
-    const userCall = execution.calls[1]!;
-    expect(userCall.planned).toMatchObject({
-      type: "transaction",
-      transactionIndex: 0,
-    });
+    const userCall = execution.transactions[0]!;
+    expect(userCall.transactionIndex).toBe(0);
     expect(userCall.result.status).toBe(true);
     expect(userCall.result.gasUsed).toBe(42_000n);
     expect(userCall.result.returnData).toBe("0xfeed");
