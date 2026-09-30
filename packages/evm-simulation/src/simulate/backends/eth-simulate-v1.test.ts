@@ -278,7 +278,16 @@ describe.sequential("executePlan", () => {
     expect((error as Error).cause).toBeDefined();
   });
 
-  test.each([null, {}, [{ calls: null }], []])(
+  test.each([
+    null,
+    {},
+    [],
+    [{ number: "0x1", timestamp: "0x1", hash: `0x${"cd".repeat(32)}` }],
+    simulateResult(okCalls(1), { hash: 5 }),
+    simulateResult(okCalls(1), { number: "0x" }),
+    simulateResult(okCalls(1), { timestamp: "0x" }),
+    [{ calls: null }],
+  ])(
     "error: InvalidSimulationResponseError for malformed result %j",
     async (result) => {
       fetchMock

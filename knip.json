@@ -3,12 +3,7 @@
   "ignoreBinaries": ["genhtml", "mkfifo"],
   "ignoreIssues": {
     "packages/blue-sdk-viem/src/MetaMorphoAction.ts": ["duplicates"],
-    "packages/morpho-ts/src/addresses.ts": ["duplicates"],
-    "packages/evm-simulation/src/result.ts": ["types"],
-    "packages/evm-simulation/src/simulate/backends/parse-response.ts": [
-      "types"
-    ],
-    "packages/evm-simulation/src/simulate/plan/plan-execution.ts": ["types"]
+    "packages/morpho-ts/src/addresses.ts": ["duplicates"]
   },
   "workspaces": {
     ".": {

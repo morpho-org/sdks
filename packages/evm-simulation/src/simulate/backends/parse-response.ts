@@ -11,7 +11,7 @@ import type { ExecutionPlan } from "../plan/plan-execution.js";
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
  */
-export interface ExecutionBlock {
+interface ExecutionBlock {
   readonly chainId: number;
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
@@ -23,7 +23,7 @@ export interface ExecutionBlock {
 /** A user transaction and its normalized result. Only successful calls are carried.
  * @internal
  */
-export interface ExecutedTransaction {
+interface ExecutedTransaction {
   readonly transactionIndex: number;
   readonly result: SimulationCall;
 }

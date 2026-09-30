@@ -120,13 +120,13 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - The state block is pinned once and re-fetched after the call; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
 - The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`.
 - A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
-- Transport failures, timeouts and malformed envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated.
+- Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. A malformed `eth_simulateV1` result shape is `InvalidSimulationResponseError`.
 - Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
 - Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.
 - A forged `status`/`returnData` shapes the reported outcome; no check can tell it from a real one.
 - A result for a different request is accepted. Only the endpoint or a proxy in front of it can swap results.
-- A truncated result fails with `ExternalServiceError`. A caller that bypasses it accepts an unsimulated bundle.
+- A truncated result (fewer calls than planned) is a non-bypassable `InvalidSimulationResponseError`.
 - A malicious token, not the endpoint, emits a fake `Transfer`. Reading balances from the node adds nothing: a token that lies in its events can also lie in `balanceOf`.
 - The endpoint serves another chain. A lying endpoint answers `eth_chainId` with the requested id. An honest endpoint on the wrong chain means the URL is set wrong, and the integrator owns that URL-to-chain mapping.
 

@@ -8,7 +8,7 @@ import type {
 /** One call of an {@link ExecutionPlan}: a user transaction.
  * @internal
  */
-export interface PlannedTransaction {
+interface PlannedTransaction {
   readonly transactionIndex: number;
   readonly transaction: ParsedTransaction;
 }

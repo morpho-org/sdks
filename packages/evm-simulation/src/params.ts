@@ -1,5 +1,5 @@
 import type { BlockTag } from "viem";
-import type { PendingAuthorization } from "./authorizations.js";
+import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationLimits } from "./limits.js";
 import type { SimulationTransaction } from "./types.js";
 
@@ -19,7 +19,7 @@ export interface SimulateParams {
   /** Defaults to "final". */
   readonly mode?: SimulationMode;
   /** Pending wallet requests, in order. Preview only; rejected in final. */
-  readonly authorizations?: readonly PendingAuthorization[];
+  readonly authorizations?: readonly SimulationAuthorization[];
   /** Resolved once; defaults to "latest". Only canonical (mined) blocks can be
    * pinned; `pending` has no stable hash and is rejected at runtime. */
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;

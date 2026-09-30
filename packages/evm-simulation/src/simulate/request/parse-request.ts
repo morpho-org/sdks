@@ -253,17 +253,18 @@ const createChecks = (): FieldChecks => {
         readField(domain, "verifyingContract"),
         `${path}.verifyingContract`,
       );
-      const salt = readField(domain, "salt");
-      if (salt !== undefined) check.bytes32(salt, `${path}.salt`);
+      const rawSalt = readField(domain, "salt");
+      const salt =
+        rawSalt !== undefined
+          ? check.bytes32(rawSalt, `${path}.salt`)
+          : undefined;
       if (!validChainId || verifyingContract === undefined) return undefined;
       return {
         ...(typeof name === "string" ? { name } : {}),
         ...(typeof version === "string" ? { version } : {}),
         chainId: chainId as number | bigint,
         verifyingContract,
-        ...(salt !== undefined && isRecord(domain)
-          ? { salt: salt as Hex }
-          : {}),
+        ...(salt !== undefined ? { salt } : {}),
       };
     },
 
@@ -608,7 +609,7 @@ const createChecks = (): FieldChecks => {
         path,
       });
       const errorsBefore = errors.length;
-      const out = { ...(operation as OperationLimit) };
+      const out = { type } as OperationLimit;
       for (const field of spec.markets) {
         const value = check.marketId(
           readField(operation, field),
@@ -1205,16 +1206,33 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   }
 
   for (const [i, authorization] of authorizations.entries()) {
-    const authorizationOwnerAddress =
-      authorization.type === "erc20Approval"
-        ? authorization.owner
-        : authorization.type === "erc2612Permit"
-          ? authorization.typedData.message.owner
-          : authorization.type === "permit2SignatureTransfer"
-            ? authorization.owner
-            : authorization.type === "blueAuthorization"
-              ? authorization.authorizer
-              : authorization.typedData.message.authorizer;
+    const { owner: authorizationOwnerAddress, domainChainId } = (() => {
+      switch (authorization.type) {
+        case "erc20Approval":
+          return { owner: authorization.owner, domainChainId: undefined };
+        case "permit2SignatureTransfer":
+          return {
+            owner: authorization.owner,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        case "erc2612Permit":
+          return {
+            owner: authorization.typedData.message.owner,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        case "blueAuthorization":
+          return { owner: authorization.authorizer, domainChainId: undefined };
+        case "blueAuthorizationSignature":
+          return {
+            owner: authorization.typedData.message.authorizer,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        default: {
+          const _exhaustive: never = authorization;
+          return _exhaustive;
+        }
+      }
+    })();
     if (
       owner !== undefined &&
       !isAddressEqual(authorizationOwnerAddress, owner)
@@ -1223,12 +1241,6 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
         `authorizations[${i}]: owner must equal the bundle sender ${owner} (got ${authorizationOwnerAddress})`,
       );
     }
-    const domainChainId =
-      authorization.type === "erc2612Permit" ||
-      authorization.type === "permit2SignatureTransfer" ||
-      authorization.type === "blueAuthorizationSignature"
-        ? authorization.typedData.domain.chainId
-        : undefined;
     if (
       domainChainId !== undefined &&
       typeof chainId === "number" &&
