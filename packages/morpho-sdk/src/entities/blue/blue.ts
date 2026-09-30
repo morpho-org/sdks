@@ -939,9 +939,10 @@ export interface BlueActions {
   /**
    * Computes Vault V2 BluePublicAllocator reallocations for this market.
    * Market/vault state and returned post-state stay at `options.timestamp`;
-   * only target-market cap checks reserve interest on the vault's existing
-   * allocation through `timestamp + capAccrualBuffer` (two hours by default;
-   * `0n` disables it).
+   * target-market cap checks reserve the interest each touched position (target,
+   * and market sources on cap ids they share) would accrue through
+   * `timestamp + capAccrualBuffer`, computed from pre-plan state and carried across
+   * the legs of one plan (two hours by default; `0n` disables it).
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.
@@ -2009,9 +2010,10 @@ export class MorphoBlue implements BlueActions {
   /**
    * Computes Vault V2 BluePublicAllocator reallocations for this market.
    * Market/vault state and returned post-state stay at `options.timestamp`;
-   * only target-market cap checks reserve interest on the vault's existing
-   * allocation through `timestamp + capAccrualBuffer` (two hours by default;
-   * `0n` disables it).
+   * target-market cap checks reserve the interest each touched position (target,
+   * and market sources on cap ids they share) would accrue through
+   * `timestamp + capAccrualBuffer`, computed from pre-plan state and carried across
+   * the legs of one plan (two hours by default; `0n` disables it).
    *
    * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
    * @param params.options - Optional allocator discovery controls and operation to support.

@@ -32,6 +32,7 @@ import { blueBundlesV1Abi } from "../abis.js";
 import { blueSupplyCollateralBorrow } from "../actions/index.js";
 import {
   DEFAULT_CAP_ACCRUAL_BUFFER,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   MAX_REALLOCATION_PENALTY,
 } from "../helpers/constant.js";
 import {
@@ -762,6 +763,143 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         ({ from }) => from.type === "market",
       ),
     ).toBe(true);
+  });
+
+  test("behavior: carries frozen reserves across market and idle legs", () => {
+    const idle = 10n * capTestHeadroom;
+    const sourceSupply = 10n ** 25n;
+    const targetSupply = capTestTargetSupply;
+    const sharedFixture = {
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply,
+      sourceBorrow: sourceSupply / 2n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      sourceAbsoluteCap: 10n ** 30n,
+      targetSupply,
+      targetBorrow: targetSupply - 1n,
+      targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetPositionAssets: targetSupply,
+      allocatorTargetCap: 10n ** 30n,
+      firstTotalAssets: 10n ** 30n,
+      idle,
+      canPullFromIdle: true,
+      canPullFromMarket: true,
+    } satisfies FixtureOptions;
+    const initialFixture = makeFixture({
+      ...sharedFixture,
+      targetCaps: [
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+      ],
+    });
+    const initialAdapter = initialFixture.data.getAdapter(
+      VAULT,
+      TARGET_ADAPTER,
+    );
+    const adapterCapId = initialAdapter.ids(targetParams)[0]!;
+    const targetShares = initialAdapter.supplyShares[targetParams.id] ?? 0n;
+    const sourceShares = initialAdapter.supplyShares[sourceParams.id] ?? 0n;
+    const capTimestamp = TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER;
+    const targetMarket = initialFixture.data.getMarket(targetParams.id);
+    const sourceMarket = initialFixture.data.getMarket(sourceParams.id);
+    const targetInterest0 = MathLib.zeroFloorSub(
+      targetMarket.accrueInterest(capTimestamp).toSupplyAssets(targetShares),
+      targetMarket.toSupplyAssets(targetShares),
+    );
+    const sourceInterest0 = MathLib.zeroFloorSub(
+      sourceMarket.accrueInterest(capTimestamp).toSupplyAssets(sourceShares),
+      sourceMarket.toSupplyAssets(sourceShares),
+    );
+    const sourceWithdrawable = sourceMarket.getWithdrawToUtilization(
+      DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+    );
+    const adapterIdAllocation0 = initialFixture.data.getAllocation(
+      VAULT,
+      adapterCapId,
+    ).allocation;
+    const x = capTestHeadroom;
+    const adapterCap =
+      adapterIdAllocation0 + x + targetInterest0 + sourceInterest0;
+    const { data } = makeFixture({
+      ...sharedFixture,
+      targetCaps: [
+        { absoluteCap: adapterCap, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    expect(sourceWithdrawable).toBeGreaterThan(idle);
+    expect(targetInterest0).toBeGreaterThan(0n);
+    expect(sourceInterest0).toBeGreaterThan(0n);
+
+    const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id);
+    const defaultLegs = defaultPlan.reallocations;
+    expect(defaultLegs).toHaveLength(2);
+    expect(defaultLegs[0]?.from.type).toBe("market");
+    expect(defaultLegs[1]?.from.type).toBe("idle");
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at the planning timestamp.
+    const defaultFirstTransition = data.clone()["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: defaultLegs[0]!,
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+    });
+    const adapterIdAllocationAfterDefaultLeg1 =
+      defaultFirstTransition.data.getAllocation(VAULT, adapterCapId).allocation;
+    expect(defaultLegs[1]!.assets).toBe(
+      adapterCap -
+        adapterIdAllocationAfterDefaultLeg1 -
+        targetInterest0 -
+        sourceInterest0,
+    );
+
+    const zeroBufferLegs = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { capAccrualBuffer: 0n },
+    ).reallocations;
+    expect(zeroBufferLegs).toHaveLength(2);
+    expect(zeroBufferLegs[0]?.from.type).toBe("market");
+    expect(zeroBufferLegs[1]?.from.type).toBe("idle");
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at the planning timestamp.
+    const zeroBufferFirstTransition = data.clone()["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: zeroBufferLegs[0]!,
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+    });
+    const adapterIdAllocationAfterZeroBufferLeg1 =
+      zeroBufferFirstTransition.data.getAllocation(
+        VAULT,
+        adapterCapId,
+      ).allocation;
+    expect(zeroBufferLegs[1]!.assets).toBe(
+      adapterCap - adapterIdAllocationAfterZeroBufferLeg1,
+    );
+
+    let horizonData = data.clone();
+    let horizonContext = {
+      donatedPenaltyAssets: {},
+      firstTotalAssets: {},
+    };
+    for (const reallocation of defaultLegs) {
+      // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
+      const transition = horizonData["applyPublicReallocation"]({
+        context: horizonContext,
+        reallocation,
+        targetMarketId: targetParams.id,
+        timestamp: capTimestamp,
+      });
+      horizonData = transition.data;
+      horizonContext = transition.context;
+    }
+    for (const id of initialAdapter.ids(targetParams)) {
+      const allocation = horizonData.getAllocation(VAULT, id);
+      expect(allocation.allocation).toBeLessThanOrEqual(allocation.absoluteCap);
+    }
   });
 
   test.each(["borrow", "withdraw"] as const)(

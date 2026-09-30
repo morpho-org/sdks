@@ -17,9 +17,10 @@ export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
 /**
  * Forward interest-accrual window, in seconds (2 hours), reserved in target-market
  * cap checks (BluePublicAllocator max-in, Vault V2 absolute and relative caps) when
- * planning reallocations, so a transaction included after the quote block does not
- * revert on a cap check. Override with
- * `VaultV2BluePublicAllocatorOptions.capAccrualBuffer`.
+ * planning reallocations. Interest for each touched position (target, and market
+ * sources on cap ids they share) is computed from pre-plan state and carried across
+ * the legs of one plan, so a transaction included after the quote block does not
+ * revert on a cap check. Override with `VaultV2BluePublicAllocatorOptions.capAccrualBuffer`.
  */
 export const DEFAULT_CAP_ACCRUAL_BUFFER = Time.s.from.h(2n);
 
