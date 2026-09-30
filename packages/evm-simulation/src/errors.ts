@@ -149,6 +149,7 @@ export abstract class SimulationPackageError extends Error {
   ) {
     const { context, ...errorOptions } = options ?? {};
     super(message, errorOptions);
+    this.name = new.target.name;
     if (context !== undefined) {
       this.context = Object.freeze({ ...context });
     }
@@ -366,7 +367,10 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  *   chains: new Map([[1, { simulateV1Url: "https://rpc.example" }]]),
  * };
  * try {
- *   await simulate(config, { chainId: 1, transactions: [] });
+ *   await simulate(config, {
+ *     chainId: 1,
+ *     transactions: [{ from: user, to: vault, data: encodedDeposit }],
+ *   });
  * } catch (e) {
  *   if (!isSimulationPackageError(e)) throw e;
  *   if (e.code !== "SIMULATION_REVERTED") throw e;
