@@ -71,14 +71,13 @@ export interface SequentialNonceChange {
   readonly after: bigint;
 }
 
-/** @internal One Permit2 `nonceBitmap(owner, wordPosition)` word before and after the bundle. */
+/** @internal One Permit2 `nonceBitmap(owner, nonce >> 8n)` word before and after the bundle. */
 export interface Permit2NonceChange {
   readonly type: "permit2";
   readonly verifyingContract: Address;
   readonly owner: Address;
-  /** Signed unordered nonce; its word is `nonce >> 8n` and its bit `nonce & 0xffn`. */
+  /** Signed unordered nonce; the word read is `nonce >> 8n` and the bit checked is `nonce & 0xffn`. */
   readonly nonce: bigint;
-  readonly wordPosition: bigint;
   readonly before: bigint;
   readonly after: bigint;
 }
