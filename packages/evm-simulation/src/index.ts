@@ -9,6 +9,7 @@ export type {
   Erc20ApprovalAuthorization,
   Erc2612PermitAuthorization,
   Erc2612PermitTypedData,
+  PendingAuthorization,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
   SimulationAuthorization,
@@ -92,6 +93,20 @@ export type {
   SimulationMode,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
+export type {
+  AuthorizationPreparation,
+  Fee,
+  MorphoAuthorizationChange,
+  Permit2NonceChange,
+  SequentialNonceChange,
+  SignatureNonceChange,
+  SimulatedOperation,
+  SimulationStateChange,
+  SimulationVerification,
+  TokenAllowance,
+  TokenBalance,
+  VerifiedSimulationResult,
+} from "./result.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants
 export {
