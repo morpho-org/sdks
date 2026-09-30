@@ -452,6 +452,13 @@ describe("SimulationPackageError.name", () => {
     }
     expect(new ConsumerError("m").name).toBe("ConsumerError");
   });
+
+  it("keeps the built-in name on subclasses of a built-in error", () => {
+    class MyValidationError extends SimulationValidationError {}
+    const err = new MyValidationError("m");
+    expect(err.name).toBe("SimulationValidationError");
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
 });
 
 describe("context on legacy errors", () => {
