@@ -53,33 +53,35 @@ export interface TokenAllowance {
   readonly amount: bigint;
 }
 
-/** @internal One Morpho `isAuthorized` state. */
-export interface MorphoAuthorizationState {
+/** @internal One Morpho `isAuthorized` flag before and after the bundle. */
+export interface MorphoAuthorizationChange {
   readonly authorizer: Address;
   readonly authorized: Address;
-  readonly isAuthorized: boolean;
+  readonly before: boolean;
+  readonly after: boolean;
 }
 
-/** @internal One signature nonce tracked by the simulation. */
-export interface SignatureNonce {
+/** @internal One signature nonce before and after the bundle. */
+export interface SignatureNonceChange {
   readonly type: "erc2612" | "blueAuthorization" | "permit2";
   /** Token for erc2612, Morpho for blueAuthorization, Permit2 for permit2. */
   readonly verifyingContract: Address;
   readonly owner: Address;
-  readonly nonce: bigint;
-  /** Permit2 only: whether this unordered nonce is spent. */
-  readonly used?: boolean;
+  /** Sequential nonce for erc2612/blueAuthorization; the unordered nonce word for permit2. */
+  readonly before: bigint;
+  readonly after: bigint;
 }
 
 /**
- * @internal Signed differences (after − before) over the whole bundle,
- * including preparation calls and interest accrual.
+ * @internal Everything the bundle changed, including preparation calls and
+ * interest accrual. Numeric entries are signed differences (after − before);
+ * authorizations and nonces carry both values.
  */
 export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
-  readonly morphoAuthorizations: readonly MorphoAuthorizationState[];
-  readonly nonces: readonly SignatureNonce[];
+  readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
+  readonly nonces: readonly SignatureNonceChange[];
   readonly positions: readonly {
     readonly marketId: MarketId;
     readonly user: Address;
