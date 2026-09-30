@@ -1,6 +1,26 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { type BigIntish, MathLib } from "@morpho-org/blue-sdk";
 import { InputExceedsMaxError, NegativeInputError } from "../types/index.js";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
+import {
+  DEFAULT_CAP_ACCRUAL_BUFFER,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+} from "./constant.js";
+
+/**
+ * Resolves and validates the target-market cap-accrual buffer.
+ * @internal
+ * @param value - Optional buffer duration in seconds.
+ * @returns The non-negative buffer duration, defaulting to two hours.
+ * @throws {NegativeInputError} when the buffer is negative.
+ * @example
+ * ```ts
+ * const buffer = resolveCapAccrualBuffer(undefined);
+ * ```
+ */
+export const resolveCapAccrualBuffer = (value?: BigIntish) => {
+  const buffer = value == null ? DEFAULT_CAP_ACCRUAL_BUFFER : BigInt(value);
+  if (buffer < 0n) throw new NegativeInputError("capAccrualBuffer", buffer);
+  return buffer;
+};
 
 /**
  * Resolves and validates a source withdrawal utilization ceiling.

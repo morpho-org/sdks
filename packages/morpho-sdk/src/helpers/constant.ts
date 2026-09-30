@@ -1,4 +1,5 @@
 import { ChainId, MathLib } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import { type Address, maxUint96 } from "viem";
 
 /** Maximum slippage tolerance: 10% */
@@ -12,6 +13,15 @@ export const MAX_REALLOCATION_PENALTY = MathLib.WAD;
 
 /** Default LLTV buffer: 0.5% below LLTV. Prevents instant liquidation on new positions. */
 export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
+
+/**
+ * Forward interest-accrual window, in seconds (2 hours), reserved in target-market
+ * cap checks (BluePublicAllocator max-in, Vault V2 absolute and relative caps) when
+ * planning reallocations, so a transaction included after the quote block does not
+ * revert on a cap check. Override with
+ * `VaultV2BluePublicAllocatorOptions.capAccrualBuffer`.
+ */
+export const DEFAULT_CAP_ACCRUAL_BUFFER = Time.s.from.h(2n);
 
 /** Maximum absolute share price cap (100 RAY). Prevents absurd maxSharePrice values in repay. */
 export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
