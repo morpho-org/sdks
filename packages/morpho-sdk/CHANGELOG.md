@@ -1,5 +1,18 @@
 # @morpho-org/morpho-sdk
 
+## 6.2.0
+
+### Minor Changes
+
+- [#1202](https://github.com/morpho-org/sdks/pull/1202) [`dbde9b9`](https://github.com/morpho-org/sdks/commit/dbde9b9a6570d83fc7e4e669ac04723a49874506) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - `fetchMarketParams` and `fetchMarket` (and callers that go through them) now throw `MarketParamsIdMismatchError` when RPC-returned market params do not hash to the requested id; all-zero params for uncreated markets remain accepted. Markets built directly from Vault V2 deployless query results are not covered by this check yet. `morpho-sdk` re-exports the error as `MarketParamsIdMismatchError` from `/blue/errors` and `BlueMarketParamsIdMismatchError` from `/errors`.
+
+### Patch Changes
+
+- [#1198](https://github.com/morpho-org/sdks/pull/1198) [`919e159`](https://github.com/morpho-org/sdks/commit/919e159e3fda3b1f79e924f9d296241cdb851c84) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Move `zod` from runtime `dependencies` to `devDependencies`; it is only used by the test environment loader, so consumers no longer install it.
+
+- Updated dependencies [[`dbde9b9`](https://github.com/morpho-org/sdks/commit/dbde9b9a6570d83fc7e4e669ac04723a49874506)]:
+  - @morpho-org/blue-sdk-viem@6.1.0
+
 ## 6.1.0
 
 ### Minor Changes
