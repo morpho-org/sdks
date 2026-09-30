@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   zizmor:
+    # Required status check on `main`: keep this name stable.
+    name: zizmor
     runs-on: ubuntu-latest
 
     permissions:
@@ -30,15 +32,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - if: env.CAN_UPLOAD == 'true'
+      - name: Upload findings to code scanning
+        if: env.CAN_UPLOAD == 'true'
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           version: 1.30.1
 
-      # Without an upload, these PRs fail here on medium+ findings instead.
-      - if: env.CAN_UPLOAD != 'true'
+      # SARIF mode exits 0 on findings, so this step is what fails the check.
+      - name: Fail on medium or higher findings
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           version: 1.30.1
           advanced-security: false
+          annotations: true
           min-severity: medium
