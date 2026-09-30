@@ -47,6 +47,7 @@ export async function fetchRatifierInfo(
   const chainId = await resolveChainId(client);
   const ecrecoverRatifier = getChainAddress(chainId, "ecrecoverRatifier");
   const setterRatifier = getChainAddress(chainId, "setterRatifier");
+  // eth_getCode is trusted; the returned ratifier is a suggestion the caller commits to on Offer.create. See THREAT_MODEL.md, RPC.
   const bytecode = await getBytecode(client, {
     ...(params.blockNumber != null
       ? { blockNumber: params.blockNumber }

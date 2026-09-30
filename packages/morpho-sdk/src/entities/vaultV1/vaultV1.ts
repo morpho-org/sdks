@@ -896,6 +896,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
                 abi: metaMorphoAbi,
                 functionName: "MORPHO",
               },
+              // feeRecipient() is trusted as returned by the RPC. See THREAT_MODEL.md, RPC.
               {
                 address: blue,
                 abi: blueAbi,

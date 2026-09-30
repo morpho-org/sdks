@@ -79,6 +79,7 @@ export async function fetchMarket(
         args: [blue, id, adaptiveCurveIrm],
       });
 
+      // Only params are bound to `id`; `market(id)` state and the oracle price are trusted. See THREAT_MODEL.md, RPC.
       // Throws if the RPC returned another market's params.
       validateMarketParamsId(id, marketParams);
 

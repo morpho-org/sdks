@@ -2727,6 +2727,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private async _revalidate(context: ChainContext): Promise<void> {
     const current = await this._getChainContext();
+    // A provider that lies about eth_chainId, or a fork with the same id, is not detectable here. See THREAT_MODEL.md, RPC.
     if (
       current.chainId !== context.chainId ||
       current.revision !== context.revision
@@ -3022,6 +3023,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       if (signedChainId !== prepared.context.chainId) {
         throw new ChainIdMismatchError(signedChainId, prepared.context.chainId);
       }
+      // The returned hash is not checked against the signed bytes (accepted gap). See THREAT_MODEL.md, RPC.
       const hash = await client.sendRawTransaction({
         serializedTransaction,
       });
