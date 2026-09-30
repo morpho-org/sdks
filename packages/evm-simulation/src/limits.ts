@@ -111,7 +111,7 @@ export type SimulationOperationSubject =
   | VaultOperationSubject
   | VaultV1MigrateToV2Subject;
 
-/** @internal Limit for a Blue `supply` operation. */
+/** Limit for a Blue `supply` operation. */
 export interface BlueSupplyLimit {
   readonly type: "blueSupply";
   readonly marketId: MarketId;
@@ -121,7 +121,7 @@ export interface BlueSupplyLimit {
   readonly minSupplySharesMinted?: bigint;
 }
 
-/** @internal Limit for a Blue `withdraw` operation. */
+/** Limit for a Blue `withdraw` operation. */
 export interface BlueWithdrawLimit {
   readonly type: "blueWithdraw";
   readonly marketId: MarketId;
@@ -134,7 +134,7 @@ export interface BlueWithdrawLimit {
   readonly maxReallocationPenaltyAssets?: bigint;
 }
 
-/** @internal Limit for a Blue `supplyCollateral` operation. */
+/** Limit for a Blue `supplyCollateral` operation. */
 export interface BlueSupplyCollateralLimit {
   readonly type: "blueSupplyCollateral";
   readonly marketId: MarketId;
@@ -144,7 +144,7 @@ export interface BlueSupplyCollateralLimit {
   readonly maxLtvAfterWad?: bigint;
 }
 
-/** @internal Limit for a Blue `borrow` operation. */
+/** Limit for a Blue `borrow` operation. */
 export interface BlueBorrowLimit {
   readonly type: "blueBorrow";
   readonly marketId: MarketId;
@@ -159,7 +159,7 @@ export interface BlueBorrowLimit {
   readonly maxReallocationPenaltyAssets?: bigint;
 }
 
-/** @internal Limit for a combined Blue `supplyCollateral` + `borrow` operation. */
+/** Limit for a combined Blue `supplyCollateral` + `borrow` operation. */
 export interface BlueSupplyCollateralBorrowLimit {
   readonly type: "blueSupplyCollateralBorrow";
   readonly marketId: MarketId;
@@ -176,7 +176,7 @@ export interface BlueSupplyCollateralBorrowLimit {
   readonly maxReallocationPenaltyAssets?: bigint;
 }
 
-/** @internal Limit for a Blue `repay` operation. */
+/** Limit for a Blue `repay` operation. */
 export interface BlueRepayLimit {
   readonly type: "blueRepay";
   readonly marketId: MarketId;
@@ -189,7 +189,7 @@ export interface BlueRepayLimit {
   readonly minRefundAssets?: bigint;
 }
 
-/** @internal Limit for a Blue `withdrawCollateral` operation. */
+/** Limit for a Blue `withdrawCollateral` operation. */
 export interface BlueWithdrawCollateralLimit {
   readonly type: "blueWithdrawCollateral";
   readonly marketId: MarketId;
@@ -200,7 +200,7 @@ export interface BlueWithdrawCollateralLimit {
   readonly minHealthFactorAfterWad?: bigint;
 }
 
-/** @internal Limit for a combined Blue `repay` + `withdrawCollateral` operation. */
+/** Limit for a combined Blue `repay` + `withdrawCollateral` operation. */
 export interface BlueRepayWithdrawCollateralLimit {
   readonly type: "blueRepayWithdrawCollateral";
   readonly marketId: MarketId;
@@ -217,7 +217,7 @@ export interface BlueRepayWithdrawCollateralLimit {
   readonly minHealthFactorAfterWad?: bigint;
 }
 
-/** @internal Limit for a full refinance between two Blue markets. The source position is always fully closed; there is no pin for it. */
+/** Limit for a full refinance between two Blue markets. The source position is always fully closed; there is no pin for it. */
 export interface BlueRefinanceLimit {
   readonly type: "blueRefinance";
   readonly sourceMarketId: MarketId;
@@ -232,7 +232,7 @@ export interface BlueRefinanceLimit {
   readonly maxReallocationPenaltyAssets?: bigint;
 }
 
-/** @internal Limit for a Morpho `setAuthorization` operation. */
+/** Limit for a Morpho `setAuthorization` operation. */
 export interface BlueAuthorizationLimit {
   readonly type: "blueAuthorization";
   readonly authorized: Address;
@@ -240,7 +240,7 @@ export interface BlueAuthorizationLimit {
   readonly expectedIsAuthorized?: boolean;
 }
 
-/** @internal Limit for a vault `deposit` operation. */
+/** Limit for a vault `deposit` operation. */
 export interface VaultDepositLimit {
   readonly type: "vaultV1Deposit" | "vaultV2Deposit";
   readonly vault: Address;
@@ -250,7 +250,7 @@ export interface VaultDepositLimit {
   readonly minSharesMinted?: bigint;
 }
 
-/** @internal Limit for a vault `withdraw` operation. */
+/** Limit for a vault `withdraw` operation. */
 export interface VaultWithdrawLimit {
   readonly type: "vaultV1Withdraw" | "vaultV2Withdraw";
   readonly vault: Address;
@@ -260,7 +260,7 @@ export interface VaultWithdrawLimit {
   readonly maxSharesBurned?: bigint;
 }
 
-/** @internal Limit for a vault `redeem` operation. */
+/** Limit for a vault `redeem` operation. */
 export interface VaultRedeemLimit {
   readonly type: "vaultV1Redeem" | "vaultV2Redeem";
   readonly vault: Address;
@@ -270,7 +270,7 @@ export interface VaultRedeemLimit {
   readonly minAssetsReceived?: bigint;
 }
 
-/** @internal Limit for a Vault V2 `forceWithdraw` operation. */
+/** Limit for a Vault V2 `forceWithdraw` operation. */
 export interface VaultV2ForceWithdrawLimit {
   readonly type: "vaultV2ForceWithdraw";
   readonly vault: Address;
@@ -283,14 +283,14 @@ export interface VaultV2ForceWithdrawLimit {
   readonly maxPenaltyAssets?: bigint;
 }
 
-/** @internal One expected deallocation step of a forced exit or in-kind redeem. */
+/** One expected deallocation step of a forced exit or in-kind redeem. */
 export interface VaultDeallocation {
   readonly adapter: Address;
   readonly marketId?: MarketId;
   readonly assets: bigint;
 }
 
-/** @internal Limit for a Vault V2 `forceRedeem` operation. */
+/** Limit for a Vault V2 `forceRedeem` operation. */
 export interface VaultV2ForceRedeemLimit {
   readonly type: "vaultV2ForceRedeem";
   readonly vault: Address;
@@ -305,13 +305,13 @@ export interface VaultV2ForceRedeemLimit {
   readonly maxPenaltyAssets?: bigint;
 }
 
-/** @internal Minimum supply assets expected in one market after an in-kind redeem. */
+/** Minimum supply assets expected in one market after an in-kind redeem. */
 export interface MarketMinAssets {
   readonly marketId: MarketId;
   readonly minAssets: bigint;
 }
 
-/** @internal Limit for a vault in-kind redeem operation. */
+/** Limit for a vault in-kind redeem operation. */
 export interface VaultInKindRedeemLimit {
   readonly type: "vaultV1InKindRedeem" | "vaultV2InKindRedeem";
   readonly vault: Address;
@@ -326,7 +326,7 @@ export interface VaultInKindRedeemLimit {
   readonly maxResidualShareAllowance?: bigint;
 }
 
-/** @internal Limit for a Vault V1 → V2 migration. Pin either `expectedAssets` or `expectedShares`, not both (checked at runtime). */
+/** Limit for a Vault V1 → V2 migration. Pin either `expectedAssets` or `expectedShares`, not both (checked at runtime). */
 export interface VaultV1MigrateToV2Limit {
   readonly type: "vaultV1MigrateToV2";
   readonly sourceVault: Address;
@@ -338,7 +338,7 @@ export interface VaultV1MigrateToV2Limit {
   readonly minTargetSharesMinted?: bigint;
 }
 
-/** @internal Union of all per-operation limits. */
+/** Union of all per-operation limits. */
 export type OperationLimit =
   | BlueSupplyLimit
   | BlueWithdrawLimit
@@ -358,7 +358,7 @@ export type OperationLimit =
   | VaultInKindRedeemLimit
   | VaultV1MigrateToV2Limit;
 
-/** @internal WAD ratios, raw amounts, inclusive bounds. Consumers may only tighten. */
+/** WAD ratios, raw amounts, inclusive bounds. Consumers may only tighten. */
 export interface SimulationLimits {
   /** Default 0.03% (`3_00000000000000n`). */
   readonly maxSlippageWad?: bigint;
