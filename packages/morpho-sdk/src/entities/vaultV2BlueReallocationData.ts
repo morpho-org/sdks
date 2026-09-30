@@ -1098,8 +1098,8 @@ export class VaultV2BlueReallocationData
     const normalizedMarketId = marketId.toLowerCase();
     const adapterIdsCache = new Map<string, AdapterIds>();
     const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
-    const initialData = data;
     interface PositionReserve {
+      readonly key: string;
       readonly ids: AdapterIds;
       interest(): bigint;
     }
@@ -1109,40 +1109,37 @@ export class VaultV2BlueReallocationData
       readonly market: ReadonlyMarketSnapshot;
     }
     const positionReserves = new Map<string, PositionReserve>();
-    const positionReserveKeyByValue = new WeakMap<PositionReserve, string>();
     const getPositionReserveKey = ({
       vaultAddress,
       adapter,
       market,
     }: PositionReserveInput) =>
       `${vaultAddress.toLowerCase()}|${adapter.address.toLowerCase()}|${market.id.toLowerCase()}`;
+    // Memoized at first sight, which is pre-plan: the target and every eligible
+    // source are visited in the first iteration, and a position first seen later
+    // has not been touched by an earlier leg.
     const getPositionReserve = (input: PositionReserveInput) => {
-      const { vaultAddress, adapter, market } = input;
+      const { adapter, market } = input;
       const key = getPositionReserveKey(input);
       const cached = positionReserves.get(key);
       if (cached != null) return cached;
 
-      const initialMarket = initialData.getMarket(market.id);
-      const initialShares =
-        initialData.getAdapter(vaultAddress, adapter.address).supplyShares[
-          market.id
-        ] ?? 0n;
+      const market0 = market;
+      const shares0 = adapter.supplyShares[market.id] ?? 0n;
       const ids = getAdapterIds(adapterIdsCache, adapter, market);
       let accruedInterest: bigint | undefined;
       const reserve: PositionReserve = {
+        key,
         ids,
         interest: () =>
           (accruedInterest ??= MathLib.zeroFloorSub(
-            initialMarket
+            market0
               .accrueInterest(timestamp + capAccrualBuffer)
-              .toSupplyAssets(initialShares),
-            initialMarket
-              .accrueInterest(timestamp)
-              .toSupplyAssets(initialShares),
+              .toSupplyAssets(shares0),
+            market0.accrueInterest(timestamp).toSupplyAssets(shares0),
           )),
       };
       positionReserves.set(key, reserve);
-      positionReserveKeyByValue.set(reserve, key);
       return reserve;
     };
     const committedReserves = new Map<string, Map<string, PositionReserve>>();
@@ -1155,15 +1152,13 @@ export class VaultV2BlueReallocationData
       readonly id: Hash;
       readonly extra: readonly PositionReserve[];
     }) => {
-      const reserves = new Map<string, PositionReserve>(
-        committedReserves.get(vaultAddress.toLowerCase()) ?? [],
-      );
-      for (const reserve of extra) {
-        const key = positionReserveKeyByValue.get(reserve);
-        if (key != null) reserves.set(key, reserve);
-      }
+      const committed = committedReserves.get(vaultAddress.toLowerCase());
       let total = 0n;
-      for (const reserve of reserves.values()) {
+      for (const reserve of committed?.values() ?? []) {
+        if (reserve.ids.includes(id)) total += reserve.interest();
+      }
+      for (const reserve of extra) {
+        if (committed?.has(reserve.key)) continue;
         if (reserve.ids.includes(id)) total += reserve.interest();
       }
       return total;
@@ -1621,10 +1616,8 @@ export class VaultV2BlueReallocationData
         vaultReserves = new Map();
         committedReserves.set(vaultReservesKey, vaultReserves);
       }
-      for (const position of positions) {
-        const positionKey = positionReserveKeyByValue.get(position);
-        if (positionKey != null) vaultReserves.set(positionKey, position);
-      }
+      for (const position of positions)
+        vaultReserves.set(position.key, position);
       if (remainingAssets != null) remainingAssets -= reallocation.assets;
     }
 
