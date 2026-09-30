@@ -677,25 +677,50 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       canPullFromMarket: true,
     });
 
-  const applyPlanAtCapHorizon = (
-    data: VaultV2BlueReallocationData,
-    reallocations: readonly VaultV2BlueReallocation[],
-  ) => {
+  const createTestContext = () => ({
+    donatedPenaltyAssets: {},
+    firstTotalAssets: {},
+    capReserves: {
+      marketAccruals: new Map(),
+      touchedPairs: new Map(),
+      reserveByPairKey: new Map(),
+    },
+  });
+
+  const applyPlanAtTimestamp = ({
+    data,
+    reallocations,
+    timestamp,
+  }: {
+    readonly data: VaultV2BlueReallocationData;
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly timestamp: bigint;
+  }) => {
     let simulated = data.clone();
-    let context = { donatedPenaltyAssets: {}, firstTotalAssets: {} };
+    let context = createTestContext();
     for (const reallocation of reallocations) {
       // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
       const transition = simulated["applyPublicReallocation"]({
         context,
         reallocation,
         targetMarketId: targetParams.id,
-        timestamp: TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER,
+        timestamp,
       });
       simulated = transition.data;
       context = transition.context;
     }
     return simulated;
   };
+
+  const applyPlanAtCapHorizon = (
+    data: VaultV2BlueReallocationData,
+    reallocations: readonly VaultV2BlueReallocation[],
+  ) =>
+    applyPlanAtTimestamp({
+      data,
+      reallocations,
+      timestamp: TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER,
+    });
 
   const expectTargetCapsAtHorizon = (
     data: VaultV2BlueReallocationData,
@@ -748,20 +773,32 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       sourceMarket.accrueInterest(TIMESTAMP).toSupplyAssets(sourceShares),
     );
     const idleHeadroom = 10n ** 22n;
-    const { data } = makeMultiLegFixture(
+    const absoluteCap =
       probe.data.getAllocation(VAULT, targetAdapterCapId).allocation +
-        targetInterest +
-        sourceInterest +
-        idleHeadroom,
-    );
+      targetInterest +
+      sourceInterest +
+      idleHeadroom;
+    const { data } = makeMultiLegFixture(absoluteCap);
 
     const { reallocations } = data.computeVaultV2BlueReallocations(
       targetParams.id,
     );
+    const allocationAtTimestamp = applyPlanAtTimestamp({
+      data,
+      reallocations,
+      timestamp: TIMESTAMP,
+    }).getAllocation(VAULT, targetAdapterCapId).allocation;
 
+    expect(targetInterest).toBeGreaterThan(0n);
     expect(sourceInterest).toBeGreaterThan(0n);
-    expect(reallocations.some(({ from }) => from.type === "market")).toBe(true);
-    expect(reallocations.some(({ from }) => from.type === "idle")).toBe(true);
+    expect(reallocations.map(({ from }) => from.type)).toEqual([
+      "market",
+      "idle",
+    ]);
+    expect(reallocations[1]?.assets).toBe(idleHeadroom);
+    expect(allocationAtTimestamp).toBe(
+      absoluteCap - targetInterest - sourceInterest,
+    );
     expectTargetCapsAtHorizon(data, reallocations);
   });
 
@@ -799,23 +836,31 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         .toSupplyAssets(targetShares),
       targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
     );
-    const { data, targetAdapterMarketCapId } = makeMultiLegFixture(
+    const absoluteCap =
       probe.data.getAllocation(VAULT, probe.targetAdapterMarketCapId)
         .allocation +
-        targetInterest +
-        idleAssets +
-        marketHeadroom,
-    );
+      targetInterest +
+      idleAssets +
+      marketHeadroom;
+    const { data, targetAdapterMarketCapId } = makeMultiLegFixture(absoluteCap);
 
     const { reallocations } = data.computeVaultV2BlueReallocations(
       targetParams.id,
     );
+    const allocationAtTimestamp = applyPlanAtTimestamp({
+      data,
+      reallocations,
+      timestamp: TIMESTAMP,
+    }).getAllocation(VAULT, targetAdapterMarketCapId).allocation;
 
     expect(targetInterest).toBeGreaterThan(0n);
-    expect(reallocations.length).toBeGreaterThanOrEqual(2);
-    expect(reallocations[0]?.from.type).toBe("idle");
+    expect(reallocations.map(({ from }) => from.type)).toEqual([
+      "idle",
+      "market",
+    ]);
     expect(reallocations[0]?.assets).toBe(idleAssets);
-    expect(reallocations.some(({ from }) => from.type === "market")).toBe(true);
+    expect(reallocations[1]?.assets).toBe(marketHeadroom);
+    expect(allocationAtTimestamp).toBe(absoluteCap - targetInterest);
     expect(
       data.getAllocation(VAULT, targetAdapterMarketCapId).absoluteCap,
     ).toBeGreaterThan(0n);
@@ -878,6 +923,55 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
     },
   );
+
+  test("behavior: reserves target accrual in allocator max-in", () => {
+    const makeAllocatorFixture = (targetAbsoluteCap: bigint) =>
+      makeFixture({
+        sourceSupply: 1_000n,
+        sourceAbsoluteCap: 10n ** 30n,
+        targetSupply: capTestTargetSupply,
+        targetBorrow: capTestTargetSupply / 2n,
+        targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+        targetPositionAssets: capTestTargetSupply,
+        targetCaps: [
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        ],
+        allocatorTargetCap: targetAbsoluteCap,
+        firstTotalAssets: 10n ** 30n,
+        idle: capTestTargetSupply,
+        canPullFromIdle: true,
+        canPullFromMarket: false,
+      });
+    const probe = makeAllocatorFixture(10n ** 30n);
+    const targetMarket = probe.data.getMarket(targetParams.id);
+    const targetShares =
+      probe.data.getAdapter(VAULT, TARGET_ADAPTER).supplyShares[
+        targetParams.id
+      ] ?? 0n;
+    const targetInterest = MathLib.zeroFloorSub(
+      targetMarket
+        .accrueInterest(TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER)
+        .toSupplyAssets(targetShares),
+      targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
+    );
+    const smallHeadroom = targetInterest * 2n + 1n;
+    const allocatorTargetCap =
+      probe.data.getAllocation(VAULT, probe.targetAdapterMarketCapId)
+        .allocation + smallHeadroom;
+    const { data } = makeAllocatorFixture(allocatorTargetCap);
+    const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id)
+      .reallocations[0]!;
+    const zeroBufferPlan = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { capAccrualBuffer: 0n },
+    ).reallocations[0]!;
+
+    expect(targetInterest).toBeGreaterThan(0n);
+    expect(zeroBufferPlan.assets).toBe(smallHeadroom);
+    expect(defaultPlan.assets).toBe(zeroBufferPlan.assets - targetInterest);
+  });
 
   test("behavior: reserves source interest on shared adapter cap ids", () => {
     const initialFixture = makeSharedCapTestFixture(10n ** 30n);
@@ -960,6 +1054,71 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
     },
   );
+
+  test("behavior: carries cap reserves from the friendly pass into fallback", () => {
+    const makeFallbackFixture = (absoluteCap: bigint) =>
+      makeFixture({
+        sourceAdapter: TARGET_ADAPTER,
+        sourceSupply: capTestTargetSupply,
+        sourceBorrow: (capTestTargetSupply * 3n) / 5n,
+        sourceRateAtTarget: (MathLib.WAD * 20n) / Time.s.from.y(1n),
+        sourceAbsoluteCap: 10n ** 30n,
+        targetSupply: capTestTargetSupply,
+        targetBorrow: (capTestTargetSupply * 99n) / 100n,
+        targetRateAtTarget: MathLib.WAD / (10n * Time.s.from.y(1n)),
+        targetPositionAssets: capTestTargetSupply,
+        targetCaps: [
+          { absoluteCap, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        ],
+        allocatorTargetCap: 10n ** 30n,
+        firstTotalAssets: 10n ** 30n,
+        idle: capTestTargetSupply,
+        canPullFromIdle: true,
+        canPullFromMarket: true,
+      });
+    const probe = makeFallbackFixture(10n ** 30n);
+    const adapter = probe.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const adapterCapId = adapter.ids(targetParams)[0]!;
+    const capTimestamp = TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER;
+    const targetShares = adapter.supplyShares[targetParams.id] ?? 0n;
+    const sourceShares = adapter.supplyShares[sourceParams.id] ?? 0n;
+    const targetMarket = probe.data.getMarket(targetParams.id);
+    const sourceMarket = probe.data.getMarket(sourceParams.id);
+    const targetInterest = MathLib.zeroFloorSub(
+      targetMarket.accrueInterest(capTimestamp).toSupplyAssets(targetShares),
+      targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
+    );
+    const sourceInterest = MathLib.zeroFloorSub(
+      sourceMarket.accrueInterest(capTimestamp).toSupplyAssets(sourceShares),
+      sourceMarket.accrueInterest(TIMESTAMP).toSupplyAssets(sourceShares),
+    );
+    const capHeadroom = 10n ** 18n;
+    const adapterAbsoluteCap =
+      probe.data.getAllocation(VAULT, adapterCapId).allocation +
+      targetInterest +
+      sourceInterest +
+      capHeadroom;
+    const { data } = makeFallbackFixture(adapterAbsoluteCap);
+    const maxWithdrawalUtilization = (MathLib.WAD * 7n) / 10n;
+    const friendlyOnly = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxWithdrawalUtilization,
+    });
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      operation: {
+        type: "borrow",
+        amount: (capTestTargetSupply * 405n) / 1_000n,
+      },
+      maxWithdrawalUtilization,
+    });
+    expect(targetInterest).toBeGreaterThan(0n);
+    expect(sourceInterest).toBeGreaterThan(0n);
+    expect(result.reallocations.length).toBeGreaterThan(
+      friendlyOnly.reallocations.length,
+    );
+    expectTargetCapsAtHorizon(data, result.reallocations);
+  });
 
   test("error: validates a negative cap-accrual buffer before an early return", () => {
     const { data } = makeCapTestFixture("idle");
@@ -1062,14 +1221,14 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
     const bufferedTransition = data.clone()["applyPublicReallocation"]({
-      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      context: createTestContext(),
       reallocation: defaultPlan,
       targetMarketId: targetParams.id,
       timestamp: TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER,
     });
     // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
     const unbufferedTransition = data.clone()["applyPublicReallocation"]({
-      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      context: createTestContext(),
       reallocation: zeroBufferPlan,
       targetMarketId: targetParams.id,
       timestamp: TIMESTAMP + 1n,
@@ -1139,7 +1298,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
   test("behavior: returns transaction context separately from durable state", () => {
     const { data } = makeFixture();
-    const context = { donatedPenaltyAssets: {}, firstTotalAssets: {} };
+    const context = createTestContext();
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition shape directly.
     const transition = data["applyPublicReallocation"]({
@@ -1189,7 +1348,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise the private probe snapshot directly.
     const transition = data["applyPublicReallocation"]({
-      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      context: createTestContext(),
       reallocation: {
         vault: VAULT,
         from: {
@@ -1236,7 +1395,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
-        context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+        context: createTestContext(),
         reallocation: {
           vault: VAULT,
           from: {
@@ -1265,7 +1424,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
-        context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+        context: createTestContext(),
         reallocation: {
           vault: VAULT,
           from: {
@@ -2063,7 +2222,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise probe isolation directly.
     const probe = input["applyPublicReallocation"]({
-      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      context: createTestContext(),
       reallocation: {
         vault: VAULT,
         from: {
@@ -2314,7 +2473,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     // biome-ignore lint/complexity/useLiteralKeys: prove the omitted smaller call is executable in the simulated transition.
     const transition = data["applyPublicReallocation"]({
-      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      context: createTestContext(),
       reallocation: {
         vault: VAULT,
         from: {

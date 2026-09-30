@@ -100,16 +100,37 @@ interface CapReservePair {
   readonly reserve: () => bigint;
 }
 
+interface ReallocationCandidate {
+  readonly reallocation: VaultV2BlueReallocation;
+  readonly targetPair: CapReservePair;
+  readonly sourcePair?: CapReservePair;
+}
+
+/** Plan-scoped cap accrual reserve state shared by every planner pass of one transaction. @internal */
+interface CapReserveState {
+  /** Pre-plan markets, captured at the first pass. */
+  initialMarkets?: Readonly<Record<MarketId, Market | undefined>>;
+  readonly marketAccruals: Map<MarketId, readonly [Market, Market]>;
+  readonly touchedPairs: Map<string, Map<string, CapReservePair>>;
+  readonly reserveByPairKey: Map<string, bigint>;
+}
+
 /** Transaction-scoped state shared by transitions in one simulated call. @internal */
 interface SimulationContext {
   readonly donatedPenaltyAssets: Readonly<Record<Address, bigint>>;
   readonly firstTotalAssets: Readonly<Record<Address, bigint>>;
+  readonly capReserves: CapReserveState;
 }
 
 /** Creates isolated transaction-scoped state for one simulation. @internal */
 const createSimulationContext = (): SimulationContext => ({
   donatedPenaltyAssets: {},
   firstTotalAssets: {},
+  capReserves: {
+    marketAccruals: new Map(),
+    touchedPairs: new Map(),
+    reserveByPairKey: new Map(),
+  },
 });
 
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
@@ -1096,7 +1117,9 @@ export class VaultV2BlueReallocationData
         : BigInt(options.timestamp);
     let data: VaultV2BlueReallocationData = this;
     let simulationContext = context;
+    const { capReserves } = context;
     data.setMarkets([data.getMarket(marketId).accrueInterest(timestamp)]);
+    capReserves.initialMarkets ??= { ...data.mutableMarkets };
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
     const vaultKeyByLower = new Map<string, Address>(
@@ -1116,23 +1139,8 @@ export class VaultV2BlueReallocationData
 
     // Onchain, each market's interest is booked once at its first touch in the
     // transaction, on pre-plan positions at the pre-plan rate, and stays on the
-    // touched positions' cap ids. Markets are replaced rather than mutated, so
-    // this snapshot freezes pre-plan state for every leg of the plan.
-    const initialMarkets = { ...data.mutableMarkets };
-    const marketAccrualsCache = new Map<MarketId, readonly [Market, Market]>();
-    const getMarketAccruals = (market: ReadonlyMarketSnapshot) => {
-      const cached = marketAccrualsCache.get(market.id);
-      if (cached != null) return cached;
-      const initial = initialMarkets[market.id] ?? market;
-      const accruals = [
-        initial.accrueInterest(timestamp),
-        initial.accrueInterest(timestamp + capAccrualBuffer),
-      ] as const;
-      marketAccrualsCache.set(market.id, accruals);
-      return accruals;
-    };
-    const touchedPairs = new Map<string, Map<string, CapReservePair>>();
-    const reserveByPairKey = new Map<string, bigint>();
+    // touched positions' cap ids. This snapshot spans every pass and leg of the
+    // plan.
     // biome-ignore lint/complexity/useMaxParams: a pair is identified by its vault, adapter, and market.
     const getPair = (
       vault: Address,
@@ -1140,21 +1148,33 @@ export class VaultV2BlueReallocationData
       market: ReadonlyMarketSnapshot,
     ): CapReservePair => {
       const key = `${vault}:${adapter.address}:${market.id}`.toLowerCase();
-      const touched = touchedPairs.get(vault.toLowerCase())?.get(key);
+      const touched = capReserves.touchedPairs
+        .get(vault.toLowerCase())
+        ?.get(key);
       if (touched != null) return touched;
       const shares = adapter.supplyShares[market.id] ?? 0n;
       return {
         key,
         ids: getAdapterIds(adapterIdsCache, adapter, market),
         reserve: () => {
-          let reserve = reserveByPairKey.get(key);
+          let reserve = capReserves.reserveByPairKey.get(key);
           if (reserve == null) {
-            const [atTimestamp, projected] = getMarketAccruals(market);
+            let accruals = capReserves.marketAccruals.get(market.id);
+            if (accruals == null) {
+              const initialMarket =
+                capReserves.initialMarkets?.[market.id] ?? market;
+              accruals = [
+                initialMarket.accrueInterest(timestamp),
+                initialMarket.accrueInterest(timestamp + capAccrualBuffer),
+              ];
+              capReserves.marketAccruals.set(market.id, accruals);
+            }
+            const [atTimestamp, projected] = accruals;
             reserve = MathLib.zeroFloorSub(
               projected.toSupplyAssets(shares),
               atTimestamp.toSupplyAssets(shares),
             );
-            reserveByPairKey.set(key, reserve);
+            capReserves.reserveByPairKey.set(key, reserve);
           }
           return reserve;
         },
@@ -1169,7 +1189,7 @@ export class VaultV2BlueReallocationData
       let reserve = 0n;
       const seen = new Set<string>();
       for (const pair of [
-        ...(touchedPairs.get(vault.toLowerCase())?.values() ?? []),
+        ...(capReserves.touchedPairs.get(vault.toLowerCase())?.values() ?? []),
         ...candidatePairs,
       ]) {
         if (seen.has(pair.key) || !pair.ids.includes(id)) continue;
@@ -1222,11 +1242,7 @@ export class VaultV2BlueReallocationData
             targetMarket.totalSupplyAssets,
           );
           const minimumSupply = targetMarket.supply(1n, 0n);
-          const rawCandidates: {
-            readonly reallocation: VaultV2BlueReallocation;
-            readonly targetPair: CapReservePair;
-            readonly sourcePair?: CapReservePair;
-          }[] = [];
+          const rawCandidates: ReallocationCandidate[] = [];
 
           // Missing nested allocator state means the snapshot is incomplete, so
           // typed getter errors below must propagate. Only explicit zero caps or
@@ -1448,11 +1464,7 @@ export class VaultV2BlueReallocationData
             }
           }
 
-          const capCompatibleCandidates: {
-            readonly reallocation: VaultV2BlueReallocation;
-            readonly targetPair: CapReservePair;
-            readonly sourcePair?: CapReservePair;
-          }[] = [];
+          const capCompatibleCandidates: ReallocationCandidate[] = [];
           for (const {
             reallocation,
             targetPair,
@@ -1574,8 +1586,7 @@ export class VaultV2BlueReallocationData
           )[0];
         })
         .filter(
-          (candidate): candidate is NonNullable<typeof candidate> =>
-            candidate != null,
+          (candidate): candidate is ReallocationCandidate => candidate != null,
         )
         .sort(
           bigIntComparator(({ reallocation }) => reallocation.assets, "desc"),
@@ -1591,10 +1602,10 @@ export class VaultV2BlueReallocationData
         sourcePair: acceptedSourcePair,
       } = largest;
       const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
-      let touchedVaultPairs = touchedPairs.get(touchedVaultKey);
+      let touchedVaultPairs = capReserves.touchedPairs.get(touchedVaultKey);
       if (touchedVaultPairs == null) {
         touchedVaultPairs = new Map();
-        touchedPairs.set(touchedVaultKey, touchedVaultPairs);
+        capReserves.touchedPairs.set(touchedVaultKey, touchedVaultPairs);
       }
       if (!touchedVaultPairs.has(acceptedTargetPair.key))
         touchedVaultPairs.set(acceptedTargetPair.key, acceptedTargetPair);
