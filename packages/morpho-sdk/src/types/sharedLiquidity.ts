@@ -7,15 +7,18 @@ export interface VaultV2BluePublicAllocatorOptions {
   readonly enabled?: boolean;
 
   /**
-   * Timestamp at which market and Vault V2 interest is evaluated. Target-market
-   * absolute caps are evaluated after accruing interest through this timestamp
-   * plus `capAccrualBuffer`.
+   * Timestamp at which market and Vault V2 state is evaluated. Canonical state
+   * and the returned post-state stay at this timestamp; only target-market cap
+   * checks reserve interest on the vault's existing allocation through this
+   * timestamp plus `capAccrualBuffer`.
    */
   readonly timestamp?: BigIntish;
 
   /**
-   * Seconds of target-market interest accrued beyond `timestamp` before sizing
-   * allocations against absolute caps. Set to `0n` to disable.
+   * Seconds beyond `timestamp` through which target-market cap checks reserve
+   * interest on the vault's existing allocation. Market and Vault V2 state,
+   * including the returned post-state, stay at `timestamp`. Set to `0n` to
+   * disable.
    *
    * @default DEFAULT_CAP_ACCRUAL_BUFFER (2h)
    */

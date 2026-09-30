@@ -664,8 +664,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       const expectedAccruedAllocation =
         accruedTargetMarket.toSupplyAssets(targetShares);
       const expectedBufferedAssets = absoluteCap - expectedAccruedAllocation;
-      const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id)
-        .reallocations[0]!;
+      const defaultResult = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+      );
+      const defaultPlan = defaultResult.reallocations[0]!;
       const zeroBufferPlan = data.computeVaultV2BlueReallocations(
         targetParams.id,
         { capAccrualBuffer: 0n },
@@ -677,10 +679,87 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       expect(defaultPlan.from.type).toBe(sourceType);
       expect(defaultPlan.assets).toBeLessThan(capTestHeadroom);
       expect(defaultPlan.assets).toBe(expectedBufferedAssets);
+      expect(defaultResult.data.getMarket(targetParams.id).lastUpdate).toBe(
+        TIMESTAMP,
+      );
       expect(zeroBufferPlan.from.type).toBe(sourceType);
       expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
     },
   );
+
+  test.each(["borrow", "withdraw"] as const)(
+    "behavior: reserves target-market accrual for %s operation plans",
+    (type) => {
+      const { data, absoluteCap } = makeCapTestFixture("idle");
+      const targetShares =
+        data.getAdapter(VAULT, TARGET_ADAPTER).supplyShares[targetParams.id] ??
+        0n;
+      const accruedTargetMarket = data
+        .getMarket(targetParams.id)
+        .accrueInterest(TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER);
+      const expectedBufferedAssets =
+        absoluteCap - accruedTargetMarket.toSupplyAssets(targetShares);
+      const operation = {
+        type,
+        amount: capTestTargetSupply / 2n,
+      };
+      const defaultPlan = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        { operation },
+      ).reallocations[0]!;
+      const zeroBufferPlan = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        { operation, capAccrualBuffer: 0n },
+      ).reallocations[0]!;
+
+      expect(defaultPlan.assets).toBe(expectedBufferedAssets);
+      expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
+    },
+  );
+
+  test("error: validates a negative cap-accrual buffer before an early return", () => {
+    const { data } = makeCapTestFixture("idle");
+
+    expect(() =>
+      data.getAvailableLiquidityToUtilization(
+        targetParams.id,
+        800_000_000_000_000_000n,
+        { capAccrualBuffer: -1n },
+      ),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("behavior: cap-accrual buffer does not loosen a binding relative cap", () => {
+    const targetRelativeCapacity = capTestTargetSupply + capTestHeadroom;
+    const { data } = makeFixture({
+      sourceSupply: 1_000n,
+      sourceAbsoluteCap: 10n ** 30n,
+      targetSupply: capTestTargetSupply,
+      targetBorrow: capTestTargetSupply / 2n,
+      targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetPositionAssets: capTestTargetSupply,
+      targetCaps: [
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD / 2n },
+      ],
+      allocatorTargetCap: 10n ** 30n,
+      firstTotalAssets: targetRelativeCapacity * 2n,
+      idle: capTestTargetSupply + 2n * capTestHeadroom,
+      canPullFromIdle: true,
+      canPullFromMarket: false,
+      maxRate: MathLib.WAD,
+    });
+    const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id)
+      .reallocations[0]!;
+    const zeroBufferPlan = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { capAccrualBuffer: 0n },
+    ).reallocations[0]!;
+
+    expect(zeroBufferPlan.assets).toBeGreaterThan(0n);
+    expect(defaultPlan.assets).toBeLessThanOrEqual(zeroBufferPlan.assets);
+  });
 
   test("behavior: buffered plan stays under cap at the buffer horizon and unbuffered plan reproduces cap overflow", () => {
     const { data, targetAdapterMarketCapId, absoluteCap } =
