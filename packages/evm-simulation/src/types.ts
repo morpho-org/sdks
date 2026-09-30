@@ -135,10 +135,10 @@ export interface SimulationLogger {
 }
 
 /**
- * Input to `simulate`. Pin a `blockNumber` for deterministic / historical
- * simulation; omit to simulate against `latest`.
+ * @internal Input to the pre-v5 `simulate` pipeline; replaced by `SimulateParams`
+ * once the verification pipeline lands (SDK-1293).
  */
-export interface SimulateParams {
+export interface LegacySimulateParams {
   chainId: number;
   transactions: SimulationTransaction[];
   authorizations?: SimulationAuthorization[];
