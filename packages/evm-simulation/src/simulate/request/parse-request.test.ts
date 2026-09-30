@@ -1,6 +1,6 @@
 import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type { SimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
@@ -27,7 +27,7 @@ const tx = (overrides: object = {}) => ({
   ...overrides,
 });
 
-const erc20Approval: PendingAuthorization = {
+const erc20Approval: SimulationAuthorization = {
   type: "erc20Approval",
   token: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
   owner: OWNER,
@@ -35,7 +35,7 @@ const erc20Approval: PendingAuthorization = {
   amount: 100n,
 };
 
-const permit2Auth: PendingAuthorization = {
+const permit2Auth: SimulationAuthorization = {
   type: "permit2SignatureTransfer",
   owner: OWNER,
   typedData: {
@@ -374,7 +374,7 @@ describe("parseRequest", () => {
     expectTypeOf<ParsedRequest["chainId"]>().toEqualTypeOf<number>();
   });
 
-  const permitAuth: PendingAuthorization = {
+  const permitAuth: SimulationAuthorization = {
     type: "erc2612Permit",
     typedData: {
       domain: {
@@ -405,7 +405,7 @@ describe("parseRequest", () => {
     },
   };
 
-  const blueSigAuth: PendingAuthorization = {
+  const blueSigAuth: SimulationAuthorization = {
     type: "blueAuthorizationSignature",
     typedData: {
       domain: {

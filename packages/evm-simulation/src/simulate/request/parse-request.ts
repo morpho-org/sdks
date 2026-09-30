@@ -13,7 +13,7 @@ import {
 import type {
   Eip712Domain,
   Eip712Field,
-  PendingAuthorization,
+  SimulationAuthorization,
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type {
@@ -45,7 +45,7 @@ export interface ParsedRequest {
   readonly mode: SimulationMode;
   readonly transactions: readonly ParsedTransaction[];
   /** Always empty in final mode. */
-  readonly authorizations: readonly PendingAuthorization[];
+  readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly limits?: SimulationLimits;
 }
@@ -118,7 +118,10 @@ interface FieldChecks {
     }[];
     readonly path: string;
   }): readonly Eip712Field[] | undefined;
-  authorization(value: unknown, path: string): PendingAuthorization | undefined;
+  authorization(
+    value: unknown,
+    path: string,
+  ): SimulationAuthorization | undefined;
   operation(value: unknown, path: string): OperationLimit | undefined;
 }
 
@@ -1132,7 +1135,7 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
 
   // authorizations
   const rawAuthorizations = input.authorizations;
-  const authorizations: PendingAuthorization[] = [];
+  const authorizations: SimulationAuthorization[] = [];
   if (rawAuthorizations !== undefined) {
     if (!Array.isArray(rawAuthorizations)) {
       fieldErrors.push("authorizations: must be an array");
