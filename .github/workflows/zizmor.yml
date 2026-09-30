@@ -17,6 +17,7 @@ jobs:
   zizmor:
     # Required status check on `main`: keep this name stable.
     name: zizmor
+    needs: missing-job
     runs-on: ubuntu-latest
 
     permissions:
