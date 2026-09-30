@@ -215,11 +215,19 @@ describe.sequential("executePlan", () => {
   ])(
     "error: ExternalServiceError for a state block with $name",
     async ({ overrides }) => {
-      fetchMock.mockResolvedValueOnce(rpc(blockResult(overrides)));
-      await expect(executePlan(params)).rejects.toBeInstanceOf(
-        ExternalServiceError,
+      fetchMock
+        .mockResolvedValueOnce(rpc("0x1"))
+        .mockResolvedValueOnce(rpc(blockResult(overrides)));
+      const error = await executePlan(params).catch(
+        (caught: unknown) => caught,
       );
-      // The failure precedes the feature gate: no eth_simulateV1 issued.
+      expect(error).toBeInstanceOf(ExternalServiceError);
+      expect((error as Error).message).toContain(
+        "a block without number or hash",
+      );
+      // The chain id was checked, then the block failed: exactly two fetches
+      // and no eth_simulateV1 issued.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(
         fetchMock.mock.calls.every(
           (call) => !String(call[1]?.body).includes("eth_simulateV1"),
@@ -331,6 +339,19 @@ describe.sequential("executePlan", () => {
     await expect(executePlan(params)).rejects.toBeInstanceOf(
       InvalidSimulationResponseError,
     );
+  });
+
+  test("error: response evidence beats a failing reorg-check eth_getBlock", async () => {
+    // Call-count mismatch evidence is in hand before the reorg re-fetch:
+    // a rejecting re-fetch must not downgrade it to ExternalServiceError.
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc(simulateResult(okCalls(2))))
+      .mockRejectedValueOnce(new Error("gateway down"));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(InvalidSimulationResponseError);
+    expect(error).not.toBeInstanceOf(ExternalServiceError);
   });
 
   // Anvil reports the pinned block itself; advancement is not required.

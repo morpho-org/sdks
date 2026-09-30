@@ -104,13 +104,16 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *    how gas is separated from economic effects. **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
- *
- * After the simulation the state block is re-fetched to detect a reorg that
- * swapped its hash mid-flight. The simulated block must be exactly
- * `stateBlockNumber` or `stateBlockNumber + 1`: geth-style nodes report the
- * former's successor while Anvil reports the pinned block itself. The
- * result records whatever the node returns; consumers must read
- * {@link ExecutionBlock.blockNumber} and never assume +1.
+ * 4. **Response validation** — the response is parsed before the reorg
+ *    re-fetch so revert/mismatch evidence already in hand surfaces instead
+ *    of being downgraded to a bypassable {@link ExternalServiceError} by a
+ *    failing re-fetch. The simulated block must be exactly
+ *    `stateBlockNumber` or `stateBlockNumber + 1`: geth-style nodes report
+ *    the former's successor while Anvil reports the pinned block itself.
+ *    The result records whatever the node returns; consumers must read
+ *    {@link ExecutionBlock.blockNumber} and never assume +1.
+ * 5. **Reorg check** — the state block is re-fetched last to detect a reorg
+ *    that swapped its hash mid-flight (`InvalidSimulationResponseError`).
  *
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
@@ -123,8 +126,9 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *   malformed JSON-RPC envelopes, or a state block without number/hash.
  * @throws {InvalidSimulationResponseError} For a chain mismatch or a
  *   response that cannot be trusted (bad shape, call-count mismatch, block
- *   other than the pinned state block or its successor, or a state-block
- *   hash that changed mid-flight).
+ *   other than the pinned state block or its successor, a block timestamp
+ *   earlier than the pinned block's, or a state-block hash that changed
+ *   mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts or the
  *   node reports a bundle-level revert (code 3 / insufficient funds).
  * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
@@ -248,6 +252,19 @@ export async function executePlan(params: {
     }),
   );
 
+  // Response parsing is validation, not transport — it runs before the
+  // reorg re-fetch so evidence already in hand reaches the caller as
+  // InvalidSimulationResponseError / SimulationRevertedError instead of
+  // being downgraded to a bypassable ExternalServiceError by a failing
+  // re-fetch.
+  const execution = parseSimulationResponse({
+    plan,
+    response,
+    stateBlockNumber: stateBlock.number,
+    stateBlockHash: stateBlock.hash,
+    stateBlockTimestamp: stateBlock.timestamp,
+  });
+
   // Reorg window: the pinned state block must still carry the same hash
   // after simulation, or the result may describe a different chain tip.
   const stateBlockAfter = await rpc("eth_getBlock", () =>
@@ -267,13 +284,5 @@ export async function executePlan(params: {
     );
   }
 
-  // Response parsing is validation, not transport — it must reach
-  // the caller as InvalidSimulationResponseError, never ExternalServiceError.
-  return parseSimulationResponse({
-    plan,
-    response,
-    stateBlockNumber: stateBlock.number,
-    stateBlockHash: stateBlock.hash,
-    stateBlockTimestamp: stateBlock.timestamp,
-  });
+  return execution;
 }

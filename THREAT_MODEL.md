@@ -117,8 +117,8 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 
 The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below only catch what the endpoint cannot fake.
 
-- The state block is pinned once and re-fetched after the call; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
-- The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`.
+- The state block is pinned once and re-fetched after the response is parsed; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
+- The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way.
 - A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
 - Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. A malformed `eth_simulateV1` result shape is `InvalidSimulationResponseError`.
 - Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.

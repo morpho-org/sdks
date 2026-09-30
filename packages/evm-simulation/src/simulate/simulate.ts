@@ -74,7 +74,8 @@ import { parseRequest } from "./request/index.js";
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, or a state-block hash that
- *   changed mid-flight).
+ *   changed mid-flight) or an endpoint whose `eth_chainId` differs from
+ *   `params.chainId` (checked before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
