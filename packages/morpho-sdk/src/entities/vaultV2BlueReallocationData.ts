@@ -106,31 +106,33 @@ interface ReallocationCandidate {
   readonly sourcePair?: CapReservePair;
 }
 
-/** Plan-scoped cap accrual reserve state shared by every planner pass of one transaction. @internal */
+/** Plan-scoped, deliberately mutable reserve state shared by every planner pass. @internal */
 interface CapReserveState {
-  /** Pre-plan markets, captured at the first pass. */
-  initialMarkets?: Readonly<Record<MarketId, Market | undefined>>;
+  readonly initialMarkets: Readonly<Record<MarketId, Market | undefined>>;
   readonly marketAccruals: Map<MarketId, readonly [Market, Market]>;
   readonly touchedPairs: Map<string, Map<string, CapReservePair>>;
   readonly reserveByPairKey: Map<string, bigint>;
 }
 
+const createCapReserveState = (
+  markets: CapReserveState["initialMarkets"],
+): CapReserveState => ({
+  initialMarkets: { ...markets },
+  marketAccruals: new Map(),
+  touchedPairs: new Map(),
+  reserveByPairKey: new Map(),
+});
+
 /** Transaction-scoped state shared by transitions in one simulated call. @internal */
 interface SimulationContext {
   readonly donatedPenaltyAssets: Readonly<Record<Address, bigint>>;
   readonly firstTotalAssets: Readonly<Record<Address, bigint>>;
-  readonly capReserves: CapReserveState;
 }
 
 /** Creates isolated transaction-scoped state for one simulation. @internal */
 const createSimulationContext = (): SimulationContext => ({
   donatedPenaltyAssets: {},
   firstTotalAssets: {},
-  capReserves: {
-    marketAccruals: new Map(),
-    touchedPairs: new Map(),
-    reserveByPairKey: new Map(),
-  },
 });
 
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
@@ -980,6 +982,7 @@ export class VaultV2BlueReallocationData
       const { reallocations, data } =
         this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
           context: createSimulationContext(),
+          reserves: createCapReserveState(this.mutableMarkets),
           marketId,
           maxWithdrawalUtilization,
           capAccrualBuffer,
@@ -1034,9 +1037,11 @@ export class VaultV2BlueReallocationData
       newTotalSupplyAssets;
     if (requiredAssets <= 0n) return { reallocations: [], data: this };
 
+    const reserves = createCapReserveState(this.mutableMarkets);
     const friendly =
       this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
         context: createSimulationContext(),
+        reserves,
         marketId,
         maxWithdrawalUtilization,
         maxAssets: requiredAssets,
@@ -1059,6 +1064,7 @@ export class VaultV2BlueReallocationData
       const fallback = data.computeVaultV2BlueReallocationsAtUtilizationInPlace(
         {
           context: friendly.context,
+          reserves,
           marketId,
           maxWithdrawalUtilization: MathLib.WAD,
           maxAssets: friendlyBorrow - friendlySupply,
@@ -1090,6 +1096,7 @@ export class VaultV2BlueReallocationData
 
   private computeVaultV2BlueReallocationsAtUtilizationInPlace({
     context,
+    reserves,
     marketId,
     maxWithdrawalUtilization,
     maxAssets,
@@ -1097,6 +1104,7 @@ export class VaultV2BlueReallocationData
     options = {},
   }: {
     readonly context: SimulationContext;
+    readonly reserves: CapReserveState;
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
     readonly maxAssets?: bigint;
@@ -1117,9 +1125,7 @@ export class VaultV2BlueReallocationData
         : BigInt(options.timestamp);
     let data: VaultV2BlueReallocationData = this;
     let simulationContext = context;
-    const { capReserves } = context;
     data.setMarkets([data.getMarket(marketId).accrueInterest(timestamp)]);
-    capReserves.initialMarkets ??= { ...data.mutableMarkets };
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
     const vaultKeyByLower = new Map<string, Address>(
@@ -1137,10 +1143,9 @@ export class VaultV2BlueReallocationData
     const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
     let remainingAssets = maxAssets;
 
-    // Onchain, each market's interest is booked once at its first touch in the
-    // transaction, on pre-plan positions at the pre-plan rate, and stays on the
-    // touched positions' cap ids. This snapshot spans every pass and leg of the
-    // plan.
+    // Onchain, market interest is booked once at transaction start, on pre-plan
+    // positions at pre-plan rates, and stays on touched positions' cap ids.
+    // This reserve state is shared across every planner pass and leg of the plan.
     // biome-ignore lint/complexity/useMaxParams: a pair is identified by its vault, adapter, and market.
     const getPair = (
       vault: Address,
@@ -1148,33 +1153,32 @@ export class VaultV2BlueReallocationData
       market: ReadonlyMarketSnapshot,
     ): CapReservePair => {
       const key = `${vault}:${adapter.address}:${market.id}`.toLowerCase();
-      const touched = capReserves.touchedPairs
-        .get(vault.toLowerCase())
-        ?.get(key);
+      const touched = reserves.touchedPairs.get(vault.toLowerCase())?.get(key);
       if (touched != null) return touched;
       const shares = adapter.supplyShares[market.id] ?? 0n;
       return {
         key,
         ids: getAdapterIds(adapterIdsCache, adapter, market),
         reserve: () => {
-          let reserve = capReserves.reserveByPairKey.get(key);
+          let reserve = reserves.reserveByPairKey.get(key);
           if (reserve == null) {
-            let accruals = capReserves.marketAccruals.get(market.id);
+            let accruals = reserves.marketAccruals.get(market.id);
             if (accruals == null) {
-              const initialMarket =
-                capReserves.initialMarkets?.[market.id] ?? market;
+              const initialMarket = reserves.initialMarkets[market.id];
+              if (initialMarket == null)
+                throw new UnknownReallocationMarketError(market.id);
               accruals = [
                 initialMarket.accrueInterest(timestamp),
                 initialMarket.accrueInterest(timestamp + capAccrualBuffer),
               ];
-              capReserves.marketAccruals.set(market.id, accruals);
+              reserves.marketAccruals.set(market.id, accruals);
             }
             const [atTimestamp, projected] = accruals;
             reserve = MathLib.zeroFloorSub(
               projected.toSupplyAssets(shares),
               atTimestamp.toSupplyAssets(shares),
             );
-            capReserves.reserveByPairKey.set(key, reserve);
+            reserves.reserveByPairKey.set(key, reserve);
           }
           return reserve;
         },
@@ -1189,7 +1193,7 @@ export class VaultV2BlueReallocationData
       let reserve = 0n;
       const seen = new Set<string>();
       for (const pair of [
-        ...(capReserves.touchedPairs.get(vault.toLowerCase())?.values() ?? []),
+        ...(reserves.touchedPairs.get(vault.toLowerCase())?.values() ?? []),
         ...candidatePairs,
       ]) {
         if (seen.has(pair.key) || !pair.ids.includes(id)) continue;
@@ -1602,10 +1606,10 @@ export class VaultV2BlueReallocationData
         sourcePair: acceptedSourcePair,
       } = largest;
       const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
-      let touchedVaultPairs = capReserves.touchedPairs.get(touchedVaultKey);
+      let touchedVaultPairs = reserves.touchedPairs.get(touchedVaultKey);
       if (touchedVaultPairs == null) {
         touchedVaultPairs = new Map();
-        capReserves.touchedPairs.set(touchedVaultKey, touchedVaultPairs);
+        reserves.touchedPairs.set(touchedVaultKey, touchedVaultPairs);
       }
       if (!touchedVaultPairs.has(acceptedTargetPair.key))
         touchedVaultPairs.set(acceptedTargetPair.key, acceptedTargetPair);
@@ -1688,6 +1692,7 @@ export class VaultV2BlueReallocationData
     return this.clone()
       .computeVaultV2BlueReallocationsAtUtilizationInPlace({
         context: createSimulationContext(),
+        reserves: createCapReserveState(this.mutableMarkets),
         marketId,
         maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
           options?.maxWithdrawalUtilization,
@@ -1766,6 +1771,7 @@ export class VaultV2BlueReallocationData
     const availableLiquidity = this.clone()
       .computeVaultV2BlueReallocationsAtUtilizationInPlace({
         context: createSimulationContext(),
+        reserves: createCapReserveState(this.mutableMarkets),
         marketId,
         maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
           options?.maxWithdrawalUtilization,

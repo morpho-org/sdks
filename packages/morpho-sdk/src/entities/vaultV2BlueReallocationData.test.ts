@@ -11,6 +11,7 @@ import {
   Market,
   type MarketId,
   MarketParams,
+  MarketUtils,
   MathLib,
   SharesMath,
   UnsupportedMarketIrmError,
@@ -680,11 +681,6 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   const createTestContext = () => ({
     donatedPenaltyAssets: {},
     firstTotalAssets: {},
-    capReserves: {
-      marketAccruals: new Map(),
-      touchedPairs: new Map(),
-      reserveByPairKey: new Map(),
-    },
   });
 
   const applyPlanAtTimestamp = ({
@@ -1055,52 +1051,57 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     },
   );
 
-  test("behavior: carries cap reserves from the friendly pass into fallback", () => {
-    const makeFallbackFixture = (absoluteCap: bigint) =>
+  test("behavior: fallback pass sizes with the frozen pre-plan reserve", () => {
+    const sourceSupply = capTestTargetSupply * 10_000n;
+    const targetMarketSupply = capTestTargetSupply * 1_000_000n;
+    const targetPositionAssets = capTestTargetSupply * 100n;
+    const operationAmount = capTestTargetSupply * 4_000n;
+    const makeFallbackFixture = (targetAbsoluteCap: bigint) =>
       makeFixture({
         sourceAdapter: TARGET_ADAPTER,
-        sourceSupply: capTestTargetSupply,
-        sourceBorrow: (capTestTargetSupply * 3n) / 5n,
+        sourceSupply,
+        sourceBorrow: (sourceSupply * 3n) / 5n,
         sourceRateAtTarget: (MathLib.WAD * 20n) / Time.s.from.y(1n),
         sourceAbsoluteCap: 10n ** 30n,
-        targetSupply: capTestTargetSupply,
-        targetBorrow: (capTestTargetSupply * 99n) / 100n,
+        targetSupply: targetMarketSupply,
+        targetBorrow: (targetMarketSupply * 999n) / 1_000n,
         targetRateAtTarget: MathLib.WAD / (10n * Time.s.from.y(1n)),
-        targetPositionAssets: capTestTargetSupply,
+        targetPositionAssets,
         targetCaps: [
-          { absoluteCap, relativeCap: MathLib.WAD },
           { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
           { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: targetAbsoluteCap, relativeCap: MathLib.WAD },
         ],
         allocatorTargetCap: 10n ** 30n,
         firstTotalAssets: 10n ** 30n,
-        idle: capTestTargetSupply,
-        canPullFromIdle: true,
+        idle: 0n,
+        canPullFromIdle: false,
         canPullFromMarket: true,
       });
     const probe = makeFallbackFixture(10n ** 30n);
-    const adapter = probe.data.getAdapter(VAULT, TARGET_ADAPTER);
-    const adapterCapId = adapter.ids(targetParams)[0]!;
+    const targetAdapterMarketCapId = probe.targetAdapterMarketCapId;
     const capTimestamp = TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER;
-    const targetShares = adapter.supplyShares[targetParams.id] ?? 0n;
-    const sourceShares = adapter.supplyShares[sourceParams.id] ?? 0n;
     const targetMarket = probe.data.getMarket(targetParams.id);
-    const sourceMarket = probe.data.getMarket(sourceParams.id);
-    const targetInterest = MathLib.zeroFloorSub(
+    const targetShares =
+      probe.data.getAdapter(VAULT, TARGET_ADAPTER).supplyShares[
+        targetParams.id
+      ] ?? 0n;
+    const reservePrePlan = MathLib.zeroFloorSub(
       targetMarket.accrueInterest(capTimestamp).toSupplyAssets(targetShares),
       targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
     );
-    const sourceInterest = MathLib.zeroFloorSub(
-      sourceMarket.accrueInterest(capTimestamp).toSupplyAssets(sourceShares),
-      sourceMarket.accrueInterest(TIMESTAMP).toSupplyAssets(sourceShares),
+    const operationMarket = targetMarket.accrueInterest(TIMESTAMP);
+    const operationShortfall = MathLib.zeroFloorSub(
+      operationMarket.totalBorrowAssets + operationAmount,
+      operationMarket.totalSupplyAssets,
     );
-    const capHeadroom = 10n ** 18n;
-    const adapterAbsoluteCap =
-      probe.data.getAllocation(VAULT, adapterCapId).allocation +
-      targetInterest +
-      sourceInterest +
-      capHeadroom;
-    const { data } = makeFallbackFixture(adapterAbsoluteCap);
+    const initialAllocation = probe.data.getAllocation(
+      VAULT,
+      targetAdapterMarketCapId,
+    ).allocation;
+    const absoluteCap =
+      initialAllocation + operationShortfall + reservePrePlan + 1n;
+    const { data } = makeFallbackFixture(absoluteCap);
     const maxWithdrawalUtilization = (MathLib.WAD * 7n) / 10n;
     const friendlyOnly = data.computeVaultV2BlueReallocations(targetParams.id, {
       maxWithdrawalUtilization,
@@ -1108,15 +1109,25 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     const result = data.computeVaultV2BlueReallocations(targetParams.id, {
       operation: {
         type: "borrow",
-        amount: (capTestTargetSupply * 405n) / 1_000n,
+        amount: operationAmount,
       },
       maxWithdrawalUtilization,
     });
-    expect(targetInterest).toBeGreaterThan(0n);
-    expect(sourceInterest).toBeGreaterThan(0n);
+    const plannedData = applyPlanAtTimestamp({
+      data,
+      reallocations: result.reallocations,
+      timestamp: TIMESTAMP,
+    });
+    expect(reservePrePlan).toBeGreaterThan(0n);
     expect(result.reallocations.length).toBeGreaterThan(
       friendlyOnly.reallocations.length,
     );
+    expect(
+      plannedData.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(initialAllocation + operationShortfall);
+    expect(
+      plannedData.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBeLessThanOrEqual(absoluteCap - reservePrePlan);
     expectTargetCapsAtHorizon(data, result.reallocations);
   });
 
@@ -1175,6 +1186,30 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         capAccrualBuffer: -1n,
       }),
     ).toThrow(NegativeInputError);
+  });
+
+  test("behavior: reserves buffered caps in utilization liquidity", () => {
+    const { data } = makeCapTestFixture("idle");
+    const market = data.getMarket(targetParams.id).accrueInterest(TIMESTAMP);
+    const defaultLiquidity = data.getAvailableLiquidityToUtilization(
+      targetParams.id,
+    );
+    const zeroBufferLiquidity = data.getAvailableLiquidityToUtilization(
+      targetParams.id,
+      undefined,
+      { capAccrualBuffer: 0n },
+    );
+
+    expect(defaultLiquidity).toBeLessThan(zeroBufferLiquidity);
+    expect(zeroBufferLiquidity).toBe(
+      MarketUtils.getBorrowToUtilization(
+        {
+          totalSupplyAssets: market.totalSupplyAssets + capTestHeadroom,
+          totalBorrowAssets: market.totalBorrowAssets,
+        },
+        (MathLib.WAD * 9n) / 10n,
+      ),
+    );
   });
 
   test("behavior: cap-accrual buffer does not loosen a binding relative cap", () => {
