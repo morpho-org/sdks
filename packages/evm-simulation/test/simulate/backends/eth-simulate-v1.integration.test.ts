@@ -26,14 +26,21 @@ const wethAbi = [
   },
 ] as const;
 
-function planFor(
-  transactions: readonly { to: Address; data: `0x${string}`; value?: bigint }[],
-  owner: Address,
-) {
+function planFor(options: {
+  readonly transactions: readonly {
+    to: Address;
+    data: `0x${string}`;
+    value?: bigint;
+  }[];
+  readonly owner: Address;
+  readonly blockNumber?: bigint | "latest";
+}) {
+  const { transactions, owner, blockNumber } = options;
   return planExecution(
     parseRequest({
       chainId: mainnet.id,
       transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+      ...(blockNumber !== undefined ? { blockNumber } : {}),
     }),
   );
 }
@@ -44,15 +51,15 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     // block.number === the pin (no base+1 advancement like geth).
     const head = await client.getBlockNumber();
     const pinned = await client.getBlock({ blockNumber: head });
-    const plan = planFor(
-      [{ to: RECIPIENT, data: "0x" }],
-      client.account.address,
-    );
+    const plan = planFor({
+      transactions: [{ to: RECIPIENT, data: "0x" }],
+      owner: client.account.address,
+      blockNumber: head,
+    });
 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
     });
 
     expect(execution.block.chainId).toBe(mainnet.id);
@@ -67,7 +74,6 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const again = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
     });
     expect(again.block).toEqual(execution.block);
     expect(again.transactions).toEqual(execution.transactions);
@@ -75,8 +81,11 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     // "latest" on the pinned fork resolves to the same pinned block.
     const latest = await executePlan({
       rpcUrl: client.transport.url!,
-      plan,
-      blockNumber: "latest",
+      plan: planFor({
+        transactions: [{ to: RECIPIENT, data: "0x" }],
+        owner: client.account.address,
+        blockNumber: "latest",
+      }),
     });
     expect(latest.block.stateBlockNumber).toBe(head);
   });
@@ -88,8 +97,8 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
-      plan: planFor(
-        [
+      plan: planFor({
+        transactions: [
           {
             to: WETH,
             data: encodeFunctionData({
@@ -107,9 +116,9 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
             }),
           },
         ],
-        client.account.address,
-      ),
-      blockNumber: await client.getBlockNumber(),
+        owner: client.account.address,
+        blockNumber: await client.getBlockNumber(),
+      }),
     });
 
     expect(execution.transactions).toHaveLength(2);

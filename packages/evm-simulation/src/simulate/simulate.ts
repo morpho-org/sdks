@@ -87,9 +87,14 @@ import { parseRequest } from "./request/index.js";
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { encodeFunctionData, erc20Abi } from "viem";
+ * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
  *
- * const result = await simulate(
+ * const rpcUrl = "https://mainnet.example/rpc";
+ * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
+ * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+ * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
+ *
+ * const result = await simulate( // result: SimulationResult
  *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
  *   {
  *     chainId: 1,
@@ -123,7 +128,6 @@ export async function simulate(
   const execution = await executeSimulation({
     config,
     plan,
-    blockNumber: request.blockNumber,
   });
 
   // Plan order is transactionIndex order, so no re-sort is needed.

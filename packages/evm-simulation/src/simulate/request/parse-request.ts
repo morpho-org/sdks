@@ -790,24 +790,34 @@ const createChecks = (): FieldChecks => {
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
 
-interface OperationSpec {
+type VariantOf<T extends OperationType> = Extract<OperationLimit, { type: T }>;
+/** Field names of a limit variant (validated tables are checked against this). */
+type FieldsOf<T extends OperationType> = readonly (Exclude<
+  keyof VariantOf<T>,
+  "type" | "transactionIndex"
+> &
+  string)[];
+
+interface OperationSpec<T extends OperationType> {
   /** Required 32-byte market ids. */
-  readonly markets: readonly string[];
+  readonly markets: FieldsOf<T>;
   /** Optional checksummed addresses. */
-  readonly addresses: readonly string[];
+  readonly addresses: FieldsOf<T>;
   /** Optional uint256 fields. */
-  readonly uints: readonly string[];
+  readonly uints: FieldsOf<T>;
   /** Optional booleans. */
-  readonly bools: readonly string[];
+  readonly bools: FieldsOf<T>;
   /** Optional arrays of market ids. */
-  readonly marketIdArrays: readonly string[];
+  readonly marketIdArrays: FieldsOf<T>;
   /** `expectedDeallocations` (VaultDeallocation[]). */
   readonly deallocations: boolean;
   /** `minSupplyAssetsByMarket` (MarketMinAssets[]). */
   readonly minSupplyByMarket: boolean;
 }
 
-const SPEC = (partial: Partial<OperationSpec>): OperationSpec => ({
+const SPEC = <T extends OperationType>(
+  partial: Partial<OperationSpec<T>>,
+): OperationSpec<T> => ({
   markets: [],
   addresses: [],
   uints: [],
@@ -818,13 +828,13 @@ const SPEC = (partial: Partial<OperationSpec>): OperationSpec => ({
   ...partial,
 });
 
-const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
-  blueSupply: SPEC({
+const OPERATION_SPECS = {
+  blueSupply: SPEC<"blueSupply">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: ["expectedAssets", "minSupplySharesMinted"],
   }),
-  blueWithdraw: SPEC({
+  blueWithdraw: SPEC<"blueWithdraw">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: [
@@ -835,12 +845,12 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueSupplyCollateral: SPEC({
+  blueSupplyCollateral: SPEC<"blueSupplyCollateral">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: ["expectedAssets", "maxLtvAfterWad"],
   }),
-  blueBorrow: SPEC({
+  blueBorrow: SPEC<"blueBorrow">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: [
@@ -853,7 +863,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueSupplyCollateralBorrow: SPEC({
+  blueSupplyCollateralBorrow: SPEC<"blueSupplyCollateralBorrow">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf", "expectedReceiver"],
     uints: [
@@ -867,7 +877,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueRepay: SPEC({
+  blueRepay: SPEC<"blueRepay">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: [
@@ -878,12 +888,12 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueWithdrawCollateral: SPEC({
+  blueWithdrawCollateral: SPEC<"blueWithdrawCollateral">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: ["expectedAssets", "maxLtvAfterWad", "minHealthFactorAfterWad"],
   }),
-  blueRepayWithdrawCollateral: SPEC({
+  blueRepayWithdrawCollateral: SPEC<"blueRepayWithdrawCollateral">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf", "expectedReceiver"],
     uints: [
@@ -897,7 +907,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueRefinance: SPEC({
+  blueRefinance: SPEC<"blueRefinance">({
     markets: ["sourceMarketId", "targetMarketId"],
     uints: [
       "maxTargetBorrowAssets",
@@ -909,35 +919,35 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueAuthorization: SPEC({
+  blueAuthorization: SPEC<"blueAuthorization">({
     addresses: ["authorized"],
     bools: ["expectedIsAuthorized"],
   }),
-  vaultV1Deposit: SPEC({
+  vaultV1Deposit: SPEC<"vaultV1Deposit">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "minSharesMinted"],
   }),
-  vaultV2Deposit: SPEC({
+  vaultV2Deposit: SPEC<"vaultV2Deposit">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "minSharesMinted"],
   }),
-  vaultV1Withdraw: SPEC({
+  vaultV1Withdraw: SPEC<"vaultV1Withdraw">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "maxSharesBurned"],
   }),
-  vaultV2Withdraw: SPEC({
+  vaultV2Withdraw: SPEC<"vaultV2Withdraw">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "maxSharesBurned"],
   }),
-  vaultV1Redeem: SPEC({
+  vaultV1Redeem: SPEC<"vaultV1Redeem">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedShares", "minAssetsReceived"],
   }),
-  vaultV2Redeem: SPEC({
+  vaultV2Redeem: SPEC<"vaultV2Redeem">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedShares", "minAssetsReceived"],
   }),
-  vaultV2ForceWithdraw: SPEC({
+  vaultV2ForceWithdraw: SPEC<"vaultV2ForceWithdraw">({
     addresses: ["vault", "expectedAdapter"],
     uints: [
       "expectedExitAssets",
@@ -946,7 +956,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxPenaltyAssets",
     ],
   }),
-  vaultV2ForceRedeem: SPEC({
+  vaultV2ForceRedeem: SPEC<"vaultV2ForceRedeem">({
     addresses: ["vault", "expectedRecipient", "expectedOnBehalf"],
     uints: [
       "expectedShares",
@@ -956,7 +966,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     deallocations: true,
   }),
-  vaultV1InKindRedeem: SPEC({
+  vaultV1InKindRedeem: SPEC<"vaultV1InKindRedeem">({
     addresses: ["vault"],
     uints: [
       "expectedAssets",
@@ -968,7 +978,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     marketIdArrays: ["expectedMarketIds"],
     minSupplyByMarket: true,
   }),
-  vaultV2InKindRedeem: SPEC({
+  vaultV2InKindRedeem: SPEC<"vaultV2InKindRedeem">({
     addresses: ["vault"],
     uints: [
       "expectedAssets",
@@ -980,15 +990,15 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     marketIdArrays: ["expectedMarketIds"],
     minSupplyByMarket: true,
   }),
-  vaultV1MigrateToV2: SPEC({
+  vaultV1MigrateToV2: SPEC<"vaultV1MigrateToV2">({
     addresses: ["sourceVault", "targetVault", "expectedReceiver"],
     uints: ["expectedAssets", "expectedShares", "minTargetSharesMinted"],
   }),
-};
+} satisfies { [T in OperationType]: OperationSpec<T> };
 
 // Required address/market fields are also declared above: a missing or invalid
 // value reports the same way — the spec names the field, not optionality.
-const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
+const REQUIRED_ADDRESSES = {
   blueSupply: [],
   blueWithdraw: [],
   blueSupplyCollateral: [],
@@ -1010,7 +1020,7 @@ const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
   vaultV1InKindRedeem: ["vault"],
   vaultV2InKindRedeem: ["vault"],
   vaultV1MigrateToV2: ["sourceVault", "targetVault"],
-};
+} satisfies { [T in OperationType]: FieldsOf<T> };
 
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.

@@ -1,6 +1,5 @@
 import {
   BaseError,
-  type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
   http,
@@ -89,14 +88,15 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *
  * The boundary performs these steps under one shared abort/timeout budget:
  *
- * 1. **Single block resolution** — the requested `blockNumber`/tag/`latest`
+ * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
+ *    mismatch means the configured endpoint reports the wrong chain
+ *    (`InvalidSimulationResponseError`, transport stage), not a simulation
+ *    failure. It runs first so a misconfigured endpoint cannot fail earlier
+ *    as a bypassable {@link ExternalServiceError}.
+ * 2. **Single block resolution** — the request's `blockNumber`/tag/`latest`
  *    resolves to one concrete state block (`stateBlock*`). `latest` is
  *    therefore resolved exactly once; the simulation below pins that number
  *    so a drifting head cannot smear the result across blocks.
- * 2. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
- *    mismatch means the configured endpoint reports the wrong chain
- *    (`InvalidSimulationResponseError`, transport stage), not a simulation
- *    failure.
  * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from`, `traceTransfers: true` so the node
  *    synthesizes native-ETH moves as transfer logs, and
@@ -115,8 +115,8 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - RPC endpoint, the plan to execute, an optional block pin and
- *   the pipeline's abort signal.
+ * @param params - RPC endpoint, the plan to execute, and the pipeline's
+ *   abort signal. The block pin rides on `plan.request.blockNumber`.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -134,10 +134,10 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
 export async function executePlan(params: {
   rpcUrl: string;
   plan: ExecutionPlan;
-  blockNumber?: bigint | BlockTag;
   signal?: AbortSignal;
 }): Promise<SimulationExecution> {
-  const { rpcUrl, plan, blockNumber, signal } = params;
+  const { rpcUrl, plan, signal } = params;
+  const blockNumber = plan.request.blockNumber ?? "latest";
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
@@ -149,12 +149,35 @@ export async function executePlan(params: {
     }),
   });
 
+  // The configured endpoint must serve the request's chain — checked first
+  // so a misconfigured endpoint fails non-bypassably instead of surfacing a
+  // bypassable transport error on the block lookup below. Error contexts
+  // require a resolved `blockNumber`, so tag requests carry none.
+  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
+  if (rpcChainId !== plan.request.chainId) {
+    throw new InvalidSimulationResponseError(
+      `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
+      {
+        ...(typeof blockNumber === "bigint"
+          ? {
+              context: {
+                stage: "transport" as const,
+                chainId: plan.request.chainId,
+                mode: plan.request.mode,
+                blockNumber,
+              },
+            }
+          : {}),
+      },
+    );
+  }
+
   // Resolve the state block exactly once so `latest` cannot drift.
   const block = await rpc("eth_getBlock", () =>
     client.getBlock(
       typeof blockNumber === "bigint"
         ? { blockNumber }
-        : { blockTag: blockNumber ?? "latest" },
+        : { blockTag: blockNumber },
     ),
   );
   if (block.number === null || block.hash === null) {
@@ -167,22 +190,6 @@ export async function executePlan(params: {
     hash: block.hash,
     timestamp: block.timestamp,
   };
-
-  // The configured endpoint must serve the request's chain.
-  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
-  if (rpcChainId !== plan.request.chainId) {
-    throw new InvalidSimulationResponseError(
-      `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
-      {
-        context: {
-          stage: "transport",
-          chainId: plan.request.chainId,
-          mode: plan.request.mode,
-          blockNumber: stateBlock.number,
-        },
-      },
-    );
-  }
 
   // Feature gate once the state block is pinned (every error context carries
   // `blockNumber`): preview authorizations and consumer limits parse and

@@ -237,14 +237,22 @@ describe.sequential("simulate — modes and unsupported features", () => {
   it("forwards blockNumber to executeSimulation", async () => {
     await simulate(makeConfig(), makeParams({ blockNumber: 20000000n }));
     expect(mockExecuteSimulation).toHaveBeenCalledWith(
-      expect.objectContaining({ blockNumber: 20000000n }),
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          request: expect.objectContaining({ blockNumber: 20000000n }),
+        }),
+      }),
     );
   });
 
   it("forwards a block tag to executeSimulation", async () => {
     await simulate(makeConfig(), makeParams({ blockNumber: "finalized" }));
     expect(mockExecuteSimulation).toHaveBeenCalledWith(
-      expect.objectContaining({ blockNumber: "finalized" }),
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          request: expect.objectContaining({ blockNumber: "finalized" }),
+        }),
+      }),
     );
   });
 
