@@ -115,7 +115,7 @@ The "expected" identity each finding proposes to check (adapter list, market ids
 
 #### `eth_simulateV1` responses (`evm-simulation`)
 
-The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below only catch what the endpoint cannot fake.
+The sole simulation backend: no fallback, no retry. Backend output is trusted as execution evidence — a well-formed forged result is not detectable; the checks below catch non-compliant, misconfigured or reorging endpoints — a dishonest endpoint can pass them all with a consistent forged response.
 
 - The state block is pinned once and re-fetched after the response is parsed; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
 - The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way.

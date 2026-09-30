@@ -10,8 +10,8 @@ export const SIMULATION_MODES = ["preview", "final"] as const;
 export type SimulationMode = (typeof SIMULATION_MODES)[number];
 
 /**
- * v5 verified-simulation input; `simulate()` accepts it once SDK-1293 cuts the
- * pipeline over. `authorizations` is accepted only in "preview".
+ * Input to `simulate()`. `authorizations` is accepted only in "preview";
+ * `mode` defaults to "final".
  */
 export interface SimulateParams {
   readonly chainId: number;
