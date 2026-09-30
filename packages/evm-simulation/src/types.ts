@@ -42,9 +42,10 @@ export interface SimulationConfig {
   logger?: SimulationLogger;
   /**
    * Overall timeout budget in ms (default 5000). With both backends configured,
-   * Tenderly runs alone for the first 40%, then both run in parallel and the
-   * first definitive result wins. The fallback gets at least 1.5s. Tenderly-only
-   * chains get the full timeout.
+   * Tenderly runs alone for the first 40%, then both run in parallel. Tenderly's
+   * success or non-service error, or a fallback success, wins immediately; a
+   * fallback error wins only after Tenderly fails. The fallback gets at least
+   * 1.5s. Tenderly-only chains get the full timeout.
    */
   timeoutMs?: number;
 }

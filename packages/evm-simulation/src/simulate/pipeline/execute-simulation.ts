@@ -27,10 +27,10 @@ const FALLBACK_MIN_BUDGET_MS = 1500;
  * Stage 4 of the simulate() pipeline.
  *
  * Tenderly runs alone for the first 40% of `timeoutMs`, then both backends run
- * in parallel. The first definitive result wins: a success or a non-service
- * error. A backend's `ExternalServiceError` waits for the other backend, and
- * if both fail that way the fallback error is thrown. The fallback receives
- * at least `FALLBACK_MIN_BUDGET_MS`. Tenderly-only chains get the full budget;
+ * in parallel. Tenderly's success or non-service error, and the fallback's
+ * success, win immediately. A fallback error waits until Tenderly fails with
+ * `ExternalServiceError` before it can win. The fallback receives at least
+ * `FALLBACK_MIN_BUDGET_MS`. Tenderly-only chains get the full budget;
  * simulateV1-only chains are unchanged.
  */
 export async function executeSimulation(params: {
@@ -134,8 +134,8 @@ async function executeHedgedSimulation(params: {
   const fallbackController = new AbortController();
   const pending = new Map<Backend, Promise<BackendOutcome>>();
   let fallbackReason: FallbackReason | undefined;
-  let tenderlyError: ExternalServiceError | undefined;
-  let fallbackError: ExternalServiceError | undefined;
+  let heldFallback: BackendOutcome | undefined;
+  let tenderlyFailed = false;
   let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
 
   const tenderlyPromise = toBackendOutcome(
@@ -176,6 +176,27 @@ async function executeHedgedSimulation(params: {
     pending.set("eth_simulateV1", fallbackPromise);
   };
 
+  const failWithFallback = (error: unknown): never => {
+    const elapsedMs = Date.now() - start;
+    if (error instanceof ExternalServiceError) {
+      config.logger?.warn("Simulation fallback failed", {
+        chainId,
+        fallbackReason,
+        error: error.message,
+        elapsedMs,
+      });
+    } else {
+      config.logger?.info("Simulation backend selected", {
+        chainId,
+        backend: "eth_simulateV1",
+        fallbackReason,
+        outcome: "error",
+        elapsedMs,
+      });
+    }
+    throw error;
+  };
+
   hedgeTimer = setTimeout(() => {
     if (!pending.has("tenderly")) return;
 
@@ -187,36 +208,32 @@ async function executeHedgedSimulation(params: {
   }, hedgeDelayMs);
 
   try {
-    while (pending.size > 0) {
+    while (true) {
       const outcome = await Promise.race(pending.values());
       pending.delete(outcome.backend);
 
-      if (
-        outcome.type === "success" ||
-        !(outcome.error instanceof ExternalServiceError)
-      ) {
-        if (outcome.backend === "tenderly") {
-          fallbackController.abort();
-        } else {
-          tenderlyController.abort();
-        }
-
-        if (fallbackReason !== undefined) {
-          config.logger?.info("Simulation backend selected", {
-            chainId,
-            backend: outcome.backend,
-            fallbackReason,
-            outcome: outcome.type === "success" ? "success" : "error",
-            elapsedMs: Date.now() - start,
-          });
-        }
-
-        if (outcome.type === "success") return outcome.result;
-        throw outcome.error;
-      }
-
       if (outcome.backend === "tenderly") {
-        tenderlyError = outcome.error;
+        if (
+          outcome.type === "success" ||
+          !(outcome.error instanceof ExternalServiceError)
+        ) {
+          fallbackController.abort();
+
+          if (fallbackReason !== undefined) {
+            config.logger?.info("Simulation backend selected", {
+              chainId,
+              backend: "tenderly",
+              fallbackReason,
+              outcome: outcome.type === "success" ? "success" : "error",
+              elapsedMs: Date.now() - start,
+            });
+          }
+
+          if (outcome.type === "success") return outcome.result;
+          throw outcome.error;
+        }
+
+        tenderlyFailed = true;
         config.logger?.warn("Tenderly simulation failed, attempting fallback", {
           chainId,
           error: outcome.error.message,
@@ -224,22 +241,30 @@ async function executeHedgedSimulation(params: {
           elapsedMs: Date.now() - start,
         });
         startFallback("tenderly_error");
-      } else {
-        fallbackError = outcome.error;
+
+        if (heldFallback?.type === "error") {
+          failWithFallback(heldFallback.error);
+        }
+        continue;
       }
 
-      if (tenderlyError && fallbackError) {
-        config.logger?.warn("Simulation fallback failed", {
-          chainId,
-          fallbackReason,
-          error: fallbackError.message,
-          elapsedMs: Date.now() - start,
-        });
-        throw fallbackError;
+      if (outcome.type === "success") {
+        tenderlyController.abort();
+        if (fallbackReason !== undefined) {
+          config.logger?.info("Simulation backend selected", {
+            chainId,
+            backend: "eth_simulateV1",
+            fallbackReason,
+            outcome: "success",
+            elapsedMs: Date.now() - start,
+          });
+        }
+        return outcome.result;
       }
+
+      if (tenderlyFailed) failWithFallback(outcome.error);
+      heldFallback = outcome;
     }
-
-    throw fallbackError ?? tenderlyError;
   } finally {
     if (hedgeTimer !== undefined) clearTimeout(hedgeTimer);
   }

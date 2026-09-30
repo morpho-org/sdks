@@ -328,6 +328,76 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     await expect(execution).resolves.toBe(tenderlyResult);
   });
 
+  it("returns Tenderly success after the fallback fails with a revert", async () => {
+    vi.useFakeTimers();
+    const logger = makeLogger();
+    const tenderly = deferred<RawSimulationResult>();
+    const fallback = deferred<RawSimulationResult>();
+    const revert = new SimulationRevertedError("fallback reverted");
+    mockTenderlyRpc.mockReturnValueOnce(tenderly.promise);
+    mockSimulateV1.mockReturnValueOnce(fallback.promise);
+
+    let settled = false;
+    const execution = executeSimulation({
+      config: bothBackends(10_000, logger),
+      chainId: 1,
+      transactions: txs,
+    }).finally(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(4000);
+    const tenderlySignal = mockTenderlyRpc.mock.calls[0]![0].signal!;
+    fallback.reject(revert);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(settled).toBe(false);
+    expect(tenderlySignal.aborted).toBe(false);
+    tenderly.resolve(tenderlyResult);
+
+    await expect(execution).resolves.toBe(tenderlyResult);
+    expect(logger.info).toHaveBeenCalledWith("Simulation backend selected", {
+      chainId: 1,
+      backend: "tenderly",
+      fallbackReason: "tenderly_slow",
+      outcome: "success",
+      elapsedMs: 4000,
+    });
+  });
+
+  it("returns a held fallback revert after Tenderly fails with ExternalServiceError", async () => {
+    vi.useFakeTimers();
+    const logger = makeLogger();
+    const tenderly = deferred<RawSimulationResult>();
+    const fallback = deferred<RawSimulationResult>();
+    const revert = new SimulationRevertedError("fallback reverted");
+    mockTenderlyRpc.mockReturnValueOnce(tenderly.promise);
+    mockSimulateV1.mockReturnValueOnce(fallback.promise);
+
+    const execution = executeSimulation({
+      config: bothBackends(10_000, logger),
+      chainId: 1,
+      transactions: txs,
+    });
+    await vi.advanceTimersByTimeAsync(4000);
+    fallback.reject(revert);
+    await vi.advanceTimersByTimeAsync(0);
+    tenderly.reject(new ExternalServiceError("Tenderly timeout"));
+
+    await expect(execution).rejects.toBe(revert);
+    expect(logger.info).toHaveBeenCalledWith("Simulation backend selected", {
+      chainId: 1,
+      backend: "eth_simulateV1",
+      fallbackReason: "tenderly_slow",
+      outcome: "error",
+      elapsedMs: 4000,
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Simulation fallback failed",
+      expect.anything(),
+    );
+  });
+
   it("throws the fallback error when both backends fail with ExternalServiceError", async () => {
     const logger = makeLogger();
     const fallbackError = new ExternalServiceError("RPC down");
