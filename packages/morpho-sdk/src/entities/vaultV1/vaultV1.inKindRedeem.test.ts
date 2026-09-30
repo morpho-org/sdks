@@ -14,6 +14,10 @@ import {
   mockMulticallResults,
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
+import {
+  signerAddress,
+  signerWalletClient,
+} from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -25,6 +29,7 @@ import {
   InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementApproval,
+  isRequirementSignature,
   NonPositiveInputError,
   type PermitRequirementSignature,
   VaultAddressMismatchError,
@@ -530,6 +535,35 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       type: "permit",
       args: { spender: IN_KIND_BUNDLER, amount: 501n },
     });
+  });
+
+  test("behavior: a signature prepared on one handle finalizes on a fresh handle", async () => {
+    const makeVault = () => {
+      const handle = createMockClient(mainnet);
+      mockV1Requirements(handle, { allowance: 0n });
+      return handle.client
+        .extend(morphoViemExtension({ supportSignature: true }))
+        .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    };
+    const params = {
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV1Data(),
+      userAddress: signerAddress,
+      deadline: 1_900_000_000n,
+    };
+    const exitA = makeVault().inKindRedeem(params);
+    const [requirement] = await exitA.getRequirements();
+    if (
+      !isRequirementSignature(requirement) ||
+      requirement.action.type !== "permit"
+    ) {
+      throw new Error("Expected a permit requirement");
+    }
+    const permit = await requirement.sign(signerWalletClient, signerAddress);
+
+    const exitB = makeVault().inKindRedeem(params);
+    expect(exitB.buildTx([permit])).toEqual(exitA.buildTx([permit]));
   });
 
   test("behavior: an exact bounded allowance needs no authorization", async () => {

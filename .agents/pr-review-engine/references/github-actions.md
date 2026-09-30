@@ -23,8 +23,8 @@ the guidance changes:
   action's owner — or anyone who compromises it — change the code you run.
   Pin to a **full-length commit SHA** with the human-readable tag in a trailing
   comment: `uses: owner/action@<40-char-sha>  # v4.1.7`. First-party
-  `actions/*` and `github/*` may use tags **when** a Dependabot policy bumps
-  them (`.github/dependabot.yml`).
+  `actions/*` and `github/*` may use tags; the Devin dependency-maintenance
+  automation bumps them (Dependabot version updates are not enabled).
 - **`GITHUB_TOKEN` / `permissions:` least-privilege.** On classic-permissions
   repos a workflow with no `permissions:` block defaults to write-all. Require
   an explicit top-level (or job-level) block scoped to the **narrowest** set

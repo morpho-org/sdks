@@ -5,12 +5,16 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  signerAddress,
+  signerWalletClient,
+} from "../../../test/helpers/signer.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -25,6 +29,7 @@ import {
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
+  isRequirementSignature,
   MarketIdMismatchError,
   MaxRepayAssetsBelowRepayAssetsError,
   MissingAccrualPositionError,
@@ -1002,6 +1007,183 @@ describe("MorphoBlue position validation", () => {
       MaxRepayAssetsBelowRepayAssetsError,
     );
   });
+
+  test.each([
+    {
+      method: "supply",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supply({ userAddress: signerAddress, assets: 1_000n, deadline }),
+    },
+    {
+      method: "supplyCollateralBorrow",
+      expectedSignatures: 2,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supplyCollateralBorrow({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
+          collateralAssets: 1_000n,
+          borrowAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "withdraw",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.withdraw({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, {
+            user: signerAddress,
+            borrowShares: 0n,
+            supplyShares: 10n ** 18n,
+          }),
+          assets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "repay",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.repay({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, {
+            user: signerAddress,
+            lastUpdate: deadline - 3_600n,
+          }),
+          repayShares: maxUint256,
+          deadline,
+        }),
+    },
+    {
+      method: "supplyCollateral",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.supplyCollateral({
+          userAddress: signerAddress,
+          collateralAssets: 1_000n,
+          deadline,
+        }),
+    },
+    {
+      method: "borrow",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.borrow({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
+          borrowAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "withdrawCollateral",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.withdrawCollateral({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, {
+            user: signerAddress,
+            borrowShares: 0n,
+          }),
+          collateralAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "repayWithdrawCollateral",
+      expectedSignatures: 2,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.repayWithdrawCollateral({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, {
+            user: signerAddress,
+            lastUpdate: deadline - 3_600n,
+          }),
+          repayShares: maxUint256,
+          collateralAssets: 1n,
+          deadline,
+        }),
+    },
+    {
+      method: "refinance",
+      expectedSignatures: 1,
+      prepare: (entity: ReturnType<typeof makeEntity>, deadline: bigint) =>
+        entity.refinance({
+          userAddress: signerAddress,
+          positionData: makePosition(marketParams, { user: signerAddress }),
+          destination: {
+            marketParams: destinationMarketParams,
+            positionData: makePosition(destinationMarketParams, {
+              user: signerAddress,
+              borrowShares: 0n,
+              collateral: 0n,
+            }),
+          },
+          deadline,
+        }),
+    },
+  ])(
+    "behavior: $method signatures prepared on one handle finalize on a fresh handle",
+    async ({ expectedSignatures, prepare }) => {
+      const now = 1_800_000_000n;
+      const deadline = now + 3_600n;
+      const makeSignatureEntity = () => {
+        const handle = createMockClient(mainnet);
+        for (const address of [
+          marketParams.loanToken,
+          marketParams.collateralToken,
+        ]) {
+          mockRead(handle, {
+            address,
+            abi: erc20Abi,
+            functionName: "allowance",
+            result: 0n,
+          });
+        }
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "permit2"),
+          abi: permit2Abi,
+          functionName: "nonceBitmap",
+          result: 0n,
+        });
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "blue"),
+          abi: blueAbi,
+          functionName: "isAuthorized",
+          result: false,
+        });
+        mockRead(handle, {
+          address: getChainAddress(mainnet.id, "blue"),
+          abi: blueAbi,
+          functionName: "nonce",
+          result: 0n,
+        });
+        return handle.client
+          .extend(morphoViemExtension({ supportSignature: true }))
+          .morpho.blue(marketParams, mainnet.id);
+      };
+
+      const actionA = withChainTimestamp(now, () =>
+        prepare(makeSignatureEntity(), deadline),
+      );
+      const requirements = (
+        await withChainTimestamp(now, () => actionA.getRequirements())
+      ).filter(isRequirementSignature);
+      expect(requirements).toHaveLength(expectedSignatures);
+      const signatures = await Promise.all(
+        requirements.map((requirement) =>
+          requirement.sign(signerWalletClient, signerAddress),
+        ),
+      );
+
+      const actionB = withChainTimestamp(now, () =>
+        prepare(makeSignatureEntity(), deadline),
+      );
+      expect(actionB.buildTx(signatures)).toEqual(actionA.buildTx(signatures));
+    },
+  );
 
   test("behavior: full repay approval equals the encoded maxRepayAssets", async () => {
     const now = 1_800_000_000n;

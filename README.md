@@ -66,6 +66,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, contribution workflow, and t
 ### Security
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported security scope.
+See [THREAT_MODEL.md](./THREAT_MODEL.md) for what the SDKs trust, including the RPC trust model.
 
 ## Debugging
 

@@ -7,8 +7,10 @@ import {
   Eip5267Domain,
   ExchangeRateWrappedToken,
   Holding,
+  type IMarketParams,
   Market,
   MarketParams,
+  MarketUtils,
   NATIVE_ADDRESS,
   Position,
   PreLiquidationParams,
@@ -31,6 +33,7 @@ import {
   erc20Abi_bytes32,
   maxUint256,
   stringToHex,
+  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -54,6 +57,7 @@ import {
   wrappedBackedTokenAbi,
   wstEthAbi,
 } from "../abis.js";
+import { MarketParamsIdMismatchError } from "../error.js";
 import { abi as holdingQueryAbi } from "../queries/GetHolding.js";
 import { abi as marketQueryAbi } from "../queries/GetMarket.js";
 import { abi as tokenQueryAbi } from "../queries/GetToken.js";
@@ -129,7 +133,30 @@ const metaMorphoFactoryIsMetaMorphoAbi = [
   },
 ] as const;
 
-const marketParamsTuple = (params = MARKET_PARAMS) =>
+function rawMarketParams(seed: number): IMarketParams {
+  const address = (offset: number) =>
+    `0x${BigInt(seed * 10 + offset)
+      .toString(16)
+      .padStart(40, "0")}` as Address;
+
+  return {
+    loanToken: address(1),
+    collateralToken: address(2),
+    oracle: address(3),
+    irm: address(4),
+    lltv: BigInt(seed) * 1000000000000000n,
+  };
+}
+
+const ZERO_MARKET_PARAMS: IMarketParams = {
+  loanToken: zeroAddress,
+  collateralToken: zeroAddress,
+  oracle: zeroAddress,
+  irm: zeroAddress,
+  lltv: 0n,
+};
+
+const marketParamsTuple = (params: IMarketParams = MARKET_PARAMS) =>
   [
     params.loanToken,
     params.collateralToken,
@@ -557,6 +584,102 @@ describe("fetchMarket", () => {
     expect(market.price).toBe(123n);
     expect(market.rateAtTarget).toBe(456n);
   });
+
+  test("error: deployless mismatch does not fall back to multicall", async () => {
+    const handle = createMockClient(mainnet);
+    const receivedParams = rawMarketParams(201);
+    mockDeploylessRead(handle, marketQueryAbi, "query", {
+      marketParams: marketParamsTuple(receivedParams),
+      market: marketTuple,
+      hasPrice: true,
+      price: 123n,
+      rateAtTarget: 456n,
+    });
+    mockMarketReads(handle);
+
+    await expect(fetchMarket(ID, handle.client)).rejects.toBeInstanceOf(
+      MarketParamsIdMismatchError,
+    );
+  });
+
+  test("error: forced deployless mismatch", async () => {
+    const handle = createMockClient(mainnet);
+    const receivedParams = rawMarketParams(203);
+    mockDeploylessRead(handle, marketQueryAbi, "query", {
+      marketParams: marketParamsTuple(receivedParams),
+      market: marketTuple,
+      hasPrice: true,
+      price: 123n,
+      rateAtTarget: 456n,
+    });
+    mockMarketReads(handle);
+
+    await expect(
+      fetchMarket(ID, handle.client, { deployless: "force" }),
+    ).rejects.toBeInstanceOf(MarketParamsIdMismatchError);
+  });
+
+  test("error: multicall mismatch is rejected before reading the oracle", async () => {
+    const handle = createMockClient(mainnet);
+    const receivedParams = rawMarketParams(205);
+    mockRead(handle, {
+      address: ADDRESSES.blue,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: marketParamsTuple(receivedParams),
+    });
+    mockRead(handle, {
+      address: ADDRESSES.blue,
+      abi: blueAbi,
+      functionName: "market",
+      result: marketTuple,
+    });
+
+    await expect(
+      fetchMarket(ID, handle.client, { deployless: false }),
+    ).rejects.toBeInstanceOf(MarketParamsIdMismatchError);
+  });
+
+  test.each([true, false])(
+    "behavior: accepts all-zero params when deployless=%s",
+    async (deployless) => {
+      const handle = createMockClient(mainnet);
+      const requestedId = MarketUtils.getMarketId(
+        rawMarketParams(deployless ? 208 : 209),
+      );
+
+      if (deployless) {
+        mockDeploylessRead(handle, marketQueryAbi, "query", {
+          marketParams: marketParamsTuple(ZERO_MARKET_PARAMS),
+          market: marketTuple,
+          hasPrice: false,
+          price: 0n,
+          rateAtTarget: 0n,
+        });
+      } else {
+        mockRead(handle, {
+          address: ADDRESSES.blue,
+          abi: blueAbi,
+          functionName: "idToMarketParams",
+          result: marketParamsTuple(ZERO_MARKET_PARAMS),
+        });
+        mockRead(handle, {
+          address: ADDRESSES.blue,
+          abi: blueAbi,
+          functionName: "market",
+          result: marketTuple,
+        });
+      }
+
+      const market = await fetchMarket(requestedId, handle.client, {
+        deployless,
+      });
+
+      expect(market.params.id).toBe(
+        MarketUtils.getMarketId(ZERO_MARKET_PARAMS),
+      );
+    },
+  );
 
   test("omits optional deployless price and rate when unavailable", async () => {
     const handle = createMockClient(mainnet);
@@ -1108,17 +1231,18 @@ describe("fetchMarketParams", () => {
 
   test("fetches unknown market params from Morpho", async () => {
     const handle = createMockClient(mainnet);
-    const id = `0x${"12".repeat(32)}` as typeof ID;
+    const rawParams = rawMarketParams(207);
+    const id = MarketUtils.getMarketId(rawParams);
     mockRead(handle, {
       address: ADDRESSES.blue,
       abi: blueAbi,
       functionName: "idToMarketParams",
-      result: marketParamsTuple(),
+      result: marketParamsTuple(rawParams),
     });
 
     const params = await fetchMarketParams(id, handle.client);
 
-    expect(params.id).toBe(ID);
+    expect(params.id).toBe(id);
   });
 });
 

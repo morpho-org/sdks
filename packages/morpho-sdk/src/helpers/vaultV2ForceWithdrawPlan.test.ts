@@ -12,7 +12,7 @@ import {
   IN_KIND_USER,
   inKindMarketParams,
   secondInKindMarketParams,
-  vaultV2ExitData,
+  inKindVaultV2Data as vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
 import { NonPositiveInputError } from "../types/index.js";
 import {
