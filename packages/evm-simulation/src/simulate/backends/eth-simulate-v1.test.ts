@@ -531,6 +531,71 @@ describe.sequential("executePlan", () => {
     }
   });
 
+  test("error: SimulationRevertedError reports the first user failure, details carry every user call in order", async () => {
+    const calls = okCalls(3);
+    calls[1] = {
+      status: "0x0",
+      gasUsed: "0x0",
+      returnData: "0x",
+      error: { code: 3, message: "first revert" },
+    };
+    calls[2] = {
+      status: "0x0",
+      gasUsed: "0x0",
+      returnData: "0x",
+      error: { code: 3, message: "second revert" },
+    };
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc(simulateResult(calls)))
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const plan = planExecution(
+      parseRequest({
+        chainId: 1,
+        transactions: [
+          { from: OWNER, to: VAULT, data: "0x12" },
+          { from: OWNER, to: VAULT, data: "0x34" },
+          { from: OWNER, to: VAULT, data: "0x56" },
+        ],
+      }),
+    );
+    const error = await executePlan({ ...params, plan }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    if (error instanceof SimulationRevertedError) {
+      // The first failed user call supplies the reason.
+      expect(error.reason).toBe("first revert");
+      const details = error.details as {
+        transactionIndex: number;
+        result: { status: boolean };
+      }[];
+      // All three user calls in plan order — including the successful one.
+      expect(details.map((d) => d.transactionIndex)).toEqual([0, 1, 2]);
+      expect(details.map((d) => d.result.status)).toEqual([true, false, false]);
+    }
+  });
+
+  test("error: SimulationRevertedError defaults the reason when the node reports no error", async () => {
+    const calls = okCalls(1);
+    calls[0] = {
+      status: "0x0",
+      gasUsed: "0x0",
+      returnData: "0x",
+    };
+    fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
+      .mockResolvedValueOnce(rpc(blockResult()))
+      .mockResolvedValueOnce(rpc(simulateResult(calls)))
+      .mockResolvedValueOnce(rpc(blockResult()));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    if (error instanceof SimulationRevertedError) {
+      expect(error.reason).toBe("Simulation failed");
+    }
+  });
+
   test("error: SimulationRevertedError for a node-level revert", async () => {
     fetchMock
       .mockResolvedValueOnce(rpc("0x1"))
