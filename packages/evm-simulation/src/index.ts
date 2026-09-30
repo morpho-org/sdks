@@ -38,10 +38,15 @@ export {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
+  BlueAuthorizationSubject,
+  BlueMarketOperationSubject,
   BlueMarketOperationType,
+  BlueRefinanceSubject,
   OperationType,
   SimulationOperationSubject,
+  VaultOperationSubject,
   VaultOperationType,
+  VaultV1MigrateToV2Subject,
 } from "./limits.js";
 export {
   BLUE_MARKET_OPERATION_TYPES,
