@@ -3,11 +3,9 @@ import type { Address, Hex } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import { decodeNativeBalanceProbe } from "../plan/native-balance-probe.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
@@ -30,17 +28,7 @@ export interface ExecutedTransaction {
   readonly result: SimulationCall;
 }
 
-/** One decoded native-balance probe reading.
- * @internal
- */
-export interface NativeBalanceReading {
-  readonly probeId: string;
-  readonly phase: "before" | "intermediate" | "after";
-  readonly account: Address;
-  readonly assets: bigint;
-}
-
-/** The output of {@link parseSimulationResponse}: the plan, its block, successful user transactions and probe readings.
+/** The output of {@link parseSimulationResponse}: the plan, its block and successful user transactions.
  * @internal
  */
 export interface SimulationExecution {
@@ -48,7 +36,6 @@ export interface SimulationExecution {
   readonly block: ExecutionBlock;
   /** User transactions in `transactionIndex` order, successful calls only. */
   readonly transactions: readonly ExecutedTransaction[];
-  readonly nativeBalances: readonly NativeBalanceReading[];
 }
 
 // RPC quantities are never the empty "0x" — BigInt("0x") would throw.
@@ -110,15 +97,13 @@ const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
  * `block.blockNumber`/`block.blockTimestamp` and never assume +1.
  *
  * @param params - The plan, the raw RPC `result`, and the resolved state block.
- * @returns Deep-frozen execution: tagged calls plus one
- *   {@link NativeBalanceReading} per successful probe.
+ * @returns Deep-frozen execution: one {@link ExecutedTransaction} per
+ *   successful user call.
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
  *   mismatch, or a simulated block that is neither the pinned state block nor
  *   its immediate successor.
  * @throws {SimulationRevertedError} When a user-transaction call failed; the
  *   `details` payload carries the tagged user call results only.
- * @throws {MissingVerificationEvidenceError} When a probe call failed or its
- *   return data cannot be decoded.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -181,11 +166,10 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  // One pass over the raw calls, split by planned-call kind. Plan order is
-  // call order, so transactions land in transactionIndex order.
+  // One pass over the raw calls; plan order is call order, so transactions
+  // land in transactionIndex order.
   const transactions: { transactionIndex: number; result: SimulationCall }[] =
     [];
-  const nativeBalances: NativeBalanceReading[] = [];
   // Reason of the first failed user transaction, if any.
   let revertReason: string | undefined;
 
@@ -203,45 +187,12 @@ export function parseSimulationResponse(params: {
       gasUsed: BigInt(call.gasUsed),
     };
 
-    switch (planned.type) {
-      case "transaction": {
-        transactions.push({
-          transactionIndex: planned.transactionIndex,
-          result,
-        });
-        if (!result.status && revertReason === undefined)
-          revertReason = call.error?.message ?? "Simulation failed";
-        break;
-      }
-      case "nativeBalanceProbe": {
-        const probeContext: SimulationErrorContext = {
-          stage: "transport",
-          mode: plan.request.mode,
-          chainId: plan.request.chainId,
-          blockNumber: params.stateBlockNumber,
-        };
-        if (!result.status) {
-          throw new MissingVerificationEvidenceError(
-            `Native balance probe "${planned.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
-            { context: probeContext },
-          );
-        }
-        const assets = decodeNativeBalanceProbe(call.returnData);
-        if (assets === null) {
-          throw new MissingVerificationEvidenceError(
-            `Native balance probe "${planned.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
-            { context: probeContext },
-          );
-        }
-        nativeBalances.push({
-          probeId: planned.probeId,
-          phase: planned.phase,
-          account: planned.account,
-          assets,
-        });
-        break;
-      }
-    }
+    transactions.push({
+      transactionIndex: planned.transactionIndex,
+      result,
+    });
+    if (!result.status && revertReason === undefined)
+      revertReason = call.error?.message ?? "Simulation failed";
   }
 
   // A user-transaction revert belongs to the bundle, not the boundary.
@@ -265,6 +216,5 @@ export function parseSimulationResponse(params: {
     },
     // Every failure was classified above: only successful calls remain.
     transactions,
-    nativeBalances,
   });
 }

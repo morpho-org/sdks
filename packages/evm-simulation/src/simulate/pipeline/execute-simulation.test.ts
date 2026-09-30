@@ -21,7 +21,7 @@ const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-function respondHappy(callCount = 3) {
+function respondHappy(callCount = 1) {
   fetchMock
     .mockResolvedValueOnce(
       rpc({
@@ -101,7 +101,6 @@ describe.sequential("executeSimulation", () => {
       blockNumber: 20_000_000n,
     });
     expect(execution.transactions).toHaveLength(1);
-    expect(execution.nativeBalances).toHaveLength(2);
   });
 
   test("error: UnsupportedChainError without an endpoint", async () => {
@@ -130,23 +129,11 @@ describe.sequential("executeSimulation", () => {
             parentHash: `0x${"ab".repeat(32)}`,
             calls: [
               {
-                status: "0x1",
-                gasUsed: "0x0",
-                returnData: encodeUint256(0n),
-                logs: [],
-              },
-              {
                 status: "0x0",
                 gasUsed: "0x0",
                 returnData: "0x",
                 logs: [],
                 error: { code: 3, message: "reverted" },
-              },
-              {
-                status: "0x1",
-                gasUsed: "0x0",
-                returnData: encodeUint256(0n),
-                logs: [],
               },
             ],
           },

@@ -4,7 +4,6 @@ import type { PendingAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type { VerifiedSimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
-import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import {
   type ParsedRequest,
   type ParsedTransaction,
@@ -329,15 +328,6 @@ describe("parseRequest", () => {
       blockNumber: "finalized",
     });
     expect(request.blockNumber).toBe("finalized");
-  });
-
-  test("error: SimulationValidationError for a transaction targeting the probe address", () => {
-    expect(() =>
-      parse({
-        chainId: 1,
-        transactions: [tx({ to: NATIVE_BALANCE_PROBE_ADDRESS })],
-      }),
-    ).toThrow(SimulationValidationError);
   });
 
   test("behavior: accepts limits within bounds", () => {

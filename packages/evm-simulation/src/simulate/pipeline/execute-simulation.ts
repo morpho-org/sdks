@@ -14,7 +14,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
  * block resolution, and simulation request.
  * @internal
  * @param params - Configuration, the planned execution, and the resolved block pin.
- * @returns The executed calls, the pinned block, and probe readings.
+ * @returns The executed transactions and the pinned block.
  * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
  * @throws {ExternalServiceError} When the RPC fails or times out.
  * @throws {SimulationRevertedError} When execution reverts.

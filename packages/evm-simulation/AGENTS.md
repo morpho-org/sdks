@@ -1,11 +1,11 @@
 # evm-simulation Conventions
 
 - Simulate EVM bundles only through `eth_simulateV1`. RPC failures, timeouts, unsupported configuration and execution reverts propagate as typed errors; never select another provider, retry execution, or return a successful result after failure. Give the sole execution the full `timeoutMs` budget (default 5000 ms) — one shared `AbortSignal` covers `eth_chainId`, `eth_getBlock*` and `eth_simulateV1`.
-- Keep the simulation pipeline staged as request parsing → planning → `eth_simulateV1` boundary (chain identity, single block resolution + reorg check, probes) → response parsing → transfer/retention derivation.
-- The boundary requires an endpoint supporting `eth_simulateV1` with `stateOverrides` code injection, per-call `from`, and `traceTransfers`. There is no fallback backend.
+- Keep the simulation pipeline staged as request parsing → planning → `eth_simulateV1` boundary (chain identity, single block resolution + reorg check) → response parsing → transfer/retention derivation.
+- The boundary requires an endpoint supporting `eth_simulateV1` with per-call `from` and `traceTransfers`. There is no fallback backend.
 - No balance inflation: `value` transfers are funded by the sender's real native balance. `validation: false` means gas is not charged, which is how gas is separated from economic effects.
 - Block advancement is observed, not required: geth-style nodes report the simulated block as `stateBlockNumber + 1` while Anvil reports the pinned block itself. The boundary accepts exactly the pinned block or pinned+1; consumers must read `block.blockNumber`/`block.blockTimestamp` on the returned execution, never assume +1.
-- Native balances are observed through a synthetic probe contract whose minimal `BALANCE`-reading bytecode is injected via `stateOverrides` code — no deployed helper or chain registry dependency. Probes are interleaved between user transactions and never exposed in `SimulationResult`; `calls`/`txIdx` index user transactions only.
+- Native-ETH movements are observed through `traceTransfers` logs on the simulated calls; `calls`/`txIdx` index user transactions only.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep RPC I/O under `src/simulate/backends/` and outputs normalized to the internal `SimulationExecution` type. Colocated transport-boundary tests cover request validation and transport failures; only the response's block envelope is structurally checked — per-call fields are trusted; pinned Anvil forks prove sequential state, real native funding, and standalone-bundle retention.
 - Preview `authorizations` and consumer `limits` parse and normalize, but fail typed with `UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call — until authorization preparation (PR5) and limit enforcement (PR6) land.

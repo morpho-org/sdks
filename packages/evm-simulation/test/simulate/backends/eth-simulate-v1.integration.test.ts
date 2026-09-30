@@ -70,7 +70,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       blockNumber: head,
     });
     expect(again.block).toEqual(execution.block);
-    expect(again.nativeBalances).toEqual(execution.nativeBalances);
+    expect(again.transactions).toEqual(execution.transactions);
 
     // "latest" on the pinned fork resolves to the same pinned block.
     const latest = await executePlan({
@@ -81,32 +81,10 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     expect(latest.block.stateBlockNumber).toBe(head);
   });
 
-  test("probe readings report the owner's real native balance", async ({
-    client,
-  }) => {
-    const balance = await client.getBalance({
-      address: client.account.address,
-    });
-    const execution = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan: planFor([{ to: RECIPIENT, data: "0x" }], client.account.address),
-      blockNumber: await client.getBlockNumber(),
-    });
-
-    expect(execution.nativeBalances).toHaveLength(2);
-    for (const reading of execution.nativeBalances) {
-      expect(reading.account).toBe(client.account.address);
-      expect(reading.assets).toBe(balance);
-    }
-  });
-
   test("sequential state: deposit then withdraw moves the native balance", async ({
     client,
   }) => {
     const amount = parseEther("0.5");
-    const before = await client.getBalance({
-      address: client.account.address,
-    });
 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
@@ -134,15 +112,10 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       blockNumber: await client.getBlockNumber(),
     });
 
-    const [before_, intermediate, after] = execution.nativeBalances.map(
-      (r) => r.assets,
-    );
-    expect(before_).toBe(before);
-    // After the deposit the balance dropped by exactly `value` — validation:
-    // false means no gas is charged.
-    expect(intermediate).toBe(before - amount);
-    // The withdraw refunds it.
-    expect(after).toBe(before);
     expect(execution.transactions).toHaveLength(2);
+    expect(execution.transactions.every((t) => t.result.status)).toBe(true);
+    // The deposit logged the WETH mint to the sender; the withdraw burned it.
+    expect(execution.transactions[0]!.result.logs.length).toBeGreaterThan(0);
+    expect(execution.transactions[1]!.result.logs.length).toBeGreaterThan(0);
   });
 });

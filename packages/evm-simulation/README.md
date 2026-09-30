@@ -49,7 +49,7 @@ try {
 
 Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
-Native balances are observed through a synthetic probe contract injected via `stateOverrides` at the reserved address `0x000000000000000000000000000000000000Ba1a`; transactions targeting that address are rejected with `SimulationValidationError`.
+Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
 This is the unreleased v5 integration stack. See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover and remaining release gates.
 
@@ -72,8 +72,7 @@ Until the authorization-verification release, preview `authorizations` and `limi
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, the preview-authorization/limits feature
 gate, the error hierarchy, retention rules, and the recipe for adding a
-chain via `SimulationConfig.chains` — including how native-balance probes are
-injected via `stateOverrides` code, how the state block is pinned and the
+chain via `SimulationConfig.chains` — including how the state block is pinned and the
 simulated block constrained to the pin or its immediate successor, and the
 feature gate that rejects `authorizations` and `limits` until PR5/PR6 land.
 

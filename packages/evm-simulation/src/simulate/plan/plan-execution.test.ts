@@ -1,11 +1,6 @@
-import { type Address, getAddress, zeroAddress } from "viem";
+import { type Address, getAddress } from "viem";
 import { parseRequest } from "../request/index.js";
 import type { ParsedRequest } from "../request/parse-request.js";
-import {
-  encodeNativeBalanceProbe,
-  NATIVE_BALANCE_PROBE_ADDRESS,
-  NATIVE_BALANCE_PROBE_BYTECODE,
-} from "./native-balance-probe.js";
 import { planExecution } from "./plan-execution.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -24,84 +19,25 @@ const makeRequest = (count: number): ParsedRequest =>
   });
 
 describe("planExecution", () => {
-  test("default: one transaction yields probe → tx → probe", () => {
+  test("default: one transaction yields one planned call", () => {
     const plan = planExecution(makeRequest(1));
     expect(plan.owner).toBe(OWNER);
-    expect(plan.calls).toHaveLength(3);
-    expect(plan.calls.map((call) => call.type)).toEqual([
-      "nativeBalanceProbe",
-      "transaction",
-      "nativeBalanceProbe",
-    ]);
+    expect(plan.calls).toHaveLength(1);
     expect(plan.calls[0]).toMatchObject({
-      probeId: "native-balance:before",
-      phase: "before",
-    });
-    expect(plan.calls[1]).toMatchObject({ transactionIndex: 0 });
-    expect(plan.calls[2]).toMatchObject({
-      probeId: "native-balance:after:0",
-      phase: "after",
+      type: "transaction",
+      transactionIndex: 0,
     });
   });
 
-  test("behavior: three transactions interleave intermediate probes", () => {
+  test("behavior: three transactions map 1:1 in order", () => {
     const plan = planExecution(makeRequest(3));
-    expect(plan.calls).toHaveLength(7);
-    expect(
-      plan.calls.map((call) =>
-        call.type === "transaction"
-          ? { type: call.type, transactionIndex: call.transactionIndex }
-          : { type: call.type, probeId: call.probeId, phase: call.phase },
-      ),
-    ).toEqual([
-      {
-        type: "nativeBalanceProbe",
-        probeId: "native-balance:before",
-        phase: "before",
-      },
-      { type: "transaction", transactionIndex: 0 },
-      {
-        type: "nativeBalanceProbe",
-        probeId: "native-balance:after:0",
-        phase: "intermediate",
-      },
-      { type: "transaction", transactionIndex: 1 },
-      {
-        type: "nativeBalanceProbe",
-        probeId: "native-balance:after:1",
-        phase: "intermediate",
-      },
-      { type: "transaction", transactionIndex: 2 },
-      {
-        type: "nativeBalanceProbe",
-        probeId: "native-balance:after:2",
-        phase: "after",
-      },
-    ]);
+    expect(plan.calls.map((call) => call.transactionIndex)).toEqual([0, 1, 2]);
+    expect(plan.calls.every((call) => call.type === "transaction")).toBe(true);
   });
 
-  test("behavior: probe calls read the owner balance via the code override", () => {
+  test("behavior: user transactions default value to 0n", () => {
     const plan = planExecution(makeRequest(1));
-    const probe = plan.calls[0]!;
-    expect(probe.transaction).toEqual({
-      from: zeroAddress,
-      to: NATIVE_BALANCE_PROBE_ADDRESS,
-      data: encodeNativeBalanceProbe(OWNER),
-      value: 0n,
-    });
-    expect(probe).toMatchObject({ account: OWNER });
-    expect(plan.stateOverrides).toEqual([
-      {
-        address: NATIVE_BALANCE_PROBE_ADDRESS,
-        code: NATIVE_BALANCE_PROBE_BYTECODE,
-      },
-    ]);
-  });
-
-  test("behavior: user transactions default value to 0n and keep their index", () => {
-    const plan = planExecution(makeRequest(1));
-    const userCall = plan.calls[1]!;
-    expect(userCall.transaction).toEqual({
+    expect(plan.calls[0]!.transaction).toEqual({
       from: OWNER,
       to: TARGET,
       data: "0x12345678",
@@ -118,6 +54,6 @@ describe("planExecution", () => {
     const plan = planExecution(makeRequest(1));
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.calls)).toBe(true);
-    expect(Object.isFrozen(plan.stateOverrides)).toBe(true);
+    expect(Object.isFrozen(plan.calls[0])).toBe(true);
   });
 });

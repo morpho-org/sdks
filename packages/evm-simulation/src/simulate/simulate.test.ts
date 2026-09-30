@@ -37,8 +37,7 @@ const SPENDER: Address = getAddress(
 );
 
 /**
- * Build an execution for a plan: probe/user calls tagged per `plan.calls`,
- * probe readings reporting a zero native balance.
+ * Build an execution for a plan: one executed transaction per user call.
  */
 function makeExecution(
   plan: ExecutionPlan,
@@ -70,17 +69,6 @@ function makeExecution(
       blockTimestamp: 1_700_000_012n,
     },
     transactions,
-    nativeBalances: plan.calls
-      .filter(
-        (planned): planned is typeof planned & { type: "nativeBalanceProbe" } =>
-          planned.type === "nativeBalanceProbe",
-      )
-      .map((planned) => ({
-        probeId: planned.probeId,
-        phase: planned.phase,
-        account: planned.account,
-        assets: 0n,
-      })),
   };
 }
 
@@ -130,7 +118,6 @@ describe.sequential("simulate — success", () => {
     expect(result.simulationTxs).toEqual([
       { from: USER, to: VAULT, data: "0x12345678", value: 0n },
     ]);
-    // Only the user call is exposed — probes stay internal.
     expect(result.calls).toHaveLength(1);
   });
 

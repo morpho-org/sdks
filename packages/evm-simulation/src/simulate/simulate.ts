@@ -20,7 +20,7 @@ import { parseRequest } from "./request/index.js";
  * Simulate a bundle of EVM transactions.
  *
  * Parses and normalizes the input → plans the execution as ordered user calls
- * interleaved with synthetic native-balance probes → resolves the chain
+ * → resolves the chain
  * endpoint → executes once through `eth_simulateV1` under the full timeout
  * budget (chain identity check, single block resolution, pinned simulation) →
  * derives ERC20/WETH9 transfers and net asset changes from the user calls only
@@ -28,8 +28,7 @@ import { parseRequest } from "./request/index.js";
  * returns the result. The caller reads whichever fields they need:
  *
  * - `simulationTxs` → exactly the caller's ordered transactions, normalized
- *   (checksummed addresses, `value` defaulted to `0n`). Internal probes are
- *   never exposed.
+ *   (checksummed addresses, `value` defaulted to `0n`).
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`,
  *   `gasUsed`), aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe
  *   gas limit; consumers deriving one must add their own headroom.
@@ -72,8 +71,6 @@ import { parseRequest } from "./request/index.js";
  * @throws {SimulationRevertedError} when a user transaction or the bundle
  * reverts at the node (including unfundable `value`); `details` carries the
  * URL-free revert context.
- * @throws {MissingVerificationEvidenceError} when a probe fails or its data
- *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, or a state-block hash that

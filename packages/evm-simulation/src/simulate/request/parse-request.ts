@@ -24,7 +24,7 @@ import type {
   VaultDeallocation,
 } from "../../limits.js";
 import type { SimulationMode, VerifiedSimulateParams } from "../../params.js";
-import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
+
 import { resolveEffectiveLimits } from "./effective-limits.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
@@ -1217,11 +1217,6 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
       if (!isAddressEqual(tx.from, owner)) {
         fieldErrors.push(
           `transactions[${i}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
-        );
-      }
-      if (isAddressEqual(tx.to, NATIVE_BALANCE_PROBE_ADDRESS)) {
-        fieldErrors.push(
-          `transactions[${i}].to: ${NATIVE_BALANCE_PROBE_ADDRESS} is reserved for the native-balance probe whose code is injected into the simulation; it cannot be a transaction target`,
         );
       }
     }

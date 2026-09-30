@@ -98,9 +98,8 @@ const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
  *    (`InvalidSimulationResponseError`, transport stage), not a simulation
  *    failure.
  * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
- *    calls with their per-call `from` (probes are sent from the zero address),
- *    the probe code override as `stateOverrides`, `traceTransfers: true` so
- *    the node synthesizes native-ETH moves as transfer logs, and
+ *    calls with their per-call `from`, `traceTransfers: true` so the node
+ *    synthesizes native-ETH moves as transfer logs, and
  *    `validation: false`. Validation-off means gas is not charged, which is
  *    how gas is separated from economic effects. **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
@@ -113,13 +112,13 @@ const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
  * result records whatever the node returns; consumers must read
  * {@link ExecutionBlock.blockNumber} and never assume +1.
  *
- * The endpoint must support `eth_simulateV1` with `stateOverrides` code
- * injection and per-call `from`; there is no fallback backend.
+ * The endpoint must support `eth_simulateV1` with per-call `from`; there is
+ * no fallback backend.
  *
  * @param params - RPC endpoint, the plan to execute, an optional block pin and
  *   the pipeline's abort signal.
- * @returns Deep-frozen {@link SimulationExecution} — tagged call results, the
- *   resolved {@link ExecutionBlock}, and per-probe native-balance readings.
+ * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
+ *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
  *   malformed JSON-RPC envelopes, or a state block without number/hash.
  * @throws {InvalidSimulationResponseError} For a chain mismatch or a
@@ -127,8 +126,6 @@ const rpc = async <T>(label: string, call: () => Promise<T>): Promise<T> => {
  *   other than the pinned state block or its successor, or a state-block
  *   hash that changed mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts.
- * @throws {MissingVerificationEvidenceError} When a probe fails or cannot be
- *   decoded.
  * @internal
  */
 export async function executePlan(params: {
@@ -225,12 +222,6 @@ export async function executePlan(params: {
         {
           blockStateCalls: [
             {
-              stateOverrides: Object.fromEntries(
-                plan.stateOverrides.map((override) => [
-                  override.address,
-                  { code: override.code },
-                ]),
-              ),
               calls: plan.calls.map((call) => ({
                 from: call.transaction.from,
                 to: call.transaction.to,
