@@ -89,6 +89,17 @@ type ReadonlyVaultSnapshot = Readonly<
 
 type AdapterIds = ReturnType<AccrualVaultV2MorphoMarketV1AdapterV2["ids"]>;
 
+/**
+ * A vault adapter-market position whose pre-plan interest accrual is reserved
+ * on the cap ids it contributes to.
+ * @internal
+ */
+interface CapReservePair {
+  readonly key: string;
+  readonly ids: AdapterIds;
+  readonly reserve: () => bigint;
+}
+
 /** Transaction-scoped state shared by transitions in one simulated call. @internal */
 interface SimulationContext {
   readonly donatedPenaltyAssets: Readonly<Record<Address, bigint>>;
@@ -858,7 +869,9 @@ export class VaultV2BlueReallocationData
    * considered. Market/vault state and the returned post-state stay at
    * `timestamp`; only target-market cap checks reserve interest the vault's
    * existing allocation would accrue through `timestamp + capAccrualBuffer`
-   * (two hours by default; `0n` disables it). Targets with no remaining supply
+   * (two hours by default; `0n` disables it). For market-source reallocations
+   * the source position's interest is also reserved on cap ids shared with the
+   * target, and reserves persist across every leg of a plan. Targets with no remaining supply
    * or allocator capacity are skipped before projecting source interest. The
    * adapter's minimum share minting requirement, supply-share limits, and target
    * absolute or zero relative caps are checked against a one-asset deposit.
@@ -876,6 +889,9 @@ export class VaultV2BlueReallocationData
    * Market/vault state and returned post-state stay at `timestamp`; only
    * target-market cap checks reserve interest on the vault's existing allocation
    * through `timestamp + capAccrualBuffer` (two hours by default; `0n` disables).
+   * For market-source reallocations the source position's interest is also
+   * reserved on cap ids shared with the target, and reserves persist across
+   * every leg of a plan.
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
    * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
@@ -1098,8 +1114,72 @@ export class VaultV2BlueReallocationData
     const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
     let remainingAssets = maxAssets;
 
+    // Onchain, each market's interest is booked once at its first touch in the
+    // transaction, on pre-plan positions at the pre-plan rate, and stays on the
+    // touched positions' cap ids. Markets are replaced rather than mutated, so
+    // this snapshot freezes pre-plan state for every leg of the plan.
+    const initialMarkets = { ...data.mutableMarkets };
+    const marketAccrualsCache = new Map<MarketId, readonly [Market, Market]>();
+    const getMarketAccruals = (market: ReadonlyMarketSnapshot) => {
+      const cached = marketAccrualsCache.get(market.id);
+      if (cached != null) return cached;
+      const initial = initialMarkets[market.id] ?? market;
+      const accruals = [
+        initial.accrueInterest(timestamp),
+        initial.accrueInterest(timestamp + capAccrualBuffer),
+      ] as const;
+      marketAccrualsCache.set(market.id, accruals);
+      return accruals;
+    };
+    const touchedPairs = new Map<string, Map<string, CapReservePair>>();
+    const reserveByPairKey = new Map<string, bigint>();
+    // biome-ignore lint/complexity/useMaxParams: a pair is identified by its vault, adapter, and market.
+    const getPair = (
+      vault: Address,
+      adapter: ReadonlyMarketAdapterSnapshot,
+      market: ReadonlyMarketSnapshot,
+    ): CapReservePair => {
+      const key = `${vault}:${adapter.address}:${market.id}`.toLowerCase();
+      const touched = touchedPairs.get(vault.toLowerCase())?.get(key);
+      if (touched != null) return touched;
+      const shares = adapter.supplyShares[market.id] ?? 0n;
+      return {
+        key,
+        ids: getAdapterIds(adapterIdsCache, adapter, market),
+        reserve: () => {
+          let reserve = reserveByPairKey.get(key);
+          if (reserve == null) {
+            const [atTimestamp, projected] = getMarketAccruals(market);
+            reserve = MathLib.zeroFloorSub(
+              projected.toSupplyAssets(shares),
+              atTimestamp.toSupplyAssets(shares),
+            );
+            reserveByPairKey.set(key, reserve);
+          }
+          return reserve;
+        },
+      };
+    };
+    // biome-ignore lint/complexity/useMaxParams: the reserve is scoped to one vault, cap id, and candidate set.
+    const capReserve = (
+      vault: Address,
+      id: Hash,
+      candidatePairs: readonly CapReservePair[],
+    ) => {
+      let reserve = 0n;
+      const seen = new Set<string>();
+      for (const pair of [
+        ...(touchedPairs.get(vault.toLowerCase())?.values() ?? []),
+        ...candidatePairs,
+      ]) {
+        if (seen.has(pair.key) || !pair.ids.includes(id)) continue;
+        seen.add(pair.key);
+        reserve += pair.reserve();
+      }
+      return reserve;
+    };
+
     while (remainingAssets == null || remainingAssets > 0n) {
-      let bufferedTargetMarket: Market | undefined;
       const candidates = vaults
         .map((vaultAddress) => {
           const targetMarket = data.getMarket(marketId);
@@ -1144,8 +1224,8 @@ export class VaultV2BlueReallocationData
           const minimumSupply = targetMarket.supply(1n, 0n);
           const rawCandidates: {
             readonly reallocation: VaultV2BlueReallocation;
-            readonly accruedInterestBuffer: bigint;
-            readonly sourceAccruedInterestBuffer: bigint;
+            readonly targetPair: CapReservePair;
+            readonly sourcePair?: CapReservePair;
           }[] = [];
 
           // Missing nested allocator state means the snapshot is incomplete, so
@@ -1161,8 +1241,7 @@ export class VaultV2BlueReallocationData
             )
               continue;
 
-            const projectedTargetMarket = (bufferedTargetMarket ??=
-              targetMarket.accrueInterest(timestamp + capAccrualBuffer));
+            const targetPair = getPair(vaultAddress, adapter, targetMarket);
             const [adapterCapId, collateralCapId, adapterMarketCapId] =
               getAdapterIds(adapterIdsCache, adapter, targetMarket);
             const marketPublicAllocatorConfig =
@@ -1206,10 +1285,6 @@ export class VaultV2BlueReallocationData
             const adapterShares = adapter.supplyShares[marketId] ?? 0n;
             const expectedSupplyAssets =
               targetMarket.toSupplyAssets(adapterShares);
-            const accruedInterestBuffer = MathLib.zeroFloorSub(
-              projectedTargetMarket.toSupplyAssets(adapterShares),
-              expectedSupplyAssets,
-            );
             const untracked = MathLib.zeroFloorSub(
               expectedSupplyAssets,
               adapterMarketCapAllocation.allocation,
@@ -1218,7 +1293,7 @@ export class VaultV2BlueReallocationData
             const allocatorHeadroom = marketPublicAllocatorConfig.getMaxIn(
               adapterMarketCapAllocation.allocation +
                 untracked +
-                accruedInterestBuffer,
+                targetPair.reserve(),
             );
             const minimumAllocation = minimumSupply.market.toSupplyAssets(
               adapterShares + minimumSupply.shares,
@@ -1226,9 +1301,11 @@ export class VaultV2BlueReallocationData
             const minimumAllocationChange =
               minimumAllocation - adapterMarketCapAllocation.allocation;
             const blockedTargetIds = targetAllocations
-              .filter(({ allocation, absoluteCap, relativeCap }) => {
+              .filter(({ allocation, absoluteCap, relativeCap, id }) => {
                 const nextAllocation =
-                  allocation + accruedInterestBuffer + minimumAllocationChange;
+                  allocation +
+                  capReserve(vaultAddress, id, [targetPair]) +
+                  minimumAllocationChange;
                 return (
                   nextAllocation > absoluteCap ||
                   (relativeCap === 0n && nextAllocation > 0n)
@@ -1265,8 +1342,7 @@ export class VaultV2BlueReallocationData
                     assets,
                     penalty: publicAllocatorConfig.penalty,
                   },
-                  accruedInterestBuffer,
-                  sourceAccruedInterestBuffer: 0n,
+                  targetPair,
                 });
               }
             }
@@ -1332,17 +1408,16 @@ export class VaultV2BlueReallocationData
                 if (blockedTargetIds.some((id) => !sourceIds.includes(id)))
                   continue;
 
+                const sourcePair = getPair(
+                  vaultAddress,
+                  sourceAdapter,
+                  sourceMarket,
+                );
                 const accruedSourceMarket =
                   sourceMarket.accrueInterest(timestamp);
                 data.setMarkets([accruedSourceMarket]);
                 const expectedSourceSupplyAssets =
                   accruedSourceMarket.toSupplyAssets(sourceSupplyShares);
-                const sourceAccruedInterestBuffer = MathLib.zeroFloorSub(
-                  sourceMarket
-                    .accrueInterest(timestamp + capAccrualBuffer)
-                    .toSupplyAssets(sourceSupplyShares),
-                  expectedSourceSupplyAssets,
-                );
                 const assets = MathLib.min(
                   MathLib.MAX_UINT_128,
                   targetSupplyHeadroom,
@@ -1366,47 +1441,38 @@ export class VaultV2BlueReallocationData
                     assets,
                     penalty: publicAllocatorConfig.penalty,
                   },
-                  accruedInterestBuffer,
-                  sourceAccruedInterestBuffer,
+                  targetPair,
+                  sourcePair,
                 });
               }
             }
           }
 
-          const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
+          const capCompatibleCandidates: {
+            readonly reallocation: VaultV2BlueReallocation;
+            readonly targetPair: CapReservePair;
+            readonly sourcePair?: CapReservePair;
+          }[] = [];
           for (const {
             reallocation,
-            accruedInterestBuffer,
-            sourceAccruedInterestBuffer,
+            targetPair,
+            sourcePair,
           } of rawCandidates) {
             let lower = 0n;
             let upper = reallocation.assets;
 
-            const reallocationAdapter = data.getAdapter(
-              reallocation.vault,
-              reallocation.to.adapter,
-            );
-            const targetIds = getAdapterIds(
-              adapterIdsCache,
-              reallocationAdapter,
-              targetMarket,
-            );
-            const sourceIds = new Set<Hash>();
-            if (reallocation.from.type === "market") {
-              const sourceAdapter = data.getAdapter(
-                reallocation.vault,
-                reallocation.from.adapter,
+            const targetIds = targetPair.ids;
+            const sourceIds = new Set<Hash>(sourcePair?.ids ?? []);
+            const reserveById = new Map<Hash, bigint>();
+            for (const id of targetIds)
+              reserveById.set(
+                id,
+                capReserve(
+                  reallocation.vault,
+                  id,
+                  sourcePair == null ? [targetPair] : [targetPair, sourcePair],
+                ),
               );
-              const sourceMarket = data.getMarket(
-                reallocation.from.marketParams.id,
-              );
-              for (const id of getAdapterIds(
-                adapterIdsCache,
-                sourceAdapter,
-                sourceMarket,
-              ))
-                sourceIds.add(id);
-            }
             const probeReallocation = (assets: bigint) => {
               if (
                 targetMarket.totalSupplyShares +
@@ -1444,14 +1510,12 @@ export class VaultV2BlueReallocationData
                   { ...allocation, allocation: 0n },
                   firstTotalAssets,
                 ).value;
-                // The reserve covers interest on existing target and shared source
-                // allocations before inclusion, as the on-chain cap check does.
-                const reserve =
-                  accruedInterestBuffer +
-                  (sourceIds.has(id) ? sourceAccruedInterestBuffer : 0n);
+                // The reserve covers interest accrued before inclusion by every
+                // position the plan touched on this cap id, as booked onchain.
                 const withinCap =
                   allocation.absoluteCap > 0n &&
-                  allocation.allocation + reserve <= capacity;
+                  allocation.allocation + (reserveById.get(id) ?? 0n) <=
+                    capacity;
                 if (!withinCap) {
                   withinAllCaps = false;
                   if (!sourceIds.has(id)) withinUpperBounds = false;
@@ -1499,37 +1563,58 @@ export class VaultV2BlueReallocationData
 
             if (selectedAssets > 0n && probe?.withinAllCaps === true)
               capCompatibleCandidates.push({
-                ...reallocation,
-                assets: selectedAssets,
+                reallocation: { ...reallocation, assets: selectedAssets },
+                targetPair,
+                sourcePair,
               });
           }
 
           return capCompatibleCandidates.sort(
-            bigIntComparator(({ assets }) => assets, "desc"),
+            bigIntComparator(({ reallocation }) => reallocation.assets, "desc"),
           )[0];
         })
         .filter(
-          (candidate): candidate is VaultV2BlueReallocation =>
+          (candidate): candidate is NonNullable<typeof candidate> =>
             candidate != null,
         )
-        .sort(bigIntComparator(({ assets }) => assets, "desc"));
+        .sort(
+          bigIntComparator(({ reallocation }) => reallocation.assets, "desc"),
+        );
 
       const largest = candidates[0];
       if (largest == null)
         return { reallocations, data, context: simulationContext };
 
-      const reallocation = largest;
-      reallocations.push(reallocation);
+      const {
+        reallocation: acceptedReallocation,
+        targetPair: acceptedTargetPair,
+        sourcePair: acceptedSourcePair,
+      } = largest;
+      const touchedVaultKey = acceptedReallocation.vault.toLowerCase();
+      let touchedVaultPairs = touchedPairs.get(touchedVaultKey);
+      if (touchedVaultPairs == null) {
+        touchedVaultPairs = new Map();
+        touchedPairs.set(touchedVaultKey, touchedVaultPairs);
+      }
+      if (!touchedVaultPairs.has(acceptedTargetPair.key))
+        touchedVaultPairs.set(acceptedTargetPair.key, acceptedTargetPair);
+      if (
+        acceptedSourcePair != null &&
+        !touchedVaultPairs.has(acceptedSourcePair.key)
+      )
+        touchedVaultPairs.set(acceptedSourcePair.key, acceptedSourcePair);
+      reallocations.push(acceptedReallocation);
       const transition = data.applyPublicReallocation({
         context: simulationContext,
-        reallocation,
+        reallocation: acceptedReallocation,
         targetMarketId: marketId,
         timestamp,
         adapterIdsCache,
       });
       data = transition.data;
       simulationContext = transition.context;
-      if (remainingAssets != null) remainingAssets -= reallocation.assets;
+      if (remainingAssets != null)
+        remainingAssets -= acceptedReallocation.assets;
     }
 
     return { reallocations, data, context: simulationContext };
@@ -1540,6 +1625,9 @@ export class VaultV2BlueReallocationData
    * Market/vault state and returned post-state stay at `timestamp`; only
    * target-market cap checks reserve interest on the vault's existing allocation
    * through `timestamp + capAccrualBuffer` (two hours by default; `0n` disables).
+   * For market-source reallocations the source position's interest is also
+   * reserved on cap ids shared with the target, and reserves persist across
+   * every leg of a plan.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional timestamp, cap-accrual buffer, enable flag, vault
@@ -1604,7 +1692,9 @@ export class VaultV2BlueReallocationData
    * Vault V2 public reallocations. Market/vault state and returned post-state
    * stay at `timestamp`; only target-market cap checks reserve interest on the
    * vault's existing allocation through `timestamp + capAccrualBuffer` (two
-   * hours by default; `0n` disables).
+   * hours by default; `0n` disables). For market-source reallocations the
+   * source position's interest is also reserved on cap ids shared with the
+   * target, and reserves persist across every leg of a plan.
    *
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.

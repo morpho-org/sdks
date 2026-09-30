@@ -49,6 +49,7 @@ import {
   UnknownReallocationMarketPublicAllocatorConfigError,
   UnknownReallocationPublicAllocatorConfigError,
   UnknownReallocationVaultError,
+  type VaultV2BlueReallocation,
 } from "../types/index.js";
 import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
@@ -675,6 +676,172 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       canPullFromIdle: false,
       canPullFromMarket: true,
     });
+
+  const applyPlanAtCapHorizon = (
+    data: VaultV2BlueReallocationData,
+    reallocations: readonly VaultV2BlueReallocation[],
+  ) => {
+    let simulated = data.clone();
+    let context = { donatedPenaltyAssets: {}, firstTotalAssets: {} };
+    for (const reallocation of reallocations) {
+      // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
+      const transition = simulated["applyPublicReallocation"]({
+        context,
+        reallocation,
+        targetMarketId: targetParams.id,
+        timestamp: TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER,
+      });
+      simulated = transition.data;
+      context = transition.context;
+    }
+    return simulated;
+  };
+
+  const expectTargetCapsAtHorizon = (
+    data: VaultV2BlueReallocationData,
+    reallocations: readonly VaultV2BlueReallocation[],
+  ) => {
+    const simulated = applyPlanAtCapHorizon(data, reallocations);
+    for (const id of data.getAdapter(VAULT, TARGET_ADAPTER).ids(targetParams)) {
+      const { allocation, absoluteCap } = simulated.getAllocation(VAULT, id);
+      expect(allocation).toBeLessThanOrEqual(absoluteCap);
+    }
+  };
+
+  test("behavior: carries source interest reserve into later legs on shared cap ids", () => {
+    const makeMultiLegFixture = (adapterAbsoluteCap: bigint) =>
+      makeFixture({
+        sourceAdapter: TARGET_ADAPTER,
+        sourceSupply: capTestTargetSupply,
+        sourceBorrow: (capTestTargetSupply * 3n) / 5n,
+        sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+        sourceAbsoluteCap: 10n ** 30n,
+        targetSupply: capTestTargetSupply,
+        targetBorrow: capTestTargetSupply / 2n,
+        targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+        targetPositionAssets: capTestTargetSupply,
+        targetCaps: [
+          { absoluteCap: adapterAbsoluteCap, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        ],
+        allocatorTargetCap: 10n ** 30n,
+        firstTotalAssets: 10n ** 30n,
+        idle: capTestTargetSupply,
+        canPullFromIdle: true,
+        canPullFromMarket: true,
+      });
+    const probe = makeMultiLegFixture(10n ** 30n);
+    const adapter = probe.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const targetAdapterCapId = adapter.ids(targetParams)[0]!;
+    const capTimestamp = TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER;
+    const targetShares = adapter.supplyShares[targetParams.id] ?? 0n;
+    const sourceShares = adapter.supplyShares[sourceParams.id] ?? 0n;
+    const targetMarket = probe.data.getMarket(targetParams.id);
+    const sourceMarket = probe.data.getMarket(sourceParams.id);
+    const targetInterest = MathLib.zeroFloorSub(
+      targetMarket.accrueInterest(capTimestamp).toSupplyAssets(targetShares),
+      targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
+    );
+    const sourceInterest = MathLib.zeroFloorSub(
+      sourceMarket.accrueInterest(capTimestamp).toSupplyAssets(sourceShares),
+      sourceMarket.accrueInterest(TIMESTAMP).toSupplyAssets(sourceShares),
+    );
+    const idleHeadroom = 10n ** 22n;
+    const { data } = makeMultiLegFixture(
+      probe.data.getAllocation(VAULT, targetAdapterCapId).allocation +
+        targetInterest +
+        sourceInterest +
+        idleHeadroom,
+    );
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(sourceInterest).toBeGreaterThan(0n);
+    expect(reallocations.some(({ from }) => from.type === "market")).toBe(true);
+    expect(reallocations.some(({ from }) => from.type === "idle")).toBe(true);
+    expectTargetCapsAtHorizon(data, reallocations);
+  });
+
+  test("behavior: freezes pre-plan target reserve across legs", () => {
+    const idleAssets = (capTestTargetSupply * 3n) / 10n;
+    const marketHeadroom = 10n ** 20n;
+    const makeMultiLegFixture = (marketAbsoluteCap: bigint) =>
+      makeFixture({
+        sourceSupply: (capTestTargetSupply * 9n) / 20n,
+        sourceBorrow: (capTestTargetSupply * 9n) / 40n,
+        sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+        sourceAbsoluteCap: 10n ** 30n,
+        targetSupply: capTestTargetSupply,
+        targetBorrow: capTestTargetSupply / 2n,
+        targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+        targetPositionAssets: capTestTargetSupply,
+        targetCaps: [
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+          { absoluteCap: marketAbsoluteCap, relativeCap: MathLib.WAD },
+        ],
+        allocatorTargetCap: 10n ** 30n,
+        firstTotalAssets: 10n ** 30n,
+        idle: idleAssets,
+        canPullFromIdle: true,
+        canPullFromMarket: true,
+      });
+    const probe = makeMultiLegFixture(10n ** 30n);
+    const adapter = probe.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const targetShares = adapter.supplyShares[targetParams.id] ?? 0n;
+    const targetMarket = probe.data.getMarket(targetParams.id);
+    const targetInterest = MathLib.zeroFloorSub(
+      targetMarket
+        .accrueInterest(TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER)
+        .toSupplyAssets(targetShares),
+      targetMarket.accrueInterest(TIMESTAMP).toSupplyAssets(targetShares),
+    );
+    const { data, targetAdapterMarketCapId } = makeMultiLegFixture(
+      probe.data.getAllocation(VAULT, probe.targetAdapterMarketCapId)
+        .allocation +
+        targetInterest +
+        idleAssets +
+        marketHeadroom,
+    );
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(targetInterest).toBeGreaterThan(0n);
+    expect(reallocations.length).toBeGreaterThanOrEqual(2);
+    expect(reallocations[0]?.from.type).toBe("idle");
+    expect(reallocations[0]?.assets).toBe(idleAssets);
+    expect(reallocations.some(({ from }) => from.type === "market")).toBe(true);
+    expect(
+      data.getAllocation(VAULT, targetAdapterMarketCapId).absoluteCap,
+    ).toBeGreaterThan(0n);
+    expectTargetCapsAtHorizon(data, reallocations);
+  });
+
+  test("behavior: skips source accrual projection sharing no capped id", () => {
+    const { data } = makeFixture({ sourceBorrow: 1n });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [sourceParams.id]: new Market({
+          ...data.getMarket(sourceParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    const { reallocations } = snapshot.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { timestamp: TIMESTAMP },
+    );
+
+    expect(reallocations.some(({ from }) => from.type === "market")).toBe(true);
+  });
 
   test.each(["idle", "market"] as const)(
     "behavior: reserves target-market accrual under absolute caps for %s reallocations",

@@ -10,15 +10,19 @@ export interface VaultV2BluePublicAllocatorOptions {
    * Timestamp at which market and Vault V2 state is evaluated. Canonical state
    * and the returned post-state stay at this timestamp; only target-market cap
    * checks reserve interest on the vault's existing allocation through this
-   * timestamp plus `capAccrualBuffer`.
+   * timestamp plus `capAccrualBuffer`. For market-source reallocations the
+   * source position's interest is also reserved on cap ids shared with the
+   * target, and reserves persist across every leg of a plan.
    */
   readonly timestamp?: BigIntish;
 
   /**
    * Seconds beyond `timestamp` through which target-market cap checks reserve
-   * interest on the vault's existing allocation. Market and Vault V2 state,
-   * including the returned post-state, stay at `timestamp`. Set to `0n` to
-   * disable.
+   * interest on the vault's existing allocation. For market-source
+   * reallocations the source position's interest is also reserved on cap ids
+   * shared with the target, and reserves persist across every leg of a plan.
+   * Market and Vault V2 state, including the returned post-state, stay at
+   * `timestamp`. Set to `0n` to disable.
    *
    * @default DEFAULT_CAP_ACCRUAL_BUFFER (2h)
    */
