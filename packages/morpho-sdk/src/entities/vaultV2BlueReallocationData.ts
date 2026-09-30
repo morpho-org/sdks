@@ -1099,12 +1099,10 @@ export class VaultV2BlueReallocationData
     let remainingAssets = maxAssets;
 
     while (remainingAssets == null || remainingAssets > 0n) {
+      let bufferedTargetMarket: Market | undefined;
       const candidates = vaults
         .map((vaultAddress) => {
           const targetMarket = data.getMarket(marketId);
-          const bufferedTargetMarket = targetMarket.accrueInterest(
-            timestamp + capAccrualBuffer,
-          );
           const publicAllocatorConfig =
             data.getOptionalPublicAllocatorConfig(vaultAddress);
           if (publicAllocatorConfig == null) return;
@@ -1147,6 +1145,7 @@ export class VaultV2BlueReallocationData
           const rawCandidates: {
             readonly reallocation: VaultV2BlueReallocation;
             readonly accruedInterestBuffer: bigint;
+            readonly sourceAccruedInterestBuffer: bigint;
           }[] = [];
 
           // Missing nested allocator state means the snapshot is incomplete, so
@@ -1162,6 +1161,8 @@ export class VaultV2BlueReallocationData
             )
               continue;
 
+            const projectedTargetMarket = (bufferedTargetMarket ??=
+              targetMarket.accrueInterest(timestamp + capAccrualBuffer));
             const [adapterCapId, collateralCapId, adapterMarketCapId] =
               getAdapterIds(adapterIdsCache, adapter, targetMarket);
             const marketPublicAllocatorConfig =
@@ -1206,7 +1207,7 @@ export class VaultV2BlueReallocationData
             const expectedSupplyAssets =
               targetMarket.toSupplyAssets(adapterShares);
             const accruedInterestBuffer = MathLib.zeroFloorSub(
-              bufferedTargetMarket.toSupplyAssets(adapterShares),
+              projectedTargetMarket.toSupplyAssets(adapterShares),
               expectedSupplyAssets,
             );
             const untracked = MathLib.zeroFloorSub(
@@ -1265,6 +1266,7 @@ export class VaultV2BlueReallocationData
                     penalty: publicAllocatorConfig.penalty,
                   },
                   accruedInterestBuffer,
+                  sourceAccruedInterestBuffer: 0n,
                 });
               }
             }
@@ -1335,6 +1337,12 @@ export class VaultV2BlueReallocationData
                 data.setMarkets([accruedSourceMarket]);
                 const expectedSourceSupplyAssets =
                   accruedSourceMarket.toSupplyAssets(sourceSupplyShares);
+                const sourceAccruedInterestBuffer = MathLib.zeroFloorSub(
+                  sourceMarket
+                    .accrueInterest(timestamp + capAccrualBuffer)
+                    .toSupplyAssets(sourceSupplyShares),
+                  expectedSourceSupplyAssets,
+                );
                 const assets = MathLib.min(
                   MathLib.MAX_UINT_128,
                   targetSupplyHeadroom,
@@ -1359,13 +1367,18 @@ export class VaultV2BlueReallocationData
                     penalty: publicAllocatorConfig.penalty,
                   },
                   accruedInterestBuffer,
+                  sourceAccruedInterestBuffer,
                 });
               }
             }
           }
 
           const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
-          for (const { reallocation, accruedInterestBuffer } of rawCandidates) {
+          for (const {
+            reallocation,
+            accruedInterestBuffer,
+            sourceAccruedInterestBuffer,
+          } of rawCandidates) {
             let lower = 0n;
             let upper = reallocation.assets;
 
@@ -1431,11 +1444,14 @@ export class VaultV2BlueReallocationData
                   { ...allocation, allocation: 0n },
                   firstTotalAssets,
                 ).value;
-                // The buffer represents interest accrued on the existing target allocation
-                // before inclusion, which the on-chain cap check includes.
+                // The reserve covers interest on existing target and shared source
+                // allocations before inclusion, as the on-chain cap check does.
+                const reserve =
+                  accruedInterestBuffer +
+                  (sourceIds.has(id) ? sourceAccruedInterestBuffer : 0n);
                 const withinCap =
                   allocation.absoluteCap > 0n &&
-                  allocation.allocation + accruedInterestBuffer <= capacity;
+                  allocation.allocation + reserve <= capacity;
                 if (!withinCap) {
                   withinAllCaps = false;
                   if (!sourceIds.has(id)) withinUpperBounds = false;

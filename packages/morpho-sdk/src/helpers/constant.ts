@@ -15,9 +15,11 @@ export const MAX_REALLOCATION_PENALTY = MathLib.WAD;
 export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
 
 /**
- * Forward interest-accrual window reserved under Vault V2 / BluePublicAllocator
- * absolute caps when planning reallocations, so a transaction included after
- * the quote block does not revert with `AbsoluteCapExceeded`.
+ * Forward interest-accrual window, in seconds (2 hours), reserved in target-market
+ * cap checks (BluePublicAllocator max-in, Vault V2 absolute and relative caps) when
+ * planning reallocations, so a transaction included after the quote block does not
+ * revert on a cap check. Override with
+ * `VaultV2BluePublicAllocatorOptions.capAccrualBuffer`.
  */
 export const DEFAULT_CAP_ACCRUAL_BUFFER = Time.s.from.h(2n);
 

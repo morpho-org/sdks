@@ -132,6 +132,7 @@ interface FixtureOptions {
     readonly supplyShares: bigint;
   };
   readonly sourceBorrow?: bigint;
+  readonly sourceRateAtTarget?: bigint;
   readonly sourceUntracked?: bigint;
   readonly targetSupply?: bigint;
   readonly targetTotalSupplyShares?: bigint;
@@ -173,6 +174,7 @@ const makeFixture = ({
   sourcePositionShares,
   siblingSourcePosition,
   sourceBorrow = 0n,
+  sourceRateAtTarget = 0n,
   sourceUntracked = 0n,
   targetSupply = 100n,
   targetTotalSupplyShares,
@@ -216,6 +218,7 @@ const makeFixture = ({
         supplyShares: sourceTotalSupplyShares,
         borrow: sourceBorrow,
         lastUpdate: sourceLastUpdate,
+        rateAtTarget: sourceRateAtTarget,
       });
   const targetSupplyShares = targetMarket.toSupplyShares(
     targetPositionAssets,
@@ -651,6 +654,28 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     return { data, targetAdapterMarketCapId, absoluteCap };
   };
 
+  const makeSharedCapTestFixture = (adapterAbsoluteCap: bigint) =>
+    makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: capTestTargetSupply,
+      sourceBorrow: capTestTargetSupply / 2n,
+      sourceRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      sourceAbsoluteCap: 10n ** 30n,
+      targetSupply: capTestTargetSupply,
+      targetBorrow: capTestTargetSupply / 2n,
+      targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetPositionAssets: capTestTargetSupply,
+      targetCaps: [
+        { absoluteCap: adapterAbsoluteCap, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+      ],
+      allocatorTargetCap: 10n ** 30n,
+      firstTotalAssets: 10n ** 30n,
+      canPullFromIdle: false,
+      canPullFromMarket: true,
+    });
+
   test.each(["idle", "market"] as const)(
     "behavior: reserves target-market accrual under absolute caps for %s reallocations",
     (sourceType) => {
@@ -686,6 +711,58 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
     },
   );
+
+  test("behavior: reserves source interest on shared adapter cap ids", () => {
+    const initialFixture = makeSharedCapTestFixture(10n ** 30n);
+    const adapter = initialFixture.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const targetAdapterCapId = adapter.ids(targetParams)[0]!;
+    const targetMarket = initialFixture.data.getMarket(targetParams.id);
+    const sourceMarket = initialFixture.data.getMarket(sourceParams.id);
+    const targetShares = adapter.supplyShares[targetParams.id] ?? 0n;
+    const sourceShares = adapter.supplyShares[sourceParams.id] ?? 0n;
+    const capTimestamp = TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER;
+    const targetInterest = MathLib.zeroFloorSub(
+      targetMarket.accrueInterest(capTimestamp).toSupplyAssets(targetShares),
+      targetMarket.toSupplyAssets(targetShares),
+    );
+    const sourceInterest = MathLib.zeroFloorSub(
+      sourceMarket.accrueInterest(capTimestamp).toSupplyAssets(sourceShares),
+      sourceMarket.toSupplyAssets(sourceShares),
+    );
+    const currentAllocation = initialFixture.data.getAllocation(
+      VAULT,
+      targetAdapterCapId,
+    ).allocation;
+    const limitedAdapterCap =
+      currentAllocation + targetInterest + sourceInterest / 2n;
+    const limitedData = makeSharedCapTestFixture(limitedAdapterCap).data;
+    const defaultPlan = limitedData.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+    const zeroBufferPlan = limitedData.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { capAccrualBuffer: 0n },
+    );
+    const sufficientCapData = makeSharedCapTestFixture(
+      currentAllocation + targetInterest + sourceInterest + 1n,
+    ).data;
+    const sufficientCapPlan = sufficientCapData.computeVaultV2BlueReallocations(
+      targetParams.id,
+    );
+
+    expect(sourceInterest).toBeGreaterThan(0n);
+    expect(
+      defaultPlan.reallocations.some(({ from }) => from.type === "market"),
+    ).toBe(false);
+    expect(
+      zeroBufferPlan.reallocations.some(({ from }) => from.type === "market"),
+    ).toBe(true);
+    expect(
+      sufficientCapPlan.reallocations.some(
+        ({ from }) => from.type === "market",
+      ),
+    ).toBe(true);
+  });
 
   test.each(["borrow", "withdraw"] as const)(
     "behavior: reserves target-market accrual for %s operation plans",
@@ -729,6 +806,51 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     ).toThrow(NegativeInputError);
   });
 
+  test("behavior: skips buffered accrual for a target with an ineligible IRM", () => {
+    const { data } = makeFixture({
+      targetAdaptiveCurveIrm: OTHER_IRM,
+      sourceAdaptiveCurveIrm: OTHER_IRM,
+      targetBorrow: 1n,
+    });
+    const snapshot = new VaultV2BlueReallocationData({
+      ...data,
+      markets: {
+        ...data.markets,
+        [targetParams.id]: new Market({
+          ...data.getMarket(targetParams.id),
+          rateAtTarget: undefined,
+        }),
+      },
+    });
+
+    expect(
+      snapshot.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+      }).reallocations,
+    ).toEqual([]);
+  });
+
+  test("behavior: getPublicReallocationLiquidity uses buffered planning", () => {
+    const { data } = makeCapTestFixture("idle");
+    const defaultPlanAssets = data
+      .computeVaultV2BlueReallocations(targetParams.id)
+      .reallocations.reduce((total, { assets }) => total + assets, 0n);
+
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(
+      defaultPlanAssets,
+    );
+    expect(
+      data.getPublicReallocationLiquidity(targetParams.id, {
+        capAccrualBuffer: 0n,
+      }),
+    ).toBe(capTestHeadroom);
+    expect(() =>
+      data.getPublicReallocationLiquidity(targetParams.id, {
+        capAccrualBuffer: -1n,
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
   test("behavior: cap-accrual buffer does not loosen a binding relative cap", () => {
     const targetRelativeCapacity = capTestTargetSupply + capTestHeadroom;
     const { data } = makeFixture({
@@ -757,8 +879,8 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       { capAccrualBuffer: 0n },
     ).reallocations[0]!;
 
-    expect(zeroBufferPlan.assets).toBeGreaterThan(0n);
-    expect(defaultPlan.assets).toBeLessThanOrEqual(zeroBufferPlan.assets);
+    expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
+    expect(defaultPlan.assets).toBeLessThan(zeroBufferPlan.assets);
   });
 
   test("behavior: buffered plan stays under cap at the buffer horizon and unbuffered plan reproduces cap overflow", () => {
