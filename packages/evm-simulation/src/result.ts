@@ -53,33 +53,49 @@ export interface TokenAllowance {
   readonly amount: bigint;
 }
 
-/** @internal One Morpho `isAuthorized` state. */
-export interface MorphoAuthorizationState {
+/** @internal One Morpho `isAuthorized` flag before and after the bundle. */
+export interface MorphoAuthorizationChange {
   readonly authorizer: Address;
   readonly authorized: Address;
-  readonly isAuthorized: boolean;
+  readonly before: boolean;
+  readonly after: boolean;
 }
 
-/** @internal One signature nonce tracked by the simulation. */
-export interface SignatureNonce {
-  readonly type: "erc2612" | "blueAuthorization" | "permit2";
-  /** Token for erc2612, Morpho for blueAuthorization, Permit2 for permit2. */
+/** @internal One sequential signature nonce before and after the bundle. */
+export interface SequentialNonceChange {
+  readonly type: "erc2612" | "blueAuthorization";
+  /** Token for erc2612, Morpho for blueAuthorization. */
   readonly verifyingContract: Address;
   readonly owner: Address;
-  readonly nonce: bigint;
-  /** Permit2 only: whether this unordered nonce is spent. */
-  readonly used?: boolean;
+  readonly before: bigint;
+  readonly after: bigint;
 }
 
+/** @internal One Permit2 `nonceBitmap(owner, wordPosition)` word before and after the bundle. */
+export interface Permit2NonceChange {
+  readonly type: "permit2";
+  readonly verifyingContract: Address;
+  readonly owner: Address;
+  /** Signed unordered nonce; its word is `nonce >> 8n` and its bit `nonce & 0xffn`. */
+  readonly nonce: bigint;
+  readonly wordPosition: bigint;
+  readonly before: bigint;
+  readonly after: bigint;
+}
+
+/** @internal One signature nonce before and after the bundle. */
+export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
+
 /**
- * @internal Signed differences (after − before) over the whole bundle,
- * including preparation calls and interest accrual.
+ * @internal Everything the bundle changed, including preparation calls and
+ * interest accrual. Numeric entries are signed differences (after − before);
+ * authorizations and nonces carry both values.
  */
 export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
-  readonly morphoAuthorizations: readonly MorphoAuthorizationState[];
-  readonly nonces: readonly SignatureNonce[];
+  readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
+  readonly nonces: readonly SignatureNonceChange[];
   readonly positions: readonly {
     readonly marketId: MarketId;
     readonly user: Address;
