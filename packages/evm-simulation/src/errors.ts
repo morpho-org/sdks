@@ -110,8 +110,7 @@ export type SimulationErrorContext =
     })
   | (SimulationOperationContext & { readonly stage: "execution" })
   | (SimulationOperationContext & { readonly stage: "verification" })
-  // Checks not bound to one operation (wallet limits, probe evidence, snapshot
-  // comparisons) carry the check fields and must name the checked field.
+  // Verification checks not bound to one operation name the checked field.
   | (SimulationCheckContext & {
       readonly stage: "verification";
       readonly field: string;

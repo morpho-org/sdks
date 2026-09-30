@@ -67,7 +67,7 @@ All symbols below are re-exported from the package root.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` (operation groups and the operation-keyed subject union that key the execution/verification `SimulationErrorContext`).
 - Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
 
-Until the authorization-verification release, preview `authorizations` and `limits` are rejected once the state block is pinned, before the `eth_simulateV1` call, with `UnsupportedVerificationFeatureError` rather than silently ignored.
+Preview `authorizations` are prepared as simulated approval calls ahead of the user transactions and proven via in-block read-back probes. `limits` are enforced as post-verification constraints and violations throw `ConsumerLimitViolationError`. `UnsupportedVerificationFeatureError` stays exported for compatibility but `simulate()` no longer throws it.
 
 ### Deeper docs
 

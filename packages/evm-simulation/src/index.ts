@@ -12,6 +12,7 @@ export type {
   PendingAuthorization,
   Permit2TransferAuthorization,
   Permit2TransferTypedData,
+  SimulationAuthorization,
 } from "./authorizations.js";
 export type {
   DecodedOperations,

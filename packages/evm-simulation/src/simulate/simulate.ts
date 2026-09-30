@@ -64,12 +64,14 @@ import { parseRequest } from "./request/index.js";
  *   or a state-block hash that changed mid-flight).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
- *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Never bypassable.
+ *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
+ *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
  *   timeout budget or reports a different chain.
- * @returns A frozen {@link SimulationResult} carrying the normalized
+ * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
- *   stamped with `txIdx`), and per-account net `assetChanges`.
+ *   stamped with `txIdx`), per-account net `assetChanges`, and the
+ *   `verification` block with decoded operations, preparations and effects.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
