@@ -6,8 +6,20 @@ export interface VaultV2BluePublicAllocatorOptions {
   /** Whether Vault V2 public allocator discovery is enabled. */
   readonly enabled?: boolean;
 
-  /** Timestamp at which market and Vault V2 interest is evaluated. */
+  /**
+   * Timestamp at which market and Vault V2 interest is evaluated. Target-market
+   * absolute caps are evaluated after accruing interest through this timestamp
+   * plus `capAccrualBuffer`.
+   */
   readonly timestamp?: BigIntish;
+
+  /**
+   * Seconds of target-market interest accrued beyond `timestamp` before sizing
+   * allocations against absolute caps. Set to `0n` to disable.
+   *
+   * @default DEFAULT_CAP_ACCRUAL_BUFFER (2h)
+   */
+  readonly capAccrualBuffer?: BigIntish;
 
   /**
    * Vault V2 addresses to consider. Arrays, readonly arrays, sets, and other

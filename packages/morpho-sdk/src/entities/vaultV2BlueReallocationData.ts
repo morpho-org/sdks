@@ -26,7 +26,10 @@ import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   MAX_REALLOCATION_PENALTY,
 } from "../helpers/constant.js";
-import { resolveMaxWithdrawalUtilization } from "../helpers/utilization.js";
+import {
+  resolveCapAccrualBuffer,
+  resolveMaxWithdrawalUtilization,
+} from "../helpers/utilization.js";
 import type {
   VaultV2BluePublicAllocatorOptions,
   VaultV2BlueReallocation,
@@ -852,9 +855,12 @@ export class VaultV2BlueReallocationData
    * utilization defaults to 90% and is configurable through
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
-   * considered. Targets with no remaining supply or allocator capacity are skipped before
-   * projecting source interest. The adapter's minimum share minting requirement, supply-share
-   * limits, and target absolute or zero relative caps are checked against a one-asset deposit.
+   * considered. Target-market absolute caps include interest accrued through
+   * `timestamp + capAccrualBuffer`; the buffer defaults to two hours and can be
+   * disabled with `capAccrualBuffer: 0n`. Targets with no remaining supply or
+   * allocator capacity are skipped before projecting source interest. The
+   * adapter's minimum share minting requirement, supply-share limits, and target
+   * absolute or zero relative caps are checked against a one-asset deposit.
    * Shared cap IDs that a source withdrawal can reduce remain eligible, as do deposits whose
    * allocation does not increase after rounding.
    *
@@ -866,9 +872,11 @@ export class VaultV2BlueReallocationData
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
+   * Target-market absolute caps include interest accrued beyond `timestamp` for
+   * `capAccrualBuffer` (two hours by default; `0n` disables it).
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
@@ -1062,9 +1070,11 @@ export class VaultV2BlueReallocationData
       options.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
+    const capTimestamp =
+      timestamp + resolveCapAccrualBuffer(options.capAccrualBuffer);
     let data: VaultV2BlueReallocationData = this;
     let simulationContext = context;
-    data.setMarkets([data.getMarket(marketId).accrueInterest(timestamp)]);
+    data.setMarkets([data.getMarket(marketId).accrueInterest(capTimestamp)]);
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
     const vaultKeyByLower = new Map<string, Address>(
@@ -1486,10 +1496,13 @@ export class VaultV2BlueReallocationData
    * Sums friendly Vault V2 shared liquidity available to a target market.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
+   * @param options - Optional timestamp, cap-accrual buffer, enable flag, vault
+   * allowlist, source utilization ceiling, and maximum penalty. Target-market
+   * absolute caps include the buffer beyond `timestamp` (two hours by default;
+   * pass `0n` to disable).
    * @returns Reallocatable market and idle assets, or `0n` when none are available; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
@@ -1546,10 +1559,13 @@ export class VaultV2BlueReallocationData
    *
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
-   * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
+   * @param options - Optional timestamp, cap-accrual buffer, enable flag, vault
+   * allowlist, source utilization ceiling, and maximum penalty. Target-market
+   * absolute caps include the buffer beyond `timestamp` (two hours by default;
+   * pass `0n` to disable).
    * @returns Borrowable assets while remaining at or below `utilization`; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {UnsupportedBlueMarketIrmError} when a market with positive debt uses an unsupported IRM.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {NegativeInputError} when `capAccrualBuffer`, `maxWithdrawalUtilization`, or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.

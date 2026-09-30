@@ -18,6 +18,7 @@ import {
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   decodeFunctionData,
@@ -29,7 +30,10 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { blueBundlesV1Abi } from "../abis.js";
 import { blueSupplyCollateralBorrow } from "../actions/index.js";
-import { MAX_REALLOCATION_PENALTY } from "../helpers/constant.js";
+import {
+  DEFAULT_CAP_ACCRUAL_BUFFER,
+  MAX_REALLOCATION_PENALTY,
+} from "../helpers/constant.js";
 import {
   InputExceedsMaxError,
   InsufficientSharedLiquidityError,
@@ -91,12 +95,14 @@ const makeMarket = ({
   supplyShares = supply * 1_000_000n,
   borrow,
   lastUpdate = TIMESTAMP,
+  rateAtTarget = 0n,
 }: {
   readonly params: MarketParams;
   readonly supply: bigint;
   readonly supplyShares?: bigint;
   readonly borrow: bigint;
   readonly lastUpdate?: bigint;
+  readonly rateAtTarget?: bigint;
 }) =>
   new Market({
     params,
@@ -106,7 +112,7 @@ const makeMarket = ({
     totalBorrowShares: borrow * 1_000_000n,
     lastUpdate,
     fee: 0n,
-    rateAtTarget: 0n,
+    rateAtTarget,
   });
 
 interface FixtureOptions {
@@ -130,6 +136,7 @@ interface FixtureOptions {
   readonly targetSupply?: bigint;
   readonly targetTotalSupplyShares?: bigint;
   readonly targetBorrow?: bigint;
+  readonly targetRateAtTarget?: bigint;
   readonly targetPositionAssets?: bigint;
   readonly targetTracked?: boolean;
   readonly targetUntracked?: bigint;
@@ -147,6 +154,7 @@ interface FixtureOptions {
   readonly penalty?: bigint;
   readonly sourceLastUpdate?: bigint;
   readonly targetLastUpdate?: bigint;
+  readonly sourceAbsoluteCap?: bigint;
   readonly vaultLastUpdate?: bigint;
   readonly maxRate?: bigint;
 }
@@ -169,6 +177,7 @@ const makeFixture = ({
   targetSupply = 100n,
   targetTotalSupplyShares,
   targetBorrow = 0n,
+  targetRateAtTarget = 0n,
   targetPositionAssets = 0n,
   targetTracked = true,
   targetUntracked = 0n,
@@ -186,6 +195,7 @@ const makeFixture = ({
   penalty = 0n,
   sourceLastUpdate = TIMESTAMP,
   targetLastUpdate = TIMESTAMP,
+  sourceAbsoluteCap = 10_000n,
   vaultLastUpdate = TIMESTAMP,
   maxRate = 0n,
 }: FixtureOptions = {}) => {
@@ -196,6 +206,7 @@ const makeFixture = ({
     supplyShares: targetTotalSupplyShares,
     borrow: sameMarket ? sourceBorrow : targetBorrow,
     lastUpdate: targetLastUpdate,
+    rateAtTarget: targetRateAtTarget,
   });
   const sourceMarket = sameMarket
     ? targetMarket
@@ -295,7 +306,7 @@ const makeFixture = ({
       id,
       allocation: sourceExpectedAssets - sourceUntracked,
       cap: {
-        absoluteCap: 10_000n,
+        absoluteCap: sourceAbsoluteCap,
         relativeCap: MathLib.WAD,
       },
     });
@@ -614,6 +625,98 @@ describe("VaultV2BlueReallocationData.clone", () => {
 });
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
+  const capTestTargetSupply = 10n ** 24n;
+  const capTestHeadroom = 10n ** 21n;
+
+  const makeCapTestFixture = (sourceType: "idle" | "market") => {
+    const absoluteCap = capTestTargetSupply + capTestHeadroom;
+    const { data, targetAdapterMarketCapId } = makeFixture({
+      sourceSupply: sourceType === "market" ? capTestTargetSupply : 1_000n,
+      sourceAbsoluteCap: 10n ** 30n,
+      targetSupply: capTestTargetSupply,
+      targetBorrow: capTestTargetSupply / 2n,
+      targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetPositionAssets: capTestTargetSupply,
+      targetCaps: [
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 30n, relativeCap: MathLib.WAD },
+        { absoluteCap, relativeCap: MathLib.WAD },
+      ],
+      allocatorTargetCap: absoluteCap,
+      idle: sourceType === "idle" ? capTestTargetSupply : 0n,
+      canPullFromIdle: sourceType === "idle",
+      canPullFromMarket: sourceType === "market",
+    });
+
+    return { data, targetAdapterMarketCapId, absoluteCap };
+  };
+
+  test.each(["idle", "market"] as const)(
+    "behavior: reserves target-market accrual under absolute caps for %s reallocations",
+    (sourceType) => {
+      const { data, absoluteCap } = makeCapTestFixture(sourceType);
+      const targetShares =
+        data.getAdapter(VAULT, TARGET_ADAPTER).supplyShares[targetParams.id] ??
+        0n;
+      const accruedTargetMarket = data
+        .getMarket(targetParams.id)
+        .accrueInterest(TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER);
+      const expectedAccruedAllocation =
+        accruedTargetMarket.toSupplyAssets(targetShares);
+      const expectedBufferedAssets = absoluteCap - expectedAccruedAllocation;
+      const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id)
+        .reallocations[0]!;
+      const zeroBufferPlan = data.computeVaultV2BlueReallocations(
+        targetParams.id,
+        { capAccrualBuffer: 0n },
+      ).reallocations[0]!;
+
+      expect(accruedTargetMarket.totalSupplyAssets).toBeGreaterThan(
+        data.getMarket(targetParams.id).totalSupplyAssets,
+      );
+      expect(defaultPlan.from.type).toBe(sourceType);
+      expect(defaultPlan.assets).toBeLessThan(capTestHeadroom);
+      expect(defaultPlan.assets).toBe(expectedBufferedAssets);
+      expect(zeroBufferPlan.from.type).toBe(sourceType);
+      expect(zeroBufferPlan.assets).toBe(capTestHeadroom);
+    },
+  );
+
+  test("behavior: buffered plan stays under cap at the buffer horizon and unbuffered plan reproduces cap overflow", () => {
+    const { data, targetAdapterMarketCapId, absoluteCap } =
+      makeCapTestFixture("idle");
+    const defaultPlan = data.computeVaultV2BlueReallocations(targetParams.id)
+      .reallocations[0]!;
+    const zeroBufferPlan = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { capAccrualBuffer: 0n },
+    ).reallocations[0]!;
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
+    const bufferedTransition = data.clone()["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: defaultPlan,
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP + DEFAULT_CAP_ACCRUAL_BUFFER,
+    });
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the simulated onchain transition at inclusion time.
+    const unbufferedTransition = data.clone()["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: zeroBufferPlan,
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP + 1n,
+    });
+
+    expect(
+      bufferedTransition.data.getAllocation(VAULT, targetAdapterMarketCapId)
+        .allocation,
+    ).toBeLessThanOrEqual(absoluteCap);
+    expect(
+      unbufferedTransition.data.getAllocation(VAULT, targetAdapterMarketCapId)
+        .allocation,
+    ).toBeGreaterThan(absoluteCap);
+  });
+
   test("default: returns an action-ready market reallocation and durable cloned post-state", () => {
     const {
       data,
