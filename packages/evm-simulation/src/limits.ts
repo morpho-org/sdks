@@ -101,7 +101,7 @@ export interface VaultV1MigrateToV2Subject {
   readonly targetVault: Address;
 }
 
-/** Protocol entity a decoded operation acts on, keyed by `operation`; shared by `SimulatedOperation` and the execution/verification error contexts. */
+/** Protocol entity a limit's operation acts on, keyed by `operation`; shared by `SimulatedOperation` and the verification error context. */
 export type SimulationOperationSubject =
   | BlueMarketOperationSubject
   | BlueRefinanceSubject
