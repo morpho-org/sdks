@@ -82,7 +82,6 @@ export type {
   SimulationMode,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
-export type { PreLiquidationBinding } from "./requirements/index.js";
 export { toSimulationAuthorizations } from "./requirements/index.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants

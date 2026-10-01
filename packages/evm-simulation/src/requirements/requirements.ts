@@ -1,8 +1,4 @@
-import {
-  type InputMarketParams,
-  type MarketId,
-  UnsupportedChainIdError,
-} from "@morpho-org/blue-sdk";
+import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import type {
   ActionRequirement,
   AuthorizationAction,
@@ -46,21 +42,6 @@ import {
 } from "../errors.js";
 import type { SimulationMode } from "../params.js";
 
-/** Concrete Blue market binding supplied from pinned reads. */
-interface MarketBinding {
-  readonly marketId: MarketId;
-  readonly params: Readonly<InputMarketParams>;
-}
-
-/**
- * Pre-liquidation contract bound to its market. The requirement's calldata or typed data
- * carries only the authorized address, so the market binding comes from pinned reads.
- */
-export interface PreLiquidationBinding {
-  readonly address: Address;
-  readonly market: MarketBinding;
-}
-
 type Fail = (message: string, options?: ErrorOptions) => never;
 
 interface Ctx {
@@ -70,7 +51,7 @@ interface Ctx {
   readonly owner: Address;
   readonly index: number;
   readonly addresses: ReturnType<typeof getChainAddresses>;
-  readonly preLiquidations: readonly PreLiquidationBinding[];
+  readonly preLiquidations: readonly Address[];
 }
 
 /**
@@ -123,7 +104,7 @@ const authorizationOperators = (ctx: Ctx): readonly Address[] => [
   ...(isDefined(ctx.addresses.bundles?.blueBundlesV1)
     ? [ctx.addresses.bundles.blueBundlesV1]
     : []),
-  ...ctx.preLiquidations.map((binding) => binding.address),
+  ...ctx.preLiquidations,
 ];
 
 const authorizationContext = (ctx: Ctx): SimulationErrorContext => ({
@@ -736,7 +717,7 @@ const toBlueAuthorization = (
  * @param params.blockNumber - Pinned block the simulation is verified against; carried into error contexts.
  * @param params.owner - The account the requirements were resolved for (transaction sender).
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
- * @param params.preLiquidations - Bound pre-liquidation contracts a `blueAuthorization`
+ * @param params.preLiquidations - Pre-liquidation contract addresses a `blueAuthorization`
  *   requirement may authorize.
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
@@ -780,7 +761,7 @@ export function toSimulationAuthorizations(params: {
   readonly blockNumber: bigint;
   readonly owner: Address;
   readonly requirements: readonly ActionRequirement[];
-  readonly preLiquidations?: readonly PreLiquidationBinding[];
+  readonly preLiquidations?: readonly Address[];
 }): readonly SimulationAuthorization[] {
   const {
     chainId,

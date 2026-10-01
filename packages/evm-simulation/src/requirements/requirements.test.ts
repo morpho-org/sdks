@@ -1,4 +1,4 @@
-import { getChainAddresses, MarketUtils, Token } from "@morpho-org/blue-sdk";
+import { getChainAddresses, Token } from "@morpho-org/blue-sdk";
 import {
   type ActionRequirement,
   type AuthorizationRequirementSignature,
@@ -1154,20 +1154,6 @@ describe("toSimulationAuthorizations", () => {
   });
 
   test("behavior: a bound pre-liquidation operator satisfies only the blueAuthorization call", async () => {
-    const bindingMarketParams = {
-      loanToken: TOKEN,
-      collateralToken: OTHER,
-      oracle: OTHER,
-      irm: OTHER,
-      lltv: 860_000000000000000n,
-    };
-    const binding = {
-      address: OTHER,
-      market: {
-        marketId: MarketUtils.getMarketId(bindingMarketParams),
-        params: bindingMarketParams,
-      },
-    };
     expect(
       toSimulationAuthorizations({
         chainId: CHAIN_ID,
@@ -1175,7 +1161,7 @@ describe("toSimulationAuthorizations", () => {
         blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [blueAuthorizationCall({ authorized: OTHER })],
-        preLiquidations: [binding],
+        preLiquidations: [OTHER],
       })[0]?.type,
     ).toBe("blueAuthorization");
     // Signed authorizations only bind BlueBundlesV1; pre-liquidation
@@ -1202,7 +1188,7 @@ describe("toSimulationAuthorizations", () => {
         blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [tampered],
-        preLiquidations: [binding],
+        preLiquidations: [OTHER],
       }),
     ).toThrowError(AuthorizationRequestMismatchError);
   });
