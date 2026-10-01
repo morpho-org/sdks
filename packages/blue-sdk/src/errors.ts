@@ -3,6 +3,7 @@ export {
   DivisionByZeroError,
   type ErrorClass,
   IncompleteChainRegistryError,
+  InvalidAddressError,
   InvalidBitLengthError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
