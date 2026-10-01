@@ -21,8 +21,9 @@ tolerance the user accepted. They already hold that quote and tolerance. The sim
 ## Decision
 
 `simulate()` checks only limits the caller supplies. It never decodes calldata, infers an operation,
-fetches a quote or applies a default bound. With `limits` omitted, a successful result means the
-bundle executed under the simulated permissions, nothing more.
+fetches a quote or applies a default bound, and it does not restrict which targets or routes a
+bundle calls. With `limits` omitted, a successful result means the bundle executed under the
+simulated permissions, nothing more.
 
 `SimulationLimits` is `{ operations?: readonly OperationLimit[] }`. Each `OperationLimit` names an
 operation `type` and its subject (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`, or
@@ -61,16 +62,21 @@ signature will execute.
 Errors keep the existing classes and add `UnsupportedOperationError`,
 `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`,
 `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError` and `UnexpectedSimulationError`,
-each extending `SimulationPackageError`. A quote outside its bound is `ConsumerLimitViolationError`,
+each extending `SimulationPackageError`. `UnsupportedOperationError` reports an SDK requirement that
+`toSimulationAuthorizations` cannot convert. A quote outside its bound is `ConsumerLimitViolationError`,
 never `SimulationRevertedError`. A failed state read, native traces that do not cover the value sent,
 or unusable metadata is `MissingVerificationEvidenceError`. The 09-18 classes
 `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `AssetChangeMismatchError`,
 `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`,
-`SlippageLimitExceededError` and `FeeMismatchError` are not introduced.
+`SlippageLimitExceededError` and `FeeMismatchError` are not introduced. In the typed error context,
+an execution or verification failure takes its `operation` and subject fields from the caller's
+`OperationLimit`, not from decoded calldata. A verification failure not bound to one limit carries
+only the checked `field`.
 
 This decision replaces these parts of ADR-2026-09-18: calldata decoding and its verification
-contract, the `SimulationLimits` defaults and wallet bounds, the operation limits, the verification
-output, preview read-back checks, and the error catalog. The rest of it stays in force, including
+contract, the supported-route list and the rejection of other routes, the `SimulationLimits`
+defaults and wallet bounds, the operation limits, the verification output, preview read-back
+checks, and the error catalog. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
 `toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
 
