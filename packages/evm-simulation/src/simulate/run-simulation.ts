@@ -5,7 +5,6 @@ import {
 import { _try } from "@morpho-org/morpho-ts";
 import { zeroAddress } from "viem";
 import {
-  ExternalServiceError,
   InvalidSimulationResponseError,
   UnsupportedChainError,
 } from "../errors.js";
@@ -13,7 +12,7 @@ import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
-import { executePlan } from "./backends/index.js";
+import { assertEndpointChain, executePlan } from "./backends/index.js";
 import { resolveAssets } from "./backends/resolve-assets.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import type { CheckContext } from "./context.js";
@@ -64,32 +63,13 @@ export async function runSimulation(params: {
     throw new UnsupportedChainError(request.chainId);
   const morpho = addresses?.blue ?? zeroAddress;
 
-  let rpcChainId: number;
-  try {
-    rpcChainId = await client.getChainId();
-  } catch (cause) {
-    throw new ExternalServiceError(
-      `eth_chainId error: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { cause },
-    );
-  }
-  if (rpcChainId !== request.chainId) {
-    throw new InvalidSimulationResponseError(
-      `The RPC configured for chain ${request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
-      {
-        ...(typeof request.blockNumber === "bigint"
-          ? {
-              context: {
-                stage: "transport" as const,
-                chainId: request.chainId,
-                mode: request.mode,
-                blockNumber: request.blockNumber,
-              },
-            }
-          : {}),
-      },
-    );
-  }
+  await assertEndpointChain({
+    client,
+    chainId: request.chainId,
+    mode: request.mode,
+    blockNumber:
+      typeof request.blockNumber === "bigint" ? request.blockNumber : undefined,
+  });
   const pinnedBlock = await resolvePinnedBlock({
     client,
     blockNumber: request.blockNumber,
@@ -151,12 +131,8 @@ export async function runSimulation(params: {
             ] as const,
         ),
     );
-  const chainAddresses = addresses;
   const transfers = parseTransfers(userCalls, {
-    wNative:
-      chainAddresses === undefined
-        ? undefined
-        : (chainAddresses.wNative ?? null),
+    wNative: addresses === undefined ? undefined : (addresses.wNative ?? null),
     logger: config.logger,
   });
 

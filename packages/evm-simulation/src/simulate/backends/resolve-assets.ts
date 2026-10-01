@@ -14,7 +14,8 @@ import {
   ExternalServiceError,
   MissingVerificationEvidenceError,
 } from "../../errors.js";
-import { type OperationLimit, operationMeasurementPlan } from "../../limits.js";
+import type { OperationLimit } from "../../limits.js";
+import { operationMeasurementPlan } from "../measurement-plan.js";
 
 /** Caller-selected operation with only the quoted wallet assets resolved. @internal */
 export interface ResolvedSlippageOperation {
