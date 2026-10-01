@@ -3,7 +3,7 @@ import type { Address, Hex } from "viem";
 import type { OperationType, VaultDeallocation } from "../limits.js";
 
 /** Original user call index and nested recipe path; never an execution-plan offset. */
-export interface OperationIdentity {
+interface OperationIdentity {
   readonly transactionIndex: number;
   readonly callPath: readonly number[];
 }
@@ -15,7 +15,7 @@ export interface MarketBinding {
 }
 
 /** Exclusive exact-assets or exact-shares amount; fullClose is resolved against pinned state. */
-export type OperationAmount =
+type OperationAmount =
   | {
       readonly type: "assets";
       readonly assets: bigint;
@@ -65,7 +65,7 @@ export type OperationSignature =
     };
 
 /** Calldata referral fee; reconciliation does not imply discretionary fee consent. */
-export interface ReferralFee {
+interface ReferralFee {
   readonly rateWad: bigint;
   readonly recipient: Address;
 }

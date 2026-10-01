@@ -15,7 +15,6 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
-
 import { InvalidNumberError } from "./error.js";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.

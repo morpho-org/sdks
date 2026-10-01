@@ -49,7 +49,7 @@ try {
 
 Every chain entry requires `simulateV1Url`, pointing to a JSON-RPC endpoint that supports `eth_simulateV1`. Execution uses the full `timeoutMs` budget (default 5000 ms), with no retries or provider fallback. RPC failures, timeouts and reverts throw typed errors. The optional logger still reports parsing and retention warnings.
 
-Native balances are observed through a synthetic probe contract injected via `stateOverrides` at the reserved address `0x000000000000000000000000000000000000Ba1a`; transactions targeting that address are rejected with `SimulationValidationError`.
+Native-ETH movements are observed through `traceTransfers` logs on the simulated calls — no `stateOverrides` or helper contracts are injected.
 
 This is the unreleased v5 integration stack. See the [v4 → v5 migration guide](../../docs/migrations/evm-simulation-v4-to-v5.md) for the backend cutover and remaining release gates.
 
@@ -58,23 +58,24 @@ This is the unreleased v5 integration stack. See the [v4 → v5 migration guide]
 All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
-- `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements, preLiquidations? })` — convert morpho-sdk `ActionRequirement[]` into `SimulationAuthorization[]`, and `decodeOperations(params)` — decode v6 fixed-bundles calldata into ordered `DecodedOperation` entries. Their types: `DecodeOperationsParams`, `DecodedOperations`, `VaultBinding`, `PreLiquidationBinding`, `DecodedOperation`, `DecodedOperationFields`, `OperationIdentity`, `MarketBinding`, `OperationAmount`, `OperationFunding`, `OperationSignature`, `OperationReallocation`, `ReferralFee`.
 - Config types: `SimulationConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Input types: `SimulateParams` (options object with `mode: "preview" | "final"`), `SimulationMode`, `SimulationTransaction`, `SimulationAuthorization` (the typed `erc20Approval` / `erc2612Permit` / `permit2SignatureTransfer` / `blueAuthorization` / `blueAuthorizationSignature` variants and their typed-data shapes `Erc2612PermitTypedData` / `Permit2TransferTypedData` / `BlueAuthorizationTypedData` / `Eip712Domain` / `Eip712Field`), `SimulationLimits`, `OperationLimit`, `OperationType`, `VaultDeallocation`, `MarketMinAssets`, and the per-operation limit types.
+- Input types: `SimulateParams` (v5 shape: `mode`, `SimulationAuthorization` requests, `SimulationLimits`), `SimulationMode`, `SimulationTransaction`.
+- `toSimulationAuthorizations({ chainId, mode, blockNumber, owner, requirements })` — map morpho-sdk `ActionRequirement[]` onto `SimulationAuthorization[]` straight from `action.args` — nothing is decoded or validated; validation happens in `simulate()`'s request parser.
+- Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit` and its per-operation members (`BlueSupplyLimit` … `VaultV1MigrateToV2Limit`, `VaultDeallocation`, `MarketMinAssets`).
+- Verified result types (not yet produced by `simulate()`): `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`, `SimulationStateChange`, `TokenBalance`, `TokenAllowance`, `MorphoAuthorizationChange`, `SignatureNonceChange` (`SequentialNonceChange` | `Permit2NonceChange`), `Fee`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
-- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
-- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` (operation groups and the operation-keyed subject union that key the execution/verification `SimulationErrorContext`).
+- Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`; union of the per-stage `SimulationValidationContext`, `SimulationTransportContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
+- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `BlueAuthorizationSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (operation groups and the operation-keyed subject union that key the execution/verification `SimulationErrorContext`).
 - Default limits: `DEFAULT_MAX_SLIPPAGE_WAD`, `DEFAULT_MIN_LLTV_BUFFER_WAD`, `DEFAULT_MAX_SIGNATURE_LIFETIME_SECONDS`.
 
 Preview `authorizations` are prepared as simulated approval calls ahead of the user transactions and proven via in-block read-back probes. `limits` are enforced as post-verification constraints and violations throw `ConsumerLimitViolationError`. `UnsupportedVerificationFeatureError` stays exported for compatibility but `simulate()` no longer throws it.
 
 ### Deeper docs
 
-See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, authorizations
-encoding, the error hierarchy, retention rules, and the recipe for adding a
-chain via `SimulationConfig.chains` — including how native-balance probes are
-injected via `stateOverrides` code, how the state block is pinned and the
+See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, the preview-authorization/limits feature
+gate, the error hierarchy, retention rules, and the recipe for adding a
+chain via `SimulationConfig.chains` — including how the state block is pinned and the
 simulated block constrained to the pin or its immediate successor, and the
 feature gate that rejects `authorizations` and `limits` until PR5/PR6 land.
 

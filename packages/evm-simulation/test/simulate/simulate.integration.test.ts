@@ -178,7 +178,7 @@ describe.sequential("simulate — real native funding", () => {
 });
 
 describe.sequential("simulate — sequential state and stable indices", () => {
-  test("behavior: three transactions keep user indices 0..2 with no probe offset", async ({
+  test("behavior: three transactions keep user indices 0..2", async ({
     client,
   }) => {
     const morpho = client.extend(

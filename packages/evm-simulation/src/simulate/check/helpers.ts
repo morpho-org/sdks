@@ -147,7 +147,7 @@ export const fail = (
 
 /** Throw a {@link MarketConstraintViolationError} for one operation. @internal */
 // biome-ignore lint/complexity/useMaxParams: throw helpers read clearest with positional arguments
-export const constraint = (
+const constraint = (
   ctx: CheckContext,
   op: DecodedOperation,
   message: string,
@@ -312,7 +312,7 @@ export const reallocationPenalty = (
   );
 
 /** Verified per-operation outcomes consumed by the inlined consumer limits. @internal */
-export interface OperationOutcomeFields {
+interface OperationOutcomeFields {
   readonly blueSupply: {
     readonly supplySharesMinted: bigint;
   };

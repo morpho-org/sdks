@@ -20,14 +20,6 @@ export type RiskMetric =
       readonly reason: "zeroCollateral" | "zeroLiquidity";
     };
 
-/** Defined absence (`notApplicable` + reason) vs a present value. @internal */
-export type Applicable<T> =
-  | { readonly type: "applicable"; readonly value: T }
-  | {
-      readonly type: "notApplicable";
-      readonly reason: "noOracle" | "noIrm" | "noPreLiquidation";
-    };
-
 /** Market extras checks/accrual need that the public `MarketState` does not carry. @internal */
 export interface MarketInternals {
   readonly marketId: MarketId;

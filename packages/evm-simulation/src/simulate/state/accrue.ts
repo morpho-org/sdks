@@ -6,7 +6,7 @@ import {
   Market,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import { type Address, zeroAddress } from "viem";
 import type { ParsedState, PositionInternals } from "./types.js";
 import { positionKey } from "./types.js";
 
@@ -50,6 +50,14 @@ export function accrue(before: ParsedState, toTimestamp: bigint): ParsedState {
       price: state.oraclePrice,
       rateAtTarget: internals.rateAtTargetPerSecondWad,
     });
+    // Queue markets are read for allocation reporting only — their IRM is not
+    // known at plan time, so `rateAtTarget` may be missing; leave them
+    // un-accrued rather than failing the whole simulation.
+    if (
+      internals.rateAtTargetPerSecondWad == null &&
+      internals.params.irm !== zeroAddress
+    )
+      continue;
     markets.set(state.marketId, {
       state,
       accrued: market.accrueInterest(toTimestamp),

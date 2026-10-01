@@ -98,7 +98,7 @@ export interface MarketState {
 }
 
 /** @internal One vault allocation. */
-export interface VaultAllocation {
+interface VaultAllocation {
   /** Set for Vault V2. */
   readonly adapter?: Address;
   readonly marketId?: MarketId;
@@ -160,7 +160,7 @@ export interface SimulationStateChange {
 }
 
 /** @internal An asset/share conversion and the bounds it was checked against. */
-export interface Conversion {
+interface Conversion {
   readonly transactionIndex: number;
   readonly marketId?: MarketId;
   readonly vault?: Address;
@@ -212,3 +212,15 @@ export interface SimulationVerification {
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }
+
+/** Parent-surface alias for {@link MorphoAuthorizationState}. @internal */
+export type MorphoAuthorizationChange = MorphoAuthorizationState;
+
+/** Parent-surface alias for {@link SignatureNonce}. @internal */
+export type SignatureNonceChange = SignatureNonce;
+
+/** Parent-surface alias for {@link SignatureNonce}. @internal */
+export type SequentialNonceChange = SignatureNonce;
+
+/** Parent-surface alias for {@link SignatureNonce}. @internal */
+export type Permit2NonceChange = SignatureNonce;

@@ -115,6 +115,7 @@ export async function fetchVaultV2(
 
   if (deployless) {
     try {
+      // The RPC is trusted: accounting and adapter data are not cross-checked. See THREAT_MODEL.md, RPC.
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
           ...parameters,
@@ -454,6 +455,7 @@ export async function fetchAccrualVaultV2(
   // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
   if (deployless) {
     try {
+      // The RPC is trusted: accounting and adapter data are not cross-checked. See THREAT_MODEL.md, RPC.
       return await fetchAccrualVaultV2WithQuery(address, client, parameters);
     } catch (error) {
       if (deployless === "force") throw error;

@@ -1,7 +1,34 @@
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.ts";
+import {
+  getErrorMessage,
+  isPathInside,
+  parseReleaseSpec,
+  sanitizeLogLine,
+} from "./helpers.ts";
+
+describe("parseReleaseSpec", () => {
+  test("accepts scoped package names and strict semver", () => {
+    expect(
+      parseReleaseSpec("@morpho-org/blue-sdk@7.1.0-next.2+build.1"),
+    ).toEqual({
+      name: "@morpho-org/blue-sdk",
+      version: "7.1.0-next.2+build.1",
+    });
+  });
+
+  test.each([
+    "blue-sdk",
+    "@morpho-org/blue-sdk@",
+    "@other/blue-sdk@7.1.0",
+    "@morpho-org/blue-sdk@7.1",
+    "@morpho-org/blue-sdk@https://x/y.tgz",
+    "@morpho-org/blue-sdk@github:morpho-org/sdks",
+  ])("rejects invalid release specs: %s", (spec) => {
+    expect(() => parseReleaseSpec(spec)).toThrow();
+  });
+});
 
 describe("getErrorMessage", () => {
   test("default", () => {

@@ -30,7 +30,7 @@ export interface ExecutedCall {
 }
 
 /** One executed state read with its raw return data. @internal */
-export interface ExecutedStateRead {
+interface ExecutedStateRead {
   readonly phase: "before" | "intermediate" | "after";
   readonly read: StateRead;
   readonly returnData: Hex;

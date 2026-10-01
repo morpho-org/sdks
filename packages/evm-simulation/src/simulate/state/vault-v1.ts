@@ -81,13 +81,6 @@ export function vaultV1Reads(subjects: VaultV1Subjects): StateRead[] {
   return reads;
 }
 
-/** Decoded values of one vault's totals reads. @internal */
-export interface VaultTotals {
-  readonly totalAssets: bigint;
-  readonly totalSupply: bigint;
-  readonly ownerShares: bigint;
-}
-
 /**
  * Decode a vault totals/idle/allocation read's return data (`uint256` for
  * every vault kind emitted here).

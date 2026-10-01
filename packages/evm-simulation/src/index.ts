@@ -15,32 +15,16 @@ export type {
   SimulationAuthorization,
 } from "./authorizations.js";
 export type {
-  DecodedOperations,
-  DecodeOperationsParams,
-  PreLiquidationBinding,
-  VaultBinding,
-} from "./decode/index.js";
-export {
-  decodeOperations,
-  toSimulationAuthorizations,
-} from "./decode/index.js";
-export type {
-  DecodedOperation,
-  DecodedOperationFields,
-  MarketBinding,
-  OperationAmount,
-  OperationFunding,
-  OperationIdentity,
-  OperationReallocation,
-  OperationSignature,
-  ReferralFee,
-} from "./decode/operation.js";
-export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
+  SimulationExecutionContext,
   SimulationExecutionReason,
+  SimulationPreparationContext,
   SimulationStage,
+  SimulationTransportContext,
+  SimulationValidationContext,
+  SimulationVerificationContext,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -69,9 +53,12 @@ export {
 } from "./errors.js";
 export type {
   BlueAuthorizationLimit,
+  BlueAuthorizationSubject,
   BlueBorrowLimit,
+  BlueMarketOperationSubject,
   BlueMarketOperationType,
   BlueRefinanceLimit,
+  BlueRefinanceSubject,
   BlueRepayLimit,
   BlueRepayWithdrawCollateralLimit,
   BlueSupplyCollateralBorrowLimit,
@@ -87,9 +74,11 @@ export type {
   VaultDeallocation,
   VaultDepositLimit,
   VaultInKindRedeemLimit,
+  VaultOperationSubject,
   VaultOperationType,
   VaultRedeemLimit,
   VaultV1MigrateToV2Limit,
+  VaultV1MigrateToV2Subject,
   VaultV2ForceRedeemLimit,
   VaultV2ForceWithdrawLimit,
   VaultWithdrawLimit,
@@ -104,6 +93,21 @@ export type {
   SimulationMode,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
+export { toSimulationAuthorizations } from "./requirements/index.js";
+export type {
+  AuthorizationPreparation,
+  Fee,
+  MorphoAuthorizationChange,
+  Permit2NonceChange,
+  SequentialNonceChange,
+  SignatureNonceChange,
+  SimulatedOperation,
+  SimulationStateChange,
+  SimulationVerification,
+  TokenAllowance,
+  TokenBalance,
+  VerifiedSimulationResult,
+} from "./result.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants
 export {
