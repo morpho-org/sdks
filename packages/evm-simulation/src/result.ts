@@ -25,14 +25,14 @@ export interface AuthorizationPreparation {
   }[];
 }
 
-/** One account's balance of one token. */
+/** Signed change (after − before) of one account's balance of one token over the bundle. */
 export interface TokenBalance {
   readonly account: Address;
   readonly token: Address;
   readonly assets: bigint;
 }
 
-/** One ERC-20 allowance. */
+/** Signed change (after − before) of one ERC-20 allowance over the bundle. */
 export interface TokenAllowance {
   readonly token: Address;
   readonly owner: Address;
