@@ -11,16 +11,14 @@ import {
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress, isAddressEqual, zeroAddress } from "viem";
 import type { SimulationAuthorization } from "../../authorizations.js";
+import { InvalidSimulationResponseError } from "../../errors.js";
+import type { OperationLimit } from "../../limits.js";
+import type { MarketState, PositionState, VaultState } from "../../result.js";
 import type {
+  MarketBinding,
   PreLiquidationBinding,
   VaultBinding,
-} from "../../decode/index.js";
-import type {
-  DecodedOperation,
-  MarketBinding,
-} from "../../decode/operation.js";
-import { InvalidSimulationResponseError } from "../../errors.js";
-import type { MarketState, PositionState, VaultState } from "../../result.js";
+} from "../backends/read-bindings.js";
 import type { DecodedStateRead, StateRead } from "./contract.js";
 import { decodeErc20Value, erc20Reads, parseErc20 } from "./erc20.js";
 import { decodeMorphoValue, morphoReads, parseMorpho } from "./morpho.js";
@@ -45,18 +43,7 @@ const add = <T>(list: T[], value: T, key: (v: T) => string): void => {
   if (!list.some((v) => key(v) === k)) list.push(value);
 };
 
-const BUNDLE_SPENDERS = {
-  blueBundlesV1: "blueBundlesV1",
-  vaultBundlesV1: "vaultBundlesV1",
-  vaultExitBundlesV1: "vaultExitBundlesV1",
-} as const satisfies Partial<
-  Record<
-    DecodedOperation["route"],
-    keyof NonNullable<ChainAddresses["bundles"]>
-  >
->;
-
-/** Every subject a state-read phase must observe, derived from decoded ops. @internal */
+/** Every subject a state-read phase must observe, derived from the declared limits. @internal */
 export interface StateSubjects {
   readonly accounts: ReadonlySet<Address>;
   readonly tokens: ReadonlySet<Address>;
@@ -98,8 +85,9 @@ export interface StateSubjects {
  */
 export function collectSubjects(params: {
   readonly owner: Address;
-  readonly operations: readonly DecodedOperation[];
+  readonly operations: readonly OperationLimit[];
   readonly authorizations: readonly SimulationAuthorization[];
+  readonly markets: readonly MarketBinding[];
   readonly vaults: readonly VaultBinding[];
   readonly preLiquidations: readonly PreLiquidationBinding[];
   readonly addresses: ChainAddresses;
@@ -108,6 +96,7 @@ export function collectSubjects(params: {
     owner,
     operations,
     authorizations,
+    markets: marketBindings,
     vaults,
     preLiquidations,
     addresses,
@@ -115,7 +104,7 @@ export function collectSubjects(params: {
 
   const accounts = new Set<Address>([owner]);
   // Accounts whose per-market positions are read: the bundle owner plus any
-  // `onBehalf` acting account (in-kind redeems, Blue ops on another's behalf).
+  // pinned `expectedOnBehalf`/`expectedRecipient` acting account.
   const positionAccounts = new Set<Address>([owner]);
   const tokens = new Set<Address>();
   const bundleAddresses = new Set<Address>();
@@ -129,103 +118,18 @@ export function collectSubjects(params: {
   const markets: MarketBinding[] = [];
   const preLiquidationMarkets = new Map<MarketId, Address>();
   const vaultMap = new Map<Address, VaultBinding>();
-  for (const binding of vaults) vaultMap.set(binding.address, binding);
+  for (const binding of vaults) {
+    vaultMap.set(binding.address, binding);
+    tokens.add(binding.asset);
+  }
   for (const binding of preLiquidations) {
     preLiquidationMarkets.set(binding.market.marketId, binding.address);
   }
-
-  const bundleSpender = (
-    route: keyof typeof BUNDLE_SPENDERS,
-  ): Address | undefined => addresses.bundles?.[BUNDLE_SPENDERS[route]];
-
-  const addFunding = (
-    funding: {
-      readonly type: string;
-      readonly token?: Address;
-      readonly wrappedToken?: Address;
-    },
-    spender: Address | undefined,
-  ) => {
-    if (funding.type === "erc20" && funding.token != null) {
-      tokens.add(funding.token);
-      if (spender != null)
-        add(
-          spenders,
-          { owner, token: funding.token, spender },
-          (s) => `${s.owner}:${s.token}:${s.spender}`,
-        );
-    } else if (funding.type === "native" && funding.wrappedToken != null) {
-      tokens.add(funding.wrappedToken);
-      tokens.add(ethAddress);
-      if (spender != null)
-        add(
-          spenders,
-          { owner, token: funding.wrappedToken, spender },
-          (s) => `${s.owner}:${s.token}:${s.spender}`,
-        );
-    }
-  };
-
-  const addSignature = (
-    sig: { readonly type: string; readonly nonce?: bigint },
-    token?: Address,
-  ) => {
-    if (sig.type === "erc2612Permit" && token != null) {
-      add(erc2612Tokens, { owner, token }, (t) => `${t.owner}:${t.token}`);
-    } else if (sig.type === "permit2SignatureTransfer" && token != null) {
-      add(permit2Tokens, { owner, token }, (t) => `${t.owner}:${t.token}`);
-      if (sig.nonce != null)
-        add(
-          permit2Nonces,
-          { owner, nonce: sig.nonce },
-          (n) => `${n.owner}:${n.nonce}`,
-        );
-      // Permit2 pulls through the canonical ERC-20 allowance.
-      if (addresses.permit2 != null)
-        add(
-          spenders,
-          { owner, token, spender: addresses.permit2 },
-          (s) => `${s.owner}:${s.token}:${s.spender}`,
-        );
-    }
-  };
 
   const addMarket = (market: MarketBinding) => {
     add(markets, market, (m) => m.marketId);
     tokens.add(market.params.loanToken);
     tokens.add(market.params.collateralToken);
-  };
-
-  const addReallocations = (
-    reallocations: readonly {
-      readonly from:
-        | { readonly type: "idle" }
-        | { readonly type: "market"; readonly market: MarketBinding };
-      readonly to: { readonly market: MarketBinding };
-    }[],
-  ) => {
-    for (const reallocation of reallocations) {
-      if (reallocation.from.type === "market")
-        addMarket(reallocation.from.market);
-      addMarket(reallocation.to.market);
-    }
-  };
-
-  // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
-  const addPull = (
-    token: Address,
-    spender: Address | undefined,
-    signature: { readonly type: string; readonly nonce?: bigint },
-  ) => {
-    tokens.add(token);
-    if (spender == null) return;
-    bundleAddresses.add(spender);
-    add(
-      spenders,
-      { owner, token, spender },
-      (s) => `${s.owner}:${s.token}:${s.spender}`,
-    );
-    addSignature(signature, token);
   };
 
   // Bundles that pull or act on the owner's behalf hold balances too.
@@ -237,93 +141,64 @@ export function collectSubjects(params: {
     if (bundle_ != null) accounts.add(bundle_);
   }
 
+  const boundMarket = (marketId: MarketId) =>
+    marketBindings.find(
+      (b) => b.marketId.toLowerCase() === marketId.toLowerCase(),
+    );
+
   for (const op of operations) {
-    if ("onBehalf" in op) positionAccounts.add(op.onBehalf);
+    if ("expectedOnBehalf" in op && op.expectedOnBehalf != null) {
+      accounts.add(op.expectedOnBehalf);
+      positionAccounts.add(op.expectedOnBehalf);
+    }
+    if ("expectedReceiver" in op && op.expectedReceiver != null)
+      accounts.add(op.expectedReceiver);
+    if ("expectedRecipient" in op && op.expectedRecipient != null)
+      accounts.add(op.expectedRecipient);
+    const addMarketId = (marketId: MarketId) => {
+      const binding = boundMarket(marketId);
+      if (binding != null) addMarket(binding);
+    };
+    const namedMarketIds = (): MarketId[] => {
+      const ids: MarketId[] = [];
+      if ("marketId" in op && op.marketId != null) ids.push(op.marketId);
+      if ("sourceMarketId" in op) ids.push(op.sourceMarketId);
+      if ("targetMarketId" in op) ids.push(op.targetMarketId);
+      if ("expectedMarketIds" in op)
+        for (const leg of op.expectedMarketIds ?? []) ids.push(leg);
+      if ("expectedDeallocations" in op)
+        for (const leg of op.expectedDeallocations ?? [])
+          if (leg.marketId != null) ids.push(leg.marketId);
+      if ("minSupplyAssetsByMarket" in op)
+        for (const entry of op.minSupplyAssetsByMarket ?? [])
+          ids.push(entry.marketId);
+      return ids;
+    };
+    for (const marketId of namedMarketIds()) addMarketId(marketId);
+
     switch (op.type) {
-      case "blueSupply":
-      case "blueSupplyCollateral": {
-        addMarket(op.market);
-        accounts.add(op.receiver);
-        accounts.add(op.referralFee.recipient);
-        const spender = bundleSpender(op.route);
-        if (spender != null) bundleAddresses.add(spender);
-        addFunding(op.funding, spender);
-        const fundingToken =
-          op.funding.type === "erc20"
-            ? op.funding.token
-            : op.funding.type === "native"
-              ? op.funding.wrappedToken
-              : undefined;
-        addSignature(op.tokenSignature, fundingToken);
-        break;
-      }
       case "blueWithdraw":
       case "blueBorrow":
-      case "blueWithdrawCollateral": {
-        addMarket(op.market);
-        accounts.add(op.receiver);
-        accounts.add(op.referralFee.recipient);
-        if (op.type !== "blueWithdrawCollateral")
-          addReallocations(op.reallocations);
-        {
-          const spender = bundleSpender(op.route);
-          if (spender != null)
-            add(
-              blueAuthorizations,
-              { authorizer: owner, authorized: spender },
-              (a) => `${a.authorizer}:${a.authorized}`,
-            );
-        }
-        break;
-      }
+      case "blueWithdrawCollateral":
       case "blueSupplyCollateralBorrow":
       case "blueRepayWithdrawCollateral":
-      case "blueRepay": {
-        addMarket(op.market);
-        accounts.add(op.receiver);
-        accounts.add(op.referralFee.recipient);
-        if (op.type === "blueSupplyCollateralBorrow")
-          addReallocations(op.reallocations);
-        const spender = bundleSpender(op.route);
-        if (spender != null) bundleAddresses.add(spender);
-        addFunding(op.funding, spender);
-        const fundingToken =
-          op.funding.type === "erc20"
-            ? op.funding.token
-            : op.funding.type === "native"
-              ? op.funding.wrappedToken
-              : undefined;
-        addSignature(op.tokenSignature, fundingToken);
-        if (op.type !== "blueRepay" && spender != null) {
+      case "blueRefinance": {
+        // Protected operations move the acting account's position through the
+        // bundles contract; the isAuthorized(owner, bundle) flag must be read.
+        const spender = addresses.bundles?.blueBundlesV1;
+        if (spender != null)
           add(
             blueAuthorizations,
             { authorizer: owner, authorized: spender },
             (a) => `${a.authorizer}:${a.authorized}`,
           );
-        }
-        break;
-      }
-      case "blueRefinance": {
-        addMarket(op.sourceMarket);
-        addMarket(op.targetMarket);
-        accounts.add(op.referralFee.recipient);
-        addReallocations(op.reallocations);
-        {
-          const spender = bundleSpender(op.route);
-          if (spender != null)
-            add(
-              blueAuthorizations,
-              { authorizer: owner, authorized: spender },
-              (a) => `${a.authorizer}:${a.authorized}`,
-            );
-        }
         break;
       }
       case "blueAuthorization": {
-        if (op.operator.type === "preLiquidation") {
-          addMarket(op.operator.market);
-          preLiquidationMarkets.set(op.operator.market.marketId, op.authorized);
-        }
+        const preLiq = preLiquidations.find((b) =>
+          eq(b.address, op.authorized),
+        );
+        if (preLiq != null) addMarket(preLiq.market);
         add(
           blueAuthorizations,
           { authorizer: owner, authorized: op.authorized },
@@ -331,64 +206,8 @@ export function collectSubjects(params: {
         );
         break;
       }
-      case "vaultV1Deposit":
-      case "vaultV2Deposit": {
-        tokens.add(op.asset);
-        accounts.add(op.receiver);
-        accounts.add(op.referralFee.recipient);
-        const spender = bundleSpender(op.route);
-        if (spender != null) bundleAddresses.add(spender);
-        addFunding(op.funding, spender);
-        const fundingToken =
-          op.funding.type === "erc20"
-            ? op.funding.token
-            : op.funding.type === "native"
-              ? op.funding.wrappedToken
-              : undefined;
-        addSignature(op.tokenSignature, fundingToken);
+      default:
         break;
-      }
-      case "vaultV1Withdraw":
-      case "vaultV2Withdraw":
-      case "vaultV1Redeem":
-      case "vaultV2Redeem":
-      case "vaultV2ForceWithdraw":
-      case "vaultV1InKindRedeem":
-      case "vaultV2InKindRedeem": {
-        tokens.add(op.asset);
-        if ("receiver" in op) accounts.add(op.receiver);
-        if ("referralFee" in op) accounts.add(op.referralFee.recipient);
-        if (
-          op.type === "vaultV1InKindRedeem" ||
-          op.type === "vaultV2InKindRedeem"
-        ) {
-          for (const market of op.markets) addMarket(market);
-        }
-        const spender = bundleSpender(op.route);
-        if (spender != null) bundleAddresses.add(spender);
-        addPull(op.vault, spender, op.tokenSignature);
-        break;
-      }
-      case "vaultV2ForceRedeem": {
-        tokens.add(op.asset);
-        accounts.add(op.receiver);
-        // The vault itself pulls and burns the caller's shares.
-        addPull(op.vault, op.vault, { type: "none" });
-        break;
-      }
-      case "vaultV1MigrateToV2": {
-        tokens.add(op.asset);
-        accounts.add(op.receiver);
-        accounts.add(op.referralFee.recipient);
-        const spender = bundleSpender(op.route);
-        if (spender != null) bundleAddresses.add(spender);
-        addPull(op.sourceVault, spender, op.tokenSignature);
-        break;
-      }
-      default: {
-        const _exhaustive: never = op;
-        return _exhaustive;
-      }
     }
   }
 

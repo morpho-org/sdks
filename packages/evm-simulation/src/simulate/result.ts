@@ -1,15 +1,14 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type {
   AuthorizationPreparation,
-  Fee,
+  SimulatedOperation,
   SimulationStateChange,
   SimulationVerification,
   VerifiedSimulationResult,
 } from "../result.js";
 import type { SimulationCall } from "../types.js";
 import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
-import type { CheckContext, CheckedOperation } from "./check/helpers.js";
-import { toSimulatedOperation } from "./check/index.js";
+import type { CheckContext } from "./check/helpers.js";
 import { parseTransfers } from "./parsing/index.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 import type { ParsedState } from "./state/types.js";
@@ -37,9 +36,8 @@ export function assembleResult(params: {
   readonly after: ParsedState;
   readonly diff: SimulationStateChange;
   readonly actionDiff: SimulationStateChange;
-  readonly operations: readonly CheckedOperation[];
+  readonly operations: readonly SimulatedOperation[];
   readonly authorizations: readonly AuthorizationPreparation[];
-  readonly fees: readonly Fee[];
   readonly userCalls: readonly SimulationCall[];
 }): VerifiedSimulationResult {
   const {
@@ -51,7 +49,6 @@ export function assembleResult(params: {
     actionDiff,
     operations,
     authorizations,
-    fees,
     userCalls,
   } = params;
 
@@ -69,14 +66,14 @@ export function assembleResult(params: {
     blockNumber: ctx.block.blockNumber,
     blockTimestamp: ctx.block.blockTimestamp,
     limits: ctx.limits,
-    operations: operations.map(toSimulatedOperation),
+    operations,
     authorizations,
     before: toPublicState(before),
     after: toPublicState(after),
     diff,
     actionDiff,
     conversions: [],
-    fees,
+    fees: [],
   };
 
   return deepFreeze({

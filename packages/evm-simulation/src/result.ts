@@ -11,8 +11,8 @@ import type {
 
 /** @internal One operation decoded from the caller's transactions. */
 export type SimulatedOperation = {
-  /** Index into `simulationTxs`. */
-  readonly transactionIndex: number;
+  /** Index into `simulationTxs`, when the caller pinned one. */
+  readonly transactionIndex?: number;
 } & SimulationOperationSubject;
 
 /** @internal How a pending authorization was modeled in preview. */

@@ -1,7 +1,7 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { DecodedOperation } from "../../decode/operation.js";
+import type { OperationLimit } from "../../limits.js";
 import {
   makeCheckContext,
   makeParsedState,
@@ -13,28 +13,39 @@ import { findPosition, operationSubject, receiverCredit } from "./helpers.js";
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 
 describe("check helpers", () => {
-  test("operationSubject maps each decoded type to its subject keys", () => {
-    const op = {
+  test("operationSubject maps each limit type to its subject keys", () => {
+    const supply: OperationLimit = {
       type: "blueSupply",
-      market: { marketId: TEST_MARKET_ID },
-    } as DecodedOperation;
-    expect(operationSubject(op)).toEqual({
+      marketId: TEST_MARKET_ID,
+    };
+    expect(operationSubject(supply)).toEqual({
       operation: "blueSupply",
       marketId: TEST_MARKET_ID,
     });
-    const refinance = {
+    const refinance: OperationLimit = {
       type: "blueRefinance",
-      sourceMarket: { marketId: TEST_MARKET_ID },
-      targetMarket: {
-        marketId:
-          "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
-      },
-    } as DecodedOperation;
+      sourceMarketId: TEST_MARKET_ID,
+      targetMarketId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId,
+    };
     expect(operationSubject(refinance)).toEqual({
       operation: "blueRefinance",
       sourceMarketId: TEST_MARKET_ID,
       targetMarketId:
         "0x1111111111111111111111111111111111111111111111111111111111111111",
+    });
+    const auth: OperationLimit = {
+      type: "blueAuthorization",
+      authorized: TOKEN,
+    };
+    expect(operationSubject(auth)).toEqual({
+      operation: "blueAuthorization",
+      authorized: TOKEN,
+    });
+    const deposit: OperationLimit = { type: "vaultV1Deposit", vault: TOKEN };
+    expect(operationSubject(deposit)).toEqual({
+      operation: "vaultV1Deposit",
+      vault: TOKEN,
     });
   });
 
@@ -83,7 +94,7 @@ describe("check helpers", () => {
         TEST_MARKET_ID,
         TEST_OWNER,
         makeCheckContext(),
-        {} as DecodedOperation,
+        {} as OperationLimit,
       ).supplyShares,
     ).toBe(1n);
   });

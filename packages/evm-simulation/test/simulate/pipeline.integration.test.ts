@@ -17,7 +17,6 @@ import {
   SimulationRevertedError,
   simulate,
   toSimulationAuthorizations,
-  UnsupportedOperationError,
 } from "../../src/index.js";
 
 /**
@@ -79,6 +78,9 @@ describe.sequential("simulate pipeline — blue supply", () => {
     const tx = action.buildTx();
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: {
+        operations: [{ type: "blueSupply", marketId: CbbtcUsdcBlue.id }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -126,6 +128,9 @@ describe.sequential("simulate pipeline — blue supply", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations,
+      limits: {
+        operations: [{ type: "blueSupply", marketId: CbbtcUsdcBlue.id }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -183,6 +188,14 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations,
+      limits: {
+        operations: [
+          {
+            type: "blueSupplyCollateralBorrow",
+            marketId: CbbtcUsdcBlue.id,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -241,6 +254,15 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     const repayTx = repay.buildTx();
     const repayResult = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: {
+        operations: [
+          {
+            type: "blueRepayWithdrawCollateral",
+            marketId: CbbtcUsdcBlue.id,
+            expectedFullClose: true,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -371,6 +393,14 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
     try {
       await simulate(configFor(client), {
         chainId: mainnet.id,
+        limits: {
+          operations: [
+            {
+              type: "blueSupplyCollateralBorrow",
+              marketId: CbbtcUsdcBlue.id,
+            },
+          ],
+        },
         transactions: [
           {
             from: client.account.address,
@@ -509,22 +539,21 @@ describe.sequential("simulate pipeline — negatives", () => {
     ).rejects.toBeInstanceOf(ConsumerLimitViolationError);
   }, 60_000);
 
-  test("error: UnsupportedOperationError for a raw WETH deposit route", async ({
+  test("behavior: a raw WETH deposit runs unchecked without limits.operations", async ({
     client,
   }) => {
-    await expect(
-      simulate(configFor(client), {
-        chainId: mainnet.id,
-        transactions: [
-          {
-            from: client.account.address,
-            to: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-            data: "0xd0e30db0",
-            value: 1n,
-          },
-        ],
-      }),
-    ).rejects.toBeInstanceOf(UnsupportedOperationError);
+    const result = await simulate(configFor(client), {
+      chainId: mainnet.id,
+      transactions: [
+        {
+          from: client.account.address,
+          to: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+          data: "0xd0e30db0",
+          value: 1n,
+        },
+      ],
+    });
+    expect(result.verification.operations).toEqual([]);
   }, 60_000);
 
   test("error: SimulationRevertedError for a reverting bundle", async ({
@@ -602,6 +631,9 @@ describe.sequential("simulate pipeline — vault V1", () => {
     const depositTx = deposit.buildTx();
     const depositResult = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: {
+        operations: [{ type: "vaultV1Deposit", vault: STEAKHOUSE }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -661,6 +693,9 @@ describe.sequential("simulate pipeline — vault V1", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations: withdrawAuths,
+      limits: {
+        operations: [{ type: "vaultV1Withdraw", vault: STEAKHOUSE }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -693,6 +728,9 @@ describe.sequential("simulate pipeline — vault V1", () => {
     const redeemTx = redeem.buildTx();
     const redeemResult = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: {
+        operations: [{ type: "vaultV1Redeem", vault: STEAKHOUSE }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -782,6 +820,9 @@ describe.sequential("simulate pipeline — vault V2", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations: exitAuths,
+      limits: {
+        operations: [{ type: "vaultV2ForceWithdraw", vault: KEYROCK }],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -899,6 +940,15 @@ describe.sequential("simulate pipeline — vault exits", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations: auths,
+      limits: {
+        operations: [
+          {
+            type: "vaultV1MigrateToV2",
+            sourceVault: STEAKHOUSE,
+            targetVault: KEYROCK,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -967,6 +1017,14 @@ describe.sequential("simulate pipeline — vault exits", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations: [],
+      limits: {
+        operations: [
+          {
+            type: "vaultV2ForceRedeem",
+            vault: KEYROCK,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -1015,6 +1073,14 @@ describe.sequential("simulate pipeline — vault exits", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations: auths,
+      limits: {
+        operations: [
+          {
+            type: "vaultV2InKindRedeem",
+            vault: KEYROCK,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,
@@ -1098,6 +1164,15 @@ describe.sequential("simulate pipeline — blue refinance", () => {
       chainId: mainnet.id,
       mode: "preview",
       authorizations,
+      limits: {
+        operations: [
+          {
+            type: "blueRefinance",
+            sourceMarketId: CbbtcUsdcBlue.id,
+            targetMarketId: CbbtcUsdcBlueAlt.id,
+          },
+        ],
+      },
       transactions: [
         {
           from: client.account.address,

@@ -1,34 +1,24 @@
 import {
-  blueAbi,
   metaMorphoAbi,
   metaMorphoFactoryAbi,
-  vaultBundlesV1Abi,
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Abi, type Address, encodeFunctionData, getAddress } from "viem";
+import { type Abi, type Address, getAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { ExternalServiceError } from "../../errors.js";
+import type { OperationLimit } from "../../limits.js";
 import { readBindings } from "./read-bindings.js";
 
 const addresses = getChainAddresses(1);
 const VAULT: Address = getAddress("0x1111111111111111111111111111111111111111");
 const ASSET: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
-const OWNER: Address = getAddress("0x5555555555555555555555555555555555555555");
 
-const permit = { kind: 0, data: "0x" } as const;
-
-const depositTx = () => ({
-  from: OWNER,
-  to: addresses.bundles!.vaultBundlesV1!,
-  data: encodeFunctionData({
-    abi: vaultBundlesV1Abi as Abi,
-    functionName: "vaultBundlesV1Deposit",
-    args: [VAULT, 1n, 0n, permit, 0n, OWNER, 1n],
-  }),
-  value: 0n,
+const depositLimit = (): OperationLimit => ({
+  type: "vaultV1Deposit",
+  vault: VAULT,
 });
 
 describe("readBindings", () => {
@@ -49,7 +39,7 @@ describe("readBindings", () => {
     const bindings = await readBindings({
       client: handle.client,
       chainId: 1,
-      transactions: [depositTx()],
+      operations: [depositLimit()],
       blockNumber: 24_000_000n,
     });
     expect(bindings.vaults).toEqual([
@@ -92,18 +82,7 @@ describe("readBindings", () => {
     const bindings = await readBindings({
       client: handle.client,
       chainId: 1,
-      transactions: [
-        {
-          from: OWNER,
-          to: VAULT,
-          data: encodeFunctionData({
-            abi: vaultV2Abi as Abi,
-            functionName: "multicall",
-            args: [[]],
-          }),
-          value: 0n,
-        },
-      ],
+      operations: [depositLimit()],
       blockNumber: 24_000_000n,
     });
     expect(bindings.vaults).toEqual([
@@ -133,7 +112,7 @@ describe("readBindings", () => {
     const bindings = await readBindings({
       client: handle.client,
       chainId: 1,
-      transactions: [depositTx()],
+      operations: [depositLimit()],
       blockNumber: 24_000_000n,
     });
     expect(bindings.vaults).toEqual([]);
@@ -161,17 +140,11 @@ describe("readBindings", () => {
     const bindings = await readBindings({
       client: handle.client,
       chainId: 1,
-      transactions: [
+      operations: [
         {
-          from: OWNER,
-          to: addresses.blue,
-          data: encodeFunctionData({
-            abi: blueAbi as Abi,
-            functionName: "setAuthorization",
-            args: [OPERATOR, true],
-          }),
-          value: 0n,
-        },
+          type: "blueAuthorization",
+          authorized: OPERATOR,
+        } satisfies OperationLimit,
       ],
       blockNumber: 24_000_000n,
     });
@@ -185,7 +158,7 @@ describe("readBindings", () => {
       readBindings({
         client: handle.client,
         chainId: 1,
-        transactions: [depositTx()],
+        operations: [depositLimit()],
         blockNumber: 24_000_000n,
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);

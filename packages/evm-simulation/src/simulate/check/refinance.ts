@@ -1,10 +1,5 @@
-import { MathLib } from "@morpho-org/blue-sdk";
-import type { DecodedOperation } from "../../decode/operation.js";
-import {
-  MarketConstraintViolationError,
-  ProtocolBindingMismatchError,
-  SlippageLimitExceededError,
-} from "../../errors.js";
+import { MarketConstraintViolationError } from "../../errors.js";
+import type { BlueRefinanceLimit } from "../../limits.js";
 import type { SimulationStateChange } from "../../result.js";
 import type { ParsedState } from "../state/types.js";
 import {
@@ -15,290 +10,211 @@ import {
   findMarket,
   findPosition,
   fmtRisk,
-  limitsFor,
   limitViolation,
-  opContext,
   riskMetricWad,
   riskOn,
   toMarketEntity,
 } from "./helpers.js";
 
 /**
- * Verify `blueRefinance` against the decoded bindings.
- *
- * Source market: borrow shares and collateral must drain to exactly zero.
- * Target market: collateral must equal the moved source collateral exactly,
- * and the minted borrow shares must equal `toBorrowShares(newDebt, "Up")`
- * where `newDebt` is the repaid source debt plus the decoded reallocation
- * penalty. Wallet: the owner's net loan-token change must be within the
- * slippage-bounded dust of the new debt.
+ * Verify a declared `blueRefinance` limit: the source position drains to zero
+ * and the target position picks up the moved collateral plus a new debt
+ * bounded by the caller's pins. Loan dust is the owner's net loan-token
+ * balance change.
  * @internal
  */
 // biome-ignore lint/complexity/useMaxParams: checks read clearest with positional arguments
 export function checkRefinanceOperation(
   ctx: CheckContext,
-  operation: Extract<DecodedOperation, { type: "blueRefinance" }>,
+  limit: BlueRefinanceLimit,
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
 ): CheckedOperation {
-  const sourceMarket = operation.sourceMarket;
-  const targetMarket = operation.targetMarket;
-  if (!after.markets.some((m) => m.marketId === sourceMarket.marketId))
-    throw new ProtocolBindingMismatchError(
-      `Refinance source market "${sourceMarket.marketId}" is not in the verified market set`,
-      { context: opContext(ctx, operation) },
-    );
-  if (!after.markets.some((m) => m.marketId === targetMarket.marketId))
-    throw new ProtocolBindingMismatchError(
-      `Refinance target market "${targetMarket.marketId}" is not in the verified market set`,
-      { context: opContext(ctx, operation) },
-    );
+  const account = ctx.owner;
+  const sourceMarketId = limit.sourceMarketId;
+  const targetMarketId = limit.targetMarketId;
 
   const sourceBefore = findPosition(
     accruedBefore,
-    sourceMarket.marketId,
-    operation.onBehalf,
+    sourceMarketId,
+    account,
     ctx,
-    operation,
+    limit,
   );
-  const sourceAfter = findPosition(
-    after,
-    sourceMarket.marketId,
-    operation.onBehalf,
-    ctx,
-    operation,
-  );
+  const sourceAfter = findPosition(after, sourceMarketId, account, ctx, limit);
   const targetBefore = findPosition(
     accruedBefore,
-    targetMarket.marketId,
-    operation.onBehalf,
+    targetMarketId,
+    account,
     ctx,
-    operation,
+    limit,
   );
-  const targetAfter = findPosition(
-    after,
-    targetMarket.marketId,
-    operation.onBehalf,
-    ctx,
-    operation,
-  );
+  const targetAfter = findPosition(after, targetMarketId, account, ctx, limit);
 
-  // Source must fully close.
   if (sourceAfter.borrowShares !== 0n || sourceAfter.collateral !== 0n)
     fail(
       ctx,
-      operation,
-      `Refinance source ${sourceMarket.marketId} retains borrow shares "${sourceAfter.borrowShares}" or collateral "${sourceAfter.collateral}" after a full close`,
+      limit,
+      `Refinance source ${sourceMarketId} retains borrow shares "${sourceAfter.borrowShares}" or collateral "${sourceAfter.collateral}" after a full close`,
     );
 
-  const sourceMarketBefore = findMarket(
-    accruedBefore,
-    sourceMarket.marketId,
-    ctx,
-    operation,
-  );
-  const sourceInternals = accruedBefore.internals.markets.get(
-    sourceMarket.marketId,
-  );
-  if (sourceInternals == null)
-    return fail(
-      ctx,
-      operation,
-      `Refinance source market "${sourceMarket.marketId}" internals missing`,
-    );
-  const sourceEntity = toMarketEntity(sourceMarketBefore, sourceInternals);
-  const repaidAssets = sourceEntity.toBorrowAssets(
-    sourceBefore.borrowShares,
-    "Up",
-  );
-  const penaltyAssets = operation.reallocations.reduce(
-    (total, r) => total + MathLib.wMulUp(r.assets, r.penaltyWad),
-    0n,
-  );
-  const newDebt = repaidAssets + penaltyAssets;
-
-  // Target collateral must equal the moved source collateral exactly.
+  // The moved collateral lands on the target verbatim.
   if (
     targetAfter.collateral !==
     targetBefore.collateral + sourceBefore.collateral
   )
     fail(
       ctx,
-      operation,
+      limit,
       `Target collateral "${targetAfter.collateral}", expected "${targetBefore.collateral + sourceBefore.collateral}" (moved "${sourceBefore.collateral}")`,
     );
 
-  const targetMarketAfter = findMarket(
-    after,
-    targetMarket.marketId,
-    ctx,
-    operation,
-  );
-  const targetInternals = after.internals.markets.get(targetMarket.marketId);
+  const targetMarketAfter = findMarket(after, targetMarketId, ctx, limit);
+  const targetInternals = after.internals.markets.get(targetMarketId);
   if (targetInternals == null)
     return fail(
       ctx,
-      operation,
-      `Refinance target market "${targetMarket.marketId}" internals missing`,
+      limit,
+      `Refinance target market "${targetMarketId}" internals missing`,
     );
   const targetEntity = toMarketEntity(targetMarketAfter, targetInternals);
-  const expectedShares = targetEntity.toBorrowShares(newDebt, "Up");
   const minted = targetAfter.borrowShares - targetBefore.borrowShares;
-  if (minted !== expectedShares)
-    fail(
-      ctx,
-      operation,
-      `Target borrow shares minted "${minted}", expected "${expectedShares}" for debt "${newDebt}"`,
-    );
+  const newDebt = targetEntity.toBorrowAssets(minted, "Up");
 
-  // Target LTV bound.
   const risk = riskOn(targetAfter, targetEntity);
   if (targetAfter.borrowShares > 0n) {
     if (targetAfter.collateral === 0n)
       throw new MarketConstraintViolationError(
-        `Refinance target ${targetMarket.marketId} holds debt with zero collateral`,
-        { context: opContext(ctx, operation) },
+        `Refinance target ${targetMarketId} holds debt with zero collateral`,
+        {
+          context: {
+            stage: "verification",
+            chainId: ctx.chainId,
+            mode: ctx.mode,
+            blockNumber: ctx.block.blockNumber,
+            operation: "blueRefinance",
+            sourceMarketId,
+            targetMarketId,
+            failedTransactionIndex: limit.transactionIndex,
+          },
+        },
       );
     if (risk.ltvWad.type === "finite") {
-      const bound = targetMarket.params.lltv - ctx.limits.minLltvBufferWad;
+      const bound = targetInternals.params.lltv - ctx.limits.minLltvBufferWad;
       if (risk.ltvWad.valueWad > bound)
         throw new MarketConstraintViolationError(
-          `Refinance target LTV "${risk.ltvWad.valueWad}" exceeds LLTV "${targetMarket.params.lltv}" minus buffer "${ctx.limits.minLltvBufferWad}"`,
-          { context: opContext(ctx, operation) },
+          `Refinance target LTV "${risk.ltvWad.valueWad}" exceeds LLTV "${targetInternals.params.lltv}" minus buffer "${ctx.limits.minLltvBufferWad}"`,
+          {
+            context: {
+              stage: "verification",
+              chainId: ctx.chainId,
+              mode: ctx.mode,
+              blockNumber: ctx.block.blockNumber,
+              operation: "blueRefinance",
+              sourceMarketId,
+              targetMarketId,
+              failedTransactionIndex: limit.transactionIndex,
+            },
+          },
         );
     }
   }
 
-  // Owner net loan-token change must be zero beyond modeled dust.
-  const loanToken = targetMarket.params.loanToken;
+  const loanToken = targetInternals.params.loanToken;
   const netLoan = actionDiff.balances
-    .filter((c) => eq(c.account, operation.onBehalf) && eq(c.token, loanToken))
+    .filter((c) => eq(c.account, account) && eq(c.token, loanToken))
     .reduce((total, c) => total + c.assets, 0n);
   const loanDust = netLoan < 0n ? -netLoan : netLoan;
-  const dustBound = MathLib.wMulUp(newDebt, ctx.limits.maxSlippageWad);
-  if (loanDust > dustBound)
-    throw new SlippageLimitExceededError(
-      `Refinance loan dust "${loanDust}" exceeds the slippage bound "${dustBound}" (${ctx.limits.maxSlippageWad} WAD of new debt "${newDebt}")`,
-      { context: opContext(ctx, operation) },
+  const dustBound = (newDebt * ctx.limits.maxSlippageWad) / 10n ** 18n;
+  if (loanDust > dustBound && limit.maxLoanDustAssets === undefined)
+    limitViolation(
+      ctx,
+      limit,
+      "maxLoanDustAssets",
+      `${dustBound}`,
+      `${loanDust}`,
+      "Increase the bound or reduce the operation.",
     );
 
-  for (const limit of limitsFor(ctx, "blueRefinance", operation)) {
-    if (
-      limit.sourceMarketId.toLowerCase() !==
-      operation.sourceMarket.marketId.toLowerCase()
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "sourceMarketId",
-        limit.sourceMarketId,
-        operation.sourceMarket.marketId,
-        "The bundle does not match the declared constraint.",
-      );
-    if (
-      limit.targetMarketId.toLowerCase() !==
-      operation.targetMarket.marketId.toLowerCase()
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "targetMarketId",
-        limit.targetMarketId,
-        operation.targetMarket.marketId,
-        "The bundle does not match the declared constraint.",
-      );
-    if (
-      limit.maxTargetBorrowAssets !== undefined &&
-      newDebt > limit.maxTargetBorrowAssets
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxTargetBorrowAssets",
-        `${limit.maxTargetBorrowAssets}`,
-        `${newDebt}`,
-        "Increase the bound or reduce the operation.",
-      );
-    if (
-      limit.maxTargetBorrowSharesMinted !== undefined &&
-      minted > limit.maxTargetBorrowSharesMinted
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxTargetBorrowSharesMinted",
-        `${limit.maxTargetBorrowSharesMinted}`,
-        `${minted}`,
-        "Increase the bound or reduce the operation.",
-      );
-    if (
-      limit.maxSourceResidualBorrowShares !== undefined &&
-      sourceAfter.borrowShares > limit.maxSourceResidualBorrowShares
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxSourceResidualBorrowShares",
-        `${limit.maxSourceResidualBorrowShares}`,
-        `${sourceAfter.borrowShares}`,
-        "Increase the bound or reduce the operation.",
-      );
-    const ltv = riskMetricWad(risk.ltvWad);
-    if (
-      limit.maxTargetLtvAfterWad !== undefined &&
-      (ltv === null || ltv > limit.maxTargetLtvAfterWad)
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxTargetLtvAfterWad",
-        `${limit.maxTargetLtvAfterWad}`,
-        fmtRisk(risk.ltvWad),
-        "Increase the bound or reduce the operation.",
-      );
-    const health = riskMetricWad(risk.healthFactorWad);
-    if (
-      limit.minTargetHealthFactorAfterWad !== undefined &&
-      health !== null &&
-      health < limit.minTargetHealthFactorAfterWad
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "minTargetHealthFactorAfterWad",
-        `${limit.minTargetHealthFactorAfterWad}`,
-        fmtRisk(risk.healthFactorWad),
-        "Decrease the bound or adjust the operation.",
-      );
-    if (
-      limit.maxLoanDustAssets !== undefined &&
-      loanDust > limit.maxLoanDustAssets
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxLoanDustAssets",
-        `${limit.maxLoanDustAssets}`,
-        `${loanDust}`,
-        "Increase the bound or reduce the operation.",
-      );
-    if (
-      limit.maxReallocationPenaltyAssets !== undefined &&
-      penaltyAssets > limit.maxReallocationPenaltyAssets
-    )
-      limitViolation(
-        ctx,
-        operation,
-        "maxReallocationPenaltyAssets",
-        `${limit.maxReallocationPenaltyAssets}`,
-        `${penaltyAssets}`,
-        "Increase the bound or reduce the operation.",
-      );
-  }
+  if (
+    limit.maxTargetBorrowAssets !== undefined &&
+    newDebt > limit.maxTargetBorrowAssets
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "maxTargetBorrowAssets",
+      `${limit.maxTargetBorrowAssets}`,
+      `${newDebt}`,
+      "Increase the bound or reduce the operation.",
+    );
+  if (
+    limit.maxTargetBorrowSharesMinted !== undefined &&
+    minted > limit.maxTargetBorrowSharesMinted
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "maxTargetBorrowSharesMinted",
+      `${limit.maxTargetBorrowSharesMinted}`,
+      `${minted}`,
+      "Increase the bound or reduce the operation.",
+    );
+  if (
+    limit.maxSourceResidualBorrowShares !== undefined &&
+    sourceAfter.borrowShares > limit.maxSourceResidualBorrowShares
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "maxSourceResidualBorrowShares",
+      `${limit.maxSourceResidualBorrowShares}`,
+      `${sourceAfter.borrowShares}`,
+      "Increase the bound or reduce the operation.",
+    );
+  const ltv = riskMetricWad(risk.ltvWad);
+  if (
+    limit.maxTargetLtvAfterWad !== undefined &&
+    (ltv === null || ltv > limit.maxTargetLtvAfterWad)
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "maxTargetLtvAfterWad",
+      `${limit.maxTargetLtvAfterWad}`,
+      fmtRisk(risk.ltvWad),
+      "Increase the bound or reduce the operation.",
+    );
+  const health = riskMetricWad(risk.healthFactorWad);
+  if (
+    limit.minTargetHealthFactorAfterWad !== undefined &&
+    health !== null &&
+    health < limit.minTargetHealthFactorAfterWad
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "minTargetHealthFactorAfterWad",
+      `${limit.minTargetHealthFactorAfterWad}`,
+      fmtRisk(risk.healthFactorWad),
+      "Decrease the bound or adjust the operation.",
+    );
+  if (
+    limit.maxLoanDustAssets !== undefined &&
+    loanDust > limit.maxLoanDustAssets
+  )
+    limitViolation(
+      ctx,
+      limit,
+      "maxLoanDustAssets",
+      `${limit.maxLoanDustAssets}`,
+      `${loanDust}`,
+      "Increase the bound or reduce the operation.",
+    );
 
   return {
-    operation,
+    operation: limit,
     outcome: {
       targetBorrowAssets: newDebt,
       targetBorrowSharesMinted: minted,
@@ -306,7 +222,6 @@ export function checkRefinanceOperation(
       targetLtvAfterWad: risk.ltvWad,
       targetHealthFactorAfterWad: risk.healthFactorWad,
       loanDustAssets: loanDust,
-      reallocationPenaltyAssets: penaltyAssets,
     },
   };
 }

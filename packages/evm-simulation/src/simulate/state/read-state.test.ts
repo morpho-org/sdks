@@ -3,7 +3,7 @@ import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import type { SimulationAuthorization } from "../../authorizations.js";
-import type { DecodedOperation } from "../../decode/operation.js";
+import type { OperationLimit } from "../../limits.js";
 import { collectSubjects, planStateReads } from "./read-state.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -25,28 +25,22 @@ const addresses = {
   bundles: { blueBundlesV1: BUNDLE },
 } as unknown as ChainAddresses;
 
-const supplyOp: DecodedOperation = {
-  type: "blueSupply",
-  route: "blueBundlesV1",
-  transactionIndex: 0,
-  market: {
-    marketId: MARKET_ID,
-    params: {
-      loanToken: TOKEN,
-      collateralToken: COLLATERAL,
-      oracle: getAddress("0x0000000000000000000000000000000000000001"),
-      irm: getAddress("0x0000000000000000000000000000000000000002"),
-      lltv: 900000000000000000n,
-    },
+const marketBinding = {
+  marketId: MARKET_ID,
+  params: {
+    loanToken: TOKEN,
+    collateralToken: COLLATERAL,
+    oracle: getAddress("0x0000000000000000000000000000000000000001"),
+    irm: getAddress("0x0000000000000000000000000000000000000002"),
+    lltv: 900000000000000000n,
   },
-  assets: 100n,
-  onBehalf: OWNER,
-  receiver: OWNER,
-  funding: { type: "erc20", token: TOKEN, assets: 100n },
-  referralFee: { rateWad: 0n, recipient: OWNER },
-  tokenSignature: { type: "none" },
-  authorizationSignature: { type: "none" },
-} as unknown as DecodedOperation;
+} as const;
+
+const supplyLimit: OperationLimit = {
+  type: "blueSupply",
+  marketId: MARKET_ID,
+  expectedAssets: 100n,
+};
 
 const approval: SimulationAuthorization = {
   type: "erc20Approval",
@@ -57,28 +51,25 @@ const approval: SimulationAuthorization = {
 };
 
 describe("collectSubjects + planStateReads", () => {
-  test("funding ops add token, allowance subject and bundle account", () => {
+  test("market limits add the market's loan/collateral tokens", () => {
     const subjects = collectSubjects({
       owner: OWNER,
-      operations: [supplyOp],
+      operations: [supplyLimit],
       authorizations: [],
+      markets: [marketBinding],
       vaults: [],
       preLiquidations: [],
       addresses,
     });
     expect(subjects.tokens.has(TOKEN)).toBe(true);
-    expect(subjects.spenders).toContainEqual({
-      owner: OWNER,
-      token: TOKEN,
-      spender: BUNDLE,
-    });
+    expect(subjects.tokens.has(COLLATERAL)).toBe(true);
     expect(subjects.markets.map((m) => m.marketId)).toContain(MARKET_ID);
   });
 
   test("authorizations contribute allowance/authorization subjects", () => {
     const subjects = collectSubjects({
       owner: OWNER,
-      operations: [supplyOp],
+      operations: [supplyLimit],
       authorizations: [
         approval,
         {
@@ -88,6 +79,7 @@ describe("collectSubjects + planStateReads", () => {
           isAuthorized: true,
         },
       ],
+      markets: [marketBinding],
       vaults: [],
       preLiquidations: [],
       addresses,
@@ -96,13 +88,19 @@ describe("collectSubjects + planStateReads", () => {
       authorizer: OWNER,
       authorized: BUNDLE,
     });
+    expect(subjects.spenders).toContainEqual({
+      owner: OWNER,
+      token: TOKEN,
+      spender: BUNDLE,
+    });
   });
 
-  test("planStateReads dedupes ids and emits morpho reads for touched markets", () => {
+  test("planStateReads dedupes ids and emits morpho reads for bound markets", () => {
     const subjects = collectSubjects({
       owner: OWNER,
-      operations: [supplyOp],
+      operations: [supplyLimit],
       authorizations: [approval],
+      markets: [marketBinding],
       vaults: [],
       preLiquidations: [],
       addresses,
@@ -121,12 +119,19 @@ describe("collectSubjects + planStateReads", () => {
     expect(reads.some((r) => r.kind === "morpho.position")).toBe(true);
   });
 
-  test("positions are read for a distinct onBehalf account", () => {
+  test("positions are read for a pinned expectedOnBehalf account", () => {
     const onBehalf = getAddress("0x2222222222222222222222222222222222222222");
     const subjects = collectSubjects({
       owner: OWNER,
-      operations: [{ ...supplyOp, onBehalf } as DecodedOperation],
+      operations: [
+        {
+          type: "blueSupply",
+          marketId: MARKET_ID,
+          expectedOnBehalf: onBehalf,
+        } satisfies OperationLimit,
+      ],
       authorizations: [],
+      markets: [marketBinding],
       vaults: [],
       preLiquidations: [],
       addresses,
@@ -144,7 +149,7 @@ describe("collectSubjects + planStateReads", () => {
     expect(owners).toContain(OWNER);
   });
 
-  test("Vault V1 queue markets without a decoded op get market + params reads", () => {
+  test("Vault V1 queue markets without a limit get market + params reads", () => {
     const VAULT: Address = getAddress(
       "0x4444444444444444444444444444444444444444",
     );
@@ -153,8 +158,9 @@ describe("collectSubjects + planStateReads", () => {
     const entity = { withdrawQueue: [QUEUE_MARKET] } as unknown as AccrualVault;
     const subjects = collectSubjects({
       owner: OWNER,
-      operations: [supplyOp],
+      operations: [supplyLimit],
       authorizations: [],
+      markets: [marketBinding],
       vaults: [{ address: VAULT, kind: "vaultV1", asset: TOKEN }],
       preLiquidations: [],
       addresses,
@@ -171,10 +177,5 @@ describe("collectSubjects + planStateReads", () => {
     expect(kinds).toContain("morpho.market");
     expect(kinds).toContain("morpho.marketParams");
     expect(kinds).toContain("morpho.position");
-    // A queue market that IS bound by a decoded op gets no params read.
-    const bound = reads.filter(
-      (r) => "marketId" in r && r.marketId === MARKET_ID,
-    );
-    expect(bound.some((r) => r.kind === "morpho.marketParams")).toBe(false);
   });
 });

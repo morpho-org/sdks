@@ -1,164 +1,104 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
-import type { DecodedOperation } from "../../decode/operation.js";
-import {
-  ConsumerLimitViolationError,
-  UnexpectedSimulationError,
-} from "../../errors.js";
+import { UnexpectedSimulationError } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import type {
-  Fee,
   SimulatedOperation,
   SimulationStateChange,
 } from "../../result.js";
-import type { Transfer as TxTransfer } from "../../types.js";
 import type { ParsedState } from "../state/types.js";
 import { checkBlueOperation } from "./blue.js";
+import { checkExitOperation } from "./exits.js";
 import {
   type CheckContext,
   type CheckedOperation,
-  checkContext,
-  limitsFor,
   operationSubject,
 } from "./helpers.js";
+import { checkRefinanceOperation } from "./refinance.js";
 import { checkVaultOperation } from "./vault.js";
 
-const unmatched = (ctx: CheckContext, limit: OperationLimit): never => {
-  throw new ConsumerLimitViolationError(
-    `No verified operation matches operation limit type "${limit.type}"${limit.transactionIndex === undefined ? "" : ` at transaction ${limit.transactionIndex}`}. Check the limit list against the bundle's decoded operations.`,
-    {
-      context: checkContext(ctx, limit.type, {
-        failedTransactionIndex: limit.transactionIndex,
-      }),
-    },
-  );
-};
-
-/** Public per-operation record: transaction index plus subject entity keys. @internal */
-export const toSimulatedOperation = (
+/** Public per-operation record: optional transaction index plus subject keys. @internal */
+const toSimulatedOperation = (
   checked: CheckedOperation,
 ): SimulatedOperation => ({
-  transactionIndex: checked.operation.transactionIndex,
+  ...("transactionIndex" in checked.operation &&
+  checked.operation.transactionIndex !== undefined
+    ? { transactionIndex: checked.operation.transactionIndex }
+    : {}),
   ...operationSubject(checked.operation),
 });
 
 /**
- * Run the per-operation economic checks plus every declared consumer limit
- * (`limits.operations`), inlined on the checked outcome.
- *
- * @returns The checked operations plus the collected conversion/fee records.
- * @throws {UnsupportedOperationError} on a type with no check.
+ * Run the per-operation economic checks. Each `limits.operations` entry is
+ * itself the operation description — type, subject entities and optional
+ * `transactionIndex` — and the check verifies the observed before/after state
+ * change on that subject, then compares only the entry's pinned
+ * `expected*`/`min*`/`max*` fields.
  * @internal
  */
 export function checkOperations(params: {
   readonly ctx: CheckContext;
-  readonly operations: readonly DecodedOperation[];
   readonly accruedBefore: ParsedState;
   readonly after: ParsedState;
-  readonly diff: SimulationStateChange;
   readonly actionDiff: SimulationStateChange;
-  readonly transfers: readonly TxTransfer[];
-}): {
-  readonly operations: readonly CheckedOperation[];
-  readonly fees: readonly Fee[];
-  readonly touchedMarketIds: ReadonlySet<MarketId>;
-} {
-  const { ctx, operations, accruedBefore, after, actionDiff } = params;
+}): { readonly operations: readonly SimulatedOperation[] } {
+  const { ctx, accruedBefore, after, actionDiff } = params;
+  const operations: SimulatedOperation[] = [];
 
-  const checked: CheckedOperation[] = [];
-  const fees: Fee[] = [];
-  const touchedMarketIds = new Set<MarketId>();
-  const matched = new Set<OperationLimit>();
-
-  for (const operation of operations) {
-    switch (operation.type) {
-      case "blueSupply":
-      case "blueWithdraw":
-      case "blueSupplyCollateral":
-      case "blueBorrow":
-      case "blueSupplyCollateralBorrow":
-      case "blueRepay":
-      case "blueWithdrawCollateral":
-      case "blueRepayWithdrawCollateral":
-      case "blueAuthorization": {
-        if ("market" in operation)
-          touchedMarketIds.add(operation.market.marketId);
-        for (const limit of limitsFor(ctx, operation.type, operation))
-          matched.add(limit);
-        checked.push(
-          checkBlueOperation(ctx, operation, accruedBefore, after, actionDiff),
-        );
-        break;
-      }
-      case "blueRefinance": {
-        touchedMarketIds.add(operation.sourceMarket.marketId);
-        touchedMarketIds.add(operation.targetMarket.marketId);
-        for (const limit of limitsFor(ctx, operation.type, operation))
-          matched.add(limit);
-        checked.push(
-          checkBlueOperation(ctx, operation, accruedBefore, after, actionDiff),
-        );
-        break;
-      }
-      case "vaultV1Deposit":
-      case "vaultV2Deposit":
-      case "vaultV1Withdraw":
-      case "vaultV2Withdraw":
-      case "vaultV1Redeem":
-      case "vaultV2Redeem":
-      case "vaultV1MigrateToV2":
-      case "vaultV2ForceWithdraw":
-      case "vaultV2ForceRedeem":
-      case "vaultV1InKindRedeem":
-      case "vaultV2InKindRedeem": {
-        if (
-          operation.type === "vaultV1InKindRedeem" ||
-          operation.type === "vaultV2InKindRedeem"
-        )
-          for (const leg of operation.markets)
-            touchedMarketIds.add(leg.marketId);
-        if (operation.type === "vaultV2ForceRedeem")
-          for (const leg of operation.deallocations)
-            if (leg.marketId != null) touchedMarketIds.add(leg.marketId);
-        // The vault's own market allocations legitimately change as deposits
-        // are allocated and exits are deallocated.
-        for (const vaultAddress of [
-          "vault" in operation ? operation.vault : undefined,
-          "sourceVault" in operation ? operation.sourceVault : undefined,
-          "targetVault" in operation ? operation.targetVault : undefined,
-        ]) {
-          if (vaultAddress == null) continue;
-          for (const allocation of after.internals.vaults.get(vaultAddress)
-            ?.allocations ?? [])
-            if (allocation.marketId != null)
-              touchedMarketIds.add(allocation.marketId);
-        }
-        const { checked: verified, fee } = checkVaultOperation(
-          ctx,
-          operation,
-          accruedBefore,
-          after,
-          actionDiff,
-        );
-        for (const limit of limitsFor(ctx, operation.type, operation))
-          matched.add(limit);
-        checked.push(verified);
-        if (fee != null) fees.push(fee);
-        break;
-      }
-      default: {
-        const _exhaustive: never = operation;
-        throw new UnexpectedSimulationError(
-          `Operation type has no verification contract: ${JSON.stringify(_exhaustive)}`,
-          { context: checkContext(ctx, "operation") },
-        );
-      }
-    }
+  for (const limit of ctx.limits.operations) {
+    operations.push(
+      toSimulatedOperation(
+        dispatch(ctx, limit, accruedBefore, after, actionDiff),
+      ),
+    );
   }
 
-  // Consumer limits are enforced next to the economic checks; limits that
-  // matched no operation are rejected after the loop.
-  for (const limit of ctx.limits.operations)
-    if (!matched.has(limit)) unmatched(ctx, limit);
+  return { operations };
+}
 
-  return { operations: checked, fees, touchedMarketIds };
+// biome-ignore lint/complexity/useMaxParams: dispatch reads clearest with positional arguments
+function dispatch(
+  ctx: CheckContext,
+  limit: OperationLimit,
+  accruedBefore: ParsedState,
+  after: ParsedState,
+  actionDiff: SimulationStateChange,
+): CheckedOperation {
+  switch (limit.type) {
+    case "blueSupply":
+    case "blueWithdraw":
+    case "blueSupplyCollateral":
+    case "blueBorrow":
+    case "blueSupplyCollateralBorrow":
+    case "blueRepay":
+    case "blueWithdrawCollateral":
+    case "blueRepayWithdrawCollateral":
+    case "blueAuthorization":
+      return checkBlueOperation(ctx, limit, accruedBefore, after, actionDiff);
+    case "blueRefinance":
+      return checkRefinanceOperation(
+        ctx,
+        limit,
+        accruedBefore,
+        after,
+        actionDiff,
+      );
+    case "vaultV1Deposit":
+    case "vaultV2Deposit":
+    case "vaultV1Withdraw":
+    case "vaultV2Withdraw":
+    case "vaultV1Redeem":
+    case "vaultV2Redeem":
+      return checkVaultOperation(ctx, limit, accruedBefore, after, actionDiff);
+    case "vaultV1MigrateToV2":
+    case "vaultV2ForceWithdraw":
+    case "vaultV2ForceRedeem":
+    case "vaultV1InKindRedeem":
+    case "vaultV2InKindRedeem":
+      return checkExitOperation(ctx, limit, accruedBefore, after, actionDiff);
+    default: {
+      const _exhaustive: never = limit;
+      throw new UnexpectedSimulationError(
+        `No check handles operation limit ${JSON.stringify(_exhaustive)}`,
+      );
+    }
+  }
 }

@@ -71,7 +71,11 @@ import { runSimulation } from "./run-simulation.js";
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
  *   stamped with `txIdx`), per-account net `assetChanges`, and the
- *   `verification` block with decoded operations, preparations and effects.
+ *   `verification` block with per-operation outcomes, preparations and state
+ *   changes. Each `verification.operations[i]` mirrors the
+ *   `limits.operations[i]` entry it verified — `limits.operations` is the
+ *   caller-supplied description of what the bundle does; entries without
+ *   pinned `expected*`/`min*`/`max*` fields are observed but unchecked.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";

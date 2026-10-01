@@ -1,11 +1,10 @@
-import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MissingVerificationEvidenceError,
   StateChangeMismatchError,
-  UnexpectedSimulationError,
 } from "../../errors.js";
+import type { OperationLimit } from "../../limits.js";
 import type { SimulationStateChange } from "../../result.js";
-import type { ParsedState, RiskMetric } from "../state/types.js";
+import type { ParsedState } from "../state/types.js";
 import {
   borrowApyAfter,
   type CheckContext,
@@ -16,1157 +15,573 @@ import {
   findMarket,
   findPosition,
   fmtRisk,
-  limitsFor,
   limitViolation,
   opContext,
-  reallocationPenalty,
+  receiverCredit,
   riskMetricWad,
   riskOn,
   toMarketEntity,
   utilizationAfter,
 } from "./helpers.js";
-import { checkRefinanceOperation } from "./refinance.js";
+
+type BlueOp = Extract<
+  OperationLimit,
+  {
+    readonly type:
+      | "blueSupply"
+      | "blueWithdraw"
+      | "blueSupplyCollateral"
+      | "blueBorrow"
+      | "blueSupplyCollateralBorrow"
+      | "blueRepay"
+      | "blueWithdrawCollateral"
+      | "blueRepayWithdrawCollateral"
+      | "blueAuthorization";
+  }
+>;
+
+interface BlueObserved {
+  readonly positionBefore: ReturnType<typeof findPosition>;
+  readonly positionAfter: ReturnType<typeof findPosition>;
+  readonly marketBefore: ReturnType<typeof findMarket>;
+  readonly marketAfter: ReturnType<typeof findMarket>;
+}
 
 /**
- * Verify one Blue-bundle operation's effects on the owner's position and the
- * market, against `accruedBefore → after`. All share/asset math delegates to
- * blue-sdk {@link AccrualPosition} and `Market` converters.
+ * Verify one declared Blue operation limit against the observed position and
+ * market deltas between `accruedBefore` and `after`. Only the fields the
+ * caller pins are compared; the observed outcome is always reported.
  * @internal
  */
 // biome-ignore lint/complexity/useMaxParams: checks read clearest with positional arguments
 export function checkBlueOperation(
   ctx: CheckContext,
-  operation: Extract<
-    DecodedOperation,
-    {
-      readonly type:
-        | "blueSupply"
-        | "blueWithdraw"
-        | "blueSupplyCollateral"
-        | "blueBorrow"
-        | "blueSupplyCollateralBorrow"
-        | "blueRepay"
-        | "blueWithdrawCollateral"
-        | "blueRepayWithdrawCollateral"
-        | "blueRefinance"
-        | "blueAuthorization";
-    }
-  >,
+  limit: BlueOp,
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
 ): CheckedOperation {
-  if (operation.type === "blueAuthorization") {
-    for (const limit of limitsFor(ctx, "blueAuthorization", operation)) {
-      if (!eq(limit.authorized, operation.authorized))
-        limitViolation(
-          ctx,
-          operation,
-          "authorized",
-          limit.authorized,
-          operation.authorized,
-          "The bundle does not match the declared constraint.",
-        );
-      if (
-        limit.expectedIsAuthorized !== undefined &&
-        limit.expectedIsAuthorized !== operation.isAuthorized
-      )
-        limitViolation(
-          ctx,
-          operation,
-          "expectedIsAuthorized",
-          `${limit.expectedIsAuthorized}`,
-          `${operation.isAuthorized}`,
-          "The bundle does not match the declared constraint.",
-        );
-    }
-    return {
-      operation,
-      outcome: { isAuthorized: operation.isAuthorized },
-    };
+  if (limit.type === "blueAuthorization") {
+    const observed = after.morphoAuthorizations.find(
+      (a) => eq(a.authorizer, ctx.owner) && eq(a.authorized, limit.authorized),
+    )?.after;
+    if (observed === undefined)
+      fail(
+        ctx,
+        limit,
+        `isAuthorized(${ctx.owner}, ${limit.authorized}) missing from read state`,
+      );
+    if (
+      limit.expectedIsAuthorized !== undefined &&
+      observed !== limit.expectedIsAuthorized
+    )
+      limitViolation(
+        ctx,
+        limit,
+        "expectedIsAuthorized",
+        `${limit.expectedIsAuthorized}`,
+        `${observed}`,
+        "The bundle does not match the declared constraint.",
+      );
+    return { operation: limit, outcome: { isAuthorized: observed! } };
   }
 
-  if (operation.type === "blueRefinance") {
-    return checkRefinanceOperation(
-      ctx,
-      operation,
-      accruedBefore,
-      after,
-      actionDiff,
-    );
-  }
-
-  const marketId = operation.market.marketId;
+  const marketId = limit.marketId;
   const internalsBefore = accruedBefore.internals.markets.get(marketId);
-  const marketBefore = findMarket(accruedBefore, marketId, ctx, operation);
-  const marketAfter = findMarket(after, marketId, ctx, operation);
   const internalsAfter = after.internals.markets.get(marketId);
   if (internalsBefore == null || internalsAfter == null)
     throw new MissingVerificationEvidenceError(
       `Market "${marketId}" internals missing`,
-      { context: opContext(ctx, operation) },
+      { context: opContext(ctx, limit) },
     );
-  const before = findPosition(
-    accruedBefore,
-    marketId,
-    operation.onBehalf,
-    ctx,
-    operation,
-  );
-  const next = findPosition(
-    after,
-    marketId,
-    operation.onBehalf,
-    ctx,
-    operation,
-  );
-  const market = toMarketEntity(marketBefore, internalsBefore);
-  const marketAfterEntity = toMarketEntity(marketAfter, internalsAfter);
 
-  const oraclePresent = marketBefore.oraclePrice != null;
-  const irmPresent = internalsBefore.rateAtTargetPerSecondWad != null;
+  // The acting account: caller-pinned `expectedOnBehalf` or the sender.
+  const account =
+    "expectedOnBehalf" in limit && limit.expectedOnBehalf !== undefined
+      ? limit.expectedOnBehalf
+      : ctx.owner;
+  const observed: BlueObserved = {
+    positionBefore: findPosition(accruedBefore, marketId, account, ctx, limit),
+    positionAfter: findPosition(after, marketId, account, ctx, limit),
+    marketBefore: findMarket(accruedBefore, marketId, ctx, limit),
+    marketAfter: findMarket(after, marketId, ctx, limit),
+  };
+  const marketEntity = toMarketEntity(observed.marketBefore, internalsBefore);
+  const marketAfterEntity = toMarketEntity(
+    observed.marketAfter,
+    internalsAfter,
+  );
+  const risk = riskOn(observed.positionAfter, marketAfterEntity);
+  const utilization = utilizationAfter(marketAfterEntity);
+  const ltv = riskMetricWad(risk.ltvWad);
+  const health = riskMetricWad(risk.healthFactorWad);
+  const util = riskMetricWad(utilization);
 
-  switch (operation.type) {
+  const pinLtv = (bound: bigint | undefined) => {
+    if (bound !== undefined && (ltv === null || ltv > bound))
+      limitViolation(
+        ctx,
+        limit,
+        "maxLtvAfterWad",
+        `${bound}`,
+        fmtRisk(risk.ltvWad),
+        "Increase the bound or reduce the operation.",
+      );
+  };
+  const pinHealth = (bound: bigint | undefined) => {
+    if (bound !== undefined && health !== null && health < bound)
+      limitViolation(
+        ctx,
+        limit,
+        "minHealthFactorAfterWad",
+        `${bound}`,
+        fmtRisk(risk.healthFactorWad),
+        "Decrease the bound or adjust the operation.",
+      );
+  };
+  const pinUtilization = (bound: bigint | undefined) => {
+    if (bound !== undefined && (util === null || util > bound))
+      limitViolation(
+        ctx,
+        limit,
+        "maxUtilizationAfterWad",
+        `${bound}`,
+        fmtRisk(utilization),
+        "Increase the bound or reduce the operation.",
+      );
+  };
+
+  switch (limit.type) {
     case "blueSupply": {
-      const shares = market.toSupplyShares(operation.assets, "Down");
-      const expectedShares = before.supplyShares + shares;
-      if (next.supplyShares !== expectedShares)
-        fail(
-          ctx,
-          operation,
-          `Supply shares "${next.supplyShares}", expected "${expectedShares}" (before "${before.supplyShares}" + "${shares}")`,
+      const sharesMinted =
+        observed.positionAfter.supplyShares -
+        observed.positionBefore.supplyShares;
+      const assetsSupplied =
+        observed.positionAfter.supplyAssets -
+        observed.positionBefore.supplyAssets;
+      if (limit.expectedAssets !== undefined) {
+        const expectedShares = marketEntity.toSupplyShares(
+          limit.expectedAssets,
+          "Down",
         );
-      const minAssets = operation.assets === 0n ? 0n : operation.assets - 1n;
-      if (next.supplyAssets - before.supplyAssets < minAssets)
-        fail(
-          ctx,
-          operation,
-          `Supply assets grew by "${next.supplyAssets - before.supplyAssets}", below "${minAssets}"`,
-        );
-      if (next.borrowShares !== before.borrowShares)
-        fail(ctx, operation, "Supply must not change borrow shares");
-      if (next.collateral !== before.collateral)
-        fail(ctx, operation, "Supply must not change collateral");
-      const supplyDelta =
-        marketAfter.totalSupplyAssets - marketBefore.totalSupplyAssets;
-      if (supplyDelta !== operation.assets)
-        fail(
-          ctx,
-          operation,
-          `Market supply grew by "${supplyDelta}", expected "${operation.assets}"`,
-        );
-      for (const limit of limitsFor(ctx, "blueSupply", operation)) {
         if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
+          sharesMinted !== expectedShares &&
+          assetsSupplied !== limit.expectedAssets
         )
           limitViolation(
             ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedAssets !== undefined &&
-          limit.expectedAssets !== operation.assets
-        )
-          limitViolation(
-            ctx,
-            operation,
+            limit,
             "expectedAssets",
             `${limit.expectedAssets}`,
-            `${operation.assets}`,
+            `${assetsSupplied}`,
             "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedOnBehalf !== undefined &&
-          !eq(limit.expectedOnBehalf, operation.onBehalf)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedOnBehalf",
-            limit.expectedOnBehalf,
-            operation.onBehalf,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.minSupplySharesMinted !== undefined &&
-          shares < limit.minSupplySharesMinted
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minSupplySharesMinted",
-            `${limit.minSupplySharesMinted}`,
-            `${shares}`,
-            "Decrease the bound or adjust the operation.",
           );
       }
+      if (
+        limit.minSupplySharesMinted !== undefined &&
+        sharesMinted < limit.minSupplySharesMinted
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "minSupplySharesMinted",
+          `${limit.minSupplySharesMinted}`,
+          `${sharesMinted}`,
+          "Decrease the bound or adjust the operation.",
+        );
       return {
-        operation,
-        outcome: { supplySharesMinted: shares },
+        operation: limit,
+        outcome: { supplySharesMinted: sharesMinted },
       };
     }
 
     case "blueWithdraw": {
-      let sharesBurned: bigint;
-      let assetsOut: bigint;
-      if (operation.amount.type === "assets") {
-        assetsOut = operation.amount.assets;
-        sharesBurned = market.toSupplyShares(assetsOut, "Up");
-      } else {
-        sharesBurned = operation.amount.shares;
-        assetsOut = market.toSupplyAssets(sharesBurned, "Down");
-      }
-      if (next.supplyShares !== before.supplyShares - sharesBurned)
-        fail(
+      const sharesBurned =
+        observed.positionBefore.supplyShares -
+        observed.positionAfter.supplyShares;
+      const residual = observed.positionAfter.supplyShares;
+      if (
+        limit.expectedFullClose !== undefined &&
+        limit.expectedFullClose !== (residual === 0n)
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Supply shares "${next.supplyShares}", expected "${before.supplyShares - sharesBurned}"`,
+          limit,
+          "expectedFullClose",
+          `${limit.expectedFullClose}`,
+          `${residual === 0n}`,
+          "The bundle does not match the declared constraint.",
         );
-      const liquidityDelta =
-        marketAfter.liquidityAssets - marketBefore.liquidityAssets;
-      if (liquidityDelta !== -assetsOut)
-        fail(
+      const credit = receiverCredit(
+        actionDiff,
+        limit.expectedReceiver ?? ctx.owner,
+        internalsBefore.params.loanToken,
+      );
+      if (
+        limit.minAssetsReceived !== undefined &&
+        credit < limit.minAssetsReceived
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Market liquidity moved "${liquidityDelta}", expected "${-assetsOut}"`,
+          limit,
+          "minAssetsReceived",
+          `${limit.minAssetsReceived}`,
+          `${credit}`,
+          "Decrease the bound or adjust the operation.",
         );
-      if (operation.fullClose && next.supplyShares !== 0n)
-        fail(
+      if (
+        limit.maxSupplySharesBurned !== undefined &&
+        sharesBurned > limit.maxSupplySharesBurned
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Full withdraw left "${next.supplyShares}" supply shares`,
+          limit,
+          "maxSupplySharesBurned",
+          `${limit.maxSupplySharesBurned}`,
+          `${sharesBurned}`,
+          "Increase the bound or reduce the operation.",
         );
-      const utilization = utilizationAfter(marketAfterEntity);
-      const penalty = reallocationPenalty(operation.reallocations ?? []);
-      for (const limit of limitsFor(ctx, "blueWithdraw", operation)) {
-        if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedReceiver !== undefined &&
-          !eq(limit.expectedReceiver, operation.receiver)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedReceiver",
-            limit.expectedReceiver,
-            operation.receiver,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedFullClose !== undefined &&
-          limit.expectedFullClose !== operation.fullClose
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedFullClose",
-            `${limit.expectedFullClose}`,
-            `${operation.fullClose}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.minAssetsReceived !== undefined &&
-          assetsOut < limit.minAssetsReceived
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minAssetsReceived",
-            `${limit.minAssetsReceived}`,
-            `${assetsOut}`,
-            "Decrease the bound or adjust the operation.",
-          );
-        if (
-          limit.maxSupplySharesBurned !== undefined &&
-          sharesBurned > limit.maxSupplySharesBurned
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxSupplySharesBurned",
-            `${limit.maxSupplySharesBurned}`,
-            `${sharesBurned}`,
-            "Increase the bound or reduce the operation.",
-          );
-        {
-          const util = riskMetricWad(utilization);
-          if (
-            limit.maxUtilizationAfterWad !== undefined &&
-            (util === null || util > limit.maxUtilizationAfterWad)
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "maxUtilizationAfterWad",
-              `${limit.maxUtilizationAfterWad}`,
-              fmtRisk(utilization),
-              "Increase the bound or reduce the operation.",
-            );
-        }
-        if (
-          limit.maxReallocationPenaltyAssets !== undefined &&
-          penalty > limit.maxReallocationPenaltyAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxReallocationPenaltyAssets",
-            `${limit.maxReallocationPenaltyAssets}`,
-            `${penalty}`,
-            "Increase the bound or reduce the operation.",
-          );
-      }
+      pinUtilization(limit.maxUtilizationAfterWad);
       return {
-        operation,
+        operation: limit,
         outcome: {
-          assetsReceived: assetsOut,
+          assetsReceived: credit,
           supplySharesBurned: sharesBurned,
           utilizationAfterWad: utilization,
-          reallocationPenaltyAssets: penalty,
         },
       };
     }
 
     case "blueSupplyCollateral": {
-      if (next.collateral !== before.collateral + operation.collateralAssets)
-        fail(
+      const collateralAdded =
+        observed.positionAfter.collateral - observed.positionBefore.collateral;
+      if (
+        limit.expectedAssets !== undefined &&
+        collateralAdded !== limit.expectedAssets
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Collateral "${next.collateral}", expected "${before.collateral + operation.collateralAssets}"`,
+          limit,
+          "expectedAssets",
+          `${limit.expectedAssets}`,
+          `${collateralAdded}`,
+          "The bundle does not match the declared constraint.",
         );
-      if (next.supplyShares !== before.supplyShares)
-        fail(ctx, operation, "SupplyCollateral must not change supply");
-      if (next.borrowShares !== before.borrowShares)
-        fail(ctx, operation, "SupplyCollateral must not change borrow");
-      const ltvAfter = riskOn(next, marketAfterEntity).ltvWad;
-      for (const limit of limitsFor(ctx, "blueSupplyCollateral", operation)) {
-        if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedAssets !== undefined &&
-          limit.expectedAssets !== operation.collateralAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedAssets",
-            `${limit.expectedAssets}`,
-            `${operation.collateralAssets}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedOnBehalf !== undefined &&
-          !eq(limit.expectedOnBehalf, operation.onBehalf)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedOnBehalf",
-            limit.expectedOnBehalf,
-            operation.onBehalf,
-            "The bundle does not match the declared constraint.",
-          );
-        const ltv = riskMetricWad(ltvAfter);
-        if (
-          limit.maxLtvAfterWad !== undefined &&
-          (ltv === null || ltv > limit.maxLtvAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxLtvAfterWad",
-            `${limit.maxLtvAfterWad}`,
-            fmtRisk(ltvAfter),
-            "Increase the bound or reduce the operation.",
-          );
-      }
-      return {
-        operation,
-        outcome: { ltvAfterWad: ltvAfter },
-      };
-    }
-
-    case "blueWithdrawCollateral": {
-      if (next.collateral !== before.collateral - operation.collateralAssets)
-        fail(
-          ctx,
-          operation,
-          `Collateral "${next.collateral}", expected "${before.collateral - operation.collateralAssets}"`,
-        );
-      const risk = checkLtv(
-        ctx,
-        operation,
-        next,
-        marketAfterEntity,
-        internalsAfter.params.lltv,
-      );
-      for (const limit of limitsFor(ctx, "blueWithdrawCollateral", operation)) {
-        if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedAssets !== undefined &&
-          limit.expectedAssets !== operation.collateralAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedAssets",
-            `${limit.expectedAssets}`,
-            `${operation.collateralAssets}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedReceiver !== undefined &&
-          !eq(limit.expectedReceiver, operation.receiver)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedReceiver",
-            limit.expectedReceiver,
-            operation.receiver,
-            "The bundle does not match the declared constraint.",
-          );
-        const ltv = riskMetricWad(risk.ltvWad);
-        if (
-          limit.maxLtvAfterWad !== undefined &&
-          (ltv === null || ltv > limit.maxLtvAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxLtvAfterWad",
-            `${limit.maxLtvAfterWad}`,
-            fmtRisk(risk.ltvWad),
-            "Increase the bound or reduce the operation.",
-          );
-        const health = riskMetricWad(risk.healthFactorWad);
-        if (
-          limit.minHealthFactorAfterWad !== undefined &&
-          health !== null &&
-          health < limit.minHealthFactorAfterWad
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minHealthFactorAfterWad",
-            `${limit.minHealthFactorAfterWad}`,
-            fmtRisk(risk.healthFactorWad),
-            "Decrease the bound or adjust the operation.",
-          );
-      }
-      return {
-        operation,
-        outcome: {
-          ltvAfterWad: risk.ltvWad,
-          healthFactorAfterWad: risk.healthFactorWad,
-        },
-      };
+      pinLtv(limit.maxLtvAfterWad);
+      return { operation: limit, outcome: { ltvAfterWad: risk.ltvWad } };
     }
 
     case "blueBorrow": {
-      if (!oraclePresent || !irmPresent)
-        throw new MissingVerificationEvidenceError(
-          `Borrow on market "${marketId}" requires oracle and IRM reads; one is missing`,
-          { context: opContext(ctx, operation) },
-        );
-      const shares = market.toBorrowShares(operation.borrowAssets, "Up");
-      if (next.borrowShares !== before.borrowShares + shares)
-        fail(
+      const borrowSharesMinted =
+        observed.positionAfter.borrowShares -
+        observed.positionBefore.borrowShares;
+      const credit = receiverCredit(
+        actionDiff,
+        limit.expectedReceiver ?? ctx.owner,
+        internalsBefore.params.loanToken,
+      );
+      if (limit.expectedAssets !== undefined && credit !== limit.expectedAssets)
+        limitViolation(
           ctx,
-          operation,
-          `Borrow shares "${next.borrowShares}", expected "${before.borrowShares + shares}"`,
+          limit,
+          "expectedAssets",
+          `${limit.expectedAssets}`,
+          `${credit}`,
+          "The bundle does not match the declared constraint.",
         );
-      const liquidityDelta =
-        marketAfter.liquidityAssets - marketBefore.liquidityAssets;
-      if (liquidityDelta !== -operation.borrowAssets)
-        fail(
+      if (
+        limit.maxBorrowSharesMinted !== undefined &&
+        borrowSharesMinted > limit.maxBorrowSharesMinted
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Market liquidity moved "${liquidityDelta}", expected "${-operation.borrowAssets}"`,
+          limit,
+          "maxBorrowSharesMinted",
+          `${limit.maxBorrowSharesMinted}`,
+          `${borrowSharesMinted}`,
+          "Increase the bound or reduce the operation.",
         );
-      const risk = checkLtv(
+      checkLtv(
         ctx,
-        operation,
-        next,
+        limit,
+        observed.positionAfter,
         marketAfterEntity,
         internalsAfter.params.lltv,
       );
-      const utilization = utilizationAfter(marketAfterEntity);
+      pinLtv(limit.maxLtvAfterWad);
+      pinHealth(limit.minHealthFactorAfterWad);
+      pinUtilization(limit.maxUtilizationAfterWad);
       const borrowApy = borrowApyAfter(marketAfterEntity);
-      const penalty = reallocationPenalty(operation.reallocations ?? []);
-      for (const limit of limitsFor(ctx, "blueBorrow", operation)) {
-        if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedAssets !== undefined &&
-          limit.expectedAssets !== operation.borrowAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedAssets",
-            `${limit.expectedAssets}`,
-            `${operation.borrowAssets}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedReceiver !== undefined &&
-          !eq(limit.expectedReceiver, operation.receiver)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedReceiver",
-            limit.expectedReceiver,
-            operation.receiver,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.maxBorrowSharesMinted !== undefined &&
-          shares > limit.maxBorrowSharesMinted
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxBorrowSharesMinted",
-            `${limit.maxBorrowSharesMinted}`,
-            `${shares}`,
-            "Increase the bound or reduce the operation.",
-          );
-        const ltv = riskMetricWad(risk.ltvWad);
-        if (
-          limit.maxLtvAfterWad !== undefined &&
-          (ltv === null || ltv > limit.maxLtvAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxLtvAfterWad",
-            `${limit.maxLtvAfterWad}`,
-            fmtRisk(risk.ltvWad),
-            "Increase the bound or reduce the operation.",
-          );
-        const health = riskMetricWad(risk.healthFactorWad);
-        if (
-          limit.minHealthFactorAfterWad !== undefined &&
-          health !== null &&
-          health < limit.minHealthFactorAfterWad
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minHealthFactorAfterWad",
-            `${limit.minHealthFactorAfterWad}`,
-            fmtRisk(risk.healthFactorWad),
-            "Decrease the bound or adjust the operation.",
-          );
-        const util = riskMetricWad(utilization);
-        if (
-          limit.maxUtilizationAfterWad !== undefined &&
-          (util === null || util > limit.maxUtilizationAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxUtilizationAfterWad",
-            `${limit.maxUtilizationAfterWad}`,
-            fmtRisk(utilization),
-            "Increase the bound or reduce the operation.",
-          );
-        if (
-          limit.maxAfterBorrowApyWad !== undefined &&
-          borrowApy > limit.maxAfterBorrowApyWad
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxAfterBorrowApyWad",
-            `${limit.maxAfterBorrowApyWad}`,
-            `${borrowApy}`,
-            "Increase the bound or reduce the operation.",
-          );
-        if (
-          limit.maxReallocationPenaltyAssets !== undefined &&
-          penalty > limit.maxReallocationPenaltyAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxReallocationPenaltyAssets",
-            `${limit.maxReallocationPenaltyAssets}`,
-            `${penalty}`,
-            "Increase the bound or reduce the operation.",
-          );
-      }
+      if (
+        limit.maxAfterBorrowApyWad !== undefined &&
+        borrowApy > limit.maxAfterBorrowApyWad
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "maxAfterBorrowApyWad",
+          `${limit.maxAfterBorrowApyWad}`,
+          `${borrowApy}`,
+          "Increase the bound or reduce the operation.",
+        );
       return {
-        operation,
+        operation: limit,
         outcome: {
-          borrowSharesMinted: shares,
+          borrowSharesMinted,
           ltvAfterWad: risk.ltvWad,
           healthFactorAfterWad: risk.healthFactorWad,
           utilizationAfterWad: utilization,
           borrowApyAfterWad: borrowApy,
-          reallocationPenaltyAssets: penalty,
         },
       };
     }
 
     case "blueSupplyCollateralBorrow": {
-      if (next.collateral !== before.collateral + operation.collateralAssets)
-        fail(
+      const collateralAdded =
+        observed.positionAfter.collateral - observed.positionBefore.collateral;
+      const borrowSharesMinted =
+        observed.positionAfter.borrowShares -
+        observed.positionBefore.borrowShares;
+      if (
+        limit.expectedCollateralAssets !== undefined &&
+        collateralAdded !== limit.expectedCollateralAssets
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Collateral "${next.collateral}", expected "${before.collateral + operation.collateralAssets}"`,
+          limit,
+          "expectedCollateralAssets",
+          `${limit.expectedCollateralAssets}`,
+          `${collateralAdded}`,
+          "The bundle does not match the declared constraint.",
         );
-      const shares = market.toBorrowShares(operation.borrowAssets, "Up");
-      if (next.borrowShares !== before.borrowShares + shares)
-        fail(
+      const credit = receiverCredit(
+        actionDiff,
+        limit.expectedReceiver ?? ctx.owner,
+        internalsBefore.params.loanToken,
+      );
+      if (
+        limit.expectedBorrowAssets !== undefined &&
+        credit !== limit.expectedBorrowAssets
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Borrow shares "${next.borrowShares}", expected "${before.borrowShares + shares}"`,
+          limit,
+          "expectedBorrowAssets",
+          `${limit.expectedBorrowAssets}`,
+          `${credit}`,
+          "The bundle does not match the declared constraint.",
         );
-      const risk = checkLtv(
+      if (
+        limit.maxBorrowSharesMinted !== undefined &&
+        borrowSharesMinted > limit.maxBorrowSharesMinted
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "maxBorrowSharesMinted",
+          `${limit.maxBorrowSharesMinted}`,
+          `${borrowSharesMinted}`,
+          "Increase the bound or reduce the operation.",
+        );
+      checkLtv(
         ctx,
-        operation,
-        next,
+        limit,
+        observed.positionAfter,
         marketAfterEntity,
         internalsAfter.params.lltv,
       );
-      const utilization = utilizationAfter(marketAfterEntity);
+      pinLtv(limit.maxLtvAfterWad);
+      pinHealth(limit.minHealthFactorAfterWad);
+      pinUtilization(limit.maxUtilizationAfterWad);
       const borrowApy = borrowApyAfter(marketAfterEntity);
-      const penalty = reallocationPenalty(operation.reallocations ?? []);
-      for (const limit of limitsFor(
-        ctx,
-        "blueSupplyCollateralBorrow",
-        operation,
-      )) {
-        if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedCollateralAssets !== undefined &&
-          limit.expectedCollateralAssets !== operation.collateralAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedCollateralAssets",
-            `${limit.expectedCollateralAssets}`,
-            `${operation.collateralAssets}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedBorrowAssets !== undefined &&
-          limit.expectedBorrowAssets !== operation.borrowAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedBorrowAssets",
-            `${limit.expectedBorrowAssets}`,
-            `${operation.borrowAssets}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedOnBehalf !== undefined &&
-          !eq(limit.expectedOnBehalf, operation.onBehalf)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedOnBehalf",
-            limit.expectedOnBehalf,
-            operation.onBehalf,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.expectedReceiver !== undefined &&
-          !eq(limit.expectedReceiver, operation.receiver)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedReceiver",
-            limit.expectedReceiver,
-            operation.receiver,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.maxBorrowSharesMinted !== undefined &&
-          shares > limit.maxBorrowSharesMinted
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxBorrowSharesMinted",
-            `${limit.maxBorrowSharesMinted}`,
-            `${shares}`,
-            "Increase the bound or reduce the operation.",
-          );
-        const ltv = riskMetricWad(risk.ltvWad);
-        if (
-          limit.maxLtvAfterWad !== undefined &&
-          (ltv === null || ltv > limit.maxLtvAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxLtvAfterWad",
-            `${limit.maxLtvAfterWad}`,
-            fmtRisk(risk.ltvWad),
-            "Increase the bound or reduce the operation.",
-          );
-        const health = riskMetricWad(risk.healthFactorWad);
-        if (
-          limit.minHealthFactorAfterWad !== undefined &&
-          health !== null &&
-          health < limit.minHealthFactorAfterWad
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minHealthFactorAfterWad",
-            `${limit.minHealthFactorAfterWad}`,
-            fmtRisk(risk.healthFactorWad),
-            "Decrease the bound or adjust the operation.",
-          );
-        const util = riskMetricWad(utilization);
-        if (
-          limit.maxUtilizationAfterWad !== undefined &&
-          (util === null || util > limit.maxUtilizationAfterWad)
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxUtilizationAfterWad",
-            `${limit.maxUtilizationAfterWad}`,
-            fmtRisk(utilization),
-            "Increase the bound or reduce the operation.",
-          );
-        if (
-          limit.maxAfterBorrowApyWad !== undefined &&
-          borrowApy > limit.maxAfterBorrowApyWad
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxAfterBorrowApyWad",
-            `${limit.maxAfterBorrowApyWad}`,
-            `${borrowApy}`,
-            "Increase the bound or reduce the operation.",
-          );
-        if (
-          limit.maxReallocationPenaltyAssets !== undefined &&
-          penalty > limit.maxReallocationPenaltyAssets
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxReallocationPenaltyAssets",
-            `${limit.maxReallocationPenaltyAssets}`,
-            `${penalty}`,
-            "Increase the bound or reduce the operation.",
-          );
-      }
+      if (
+        limit.maxAfterBorrowApyWad !== undefined &&
+        borrowApy > limit.maxAfterBorrowApyWad
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "maxAfterBorrowApyWad",
+          `${limit.maxAfterBorrowApyWad}`,
+          `${borrowApy}`,
+          "Increase the bound or reduce the operation.",
+        );
       return {
-        operation,
+        operation: limit,
         outcome: {
-          borrowSharesMinted: shares,
+          borrowSharesMinted,
           ltvAfterWad: risk.ltvWad,
           healthFactorAfterWad: risk.healthFactorWad,
           utilizationAfterWad: utilization,
           borrowApyAfterWad: borrowApy,
-          reallocationPenaltyAssets: penalty,
         },
       };
     }
 
     case "blueRepay":
     case "blueRepayWithdrawCollateral": {
-      let sharesBurned: bigint;
-      let assetsPaid: bigint;
-      if (operation.repay.type === "assets") {
-        assetsPaid = operation.repay.assets;
-        sharesBurned = market.toBorrowShares(assetsPaid, "Down");
-      } else {
-        sharesBurned = operation.repay.shares;
-        assetsPaid = market.toBorrowAssets(sharesBurned, "Up");
-      }
-      const residual = before.borrowShares - sharesBurned;
-      if (residual < 0n)
-        fail(
+      const borrowSharesBurned =
+        observed.positionBefore.borrowShares -
+        observed.positionAfter.borrowShares;
+      const residual = observed.positionAfter.borrowShares;
+      // Assets paid = loan-token debit of the owner; a capped repay refunds
+      // the excess to `onBehalf`, visible as a loan-token credit.
+      const assetsPaid = -receiverCredit(
+        actionDiff,
+        ctx.owner,
+        internalsBefore.params.loanToken,
+      );
+      const refundAssets =
+        actionDiff.balances
+          .filter(
+            (c) =>
+              eq(c.account, account) &&
+              eq(c.token, internalsBefore.params.loanToken),
+          )
+          .reduce((t, c) => t + c.assets, 0n) || 0n;
+      if (
+        limit.expectedFullClose !== undefined &&
+        limit.expectedFullClose !== (residual === 0n)
+      )
+        limitViolation(
           ctx,
-          operation,
-          `Repay burned "${sharesBurned}" shares, more than the "${before.borrowShares}" owed`,
+          limit,
+          "expectedFullClose",
+          `${limit.expectedFullClose}`,
+          `${residual === 0n}`,
+          "The bundle does not match the declared constraint.",
         );
-      if (next.borrowShares !== residual)
-        fail(
+      if (limit.maxAssetsPaid !== undefined && assetsPaid > limit.maxAssetsPaid)
+        limitViolation(
           ctx,
-          operation,
-          `Residual borrow shares "${next.borrowShares}", expected "${residual}"`,
+          limit,
+          "maxAssetsPaid",
+          `${limit.maxAssetsPaid}`,
+          `${assetsPaid}`,
+          "Increase the bound or reduce the operation.",
         );
-      if (operation.fullClose && next.borrowShares !== 0n)
-        throw new StateChangeMismatchError(
-          `Full repay left "${next.borrowShares}" borrow shares`,
-          { context: opContext(ctx, operation) },
-        );
-      if (operation.type === "blueRepayWithdrawCollateral") {
-        if (next.collateral !== before.collateral - operation.collateralAssets)
-          fail(
-            ctx,
-            operation,
-            `Collateral "${next.collateral}", expected "${before.collateral - operation.collateralAssets}"`,
-          );
-        // Debt-free after a full repay allows zero collateral.
-        const risk =
-          next.borrowShares === 0n
-            ? {
-                ltvWad: { type: "debtFree" } as RiskMetric,
-                healthFactorWad: {
-                  type: "unbounded",
-                  reason: "zeroCollateral",
-                } as RiskMetric,
-              }
-            : checkLtv(
-                ctx,
-                operation,
-                next,
-                marketAfterEntity,
-                internalsAfter.params.lltv,
-              );
-        for (const limit of limitsFor(
+      if (
+        limit.minBorrowSharesBurned !== undefined &&
+        borrowSharesBurned < limit.minBorrowSharesBurned
+      )
+        limitViolation(
           ctx,
-          "blueRepayWithdrawCollateral",
-          operation,
-        )) {
-          if (
-            limit.marketId.toLowerCase() !==
-            operation.market.marketId.toLowerCase()
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "marketId",
-              limit.marketId,
-              operation.market.marketId,
-              "The bundle does not match the declared constraint.",
-            );
-          if (
-            limit.expectedWithdrawAssets !== undefined &&
-            limit.expectedWithdrawAssets !== operation.collateralAssets
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "expectedWithdrawAssets",
-              `${limit.expectedWithdrawAssets}`,
-              `${operation.collateralAssets}`,
-              "The bundle does not match the declared constraint.",
-            );
-          if (
-            limit.expectedOnBehalf !== undefined &&
-            !eq(limit.expectedOnBehalf, operation.onBehalf)
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "expectedOnBehalf",
-              limit.expectedOnBehalf,
-              operation.onBehalf,
-              "The bundle does not match the declared constraint.",
-            );
-          if (
-            limit.expectedReceiver !== undefined &&
-            !eq(limit.expectedReceiver, operation.receiver)
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "expectedReceiver",
-              limit.expectedReceiver,
-              operation.receiver,
-              "The bundle does not match the declared constraint.",
-            );
-          if (
-            limit.expectedFullClose !== undefined &&
-            limit.expectedFullClose !== operation.fullClose
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "expectedFullClose",
-              `${limit.expectedFullClose}`,
-              `${operation.fullClose}`,
-              "The bundle does not match the declared constraint.",
-            );
-          if (
-            limit.maxAssetsPaid !== undefined &&
-            assetsPaid > limit.maxAssetsPaid
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "maxAssetsPaid",
-              `${limit.maxAssetsPaid}`,
-              `${assetsPaid}`,
-              "Increase the bound or reduce the operation.",
-            );
-          if (
-            limit.minBorrowSharesBurned !== undefined &&
-            sharesBurned < limit.minBorrowSharesBurned
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "minBorrowSharesBurned",
-              `${limit.minBorrowSharesBurned}`,
-              `${sharesBurned}`,
-              "Decrease the bound or adjust the operation.",
-            );
-          if (
-            limit.maxResidualBorrowShares !== undefined &&
-            next.borrowShares > limit.maxResidualBorrowShares
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "maxResidualBorrowShares",
-              `${limit.maxResidualBorrowShares}`,
-              `${next.borrowShares}`,
-              "Increase the bound or reduce the operation.",
-            );
-          if (limit.minRefundAssets !== undefined && 0n < limit.minRefundAssets)
-            limitViolation(
-              ctx,
-              operation,
-              "minRefundAssets",
-              `${limit.minRefundAssets}`,
-              "0",
-              "Decrease the bound or adjust the operation.",
-            );
-          const ltv = riskMetricWad(risk.ltvWad);
-          if (
-            limit.maxLtvAfterWad !== undefined &&
-            (ltv === null || ltv > limit.maxLtvAfterWad)
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "maxLtvAfterWad",
-              `${limit.maxLtvAfterWad}`,
-              fmtRisk(risk.ltvWad),
-              "Increase the bound or reduce the operation.",
-            );
-          const health = riskMetricWad(risk.healthFactorWad);
-          if (
-            limit.minHealthFactorAfterWad !== undefined &&
-            health !== null &&
-            health < limit.minHealthFactorAfterWad
-          )
-            limitViolation(
-              ctx,
-              operation,
-              "minHealthFactorAfterWad",
-              `${limit.minHealthFactorAfterWad}`,
-              fmtRisk(risk.healthFactorWad),
-              "Decrease the bound or adjust the operation.",
-            );
-        }
-        return {
-          operation,
-          outcome: {
-            assetsPaid,
-            borrowSharesBurned: sharesBurned,
-            residualBorrowShares: next.borrowShares,
-            refundAssets: 0n,
-            ltvAfterWad: risk.ltvWad,
-            healthFactorAfterWad: risk.healthFactorWad,
-          },
-        };
-      }
-      for (const limit of limitsFor(ctx, "blueRepay", operation)) {
+          limit,
+          "minBorrowSharesBurned",
+          `${limit.minBorrowSharesBurned}`,
+          `${borrowSharesBurned}`,
+          "Decrease the bound or adjust the operation.",
+        );
+      if (
+        limit.maxResidualBorrowShares !== undefined &&
+        residual > limit.maxResidualBorrowShares
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "maxResidualBorrowShares",
+          `${limit.maxResidualBorrowShares}`,
+          `${residual}`,
+          "Increase the bound or reduce the operation.",
+        );
+      if (
+        limit.minRefundAssets !== undefined &&
+        refundAssets < limit.minRefundAssets
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "minRefundAssets",
+          `${limit.minRefundAssets}`,
+          `${refundAssets}`,
+          "Decrease the bound or adjust the operation.",
+        );
+
+      let outcome: CheckedOperation["outcome"] = {
+        assetsPaid,
+        borrowSharesBurned,
+        residualBorrowShares: residual,
+        refundAssets,
+        ltvAfterWad: risk.ltvWad,
+        healthFactorAfterWad: risk.healthFactorWad,
+      };
+      if (limit.type === "blueRepayWithdrawCollateral") {
+        const collateralWithdrawn =
+          observed.positionBefore.collateral -
+          observed.positionAfter.collateral;
         if (
-          limit.marketId.toLowerCase() !==
-          operation.market.marketId.toLowerCase()
+          limit.expectedWithdrawAssets !== undefined &&
+          collateralWithdrawn !== limit.expectedWithdrawAssets
         )
           limitViolation(
             ctx,
-            operation,
-            "marketId",
-            limit.marketId,
-            operation.market.marketId,
+            limit,
+            "expectedWithdrawAssets",
+            `${limit.expectedWithdrawAssets}`,
+            `${collateralWithdrawn}`,
             "The bundle does not match the declared constraint.",
           );
-        if (
-          limit.expectedOnBehalf !== undefined &&
-          !eq(limit.expectedOnBehalf, operation.onBehalf)
-        )
-          limitViolation(
+        if (residual !== 0n)
+          checkLtv(
             ctx,
-            operation,
-            "expectedOnBehalf",
-            limit.expectedOnBehalf,
-            operation.onBehalf,
-            "The bundle does not match the declared constraint.",
+            limit,
+            observed.positionAfter,
+            marketAfterEntity,
+            internalsAfter.params.lltv,
           );
-        if (
-          limit.expectedFullClose !== undefined &&
-          limit.expectedFullClose !== operation.fullClose
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "expectedFullClose",
-            `${limit.expectedFullClose}`,
-            `${operation.fullClose}`,
-            "The bundle does not match the declared constraint.",
-          );
-        if (
-          limit.maxAssetsPaid !== undefined &&
-          assetsPaid > limit.maxAssetsPaid
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxAssetsPaid",
-            `${limit.maxAssetsPaid}`,
-            `${assetsPaid}`,
-            "Increase the bound or reduce the operation.",
-          );
-        if (
-          limit.minBorrowSharesBurned !== undefined &&
-          sharesBurned < limit.minBorrowSharesBurned
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "minBorrowSharesBurned",
-            `${limit.minBorrowSharesBurned}`,
-            `${sharesBurned}`,
-            "Decrease the bound or adjust the operation.",
-          );
-        if (
-          limit.maxResidualBorrowShares !== undefined &&
-          next.borrowShares > limit.maxResidualBorrowShares
-        )
-          limitViolation(
-            ctx,
-            operation,
-            "maxResidualBorrowShares",
-            `${limit.maxResidualBorrowShares}`,
-            `${next.borrowShares}`,
-            "Increase the bound or reduce the operation.",
-          );
-        if (limit.minRefundAssets !== undefined && 0n < limit.minRefundAssets)
-          limitViolation(
-            ctx,
-            operation,
-            "minRefundAssets",
-            `${limit.minRefundAssets}`,
-            "0",
-            "Decrease the bound or adjust the operation.",
-          );
+        pinLtv(limit.maxLtvAfterWad);
+        pinHealth(limit.minHealthFactorAfterWad);
+        outcome = { ...outcome, collateralWithdrawn };
       }
+      return { operation: limit, outcome };
+    }
+
+    case "blueWithdrawCollateral": {
+      const collateralWithdrawn =
+        observed.positionBefore.collateral - observed.positionAfter.collateral;
+      if (
+        limit.expectedAssets !== undefined &&
+        collateralWithdrawn !== limit.expectedAssets
+      )
+        limitViolation(
+          ctx,
+          limit,
+          "expectedAssets",
+          `${limit.expectedAssets}`,
+          `${collateralWithdrawn}`,
+          "The bundle does not match the declared constraint.",
+        );
+      const credit = receiverCredit(
+        actionDiff,
+        limit.expectedReceiver ?? ctx.owner,
+        internalsBefore.params.collateralToken,
+      );
+      checkLtv(
+        ctx,
+        limit,
+        observed.positionAfter,
+        marketAfterEntity,
+        internalsAfter.params.lltv,
+      );
+      pinLtv(limit.maxLtvAfterWad);
+      pinHealth(limit.minHealthFactorAfterWad);
       return {
-        operation,
+        operation: limit,
         outcome: {
-          assetsPaid,
-          borrowSharesBurned: sharesBurned,
-          residualBorrowShares: next.borrowShares,
-          refundAssets: 0n,
+          collateralWithdrawn,
+          assetsReceived: credit,
+          ltvAfterWad: risk.ltvWad,
+          healthFactorAfterWad: risk.healthFactorWad,
         },
       };
     }
 
     default: {
-      const _exhaustive: never = operation;
-      throw new UnexpectedSimulationError(
-        `checkBlueOperation received an unhandled operation type: ${JSON.stringify(_exhaustive)}`,
-        { context: opContext(ctx, operation as DecodedOperation) },
+      const _exhaustive: never = limit;
+      throw new StateChangeMismatchError(
+        `checkBlueOperation received ${JSON.stringify(_exhaustive)}`,
+        { context: opContext(ctx, limit as BlueOp) },
       );
     }
   }
-}
-
-/** Funding debit overrides for repay legs pulling capped amounts. @internal */
-export function fundingDebitOverrides(
-  operations: readonly DecodedOperation[],
-  accruedBefore: ParsedState,
-): Map<DecodedOperation, bigint> {
-  const overrides = new Map<DecodedOperation, bigint>();
-  for (const op of operations) {
-    if (
-      (op.type !== "blueRepay" && op.type !== "blueRepayWithdrawCollateral") ||
-      op.funding.type === "none"
-    )
-      continue;
-    const marketState = accruedBefore.markets.find(
-      (m) => m.marketId === op.market.marketId,
-    );
-    const internals = accruedBefore.internals.markets.get(op.market.marketId);
-    if (marketState == null || internals == null) continue;
-    const entity = toMarketEntity(marketState, internals);
-    const paid =
-      op.repay.type === "assets"
-        ? op.repay.assets
-        : entity.toBorrowAssets(op.repay.shares, "Up");
-    overrides.set(op, paid);
-  }
-  return overrides;
 }

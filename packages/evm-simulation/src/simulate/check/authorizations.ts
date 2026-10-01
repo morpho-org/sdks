@@ -1,11 +1,11 @@
 import { type Address, maxUint256 } from "viem";
 import type { SimulationAuthorization } from "../../authorizations.js";
-import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AuthorizationRequestMismatchError,
   PermissionChangeMismatchError,
   UnsupportedOperationError,
 } from "../../errors.js";
+import type { OperationLimit } from "../../limits.js";
 import type {
   AuthorizationPreparation,
   SignatureNonceChange,
@@ -117,7 +117,7 @@ const mismatch = (ctx: CheckContext, message: string, field: string): never => {
 export function checkAuthorizations(params: {
   readonly ctx: CheckContext;
   readonly authorizations: readonly SimulationAuthorization[];
-  readonly operations: readonly DecodedOperation[];
+  readonly operations: readonly OperationLimit[];
   readonly before: SimulationState;
   readonly after: SimulationState;
   readonly executedCalls: readonly ExecutedCall[];
@@ -377,37 +377,10 @@ export function checkAuthorizations(params: {
   // Final mode: every decoded pull must have been satisfiable at before.
   if (!preview) {
     for (const op of operations) {
-      if (
-        "funding" in op &&
-        op.funding != null &&
-        op.funding.type === "erc20"
-      ) {
-        const spender = bundleSpender(ctx, op.route);
-        if (spender == null) continue;
-        const pulled = pulledAmount(transfers, ctx.owner, op.funding.token);
-        if (pulled === 0n) continue;
-        const allowanceBefore =
-          findAllowance(before, ctx.owner, op.funding.token, spender)?.amount ??
-          0n;
-        if (pulled > allowanceBefore)
-          throw new AuthorizationRequestMismatchError(
-            `Final-mode pull of "${pulled}" on ${op.funding.token} by ${spender} exceeds the before-state allowance "${allowanceBefore}"`,
-            {
-              context: checkContext(ctx, "finalPull", {
-                token: op.funding.token,
-                account: ctx.owner,
-                spender,
-                expected: pulled,
-                observed: allowanceBefore,
-                failedTransactionIndex: op.transactionIndex,
-              }),
-            },
-          );
-      }
       // Protected operations need `isAuthorized` already true at before
-      // unless the operation itself granted it.
+      // unless the bundle itself granted it during the block.
       if (requiresBundleAuthorization(op)) {
-        const spender = bundleSpender(ctx, op.route);
+        const spender = ctx.addresses.bundles?.blueBundlesV1;
         if (spender == null) continue;
         const authorized =
           isAuthorized(before, ctx.owner, spender) === true ||
@@ -430,23 +403,7 @@ export function checkAuthorizations(params: {
   return preparations;
 }
 
-const BUNDLE_SPENDER_KEYS = {
-  blueBundlesV1: "blueBundlesV1",
-  vaultBundlesV1: "vaultBundlesV1",
-  vaultExitBundlesV1: "vaultExitBundlesV1",
-} as const;
-
-const bundleSpender = (
-  ctx: CheckContext,
-  route: DecodedOperation["route"],
-): Address | undefined => {
-  if (!(route in BUNDLE_SPENDER_KEYS)) return undefined;
-  const key = route as keyof typeof BUNDLE_SPENDER_KEYS;
-  return ctx.addresses.bundles?.[BUNDLE_SPENDER_KEYS[key]];
-};
-
-/** Operations that move `onBehalf` collateral and need a bundle authorization. */
-const requiresBundleAuthorization = (op: DecodedOperation): boolean =>
+const requiresBundleAuthorization = (op: OperationLimit): boolean =>
   op.type === "blueWithdraw" ||
   op.type === "blueBorrow" ||
   op.type === "blueWithdrawCollateral" ||

@@ -2,8 +2,10 @@ import type { MarketId } from "@morpho-org/blue-sdk";
 import { MarketUtils } from "@morpho-org/blue-sdk";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import { ConsumerLimitViolationError } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
+import {
+  ConsumerLimitViolationError,
+  StateChangeMismatchError,
+} from "../../errors.js";
 import {
   emptyDiff,
   makeCheckContext,
@@ -12,241 +14,172 @@ import {
   TEST_MARKET_ID,
   TEST_OWNER,
 } from "../../test-helpers/index.js";
+import type { ParsedState } from "../state/types.js";
 import { checkRefinanceOperation } from "./refinance.js";
 
 const TARGET_ID =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as MarketId;
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 
-const market = (marketId: MarketId) => ({
-  marketId,
-  params: {
-    loanToken: TOKEN,
-    collateralToken: getAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
-    oracle: getAddress("0x0000000000000000000000000000000000000001"),
-    irm: getAddress("0x0000000000000000000000000000000000000002"),
-    lltv: 900000000000000000n,
-  },
-});
+const ctx = makeCheckContext();
+type Op = Parameters<typeof checkRefinanceOperation>[1];
+
+/** Merge two single-market states into one ParsedState. */
+const merge = (a: ParsedState, b: ParsedState): ParsedState =>
+  makeParsedState({
+    markets: [...a.markets, ...b.markets],
+    positions: [...a.positions, ...b.positions],
+    internals: {
+      markets: new Map([...a.internals.markets, ...b.internals.markets]),
+      vaults: new Map([...a.internals.vaults, ...b.internals.vaults]),
+      positions: new Map([...a.internals.positions, ...b.internals.positions]),
+    },
+  });
+
+const repaidShares = MarketUtils.toBorrowShares(
+  200n,
+  { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
+  "Up",
+);
+
+const baseBefore = () =>
+  merge(
+    makeMarketState({
+      marketId: TEST_MARKET_ID,
+      position: {
+        collateral: 300n,
+        borrowAssets: 200n,
+        borrowShares: repaidShares,
+      },
+      market: {
+        totalBorrowAssets: 1_000n,
+        totalBorrowShares: 1_000n,
+        oraclePrice: 10n ** 36n,
+      },
+      internals: { rateAtTargetPerSecondWad: 0n },
+    }),
+    makeMarketState({
+      marketId: TARGET_ID,
+      market: {
+        totalBorrowAssets: 1_000n,
+        totalBorrowShares: 1_000n,
+        liquidityAssets: 10_000n,
+        oraclePrice: 10n ** 36n,
+      },
+      internals: { rateAtTargetPerSecondWad: 0n },
+    }),
+  );
+
+const baseAfter = () =>
+  merge(
+    makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: {
+        totalBorrowAssets: 800n,
+        totalBorrowShares: 1_000n - repaidShares,
+        oraclePrice: 10n ** 36n,
+      },
+      internals: { rateAtTargetPerSecondWad: 0n },
+    }),
+    makeMarketState({
+      marketId: TARGET_ID,
+      position: {
+        collateral: 300n,
+        borrowAssets: 200n,
+        borrowShares: repaidShares,
+      },
+      market: {
+        totalBorrowAssets: 1_200n,
+        totalBorrowShares: 1_000n + repaidShares,
+        liquidityAssets: 9_800n,
+        oraclePrice: 10n ** 36n,
+      },
+      internals: { rateAtTargetPerSecondWad: 0n },
+    }),
+  );
+
+const limit = (over: object = {}): Op =>
+  ({
+    type: "blueRefinance",
+    sourceMarketId: TEST_MARKET_ID,
+    targetMarketId: TARGET_ID,
+    ...over,
+  }) as Op;
 
 describe("checkRefinanceOperation", () => {
   test("error: source market missing from read state", () => {
-    const op = {
-      type: "blueRefinance",
-      transactionIndex: 0,
-      sourceMarket: market(TEST_MARKET_ID),
-      targetMarket: market(TARGET_ID),
-      onBehalf: TEST_OWNER,
-      receiver: TEST_OWNER,
-    } as unknown as Parameters<typeof checkRefinanceOperation>[1];
     const empty = makeParsedState();
     expect(() =>
-      checkRefinanceOperation(makeCheckContext(), op, empty, empty, {
+      checkRefinanceOperation(ctx, limit(), empty, empty, { ...emptyDiff }),
+    ).toThrow(StateChangeMismatchError);
+  });
+
+  test("pass: source closed, collateral moved, debt minted", () => {
+    expect(() =>
+      checkRefinanceOperation(ctx, limit(), baseBefore(), baseAfter(), {
         ...emptyDiff,
       }),
-    ).toThrow();
-  });
-});
-
-describe("checkRefinanceOperation — loan dust", () => {
-  test("error: owner net loan-token inflow beyond the slippage bound", async () => {
-    const { SlippageLimitExceededError } = await import("../../errors.js");
-    const source = makeMarketState({
-      marketId: TEST_MARKET_ID,
-      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-      position: { borrowShares: 100n, collateral: 300n },
-    });
-    const sourceClosed = makeMarketState({
-      marketId: TEST_MARKET_ID,
-      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-      position: { borrowShares: 0n, collateral: 0n },
-    });
-    const targetBefore = makeMarketState({
-      marketId: TARGET_ID,
-      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-    });
-    const repaid = MarketUtils.toBorrowAssets(
-      100n,
-      {
-        totalBorrowAssets: 1_000n,
-        totalBorrowShares: 1_000n,
-      },
-      "Up",
-    );
-    const minted = MarketUtils.toBorrowShares(
-      repaid,
-      {
-        totalBorrowAssets: 1_000n,
-        totalBorrowShares: 1_000n,
-      },
-      "Up",
-    );
-    const targetAfter = makeMarketState({
-      marketId: TARGET_ID,
-      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-      position: { borrowShares: minted, collateral: 300n },
-    });
-    const merge = (
-      a: ReturnType<typeof makeMarketState>,
-      b: ReturnType<typeof makeMarketState>,
-    ) =>
-      makeParsedState({
-        markets: [...a.markets, ...b.markets],
-        positions: [...a.positions, ...b.positions],
-        internals: {
-          markets: new Map([...a.internals.markets, ...b.internals.markets]),
-          vaults: new Map(),
-          positions: new Map([
-            ...a.internals.positions,
-            ...b.internals.positions,
-          ]),
-        },
-      });
-    const op = {
-      type: "blueRefinance",
-      transactionIndex: 0,
-      sourceMarket: market(TEST_MARKET_ID),
-      targetMarket: market(TARGET_ID),
-      onBehalf: TEST_OWNER,
-      receiver: TEST_OWNER,
-      reallocations: [],
-    } as unknown as Parameters<typeof checkRefinanceOperation>[1];
-    expect(() =>
-      checkRefinanceOperation(
-        makeCheckContext(),
-        op,
-        merge(source, targetBefore),
-        merge(sourceClosed, targetAfter),
-        {
-          ...emptyDiff,
-          balances: [{ account: TEST_OWNER, token: TOKEN, assets: 10n }],
-        },
-      ),
-    ).toThrow(SlippageLimitExceededError);
-  });
-});
-
-describe("checkRefinanceOperation — consumer limits", () => {
-  const ctxWith = (operations: OperationLimit[]) =>
-    makeCheckContext({ limits: { ...makeCheckContext().limits, operations } });
-
-  const OTHER_ID =
-    "0x0000000000000000000000000000000000000000000000000000000000000bad" as MarketId;
-
-  const repaid = MarketUtils.toBorrowAssets(
-    100n,
-    { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-    "Up",
-  );
-  const minted = MarketUtils.toBorrowShares(
-    repaid,
-    { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-    "Up",
-  );
-  const source = makeMarketState({
-    marketId: TEST_MARKET_ID,
-    market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-    position: { borrowShares: 100n, collateral: 300n },
-  });
-  const sourceClosed = makeMarketState({
-    marketId: TEST_MARKET_ID,
-    market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
-    position: { borrowShares: 0n, collateral: 0n },
-  });
-  const targetBefore = makeMarketState({
-    marketId: TARGET_ID,
-    market: {
-      totalBorrowAssets: 1_000n,
-      totalBorrowShares: 1_000n,
-      oraclePrice: 10n ** 36n,
-    },
-    internals: { rateAtTargetPerSecondWad: 0n },
-  });
-  const targetAfter = makeMarketState({
-    marketId: TARGET_ID,
-    market: {
-      totalBorrowAssets: 1_000n,
-      totalBorrowShares: 1_000n,
-      oraclePrice: 10n ** 36n,
-    },
-    internals: { rateAtTargetPerSecondWad: 0n },
-    position: { borrowShares: minted, collateral: 300n },
-  });
-  const merged = (
-    a: ReturnType<typeof makeMarketState>,
-    b: ReturnType<typeof makeMarketState>,
-  ) =>
-    makeParsedState({
-      markets: [...a.markets, ...b.markets],
-      positions: [...a.positions, ...b.positions],
-      internals: {
-        markets: new Map([...a.internals.markets, ...b.internals.markets]),
-        vaults: new Map(),
-        positions: new Map([
-          ...a.internals.positions,
-          ...b.internals.positions,
-        ]),
-      },
-    });
-  const before = merged(source, targetBefore);
-  const after = merged(sourceClosed, targetAfter);
-
-  const op = {
-    type: "blueRefinance",
-    transactionIndex: 0,
-    sourceMarket: market(TEST_MARKET_ID),
-    targetMarket: market(TARGET_ID),
-    onBehalf: TEST_OWNER,
-    receiver: TEST_OWNER,
-    reallocations: [],
-  } as unknown as Parameters<typeof checkRefinanceOperation>[1];
-
-  const call = (limits: OperationLimit[]) => () =>
-    checkRefinanceOperation(ctxWith(limits), op, before, after, {
-      ...emptyDiff,
-    });
-
-  test("pass: all fields satisfied", () => {
-    expect(
-      call([
-        {
-          type: "blueRefinance",
-          sourceMarketId: TEST_MARKET_ID,
-          targetMarketId: TARGET_ID,
-          maxTargetBorrowAssets: 10n ** 30n,
-          maxTargetBorrowSharesMinted: 10n ** 30n,
-          maxSourceResidualBorrowShares: 10n ** 30n,
-          maxTargetLtvAfterWad: 10n ** 30n,
-          minTargetHealthFactorAfterWad: 0n,
-          maxLoanDustAssets: 10n ** 30n,
-          maxReallocationPenaltyAssets: 10n ** 30n,
-        },
-      ]),
     ).not.toThrow();
   });
+
   test.each<[string, object]>([
-    ["sourceMarketId", { sourceMarketId: OTHER_ID }],
-    ["targetMarketId", { targetMarketId: OTHER_ID }],
-    ["maxTargetBorrowAssets", { maxTargetBorrowAssets: 0n }],
-    ["maxTargetBorrowSharesMinted", { maxTargetBorrowSharesMinted: 0n }],
+    ["maxTargetBorrowAssets", { maxTargetBorrowAssets: 100n }],
+    ["maxTargetBorrowSharesMinted", { maxTargetBorrowSharesMinted: 1n }],
     ["maxSourceResidualBorrowShares", { maxSourceResidualBorrowShares: -1n }],
-    ["maxTargetLtvAfterWad", { maxTargetLtvAfterWad: -1n }],
+    ["maxTargetLtvAfterWad", { maxTargetLtvAfterWad: 0n }],
     [
       "minTargetHealthFactorAfterWad",
-      { minTargetHealthFactorAfterWad: 10n ** 30n },
+      { minTargetHealthFactorAfterWad: 10n ** 36n },
     ],
     ["maxLoanDustAssets", { maxLoanDustAssets: -1n }],
-    ["maxReallocationPenaltyAssets", { maxReallocationPenaltyAssets: -1n }],
   ])("violation: %s", (_f, override) => {
-    expect(
-      call([
+    expect(() =>
+      checkRefinanceOperation(ctx, limit(override), baseBefore(), baseAfter(), {
+        ...emptyDiff,
+      }),
+    ).toThrow(ConsumerLimitViolationError);
+  });
+
+  test("error: source not fully closed", () => {
+    const after = merge(
+      makeMarketState({
+        marketId: TEST_MARKET_ID,
+        position: { collateral: 10n },
+        market: { oraclePrice: 10n ** 36n },
+      }),
+      makeMarketState({
+        marketId: TARGET_ID,
+        position: { collateral: 290n, borrowShares: repaidShares },
+        market: {
+          totalBorrowAssets: 1_200n,
+          totalBorrowShares: 1_000n + repaidShares,
+          oraclePrice: 10n ** 36n,
+        },
+        internals: { rateAtTargetPerSecondWad: 0n },
+      }),
+    );
+    expect(() =>
+      checkRefinanceOperation(ctx, limit(), baseBefore(), after, {
+        ...emptyDiff,
+      }),
+    ).toThrow(StateChangeMismatchError);
+  });
+
+  test("loan dust beyond the slippage bound throws", () => {
+    const diff = {
+      ...emptyDiff,
+      balances: [
         {
-          type: "blueRefinance",
-          sourceMarketId: TEST_MARKET_ID,
-          targetMarketId: TARGET_ID,
-          ...override,
-        } as OperationLimit,
-      ]),
+          account: TEST_OWNER,
+          token: TOKEN,
+          before: 0n,
+          after: 500n,
+          assets: 500n,
+        },
+      ],
+    };
+    expect(() =>
+      checkRefinanceOperation(ctx, limit(), baseBefore(), baseAfter(), diff),
     ).toThrow(ConsumerLimitViolationError);
   });
 });

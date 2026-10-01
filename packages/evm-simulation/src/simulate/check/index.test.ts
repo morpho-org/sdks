@@ -1,8 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import { getAddress } from "viem";
-import { describe, expect, test, vi } from "vitest";
-import type { DecodedOperation } from "../../decode/operation.js";
-import { ConsumerLimitViolationError } from "../../errors.js";
+import { describe, expect, test } from "vitest";
 import type { OperationLimit } from "../../limits.js";
 import {
   emptyDiff,
@@ -10,81 +7,50 @@ import {
   makeMarketState,
   TEST_OWNER,
 } from "../../test-helpers/index.js";
-import * as blueModule from "./blue.js";
 import { checkOperations } from "./index.js";
 
 const MARKET_ID =
   "0xb8c25cd0a6f03f8b34c8b9b12e24a2a1b3f0f0f0f0f0f0f0f0f0f0f0f0f0f0f" as MarketId;
 
-const market = {
-  marketId: MARKET_ID,
-  params: {
-    loanToken: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
-    collateralToken: getAddress("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
-    oracle: getAddress("0x0000000000000000000000000000000000000001"),
-    irm: getAddress("0x0000000000000000000000000000000000000002"),
-    lltv: 900000000000000000n,
-  },
-} as const;
-
-const supplyOp: DecodedOperation = {
-  type: "blueSupply",
-  route: "blueBundlesV1",
-  transactionIndex: 0,
-  market,
-  assets: 100n,
-  shares: undefined,
-  onBehalf: TEST_OWNER,
-  receiver: TEST_OWNER,
-  funding: { type: "erc20", token: market.params.loanToken, assets: 100n },
-} as unknown as DecodedOperation;
-
-const stubCheck = () => {
-  const state = makeMarketState({ marketId: MARKET_ID });
-  return {
-    state,
-    args: {
-      operations: [supplyOp],
+describe("checkOperations", () => {
+  test("empty limits → no operations", () => {
+    const state = makeMarketState({ marketId: MARKET_ID });
+    const { operations } = checkOperations({
+      ctx: makeCheckContext(),
       accruedBefore: state,
       after: state,
-      diff: { ...emptyDiff },
       actionDiff: { ...emptyDiff },
-      transfers: [],
-    },
-  };
-};
-
-describe("checkOperations — consumer limits", () => {
-  test("no limits → checked operations returned", () => {
-    const { args, state } = stubCheck();
-    const spy = vi.spyOn(blueModule, "checkBlueOperation").mockReturnValue({
-      operation: supplyOp,
-      outcome: { supplySharesMinted: 100n },
-    } as never);
-    const result = checkOperations({ ctx: makeCheckContext(), ...args });
-    expect(result.operations).toHaveLength(1);
-    spy.mockRestore();
-    void state;
+    });
+    expect(operations).toHaveLength(0);
   });
 
-  test("unmatched limit type → ConsumerLimitViolationError", () => {
-    const { args } = stubCheck();
-    const spy = vi.spyOn(blueModule, "checkBlueOperation").mockReturnValue({
-      operation: supplyOp,
-      outcome: { supplySharesMinted: 100n },
-    } as never);
-    const limit: OperationLimit = {
-      type: "blueRepay",
+  test("each limit entry is checked and echoed as the operation subject", () => {
+    const before = makeMarketState({ marketId: MARKET_ID });
+    const after = makeMarketState({
       marketId: MARKET_ID,
+      position: { supplyAssets: 100n, supplyShares: 100n },
+    });
+    const limit: OperationLimit = {
+      type: "blueSupply",
+      marketId: MARKET_ID,
+      transactionIndex: 2,
+      minSupplySharesMinted: 1n,
     };
-    expect(() =>
-      checkOperations({
-        ctx: makeCheckContext({
-          limits: { ...makeCheckContext().limits, operations: [limit] },
-        }),
-        ...args,
+    const { operations } = checkOperations({
+      ctx: makeCheckContext({
+        limits: { ...makeCheckContext().limits, operations: [limit] },
+        owner: TEST_OWNER,
       }),
-    ).toThrow(ConsumerLimitViolationError);
-    spy.mockRestore();
+      accruedBefore: before,
+      after,
+      actionDiff: { ...emptyDiff },
+    });
+    expect(operations).toEqual([
+      {
+        transactionIndex: 2,
+        operation: "blueSupply",
+        marketId: MARKET_ID,
+      },
+    ]);
   });
 });

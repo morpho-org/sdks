@@ -8,7 +8,6 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
-import type { DecodedOperation } from "../../decode/operation.js";
 import {
   ConsumerLimitViolationError,
   MarketConstraintViolationError,
@@ -51,9 +50,9 @@ export interface CheckContext {
   readonly addresses: ChainAddresses;
 }
 
-/** The operation subject (`operation` + entity keys) of one decoded operation. @internal */
+/** The operation subject (`operation` + entity keys) of one declared limit. @internal */
 export const operationSubject = (
-  op: DecodedOperation,
+  op: OperationLimit,
 ): SimulationOperationSubject => {
   switch (op.type) {
     case "blueSupply":
@@ -64,12 +63,12 @@ export const operationSubject = (
     case "blueRepay":
     case "blueWithdrawCollateral":
     case "blueRepayWithdrawCollateral":
-      return { operation: op.type, marketId: op.market.marketId };
+      return { operation: op.type, marketId: op.marketId };
     case "blueRefinance":
       return {
         operation: "blueRefinance",
-        sourceMarketId: op.sourceMarket.marketId,
-        targetMarketId: op.targetMarket.marketId,
+        sourceMarketId: op.sourceMarketId,
+        targetMarketId: op.targetMarketId,
       };
     case "blueAuthorization":
       return { operation: "blueAuthorization", authorized: op.authorized };
@@ -83,18 +82,18 @@ export const operationSubject = (
       return {
         operation: "vaultV2ForceWithdraw",
         vault: op.vault,
-        adapter: op.adapter,
+        adapter: op.expectedAdapter,
       };
     default:
       return { operation: op.type, vault: op.vault };
   }
 };
 
-/** Verification context bound to one decoded operation, as a plain literal. @internal */
+/** Verification context bound to one declared operation limit. @internal */
 // biome-ignore lint/complexity/useMaxParams: context builders read clearest with positional arguments
 export const opContext = (
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
   extra: {
     readonly token?: Address;
     readonly account?: Address;
@@ -139,7 +138,7 @@ export const checkContext = (
 // biome-ignore lint/complexity/useMaxParams: throw helpers read clearest with positional arguments
 export const fail = (
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
   message: string,
 ): never => {
   throw new StateChangeMismatchError(message, { context: opContext(ctx, op) });
@@ -149,7 +148,7 @@ export const fail = (
 // biome-ignore lint/complexity/useMaxParams: throw helpers read clearest with positional arguments
 const constraint = (
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
   message: string,
 ): never => {
   throw new MarketConstraintViolationError(message, {
@@ -164,7 +163,7 @@ export const findPosition = (
   marketId: MarketId,
   owner: Address,
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
 ): PositionState =>
   state.positions.find((p) => p.marketId === marketId && eq(p.user, owner)) ??
   fail(ctx, op, `Position ${marketId}:${owner} missing from read state`);
@@ -175,7 +174,7 @@ export const findMarket = (
   state: { readonly markets: readonly MarketState[] },
   marketId: MarketId,
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
 ): MarketState =>
   state.markets.find((m) => m.marketId === marketId) ??
   fail(ctx, op, `Market ${marketId} missing from read state`);
@@ -186,7 +185,7 @@ export const findVault = (
   state: { readonly vaults: readonly VaultState[] },
   vault: Address,
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
 ): VaultState =>
   state.vaults.find((v) => eq(v.vault, vault)) ??
   fail(ctx, op, `Vault ${vault} missing from read state`);
@@ -256,7 +255,7 @@ export const riskOn = (
 // biome-ignore lint/complexity/useMaxParams: check helpers read clearest with positional arguments
 export const checkLtv = (
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
   position: PositionState,
   market: Market,
   lltvWad: bigint,
@@ -295,127 +294,15 @@ export const borrowApyAfter = (market: Market): bigint => {
 };
 
 /**
- * Penalty charged by Vault V2 `forceDeallocate` for a decoded reallocation
- * list: the independently-rounded sum Σ wMulUp(assets, penaltyWad), matching
- * `VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets`.
+ * A declared operation limit paired with the outcome observed for its
+ * subject. `operation` is the caller's {@link OperationLimit} entry; `outcome`
+ * carries only fields that remain computable from the before/after state.
  * @internal
  */
-export const reallocationPenalty = (
-  reallocations: readonly {
-    readonly assets: bigint;
-    readonly penaltyWad: bigint;
-  }[],
-): bigint =>
-  reallocations.reduce(
-    (total, r) => total + MathLib.wMulUp(r.assets, r.penaltyWad),
-    0n,
-  );
-
-/** Verified per-operation outcomes consumed by the inlined consumer limits. @internal */
-interface OperationOutcomeFields {
-  readonly blueSupply: {
-    readonly supplySharesMinted: bigint;
-  };
-  readonly blueWithdraw: {
-    readonly assetsReceived: bigint;
-    readonly supplySharesBurned: bigint;
-    readonly utilizationAfterWad: RiskMetric;
-    readonly reallocationPenaltyAssets: bigint;
-  };
-  readonly blueSupplyCollateral: {
-    readonly ltvAfterWad: RiskMetric;
-  };
-  readonly blueBorrow: {
-    readonly borrowSharesMinted: bigint;
-    readonly ltvAfterWad: RiskMetric;
-    readonly healthFactorAfterWad: RiskMetric;
-    readonly utilizationAfterWad: RiskMetric;
-    readonly borrowApyAfterWad: bigint;
-    readonly reallocationPenaltyAssets: bigint;
-  };
-  readonly blueSupplyCollateralBorrow: {
-    readonly borrowSharesMinted: bigint;
-    readonly ltvAfterWad: RiskMetric;
-    readonly healthFactorAfterWad: RiskMetric;
-    readonly utilizationAfterWad: RiskMetric;
-    readonly borrowApyAfterWad: bigint;
-    readonly reallocationPenaltyAssets: bigint;
-  };
-  readonly blueRepay: {
-    readonly assetsPaid: bigint;
-    readonly borrowSharesBurned: bigint;
-    readonly residualBorrowShares: bigint;
-    readonly refundAssets: bigint;
-  };
-  readonly blueWithdrawCollateral: {
-    readonly ltvAfterWad: RiskMetric;
-    readonly healthFactorAfterWad: RiskMetric;
-  };
-  readonly blueRepayWithdrawCollateral: {
-    readonly assetsPaid: bigint;
-    readonly borrowSharesBurned: bigint;
-    readonly residualBorrowShares: bigint;
-    readonly refundAssets: bigint;
-    readonly ltvAfterWad: RiskMetric;
-    readonly healthFactorAfterWad: RiskMetric;
-  };
-  readonly blueRefinance: {
-    readonly targetBorrowAssets: bigint;
-    readonly targetBorrowSharesMinted: bigint;
-    readonly sourceResidualBorrowShares: bigint;
-    readonly targetLtvAfterWad: RiskMetric;
-    readonly targetHealthFactorAfterWad: RiskMetric;
-    readonly loanDustAssets: bigint;
-    readonly reallocationPenaltyAssets: bigint;
-  };
-  readonly blueAuthorization: {
-    readonly isAuthorized: boolean;
-  };
-  readonly vaultV1Deposit: {
-    readonly sharesMinted: bigint;
-  };
-  readonly vaultV2Deposit: OperationOutcomeFields["vaultV1Deposit"];
-  readonly vaultV1Withdraw: {
-    readonly sharesBurned: bigint;
-  };
-  readonly vaultV2Withdraw: OperationOutcomeFields["vaultV1Withdraw"];
-  readonly vaultV1Redeem: {
-    readonly assetsReceived: bigint;
-  };
-  readonly vaultV2Redeem: OperationOutcomeFields["vaultV1Redeem"];
-  readonly vaultV2ForceWithdraw: {
-    readonly sharesBurned: bigint;
-    readonly assetsReceived: bigint;
-    readonly penaltyAssets: bigint;
-  };
-  readonly vaultV2ForceRedeem: {
-    readonly assetsReceived: bigint;
-    readonly penaltyShares: bigint;
-    readonly penaltyAssets: bigint;
-  };
-  readonly vaultV1InKindRedeem: {
-    readonly sharesBurned: bigint;
-    readonly idleAssetsReceived: bigint;
-    readonly supplyAssetsByMarket: readonly {
-      readonly marketId: MarketId;
-      readonly assets: bigint;
-    }[];
-    readonly penaltyAssets: bigint;
-    readonly residualShareAllowance: bigint;
-  };
-  readonly vaultV2InKindRedeem: OperationOutcomeFields["vaultV1InKindRedeem"];
-  readonly vaultV1MigrateToV2: {
-    readonly targetSharesMinted: bigint;
-  };
+export interface CheckedOperation {
+  readonly operation: OperationLimit;
+  readonly outcome: Readonly<Record<string, bigint | boolean | RiskMetric>>;
 }
-
-/** A decoded operation paired with its verified outcome. @internal */
-export type CheckedOperation = {
-  [Type in DecodedOperation["type"]]: {
-    readonly operation: Extract<DecodedOperation, { readonly type: Type }>;
-    readonly outcome: OperationOutcomeFields[Type];
-  };
-}[DecodedOperation["type"]];
 
 /** Format a {@link RiskMetric} for limit-violation messages. @internal */
 export const fmtRisk = (metric: RiskMetric): string =>
@@ -426,14 +313,14 @@ export const riskMetricWad = (metric: RiskMetric): bigint | null =>
   metric.type === "finite" ? metric.valueWad : null;
 
 /**
- * Throw a {@link ConsumerLimitViolationError} for one limit field; `expected`
- * and `observed` are pre-formatted for the message.
+ * Throw a {@link ConsumerLimitViolationError} for one pinned limit field;
+ * `expected` and `observed` are pre-formatted for the message.
  * @internal
  */
 // biome-ignore lint/complexity/useMaxParams: violation reports need field, bound, observed and hint
 export const limitViolation = (
   ctx: CheckContext,
-  op: DecodedOperation,
+  op: OperationLimit,
   field: string,
   expected: string,
   observed: string,
@@ -454,17 +341,3 @@ export const limitViolation = (
     },
   );
 };
-
-/** Consumer limits of type `T` matching one decoded operation (type + optional `transactionIndex`). @internal */
-// biome-ignore lint/complexity/useMaxParams: selector reads clearest with positional arguments
-export const limitsFor = <T extends OperationLimit["type"]>(
-  ctx: CheckContext,
-  type: T,
-  op: DecodedOperation,
-): Extract<OperationLimit, { readonly type: T }>[] =>
-  ctx.limits.operations.filter(
-    (limit): limit is Extract<OperationLimit, { readonly type: T }> =>
-      limit.type === type &&
-      (limit.transactionIndex === undefined ||
-        limit.transactionIndex === op.transactionIndex),
-  );

@@ -227,6 +227,13 @@ describe.sequential("simulate — sequential state and stable indices", () => {
 
     const result = await simulate(configFor(client), {
       chainId: mainnet.id,
+      limits: {
+        operations: supplies.map(([marketParams], transactionIndex) => ({
+          type: "blueSupply" as const,
+          marketId: marketParams.id,
+          transactionIndex,
+        })),
+      },
       transactions,
     });
 

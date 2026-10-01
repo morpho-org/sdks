@@ -1,7 +1,6 @@
 import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try } from "@morpho-org/morpho-ts";
-import { decodeOperations } from "../decode/operations.js";
 import {
   InvalidSimulationResponseError,
   UnsupportedChainError,
@@ -14,11 +13,8 @@ import { executePlan } from "./backends/index.js";
 import { readBindings, readVaultEntities } from "./backends/read-bindings.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import { checkAuthorizations } from "./check/authorizations.js";
-import { fundingDebitOverrides } from "./check/blue.js";
 import type { CheckContext } from "./check/helpers.js";
 import { checkOperations } from "./check/index.js";
-import { checkUnrelatedState } from "./check/unrelated.js";
-import { checkWallet } from "./check/wallet.js";
 import { parseTransfers } from "./parsing/index.js";
 import { assertNoBundlesRetention } from "./pipeline/bundles-retention.js";
 import { resolveChain } from "./pipeline/resolve-chain.js";
@@ -78,29 +74,25 @@ export async function runSimulation(params: {
     signal,
   });
 
+  // With no calldata decoding, the caller's declared `limits.operations`
+  // entries are the operations: subjects for state reads and per-operation
+  // checks come straight from the limit list.
+  const limits = resolveEffectiveLimits(request.limits);
+  const preview = request.mode === "preview";
+  const owner = request.transactions[0]!.from;
+
   const bindings = await readBindings({
     client,
     chainId: request.chainId,
-    transactions: request.transactions,
+    operations: limits.operations,
     blockNumber: pinnedBlock.number,
   });
-
-  const { owner, operations } = decodeOperations({
-    chainId: request.chainId,
-    mode: request.mode,
-    blockNumber: pinnedBlock.number,
-    transactions: request.transactions,
-    vaults: bindings.vaults,
-    preLiquidations: bindings.preLiquidations,
-  });
-
-  const limits = resolveEffectiveLimits(request.limits);
-  const preview = request.mode === "preview";
 
   const subjects = collectSubjects({
     owner,
-    operations,
+    operations: limits.operations,
     authorizations: preview ? request.authorizations : [],
+    markets: bindings.markets,
     vaults: bindings.vaults,
     preLiquidations: bindings.preLiquidations,
     addresses,
@@ -206,37 +198,19 @@ export async function runSimulation(params: {
   const authorizations = checkAuthorizations({
     ctx,
     authorizations: preview ? request.authorizations : [],
-    operations,
+    operations: limits.operations,
     before,
     after,
     executedCalls: execution.calls,
     transfers,
   });
 
-  const {
-    operations: checked,
-    fees,
-    touchedMarketIds,
-  } = checkOperations({
+  const { operations: checked } = checkOperations({
     ctx,
-    operations,
     accruedBefore,
     after,
-    diff,
     actionDiff,
-    transfers,
   });
-
-  checkWallet({
-    ctx,
-    operations,
-    actionDiff,
-    transfers,
-    logger: config.logger,
-    fundingDebitOverrides: fundingDebitOverrides(operations, accruedBefore),
-  });
-
-  checkUnrelatedState({ ctx, accruedBefore, after, touchedMarketIds });
 
   assertNoBundlesRetention({
     chainId: request.chainId,
@@ -254,7 +228,6 @@ export async function runSimulation(params: {
     actionDiff,
     operations: checked,
     authorizations,
-    fees,
     userCalls,
   });
 }
