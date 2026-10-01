@@ -1,6 +1,6 @@
 import type { BlockTag } from "viem";
 import { expectTypeOf } from "vitest";
-import type { PendingAuthorization } from "./authorizations.js";
+import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationLimits } from "./limits.js";
 import {
   SIMULATION_MODES,
@@ -32,10 +32,10 @@ describe("SimulateParams", () => {
       SimulationMode | undefined
     >();
     expectTypeOf<SimulateParams["authorizations"]>().toEqualTypeOf<
-      readonly PendingAuthorization[] | undefined
+      readonly SimulationAuthorization[] | undefined
     >();
     expectTypeOf<SimulateParams["blockNumber"]>().toEqualTypeOf<
-      bigint | BlockTag | undefined
+      bigint | Exclude<BlockTag, "pending"> | undefined
     >();
     expectTypeOf<SimulateParams["limits"]>().toEqualTypeOf<
       SimulationLimits | undefined
