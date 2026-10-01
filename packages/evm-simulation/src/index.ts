@@ -14,27 +14,6 @@ export type {
   SimulationAuthorization,
 } from "./authorizations.js";
 export type {
-  DecodedOperations,
-  DecodeOperationsParams,
-  PreLiquidationBinding,
-  VaultBinding,
-} from "./decode/index.js";
-export {
-  decodeOperations,
-  toSimulationAuthorizations,
-} from "./decode/index.js";
-export type {
-  DecodedOperation,
-  DecodedOperationFields,
-  MarketBinding,
-  OperationAmount,
-  OperationFunding,
-  OperationIdentity,
-  OperationReallocation,
-  OperationSignature,
-  ReferralFee,
-} from "./decode/operation.js";
-export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
@@ -103,6 +82,8 @@ export type {
   SimulationMode,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
+export type { PreLiquidationBinding } from "./requirements/index.js";
+export { toSimulationAuthorizations } from "./requirements/index.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants
 export {

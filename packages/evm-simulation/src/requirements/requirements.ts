@@ -1,4 +1,8 @@
-import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
+import {
+  type InputMarketParams,
+  type MarketId,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import type {
   ActionRequirement,
   AuthorizationAction,
@@ -41,7 +45,21 @@ import {
   UnsupportedOperationError,
 } from "../errors.js";
 import type { SimulationMode } from "../params.js";
-import type { PreLiquidationBinding } from "./operations.js";
+
+/** Concrete Blue market binding supplied from pinned reads. */
+interface MarketBinding {
+  readonly marketId: MarketId;
+  readonly params: Readonly<InputMarketParams>;
+}
+
+/**
+ * Pre-liquidation contract bound to its market. The requirement's calldata or typed data
+ * carries only the authorized address, so the market binding comes from pinned reads.
+ */
+export interface PreLiquidationBinding {
+  readonly address: Address;
+  readonly market: MarketBinding;
+}
 
 type Fail = (message: string, options?: ErrorOptions) => never;
 
@@ -99,7 +117,7 @@ const isMidnight = (ctx: Ctx, address: Address): boolean =>
 
 /**
  * Operators a Morpho authorization may bind: the registered BlueBundlesV1 or a
- * bound pre-liquidation contract, mirroring `decodeOperations`' morpho route.
+ * bound pre-liquidation contract.
  */
 const authorizationOperators = (ctx: Ctx): readonly Address[] => [
   ...(isDefined(ctx.addresses.bundles?.blueBundlesV1)
@@ -719,7 +737,7 @@ const toBlueAuthorization = (
  * @param params.owner - The account the requirements were resolved for (transaction sender).
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @param params.preLiquidations - Bound pre-liquidation contracts a `blueAuthorization`
- *   requirement may authorize, mirroring {@link decodeOperations}.
+ *   requirement may authorize.
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {AuthorizationRequestMismatchError} when decoded calldata or typed data disagrees with the
