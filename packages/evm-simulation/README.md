@@ -117,9 +117,12 @@ only the receiver's wallet balance of the vault asset (the idle portion); it
 does not measure in-kind Morpho positions.
 
 Only slippage is checked; there are no separate refund or penalty checks.
-A quoted amount whose measurement is unavailable for its subject throws `MissingVerificationEvidenceError`; it never silently passes.
-For example, a collateral-only position has no share measurement. Excessive
-slippage throws `ConsumerLimitViolationError`.
+`sharesMinted` and `sharesBurned` quotes for `blueSupplyCollateral` and
+`blueWithdrawCollateral` are invalid and throw `SimulationValidationError`
+during request parsing. `MissingVerificationEvidenceError` reports runtime
+evidence gaps: a failed state read, native outgoing traces that do not cover
+value sent, or a non-transport metadata read that fails or returns empty/invalid
+data. Excessive slippage throws `ConsumerLimitViolationError`.
 
 Only quoted amounts are observed. ERC-20 assets and vault shares use `balanceOf`;
 Blue shares use `position`. Each distinct call runs before and after the bundle.

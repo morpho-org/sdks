@@ -51,15 +51,16 @@ import { runSimulation } from "./run-simulation.js";
  *   Defaults to `latest`, resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, malformed limits).
+ *   authorizations, malformed limits, or share quotes for
+ *   `blueSupplyCollateral` / `blueWithdrawCollateral`).
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a quote cannot be measured for
- *   the supplied subject, metadata resolution fails, a planned state read
- *   reverts, or native transfer traces are missing.
+ * @throws {MissingVerificationEvidenceError} when a planned state read fails,
+ *   native outgoing traces do not cover value sent, or required metadata is
+ *   unavailable or empty/invalid after a non-transport read.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a block timestamp earlier than

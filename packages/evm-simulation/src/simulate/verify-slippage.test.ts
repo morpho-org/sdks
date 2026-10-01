@@ -162,7 +162,7 @@ describe("verifySlippage", () => {
       }),
     ).toThrow(MissingVerificationEvidenceError);
   });
-  test("error: native quote requires traces for a positive-value transaction", () => {
+  test("error: incoming native refund does not cover outgoing value evidence", () => {
     const nativeLimit = {
       ...limit,
       quote: { assetsPaid: 10n },
@@ -179,7 +179,15 @@ describe("verifySlippage", () => {
         operations: plan.operations,
         before: new Map(),
         after: new Map(),
-        transfers: [],
+        transfers: [
+          {
+            token: ethAddress,
+            from: receiver,
+            to: owner,
+            amount: 2n,
+            txIdx: 0,
+          },
+        ],
         requestTransactions: [{ from: owner, value: 10n }],
       }),
     ).toThrow(MissingVerificationEvidenceError);

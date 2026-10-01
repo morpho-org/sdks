@@ -1,8 +1,7 @@
 import {
   BaseError,
-  createPublicClient,
+  type Client,
   ExecutionRevertedError,
-  http,
   InsufficientFundsError,
   type PublicClient,
 } from "viem";
@@ -75,8 +74,11 @@ const toBoundaryError = (
   });
 };
 
-/** Run one RPC call; anything thrown becomes a typed boundary error. */
-const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
+/** Run one RPC call; anything thrown becomes a typed boundary error. @internal */
+export const rpc = async <T>(
+  label: RpcLabel,
+  call: () => Promise<T>,
+): Promise<T> => {
   try {
     return await call();
   } catch (error) {
@@ -142,8 +144,8 @@ export async function assertEndpointChain(params: {
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - RPC endpoint, execution plan, already-pinned state block,
- *   and the pipeline's abort signal.
+ * @param params - Shared simulation client, execution plan, and already-pinned
+ *   state block.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
@@ -158,22 +160,11 @@ export async function assertEndpointChain(params: {
  * @internal
  */
 export async function executePlan(params: {
-  rpcUrl: string;
+  client: Client & Pick<PublicClient, "getBlock">;
   plan: ExecutionPlan;
   stateBlock: PinnedBlock;
-  signal?: AbortSignal;
 }): Promise<SimulationExecution> {
-  const { rpcUrl, plan, stateBlock, signal } = params;
-
-  const client = createPublicClient({
-    transport: http(rpcUrl, {
-      fetchOptions: signal ? { signal } : undefined,
-      // A failed request must not consume another attempt or a fresh budget.
-      retryCount: 0,
-      // The pipeline abort signal owns the overall execution deadline.
-      timeout: signal ? 0 : undefined,
-    }),
-  });
+  const { client, plan, stateBlock } = params;
 
   // viem's simulateBlocks serializes per-call senders (`account` → `from`)
   // and formats the result for us.

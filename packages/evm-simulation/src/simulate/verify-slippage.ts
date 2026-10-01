@@ -42,20 +42,22 @@ export function verifySlippage(params: {
     for (const measurement of measurements) {
       let delta: bigint;
       if (measurement.type === "native") {
-        const touchesAccount = transfers.some(
-          (transfer) =>
+        const tracedOutgoing = transfers.reduce(
+          (total, transfer) =>
             isAddressEqual(transfer.token, ethAddress) &&
-            (isAddressEqual(transfer.to, measurement.account) ||
-              isAddressEqual(transfer.from, measurement.account)),
+            isAddressEqual(transfer.from, measurement.account)
+              ? total + transfer.amount
+              : total,
+          0n,
         );
-        if (
-          !touchesAccount &&
-          requestTransactions.some(
-            (transaction) =>
-              isAddressEqual(transaction.from, measurement.account) &&
-              (transaction.value ?? 0n) > 0n,
-          )
-        ) {
+        const sentValue = requestTransactions.reduce(
+          (total, transaction) =>
+            isAddressEqual(transaction.from, measurement.account)
+              ? total + (transaction.value ?? 0n)
+              : total,
+          0n,
+        );
+        if (tracedOutgoing < sentValue) {
           throw new MissingVerificationEvidenceError(
             `Missing native transfer evidence for "${measurement.field}" from a transaction with value.`,
             { context: { ...context, field: measurement.field } },

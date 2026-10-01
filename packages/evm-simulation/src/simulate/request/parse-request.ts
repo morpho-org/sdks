@@ -763,7 +763,14 @@ const OPERATION_SPECS: Record<
   vaultV2InKindRedeem: VAULT_SUBJECT,
   vaultV1MigrateToV2: {
     markets: [],
-    addresses: ["sourceVault", "targetVault", "account", "receiver", "asset"],
+    addresses: [
+      "sourceVault",
+      "targetVault",
+      "account",
+      "receiver",
+      "assetPaid",
+      "assetReceived",
+    ],
     requiredAddresses: ["sourceVault", "targetVault"],
   },
 };

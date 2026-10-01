@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
+  BlueAuthorizationSubject,
   SimulationLimits,
   SimulationOperationSubject,
   SlippageLimits,
@@ -18,7 +19,7 @@ export type SimulatedOperation = {
   readonly checkedLimits: SlippageLimits;
   readonly account: Address;
   readonly receiver: Address;
-} & SimulationOperationSubject;
+} & Exclude<SimulationOperationSubject, BlueAuthorizationSubject>;
 
 /** How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {

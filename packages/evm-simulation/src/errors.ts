@@ -364,9 +364,11 @@ export function isSimulationPackageError(
     typeof blockNumber !== "bigint"
   )
     return false;
-  if (stage === "preparation") return typeof authorizationIndex === "number";
-  if (stage !== "execution" && stage !== "verification") return true;
   const c = context as Record<string, unknown>;
+  if (stage === "preparation") return typeof authorizationIndex === "number";
+  if (stage === "verification" && c.operation === undefined)
+    return typeof c.field === "string";
+  if (stage !== "execution" && stage !== "verification") return true;
   const operation = c.operation;
   if (
     typeof operation !== "string" ||

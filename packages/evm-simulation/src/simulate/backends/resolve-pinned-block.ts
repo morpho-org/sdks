@@ -1,9 +1,7 @@
 import type { BlockTag, Client, Hex } from "viem";
 import { getBlock } from "viem/actions";
-import {
-  ExternalServiceError,
-  InvalidSimulationResponseError,
-} from "../../errors.js";
+import { InvalidSimulationResponseError } from "../../errors.js";
+import { rpc } from "./eth-simulate-v1.js";
 
 /** One concrete canonical block: the state anchor for every pinned read. @internal */
 export interface PinnedBlock {
@@ -39,35 +37,25 @@ export async function resolvePinnedBlock(params: {
   readonly signal?: AbortSignal;
 }): Promise<PinnedBlock> {
   const { client, blockNumber, signal } = params;
-  try {
+  const block = await rpc("eth_getBlock", async () => {
     signal?.throwIfAborted();
-    const block = await getBlock(
+    const resolved = await getBlock(
       client,
       typeof blockNumber === "bigint"
         ? { blockNumber }
         : { blockTag: blockNumber ?? "latest" },
     );
     signal?.throwIfAborted();
-    if (block.number === null || block.hash === null) {
-      throw new InvalidSimulationResponseError(
-        "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-      );
-    }
-    return {
-      number: block.number,
-      hash: block.hash,
-      timestamp: block.timestamp,
-    };
-  } catch (error) {
-    if (
-      error instanceof InvalidSimulationResponseError ||
-      error instanceof ExternalServiceError
-    ) {
-      throw error;
-    }
-    throw new ExternalServiceError(
-      `eth_getBlock error: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
+    return resolved;
+  });
+  if (block.number === null || block.hash === null) {
+    throw new InvalidSimulationResponseError(
+      "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
     );
   }
+  return {
+    number: block.number,
+    hash: block.hash,
+    timestamp: block.timestamp,
+  };
 }
