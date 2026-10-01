@@ -551,6 +551,38 @@ describe("parseRequest", () => {
       },
     ],
     [
+      "erc2612Permit typedData chainId mismatch",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...permitAuth,
+            typedData: {
+              ...permitAuth.typedData,
+              domain: { ...permitAuth.typedData.domain, chainId: 42 },
+            },
+          },
+        ],
+      },
+    ],
+    [
+      "blueAuthorizationSignature typedData chainId mismatch",
+      {
+        mode: "preview",
+        transactions: [tx()],
+        authorizations: [
+          {
+            ...blueSigAuth,
+            typedData: {
+              ...blueSigAuth.typedData,
+              domain: { ...blueSigAuth.typedData.domain, chainId: 42 },
+            },
+          },
+        ],
+      },
+    ],
+    [
       "erc2612Permit wrong primaryType",
       {
         mode: "preview",
