@@ -161,6 +161,7 @@ export async function runSimulation(params: {
       .filter((read) => read.phase === phase)
       .map((read) => decodeStateRead(read.read, read.returnData));
 
+  const transfers = parseTransfers(userCalls);
   const parse = (phase: "before" | "after") =>
     parseState({
       reads: decodePhase(phase),
@@ -183,8 +184,6 @@ export async function runSimulation(params: {
               transfers,
             }),
     });
-
-  const transfers = parseTransfers(userCalls);
 
   const before = parse("before");
   const after = parse("after");
