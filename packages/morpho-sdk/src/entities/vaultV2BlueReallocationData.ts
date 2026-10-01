@@ -898,8 +898,9 @@ export class VaultV2BlueReallocationData
    * or allocator capacity are skipped before projecting source interest. The
    * adapter's minimum share minting requirement, supply-share limits, and target
    * absolute or zero relative caps are checked against a one-asset deposit.
-   * Shared cap IDs that a source withdrawal can reduce remain eligible, as do deposits whose
-   * allocation does not increase after rounding.
+   * Shared cap IDs that a source withdrawal can reduce remain eligible. Each
+   * accepted leg counts at least its requested `assets` against the target cap
+   * IDs, so a leg sized to a cap leaves no rounding headroom.
    *
    * Shared-cap discovery is conservative. Operation planning searches at most
    * 1,024 base units above its targeted amount for the nearest executable fit.

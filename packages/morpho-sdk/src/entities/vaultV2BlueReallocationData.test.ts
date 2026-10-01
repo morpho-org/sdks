@@ -1785,6 +1785,50 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     },
   );
 
+  test("behavior: tracks target share value above requested assets", () => {
+    const { data, targetAdapterMarketCapId } = makeFixture({
+      targetSupply: 5n,
+      targetTotalSupplyShares: 1_000_000n,
+      targetPositionAssets: 3n,
+      targetUntracked: 2n,
+      idle: 1n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+    const oldAllocation = data.getAllocation(
+      VAULT,
+      targetAdapterMarketCapId,
+    ).allocation;
+    const assets = 1n;
+
+    // biome-ignore lint/complexity/useLiteralKeys: inspect the simulated transition's target-cap accounting.
+    const transition = data["applyPublicReallocation"]({
+      context: createTestContext(),
+      reallocation: {
+        vault: VAULT,
+        from: { type: "idle" },
+        to: { adapter: TARGET_ADAPTER },
+        assets,
+        penalty: 0n,
+      },
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+    });
+    const targetAdapter = transition.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const targetMarket = transition.data.getMarket(targetParams.id);
+    const targetShares = targetAdapter.supplyShares[targetParams.id] ?? 0n;
+    const trackedAllocation = transition.data.getAllocation(
+      VAULT,
+      targetAdapterMarketCapId,
+    ).allocation;
+
+    expect(trackedAllocation).toBe(targetMarket.toSupplyAssets(targetShares));
+    expect(trackedAllocation).toBeGreaterThan(oldAllocation + assets);
+  });
+
   test("behavior: blocks allocation growth under zero target relative caps", () => {
     const { data } = makeFixture({
       targetSupply: 2n,
@@ -2504,7 +2548,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       ],
     });
 
-    // biome-ignore lint/complexity/useLiteralKeys: prove the omitted smaller call is executable in the simulated transition.
+    // biome-ignore lint/complexity/useLiteralKeys: inspect the share-based allocation rejected by conservative cap tracking.
     const transition = data["applyPublicReallocation"]({
       context: createTestContext(),
       reallocation: {
@@ -2526,6 +2570,15 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(
       transition.data.getAllocation(VAULT, sourceAdapterCapId).allocation,
     ).toBe(8n);
+    const adapter = transition.data.getAdapter(VAULT, TARGET_ADAPTER);
+    const shareBasedAllocation =
+      transition.data
+        .getMarket(sourceParams.id)
+        .toSupplyAssets(adapter.supplyShares[sourceParams.id] ?? 0n) +
+      transition.data
+        .getMarket(targetParams.id)
+        .toSupplyAssets(adapter.supplyShares[targetParams.id] ?? 0n);
+    expect(shareBasedAllocation).toBeLessThanOrEqual(7n);
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
@@ -3029,33 +3082,37 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
   });
 
   test("behavior: selects the nearest non-monotonic shared-cap fit", () => {
-    const maxCandidate = 2n ** 40n - 1n;
+    const operationAmount = 72n;
     const penalty = MathLib.WAD / 1_000n;
     const { data } = makeFixture({
       sourceAdapter: TARGET_ADAPTER,
-      sourceSupply: maxCandidate,
+      sourceSupply: 761_078n,
+      sourceTotalSupplyShares: 1_691_858n,
+      sourcePositionShares: 1_251_351n,
+      sourceUntracked: 1n,
       targetSupply: 1n,
       targetTotalSupplyShares: 1_000_001n,
       targetBorrow: 0n,
       targetPositionAssets: 0n,
-      firstTotalAssets: maxCandidate + 1n,
       vaultLastUpdate: TIMESTAMP - 1n,
       maxRate: MathLib.WAD,
       penalty,
-      allocatorTargetCap: maxCandidate,
+      allocatorTargetCap: 1_000_000n,
+      sourceAbsoluteCap: 1_000_000n,
       targetCaps: [
-        { absoluteCap: maxCandidate, relativeCap: MathLib.WAD },
-        { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
-        { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
+        { absoluteCap: 353_798n, relativeCap: MathLib.WAD },
+        { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 1_000_000n, relativeCap: MathLib.WAD },
       ],
     });
 
-    expect(
-      data.computeVaultV2BlueReallocations(targetParams.id, {
-        maxPenalty: penalty,
-        operation: { type: "borrow", amount: 2n },
-      }).reallocations[0]?.assets,
-    ).toBe(2n);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+      operation: { type: "borrow", amount: operationAmount },
+    });
+
+    expect(result.reallocations[0]?.assets).toBeGreaterThan(operationAmount);
+    expect(result.reallocations[0]?.assets).toBe(82n);
   });
 
   test("default: caps friendly reallocations to the 90% target", () => {
