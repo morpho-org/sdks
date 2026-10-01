@@ -50,6 +50,7 @@ import {
   AccrualPositionUserMismatchError,
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
+  ConflictingMidnightCollateralInputError,
   DuplicateMidnightCollateralIndexError,
   EmptyMidnightCollateralAmountsError,
   EmptyMidnightTakeableOffersError,
@@ -2097,6 +2098,15 @@ describe("MorphoMidnight", () => {
           collateralSupplies: [{ collateralIndex: 1n, assets: 0n }],
         }),
       ).rejects.toThrow(NonPositiveInputError);
+      const mixed = {
+        ...params,
+        collateralSupplies: [{ collateralIndex: 1n, assets: 1n }],
+        reservedCollateralAssets: 1n,
+      };
+      await expect(
+        // @ts-expect-error -- runtime callers can still mix both forms.
+        midnight().supplyCollateralMakeBorrow(mixed),
+      ).rejects.toThrow(ConflictingMidnightCollateralInputError);
     });
   });
 

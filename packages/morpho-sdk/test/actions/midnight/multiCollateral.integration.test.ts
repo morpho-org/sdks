@@ -306,5 +306,15 @@ describe("Midnight multi-collateral bundles on fork", () => {
       wNativeAssets,
     );
     await expect(client.balanceOf({ erc20: usdc })).resolves.toBe(0n);
+
+    // The same bundle succeeds once the skipped approval is sent.
+    await sendRequirements(
+      client,
+      requirements.filter(
+        (requirement) => "to" in requirement && requirement.to === cbBtc,
+      ),
+    );
+    await client.sendTransaction(borrow.buildTx());
+    await expect(readCollateral(client, 1n)).resolves.toBe(cbBtcAssets);
   });
 });

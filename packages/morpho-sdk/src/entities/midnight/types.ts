@@ -10,8 +10,6 @@ import type {
 import type { Address, Hex } from "viem";
 import type {
   MidnightCollateralAmount,
-  MidnightCollateralSupplyInput,
-  MidnightCollateralWithdrawalInput,
   MidnightTakeableOffer,
 } from "../../actions/midnight/types.js";
 import type {
@@ -75,30 +73,25 @@ export interface MidnightReservedCollateralAmount
   readonly reservedAssets?: bigint;
 }
 
-/**
- * Parameters for the Midnight supply-collateral-and-make-borrow maker flow.
- * Pass either `collateralAssets` (with optional `reservedCollateralAssets`
- * and `collateralIndex`) or a `collateralSupplies` list.
- */
-export type SupplyCollateralMakeBorrowParams = MakeOffersParams & {
+/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
+export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly market: MarketInput;
-} & (
-    | {
-        /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
-        readonly collateralAssets: bigint;
-        /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
-        readonly reservedCollateralAssets?: bigint;
-        readonly collateralIndex?: bigint;
-        readonly collateralSupplies?: never;
-      }
-    | {
-        /** Collateral supplied before offer submission, one entry per unique index. */
-        readonly collateralSupplies: readonly MidnightReservedCollateralAmount[];
-        readonly collateralAssets?: never;
-        readonly reservedCollateralAssets?: never;
-        readonly collateralIndex?: never;
-      }
-  );
+  /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
+  readonly collateralAssets: bigint;
+  /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
+  readonly reservedCollateralAssets?: bigint;
+  readonly collateralIndex?: bigint;
+}
+
+/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow with several collaterals. */
+export interface SupplyCollateralListMakeBorrowParams extends MakeOffersParams {
+  readonly market: MarketInput;
+  /** Collateral supplied before offer submission, one entry per unique index. */
+  readonly collateralSupplies: readonly MidnightReservedCollateralAmount[];
+  readonly collateralAssets?: never;
+  readonly reservedCollateralAssets?: never;
+  readonly collateralIndex?: never;
+}
 
 /** Signatures accepted by Midnight action-output transaction builders. */
 export type MidnightActionSignatures =
@@ -194,13 +187,19 @@ export interface TakeBorrowParams extends MarketActionParams {
   readonly deadline: bigint;
 }
 
-/**
- * Parameters for the Midnight supply-collateral-and-take-borrow taker flow.
- * Pass either `collateralAssets` (and optional `collateralIndex`) or a
- * `collateralSupplies` list.
- */
-export type SupplyCollateralTakeBorrowParams = TakeBorrowParams &
-  MidnightCollateralSupplyInput;
+/** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
+export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
+  readonly collateralAssets: bigint;
+  readonly collateralIndex?: bigint;
+}
+
+/** Parameters for the Midnight supply-collateral-and-take-borrow taker flow with several collaterals. */
+export interface SupplyCollateralListTakeBorrowParams extends TakeBorrowParams {
+  /** Collateral supplied before borrowing, one entry per unique index. */
+  readonly collateralSupplies: readonly MidnightCollateralAmount[];
+  readonly collateralAssets?: never;
+  readonly collateralIndex?: never;
+}
 
 /** Parameters for the Midnight supply-collateral flow. */
 export interface SupplyCollateralParams extends MarketActionParams {
@@ -219,16 +218,26 @@ export interface RedeemParams {
   readonly units?: bigint;
 }
 
-/**
- * Parameters for the Midnight repay-and-withdraw-collateral flow. Pass either
- * `withdrawCollateralAssets` (and optional `collateralIndex`) or a
- * `collateralWithdrawals` list.
- */
-export type RepayWithdrawCollateralParams = MarketActionParams & {
+/** Parameters for the Midnight repay-and-withdraw-collateral flow. */
+export interface RepayWithdrawCollateralParams extends MarketActionParams {
   readonly repayAssets: bigint;
+  readonly withdrawCollateralAssets: bigint;
+  readonly collateralIndex?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
-} & MidnightCollateralWithdrawalInput;
+}
+
+/** Parameters for the Midnight repay-and-withdraw-collateral flow with several collaterals. */
+export interface RepayWithdrawCollateralListParams
+  extends Omit<
+    RepayWithdrawCollateralParams,
+    "withdrawCollateralAssets" | "collateralIndex"
+  > {
+  /** Collateral withdrawn, one entry per unique index; empty withdraws nothing. */
+  readonly collateralWithdrawals: readonly MidnightCollateralAmount[];
+  readonly withdrawCollateralAssets?: never;
+  readonly collateralIndex?: never;
+}
 
 /** Parameters for fetching a Midnight user position with market data. */
 export interface GetPositionDataParams {

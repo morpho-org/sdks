@@ -21,6 +21,10 @@ import {
   type WalletClient,
 } from "viem";
 import {
+  resolveMidnightCollateralSupplies,
+  resolveMidnightCollateralWithdrawals,
+} from "../../actions/midnight/collateralAmounts.js";
+import {
   mempoolSubmitOffers,
   midnightCancelOffer,
   midnightRedeem,
@@ -36,10 +40,6 @@ import {
   getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
-import {
-  resolveMidnightCollateralSupplies,
-  resolveMidnightCollateralWithdrawals,
-} from "../../helpers/resolveMidnightCollateralAmounts.js";
 import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
@@ -48,6 +48,7 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
   type ActionRequirement,
+  ConflictingMidnightCollateralInputError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
@@ -87,7 +88,10 @@ import type {
   MidnightActionSignatures,
   OffersData,
   RedeemParams,
+  RepayWithdrawCollateralListParams,
   RepayWithdrawCollateralParams,
+  SupplyCollateralListMakeBorrowParams,
+  SupplyCollateralListTakeBorrowParams,
   SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
@@ -535,6 +539,7 @@ export class MorphoMidnight {
    * @throws {NonPositiveInputError} when any collateral amount, loan assets, or `maxUnits` is non-positive.
    * @throws {NegativeInputError} when `deadline` or any collateral index is negative.
    * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+   * @throws {ConflictingMidnightCollateralInputError} when `collateralSupplies` is combined with single-collateral fields.
    * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
    * @throws {UnknownCollateralIndexError} when a selected collateral is not configured.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
@@ -551,7 +556,9 @@ export class MorphoMidnight {
    *   takeableOffers: quote.data.takeableOffers,
    *   deadline: maxUint256,
    * });
-   *
+   * ```
+   * @example
+   * ```ts
    * const multiCollateralOutput = midnight.supplyCollateralTakeBorrow({
    *   accountAddress: borrower,
    *   marketData,
@@ -567,7 +574,9 @@ export class MorphoMidnight {
    * ```
    */
   supplyCollateralTakeBorrow(
-    params: SupplyCollateralTakeBorrowParams,
+    params:
+      | SupplyCollateralTakeBorrowParams
+      | SupplyCollateralListTakeBorrowParams,
   ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
@@ -844,6 +853,7 @@ export class MorphoMidnight {
    * @throws {NonPositiveInputError} when any collateral amount is non-positive.
    * @throws {NegativeInputError} when any collateral index or reserved amount is negative.
    * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+   * @throws {ConflictingMidnightCollateralInputError} when `collateralSupplies` is combined with single-collateral fields.
    * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
    * @throws {UnknownCollateralIndexError} when a selected collateral is not configured.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
@@ -856,7 +866,9 @@ export class MorphoMidnight {
    *   collateralAssets: 2_000_000n,
    *   offers: [offer],
    * });
-   *
+   * ```
+   * @example
+   * ```ts
    * const multiCollateralOutput = await midnight.supplyCollateralMakeBorrow({
    *   accountAddress: maker,
    *   market: marketData.params,
@@ -869,21 +881,31 @@ export class MorphoMidnight {
    * ```
    */
   async supplyCollateralMakeBorrow(
-    params: SupplyCollateralMakeBorrowParams,
+    params:
+      | SupplyCollateralMakeBorrowParams
+      | SupplyCollateralListMakeBorrowParams,
   ): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    if (params.collateralSupplies == null) {
-      assertNonNegativeAmount(
-        "reservedCollateralAssets",
-        params.reservedCollateralAssets ?? 0n,
-      );
-    } else {
-      for (const [index, supply] of params.collateralSupplies.entries()) {
-        assertNonNegativeAmount(
-          `collateralSupplies[${index}].reservedAssets`,
-          supply.reservedAssets ?? 0n,
+    const reservedByIndex = new Map<bigint, bigint>();
+    if ("collateralSupplies" in params && params.collateralSupplies != null) {
+      if (params.reservedCollateralAssets !== undefined) {
+        throw new ConflictingMidnightCollateralInputError(
+          "collateralSupplies",
+          "reservedCollateralAssets",
         );
       }
+      for (const [index, supply] of params.collateralSupplies.entries()) {
+        const reservedAssets = supply.reservedAssets ?? 0n;
+        assertNonNegativeAmount(
+          `collateralSupplies[${index}].reservedAssets`,
+          reservedAssets,
+        );
+        reservedByIndex.set(supply.collateralIndex, reservedAssets);
+      }
+    } else {
+      const reservedAssets = params.reservedCollateralAssets ?? 0n;
+      assertNonNegativeAmount("reservedCollateralAssets", reservedAssets);
+      reservedByIndex.set(params.collateralIndex ?? 0n, reservedAssets);
     }
 
     const market =
@@ -895,14 +917,11 @@ export class MorphoMidnight {
     const collateralSupplies = resolveMidnightCollateralSupplies(
       market,
       params,
-    ).map((supply, index) => ({
+    ).map((supply) => ({
       ...supply,
       token: MarketUtils.getCollateralByIndex(market, supply.collateralIndex)
         .token,
-      reservedAssets:
-        params.collateralSupplies == null
-          ? (params.reservedCollateralAssets ?? 0n)
-          : (params.collateralSupplies[index]?.reservedAssets ?? 0n),
+      reservedAssets: reservedByIndex.get(supply.collateralIndex) ?? 0n,
     }));
 
     const data = await this.getOffersData({
@@ -1058,6 +1077,7 @@ export class MorphoMidnight {
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NegativeInputError} when an amount, index, or deadline is negative.
    * @throws {NonPositiveInputError} when a `collateralWithdrawals` amount is non-positive, or nothing is repaid or withdrawn.
+   * @throws {ConflictingMidnightCollateralInputError} when `collateralWithdrawals` is combined with single-collateral fields.
    * @throws {DuplicateMidnightCollateralIndexError} when `collateralWithdrawals` repeats an index.
    * @throws {UnknownCollateralIndexError} when a withdrawal selects an unconfigured collateral.
    * @example
@@ -1069,7 +1089,9 @@ export class MorphoMidnight {
    *   withdrawCollateralAssets: 2_000_000n,
    *   deadline: maxUint256,
    * });
-   *
+   * ```
+   * @example
+   * ```ts
    * const multiCollateralOutput = midnight.repayWithdrawCollateral({
    *   accountAddress: borrower,
    *   marketData,
@@ -1083,7 +1105,7 @@ export class MorphoMidnight {
    * ```
    */
   repayWithdrawCollateral(
-    params: RepayWithdrawCollateralParams,
+    params: RepayWithdrawCollateralParams | RepayWithdrawCollateralListParams,
   ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
