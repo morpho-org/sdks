@@ -80,6 +80,56 @@ describe("checkAuthorizations — preview", () => {
     expect(preparations[0]?.calls).toHaveLength(1);
   });
 
+  test("approve replaces a pre-existing allowance", () => {
+    // approve(100) replaces before=777; expected after = 100 − 60 pulled = 40.
+    const before = emptyState({
+      allowances: [
+        { token: TOKEN, owner: TEST_OWNER, spender: SPENDER, amount: 777n },
+      ],
+    });
+    const after = emptyState({
+      allowances: [
+        { token: TOKEN, owner: TEST_OWNER, spender: SPENDER, amount: 40n },
+      ],
+    });
+    expect(() =>
+      checkAuthorizations({
+        ctx: makeCheckContext({ mode: "preview" }),
+        authorizations: [approvalAuth],
+        operations: [],
+        before,
+        after,
+        executedCalls: prepCalls,
+        transfers: pulled,
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: additive expectation would pass wrongly — replacement enforced", () => {
+    // before=777 pulled=60 → additive would expect 817, replacement expects 40.
+    const before = emptyState({
+      allowances: [
+        { token: TOKEN, owner: TEST_OWNER, spender: SPENDER, amount: 777n },
+      ],
+    });
+    const additiveAfter = emptyState({
+      allowances: [
+        { token: TOKEN, owner: TEST_OWNER, spender: SPENDER, amount: 817n },
+      ],
+    });
+    expect(() =>
+      checkAuthorizations({
+        ctx: makeCheckContext({ mode: "preview" }),
+        authorizations: [approvalAuth],
+        operations: [],
+        before,
+        after: additiveAfter,
+        executedCalls: prepCalls,
+        transfers: pulled,
+      }),
+    ).toThrow(PermissionChangeMismatchError);
+  });
+
   test("error: no preparation calls → AuthorizationRequestMismatchError", () => {
     const before = emptyState();
     const after = emptyState({

@@ -31,6 +31,8 @@ export interface MorphoSubjects {
     };
     readonly preLiquidation?: Address;
   }[];
+  /** Markets read without a decoded binding (e.g. Vault V1 queue markets): `market` + `idToMarketParams` are emitted. */
+  readonly queueMarkets?: readonly MarketId[];
   readonly positions: readonly {
     readonly marketId: MarketId;
     readonly owner: Address;
@@ -125,6 +127,33 @@ export function morphoReads(subjects: MorphoSubjects): StateRead[] {
     }
   }
 
+  for (const marketId of subjects.queueMarkets ?? []) {
+    reads.push({
+      kind: "morpho.market",
+      id: `morpho.market:${marketId}`,
+      to: morpho,
+      data: encodeFunctionData({
+        abi: blueAbi,
+        functionName: "market",
+        args: [marketId],
+      }),
+      morpho,
+      marketId,
+    });
+    reads.push({
+      kind: "morpho.marketParams",
+      id: `morpho.marketParams:${marketId}`,
+      to: morpho,
+      data: encodeFunctionData({
+        abi: blueAbi,
+        functionName: "idToMarketParams",
+        args: [marketId],
+      }),
+      morpho,
+      marketId,
+    });
+  }
+
   for (const { marketId, owner } of subjects.positions) {
     reads.push({
       kind: "morpho.position",
@@ -187,6 +216,13 @@ export function decodeMorphoValue(
   | MorphoPositionTuple
   | bigint
   | boolean
+  | {
+      loanToken: Address;
+      collateralToken: Address;
+      oracle: Address;
+      irm: Address;
+      lltv: bigint;
+    }
   | { preLltv: bigint; preLCF: bigint; preLIF: bigint } {
   try {
     switch (read.kind) {
@@ -232,6 +268,15 @@ export function decodeMorphoValue(
           functionName: "nonce",
           data,
         });
+      case "morpho.marketParams": {
+        const [loanToken, collateralToken, oracle, irm, lltv] =
+          decodeFunctionResult({
+            abi: blueAbi,
+            functionName: "idToMarketParams",
+            data,
+          });
+        return { loanToken, collateralToken, oracle, irm, lltv };
+      }
       case "morpho.oraclePrice":
         return decodeFunctionResult({
           abi: blueOracleAbi,
@@ -282,6 +327,16 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
   readonly markets: readonly (MorphoMarketTuple & {
     readonly marketId: MarketId;
   })[];
+  readonly marketParams: ReadonlyMap<
+    MarketId,
+    {
+      readonly loanToken: Address;
+      readonly collateralToken: Address;
+      readonly oracle: Address;
+      readonly irm: Address;
+      readonly lltv: bigint;
+    }
+  >;
   readonly oraclePrices: ReadonlyMap<Address, bigint>;
   readonly irmRates: ReadonlyMap<MarketId, { readonly rateAtTarget?: bigint }>;
   readonly preLiquidations: ReadonlyMap<
@@ -296,6 +351,16 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
     owner: Address;
   })[] = [];
   const markets: (MorphoMarketTuple & { marketId: MarketId })[] = [];
+  const marketParams = new Map<
+    MarketId,
+    {
+      loanToken: Address;
+      collateralToken: Address;
+      oracle: Address;
+      irm: Address;
+      lltv: bigint;
+    }
+  >();
   const oraclePrices = new Map<Address, bigint>();
   const irmRates = new Map<MarketId, { rateAtTarget?: bigint }>();
   const preLiquidations = new Map<
@@ -328,6 +393,17 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
       case "morpho.market": {
         const tuple = value as MorphoMarketTuple;
         markets.push({ marketId: read.marketId, ...tuple });
+        break;
+      }
+      case "morpho.marketParams": {
+        const tuple = value as {
+          loanToken: Address;
+          collateralToken: Address;
+          oracle: Address;
+          irm: Address;
+          lltv: bigint;
+        };
+        marketParams.set(read.marketId, tuple);
         break;
       }
       case "morpho.oraclePrice":
@@ -371,6 +447,7 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
   return {
     positions,
     markets,
+    marketParams,
     oraclePrices,
     irmRates,
     preLiquidations,

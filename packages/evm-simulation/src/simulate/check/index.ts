@@ -12,17 +12,15 @@ import type {
 } from "../../result.js";
 import type { Transfer as TxTransfer } from "../../types.js";
 import type { ParsedState } from "../state/types.js";
-import { checkBlueOperation, checkBlueOperationLimits } from "./blue.js";
-import { checkExitOperationLimits } from "./exits.js";
+import { checkBlueOperation } from "./blue.js";
 import {
   type CheckContext,
   type CheckedOperation,
   checkContext,
-  matchLimits,
+  limitsFor,
   operationSubject,
 } from "./helpers.js";
-import { checkRefinanceLimits } from "./refinance.js";
-import { checkVaultOperation, checkVaultOperationLimits } from "./vault.js";
+import { checkVaultOperation } from "./vault.js";
 
 const unmatched = (ctx: CheckContext, limit: OperationLimit): never => {
   throw new ConsumerLimitViolationError(
@@ -84,31 +82,21 @@ export function checkOperations(params: {
       case "blueAuthorization": {
         if ("market" in operation)
           touchedMarketIds.add(operation.market.marketId);
-        for (const limit of matchLimits(ctx, operation)) matched.add(limit);
-        {
-          const verified = checkBlueOperation(
-            ctx,
-            operation,
-            accruedBefore,
-            after,
-          );
-          checkBlueOperationLimits(ctx, verified);
-          checked.push(verified);
-        }
+        for (const limit of limitsFor(ctx, operation.type, operation))
+          matched.add(limit);
+        checked.push(
+          checkBlueOperation(ctx, operation, accruedBefore, after, actionDiff),
+        );
         break;
       }
       case "blueRefinance": {
         touchedMarketIds.add(operation.sourceMarket.marketId);
         touchedMarketIds.add(operation.targetMarket.marketId);
-        for (const limit of matchLimits(ctx, operation)) matched.add(limit);
-        const verified = checkBlueOperation(
-          ctx,
-          operation,
-          accruedBefore,
-          after,
+        for (const limit of limitsFor(ctx, operation.type, operation))
+          matched.add(limit);
+        checked.push(
+          checkBlueOperation(ctx, operation, accruedBefore, after, actionDiff),
         );
-        checkRefinanceLimits(ctx, verified);
-        checked.push(verified);
         break;
       }
       case "vaultV1Deposit":
@@ -151,17 +139,8 @@ export function checkOperations(params: {
           after,
           actionDiff,
         );
-        for (const limit of matchLimits(ctx, operation)) matched.add(limit);
-        if (
-          verified.operation.type === "vaultV1Deposit" ||
-          verified.operation.type === "vaultV2Deposit" ||
-          verified.operation.type === "vaultV1Withdraw" ||
-          verified.operation.type === "vaultV2Withdraw" ||
-          verified.operation.type === "vaultV1Redeem" ||
-          verified.operation.type === "vaultV2Redeem"
-        )
-          checkVaultOperationLimits(ctx, verified);
-        else checkExitOperationLimits(ctx, verified);
+        for (const limit of limitsFor(ctx, operation.type, operation))
+          matched.add(limit);
         checked.push(verified);
         if (fee != null) fees.push(fee);
         break;

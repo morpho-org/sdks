@@ -1,25 +1,26 @@
-import { ethAddress } from "viem";
 import type { DecodedOperation } from "../../decode/operation.js";
 import {
   MissingVerificationEvidenceError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
 } from "../../errors.js";
+import type { SimulationStateChange } from "../../result.js";
 import type { ParsedState, RiskMetric } from "../state/types.js";
 import {
   borrowApyAfter,
   type CheckContext,
   type CheckedOperation,
   checkLtv,
-  expectEquals,
-  expectMax,
-  expectMin,
+  eq,
   fail,
   findMarket,
   findPosition,
-  matchLimits,
+  fmtRisk,
+  limitsFor,
+  limitViolation,
   opContext,
   reallocationPenalty,
+  riskMetricWad,
   riskOn,
   toMarketEntity,
   utilizationAfter,
@@ -53,16 +54,46 @@ export function checkBlueOperation(
   >,
   accruedBefore: ParsedState,
   after: ParsedState,
+  actionDiff: SimulationStateChange,
 ): CheckedOperation {
   if (operation.type === "blueAuthorization") {
+    for (const limit of limitsFor(ctx, "blueAuthorization", operation)) {
+      if (!eq(limit.authorized, operation.authorized))
+        limitViolation(
+          ctx,
+          operation,
+          "authorized",
+          limit.authorized,
+          operation.authorized,
+          "The bundle does not match the declared constraint.",
+        );
+      if (
+        limit.expectedIsAuthorized !== undefined &&
+        limit.expectedIsAuthorized !== operation.isAuthorized
+      )
+        limitViolation(
+          ctx,
+          operation,
+          "expectedIsAuthorized",
+          `${limit.expectedIsAuthorized}`,
+          `${operation.isAuthorized}`,
+          "The bundle does not match the declared constraint.",
+        );
+    }
     return {
       operation,
       outcome: { isAuthorized: operation.isAuthorized },
-    } as CheckedOperation;
+    };
   }
 
   if (operation.type === "blueRefinance") {
-    return checkRefinanceOperation(ctx, operation, accruedBefore, after);
+    return checkRefinanceOperation(
+      ctx,
+      operation,
+      accruedBefore,
+      after,
+      actionDiff,
+    );
   }
 
   const marketId = operation.market.marketId;
@@ -124,10 +155,60 @@ export function checkBlueOperation(
           operation,
           `Market supply grew by "${supplyDelta}", expected "${operation.assets}"`,
         );
+      for (const limit of limitsFor(ctx, "blueSupply", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.assets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.assets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedOnBehalf !== undefined &&
+          !eq(limit.expectedOnBehalf, operation.onBehalf)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedOnBehalf",
+            limit.expectedOnBehalf,
+            operation.onBehalf,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.minSupplySharesMinted !== undefined &&
+          shares < limit.minSupplySharesMinted
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minSupplySharesMinted",
+            `${limit.minSupplySharesMinted}`,
+            `${shares}`,
+            "Decrease the bound or adjust the operation.",
+          );
+      }
       return {
         operation,
         outcome: { supplySharesMinted: shares },
-      } as CheckedOperation;
+      };
     }
 
     case "blueWithdraw": {
@@ -160,17 +241,106 @@ export function checkBlueOperation(
           operation,
           `Full withdraw left "${next.supplyShares}" supply shares`,
         );
+      const utilization = utilizationAfter(marketAfterEntity);
+      const penalty = reallocationPenalty(operation.reallocations ?? []);
+      for (const limit of limitsFor(ctx, "blueWithdraw", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedFullClose !== undefined &&
+          limit.expectedFullClose !== operation.fullClose
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedFullClose",
+            `${limit.expectedFullClose}`,
+            `${operation.fullClose}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.minAssetsReceived !== undefined &&
+          assetsOut < limit.minAssetsReceived
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minAssetsReceived",
+            `${limit.minAssetsReceived}`,
+            `${assetsOut}`,
+            "Decrease the bound or adjust the operation.",
+          );
+        if (
+          limit.maxSupplySharesBurned !== undefined &&
+          sharesBurned > limit.maxSupplySharesBurned
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxSupplySharesBurned",
+            `${limit.maxSupplySharesBurned}`,
+            `${sharesBurned}`,
+            "Increase the bound or reduce the operation.",
+          );
+        {
+          const util = riskMetricWad(utilization);
+          if (
+            limit.maxUtilizationAfterWad !== undefined &&
+            (util === null || util > limit.maxUtilizationAfterWad)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxUtilizationAfterWad",
+              `${limit.maxUtilizationAfterWad}`,
+              fmtRisk(utilization),
+              "Increase the bound or reduce the operation.",
+            );
+        }
+        if (
+          limit.maxReallocationPenaltyAssets !== undefined &&
+          penalty > limit.maxReallocationPenaltyAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxReallocationPenaltyAssets",
+            `${limit.maxReallocationPenaltyAssets}`,
+            `${penalty}`,
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         operation,
         outcome: {
           assetsReceived: assetsOut,
           supplySharesBurned: sharesBurned,
-          utilizationAfterWad: utilizationAfter(marketAfterEntity),
-          reallocationPenaltyAssets: reallocationPenalty(
-            operation.reallocations ?? [],
-          ),
+          utilizationAfterWad: utilization,
+          reallocationPenaltyAssets: penalty,
         },
-      } as CheckedOperation;
+      };
     }
 
     case "blueSupplyCollateral": {
@@ -184,10 +354,62 @@ export function checkBlueOperation(
         fail(ctx, operation, "SupplyCollateral must not change supply");
       if (next.borrowShares !== before.borrowShares)
         fail(ctx, operation, "SupplyCollateral must not change borrow");
+      const ltvAfter = riskOn(next, marketAfterEntity).ltvWad;
+      for (const limit of limitsFor(ctx, "blueSupplyCollateral", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.collateralAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.collateralAssets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedOnBehalf !== undefined &&
+          !eq(limit.expectedOnBehalf, operation.onBehalf)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedOnBehalf",
+            limit.expectedOnBehalf,
+            operation.onBehalf,
+            "The bundle does not match the declared constraint.",
+          );
+        const ltv = riskMetricWad(ltvAfter);
+        if (
+          limit.maxLtvAfterWad !== undefined &&
+          (ltv === null || ltv > limit.maxLtvAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxLtvAfterWad",
+            `${limit.maxLtvAfterWad}`,
+            fmtRisk(ltvAfter),
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         operation,
-        outcome: { ltvAfterWad: riskOn(next, marketAfterEntity).ltvWad },
-      } as CheckedOperation;
+        outcome: { ltvAfterWad: ltvAfter },
+      };
     }
 
     case "blueWithdrawCollateral": {
@@ -204,13 +426,78 @@ export function checkBlueOperation(
         marketAfterEntity,
         internalsAfter.params.lltv,
       );
+      for (const limit of limitsFor(ctx, "blueWithdrawCollateral", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.collateralAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.collateralAssets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        const ltv = riskMetricWad(risk.ltvWad);
+        if (
+          limit.maxLtvAfterWad !== undefined &&
+          (ltv === null || ltv > limit.maxLtvAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxLtvAfterWad",
+            `${limit.maxLtvAfterWad}`,
+            fmtRisk(risk.ltvWad),
+            "Increase the bound or reduce the operation.",
+          );
+        const health = riskMetricWad(risk.healthFactorWad);
+        if (
+          limit.minHealthFactorAfterWad !== undefined &&
+          health !== null &&
+          health < limit.minHealthFactorAfterWad
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minHealthFactorAfterWad",
+            `${limit.minHealthFactorAfterWad}`,
+            fmtRisk(risk.healthFactorWad),
+            "Decrease the bound or adjust the operation.",
+          );
+      }
       return {
         operation,
         outcome: {
           ltvAfterWad: risk.ltvWad,
           healthFactorAfterWad: risk.healthFactorWad,
         },
-      } as CheckedOperation;
+      };
     }
 
     case "blueBorrow": {
@@ -241,19 +528,134 @@ export function checkBlueOperation(
         marketAfterEntity,
         internalsAfter.params.lltv,
       );
+      const utilization = utilizationAfter(marketAfterEntity);
+      const borrowApy = borrowApyAfter(marketAfterEntity);
+      const penalty = reallocationPenalty(operation.reallocations ?? []);
+      for (const limit of limitsFor(ctx, "blueBorrow", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.borrowAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.borrowAssets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.maxBorrowSharesMinted !== undefined &&
+          shares > limit.maxBorrowSharesMinted
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxBorrowSharesMinted",
+            `${limit.maxBorrowSharesMinted}`,
+            `${shares}`,
+            "Increase the bound or reduce the operation.",
+          );
+        const ltv = riskMetricWad(risk.ltvWad);
+        if (
+          limit.maxLtvAfterWad !== undefined &&
+          (ltv === null || ltv > limit.maxLtvAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxLtvAfterWad",
+            `${limit.maxLtvAfterWad}`,
+            fmtRisk(risk.ltvWad),
+            "Increase the bound or reduce the operation.",
+          );
+        const health = riskMetricWad(risk.healthFactorWad);
+        if (
+          limit.minHealthFactorAfterWad !== undefined &&
+          health !== null &&
+          health < limit.minHealthFactorAfterWad
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minHealthFactorAfterWad",
+            `${limit.minHealthFactorAfterWad}`,
+            fmtRisk(risk.healthFactorWad),
+            "Decrease the bound or adjust the operation.",
+          );
+        const util = riskMetricWad(utilization);
+        if (
+          limit.maxUtilizationAfterWad !== undefined &&
+          (util === null || util > limit.maxUtilizationAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxUtilizationAfterWad",
+            `${limit.maxUtilizationAfterWad}`,
+            fmtRisk(utilization),
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.maxAfterBorrowApyWad !== undefined &&
+          borrowApy > limit.maxAfterBorrowApyWad
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxAfterBorrowApyWad",
+            `${limit.maxAfterBorrowApyWad}`,
+            `${borrowApy}`,
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.maxReallocationPenaltyAssets !== undefined &&
+          penalty > limit.maxReallocationPenaltyAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxReallocationPenaltyAssets",
+            `${limit.maxReallocationPenaltyAssets}`,
+            `${penalty}`,
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         operation,
         outcome: {
           borrowSharesMinted: shares,
           ltvAfterWad: risk.ltvWad,
           healthFactorAfterWad: risk.healthFactorWad,
-          utilizationAfterWad: utilizationAfter(marketAfterEntity),
-          borrowApyAfterWad: borrowApyAfter(marketAfterEntity),
-          reallocationPenaltyAssets: reallocationPenalty(
-            operation.reallocations ?? [],
-          ),
+          utilizationAfterWad: utilization,
+          borrowApyAfterWad: borrowApy,
+          reallocationPenaltyAssets: penalty,
         },
-      } as CheckedOperation;
+      };
     }
 
     case "blueSupplyCollateralBorrow": {
@@ -277,19 +679,162 @@ export function checkBlueOperation(
         marketAfterEntity,
         internalsAfter.params.lltv,
       );
+      const utilization = utilizationAfter(marketAfterEntity);
+      const borrowApy = borrowApyAfter(marketAfterEntity);
+      const penalty = reallocationPenalty(operation.reallocations ?? []);
+      for (const limit of limitsFor(
+        ctx,
+        "blueSupplyCollateralBorrow",
+        operation,
+      )) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedCollateralAssets !== undefined &&
+          limit.expectedCollateralAssets !== operation.collateralAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedCollateralAssets",
+            `${limit.expectedCollateralAssets}`,
+            `${operation.collateralAssets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedBorrowAssets !== undefined &&
+          limit.expectedBorrowAssets !== operation.borrowAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedBorrowAssets",
+            `${limit.expectedBorrowAssets}`,
+            `${operation.borrowAssets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedOnBehalf !== undefined &&
+          !eq(limit.expectedOnBehalf, operation.onBehalf)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedOnBehalf",
+            limit.expectedOnBehalf,
+            operation.onBehalf,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.maxBorrowSharesMinted !== undefined &&
+          shares > limit.maxBorrowSharesMinted
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxBorrowSharesMinted",
+            `${limit.maxBorrowSharesMinted}`,
+            `${shares}`,
+            "Increase the bound or reduce the operation.",
+          );
+        const ltv = riskMetricWad(risk.ltvWad);
+        if (
+          limit.maxLtvAfterWad !== undefined &&
+          (ltv === null || ltv > limit.maxLtvAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxLtvAfterWad",
+            `${limit.maxLtvAfterWad}`,
+            fmtRisk(risk.ltvWad),
+            "Increase the bound or reduce the operation.",
+          );
+        const health = riskMetricWad(risk.healthFactorWad);
+        if (
+          limit.minHealthFactorAfterWad !== undefined &&
+          health !== null &&
+          health < limit.minHealthFactorAfterWad
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minHealthFactorAfterWad",
+            `${limit.minHealthFactorAfterWad}`,
+            fmtRisk(risk.healthFactorWad),
+            "Decrease the bound or adjust the operation.",
+          );
+        const util = riskMetricWad(utilization);
+        if (
+          limit.maxUtilizationAfterWad !== undefined &&
+          (util === null || util > limit.maxUtilizationAfterWad)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxUtilizationAfterWad",
+            `${limit.maxUtilizationAfterWad}`,
+            fmtRisk(utilization),
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.maxAfterBorrowApyWad !== undefined &&
+          borrowApy > limit.maxAfterBorrowApyWad
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxAfterBorrowApyWad",
+            `${limit.maxAfterBorrowApyWad}`,
+            `${borrowApy}`,
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.maxReallocationPenaltyAssets !== undefined &&
+          penalty > limit.maxReallocationPenaltyAssets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxReallocationPenaltyAssets",
+            `${limit.maxReallocationPenaltyAssets}`,
+            `${penalty}`,
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         operation,
         outcome: {
           borrowSharesMinted: shares,
           ltvAfterWad: risk.ltvWad,
           healthFactorAfterWad: risk.healthFactorWad,
-          utilizationAfterWad: utilizationAfter(marketAfterEntity),
-          borrowApyAfterWad: borrowApyAfter(marketAfterEntity),
-          reallocationPenaltyAssets: reallocationPenalty(
-            operation.reallocations ?? [],
-          ),
+          utilizationAfterWad: utilization,
+          borrowApyAfterWad: borrowApy,
+          reallocationPenaltyAssets: penalty,
         },
-      } as CheckedOperation;
+      };
     }
 
     case "blueRepay":
@@ -345,6 +890,144 @@ export function checkBlueOperation(
                 marketAfterEntity,
                 internalsAfter.params.lltv,
               );
+        for (const limit of limitsFor(
+          ctx,
+          "blueRepayWithdrawCollateral",
+          operation,
+        )) {
+          if (
+            limit.marketId.toLowerCase() !==
+            operation.market.marketId.toLowerCase()
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "marketId",
+              limit.marketId,
+              operation.market.marketId,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedWithdrawAssets !== undefined &&
+            limit.expectedWithdrawAssets !== operation.collateralAssets
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedWithdrawAssets",
+              `${limit.expectedWithdrawAssets}`,
+              `${operation.collateralAssets}`,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedOnBehalf !== undefined &&
+            !eq(limit.expectedOnBehalf, operation.onBehalf)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedOnBehalf",
+              limit.expectedOnBehalf,
+              operation.onBehalf,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedReceiver !== undefined &&
+            !eq(limit.expectedReceiver, operation.receiver)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedReceiver",
+              limit.expectedReceiver,
+              operation.receiver,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedFullClose !== undefined &&
+            limit.expectedFullClose !== operation.fullClose
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedFullClose",
+              `${limit.expectedFullClose}`,
+              `${operation.fullClose}`,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.maxAssetsPaid !== undefined &&
+            assetsPaid > limit.maxAssetsPaid
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxAssetsPaid",
+              `${limit.maxAssetsPaid}`,
+              `${assetsPaid}`,
+              "Increase the bound or reduce the operation.",
+            );
+          if (
+            limit.minBorrowSharesBurned !== undefined &&
+            sharesBurned < limit.minBorrowSharesBurned
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "minBorrowSharesBurned",
+              `${limit.minBorrowSharesBurned}`,
+              `${sharesBurned}`,
+              "Decrease the bound or adjust the operation.",
+            );
+          if (
+            limit.maxResidualBorrowShares !== undefined &&
+            next.borrowShares > limit.maxResidualBorrowShares
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxResidualBorrowShares",
+              `${limit.maxResidualBorrowShares}`,
+              `${next.borrowShares}`,
+              "Increase the bound or reduce the operation.",
+            );
+          if (limit.minRefundAssets !== undefined && 0n < limit.minRefundAssets)
+            limitViolation(
+              ctx,
+              operation,
+              "minRefundAssets",
+              `${limit.minRefundAssets}`,
+              "0",
+              "Decrease the bound or adjust the operation.",
+            );
+          const ltv = riskMetricWad(risk.ltvWad);
+          if (
+            limit.maxLtvAfterWad !== undefined &&
+            (ltv === null || ltv > limit.maxLtvAfterWad)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxLtvAfterWad",
+              `${limit.maxLtvAfterWad}`,
+              fmtRisk(risk.ltvWad),
+              "Increase the bound or reduce the operation.",
+            );
+          const health = riskMetricWad(risk.healthFactorWad);
+          if (
+            limit.minHealthFactorAfterWad !== undefined &&
+            health !== null &&
+            health < limit.minHealthFactorAfterWad
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "minHealthFactorAfterWad",
+              `${limit.minHealthFactorAfterWad}`,
+              fmtRisk(risk.healthFactorWad),
+              "Decrease the bound or adjust the operation.",
+            );
+        }
         return {
           operation,
           outcome: {
@@ -355,7 +1038,90 @@ export function checkBlueOperation(
             ltvAfterWad: risk.ltvWad,
             healthFactorAfterWad: risk.healthFactorWad,
           },
-        } as CheckedOperation;
+        };
+      }
+      for (const limit of limitsFor(ctx, "blueRepay", operation)) {
+        if (
+          limit.marketId.toLowerCase() !==
+          operation.market.marketId.toLowerCase()
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "marketId",
+            limit.marketId,
+            operation.market.marketId,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedOnBehalf !== undefined &&
+          !eq(limit.expectedOnBehalf, operation.onBehalf)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedOnBehalf",
+            limit.expectedOnBehalf,
+            operation.onBehalf,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedFullClose !== undefined &&
+          limit.expectedFullClose !== operation.fullClose
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedFullClose",
+            `${limit.expectedFullClose}`,
+            `${operation.fullClose}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.maxAssetsPaid !== undefined &&
+          assetsPaid > limit.maxAssetsPaid
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxAssetsPaid",
+            `${limit.maxAssetsPaid}`,
+            `${assetsPaid}`,
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.minBorrowSharesBurned !== undefined &&
+          sharesBurned < limit.minBorrowSharesBurned
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minBorrowSharesBurned",
+            `${limit.minBorrowSharesBurned}`,
+            `${sharesBurned}`,
+            "Decrease the bound or adjust the operation.",
+          );
+        if (
+          limit.maxResidualBorrowShares !== undefined &&
+          next.borrowShares > limit.maxResidualBorrowShares
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxResidualBorrowShares",
+            `${limit.maxResidualBorrowShares}`,
+            `${next.borrowShares}`,
+            "Increase the bound or reduce the operation.",
+          );
+        if (limit.minRefundAssets !== undefined && 0n < limit.minRefundAssets)
+          limitViolation(
+            ctx,
+            operation,
+            "minRefundAssets",
+            `${limit.minRefundAssets}`,
+            "0",
+            "Decrease the bound or adjust the operation.",
+          );
       }
       return {
         operation,
@@ -365,7 +1131,7 @@ export function checkBlueOperation(
           residualBorrowShares: next.borrowShares,
           refundAssets: 0n,
         },
-      } as CheckedOperation;
+      };
     }
 
     default: {
@@ -379,13 +1145,11 @@ export function checkBlueOperation(
 }
 
 /** Funding debit overrides for repay legs pulling capped amounts. @internal */
-// biome-ignore lint/complexity/useMaxParams: helpers read clearest with positional arguments
 export function fundingDebitOverrides(
   operations: readonly DecodedOperation[],
   accruedBefore: ParsedState,
-  owner: `0x${string}`,
-): Map<string, bigint> {
-  const overrides = new Map<string, bigint>();
+): Map<DecodedOperation, bigint> {
+  const overrides = new Map<DecodedOperation, bigint>();
   for (const op of operations) {
     if (
       (op.type !== "blueRepay" && op.type !== "blueRepayWithdrawCollateral") ||
@@ -402,460 +1166,7 @@ export function fundingDebitOverrides(
       op.repay.type === "assets"
         ? op.repay.assets
         : entity.toBorrowAssets(op.repay.shares, "Up");
-    const token = op.funding.type === "erc20" ? op.funding.token : ethAddress;
-    const key = `${owner.toLowerCase()}:${token.toLowerCase()}`;
-    overrides.set(key, (overrides.get(key) ?? 0n) + paid);
+    overrides.set(op, paid);
   }
   return overrides;
-}
-
-/**
- * Assert every consumer limit declared for one checked Blue operation.
- * Called by {@link checkOperations} right after the economic check that
- * produced the outcome.
- * @internal
- */
-export function checkBlueOperationLimits(
-  ctx: CheckContext,
-  checked: CheckedOperation,
-): void {
-  const { operation: op, outcome } = checked;
-  for (const limit of matchLimits(ctx, op)) {
-    switch (limit.type) {
-      case "blueSupply": {
-        if (op.type !== "blueSupply") continue;
-        const o = outcome as { supplySharesMinted: bigint };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.assets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minSupplySharesMinted",
-          limit.minSupplySharesMinted,
-          o.supplySharesMinted,
-        );
-        break;
-      }
-      case "blueWithdraw": {
-        if (op.type !== "blueWithdraw") continue;
-        const o = outcome as {
-          assetsReceived: bigint;
-          supplySharesBurned: bigint;
-          utilizationAfterWad: RiskMetric;
-          reallocationPenaltyAssets: bigint;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedFullClose",
-          limit.expectedFullClose,
-          op.fullClose,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minAssetsReceived",
-          limit.minAssetsReceived,
-          o.assetsReceived,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxSupplySharesBurned",
-          limit.maxSupplySharesBurned,
-          o.supplySharesBurned,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxUtilizationAfterWad",
-          limit.maxUtilizationAfterWad,
-          o.utilizationAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxReallocationPenaltyAssets",
-          limit.maxReallocationPenaltyAssets,
-          o.reallocationPenaltyAssets,
-        );
-        break;
-      }
-      case "blueSupplyCollateral": {
-        if (op.type !== "blueSupplyCollateral") continue;
-        const o = outcome as { ltvAfterWad: RiskMetric };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.collateralAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxLtvAfterWad",
-          limit.maxLtvAfterWad,
-          o.ltvAfterWad,
-        );
-        break;
-      }
-      case "blueBorrow": {
-        if (op.type !== "blueBorrow") continue;
-        const o = outcome as {
-          borrowSharesMinted: bigint;
-          ltvAfterWad: RiskMetric;
-          healthFactorAfterWad: RiskMetric;
-          utilizationAfterWad: RiskMetric;
-          borrowApyAfterWad: bigint;
-          reallocationPenaltyAssets: bigint;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.borrowAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxBorrowSharesMinted",
-          limit.maxBorrowSharesMinted,
-          o.borrowSharesMinted,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxLtvAfterWad",
-          limit.maxLtvAfterWad,
-          o.ltvAfterWad,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minHealthFactorAfterWad",
-          limit.minHealthFactorAfterWad,
-          o.healthFactorAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxUtilizationAfterWad",
-          limit.maxUtilizationAfterWad,
-          o.utilizationAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxAfterBorrowApyWad",
-          limit.maxAfterBorrowApyWad,
-          o.borrowApyAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxReallocationPenaltyAssets",
-          limit.maxReallocationPenaltyAssets,
-          o.reallocationPenaltyAssets,
-        );
-        break;
-      }
-      case "blueSupplyCollateralBorrow": {
-        if (op.type !== "blueSupplyCollateralBorrow") continue;
-        const o = outcome as {
-          borrowSharesMinted: bigint;
-          ltvAfterWad: RiskMetric;
-          healthFactorAfterWad: RiskMetric;
-          utilizationAfterWad: RiskMetric;
-          borrowApyAfterWad: bigint;
-          reallocationPenaltyAssets: bigint;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedCollateralAssets",
-          limit.expectedCollateralAssets,
-          op.collateralAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedBorrowAssets",
-          limit.expectedBorrowAssets,
-          op.borrowAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxBorrowSharesMinted",
-          limit.maxBorrowSharesMinted,
-          o.borrowSharesMinted,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxLtvAfterWad",
-          limit.maxLtvAfterWad,
-          o.ltvAfterWad,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minHealthFactorAfterWad",
-          limit.minHealthFactorAfterWad,
-          o.healthFactorAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxUtilizationAfterWad",
-          limit.maxUtilizationAfterWad,
-          o.utilizationAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxAfterBorrowApyWad",
-          limit.maxAfterBorrowApyWad,
-          o.borrowApyAfterWad,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxReallocationPenaltyAssets",
-          limit.maxReallocationPenaltyAssets,
-          o.reallocationPenaltyAssets,
-        );
-        break;
-      }
-      case "blueRepay": {
-        if (op.type !== "blueRepay") continue;
-        const o = outcome as {
-          assetsPaid: bigint;
-          borrowSharesBurned: bigint;
-          residualBorrowShares: bigint;
-          refundAssets: bigint;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedFullClose",
-          limit.expectedFullClose,
-          op.fullClose,
-        );
-        expectMax(ctx, op, "maxAssetsPaid", limit.maxAssetsPaid, o.assetsPaid);
-        expectMin(
-          ctx,
-          op,
-          "minBorrowSharesBurned",
-          limit.minBorrowSharesBurned,
-          o.borrowSharesBurned,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxResidualBorrowShares",
-          limit.maxResidualBorrowShares,
-          o.residualBorrowShares,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minRefundAssets",
-          limit.minRefundAssets,
-          o.refundAssets,
-        );
-        break;
-      }
-      case "blueWithdrawCollateral": {
-        if (op.type !== "blueWithdrawCollateral") continue;
-        const o = outcome as {
-          ltvAfterWad: RiskMetric;
-          healthFactorAfterWad: RiskMetric;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.collateralAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxLtvAfterWad",
-          limit.maxLtvAfterWad,
-          o.ltvAfterWad,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minHealthFactorAfterWad",
-          limit.minHealthFactorAfterWad,
-          o.healthFactorAfterWad,
-        );
-        break;
-      }
-      case "blueRepayWithdrawCollateral": {
-        if (op.type !== "blueRepayWithdrawCollateral") continue;
-        const o = outcome as {
-          assetsPaid: bigint;
-          borrowSharesBurned: bigint;
-          residualBorrowShares: bigint;
-          refundAssets: bigint;
-          ltvAfterWad: RiskMetric;
-          healthFactorAfterWad: RiskMetric;
-        };
-        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
-        expectEquals(
-          ctx,
-          op,
-          "expectedWithdrawAssets",
-          limit.expectedWithdrawAssets,
-          op.collateralAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedFullClose",
-          limit.expectedFullClose,
-          op.fullClose,
-        );
-        expectMax(ctx, op, "maxAssetsPaid", limit.maxAssetsPaid, o.assetsPaid);
-        expectMin(
-          ctx,
-          op,
-          "minBorrowSharesBurned",
-          limit.minBorrowSharesBurned,
-          o.borrowSharesBurned,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxResidualBorrowShares",
-          limit.maxResidualBorrowShares,
-          o.residualBorrowShares,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minRefundAssets",
-          limit.minRefundAssets,
-          o.refundAssets,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxLtvAfterWad",
-          limit.maxLtvAfterWad,
-          o.ltvAfterWad,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minHealthFactorAfterWad",
-          limit.minHealthFactorAfterWad,
-          o.healthFactorAfterWad,
-        );
-        break;
-      }
-      case "blueAuthorization": {
-        if (op.type !== "blueAuthorization") continue;
-        expectEquals(ctx, op, "authorized", limit.authorized, op.authorized);
-        expectEquals(
-          ctx,
-          op,
-          "expectedIsAuthorized",
-          limit.expectedIsAuthorized,
-          op.isAuthorized,
-        );
-        break;
-      }
-      default:
-        break;
-    }
-  }
 }

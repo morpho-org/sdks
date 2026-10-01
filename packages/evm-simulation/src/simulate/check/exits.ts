@@ -1,4 +1,4 @@
-import { AccrualVaultV2, type MarketId, MathLib } from "@morpho-org/blue-sdk";
+import { AccrualVaultV2, MathLib } from "@morpho-org/blue-sdk";
 import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AssetChangeMismatchError,
@@ -10,14 +10,10 @@ import {
   type CheckContext,
   type CheckedOperation,
   eq,
-  eqLimit,
-  expectEquals,
-  expectMax,
-  expectMin,
   fail,
   findVault,
+  limitsFor,
   limitViolation,
-  matchLimits,
   opContext,
   receiverCredit,
 } from "./helpers.js";
@@ -34,8 +30,8 @@ import { vaultInternals } from "./vault.js";
  *   adapter allocation exactly; penalty shares burned from the owner on top
  *   of the exit shares; receiver credit == `exitAssets` (forceWithdraw) or
  *   `previewRedeem(shares)` (forceRedeem).
- * - `vaultV1/2InKindRedeem`: owner receives Blue supply shares per decoded
- *   leg — owner's supplyShares += leg shares, vault's market position −= the
+ * - `vaultV1/2InKindRedeem`: `onBehalf` receives Blue supply shares per decoded
+ *   leg — onBehalf's supplyShares += leg shares, vault's market position −= the
  *   same; idle-covered portion pays underlying.
  * @internal
  */
@@ -146,10 +142,84 @@ export function checkExitOperation(
           `Migration moved "${walletNet}" wallet assets — migrated assets must route vault-to-vault`,
           { context: opContext(ctx, operation) },
         );
+      for (const limit of limitsFor(ctx, "vaultV1MigrateToV2", operation)) {
+        if (!eq(limit.sourceVault, operation.sourceVault))
+          limitViolation(
+            ctx,
+            operation,
+            "sourceVault",
+            limit.sourceVault,
+            operation.sourceVault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (!eq(limit.targetVault, operation.targetVault))
+          limitViolation(
+            ctx,
+            operation,
+            "targetVault",
+            limit.targetVault,
+            operation.targetVault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !==
+            (operation.amount.type === "assets"
+              ? operation.amount.assets
+              : undefined)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.amount.type === "assets" ? operation.amount.assets : undefined}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedShares !== undefined &&
+          limit.expectedShares !==
+            (operation.amount.type === "shares"
+              ? operation.amount.shares
+              : undefined)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedShares",
+            `${limit.expectedShares}`,
+            `${operation.amount.type === "shares" ? operation.amount.shares : undefined}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.minTargetSharesMinted !== undefined &&
+          minted < limit.minTargetSharesMinted
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minTargetSharesMinted",
+            `${limit.minTargetSharesMinted}`,
+            `${minted}`,
+            "Decrease the bound or adjust the operation.",
+          );
+      }
       return {
         operation,
         outcome: { targetSharesMinted: minted },
-      } as CheckedOperation;
+      };
     }
 
     case "vaultV2ForceWithdraw":
@@ -353,6 +423,189 @@ export function checkExitOperation(
           `Idle assets dropped "${before.idleAssets - next.idleAssets}", above the exit "${exitAssets}" plus penalty "${penaltyAssets}"`,
         );
 
+      if (operation.type === "vaultV2ForceWithdraw") {
+        for (const limit of limitsFor(ctx, "vaultV2ForceWithdraw", operation)) {
+          if (!eq(limit.vault, operation.vault))
+            limitViolation(
+              ctx,
+              operation,
+              "vault",
+              limit.vault,
+              operation.vault,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedExitAssets !== undefined &&
+            limit.expectedExitAssets !== operation.exitAssets
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedExitAssets",
+              `${limit.expectedExitAssets}`,
+              `${operation.exitAssets}`,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedAdapter !== undefined &&
+            !eq(limit.expectedAdapter, operation.adapter)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedAdapter",
+              limit.expectedAdapter,
+              operation.adapter,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.maxSharesBurned !== undefined &&
+            burned > limit.maxSharesBurned
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxSharesBurned",
+              `${limit.maxSharesBurned}`,
+              `${burned}`,
+              "Increase the bound or reduce the operation.",
+            );
+          if (
+            limit.minAssetsReceived !== undefined &&
+            credit < limit.minAssetsReceived
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "minAssetsReceived",
+              `${limit.minAssetsReceived}`,
+              `${credit}`,
+              "Decrease the bound or adjust the operation.",
+            );
+          if (
+            limit.maxPenaltyAssets !== undefined &&
+            penaltyAssets > limit.maxPenaltyAssets
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxPenaltyAssets",
+              `${limit.maxPenaltyAssets}`,
+              `${penaltyAssets}`,
+              "Increase the bound or reduce the operation.",
+            );
+        }
+      } else {
+        for (const limit of limitsFor(ctx, "vaultV2ForceRedeem", operation)) {
+          if (!eq(limit.vault, operation.vault))
+            limitViolation(
+              ctx,
+              operation,
+              "vault",
+              limit.vault,
+              operation.vault,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedShares !== undefined &&
+            limit.expectedShares !== operation.shares
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedShares",
+              `${limit.expectedShares}`,
+              `${operation.shares}`,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedRecipient !== undefined &&
+            !eq(limit.expectedRecipient, operation.receiver)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedRecipient",
+              limit.expectedRecipient,
+              operation.receiver,
+              "The bundle does not match the declared constraint.",
+            );
+          if (
+            limit.expectedOnBehalf !== undefined &&
+            !eq(limit.expectedOnBehalf, operation.onBehalf)
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "expectedOnBehalf",
+              limit.expectedOnBehalf,
+              operation.onBehalf,
+              "The bundle does not match the declared constraint.",
+            );
+          if (limit.expectedDeallocations !== undefined) {
+            const expected = limit.expectedDeallocations;
+            const observed = operation.deallocations;
+            const same =
+              expected.length === observed.length &&
+              expected.every(
+                (leg, index) =>
+                  eq(leg.adapter, observed[index]!.adapter) &&
+                  (leg.marketId ?? "0x").toLowerCase() ===
+                    (observed[index]!.marketId ?? "0x").toLowerCase() &&
+                  leg.assets === observed[index]!.assets,
+              );
+            if (!same)
+              limitViolation(
+                ctx,
+                operation,
+                "expectedDeallocations",
+                JSON.stringify(expected, (_k, v) =>
+                  typeof v === "bigint" ? v.toString() : v,
+                ),
+                JSON.stringify(observed, (_k, v) =>
+                  typeof v === "bigint" ? v.toString() : v,
+                ),
+                "The bundle does not match the declared constraint.",
+              );
+          }
+          if (
+            limit.minAssetsReceived !== undefined &&
+            credit < limit.minAssetsReceived
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "minAssetsReceived",
+              `${limit.minAssetsReceived}`,
+              `${credit}`,
+              "Decrease the bound or adjust the operation.",
+            );
+          if (
+            limit.maxPenaltyShares !== undefined &&
+            penaltyShares > limit.maxPenaltyShares
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxPenaltyShares",
+              `${limit.maxPenaltyShares}`,
+              `${penaltyShares}`,
+              "Increase the bound or reduce the operation.",
+            );
+          if (
+            limit.maxPenaltyAssets !== undefined &&
+            penaltyAssets > limit.maxPenaltyAssets
+          )
+            limitViolation(
+              ctx,
+              operation,
+              "maxPenaltyAssets",
+              `${limit.maxPenaltyAssets}`,
+              `${penaltyAssets}`,
+              "Increase the bound or reduce the operation.",
+            );
+        }
+      }
       return {
         operation,
         outcome: isForceWithdraw
@@ -407,7 +660,8 @@ export function checkExitOperation(
       for (const leg of operation.markets) {
         const ownerBefore =
           accruedBefore.positions.find(
-            (p) => p.marketId === leg.marketId && eq(p.user, operation.owner),
+            (p) =>
+              p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
           ) ??
           fail(
             ctx,
@@ -416,7 +670,8 @@ export function checkExitOperation(
           );
         const ownerAfter =
           after.positions.find(
-            (p) => p.marketId === leg.marketId && eq(p.user, operation.owner),
+            (p) =>
+              p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
           ) ??
           fail(
             ctx,
@@ -439,27 +694,127 @@ export function checkExitOperation(
             `In-kind leg "${leg.marketId}" credited no supply shares`,
           );
       }
+      const supplyAssetsByMarket = operation.markets.map((leg) => {
+        const ownerBefore = accruedBefore.positions.find(
+          (p) => p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
+        );
+        const ownerAfter = after.positions.find(
+          (p) => p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
+        );
+        return {
+          marketId: leg.marketId,
+          assets:
+            (ownerAfter?.supplyAssets ?? 0n) -
+            (ownerBefore?.supplyAssets ?? 0n),
+        };
+      });
+      for (const limit of limitsFor(ctx, operation.type, operation)) {
+        if (!eq(limit.vault, operation.vault))
+          limitViolation(
+            ctx,
+            operation,
+            "vault",
+            limit.vault,
+            operation.vault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.assets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.assets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (limit.expectedMarketIds !== undefined) {
+          const observed = operation.markets.map((leg) => leg.marketId);
+          const same =
+            limit.expectedMarketIds.length === observed.length &&
+            limit.expectedMarketIds.every(
+              (marketId, index) =>
+                marketId.toLowerCase() === observed[index]!.toLowerCase(),
+            );
+          if (!same)
+            limitViolation(
+              ctx,
+              operation,
+              "expectedMarketIds",
+              `[${limit.expectedMarketIds.join(", ")}]`,
+              `[${observed.join(", ")}]`,
+              "The bundle does not match the declared constraint.",
+            );
+        }
+        if (
+          limit.maxSharesBurned !== undefined &&
+          burned > limit.maxSharesBurned
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxSharesBurned",
+            `${limit.maxSharesBurned}`,
+            `${burned}`,
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.minIdleAssetsReceived !== undefined &&
+          credit < limit.minIdleAssetsReceived
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minIdleAssetsReceived",
+            `${limit.minIdleAssetsReceived}`,
+            `${credit}`,
+            "Decrease the bound or adjust the operation.",
+          );
+        for (const minimum of limit.minSupplyAssetsByMarket ?? []) {
+          const leg = supplyAssetsByMarket.find(
+            (entry) =>
+              entry.marketId.toLowerCase() === minimum.marketId.toLowerCase(),
+          );
+          if (leg == null || leg.assets < minimum.minAssets)
+            limitViolation(
+              ctx,
+              operation,
+              "minSupplyAssetsByMarket",
+              `${minimum.minAssets}`,
+              `${leg?.assets}`,
+              `Market "${minimum.marketId}" did not supply the declared minimum.`,
+            );
+        }
+        if (limit.maxPenaltyAssets !== undefined && 0n > limit.maxPenaltyAssets)
+          limitViolation(
+            ctx,
+            operation,
+            "maxPenaltyAssets",
+            `${limit.maxPenaltyAssets}`,
+            "0",
+            "Increase the bound or reduce the operation.",
+          );
+        if (
+          limit.maxResidualShareAllowance !== undefined &&
+          0n > limit.maxResidualShareAllowance
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxResidualShareAllowance",
+            `${limit.maxResidualShareAllowance}`,
+            "0",
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         operation,
         outcome: {
           sharesBurned: burned,
           idleAssetsReceived: credit,
-          supplyAssetsByMarket: operation.markets.map((leg) => {
-            const ownerBefore = accruedBefore.positions.find(
-              (p) =>
-                p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
-            );
-            const ownerAfter = after.positions.find(
-              (p) =>
-                p.marketId === leg.marketId && eq(p.user, operation.onBehalf),
-            );
-            return {
-              marketId: leg.marketId,
-              assets:
-                (ownerAfter?.supplyAssets ?? 0n) -
-                (ownerBefore?.supplyAssets ?? 0n),
-            };
-          }),
+          supplyAssetsByMarket,
           penaltyAssets: 0n,
           residualShareAllowance: 0n,
         },
@@ -472,273 +827,6 @@ export function checkExitOperation(
         `checkExitOperation received ${JSON.stringify(_exhaustive)}`,
         { context: opContext(ctx, operation as DecodedOperation) },
       );
-    }
-  }
-}
-
-/**
- * Assert every consumer limit declared for one checked vault exit /
- * migration / in-kind operation. Called by {@link checkOperations} right
- * after the economic check that produced the outcome.
- * @internal
- */
-export function checkExitOperationLimits(
-  ctx: CheckContext,
-  checked: CheckedOperation,
-): void {
-  const { operation: op, outcome } = checked;
-  for (const limit of matchLimits(ctx, op)) {
-    switch (limit.type) {
-      case "vaultV1MigrateToV2": {
-        if (op.type !== "vaultV1MigrateToV2") continue;
-        const o = outcome as { targetSharesMinted: bigint };
-        expectEquals(ctx, op, "sourceVault", limit.sourceVault, op.sourceVault);
-        expectEquals(ctx, op, "targetVault", limit.targetVault, op.targetVault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minTargetSharesMinted",
-          limit.minTargetSharesMinted,
-          o.targetSharesMinted,
-        );
-        if (limit.expectedAssets !== undefined) {
-          const observed =
-            op.amount.type === "assets" ? op.amount.assets : undefined;
-          expectEquals(
-            ctx,
-            op,
-            "expectedAssets",
-            limit.expectedAssets,
-            observed,
-          );
-        }
-        if (limit.expectedShares !== undefined) {
-          const observed =
-            op.amount.type === "shares" ? op.amount.shares : undefined;
-          expectEquals(
-            ctx,
-            op,
-            "expectedShares",
-            limit.expectedShares,
-            observed,
-          );
-        }
-        break;
-      }
-      case "vaultV2ForceWithdraw": {
-        if (op.type !== "vaultV2ForceWithdraw") continue;
-        const o = outcome as {
-          sharesBurned: bigint;
-          assetsReceived: bigint;
-          penaltyAssets: bigint;
-        };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedExitAssets",
-          limit.expectedExitAssets,
-          op.exitAssets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedAdapter",
-          limit.expectedAdapter,
-          op.adapter,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxSharesBurned",
-          limit.maxSharesBurned,
-          o.sharesBurned,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minAssetsReceived",
-          limit.minAssetsReceived,
-          o.assetsReceived,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxPenaltyAssets",
-          limit.maxPenaltyAssets,
-          o.penaltyAssets,
-        );
-        break;
-      }
-      case "vaultV2ForceRedeem": {
-        if (op.type !== "vaultV2ForceRedeem") continue;
-        const o = outcome as {
-          assetsReceived: bigint;
-          penaltyShares: bigint;
-          penaltyAssets: bigint;
-        };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedShares",
-          limit.expectedShares,
-          op.shares,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedRecipient",
-          limit.expectedRecipient,
-          op.receiver,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedOnBehalf",
-          limit.expectedOnBehalf,
-          op.onBehalf,
-        );
-        if (limit.expectedDeallocations !== undefined) {
-          const expected = limit.expectedDeallocations;
-          const observed = op.deallocations;
-          const same =
-            expected.length === observed.length &&
-            expected.every(
-              (leg, index) =>
-                eqLimit(leg.adapter, observed[index]?.adapter) &&
-                eqLimit(leg.marketId, observed[index]?.marketId) &&
-                leg.assets === observed[index]?.assets,
-            );
-          if (!same)
-            limitViolation(
-              ctx,
-              op,
-              "expectedDeallocations",
-              expected,
-              observed,
-              "The bundle does not match the declared constraint.",
-            );
-        }
-        expectMin(
-          ctx,
-          op,
-          "minAssetsReceived",
-          limit.minAssetsReceived,
-          o.assetsReceived,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxPenaltyShares",
-          limit.maxPenaltyShares,
-          o.penaltyShares,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxPenaltyAssets",
-          limit.maxPenaltyAssets,
-          o.penaltyAssets,
-        );
-        break;
-      }
-      case "vaultV1InKindRedeem":
-      case "vaultV2InKindRedeem": {
-        if (
-          op.type !== "vaultV1InKindRedeem" &&
-          op.type !== "vaultV2InKindRedeem"
-        )
-          continue;
-        const o = outcome as {
-          sharesBurned: bigint;
-          idleAssetsReceived: bigint;
-          supplyAssetsByMarket: readonly {
-            marketId: MarketId;
-            assets: bigint;
-          }[];
-          penaltyAssets: bigint;
-          residualShareAllowance: bigint;
-        };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.assets,
-        );
-        if (limit.expectedMarketIds !== undefined) {
-          const expected = limit.expectedMarketIds;
-          const observed = op.markets.map((leg) => leg.marketId);
-          const same =
-            expected.length === observed.length &&
-            expected.every((marketId, index) =>
-              eqLimit(marketId, observed[index]),
-            );
-          if (!same)
-            limitViolation(
-              ctx,
-              op,
-              "expectedMarketIds",
-              expected,
-              observed,
-              "The bundle does not match the declared constraint.",
-            );
-        }
-        expectMax(
-          ctx,
-          op,
-          "maxSharesBurned",
-          limit.maxSharesBurned,
-          o.sharesBurned,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minIdleAssetsReceived",
-          limit.minIdleAssetsReceived,
-          o.idleAssetsReceived,
-        );
-        for (const minimum of limit.minSupplyAssetsByMarket ?? []) {
-          const leg = o.supplyAssetsByMarket.find((entry) =>
-            eqLimit(entry.marketId, minimum.marketId),
-          );
-          if (leg == null || leg.assets < minimum.minAssets)
-            limitViolation(
-              ctx,
-              op,
-              "minSupplyAssetsByMarket",
-              minimum.minAssets,
-              leg?.assets,
-              `Market "${minimum.marketId}" did not supply the declared minimum.`,
-            );
-        }
-        expectMax(
-          ctx,
-          op,
-          "maxPenaltyAssets",
-          limit.maxPenaltyAssets,
-          o.penaltyAssets,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxResidualShareAllowance",
-          limit.maxResidualShareAllowance,
-          o.residualShareAllowance,
-        );
-        break;
-      }
-      default:
-        break;
     }
   }
 }

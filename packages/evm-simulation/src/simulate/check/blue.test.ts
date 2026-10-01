@@ -1,20 +1,17 @@
+import { MarketUtils } from "@morpho-org/blue-sdk";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { ConsumerLimitViolationError } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import {
+  emptyDiff,
   makeCheckContext,
   makeMarketState,
   makeParsedState,
   TEST_MARKET_ID,
   TEST_OWNER,
 } from "../../test-helpers/index.js";
-import {
-  checkBlueOperation,
-  checkBlueOperationLimits,
-  fundingDebitOverrides,
-} from "./blue.js";
-import type { CheckedOperation } from "./helpers.js";
+import { checkBlueOperation, fundingDebitOverrides } from "./blue.js";
 
 const TOKEN: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 
@@ -44,6 +41,7 @@ describe("checkBlueOperation", () => {
       op,
       makeParsedState(),
       makeParsedState(),
+      { ...emptyDiff },
     );
     expect(checked.outcome).toEqual({ isAuthorized: true });
   });
@@ -58,7 +56,9 @@ describe("checkBlueOperation", () => {
       funding: { type: "erc20", token: TOKEN, assets: 100n },
     } as unknown as Parameters<typeof checkBlueOperation>[1];
     const empty = makeParsedState();
-    expect(() => checkBlueOperation(ctx, op, empty, empty)).toThrow();
+    expect(() =>
+      checkBlueOperation(ctx, op, empty, empty, { ...emptyDiff }),
+    ).toThrow();
   });
 
   test("blueSupply: position grows by the exact minted shares", () => {
@@ -80,7 +80,9 @@ describe("checkBlueOperation", () => {
       onBehalf: TEST_OWNER,
       funding: { type: "erc20", token: TOKEN, assets: 100n },
     } as unknown as Parameters<typeof checkBlueOperation>[1];
-    const checked = checkBlueOperation(ctx, op, before, after);
+    const checked = checkBlueOperation(ctx, op, before, after, {
+      ...emptyDiff,
+    });
     expect(
       (checked.outcome as { supplySharesMinted: bigint }).supplySharesMinted,
     ).toBe(100_000n);
@@ -88,69 +90,157 @@ describe("checkBlueOperation", () => {
 });
 
 describe("fundingDebitOverrides", () => {
+  test("keyed per operation — a same-token supply gets no repay override", () => {
+    const repayOp = {
+      type: "blueRepay",
+      transactionIndex: 0,
+      market,
+      repay: { type: "assets", assets: 10n },
+      onBehalf: TEST_OWNER,
+      funding: { type: "erc20", token: TOKEN, assets: 10n },
+    } as unknown as Parameters<typeof checkBlueOperation>[1];
+    const supplyOp = {
+      type: "blueSupply",
+      transactionIndex: 1,
+      market,
+      funding: { type: "erc20", token: TOKEN, assets: 5n },
+    } as unknown as Parameters<typeof checkBlueOperation>[1];
+    const state = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
+    });
+    const overrides = fundingDebitOverrides([repayOp, supplyOp], state);
+    expect(overrides.get(repayOp)).toBe(10n);
+    expect(overrides.has(supplyOp)).toBe(false);
+  });
+
   test("empty for non-repay operations", () => {
     const op = {
       type: "blueSupply",
       funding: { type: "erc20", token: TOKEN, assets: 5n },
     } as unknown as Parameters<typeof checkBlueOperation>[1];
-    expect(
-      fundingDebitOverrides([op], makeParsedState(), TEST_OWNER).size,
-    ).toBe(0);
+    expect(fundingDebitOverrides([op], makeParsedState()).size).toBe(0);
   });
 });
 
-describe("checkBlueOperationLimits", () => {
+describe("checkBlueOperation — consumer limits", () => {
   const ctxWith = (operations: OperationLimit[]) =>
     makeCheckContext({
       limits: { ...makeCheckContext().limits, operations },
     });
 
-  const checked = (operation: object, outcome: object) =>
-    ({ operation, outcome }) as CheckedOperation;
-
-  // biome-ignore lint/complexity/useMaxParams: pass/fail helper reads clearest with positional arguments
-  const expectPass = (
-    operation: object,
-    outcome: object,
-    limit: OperationLimit,
-  ) =>
-    expect(() =>
-      checkBlueOperationLimits(ctxWith([limit]), checked(operation, outcome)),
-    ).not.toThrow();
-
-  // biome-ignore lint/complexity/useMaxParams: pass/fail helper reads clearest with positional arguments
-  const expectFail = (
-    operation: object,
-    outcome: object,
-    limit: OperationLimit,
-  ) =>
-    expect(() =>
-      checkBlueOperationLimits(ctxWith([limit]), checked(operation, outcome)),
-    ).toThrow(ConsumerLimitViolationError);
-
   const OTHER: Address = getAddress(
     "0x00000000000000000000000000000000000000ff",
   );
-  const finite = (valueWad: bigint) => ({ type: "finite", valueWad }) as const;
-  const unbounded = { type: "unbounded", reason: "zeroLiquidity" } as const;
+
+  type Op = Parameters<typeof checkBlueOperation>[1];
+
+  const run =
+    (args: {
+      op: Op;
+      before: ReturnType<typeof makeMarketState>;
+      after: ReturnType<typeof makeMarketState>;
+      limits: OperationLimit[];
+    }) =>
+    () =>
+      checkBlueOperation(
+        ctxWith(args.limits),
+        args.op,
+        args.before,
+        args.after,
+        {
+          ...emptyDiff,
+        },
+      );
+
+  const mkOp = (op: object) =>
+    ({ onBehalf: TEST_OWNER, receiver: TEST_OWNER, ...op }) as Op;
+  const mkLimit = (limit: object) => limit as OperationLimit;
+
+  const ORACLE = {
+    oraclePrice: 10n ** 36n,
+    totalBorrowAssets: 1_000_000n,
+    totalBorrowShares: 1_000_000n,
+  };
+  const IRM = { rateAtTargetPerSecondWad: 0n };
+
+  describe("blueAuthorization", () => {
+    const AUTH: Address = getAddress(
+      "0x00000000000000000000000000000000000000aa",
+    );
+    const op = mkOp({
+      type: "blueAuthorization",
+      transactionIndex: 0,
+      authorized: AUTH,
+      isAuthorized: true,
+    });
+    const state = makeParsedState();
+    const call = (limits: OperationLimit[]) => () =>
+      checkBlueOperation(ctxWith(limits), op, state, state, { ...emptyDiff });
+    test("pass", () => {
+      expect(
+        call([
+          {
+            type: "blueAuthorization",
+            authorized: AUTH,
+            expectedIsAuthorized: true,
+          },
+        ]),
+      ).not.toThrow();
+    });
+    test.each<[string, object]>([
+      ["authorized", { authorized: OTHER }],
+      ["expectedIsAuthorized", { expectedIsAuthorized: false }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        call([
+          mkLimit({ type: "blueAuthorization", authorized: AUTH, ...override }),
+        ]),
+      ).toThrow(ConsumerLimitViolationError);
+    });
+  });
 
   describe("blueSupply", () => {
-    const op = {
+    const minted = MarketUtils.toSupplyShares(
+      100n,
+      { totalSupplyAssets: 1_000n, totalSupplyShares: 1_000n },
+      "Down",
+    );
+    const before = makeMarketState({ marketId: TEST_MARKET_ID });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      position: { supplyAssets: 100n, supplyShares: minted },
+      market: {
+        totalSupplyAssets: 1_100n,
+        totalSupplyShares: 1_000n + minted,
+        liquidityAssets: 1_100n,
+      },
+    });
+    const op = mkOp({
       type: "blueSupply",
       transactionIndex: 0,
       market,
       assets: 100n,
       onBehalf: TEST_OWNER,
-    };
-    const outcome = { supplySharesMinted: 100n };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueSupply",
-        marketId: TEST_MARKET_ID,
-        expectedAssets: 100n,
-        expectedOnBehalf: TEST_OWNER,
-        minSupplySharesMinted: 50n,
-      });
+      funding: { type: "erc20", token: TOKEN, assets: 100n },
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupply",
+              marketId: TEST_MARKET_ID,
+              expectedAssets: 100n,
+              expectedOnBehalf: TEST_OWNER,
+              minSupplySharesMinted: 1n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -162,41 +252,68 @@ describe("checkBlueOperationLimits", () => {
       ],
       ["expectedAssets", { expectedAssets: 99n }],
       ["expectedOnBehalf", { expectedOnBehalf: OTHER }],
-      ["minSupplySharesMinted", { minSupplySharesMinted: 101n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueSupply",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
+      ["minSupplySharesMinted", { minSupplySharesMinted: 999_999_999n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupply",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
   describe("blueWithdraw", () => {
-    const op = {
+    const burned = MarketUtils.toSupplyShares(
+      100n,
+      { totalSupplyAssets: 1_000n, totalSupplyShares: 1_000n },
+      "Up",
+    );
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      position: { supplyAssets: 200n, supplyShares: burned + 200n },
+    });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      position: { supplyAssets: 100n, supplyShares: 200n },
+      market: { liquidityAssets: 900n },
+    });
+    const op = mkOp({
       type: "blueWithdraw",
       transactionIndex: 0,
       market,
+      amount: { type: "assets", assets: 100n },
       receiver: TEST_OWNER,
       fullClose: false,
-    };
-    const outcome = {
-      assetsReceived: 100n,
-      supplySharesBurned: 100n,
-      utilizationAfterWad: finite(500n),
-      reallocationPenaltyAssets: 0n,
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueWithdraw",
-        marketId: TEST_MARKET_ID,
-        expectedReceiver: TEST_OWNER,
-        expectedFullClose: false,
-        minAssetsReceived: 50n,
-        maxSupplySharesBurned: 200n,
-        maxUtilizationAfterWad: 600n,
-        maxReallocationPenaltyAssets: 0n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueWithdraw",
+              marketId: TEST_MARKET_ID,
+              expectedReceiver: TEST_OWNER,
+              expectedFullClose: false,
+              minAssetsReceived: 1n,
+              maxSupplySharesBurned: 10n ** 30n,
+              maxUtilizationAfterWad: 10n ** 30n,
+              maxReallocationPenaltyAssets: 10n ** 30n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -208,36 +325,65 @@ describe("checkBlueOperationLimits", () => {
       ],
       ["expectedReceiver", { expectedReceiver: OTHER }],
       ["expectedFullClose", { expectedFullClose: true }],
-      ["minAssetsReceived", { minAssetsReceived: 101n }],
-      ["maxSupplySharesBurned", { maxSupplySharesBurned: 99n }],
-      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: 400n }],
+      ["minAssetsReceived", { minAssetsReceived: 10n ** 30n }],
+      ["maxSupplySharesBurned", { maxSupplySharesBurned: 0n }],
+      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: -1n }],
       ["maxReallocationPenaltyAssets", { maxReallocationPenaltyAssets: -1n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueWithdraw",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueWithdraw",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
   describe("blueSupplyCollateral", () => {
-    const op = {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { borrowShares: 100n, collateral: 300n },
+    });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { borrowShares: 100n, collateral: 400n },
+    });
+    const op = mkOp({
       type: "blueSupplyCollateral",
       transactionIndex: 0,
       market,
       collateralAssets: 100n,
       onBehalf: TEST_OWNER,
-    };
-    const outcome = { ltvAfterWad: finite(100n) };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueSupplyCollateral",
-        marketId: TEST_MARKET_ID,
-        expectedAssets: 100n,
-        expectedOnBehalf: TEST_OWNER,
-        maxLtvAfterWad: 200n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupplyCollateral",
+              marketId: TEST_MARKET_ID,
+              expectedAssets: 100n,
+              expectedOnBehalf: TEST_OWNER,
+              maxLtvAfterWad: 10n ** 30n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -249,81 +395,63 @@ describe("checkBlueOperationLimits", () => {
       ],
       ["expectedAssets", { expectedAssets: 99n }],
       ["expectedOnBehalf", { expectedOnBehalf: OTHER }],
-      ["maxLtvAfterWad", { maxLtvAfterWad: 99n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueSupplyCollateral",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
-    });
-    test("violation: maxLtvAfterWad vs non-finite metric", () => {
-      expectFail(
-        op,
-        { ltvAfterWad: unbounded },
-        {
-          type: "blueSupplyCollateral",
-          marketId: TEST_MARKET_ID,
-          maxLtvAfterWad: 10n ** 27n,
-        },
-      );
-    });
-    test("pass: min bound vs non-finite metric", () => {
-      const borrowOp = {
-        type: "blueBorrow",
-        transactionIndex: 0,
-        market,
-        borrowAssets: 100n,
-        receiver: TEST_OWNER,
-      };
-      expectPass(
-        borrowOp,
-        {
-          borrowSharesMinted: 100n,
-          ltvAfterWad: finite(100n),
-          healthFactorAfterWad: unbounded,
-          utilizationAfterWad: finite(100n),
-          borrowApyAfterWad: 1n,
-          reallocationPenaltyAssets: 0n,
-        },
-        {
-          type: "blueBorrow",
-          marketId: TEST_MARKET_ID,
-          minHealthFactorAfterWad: 10n ** 27n,
-        },
-      );
+      ["maxLtvAfterWad", { maxLtvAfterWad: -1n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupplyCollateral",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
-  describe("blueBorrow", () => {
-    const op = {
-      type: "blueBorrow",
+  describe("blueWithdrawCollateral", () => {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { borrowShares: 100n, collateral: 400n },
+    });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { borrowShares: 100n, collateral: 300n },
+    });
+    const op = mkOp({
+      type: "blueWithdrawCollateral",
       transactionIndex: 0,
       market,
-      borrowAssets: 100n,
+      collateralAssets: 100n,
       receiver: TEST_OWNER,
-    };
-    const outcome = {
-      borrowSharesMinted: 100n,
-      ltvAfterWad: finite(100n),
-      healthFactorAfterWad: finite(200n),
-      utilizationAfterWad: finite(300n),
-      borrowApyAfterWad: 400n,
-      reallocationPenaltyAssets: 0n,
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueBorrow",
-        marketId: TEST_MARKET_ID,
-        expectedAssets: 100n,
-        expectedReceiver: TEST_OWNER,
-        maxBorrowSharesMinted: 200n,
-        maxLtvAfterWad: 200n,
-        minHealthFactorAfterWad: 100n,
-        maxUtilizationAfterWad: 400n,
-        maxAfterBorrowApyWad: 500n,
-        maxReallocationPenaltyAssets: 0n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueWithdrawCollateral",
+              marketId: TEST_MARKET_ID,
+              expectedAssets: 100n,
+              expectedReceiver: TEST_OWNER,
+              maxLtvAfterWad: 10n ** 30n,
+              minHealthFactorAfterWad: 0n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -335,54 +463,159 @@ describe("checkBlueOperationLimits", () => {
       ],
       ["expectedAssets", { expectedAssets: 99n }],
       ["expectedReceiver", { expectedReceiver: OTHER }],
-      ["maxBorrowSharesMinted", { maxBorrowSharesMinted: 99n }],
-      ["maxLtvAfterWad", { maxLtvAfterWad: 99n }],
-      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 201n }],
-      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: 299n }],
-      ["maxAfterBorrowApyWad", { maxAfterBorrowApyWad: 399n }],
+      ["maxLtvAfterWad", { maxLtvAfterWad: -1n }],
+      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 10n ** 30n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueWithdrawCollateral",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
+    });
+  });
+
+  describe("blueBorrow", () => {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { collateral: 400n },
+    });
+    const borrowShares = MarketUtils.toBorrowShares(
+      100n,
+      { totalBorrowAssets: 1_000_000n, totalBorrowShares: 1_000_000n },
+      "Up",
+    );
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: { ...ORACLE, liquidityAssets: 900n },
+      internals: IRM,
+      position: { collateral: 400n, borrowShares },
+    });
+    const op = mkOp({
+      type: "blueBorrow",
+      transactionIndex: 0,
+      market,
+      borrowAssets: 100n,
+      receiver: TEST_OWNER,
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueBorrow",
+              marketId: TEST_MARKET_ID,
+              expectedAssets: 100n,
+              expectedReceiver: TEST_OWNER,
+              maxBorrowSharesMinted: 10n ** 30n,
+              maxLtvAfterWad: 10n ** 30n,
+              minHealthFactorAfterWad: 0n,
+              maxUtilizationAfterWad: 10n ** 30n,
+              maxAfterBorrowApyWad: 10n ** 30n,
+              maxReallocationPenaltyAssets: 10n ** 30n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
+    });
+    test.each<[string, object]>([
+      [
+        "marketId",
+        {
+          marketId:
+            "0x0000000000000000000000000000000000000000000000000000000000000bad",
+        },
+      ],
+      ["expectedAssets", { expectedAssets: 99n }],
+      ["expectedReceiver", { expectedReceiver: OTHER }],
+      ["maxBorrowSharesMinted", { maxBorrowSharesMinted: 0n }],
+      ["maxLtvAfterWad", { maxLtvAfterWad: -1n }],
+      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 10n ** 30n }],
+      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: -1n }],
+      ["maxAfterBorrowApyWad", { maxAfterBorrowApyWad: -1n }],
       ["maxReallocationPenaltyAssets", { maxReallocationPenaltyAssets: -1n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueBorrow",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueBorrow",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
   describe("blueSupplyCollateralBorrow", () => {
-    const op = {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: ORACLE,
+      internals: IRM,
+      position: { collateral: 300n },
+    });
+    const borrowShares = MarketUtils.toBorrowShares(
+      100n,
+      { totalBorrowAssets: 1_000_000n, totalBorrowShares: 1_000_000n },
+      "Up",
+    );
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: { ...ORACLE, liquidityAssets: 900n },
+      internals: IRM,
+      position: { collateral: 400n, borrowShares },
+    });
+    const op = mkOp({
       type: "blueSupplyCollateralBorrow",
       transactionIndex: 0,
       market,
       collateralAssets: 100n,
-      borrowAssets: 50n,
+      borrowAssets: 100n,
       onBehalf: TEST_OWNER,
       receiver: TEST_OWNER,
-    };
-    const outcome = {
-      borrowSharesMinted: 50n,
-      ltvAfterWad: finite(100n),
-      healthFactorAfterWad: finite(200n),
-      utilizationAfterWad: finite(300n),
-      borrowApyAfterWad: 400n,
-      reallocationPenaltyAssets: 0n,
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueSupplyCollateralBorrow",
-        marketId: TEST_MARKET_ID,
-        expectedCollateralAssets: 100n,
-        expectedBorrowAssets: 50n,
-        expectedOnBehalf: TEST_OWNER,
-        expectedReceiver: TEST_OWNER,
-        maxBorrowSharesMinted: 100n,
-        maxLtvAfterWad: 200n,
-        minHealthFactorAfterWad: 100n,
-        maxUtilizationAfterWad: 400n,
-        maxAfterBorrowApyWad: 500n,
-        maxReallocationPenaltyAssets: 0n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupplyCollateralBorrow",
+              marketId: TEST_MARKET_ID,
+              expectedCollateralAssets: 100n,
+              expectedBorrowAssets: 100n,
+              expectedOnBehalf: TEST_OWNER,
+              expectedReceiver: TEST_OWNER,
+              maxBorrowSharesMinted: 10n ** 30n,
+              maxLtvAfterWad: 10n ** 30n,
+              minHealthFactorAfterWad: 0n,
+              maxUtilizationAfterWad: 10n ** 30n,
+              maxAfterBorrowApyWad: 10n ** 30n,
+              maxReallocationPenaltyAssets: 10n ** 30n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -393,49 +626,72 @@ describe("checkBlueOperationLimits", () => {
         },
       ],
       ["expectedCollateralAssets", { expectedCollateralAssets: 99n }],
-      ["expectedBorrowAssets", { expectedBorrowAssets: 49n }],
+      ["expectedBorrowAssets", { expectedBorrowAssets: 99n }],
       ["expectedOnBehalf", { expectedOnBehalf: OTHER }],
       ["expectedReceiver", { expectedReceiver: OTHER }],
-      ["maxBorrowSharesMinted", { maxBorrowSharesMinted: 49n }],
-      ["maxLtvAfterWad", { maxLtvAfterWad: 99n }],
-      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 201n }],
-      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: 299n }],
-      ["maxAfterBorrowApyWad", { maxAfterBorrowApyWad: 399n }],
+      ["maxBorrowSharesMinted", { maxBorrowSharesMinted: 0n }],
+      ["maxLtvAfterWad", { maxLtvAfterWad: -1n }],
+      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 10n ** 30n }],
+      ["maxUtilizationAfterWad", { maxUtilizationAfterWad: -1n }],
+      ["maxAfterBorrowApyWad", { maxAfterBorrowApyWad: -1n }],
       ["maxReallocationPenaltyAssets", { maxReallocationPenaltyAssets: -1n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueSupplyCollateralBorrow",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueSupplyCollateralBorrow",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
   describe("blueRepay", () => {
-    const op = {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
+      position: { borrowShares: 200n, collateral: 400n },
+    });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: { totalBorrowAssets: 1_000n, totalBorrowShares: 1_000n },
+      position: { borrowShares: 100n, collateral: 400n },
+    });
+    const op = mkOp({
       type: "blueRepay",
       transactionIndex: 0,
       market,
+      repay: { type: "shares", shares: 100n },
       onBehalf: TEST_OWNER,
       fullClose: false,
-    };
-    const outcome = {
-      assetsPaid: 100n,
-      borrowSharesBurned: 100n,
-      residualBorrowShares: 10n,
-      refundAssets: 5n,
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueRepay",
-        marketId: TEST_MARKET_ID,
-        expectedOnBehalf: TEST_OWNER,
-        expectedFullClose: false,
-        maxAssetsPaid: 200n,
-        minBorrowSharesBurned: 50n,
-        maxResidualBorrowShares: 20n,
-        minRefundAssets: 1n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueRepay",
+              marketId: TEST_MARKET_ID,
+              expectedOnBehalf: TEST_OWNER,
+              expectedFullClose: false,
+              maxAssetsPaid: 10n ** 30n,
+              minBorrowSharesBurned: 1n,
+              maxResidualBorrowShares: 10n ** 30n,
+              minRefundAssets: 0n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -447,95 +703,83 @@ describe("checkBlueOperationLimits", () => {
       ],
       ["expectedOnBehalf", { expectedOnBehalf: OTHER }],
       ["expectedFullClose", { expectedFullClose: true }],
-      ["maxAssetsPaid", { maxAssetsPaid: 99n }],
-      ["minBorrowSharesBurned", { minBorrowSharesBurned: 101n }],
-      ["maxResidualBorrowShares", { maxResidualBorrowShares: 9n }],
-      ["minRefundAssets", { minRefundAssets: 6n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueRepay",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
-    });
-  });
-
-  describe("blueWithdrawCollateral", () => {
-    const op = {
-      type: "blueWithdrawCollateral",
-      transactionIndex: 0,
-      market,
-      collateralAssets: 100n,
-      receiver: TEST_OWNER,
-    };
-    const outcome = {
-      ltvAfterWad: finite(100n),
-      healthFactorAfterWad: finite(200n),
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueWithdrawCollateral",
-        marketId: TEST_MARKET_ID,
-        expectedAssets: 100n,
-        expectedReceiver: TEST_OWNER,
-        maxLtvAfterWad: 200n,
-        minHealthFactorAfterWad: 100n,
-      });
-    });
-    test.each<[string, object]>([
-      [
-        "marketId",
-        {
-          marketId:
-            "0x0000000000000000000000000000000000000000000000000000000000000bad",
-        },
-      ],
-      ["expectedAssets", { expectedAssets: 99n }],
-      ["expectedReceiver", { expectedReceiver: OTHER }],
-      ["maxLtvAfterWad", { maxLtvAfterWad: 99n }],
-      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 201n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueWithdrawCollateral",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
+      ["maxAssetsPaid", { maxAssetsPaid: -1n }],
+      ["minBorrowSharesBurned", { minBorrowSharesBurned: 10n ** 30n }],
+      ["maxResidualBorrowShares", { maxResidualBorrowShares: 0n }],
+      ["minRefundAssets", { minRefundAssets: 1n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueRepay",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 
   describe("blueRepayWithdrawCollateral", () => {
-    const op = {
+    const before = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: {
+        ...ORACLE,
+        totalBorrowAssets: 1_000n,
+        totalBorrowShares: 1_000n,
+      },
+      internals: IRM,
+      position: { borrowShares: 200n, collateral: 400n },
+    });
+    const after = makeMarketState({
+      marketId: TEST_MARKET_ID,
+      market: {
+        ...ORACLE,
+        totalBorrowAssets: 1_000n,
+        totalBorrowShares: 1_000n,
+      },
+      internals: IRM,
+      position: { borrowShares: 100n, collateral: 300n },
+    });
+    const op = mkOp({
       type: "blueRepayWithdrawCollateral",
       transactionIndex: 0,
       market,
+      repay: { type: "shares", shares: 100n },
       collateralAssets: 100n,
       onBehalf: TEST_OWNER,
       receiver: TEST_OWNER,
       fullClose: false,
-    };
-    const outcome = {
-      assetsPaid: 100n,
-      borrowSharesBurned: 100n,
-      residualBorrowShares: 10n,
-      refundAssets: 5n,
-      ltvAfterWad: finite(100n),
-      healthFactorAfterWad: finite(200n),
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(op, outcome, {
-        type: "blueRepayWithdrawCollateral",
-        marketId: TEST_MARKET_ID,
-        expectedWithdrawAssets: 100n,
-        expectedOnBehalf: TEST_OWNER,
-        expectedReceiver: TEST_OWNER,
-        expectedFullClose: false,
-        maxAssetsPaid: 200n,
-        minBorrowSharesBurned: 50n,
-        maxResidualBorrowShares: 20n,
-        minRefundAssets: 1n,
-        maxLtvAfterWad: 200n,
-        minHealthFactorAfterWad: 100n,
-      });
+    });
+    test("pass", () => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueRepayWithdrawCollateral",
+              marketId: TEST_MARKET_ID,
+              expectedWithdrawAssets: 100n,
+              expectedOnBehalf: TEST_OWNER,
+              expectedReceiver: TEST_OWNER,
+              expectedFullClose: false,
+              maxAssetsPaid: 10n ** 30n,
+              minBorrowSharesBurned: 1n,
+              maxResidualBorrowShares: 10n ** 30n,
+              minRefundAssets: 0n,
+              maxLtvAfterWad: 10n ** 30n,
+              minHealthFactorAfterWad: 0n,
+            }),
+          ],
+        }),
+      ).not.toThrow();
     });
     test.each<[string, object]>([
       [
@@ -549,51 +793,27 @@ describe("checkBlueOperationLimits", () => {
       ["expectedOnBehalf", { expectedOnBehalf: OTHER }],
       ["expectedReceiver", { expectedReceiver: OTHER }],
       ["expectedFullClose", { expectedFullClose: true }],
-      ["maxAssetsPaid", { maxAssetsPaid: 99n }],
-      ["minBorrowSharesBurned", { minBorrowSharesBurned: 101n }],
-      ["maxResidualBorrowShares", { maxResidualBorrowShares: 9n }],
-      ["minRefundAssets", { minRefundAssets: 6n }],
-      ["maxLtvAfterWad", { maxLtvAfterWad: 99n }],
-      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 201n }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, outcome, {
-        type: "blueRepayWithdrawCollateral",
-        marketId: TEST_MARKET_ID,
-        ...override,
-      } as OperationLimit);
-    });
-  });
-
-  describe("blueAuthorization", () => {
-    const AUTH: Address = getAddress(
-      "0x00000000000000000000000000000000000000aa",
-    );
-    const op = {
-      type: "blueAuthorization",
-      transactionIndex: 0,
-      authorized: AUTH,
-      isAuthorized: true,
-    };
-    test("pass: all fields satisfied", () => {
-      expectPass(
-        op,
-        { isAuthorized: true },
-        {
-          type: "blueAuthorization",
-          authorized: AUTH,
-          expectedIsAuthorized: true,
-        },
-      );
-    });
-    test.each<[string, object]>([
-      ["authorized", { authorized: OTHER }],
-      ["expectedIsAuthorized", { expectedIsAuthorized: false }],
-    ])("violation: %s", (_field, override) => {
-      expectFail(op, { isAuthorized: true }, {
-        type: "blueAuthorization",
-        authorized: AUTH,
-        ...override,
-      } as OperationLimit);
+      ["maxAssetsPaid", { maxAssetsPaid: -1n }],
+      ["minBorrowSharesBurned", { minBorrowSharesBurned: 10n ** 30n }],
+      ["maxResidualBorrowShares", { maxResidualBorrowShares: 0n }],
+      ["minRefundAssets", { minRefundAssets: 1n }],
+      ["maxLtvAfterWad", { maxLtvAfterWad: -1n }],
+      ["minHealthFactorAfterWad", { minHealthFactorAfterWad: 10n ** 30n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        run({
+          op,
+          before,
+          after,
+          limits: [
+            mkLimit({
+              type: "blueRepayWithdrawCollateral",
+              marketId: TEST_MARKET_ID,
+              ...override,
+            }),
+          ],
+        }),
+      ).toThrow(ConsumerLimitViolationError);
     });
   });
 });

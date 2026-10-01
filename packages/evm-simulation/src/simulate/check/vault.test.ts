@@ -12,13 +12,7 @@ import {
   TEST_OWNER,
 } from "../../test-helpers/index.js";
 import type { VaultInternals } from "../state/types.js";
-import type { CheckedOperation } from "./helpers.js";
-import {
-  checkVaultOperation,
-  checkVaultOperationLimits,
-  vaultToAssets,
-  vaultToShares,
-} from "./vault.js";
+import { checkVaultOperation, vaultToAssets, vaultToShares } from "./vault.js";
 
 const VAULT: Address = getAddress("0xBEEF0173c205AF46a9B1C95C4D1020C0f0b864CB");
 const ASSET: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
@@ -81,12 +75,9 @@ describe("checkVaultOperation", () => {
   });
 });
 
-describe("checkVaultOperationLimits", () => {
+describe("checkVaultOperation — consumer limits", () => {
   const ctxWith = (operations: OperationLimit[]) =>
     makeCheckContext({ limits: { ...makeCheckContext().limits, operations } });
-
-  const checked = (operation: object, outcome: object) =>
-    ({ operation, outcome }) as CheckedOperation;
 
   const OTHER: Address = getAddress(
     "0x00000000000000000000000000000000000000ff",
@@ -95,210 +86,320 @@ describe("checkVaultOperationLimits", () => {
     "0x0000000000000000000000000000000000000bad",
   );
 
-  const depositOp = {
-    type: "vaultV1Deposit",
-    transactionIndex: 0,
-    vault: VAULT,
-    funding: { type: "erc20", token: ASSET, assets: 100n },
-    receiver: TEST_OWNER,
-  };
-  const withdrawOp = {
-    type: "vaultV1Withdraw",
-    transactionIndex: 0,
-    vault: VAULT,
-    assets: 100n,
-    receiver: TEST_OWNER,
-  };
-  const redeemOp = {
-    type: "vaultV1Redeem",
-    transactionIndex: 0,
-    vault: VAULT,
-    shares: 100n,
-    receiver: TEST_OWNER,
-  };
+  type Op = Parameters<typeof checkVaultOperation>[1];
+  const mkOp = (op: object) => op as Op;
+  const mkLimit = (limit: object) => limit as OperationLimit;
 
-  test("deposit pass: all fields satisfied", () => {
-    const limit: OperationLimit = {
-      type: "vaultV1Deposit",
+  // biome-ignore lint/complexity/useMaxParams: fixture builder reads clearest with positional arguments
+  const beforeVault = (
+    version: "v1" | "v2",
+    vaultState_ = {},
+    internals_ = {},
+  ) =>
+    makeVaultState({
       vault: VAULT,
-      expectedAssets: 100n,
-      expectedReceiver: TEST_OWNER,
-      minSharesMinted: 50n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([limit]),
-        checked(depositOp, { sharesMinted: 100n }),
-      ),
-    ).not.toThrow();
+      version,
+      vaultState: { ...vaultState, ...vaultState_ },
+      internals: {
+        ...(version === "v1" ? v1Internals : v2Internals),
+        ...internals_,
+      },
+    });
+  // biome-ignore lint/complexity/useMaxParams: fixture builder reads clearest with positional arguments
+  const afterVault = (
+    version: "v1" | "v2",
+    vaultState_ = {},
+    internals_ = {},
+  ) => beforeVault(version, vaultState_, internals_);
+
+  const credit = (account: Address, assets: bigint) => ({
+    ...emptyDiff,
+    balances: [
+      {
+        account,
+        token: ASSET,
+        assets,
+      },
+    ],
   });
-  test.each<[string, object]>([
-    ["vault", { vault: BAD_VAULT }],
-    ["expectedAssets", { expectedAssets: 99n }],
-    ["expectedReceiver", { expectedReceiver: OTHER }],
-    ["minSharesMinted", { minSharesMinted: 101n }],
-  ])("deposit violation: %s", (_field, override) => {
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([
-          {
+
+  describe("vaultV1Deposit", () => {
+    const before = beforeVault("v1");
+    const after = afterVault("v1", {
+      totalAssets: 1_100n,
+      totalShares: 1_100n,
+      userShares: 600n,
+    });
+    const op = mkOp({
+      type: "vaultV1Deposit",
+      transactionIndex: 0,
+      vault: VAULT,
+      asset: ASSET,
+      funding: { type: "erc20", token: ASSET, assets: 100n },
+      receiver: TEST_OWNER,
+    });
+    const call = (limits: OperationLimit[]) => () =>
+      checkVaultOperation(ctxWith(limits), op, before, after, { ...emptyDiff });
+    test("pass", () => {
+      expect(
+        call([
+          mkLimit({
             type: "vaultV1Deposit",
             vault: VAULT,
-            ...override,
-          } as OperationLimit,
+            expectedAssets: 100n,
+            expectedReceiver: TEST_OWNER,
+            minSharesMinted: 1n,
+          }),
         ]),
-        checked(depositOp, { sharesMinted: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
+      ).not.toThrow();
+    });
+    test.each<[string, object]>([
+      ["vault", { vault: BAD_VAULT }],
+      ["expectedAssets", { expectedAssets: 99n }],
+      ["expectedReceiver", { expectedReceiver: OTHER }],
+      ["minSharesMinted", { minSharesMinted: 10n ** 30n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        call([mkLimit({ type: "vaultV1Deposit", vault: VAULT, ...override })]),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
 
-  test("deposit (v2) pass", () => {
-    const op = { ...depositOp, type: "vaultV2Deposit" };
-    const limit: OperationLimit = {
+  describe("vaultV2Deposit", () => {
+    const before = beforeVault("v2", { version: "v2" });
+    const after = afterVault("v2", {
+      version: "v2",
+      totalAssets: 1_100n,
+      totalShares: 1_100n,
+      userShares: 600n,
+    });
+    const op = mkOp({
       type: "vaultV2Deposit",
+      transactionIndex: 0,
       vault: VAULT,
-      expectedAssets: 100n,
-      minSharesMinted: 100n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([limit]),
-        checked(op, { sharesMinted: 100n }),
-      ),
-    ).not.toThrow();
-  });
-  test("deposit (v2) violation: minSharesMinted", () => {
-    const op = { ...depositOp, type: "vaultV2Deposit" };
-    const limit: OperationLimit = {
-      type: "vaultV2Deposit",
-      vault: VAULT,
-      minSharesMinted: 101n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([limit]),
-        checked(op, { sharesMinted: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
+      asset: ASSET,
+      funding: { type: "erc20", token: ASSET, assets: 100n },
+      receiver: TEST_OWNER,
+    });
+    test("pass + violation", () => {
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Deposit",
+              vault: VAULT,
+              minSharesMinted: 1n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          { ...emptyDiff },
+        ),
+      ).not.toThrow();
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Deposit",
+              vault: VAULT,
+              minSharesMinted: 10n ** 30n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          { ...emptyDiff },
+        ),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
 
-  test("withdraw pass: all fields satisfied", () => {
-    const limit: OperationLimit = {
+  describe("vaultV1Withdraw", () => {
+    const before = beforeVault("v1");
+    const after = afterVault("v1", {
+      totalAssets: 900n,
+      totalShares: 900n,
+      userShares: 400n,
+    });
+    const op = mkOp({
       type: "vaultV1Withdraw",
+      transactionIndex: 0,
       vault: VAULT,
-      expectedAssets: 100n,
-      expectedReceiver: TEST_OWNER,
-      maxSharesBurned: 200n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([limit]),
-        checked(withdrawOp, { sharesBurned: 100n }),
-      ),
-    ).not.toThrow();
-  });
-  test.each<[string, object]>([
-    ["vault", { vault: BAD_VAULT }],
-    ["expectedAssets", { expectedAssets: 99n }],
-    ["expectedReceiver", { expectedReceiver: OTHER }],
-    ["maxSharesBurned", { maxSharesBurned: 99n }],
-  ])("withdraw violation: %s", (_field, override) => {
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([
-          {
+      asset: ASSET,
+      assets: 100n,
+      receiver: TEST_OWNER,
+    });
+    const diff = credit(TEST_OWNER, 100n);
+    const call = (limits: OperationLimit[]) => () =>
+      checkVaultOperation(ctxWith(limits), op, before, after, diff);
+    test("pass", () => {
+      expect(
+        call([
+          mkLimit({
             type: "vaultV1Withdraw",
             vault: VAULT,
-            ...override,
-          } as OperationLimit,
+            expectedAssets: 100n,
+            expectedReceiver: TEST_OWNER,
+            maxSharesBurned: 10n ** 30n,
+          }),
         ]),
-        checked(withdrawOp, { sharesBurned: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
-  });
-  test("withdraw (v2) pass + violation: maxSharesBurned", () => {
-    const op = { ...withdrawOp, type: "vaultV2Withdraw" };
-    const pass: OperationLimit = {
-      type: "vaultV2Withdraw",
-      vault: VAULT,
-      maxSharesBurned: 100n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([pass]),
-        checked(op, { sharesBurned: 100n }),
-      ),
-    ).not.toThrow();
-    const fail: OperationLimit = {
-      type: "vaultV2Withdraw",
-      vault: VAULT,
-      maxSharesBurned: 99n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([fail]),
-        checked(op, { sharesBurned: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
+      ).not.toThrow();
+    });
+    test.each<[string, object]>([
+      ["vault", { vault: BAD_VAULT }],
+      ["expectedAssets", { expectedAssets: 99n }],
+      ["expectedReceiver", { expectedReceiver: OTHER }],
+      ["maxSharesBurned", { maxSharesBurned: 0n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        call([mkLimit({ type: "vaultV1Withdraw", vault: VAULT, ...override })]),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
 
-  test("redeem pass: all fields satisfied", () => {
-    const limit: OperationLimit = {
-      type: "vaultV1Redeem",
+  describe("vaultV2Withdraw", () => {
+    const before = beforeVault("v2", { version: "v2" });
+    const after = afterVault("v2", {
+      version: "v2",
+      totalAssets: 900n,
+      totalShares: 900n,
+      userShares: 400n,
+    });
+    const op = mkOp({
+      type: "vaultV2Withdraw",
+      transactionIndex: 0,
       vault: VAULT,
-      expectedShares: 100n,
-      expectedReceiver: TEST_OWNER,
-      minAssetsReceived: 50n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([limit]),
-        checked(redeemOp, { assetsReceived: 100n }),
-      ),
-    ).not.toThrow();
+      asset: ASSET,
+      assets: 100n,
+      receiver: TEST_OWNER,
+    });
+    const diff = credit(TEST_OWNER, 100n);
+    test("pass + violation", () => {
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Withdraw",
+              vault: VAULT,
+              maxSharesBurned: 10n ** 30n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          diff,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Withdraw",
+              vault: VAULT,
+              maxSharesBurned: 0n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          diff,
+        ),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
-  test.each<[string, object]>([
-    ["vault", { vault: BAD_VAULT }],
-    ["expectedShares", { expectedShares: 99n }],
-    ["expectedReceiver", { expectedReceiver: OTHER }],
-    ["minAssetsReceived", { minAssetsReceived: 101n }],
-  ])("redeem violation: %s", (_field, override) => {
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([
-          {
+
+  describe("vaultV1Redeem", () => {
+    const before = beforeVault("v1");
+    const after = afterVault("v1", {
+      totalAssets: 900n,
+      totalShares: 900n,
+      userShares: 400n,
+    });
+    const op = mkOp({
+      type: "vaultV1Redeem",
+      transactionIndex: 0,
+      vault: VAULT,
+      asset: ASSET,
+      shares: 100n,
+      receiver: TEST_OWNER,
+    });
+    const diff = credit(TEST_OWNER, 100n);
+    const call = (limits: OperationLimit[]) => () =>
+      checkVaultOperation(ctxWith(limits), op, before, after, diff);
+    test("pass", () => {
+      expect(
+        call([
+          mkLimit({
             type: "vaultV1Redeem",
             vault: VAULT,
-            ...override,
-          } as OperationLimit,
+            expectedShares: 100n,
+            expectedReceiver: TEST_OWNER,
+            minAssetsReceived: 1n,
+          }),
         ]),
-        checked(redeemOp, { assetsReceived: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
+      ).not.toThrow();
+    });
+    test.each<[string, object]>([
+      ["vault", { vault: BAD_VAULT }],
+      ["expectedShares", { expectedShares: 99n }],
+      ["expectedReceiver", { expectedReceiver: OTHER }],
+      ["minAssetsReceived", { minAssetsReceived: 10n ** 30n }],
+    ])("violation: %s", (_f, override) => {
+      expect(
+        call([mkLimit({ type: "vaultV1Redeem", vault: VAULT, ...override })]),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
-  test("redeem (v2) pass + violation: minAssetsReceived", () => {
-    const op = { ...redeemOp, type: "vaultV2Redeem" };
-    const pass: OperationLimit = {
+
+  describe("vaultV2Redeem", () => {
+    const before = beforeVault("v2", { version: "v2" });
+    const after = afterVault("v2", {
+      version: "v2",
+      totalAssets: 900n,
+      totalShares: 900n,
+      userShares: 400n,
+    });
+    const op = mkOp({
       type: "vaultV2Redeem",
+      transactionIndex: 0,
       vault: VAULT,
-      minAssetsReceived: 100n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([pass]),
-        checked(op, { assetsReceived: 100n }),
-      ),
-    ).not.toThrow();
-    const fail: OperationLimit = {
-      type: "vaultV2Redeem",
-      vault: VAULT,
-      minAssetsReceived: 101n,
-    };
-    expect(() =>
-      checkVaultOperationLimits(
-        ctxWith([fail]),
-        checked(op, { assetsReceived: 100n }),
-      ),
-    ).toThrow(ConsumerLimitViolationError);
+      asset: ASSET,
+      shares: 100n,
+      receiver: TEST_OWNER,
+    });
+    const diff = credit(TEST_OWNER, 100n);
+    test("pass + violation", () => {
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Redeem",
+              vault: VAULT,
+              minAssetsReceived: 1n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          diff,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        checkVaultOperation(
+          ctxWith([
+            mkLimit({
+              type: "vaultV2Redeem",
+              vault: VAULT,
+              minAssetsReceived: 10n ** 30n,
+            }),
+          ]),
+          op,
+          before,
+          after,
+          diff,
+        ),
+      ).toThrow(ConsumerLimitViolationError);
+    });
   });
 });

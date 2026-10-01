@@ -41,7 +41,7 @@ export function checkWallet(params: {
    * `maxRepayAssets` and return the excess, so the net debit is the accrued
    * paid amount, not the encoded cap.
    */
-  readonly fundingDebitOverrides?: ReadonlyMap<string, bigint>;
+  readonly fundingDebitOverrides?: ReadonlyMap<DecodedOperation, bigint>;
 }): void {
   const {
     ctx,
@@ -104,17 +104,13 @@ export function checkWallet(params: {
 
     if ("funding" in op && op.funding != null) {
       if (op.funding.type === "erc20") {
-        const override = fundingDebitOverrides?.get(
-          `${owner.toLowerCase()}:${op.funding.token.toLowerCase()}`,
-        );
+        const override = fundingDebitOverrides?.get(op);
         addDebit(owner, op.funding.token, override ?? op.funding.assets);
         knownTokens.add(op.funding.token.toLowerCase());
       } else if (op.funding.type === "native") {
         // Native funding is a tx.value pull — debited from the owner's
         // native balance, surfaced through the native-balance reads.
-        const override = fundingDebitOverrides?.get(
-          `${owner.toLowerCase()}:${ethAddress}`,
-        );
+        const override = fundingDebitOverrides?.get(op);
         addDebit(owner, ethAddress, override ?? op.funding.assets);
         knownTokens.add(op.funding.wrappedToken.toLowerCase());
       }

@@ -1,4 +1,4 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import type { AccrualVault, MarketId } from "@morpho-org/blue-sdk";
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
@@ -119,5 +119,62 @@ describe("collectSubjects + planStateReads", () => {
     expect(reads.some((r) => r.kind === "erc20.allowance")).toBe(true);
     expect(reads.some((r) => r.kind === "morpho.market")).toBe(true);
     expect(reads.some((r) => r.kind === "morpho.position")).toBe(true);
+  });
+
+  test("positions are read for a distinct onBehalf account", () => {
+    const onBehalf = getAddress("0x2222222222222222222222222222222222222222");
+    const subjects = collectSubjects({
+      owner: OWNER,
+      operations: [{ ...supplyOp, onBehalf } as DecodedOperation],
+      authorizations: [],
+      vaults: [],
+      preLiquidations: [],
+      addresses,
+    });
+    const reads = planStateReads({
+      subjects,
+      owner: OWNER,
+      morpho: MORPHO,
+      vaultData: new Map(),
+    });
+    const owners = reads
+      .filter((r) => r.kind === "morpho.position")
+      .map((r) => ("owner" in r ? r.owner : undefined));
+    expect(owners).toContain(onBehalf);
+    expect(owners).toContain(OWNER);
+  });
+
+  test("Vault V1 queue markets without a decoded op get market + params reads", () => {
+    const VAULT: Address = getAddress(
+      "0x4444444444444444444444444444444444444444",
+    );
+    const QUEUE_MARKET =
+      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as MarketId;
+    const entity = { withdrawQueue: [QUEUE_MARKET] } as unknown as AccrualVault;
+    const subjects = collectSubjects({
+      owner: OWNER,
+      operations: [supplyOp],
+      authorizations: [],
+      vaults: [{ address: VAULT, kind: "vaultV1", asset: TOKEN }],
+      preLiquidations: [],
+      addresses,
+    });
+    const reads = planStateReads({
+      subjects,
+      owner: OWNER,
+      morpho: MORPHO,
+      vaultData: new Map([[VAULT, entity]]),
+    });
+    const kinds = reads
+      .filter((r) => "marketId" in r && r.marketId === QUEUE_MARKET)
+      .map((r) => r.kind);
+    expect(kinds).toContain("morpho.market");
+    expect(kinds).toContain("morpho.marketParams");
+    expect(kinds).toContain("morpho.position");
+    // A queue market that IS bound by a decoded op gets no params read.
+    const bound = reads.filter(
+      (r) => "marketId" in r && r.marketId === MARKET_ID,
+    );
+    expect(bound.some((r) => r.kind === "morpho.marketParams")).toBe(false);
   });
 });

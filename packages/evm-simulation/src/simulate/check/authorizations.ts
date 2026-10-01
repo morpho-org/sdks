@@ -162,12 +162,15 @@ export function checkAuthorizations(params: {
           const allowanceAfter =
             findAllowance(after, auth.owner, auth.token, auth.spender)
               ?.amount ?? 0n;
+          // ERC-20 `approve` replaces the allowance: the expected value is the
+          // approved amount minus what the bundle pulled, independent of the
+          // pre-existing allowance (a maxUint256 grant stays maxUint256).
           const expectedAfter =
-            allowanceBefore === maxUint256
+            auth.amount === maxUint256
               ? maxUint256
-              : allowanceBefore + auth.amount - pulled < 0n
+              : auth.amount - pulled < 0n
                 ? 0n
-                : allowanceBefore + auth.amount - pulled;
+                : auth.amount - pulled;
           if (pulled <= 0n && auth.amount !== 0n)
             throw new AuthorizationRequestMismatchError(
               `Authorization ${authorizationIndex} approved "${auth.amount}" but nothing was pulled by the user transactions`,
@@ -176,7 +179,7 @@ export function checkAuthorizations(params: {
           if (allowanceAfter !== expectedAfter)
             mismatch(
               ctx,
-              `Allowance ${auth.owner}:${auth.token}→${auth.spender} is "${allowanceAfter}", expected "${expectedAfter}" (before "${allowanceBefore}" + approved "${auth.amount}" − pulled "${pulled}")`,
+              `Allowance ${auth.owner}:${auth.token}→${auth.spender} is "${allowanceAfter}", expected "${expectedAfter}" (approved "${auth.amount}" replaces before "${allowanceBefore}" − pulled "${pulled}")`,
               "erc20Approval",
             );
         } else {

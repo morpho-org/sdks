@@ -233,11 +233,7 @@ export async function runSimulation(params: {
     actionDiff,
     transfers,
     logger: config.logger,
-    fundingDebitOverrides: fundingDebitOverrides(
-      operations,
-      accruedBefore,
-      owner,
-    ),
+    fundingDebitOverrides: fundingDebitOverrides(operations, accruedBefore),
   });
 
   checkUnrelatedState({ ctx, accruedBefore, after, touchedMarketIds });

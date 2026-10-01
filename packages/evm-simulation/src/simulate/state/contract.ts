@@ -87,6 +87,14 @@ export type StateRead =
       readonly marketId: MarketId;
     }
   | {
+      readonly kind: "morpho.marketParams";
+      readonly id: string;
+      readonly to: Address;
+      readonly data: Hex;
+      readonly morpho: Address;
+      readonly marketId: MarketId;
+    }
+  | {
       readonly kind: "morpho.oraclePrice";
       readonly id: string;
       readonly to: Address;

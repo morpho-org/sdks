@@ -83,6 +83,8 @@ export interface StateSubjects {
     readonly authorized: Address;
   }[];
   readonly markets: readonly MarketBinding[];
+  /** Accounts whose per-market positions must be read (owner + every `onBehalf`). */
+  readonly positionAccounts: ReadonlySet<Address>;
   readonly preLiquidationMarkets: ReadonlyMap<MarketId, Address>;
   readonly vaults: ReadonlyMap<Address, VaultBinding>;
 }
@@ -112,6 +114,9 @@ export function collectSubjects(params: {
   } = params;
 
   const accounts = new Set<Address>([owner]);
+  // Accounts whose per-market positions are read: the bundle owner plus any
+  // `onBehalf` acting account (in-kind redeems, Blue ops on another's behalf).
+  const positionAccounts = new Set<Address>([owner]);
   const tokens = new Set<Address>();
   const bundleAddresses = new Set<Address>();
   const spenders: StateSubjects["spenders"] extends readonly (infer T)[]
@@ -233,6 +238,7 @@ export function collectSubjects(params: {
   }
 
   for (const op of operations) {
+    if ("onBehalf" in op) positionAccounts.add(op.onBehalf);
     switch (op.type) {
       case "blueSupply":
       case "blueSupplyCollateral": {
@@ -478,6 +484,7 @@ export function collectSubjects(params: {
     permit2Nonces,
     blueAuthorizations,
     markets,
+    positionAccounts,
     preLiquidationMarkets,
     vaults: vaultMap,
   };
@@ -519,12 +526,24 @@ export function planStateReads(params: {
     preLiquidation: subjects.preLiquidationMarkets.get(binding.marketId),
   }));
 
-  const positionSubjects = subjects.markets.map((binding) => ({
-    marketId: binding.marketId,
-    owner,
-  }));
+  const positionSubjects = subjects.markets.flatMap((binding) =>
+    [...subjects.positionAccounts].map((positionOwner) => ({
+      marketId: binding.marketId,
+      owner: positionOwner,
+    })),
+  );
 
   const nonceOwners = subjects.blueAuthorizations.length > 0 ? [owner] : [];
+
+  // Vault V1 queue markets that no decoded op bound still need market reads so
+  // `parseState` converts their vault position shares to assets.
+  const boundMarketIds = new Set(subjects.markets.map((m) => m.marketId));
+  const queueMarketIds = new Set<MarketId>();
+  for (const [vaultAddress, binding] of subjects.vaults) {
+    if (binding.kind !== "vaultV1") continue;
+    for (const marketId of v1AllocationMarketIds(vaultData.get(vaultAddress)))
+      if (!boundMarketIds.has(marketId)) queueMarketIds.add(marketId);
+  }
 
   const reads: StateRead[] = [
     ...erc20Reads({
@@ -538,6 +557,7 @@ export function planStateReads(params: {
     ...morphoReads({
       morpho,
       markets: marketSubjects,
+      queueMarkets: [...queueMarketIds],
       positions: positionSubjects,
       authorizations: subjects.blueAuthorizations,
       nonceOwners,
@@ -619,6 +639,7 @@ export function decodeStateRead(
     case "morpho.nonce":
     case "morpho.position":
     case "morpho.market":
+    case "morpho.marketParams":
     case "morpho.oraclePrice":
     case "morpho.irmRateAtTarget":
     case "preLiquidation.params":
@@ -671,11 +692,14 @@ export function parseState(params: {
   const marketInternals = new Map<MarketId, MarketInternals>();
   const marketStates: MarketState[] = [];
   for (const market of morpho.markets) {
-    const binding = marketBindings.get(market.marketId);
-    if (binding == null)
+    const bound = marketBindings.get(market.marketId);
+    const marketParams =
+      bound?.params ?? morpho.marketParams.get(market.marketId);
+    if (marketParams == null)
       throw new InvalidSimulationResponseError(
         `Market read for "${market.marketId}" has no decoded binding`,
       );
+    const binding = { marketId: market.marketId, params: marketParams };
     const oracle = binding.params.oracle;
     const irm = binding.params.irm;
     const oraclePrice =

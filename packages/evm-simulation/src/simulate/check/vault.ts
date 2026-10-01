@@ -8,12 +8,11 @@ import { checkReferralFee } from "./fees.js";
 import {
   type CheckContext,
   type CheckedOperation,
-  expectEquals,
-  expectMax,
-  expectMin,
+  eq,
   fail,
   findVault,
-  matchLimits,
+  limitsFor,
+  limitViolation,
   opContext,
   receiverCredit,
 } from "./helpers.js";
@@ -151,6 +150,53 @@ export function checkVaultOperation(
           operation,
           `Vault totalSupply "${next.totalShares}", expected "${before.totalShares + minted}"`,
         );
+      for (const limit of limitsFor(ctx, operation.type, operation)) {
+        if (!eq(limit.vault, operation.vault))
+          limitViolation(
+            ctx,
+            operation,
+            "vault",
+            limit.vault,
+            operation.vault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== assets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${assets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.minSharesMinted !== undefined &&
+          minted < limit.minSharesMinted
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minSharesMinted",
+            `${limit.minSharesMinted}`,
+            `${minted}`,
+            "Decrease the bound or adjust the operation.",
+          );
+      }
       return {
         checked: {
           operation,
@@ -199,6 +245,53 @@ export function checkVaultOperation(
           operation,
           `Vault totalAssets "${next.totalAssets}", expected "${before.totalAssets - operation.assets}"`,
         );
+      for (const limit of limitsFor(ctx, operation.type, operation)) {
+        if (!eq(limit.vault, operation.vault))
+          limitViolation(
+            ctx,
+            operation,
+            "vault",
+            limit.vault,
+            operation.vault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedAssets !== undefined &&
+          limit.expectedAssets !== operation.assets
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedAssets",
+            `${limit.expectedAssets}`,
+            `${operation.assets}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.maxSharesBurned !== undefined &&
+          burned > limit.maxSharesBurned
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "maxSharesBurned",
+            `${limit.maxSharesBurned}`,
+            `${burned}`,
+            "Increase the bound or reduce the operation.",
+          );
+      }
       return {
         checked: {
           operation,
@@ -236,6 +329,53 @@ export function checkVaultOperation(
           operation,
           `Receiver credit "${credit}", expected "${expectedAssets}" (±1 rounding)`,
         );
+      for (const limit of limitsFor(ctx, operation.type, operation)) {
+        if (!eq(limit.vault, operation.vault))
+          limitViolation(
+            ctx,
+            operation,
+            "vault",
+            limit.vault,
+            operation.vault,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedShares !== undefined &&
+          limit.expectedShares !== operation.shares
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedShares",
+            `${limit.expectedShares}`,
+            `${operation.shares}`,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.expectedReceiver !== undefined &&
+          !eq(limit.expectedReceiver, operation.receiver)
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "expectedReceiver",
+            limit.expectedReceiver,
+            operation.receiver,
+            "The bundle does not match the declared constraint.",
+          );
+        if (
+          limit.minAssetsReceived !== undefined &&
+          credit < limit.minAssetsReceived
+        )
+          limitViolation(
+            ctx,
+            operation,
+            "minAssetsReceived",
+            `${limit.minAssetsReceived}`,
+            `${credit}`,
+            "Decrease the bound or adjust the operation.",
+          );
+      }
       return {
         checked: {
           operation,
@@ -267,113 +407,6 @@ export function checkVaultOperation(
         `checkVaultOperation received ${JSON.stringify(_exhaustive)}`,
         { context: opContext(ctx, operation as DecodedOperation) },
       );
-    }
-  }
-}
-
-/**
- * Assert every consumer limit declared for one checked vault deposit /
- * withdraw / redeem (V1 and V2 share a limit shape). Called by
- * {@link checkOperations} right after the economic check that produced the
- * outcome.
- * @internal
- */
-export function checkVaultOperationLimits(
-  ctx: CheckContext,
-  checked: CheckedOperation,
-): void {
-  const { operation: op, outcome } = checked;
-  for (const limit of matchLimits(ctx, op)) {
-    switch (limit.type) {
-      case "vaultV1Deposit":
-      case "vaultV2Deposit": {
-        if (op.type !== "vaultV1Deposit" && op.type !== "vaultV2Deposit")
-          continue;
-        const o = outcome as { sharesMinted: bigint };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.funding.assets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minSharesMinted",
-          limit.minSharesMinted,
-          o.sharesMinted,
-        );
-        break;
-      }
-      case "vaultV1Withdraw":
-      case "vaultV2Withdraw": {
-        if (op.type !== "vaultV1Withdraw" && op.type !== "vaultV2Withdraw")
-          continue;
-        const o = outcome as { sharesBurned: bigint };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedAssets",
-          limit.expectedAssets,
-          op.assets,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMax(
-          ctx,
-          op,
-          "maxSharesBurned",
-          limit.maxSharesBurned,
-          o.sharesBurned,
-        );
-        break;
-      }
-      case "vaultV1Redeem":
-      case "vaultV2Redeem": {
-        if (op.type !== "vaultV1Redeem" && op.type !== "vaultV2Redeem")
-          continue;
-        const o = outcome as { assetsReceived: bigint };
-        expectEquals(ctx, op, "vault", limit.vault, op.vault);
-        expectEquals(
-          ctx,
-          op,
-          "expectedShares",
-          limit.expectedShares,
-          op.shares,
-        );
-        expectEquals(
-          ctx,
-          op,
-          "expectedReceiver",
-          limit.expectedReceiver,
-          op.receiver,
-        );
-        expectMin(
-          ctx,
-          op,
-          "minAssetsReceived",
-          limit.minAssetsReceived,
-          o.assetsReceived,
-        );
-        break;
-      }
-      default:
-        break;
     }
   }
 }

@@ -6,19 +6,19 @@ import {
   SlippageLimitExceededError,
 } from "../../errors.js";
 import type { SimulationStateChange } from "../../result.js";
-import type { ParsedState, RiskMetric } from "../state/types.js";
+import type { ParsedState } from "../state/types.js";
 import {
   type CheckContext,
   type CheckedOperation,
   eq,
-  expectEquals,
-  expectMax,
-  expectMin,
   fail,
   findMarket,
   findPosition,
-  matchLimits,
+  fmtRisk,
+  limitsFor,
+  limitViolation,
   opContext,
+  riskMetricWad,
   riskOn,
   toMarketEntity,
 } from "./helpers.js";
@@ -40,7 +40,7 @@ export function checkRefinanceOperation(
   operation: Extract<DecodedOperation, { type: "blueRefinance" }>,
   accruedBefore: ParsedState,
   after: ParsedState,
-  actionDiff?: SimulationStateChange,
+  actionDiff: SimulationStateChange,
 ): CheckedOperation {
   const sourceMarket = operation.sourceMarket;
   const targetMarket = operation.targetMarket;
@@ -172,7 +172,7 @@ export function checkRefinanceOperation(
 
   // Owner net loan-token change must be zero beyond modeled dust.
   const loanToken = targetMarket.params.loanToken;
-  const netLoan = (actionDiff?.balances ?? [])
+  const netLoan = actionDiff.balances
     .filter((c) => eq(c.account, operation.onBehalf) && eq(c.token, loanToken))
     .reduce((total, c) => total + c.assets, 0n);
   const loanDust = netLoan < 0n ? -netLoan : netLoan;
@@ -182,6 +182,120 @@ export function checkRefinanceOperation(
       `Refinance loan dust "${loanDust}" exceeds the slippage bound "${dustBound}" (${ctx.limits.maxSlippageWad} WAD of new debt "${newDebt}")`,
       { context: opContext(ctx, operation) },
     );
+
+  for (const limit of limitsFor(ctx, "blueRefinance", operation)) {
+    if (
+      limit.sourceMarketId.toLowerCase() !==
+      operation.sourceMarket.marketId.toLowerCase()
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "sourceMarketId",
+        limit.sourceMarketId,
+        operation.sourceMarket.marketId,
+        "The bundle does not match the declared constraint.",
+      );
+    if (
+      limit.targetMarketId.toLowerCase() !==
+      operation.targetMarket.marketId.toLowerCase()
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "targetMarketId",
+        limit.targetMarketId,
+        operation.targetMarket.marketId,
+        "The bundle does not match the declared constraint.",
+      );
+    if (
+      limit.maxTargetBorrowAssets !== undefined &&
+      newDebt > limit.maxTargetBorrowAssets
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxTargetBorrowAssets",
+        `${limit.maxTargetBorrowAssets}`,
+        `${newDebt}`,
+        "Increase the bound or reduce the operation.",
+      );
+    if (
+      limit.maxTargetBorrowSharesMinted !== undefined &&
+      minted > limit.maxTargetBorrowSharesMinted
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxTargetBorrowSharesMinted",
+        `${limit.maxTargetBorrowSharesMinted}`,
+        `${minted}`,
+        "Increase the bound or reduce the operation.",
+      );
+    if (
+      limit.maxSourceResidualBorrowShares !== undefined &&
+      sourceAfter.borrowShares > limit.maxSourceResidualBorrowShares
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxSourceResidualBorrowShares",
+        `${limit.maxSourceResidualBorrowShares}`,
+        `${sourceAfter.borrowShares}`,
+        "Increase the bound or reduce the operation.",
+      );
+    const ltv = riskMetricWad(risk.ltvWad);
+    if (
+      limit.maxTargetLtvAfterWad !== undefined &&
+      (ltv === null || ltv > limit.maxTargetLtvAfterWad)
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxTargetLtvAfterWad",
+        `${limit.maxTargetLtvAfterWad}`,
+        fmtRisk(risk.ltvWad),
+        "Increase the bound or reduce the operation.",
+      );
+    const health = riskMetricWad(risk.healthFactorWad);
+    if (
+      limit.minTargetHealthFactorAfterWad !== undefined &&
+      health !== null &&
+      health < limit.minTargetHealthFactorAfterWad
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "minTargetHealthFactorAfterWad",
+        `${limit.minTargetHealthFactorAfterWad}`,
+        fmtRisk(risk.healthFactorWad),
+        "Decrease the bound or adjust the operation.",
+      );
+    if (
+      limit.maxLoanDustAssets !== undefined &&
+      loanDust > limit.maxLoanDustAssets
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxLoanDustAssets",
+        `${limit.maxLoanDustAssets}`,
+        `${loanDust}`,
+        "Increase the bound or reduce the operation.",
+      );
+    if (
+      limit.maxReallocationPenaltyAssets !== undefined &&
+      penaltyAssets > limit.maxReallocationPenaltyAssets
+    )
+      limitViolation(
+        ctx,
+        operation,
+        "maxReallocationPenaltyAssets",
+        `${limit.maxReallocationPenaltyAssets}`,
+        `${penaltyAssets}`,
+        "Increase the bound or reduce the operation.",
+      );
+  }
 
   return {
     operation,
@@ -194,94 +308,5 @@ export function checkRefinanceOperation(
       loanDustAssets: loanDust,
       reallocationPenaltyAssets: penaltyAssets,
     },
-  } as CheckedOperation;
-}
-
-/**
- * Assert every consumer limit declared for one checked refinance. Called by
- * {@link checkOperations} right after the economic check that produced the
- * outcome.
- * @internal
- */
-export function checkRefinanceLimits(
-  ctx: CheckContext,
-  checked: CheckedOperation,
-): void {
-  const { operation: op, outcome } = checked;
-  if (op.type !== "blueRefinance") return;
-  const o = outcome as {
-    targetBorrowAssets: bigint;
-    targetBorrowSharesMinted: bigint;
-    sourceResidualBorrowShares: bigint;
-    targetLtvAfterWad: RiskMetric;
-    targetHealthFactorAfterWad: RiskMetric;
-    loanDustAssets: bigint;
-    reallocationPenaltyAssets: bigint;
   };
-  for (const limit of matchLimits(ctx, op)) {
-    if (limit.type !== "blueRefinance") continue;
-    expectEquals(
-      ctx,
-      op,
-      "sourceMarketId",
-      limit.sourceMarketId,
-      op.sourceMarket.marketId,
-    );
-    expectEquals(
-      ctx,
-      op,
-      "targetMarketId",
-      limit.targetMarketId,
-      op.targetMarket.marketId,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxTargetBorrowAssets",
-      limit.maxTargetBorrowAssets,
-      o.targetBorrowAssets,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxTargetBorrowSharesMinted",
-      limit.maxTargetBorrowSharesMinted,
-      o.targetBorrowSharesMinted,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxSourceResidualBorrowShares",
-      limit.maxSourceResidualBorrowShares,
-      o.sourceResidualBorrowShares,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxTargetLtvAfterWad",
-      limit.maxTargetLtvAfterWad,
-      o.targetLtvAfterWad,
-    );
-    expectMin(
-      ctx,
-      op,
-      "minTargetHealthFactorAfterWad",
-      limit.minTargetHealthFactorAfterWad,
-      o.targetHealthFactorAfterWad,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxLoanDustAssets",
-      limit.maxLoanDustAssets,
-      o.loanDustAssets,
-    );
-    expectMax(
-      ctx,
-      op,
-      "maxReallocationPenaltyAssets",
-      limit.maxReallocationPenaltyAssets,
-      o.reallocationPenaltyAssets,
-    );
-  }
 }
