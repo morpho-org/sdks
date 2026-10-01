@@ -2045,8 +2045,11 @@ export class VaultV2BlueReallocationData
       targetAdapter.markets.push(supply.market);
     data.setMarkets([supply.market], probe ? [targetAdapter] : undefined);
 
-    const targetChange =
+    const simulatedChange =
       supply.market.toSupplyAssets(targetSupplyShares) - oldTargetAllocation;
+    // The adapter's rounded expected-assets delta can differ by one wei at inclusion,
+    // so cap tracking assumes each accepted leg adds at least its requested assets.
+    const targetChange = MathLib.max(simulatedChange, reallocation.assets);
     for (const id of targetIds) {
       const allocation = data.getAllocation(reallocation.vault, id);
       const nextAllocation = allocation.allocation + targetChange;

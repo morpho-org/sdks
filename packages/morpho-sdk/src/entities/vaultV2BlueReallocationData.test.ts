@@ -1761,7 +1761,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   );
 
   test.each([0n, -2n])(
-    "behavior: full target absolute caps preserve rounding and signed allocation changes with %s untracked assets",
+    "behavior: respects full target absolute caps with %s untracked assets",
     (targetUntracked) => {
       const { data, targetAdapterMarketCapId } = makeFixture({
         targetSupply: 5n,
@@ -1778,15 +1778,14 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
       const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
-      expect(result.reallocations).toHaveLength(1);
-      expect(result.reallocations[0]?.assets).toBe(1n);
+      expect(result.reallocations).toEqual([]);
       expect(
         result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
-      ).toBe(3n);
+      ).toBe(3n - targetUntracked);
     },
   );
 
-  test("behavior: zero target relative caps permit a deposit that rounds to zero allocation", () => {
+  test("behavior: blocks allocation growth under zero target relative caps", () => {
     const { data } = makeFixture({
       targetSupply: 2n,
       targetTotalSupplyShares: 1_000_000n,
@@ -1802,8 +1801,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       targetParams.id,
     );
 
-    expect(reallocations).toHaveLength(1);
-    expect(reallocations[0]?.assets).toBe(1n);
+    expect(reallocations).toEqual([]);
   });
 
   test.each([
@@ -2527,7 +2525,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     expect(
       transition.data.getAllocation(VAULT, sourceAdapterCapId).allocation,
-    ).toBe(7n);
+    ).toBe(8n);
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
@@ -2930,6 +2928,106 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 });
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation", () => {
+  const roundingCap = 88_899_561_451n;
+  const makeRoundingFixture = (sourceType: "idle" | "market") => {
+    const targetSupply = 10n ** 15n;
+    const { data, targetAdapterMarketCapId } = makeFixture({
+      sourceSupply: sourceType === "market" ? 10n ** 12n : 0n,
+      sourceBorrow: sourceType === "market" ? 5n * 10n ** 11n : 0n,
+      sourceAbsoluteCap: 10n ** 15n,
+      targetSupply,
+      targetTotalSupplyShares: targetSupply * 1_000_000n + 1n,
+      targetBorrow: targetSupply - 1n,
+      targetRateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+      targetPositionAssets: 0n,
+      targetCaps: [
+        { absoluteCap: 10n ** 15n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 15n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10n ** 15n, relativeCap: MathLib.WAD },
+      ],
+      allocatorTargetCap: roundingCap,
+      idle: sourceType === "idle" ? roundingCap + 1n : 0n,
+      canPullFromIdle: true,
+      canPullFromMarket: sourceType === "market",
+      penalty: 0n,
+    });
+
+    return { data, targetAdapterMarketCapId };
+  };
+
+  test.each(["idle", "market"] as const)(
+    "behavior: avoids a target-cap dust leg for %s reallocations",
+    (sourceType) => {
+      const { data, targetAdapterMarketCapId } =
+        makeRoundingFixture(sourceType);
+      const targetMarket = data.getMarket(targetParams.id);
+      const targetAdapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+      const targetIds = targetAdapter.ids(targetParams);
+      const operation = {
+        type: "borrow" as const,
+        amount: roundingCap + 1n,
+      };
+
+      expect(
+        targetMarket.toSupplyAssets(
+          targetMarket.toSupplyShares(roundingCap, "Down"),
+          "Down",
+        ),
+      ).toBe(roundingCap - 1n);
+      expect(targetAdapter.supplyShares[targetParams.id] ?? 0n).toBe(0n);
+      for (const id of targetIds)
+        expect(data.getAllocation(VAULT, id).allocation).toBe(0n);
+
+      const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        capAccrualBuffer: 0n,
+        operation,
+      });
+
+      expect(result.reallocations.map(({ assets }) => assets)).toEqual([
+        roundingCap,
+      ]);
+      expect(result.reallocations[0]?.from.type).toBe(sourceType);
+      expect(
+        result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+      ).toBe(roundingCap);
+      expect(
+        result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+      ).toBeLessThanOrEqual(roundingCap);
+    },
+  );
+
+  test("behavior: avoids a target-cap dust leg with the default buffer", () => {
+    const { data, targetAdapterMarketCapId } = makeRoundingFixture("idle");
+    const targetMarket = data.getMarket(targetParams.id);
+    const targetAdapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+
+    expect(
+      targetMarket.toSupplyAssets(
+        targetMarket.toSupplyShares(roundingCap, "Down"),
+        "Down",
+      ),
+    ).toBe(roundingCap - 1n);
+    expect(targetAdapter.supplyShares[targetParams.id] ?? 0n).toBe(0n);
+    for (const id of targetAdapter.ids(targetParams))
+      expect(data.getAllocation(VAULT, id).allocation).toBe(0n);
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp: TIMESTAMP,
+      operation: { type: "borrow", amount: roundingCap + 1n },
+    });
+
+    expect(result.reallocations.map(({ assets }) => assets)).toEqual([
+      roundingCap,
+    ]);
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(roundingCap);
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBeLessThanOrEqual(roundingCap);
+  });
+
   test("behavior: selects the nearest non-monotonic shared-cap fit", () => {
     const maxCandidate = 2n ** 40n - 1n;
     const penalty = MathLib.WAD / 1_000n;
@@ -2946,7 +3044,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       penalty,
       allocatorTargetCap: maxCandidate,
       targetCaps: [
-        { absoluteCap: maxCandidate - 1n, relativeCap: MathLib.WAD },
+        { absoluteCap: maxCandidate, relativeCap: MathLib.WAD },
         { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
         { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
       ],
@@ -2957,7 +3055,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
         maxPenalty: penalty,
         operation: { type: "borrow", amount: 2n },
       }).reallocations[0]?.assets,
-    ).toBe(3n);
+    ).toBe(2n);
   });
 
   test("default: caps friendly reallocations to the 90% target", () => {
