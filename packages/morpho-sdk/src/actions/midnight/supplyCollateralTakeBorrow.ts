@@ -2,7 +2,6 @@ import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { resolveMidnightCollateralSupplies } from "../../helpers/resolveMidnightCollateralAmounts.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
@@ -11,20 +10,31 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
+import { resolveMidnightCollateralSupplies } from "./collateralAmounts.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 import {
+  type MidnightCollateralAmount,
   type MidnightCollateralSupply,
-  type MidnightCollateralSupplyInput,
   PermitKind,
 } from "./types.js";
 
+/** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
+export interface MidnightSupplyCollateralTakeBorrowParams
+  extends MidnightTakeBorrowParams {
+  readonly collateralAssets: bigint;
+  readonly collateralIndex?: bigint;
+}
+
 /**
- * Parameters for encoding collateral supplies followed by a Midnight borrow
- * take. Pass either `collateralAssets` (and optional `collateralIndex`) or a
- * `collateralSupplies` list.
+ * Parameters for encoding several collateral supplies followed by a Midnight
+ * borrow take. Entries are encoded in order; each index may appear once.
  */
-export type MidnightSupplyCollateralTakeBorrowParams =
-  MidnightTakeBorrowParams & MidnightCollateralSupplyInput;
+export interface MidnightSupplyCollateralListTakeBorrowParams
+  extends MidnightTakeBorrowParams {
+  readonly collateralSupplies: readonly MidnightCollateralAmount[];
+  readonly collateralAssets?: never;
+  readonly collateralIndex?: never;
+}
 
 /**
  * Encodes a Midnight bundle that supplies collateral and borrows in one call.
@@ -45,16 +55,18 @@ export type MidnightSupplyCollateralTakeBorrowParams =
  * @param params.collateralIndex - Optional collateral index for `collateralAssets`; defaults to `0n`.
  * @param params.collateralSupplies - Collateral supplied before taking offers, one entry per unique index, encoded in order (multi-collateral form).
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when any collateral amount, loan assets, or `maxUnits` is non-positive.
- * @throws {NegativeInputError} when `deadline` or any collateral index is negative.
- * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
- * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
+ * @throws {NonPositiveInputError} when loan assets or `maxUnits` is non-positive.
+ * @throws {NegativeInputError} when `deadline` is negative.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
- * @throws {ChainIdMismatchError} when the market targets another chain.
- * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
- * @throws {UnknownCollateralIndexError} when any collateral index is not configured on the market.
+ * @throws {ConflictingMidnightCollateralInputError} when `collateralSupplies` is combined with `collateralAssets` or `collateralIndex`.
+ * @throws {NonPositiveInputError} when any collateral amount is non-positive.
+ * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+ * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
+ * @throws {UnknownCollateralIndexError} when any collateral index is negative or not configured on the market.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -87,7 +99,9 @@ export type MidnightSupplyCollateralTakeBorrowParams =
  * ```
  */
 export const midnightSupplyCollateralTakeBorrow = (
-  params: MidnightSupplyCollateralTakeBorrowParams,
+  params:
+    | MidnightSupplyCollateralTakeBorrowParams
+    | MidnightSupplyCollateralListTakeBorrowParams,
 ): Readonly<Transaction<MidnightSupplyCollateralTakeBorrowAction>> => {
   if (params.loanAssets <= 0n) {
     throw new NonPositiveInputError("loanAssets", params.loanAssets);
@@ -107,8 +121,12 @@ export const midnightSupplyCollateralTakeBorrow = (
   });
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const collateralAmounts = resolveMidnightCollateralSupplies(
+    params.market,
+    params,
+  );
   const collateralSupplies: readonly MidnightCollateralSupply[] =
-    resolveMidnightCollateralSupplies(params.market, params).map((supply) => ({
+    collateralAmounts.map((supply) => ({
       ...supply,
       permit: { kind: PermitKind.None, data: "0x" },
     }));
@@ -145,10 +163,11 @@ export const midnightSupplyCollateralTakeBorrow = (
       type: "midnightSupplyCollateralTakeBorrow",
       args: {
         market: marketId,
-        collateralAssets: collateralSupplies.reduce(
+        collateralAssets: collateralAmounts.reduce(
           (total, supply) => total + supply.assets,
           0n,
         ),
+        collateralAmounts,
         loanAssets: params.loanAssets,
         maxUnits: params.maxUnits,
         taker: params.taker,

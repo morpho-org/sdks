@@ -1591,6 +1591,37 @@ export class EmptyMidnightCollateralAmountsError extends Error {
 }
 
 /**
+ * Thrown when a Midnight flow receives both a collateral list and a
+ * single-collateral field, so the intended collateral is ambiguous.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   midnightRepayWithdrawCollateral({ ...params, collateralWithdrawals: [], withdrawCollateralAssets: 500n });
+ * } catch (error) {
+ *   if (error instanceof ConflictingMidnightCollateralInputError) {
+ *     console.error(error.field, error.conflictingField);
+ *   }
+ * }
+ * ```
+ */
+export class ConflictingMidnightCollateralInputError extends Error {
+  /**
+   * @param field - Collateral list field that was provided.
+   * @param conflictingField - Single-collateral field provided alongside it.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly conflictingField: string,
+  ) {
+    super(
+      `Input "${field}" cannot be combined with "${conflictingField}". Pass either the list or the single-collateral fields.`,
+    );
+    this.name = "ConflictingMidnightCollateralInputError";
+  }
+}
+
+/**
  * Thrown when a Midnight multi-collateral list repeats a collateral index.
  *
  * @example

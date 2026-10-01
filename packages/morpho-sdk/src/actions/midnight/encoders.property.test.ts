@@ -13,6 +13,7 @@ import {
   midnightApiTake,
   midnightChainId,
   midnightMarket,
+  midnightMultiCollateralMarket,
 } from "../../../test/fixtures/midnight.js";
 import { MidnightMarketAddressMismatchError } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
@@ -35,6 +36,13 @@ const inputs = fc.record({
   optionalAmount: uint128,
   flag: fc.boolean(),
 });
+const collateralAmounts = fc.uniqueArray(
+  fc.record({
+    collateralIndex: fc.constantFrom(0n, 1n),
+    assets: positiveUint128,
+  }),
+  { selector: ({ collateralIndex }) => collateralIndex, minLength: 1 },
+);
 
 describe("Midnight calldata encoders", () => {
   test.each([
@@ -256,6 +264,63 @@ describe("Midnight calldata encoders", () => {
         });
         expect(lend.args[0]).toBe(assets);
         expect(lend.args[1]).toBe(optionalAmount);
+      }),
+      { seed: 42 },
+    );
+  });
+
+  test("property: preserves collateral lists entry by entry", () => {
+    fc.assert(
+      fc.property(collateralAmounts, positiveUint128, (amounts, loanAssets) => {
+        const collateralBorrow = decodeFunctionData({
+          abi: midnightBundlesAbi,
+          data: midnightSupplyCollateralTakeBorrow({
+            chainId: midnightChainId,
+            market: midnightMultiCollateralMarket,
+            collateralSupplies: amounts,
+            loanAssets,
+            maxUnits: loanAssets,
+            taker: midnightAddresses.taker,
+            takeableOffers: [
+              midnightApiTake({
+                buy: true,
+                market: midnightMultiCollateralMarket,
+              }),
+            ],
+            deadline: 0n,
+          }).data,
+        });
+        if (
+          collateralBorrow.functionName !==
+          "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget"
+        ) {
+          throw new TypeError("unexpected collateral-borrow function");
+        }
+        expect(
+          collateralBorrow.args[5].map(({ collateralIndex, assets }) => ({
+            collateralIndex,
+            assets,
+          })),
+        ).toEqual(amounts);
+
+        const repayment = decodeFunctionData({
+          abi: midnightBundlesAbi,
+          data: midnightRepayWithdrawCollateral({
+            chainId: midnightChainId,
+            market: midnightMultiCollateralMarket,
+            repayAssets: 0n,
+            collateralWithdrawals: amounts,
+            onBehalf: midnightAddresses.taker,
+            deadline: 0n,
+          }).data,
+        });
+        if (
+          repayment.functionName !==
+          "midnightBundlesV1RepayAndWithdrawCollateral"
+        ) {
+          throw new TypeError("unexpected repay function");
+        }
+        expect(repayment.args[4]).toEqual(amounts);
       }),
       { seed: 42 },
     );
