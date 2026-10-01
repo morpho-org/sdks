@@ -407,6 +407,49 @@ describe("parseRequest", () => {
     },
   );
 
+  test("behavior: accepts assetPaid on a vaultV1MigrateToV2 limit", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "vaultV1MigrateToV2",
+            sourceVault: SPENDER,
+            targetVault: TARGET,
+            assetPaid: SPENDER,
+            quote: { assetsPaid: 1n },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    });
+    expect(request.limits?.operations?.[0]).toMatchObject({
+      assetPaid: SPENDER,
+    });
+  });
+
+  test("error: rejects asset on a vaultV1MigrateToV2 limit", () => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV1MigrateToV2",
+              sourceVault: SPENDER,
+              targetVault: TARGET,
+              asset: SPENDER,
+              quote: { assetsPaid: 1n },
+              slippageTolerance: 0n,
+            },
+          ],
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
       try {

@@ -135,6 +135,27 @@ describe.sequential("runSimulation", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test("error: preview authorizations on an unregistered chain require Morpho addresses", async () => {
+    const { fetch } = stubFetch(CHAIN_ID, []);
+    await expect(
+      simulate(config, {
+        chainId: CHAIN_ID,
+        mode: "preview",
+        transactions: [TRANSACTION],
+        authorizations: [
+          {
+            type: "erc20Approval",
+            token: TARGET,
+            owner: OWNER,
+            spender: TARGET,
+            amount: 1n,
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedChainError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test("behavior: an unregistered configured chain works without limits", async () => {
     const { methods } = stubFetch(CHAIN_ID, []);
     const result = await simulate(config, {

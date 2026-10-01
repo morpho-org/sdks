@@ -60,7 +60,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     );
 
     const execution = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan,
       stateBlock,
     });
@@ -75,7 +75,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
 
     // Re-running at the same pin yields a deep-equal block and readings.
     const again = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan,
       stateBlock,
     });
@@ -92,7 +92,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     });
     const stateBlock = await pin(client);
     const execution = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan: planFor(
         [{ to: RECIPIENT, data: "0x", value: amount }],
         client.account.address,
@@ -114,7 +114,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const amount = parseEther("0.5");
     const stateBlock = await pin(client);
     const execution = await executePlan({
-      rpcUrl: client.transport.url!,
+      client,
       plan: planFor(
         [
           {

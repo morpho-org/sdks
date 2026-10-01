@@ -105,10 +105,9 @@ export async function runSimulation(params: {
 
   // Execute against the block resolved once above; the boundary rechecks its hash.
   const execution = await executePlan({
-    rpcUrl: chain.simulateV1Url,
+    client,
     plan,
     stateBlock: pinnedBlock,
-    signal,
   });
 
   const userCalls = execution.calls

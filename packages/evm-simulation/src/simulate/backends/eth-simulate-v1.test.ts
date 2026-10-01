@@ -12,14 +12,17 @@ import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { decodeStateRead } from "../state/read-state.js";
+import { createSimulationClient } from "./client.js";
 import { executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const VAULT: Address = getAddress("0x3333333333333333333333333333333333333333");
 const USDC: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
 const STATE_BLOCK = 20_000_000n;
+const RPC_URL = "https://rpc.example";
 
 const fetchMock = vi.fn<typeof fetch>();
+let params!: Parameters<typeof executePlan>[0];
 
 function makePlan(transactions = 1): ExecutionPlan {
   const request = parseRequest({
@@ -91,18 +94,17 @@ const okCalls = (count: number): CallResult[] =>
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  params = {
+    client: createSimulationClient(RPC_URL),
+    plan: makePlan(),
+    stateBlock: {
+      number: STATE_BLOCK,
+      hash: `0x${"ab".repeat(32)}`,
+      timestamp: 1_700_000_000n,
+    },
+  };
 });
 afterEach(() => vi.unstubAllGlobals());
-
-const params = {
-  rpcUrl: "https://rpc.example",
-  plan: makePlan(),
-  stateBlock: {
-    number: STATE_BLOCK,
-    hash: `0x${"ab".repeat(32)}` as const,
-    timestamp: 1_700_000_000n,
-  },
-};
 
 describe.sequential("executePlan", () => {
   test("default", async () => {

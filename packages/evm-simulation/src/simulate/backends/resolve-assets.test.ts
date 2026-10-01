@@ -1,7 +1,13 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { BaseError, erc4626Abi, HttpRequestError, zeroAddress } from "viem";
+import {
+  BaseError,
+  erc4626Abi,
+  HttpRequestError,
+  TimeoutError,
+  zeroAddress,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -127,6 +133,35 @@ describe("resolveAssets", () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
       new HttpRequestError({ body: {}, url: "https://rpc.example" }),
+    );
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+  test("error: an already-aborted signal maps metadata failure to ExternalServiceError", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(new Error("request aborted"));
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+  test("error: TimeoutError maps to ExternalServiceError", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      new TimeoutError({ body: {}, url: "https://rpc.example" }),
     );
     await expect(
       resolveAssets({

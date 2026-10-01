@@ -68,11 +68,15 @@ describe.sequential("resolvePinnedBlock", () => {
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
   });
 
-  test("error: ExternalServiceError when the RPC fails", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("refused"));
-    await expect(
-      resolvePinnedBlock({ client: client() }),
-    ).rejects.toBeInstanceOf(ExternalServiceError);
+  test("error: ExternalServiceError does not expose the RPC URL", async () => {
+    fetchMock.mockRejectedValueOnce(
+      new Error("request failed: https://rpc.example"),
+    );
+    const error = await resolvePinnedBlock({ client: client() }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect((error as Error).message).not.toContain("https://rpc.example");
   });
 
   test("error: ExternalServiceError on abort", async () => {

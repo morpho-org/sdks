@@ -128,8 +128,8 @@ describe("SimulationRevertedError", () => {
   });
 
   it("attaches optional details payload", () => {
-    const err = new SimulationRevertedError("x", { raw: "tenderly response" });
-    expect(err.details).toEqual({ raw: "tenderly response" });
+    const err = new SimulationRevertedError("x", { raw: "node response" });
+    expect(err.details).toEqual({ raw: "node response" });
     expect(err.cause).toBeUndefined();
   });
 
@@ -186,7 +186,7 @@ describe("UnsupportedChainError", () => {
 describe("ExternalServiceError", () => {
   it("forwards cause via Error options", () => {
     const cause = new Error("underlying fetch failure");
-    const err = new ExternalServiceError("Tenderly 502", { cause });
+    const err = new ExternalServiceError("RPC 502", { cause });
     expect(err.cause).toBe(cause);
   });
 });
@@ -312,9 +312,9 @@ describe("SimulationErrorContext", () => {
       Extract<Verification, { operation: "vaultV1MigrateToV2" }>
     >().not.toHaveProperty("vault");
     expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
-    expectTypeOf<
-      SimulatedOperation["operation"]
-    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<SimulatedOperation["operation"]>().toEqualTypeOf<
+      Exclude<OperationType, "blueAuthorization">
+    >();
     expectTypeOf<{
       transactionIndex: number;
       operation: "blueRefinance";
@@ -661,6 +661,23 @@ describe("isSimulationPackageError", () => {
     expect(isSimulationPackageError({ ...base, context: EXECUTION })).toBe(
       true,
     );
+  });
+
+  it("accepts a field-only verification context on a plain error object", () => {
+    expect(
+      isSimulationPackageError({
+        name: "MissingVerificationEvidenceError",
+        message: "State read failed",
+        code: "MISSING_VERIFICATION_EVIDENCE",
+        context: {
+          stage: "verification",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+          field: "balance:token:account",
+        },
+      }),
+    ).toBe(true);
   });
 
   it.each(OPERATION_TYPES)(
