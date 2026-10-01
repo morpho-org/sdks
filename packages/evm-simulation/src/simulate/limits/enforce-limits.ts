@@ -562,9 +562,10 @@ export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
  * Check every declared field of one bound operation limit against the
  * explicit {@link BINDINGS} table, in table order. `"equals"` bindings compare
  * the decoded operation field; `"min"`/`"max"` bindings bound a numeric
- * outcome inclusively — a non-finite {@link RiskMetric}
- * (`debtFree`/`unbounded`) means "infinite", failing every `"max"` cap and
- * passing every `"min"` bound; `"minByMarket"` requires each declared market
+ * outcome inclusively — a `finite` {@link RiskMetric} compares numerically,
+ * `debtFree` (LTV 0, infinite health factor) satisfies every cap and floor,
+ * and `unbounded` (zero collateral or liquidity) fails every `"max"` cap and
+ * passes every `"min"` bound; `"minByMarket"` requires each declared market
  * leg to be covered by an observed credit. A missing observation never passes.
  */
 // biome-ignore lint/complexity/useMaxParams: each check needs the bound pair, outcome and context

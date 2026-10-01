@@ -59,9 +59,8 @@ import { parseRequest } from "./request/index.js";
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
  * @throws {SimulationRevertedError} when a user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a probe fails, its data
- *   cannot be decoded, or a wallet limit names a token whose owner balance
- *   was never observed.
+ * @throws {MissingVerificationEvidenceError} when a probe fails or its data
+ *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block behind the pinned state,
  *   or a state-block hash that changed mid-flight).
