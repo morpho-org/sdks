@@ -128,6 +128,7 @@ export type {
   MakeOffersOutput as MidnightMakeOffersOutput,
   MakeOffersParams as MidnightMakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
+  MidnightReservedCollateralAmount,
   OffersData as MidnightOffersData,
   OfferValidationParams as MidnightOfferValidationParams,
   RedeemParams as MidnightRedeemParams,

@@ -36,6 +36,10 @@ import {
   getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
+import {
+  resolveMidnightCollateralSupplies,
+  resolveMidnightCollateralWithdrawals,
+} from "../../helpers/resolveMidnightCollateralAmounts.js";
 import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
@@ -518,8 +522,9 @@ export class MorphoMidnight {
    * @param params - Borrower, market snapshot, collateral and loan amounts, unit cap, offers, and deadline.
    * @param params.accountAddress - Borrower executing the bundle.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
-   * @param params.collateralAssets - Collateral assets supplied before borrowing.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+   * @param params.collateralAssets - Collateral assets supplied before borrowing (single-collateral form).
+   * @param params.collateralIndex - Optional collateral index for `collateralAssets`; defaults to `0n`.
+   * @param params.collateralSupplies - Collateral supplied before borrowing, one entry per unique index (multi-collateral form). Each token gets its own `MidnightBundles` approval requirement.
    * @param params.loanAssets - Loan assets received by the borrower.
    * @param params.maxUnits - Maximum debt units accepted.
    * @param params.takeableOffers - Lend-side offers returned by the Midnight API.
@@ -527,9 +532,11 @@ export class MorphoMidnight {
    * @returns Lazy collateral approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when collateral, loan assets, or `maxUnits` is non-positive.
-   * @throws {NegativeInputError} when `deadline` is negative.
-   * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
+   * @throws {NonPositiveInputError} when any collateral amount, loan assets, or `maxUnits` is non-positive.
+   * @throws {NegativeInputError} when `deadline` or any collateral index is negative.
+   * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
+   * @throws {UnknownCollateralIndexError} when a selected collateral is not configured.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -544,6 +551,19 @@ export class MorphoMidnight {
    *   takeableOffers: quote.data.takeableOffers,
    *   deadline: maxUint256,
    * });
+   *
+   * const multiCollateralOutput = midnight.supplyCollateralTakeBorrow({
+   *   accountAddress: borrower,
+   *   marketData,
+   *   collateralSupplies: [
+   *     { collateralIndex: 0n, assets: 1_000_000n },
+   *     { collateralIndex: 1n, assets: 50_000n },
+   *   ],
+   *   loanAssets: 1_000_000n,
+   *   maxUnits: 1_100_000n,
+   *   takeableOffers: quote.data.takeableOffers,
+   *   deadline: maxUint256,
+   * });
    * ```
    */
   supplyCollateralTakeBorrow(
@@ -551,7 +571,11 @@ export class MorphoMidnight {
   ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
-    assertPositiveAmount("collateralAssets", params.collateralAssets);
+    const market = params.marketData;
+    const collateralSupplies = resolveMidnightCollateralSupplies(
+      market.params,
+      params,
+    );
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertPositiveAmount("maxUnits", params.maxUnits);
     assertNonNegativeAmount("deadline", params.deadline);
@@ -562,23 +586,23 @@ export class MorphoMidnight {
       expectedBuy: true,
     });
 
-    const market = params.marketData;
-    const collateralIndex = params.collateralIndex ?? 0n;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
-    const collateral = market.getCollateralByIndex(collateralIndex);
 
     return {
       getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
-          ...(await getMidnightApprovalRequirements({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            token: collateral.token,
-            owner: params.accountAddress,
-            spender: midnightBundles,
-            amount: params.collateralAssets,
-          })),
-        ];
+        const requirements: ActionRequirement[] = [];
+        for (const { collateralIndex, assets } of collateralSupplies) {
+          requirements.push(
+            ...(await getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token: market.getCollateralByIndex(collateralIndex).token,
+              owner: params.accountAddress,
+              spender: midnightBundles,
+              amount: assets,
+            })),
+          );
+        }
         const authorization = await getMidnightAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -593,11 +617,10 @@ export class MorphoMidnight {
         midnightSupplyCollateralTakeBorrow({
           chainId: this.chainId,
           market: market.params,
-          collateralAssets: params.collateralAssets,
+          collateralSupplies,
           loanAssets: params.loanAssets,
           maxUnits: params.maxUnits,
           taker: params.accountAddress,
-          collateralIndex,
           takeableOffers: params.takeableOffers,
           deadline: params.deadline,
           metadata: this.client.options.metadata,
@@ -811,15 +834,18 @@ export class MorphoMidnight {
    * @param params.offers - Raw borrow-side offers or groups.
    * @param params.validation - Optional Midnight mempool API request controls.
    * @param params.market - Market shared by every submitted offer.
-   * @param params.collateralAssets - Collateral supplied before offer submission.
-   * @param params.reservedCollateralAssets - Existing collateral reserved by other open groups.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+   * @param params.collateralAssets - Collateral supplied before offer submission (single-collateral form).
+   * @param params.reservedCollateralAssets - Existing collateral reserved by other open groups (single-collateral form).
+   * @param params.collateralIndex - Optional collateral index for `collateralAssets`; defaults to `0n`.
+   * @param params.collateralSupplies - Collateral supplied before offer submission, one entry per unique index with optional `reservedAssets` (multi-collateral form). Each entry yields its own approval and direct supply requirement.
    * @returns Prepared group metadata, lazy supply/ratifier requirements, and a synchronous mempool transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
-   * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
-   * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
+   * @throws {NonPositiveInputError} when any collateral amount is non-positive.
+   * @throws {NegativeInputError} when any collateral index or reserved amount is negative.
+   * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+   * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
+   * @throws {UnknownCollateralIndexError} when a selected collateral is not configured.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @throws {MarketIdMismatchError} when an offer targets another market.
    * @example
@@ -830,17 +856,35 @@ export class MorphoMidnight {
    *   collateralAssets: 2_000_000n,
    *   offers: [offer],
    * });
+   *
+   * const multiCollateralOutput = await midnight.supplyCollateralMakeBorrow({
+   *   accountAddress: maker,
+   *   market: marketData.params,
+   *   collateralSupplies: [
+   *     { collateralIndex: 0n, assets: 1_000_000n, reservedAssets: 250_000n },
+   *     { collateralIndex: 1n, assets: 50_000n },
+   *   ],
+   *   offers: [offer],
+   * });
    * ```
    */
   async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
   ): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    assertPositiveAmount("collateralAssets", params.collateralAssets);
-    assertNonNegativeAmount(
-      "reservedCollateralAssets",
-      params.reservedCollateralAssets ?? 0n,
-    );
+    if (params.collateralSupplies == null) {
+      assertNonNegativeAmount(
+        "reservedCollateralAssets",
+        params.reservedCollateralAssets ?? 0n,
+      );
+    } else {
+      for (const [index, supply] of params.collateralSupplies.entries()) {
+        assertNonNegativeAmount(
+          `collateralSupplies[${index}].reservedAssets`,
+          supply.reservedAssets ?? 0n,
+        );
+      }
+    }
 
     const market =
       params.market instanceof MarketParams
@@ -848,11 +892,18 @@ export class MorphoMidnight {
         : MarketParams.from(params.market);
     // Reject markets from another chain deployment before preparing requirements.
     validateMidnightMarket({ market, chainId: this.chainId });
-    const collateralIndex = params.collateralIndex ?? 0n;
-    const collateral = MarketUtils.getCollateralByIndex(
+    const collateralSupplies = resolveMidnightCollateralSupplies(
       market,
-      collateralIndex,
-    );
+      params,
+    ).map((supply, index) => ({
+      ...supply,
+      token: MarketUtils.getCollateralByIndex(market, supply.collateralIndex)
+        .token,
+      reservedAssets:
+        params.collateralSupplies == null
+          ? (params.reservedCollateralAssets ?? 0n)
+          : (params.collateralSupplies[index]?.reservedAssets ?? 0n),
+    }));
 
     const data = await this.getOffersData({
       accountAddress: params.accountAddress,
@@ -874,28 +925,36 @@ export class MorphoMidnight {
       root: data.tree.root,
       ratifierType: data.ratifierType,
       getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
-          ...(await getMidnightApprovalRequirements({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            token: collateral.token,
-            owner: data.accountAddress,
-            spender: midnight,
-            amount:
-              params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
-          })),
-          midnightSupplyCollateral({
-            chainId: this.chainId,
-            market,
-            collateralIndex,
-            assets: params.collateralAssets,
-            onBehalf: data.accountAddress,
-            metadata: this.client.options.metadata,
-          }),
+        const requirements: ActionRequirement[] = [];
+        for (const supply of collateralSupplies) {
+          requirements.push(
+            ...(await getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token: supply.token,
+              owner: data.accountAddress,
+              spender: midnight,
+              amount: supply.assets + supply.reservedAssets,
+            })),
+          );
+        }
+        for (const supply of collateralSupplies) {
+          requirements.push(
+            midnightSupplyCollateral({
+              chainId: this.chainId,
+              market,
+              collateralIndex: supply.collateralIndex,
+              assets: supply.assets,
+              onBehalf: data.accountAddress,
+              metadata: this.client.options.metadata,
+            }),
+          );
+        }
+        requirements.push(
           ...(await this.getRatifierRequirements({
             offersData: data,
           })),
-        ];
+        );
 
         return requirements;
       },
@@ -990,15 +1049,17 @@ export class MorphoMidnight {
    * @param params.accountAddress - Position owner whose debt or collateral is updated.
    * @param params.marketData - Hydrated market snapshot used for validation and transaction construction.
    * @param params.repayAssets - Loan assets repaid; may be zero for withdrawal-only flows.
-   * @param params.withdrawCollateralAssets - Collateral assets withdrawn; may be zero for repay-only flows.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+   * @param params.withdrawCollateralAssets - Collateral assets withdrawn; may be zero for repay-only flows (single-collateral form).
+   * @param params.collateralIndex - Optional collateral index for `withdrawCollateralAssets`; defaults to `0n`.
+   * @param params.collateralWithdrawals - Collateral withdrawn, one entry per unique index; may be empty for repay-only flows (multi-collateral form).
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NegativeInputError} when an amount, index, or deadline is negative.
-   * @throws {NonPositiveInputError} when both repay and withdrawal amounts are zero.
-   * @throws {UnknownCollateralIndexError} when a positive withdrawal selects an unconfigured collateral.
+   * @throws {NonPositiveInputError} when a `collateralWithdrawals` amount is non-positive, or nothing is repaid or withdrawn.
+   * @throws {DuplicateMidnightCollateralIndexError} when `collateralWithdrawals` repeats an index.
+   * @throws {UnknownCollateralIndexError} when a withdrawal selects an unconfigured collateral.
    * @example
    * ```ts
    * const output = midnight.repayWithdrawCollateral({
@@ -1006,6 +1067,17 @@ export class MorphoMidnight {
    *   marketData,
    *   repayAssets: 1_000_000n,
    *   withdrawCollateralAssets: 2_000_000n,
+   *   deadline: maxUint256,
+   * });
+   *
+   * const multiCollateralOutput = midnight.repayWithdrawCollateral({
+   *   accountAddress: borrower,
+   *   marketData,
+   *   repayAssets: 1_000_000n,
+   *   collateralWithdrawals: [
+   *     { collateralIndex: 0n, assets: 500_000n },
+   *     { collateralIndex: 1n, assets: 10_000n },
+   *   ],
    *   deadline: maxUint256,
    * });
    * ```
@@ -1016,33 +1088,13 @@ export class MorphoMidnight {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertNonNegativeAmount("repayAssets", params.repayAssets);
-    assertNonNegativeAmount(
-      "withdrawCollateralAssets",
-      params.withdrawCollateralAssets,
-    );
     assertNonNegativeAmount("deadline", params.deadline);
     const market = params.marketData;
-    const collateralWithdrawals =
-      params.withdrawCollateralAssets > 0n
-        ? [
-            {
-              collateralIndex: params.collateralIndex ?? 0n,
-              assets: params.withdrawCollateralAssets,
-            },
-          ]
-        : [];
-    for (const [index, withdrawal] of collateralWithdrawals.entries()) {
-      assertNonNegativeAmount(
-        `collateralWithdrawals[${index}].collateralIndex`,
-        withdrawal.collateralIndex,
-      );
-      // Validate the configured collateral before exposing requirement reads.
-      market.getCollateralByIndex(withdrawal.collateralIndex);
-    }
-    if (
-      params.repayAssets === 0n &&
-      collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
-    ) {
+    const collateralWithdrawals = resolveMidnightCollateralWithdrawals(
+      market.params,
+      params,
+    );
+    if (params.repayAssets === 0n && collateralWithdrawals.length === 0) {
       throw new NonPositiveInputError("repay or withdraw amount", 0n);
     }
 
@@ -1078,9 +1130,8 @@ export class MorphoMidnight {
           chainId: this.chainId,
           market: market.params,
           repayAssets: params.repayAssets,
-          withdrawCollateralAssets: params.withdrawCollateralAssets,
+          collateralWithdrawals,
           onBehalf: params.accountAddress,
-          collateralIndex: params.collateralIndex,
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),

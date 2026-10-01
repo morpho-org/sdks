@@ -36,6 +36,7 @@ import {
   midnightChainId,
   midnightMarket,
   midnightMarketId,
+  midnightMultiCollateralMarket,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import type {
@@ -49,6 +50,8 @@ import {
   AccrualPositionUserMismatchError,
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
+  DuplicateMidnightCollateralIndexError,
+  EmptyMidnightCollateralAmountsError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
@@ -106,10 +109,20 @@ const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
 const offersData = (
   buy = true,
   maker: Address = midnightAddresses.maker,
-): OffersData => {
+): OffersData => marketOffersData({ buy, maker, market: midnightMarket });
+
+const marketOffersData = ({
+  buy,
+  maker,
+  market,
+}: {
+  readonly buy: boolean;
+  readonly maker: Address;
+  readonly market: typeof midnightMarket;
+}): OffersData => {
   const offer = Offer.create(
     midnightBaseOffer({
-      market: { ...midnightMarket, maturity: apiValidMaturity },
+      market: { ...market, maturity: apiValidMaturity },
       buy,
       maker,
       expiry: apiValidMaturity - 60n,
@@ -285,9 +298,14 @@ const offerValidation = {
     }),
 };
 
-const marketData = (overrides: { readonly withdrawable?: bigint } = {}) =>
+const marketData = (
+  overrides: {
+    readonly withdrawable?: bigint;
+    readonly params?: typeof midnightMarket;
+  } = {},
+) =>
   new Market({
-    params: midnightMarket,
+    params: overrides.params ?? midnightMarket,
     totalUnits: 1_000n,
     lossFactor: 0n,
     withdrawable: overrides.withdrawable ?? 1_000n,
@@ -766,6 +784,110 @@ describe("MorphoMidnight", () => {
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
       ).toThrow(NegativeInputError);
+    });
+  });
+
+  describe("supplyCollateralTakeBorrow multi-collateral", () => {
+    test("behavior: approves every supplied token for MidnightBundles and encodes every entry", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockAllowance({
+        handle,
+        token: midnightAddresses.secondCollateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
+        marketData: marketData({ params: midnightMultiCollateralMarket }),
+        accountAddress: midnightAddresses.taker,
+        collateralSupplies: [
+          { collateralIndex: 1n, assets: 300n },
+          { collateralIndex: 0n, assets: 2_000n },
+        ],
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [
+          midnightApiTake({
+            buy: true,
+            market: midnightMultiCollateralMarket,
+          }),
+        ],
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(requirements.map((requirement) => requirement.action)).toEqual([
+        expect.objectContaining({
+          type: "erc20Approval",
+          args: expect.objectContaining({
+            spender: midnightAddresses.midnightBundles,
+            amount: 300n,
+          }),
+        }),
+        expect.objectContaining({
+          type: "erc20Approval",
+          args: expect.objectContaining({
+            spender: midnightAddresses.midnightBundles,
+            amount: 2_000n,
+          }),
+        }),
+      ]);
+      expect(
+        requirements.map((requirement) =>
+          "to" in requirement ? requirement.to : null,
+        ),
+      ).toEqual([
+        midnightAddresses.secondCollateralToken,
+        midnightAddresses.collateralToken,
+      ]);
+      expect(tx.action.args).toMatchObject({
+        collateralAssets: 2_300n,
+        collateralSupplies: 2,
+      });
+    });
+
+    test("error: invalid collateralSupplies", () => {
+      const params = {
+        marketData: marketData({ params: midnightMultiCollateralMarket }),
+        accountAddress: midnightAddresses.taker,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [
+          midnightApiTake({
+            buy: true,
+            market: midnightMultiCollateralMarket,
+          }),
+        ],
+        deadline: maxUint256,
+      } as const;
+
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({
+          ...params,
+          collateralSupplies: [],
+        }),
+      ).toThrow(EmptyMidnightCollateralAmountsError);
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({
+          ...params,
+          collateralSupplies: [
+            { collateralIndex: 1n, assets: 1n },
+            { collateralIndex: 1n, assets: 1n },
+          ],
+        }),
+      ).toThrow(DuplicateMidnightCollateralIndexError);
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({
+          ...params,
+          collateralSupplies: [{ collateralIndex: 2n, assets: 1n }],
+        }),
+      ).toThrow(UnknownCollateralIndexError);
     });
   });
 
@@ -1852,6 +1974,132 @@ describe("MorphoMidnight", () => {
     });
   });
 
+  describe("supplyCollateralMakeBorrow multi-collateral", () => {
+    test("behavior: approves and supplies every entry including its reserve", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockAllowance({
+        handle,
+        token: midnightAddresses.secondCollateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+      const data = marketOffersData({
+        buy: false,
+        maker: offerSignerAccount.address,
+        market: midnightMultiCollateralMarket,
+      });
+
+      const output = await midnightWithHandle(
+        handle,
+      ).supplyCollateralMakeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        market: {
+          ...midnightMultiCollateralMarket,
+          maturity: apiValidMaturity,
+        },
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 1_000n, reservedAssets: 250n },
+          { collateralIndex: 1n, assets: 40n },
+        ],
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements
+          .filter((requirement) => requirement.action.type === "erc20Approval")
+          .map((requirement) => [
+            "to" in requirement ? requirement.to : null,
+            requirement.action.args,
+          ]),
+      ).toEqual([
+        [
+          midnightAddresses.collateralToken,
+          expect.objectContaining({
+            spender: midnightAddresses.midnight,
+            amount: 1_250n,
+          }),
+        ],
+        [
+          midnightAddresses.secondCollateralToken,
+          expect.objectContaining({
+            spender: midnightAddresses.midnight,
+            amount: 40n,
+          }),
+        ],
+      ]);
+      expect(
+        requirements
+          .filter(
+            (requirement) =>
+              requirement.action.type === "midnightSupplyCollateral",
+          )
+          .map((requirement) => requirement.action.args),
+      ).toEqual([
+        expect.objectContaining({ collateralIndex: 0n, assets: 1_000n }),
+        expect.objectContaining({ collateralIndex: 1n, assets: 40n }),
+      ]);
+      const signature = await signOfferRootRequirement(requirements);
+
+      expect(output.buildTx(signature).action.args.maker).toBe(
+        data.accountAddress,
+      );
+    });
+
+    test("error: invalid collateralSupplies", async () => {
+      const data = marketOffersData({
+        buy: false,
+        maker: midnightAddresses.maker,
+        market: midnightMultiCollateralMarket,
+      });
+      const params = {
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        market: {
+          ...midnightMultiCollateralMarket,
+          maturity: apiValidMaturity,
+        },
+      } as const;
+
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          ...params,
+          collateralSupplies: [],
+        }),
+      ).rejects.toThrow(EmptyMidnightCollateralAmountsError);
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          ...params,
+          collateralSupplies: [
+            { collateralIndex: 0n, assets: 1n },
+            { collateralIndex: 0n, assets: 1n },
+          ],
+        }),
+      ).rejects.toThrow(DuplicateMidnightCollateralIndexError);
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          ...params,
+          collateralSupplies: [
+            { collateralIndex: 1n, assets: 1n, reservedAssets: -1n },
+          ],
+        }),
+      ).rejects.toThrow(NegativeInputError);
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          ...params,
+          collateralSupplies: [{ collateralIndex: 1n, assets: 0n }],
+        }),
+      ).rejects.toThrow(NonPositiveInputError);
+    });
+  });
+
   describe("makeBorrow", () => {
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
@@ -2036,6 +2284,69 @@ describe("MorphoMidnight", () => {
           repayAssets: 0n,
           withdrawCollateralAssets: 1n,
           collateralIndex: 1n,
+        }),
+      ).toThrow(UnknownCollateralIndexError);
+    });
+  });
+
+  describe("repayWithdrawCollateral multi-collateral", () => {
+    test("behavior: withdraws every entry and only approves the loan token", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).repayWithdrawCollateral({
+        marketData: marketData({ params: midnightMultiCollateralMarket }),
+        accountAddress: midnightAddresses.taker,
+        repayAssets: 1_000n,
+        collateralWithdrawals: [
+          { collateralIndex: 0n, assets: 2_000n },
+          { collateralIndex: 1n, assets: 30n },
+        ],
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.map((requirement) =>
+          "to" in requirement ? requirement.to : null,
+        ),
+      ).toEqual([midnightAddresses.loanToken]);
+      expect(output.buildTx().action.args.collateralWithdrawals).toBe(2);
+    });
+
+    test("error: invalid collateralWithdrawals", () => {
+      const params = {
+        marketData: marketData({ params: midnightMultiCollateralMarket }),
+        accountAddress: midnightAddresses.taker,
+        repayAssets: 1_000n,
+        deadline: maxUint256,
+      } as const;
+
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          repayAssets: 0n,
+          collateralWithdrawals: [],
+        }),
+      ).toThrow(NonPositiveInputError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          collateralWithdrawals: [
+            { collateralIndex: 0n, assets: 1n },
+            { collateralIndex: 0n, assets: 2n },
+          ],
+        }),
+      ).toThrow(DuplicateMidnightCollateralIndexError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          collateralWithdrawals: [{ collateralIndex: 2n, assets: 1n }],
         }),
       ).toThrow(UnknownCollateralIndexError);
     });
