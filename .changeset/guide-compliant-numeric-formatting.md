@@ -1,5 +1,6 @@
 ---
 "@morpho-org/morpho-ts": minor
+"@morpho-org/morpho-sdk": patch
 ---
 
 Add opt-in numeric formatting options for the Morpho style guide, without changing existing defaults:
@@ -8,4 +9,4 @@ Add opt-in numeric formatting options for the Morpho style guide, without changi
 - `.readable("signed")` writes values below the displayable precision as `<0.01` / `>-0.01`, with the unit attached to the smallest unit (`<$0.01`, `<0.01%`, `<0.0001 WETH`).
 - `format.short.compactThousands()` abbreviates from 1,000 with an uppercase `K` (`1.23K`).
 
-All three are also available as `rounding`, `readableNotation` and `compactThousands` options in `createFormat`. `min`/`max` caps keep their existing output.
+`createFormat` accepts the same settings as `rounding`, `compactThousands` and `readableNotation` options. `readableNotation` only picks the notation; pair it with `readable: true` or a `.readable()` call (e.g. `createFormat({ all: { readable: true, readableNotation: "signed" } })`). `min`/`max` caps keep their existing output. `@morpho-org/morpho-sdk/format` re-exports the new `RoundingMode` and `ReadableNotation` types.

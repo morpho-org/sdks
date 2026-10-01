@@ -1,4 +1,8 @@
-export type { LocaleParts } from "@morpho-org/morpho-ts";
+export type {
+  LocaleParts,
+  ReadableNotation,
+  RoundingMode,
+} from "@morpho-org/morpho-ts";
 export {
   BaseFormatter,
   CommasFormatter,

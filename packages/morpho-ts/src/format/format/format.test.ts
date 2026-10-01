@@ -1003,6 +1003,30 @@ describe("format", () => {
       ).toEqual("<0.0001 WETH");
     });
 
+    test("should apply to short and negative percent values", () => {
+      expect(format.short.digits(2).readable("signed").of(0.001)).toEqual(
+        "<0.01",
+      );
+      expect(
+        format.short.digits(2).unit("$").readable("signed").of(-0.001),
+      ).toEqual(">-$0.01");
+      expect(
+        format.short
+          .digits(2)
+          .compactThousands()
+          .rounding("halfUp")
+          .unit("$")
+          .readable("signed")
+          .of(-0.004),
+      ).toEqual(">-$0.01");
+      expect(
+        format.short.digits(2).rounding("halfUp").readable("signed").of(0.005),
+      ).toEqual("0.01");
+      expect(
+        format.percent.digits(2).unit("%").readable("signed").of(-0.000001),
+      ).toEqual(">-0.01%");
+    });
+
     test("should ignore the sign option below display precision", () => {
       expect(
         format.number.digits(2).sign().readable("signed").of(0.001),

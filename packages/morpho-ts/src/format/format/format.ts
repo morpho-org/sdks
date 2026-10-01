@@ -135,26 +135,23 @@ const COMPACT_THOUSANDS_RANGES = [
   },
 ];
 
-const _roundHalfUp = (bi: bigint, droppedDecimals: number) => {
-  if (droppedDecimals <= 0) return bi;
-
-  const unit = 10n ** BigInt(droppedDecimals);
-
-  return ((bi + unit / 2n) / unit) * unit;
-};
-
-// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const _roundToDigits = (
   bi: bigint,
-  decimals: number,
-  formatOptions: Omit<BaseFormatOptions, "format">,
+  {
+    decimals,
+    digits,
+    rounding,
+    readable,
+  }: Pick<BaseFormatOptions, "digits" | "rounding" | "readable"> & {
+    decimals: number;
+  },
 ) => {
-  if (formatOptions.rounding !== "halfUp" || formatOptions.digits == null)
-    return bi;
+  if (rounding !== "halfUp" || digits == null || decimals <= digits) return bi;
 
-  const rounded = _roundHalfUp(bi, decimals - formatOptions.digits);
+  const unit = 10n ** BigInt(decimals - digits);
+  const rounded = ((bi + unit / 2n) / unit) * unit;
 
-  if (rounded === 0n && formatOptions.readable) return bi;
+  if (rounded === 0n && readable) return bi;
 
   return rounded;
 };
@@ -173,11 +170,10 @@ const _formatShort = (
       (range) => value.toString().length > range.minDecimals + decimals,
     );
   const roundInRange = (range: (typeof ranges)[number] | undefined) =>
-    _roundToDigits(
-      _bi,
-      decimals + (range ? (range.power ?? range.minDecimals) : 0),
-      formatOptions,
-    );
+    _roundToDigits(_bi, {
+      ...formatOptions,
+      decimals: decimals + (range ? (range.power ?? range.minDecimals) : 0),
+    });
 
   let bi = roundInRange(findRange(_bi));
   const params = findRange(bi);
@@ -321,14 +317,14 @@ function formatBI(
   switch (formatOptions.format) {
     case Format.commas:
       value = _formatCommas(
-        _roundToDigits(absBI, decimals, formatOptions),
+        _roundToDigits(absBI, { ...formatOptions, decimals }),
         decimals,
         formatOptions,
       );
       break;
     case Format.number:
       value = _formatNumber(
-        _roundToDigits(absBI, decimals, formatOptions),
+        _roundToDigits(absBI, { ...formatOptions, decimals }),
         decimals,
         formatOptions,
       );
@@ -338,7 +334,7 @@ function formatBI(
       break;
     case Format.percent:
       value = _formatNumber(
-        _roundToDigits(absBI * 100n, decimals, formatOptions),
+        _roundToDigits(absBI * 100n, { ...formatOptions, decimals }),
         decimals,
         formatOptions,
       );
