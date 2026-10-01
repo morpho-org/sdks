@@ -40,6 +40,49 @@ describe("checkSlippage", () => {
       ).toThrow(ConsumerLimitViolationError);
     },
   );
+  test("behavior: minting debt shares is capped and burning debt shares is floored", () => {
+    const debtLimits: SlippageLimits = {
+      quote: { sharesMinted: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    expect(() =>
+      checkSlippage({
+        limits: debtLimits,
+        observed: { sharesMinted: 1011n },
+        context,
+        debtShares: true,
+      }),
+    ).toThrow(ConsumerLimitViolationError);
+    expect(
+      checkSlippage({
+        limits: debtLimits,
+        observed: { sharesMinted: 980n },
+        context,
+        debtShares: true,
+      }),
+    ).toEqual(debtLimits);
+
+    const repayLimits: SlippageLimits = {
+      quote: { sharesBurned: 1000n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    expect(() =>
+      checkSlippage({
+        limits: repayLimits,
+        observed: { sharesBurned: 980n },
+        context,
+        debtShares: true,
+      }),
+    ).toThrow(ConsumerLimitViolationError);
+    expect(
+      checkSlippage({
+        limits: repayLimits,
+        observed: { sharesBurned: 1020n },
+        context,
+        debtShares: true,
+      }),
+    ).toEqual(repayLimits);
+  });
   test.each(["sharesMinted", "assetsPaid"] as const)(
     "behavior: rounding does not weaken tolerance for $field",
     (field) => {

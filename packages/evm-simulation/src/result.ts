@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import type { Address } from "viem";
 import type { SimulationAuthorization } from "./authorizations.js";
 import type {
   SimulationLimits,
@@ -24,16 +24,11 @@ export type SimulatedOperation = {
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
   readonly authorization: SimulationAuthorization;
-  /** Approval calls simulated before the user transactions; empty when a state override was used. */
+  /** Approval calls simulated before the user transactions. */
   readonly calls: readonly {
     readonly transaction: SimulationTransaction;
     readonly result: SimulationCall;
   }[];
-  readonly stateOverride?: {
-    readonly address: Address;
-    readonly slot: Hex;
-    readonly value: Hex;
-  };
 }
 
 /** Optional slippage checks; execution success does not imply economic verification. */

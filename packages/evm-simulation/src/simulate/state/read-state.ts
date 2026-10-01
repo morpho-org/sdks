@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import {
   type Address,
@@ -8,16 +9,17 @@ import {
   type Hex,
   isAddressEqual,
 } from "viem";
+import { InvalidSimulationResponseError } from "../../errors.js";
 import {
-  InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
-} from "../../errors.js";
-import type { OperationLimit, SlippageQuote } from "../../limits.js";
+  type OperationLimit,
+  operationMeasurementPlan,
+  type SlippageQuote,
+} from "../../limits.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
 import type { StateRead } from "./contract.js";
 
 /** One quoted amount's observation source. @internal */
-export type SlippageMeasurement = {
+type SlippageMeasurement = {
   readonly field: keyof SlippageQuote;
 } & (
   | { readonly type: "native"; readonly account: Address }
@@ -40,6 +42,52 @@ export type StateValue =
   | bigint
   | { readonly supplyShares: bigint; readonly borrowShares: bigint };
 
+function planBalanceRead(params: {
+  readonly reads: Map<string, StateRead>;
+  readonly token: Address;
+  readonly account: Address;
+}): string {
+  const { reads, token, account } = params;
+  const id = `balance:${token}:${account}`.toLowerCase();
+  reads.set(id, {
+    kind: "erc20.balance",
+    id,
+    to: token,
+    token,
+    account,
+    data: encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [account],
+    }),
+  });
+  return id;
+}
+
+function planPositionRead(params: {
+  readonly reads: Map<string, StateRead>;
+  readonly morpho: Address;
+  readonly marketId: MarketId;
+  readonly account: Address;
+}): string {
+  const { reads, morpho, marketId, account } = params;
+  const id = `position:${marketId}:${account}`.toLowerCase();
+  reads.set(id, {
+    kind: "morpho.position",
+    id,
+    to: morpho,
+    morpho,
+    marketId,
+    owner: account,
+    data: encodeFunctionData({
+      abi: blueAbi,
+      functionName: "position",
+      args: [marketId, account],
+    }),
+  });
+  return id;
+}
+
 /**
  * Plan only quoted balance and position reads, deduplicating contract calls.
  * Native deltas use the execution's transfer traces and require no view call.
@@ -61,6 +109,7 @@ export function planStateReads(params: {
     ({ limit, assetsPaid, assetsReceived }) => {
       const measurements: SlippageMeasurement[] = [];
       const account = limit.account ?? params.owner;
+      const plan = operationMeasurementPlan(limit);
       for (const field of [
         "assetsReceived",
         "assetsPaid",
@@ -69,83 +118,52 @@ export function planStateReads(params: {
       ] as const) {
         if (limit.quote[field] === undefined) continue;
         const assetField = field === "assetsReceived" || field === "assetsPaid";
-        let token = field === "assetsReceived" ? assetsReceived : assetsPaid;
-        const holder = assetField
-          ? field === "assetsReceived"
-            ? (limit.receiver ?? params.owner)
-            : params.owner
-          : account;
         if (!assetField) {
-          const marketId =
-            "marketId" in limit
-              ? limit.marketId
-              : "sourceMarketId" in limit
-                ? field === "sharesMinted"
-                  ? limit.targetMarketId
-                  : limit.sourceMarketId
-                : undefined;
-          if (
-            marketId !== undefined &&
-            limit.type !== "blueSupplyCollateral" &&
-            limit.type !== "blueWithdrawCollateral"
-          ) {
-            const id = `position:${marketId}:${account}`.toLowerCase();
-            reads.set(id, {
-              kind: "morpho.position",
-              id,
-              to: params.morpho,
-              morpho: params.morpho,
-              marketId,
-              owner: account,
-              data: encodeFunctionData({
-                abi: blueAbi,
-                functionName: "position",
-                args: [marketId, account],
-              }),
-            });
+          const source =
+            field === "sharesMinted" ? plan.sharesMinted : plan.sharesBurned;
+          if (source === undefined) continue;
+          if (source.type === "position") {
             measurements.push({
               field,
               type: "position",
-              readId: id,
-              shares:
-                limit.type === "blueSupply" || limit.type === "blueWithdraw"
-                  ? "supplyShares"
-                  : "borrowShares",
+              readId: planPositionRead({
+                reads,
+                morpho: params.morpho,
+                marketId: source.marketId,
+                account,
+              }),
+              shares: source.shares,
             });
             continue;
           }
-          token =
-            "vault" in limit
-              ? limit.vault
-              : "sourceVault" in limit
-                ? field === "sharesMinted"
-                  ? limit.targetVault
-                  : limit.sourceVault
-                : undefined;
+          measurements.push({
+            field,
+            type: "balance",
+            readId: planBalanceRead({
+              reads,
+              token: source.token,
+              account,
+            }),
+          });
+          continue;
         }
+        const token = field === "assetsReceived" ? assetsReceived : assetsPaid;
+        const holder =
+          field === "assetsReceived"
+            ? (limit.receiver ?? params.owner)
+            : params.owner;
         if (token === undefined) {
-          throw new MissingVerificationEvidenceError(
-            `Cannot measure "${limit.type}.${field}". Supply an observable subject or omit this quoted amount.`,
-          );
+          continue;
         }
-        if (assetField && isAddressEqual(token, ethAddress)) {
+        if (isAddressEqual(token, ethAddress)) {
           measurements.push({ field, type: "native", account: holder });
           continue;
         }
-        const id = `balance:${token}:${holder}`.toLowerCase();
-        reads.set(id, {
-          kind: "erc20.balance",
-          id,
-          to: token,
-          token,
-          account: holder,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [holder],
-          }),
+        measurements.push({
+          field,
+          type: "balance",
+          readId: planBalanceRead({ reads, token, account: holder }),
         });
-        measurements.push({ field, type: "balance", readId: id });
       }
       return { limit, measurements };
     },

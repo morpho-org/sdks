@@ -115,6 +115,28 @@ describe("parseRequest", () => {
       ).toEqual([operation]);
     },
   );
+  test("behavior: separate asset overrides are preserved", () => {
+    const request = parse({
+      chainId: 1,
+      transactions: [tx()],
+      limits: {
+        operations: [
+          {
+            type: "blueSupplyCollateralBorrow",
+            marketId: _MARKET_ID,
+            assetPaid: TARGET,
+            assetReceived: SPENDER,
+            quote: { assetsPaid: 1n, assetsReceived: 2n },
+            slippageTolerance: 0n,
+          },
+        ],
+      },
+    });
+    expect(request.limits?.operations?.[0]).toMatchObject({
+      assetPaid: TARGET,
+      assetReceived: SPENDER,
+    });
+  });
   test.each([
     "minAssetsReceived",
     "minSharesMinted",
@@ -141,6 +163,42 @@ describe("parseRequest", () => {
       }),
     ).toThrow(SimulationValidationError);
   });
+  test.each([
+    { type: "blueSupplyCollateral", field: "sharesMinted" },
+    { type: "blueSupplyCollateral", field: "sharesBurned" },
+    { type: "blueWithdrawCollateral", field: "sharesMinted" },
+    { type: "blueWithdrawCollateral", field: "sharesBurned" },
+  ])(
+    "error: SimulationValidationError for $field on $type",
+    ({ type, field }) => {
+      const error = (() => {
+        try {
+          parse({
+            chainId: 1,
+            transactions: [tx()],
+            limits: {
+              operations: [
+                {
+                  type,
+                  marketId: _MARKET_ID,
+                  quote: { [field]: 1n },
+                  slippageTolerance: 0n,
+                },
+              ],
+            },
+          });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect(
+        (error as SimulationValidationError).fieldErrors?.some((message) =>
+          message.includes(`quote.${field}`),
+        ),
+      ).toBe(true);
+    },
+  );
 
   test("default", () => {
     const request = parse({
@@ -296,26 +354,25 @@ describe("parseRequest", () => {
       },
     ],
     [
-      "operation transactionIndex out of range",
+      "operation transactionIndex",
       {
         transactions: [tx()],
         limits: {
           operations: [
             {
-              type: "blueAuthorization",
-              authorized: SPENDER,
-              transactionIndex: 1,
+              type: "blueSupply",
+              marketId: _MARKET_ID,
+              quote: { assetsPaid: 1n },
+              slippageTolerance: 0n,
+              transactionIndex: 0,
             },
           ],
         },
       },
     ],
     [
-      "weakening limits",
-      {
-        transactions: [tx()],
-        limits: { maxSlippageWad: 10n ** 18n },
-      },
+      "removed policy field",
+      { transactions: [tx()], limits: { legacyPolicy: 1n } },
     ],
   ])("error: SimulationValidationError for %s", (_name, input) => {
     expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
@@ -349,31 +406,6 @@ describe("parseRequest", () => {
       expect(request.limits?.operations).toHaveLength(1);
     },
   );
-
-  test("error: SimulationValidationError for a vaultV1MigrateToV2 limit with both expectedAssets and expectedShares", () => {
-    const error = (() => {
-      try {
-        parse({
-          chainId: 1,
-          transactions: [tx()],
-          limits: {
-            operations: [
-              {
-                type: "vaultV1MigrateToV2",
-                sourceVault: SPENDER,
-                targetVault: TARGET,
-                expectedAssets: 1n,
-                expectedShares: 1n,
-              },
-            ],
-          },
-        });
-      } catch (caught) {
-        return caught;
-      }
-    })();
-    expect(error).toBeInstanceOf(SimulationValidationError);
-  });
 
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
@@ -427,24 +459,6 @@ describe("parseRequest", () => {
       blockNumber: "finalized",
     });
     expect(request.blockNumber).toBe("finalized");
-  });
-
-  test("behavior: accepts limits within bounds", () => {
-    const request = parse({
-      chainId: 1,
-      transactions: [tx()],
-      limits: {
-        operations: [
-          {
-            type: "blueAuthorization",
-            authorized: SPENDER,
-            quote: { assetsPaid: 0n },
-            slippageTolerance: 0n,
-          },
-        ],
-      },
-    });
-    expect(request.limits?.operations).toHaveLength(1);
   });
 
   test("error: SimulationValidationError for non-object input", () => {
@@ -544,8 +558,8 @@ describe("parseRequest", () => {
       limits: {
         operations: [
           {
-            type: "blueAuthorization",
-            authorized: SPENDER,
+            type: "blueSupply",
+            marketId: _MARKET_ID,
             quote: { assetsPaid: 0n },
             slippageTolerance: 0n,
           },
@@ -561,15 +575,32 @@ describe("parseRequest", () => {
     expect(request.authorizations[0]).toEqual(erc20Approval);
     expect(request.authorizations[1]).not.toBe(permit2Auth);
     expect(request.limits?.operations?.[0]).toMatchObject({
-      type: "blueAuthorization",
-      authorized: SPENDER,
+      type: "blueSupply",
+      marketId: _MARKET_ID,
     });
   });
 
   test.each([
     [
       "unknown limit field",
-      { transactions: [tx()], limits: { maxSlipageWad: 1n } },
+      { transactions: [tx()], limits: { legacyPolicy: 1n } },
+    ],
+    [
+      "removed asset override",
+      {
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "blueSupply",
+              marketId: _MARKET_ID,
+              asset: TARGET,
+              quote: { assetsPaid: 1n },
+              slippageTolerance: 0n,
+            },
+          ],
+        },
+      },
     ],
     [
       "unknown operation field",
@@ -607,17 +638,9 @@ describe("parseRequest", () => {
       { transactions: [tx()], limits: { operations: [null] } },
     ],
     [
-      "operation transactionIndex without transactions",
+      "non-array transactions",
       {
         transactions: null,
-        limits: {
-          operations: [
-            {
-              type: "blueAuthorization",
-              authorized: SPENDER,
-            },
-          ],
-        },
       },
     ],
     [
@@ -852,100 +875,19 @@ describe("parseRequest", () => {
       },
     ],
     [
-      "operation bad address",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [{ type: "blueAuthorization", authorized: "0xnot" }],
-        },
-      },
-    ],
-    [
-      "operation bad uint",
+      "operation bad assetPaid address",
       {
         transactions: [tx()],
         limits: {
           operations: [
             {
-              type: "blueAuthorization",
-              authorized: SPENDER,
-              expectedIsAuthorized: true,
-              maxExpected: -2n,
+              type: "blueSupply",
+              marketId: _MARKET_ID,
+              assetPaid: "0xnot",
+              quote: { assetsPaid: 1n },
+              slippageTolerance: 0n,
             },
           ],
-        },
-      },
-    ],
-    [
-      "operation bad bool",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "blueAuthorization",
-              authorized: SPENDER,
-              expectedIsAuthorized: "yes",
-            },
-          ],
-        },
-      },
-    ],
-    [
-      "operation bad marketId array",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "vaultV1InKindRedeem",
-              vault: SPENDER,
-              expectedMarketIds: ["0x12"],
-            },
-          ],
-        },
-      },
-    ],
-    [
-      "operation bad deallocations",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "vaultV2ForceRedeem",
-              vault: SPENDER,
-              expectedDeallocations: [
-                { adapter: "0xnot", marketId: _MARKET_ID, assets: 1n },
-              ],
-            },
-          ],
-        },
-      },
-    ],
-    [
-      "operation bad minSupplyByMarket",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [
-            {
-              type: "vaultV1InKindRedeem",
-              vault: SPENDER,
-              minSupplyAssetsByMarket: [
-                { marketId: _MARKET_ID, minSupplyAssets: -1n },
-              ],
-            },
-          ],
-        },
-      },
-    ],
-    [
-      "operation missing required address",
-      {
-        transactions: [tx()],
-        limits: {
-          operations: [{ type: "vaultV1Deposit", expectedAssets: 1n }],
         },
       },
     ],
@@ -961,10 +903,6 @@ describe("parseRequest", () => {
     [
       "non-array operations",
       { transactions: [tx()], limits: { operations: {} } },
-    ],
-    [
-      "non-bigint maxSlippageWad",
-      { transactions: [tx()], limits: { maxSlippageWad: "1" } },
     ],
   ])("error: SimulationValidationError for %s", (_name, input) => {
     expect(() => parse({ chainId: 1, ...(input as object) })).toThrow(
@@ -1002,35 +940,6 @@ describe("parseRequest", () => {
       },
     });
     expect(request.limits?.operations).toHaveLength(1);
-  });
-
-  test("error: SimulationValidationError reports maxSlippageWad exactly once", () => {
-    const error = (() => {
-      try {
-        parse({
-          chainId: 1,
-          transactions: [tx()],
-          limits: { maxSlippageWad: -1n },
-        });
-      } catch (caught) {
-        return caught;
-      }
-    })();
-    expect(error).toBeInstanceOf(SimulationValidationError);
-    const hits = (error as SimulationValidationError).fieldErrors?.filter(
-      (line) => line.includes("maxSlippageWad"),
-    );
-    expect(hits).toHaveLength(1);
-  });
-
-  test("error: SimulationValidationError for a non-bigint symbol limit", () => {
-    expect(() =>
-      parse({
-        chainId: 1,
-        transactions: [tx()],
-        limits: { maxSlippageWad: Symbol("x") },
-      }),
-    ).toThrow(SimulationValidationError);
   });
 
   test("behavior: preview parses permit and blue signature authorizations", () => {

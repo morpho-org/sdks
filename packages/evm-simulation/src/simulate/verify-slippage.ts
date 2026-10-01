@@ -1,5 +1,5 @@
 import { MathLib } from "@morpho-org/blue-sdk";
-import { ethAddress, isAddressEqual } from "viem";
+import { type Address, ethAddress, isAddressEqual } from "viem";
 import { MissingVerificationEvidenceError } from "../errors.js";
 import type { SlippageQuote } from "../limits.js";
 import type { SimulatedOperation } from "../result.js";
@@ -22,8 +22,12 @@ export function verifySlippage(params: {
   readonly before: ReadonlyMap<string, StateValue>;
   readonly after: ReadonlyMap<string, StateValue>;
   readonly transfers: readonly Transfer[];
+  readonly requestTransactions: readonly {
+    readonly from: Address;
+    readonly value?: bigint;
+  }[];
 }): readonly SimulatedOperation[] {
-  const { ctx, before, after, transfers } = params;
+  const { ctx, before, after, transfers, requestTransactions } = params;
   return params.operations.map(({ limit, measurements }) => {
     const subject = operationSubject(limit);
     const context = {
@@ -38,6 +42,25 @@ export function verifySlippage(params: {
     for (const measurement of measurements) {
       let delta: bigint;
       if (measurement.type === "native") {
+        const touchesAccount = transfers.some(
+          (transfer) =>
+            isAddressEqual(transfer.token, ethAddress) &&
+            (isAddressEqual(transfer.to, measurement.account) ||
+              isAddressEqual(transfer.from, measurement.account)),
+        );
+        if (
+          !touchesAccount &&
+          requestTransactions.some(
+            (transaction) =>
+              isAddressEqual(transaction.from, measurement.account) &&
+              (transaction.value ?? 0n) > 0n,
+          )
+        ) {
+          throw new MissingVerificationEvidenceError(
+            `Missing native transfer evidence for "${measurement.field}" from a transaction with value.`,
+            { context: { ...context, field: measurement.field } },
+          );
+        }
         delta = 0n;
         for (const transfer of transfers) {
           if (!isAddressEqual(transfer.token, ethAddress)) continue;
@@ -77,7 +100,16 @@ export function verifySlippage(params: {
       ...subject,
       account: limit.account ?? ctx.owner,
       receiver: limit.receiver ?? ctx.owner,
-      checkedLimits: checkSlippage({ limits: limit, observed, context }),
+      checkedLimits: checkSlippage({
+        limits: limit,
+        observed,
+        context,
+        debtShares: measurements.some(
+          (measurement) =>
+            measurement.type === "position" &&
+            measurement.shares === "borrowShares",
+        ),
+      }),
     };
   });
 }

@@ -1,6 +1,5 @@
 import {
   BaseError,
-  type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
   http,
@@ -16,6 +15,7 @@ import {
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import type { SimulationExecution } from "./parse-response.js";
 import { parseSimulationResponse } from "./parse-response.js";
+import type { PinnedBlock } from "./resolve-pinned-block.js";
 
 /**
  * Classify a node-level revert: viem's `ExecutionRevertedError`, or a raw
@@ -86,25 +86,20 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
  * collect the pinned execution.
  *
- * The boundary performs these steps under one shared abort/timeout budget:
+ * The caller checks the endpoint chain identity and resolves the pinned state
+ * block before this boundary. This function uses that same block for the
+ * simulation and reorg check under the shared abort/timeout budget.
  *
- * 1. **Chain identity** — `eth_chainId` must equal the request's `chainId`; a
- *    mismatch means the configured endpoint reports the wrong chain
- *    (`InvalidSimulationResponseError`, transport stage), not a simulation
- *    failure. It runs first so a misconfigured endpoint cannot fail earlier
- *    as a bypassable {@link ExternalServiceError}.
- * 2. **Single block resolution** — the request's `blockNumber`/tag/`latest`
- *    resolves to one concrete state block (`stateBlock*`). `latest` is
- *    therefore resolved exactly once; the simulation below pins that number
- *    so a drifting head cannot smear the result across blocks.
- * 3. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
+ * The boundary performs these steps:
+ *
+ * 1. **`eth_simulateV1`** — one `blockStateCalls` entry carrying the planned
  *    calls with their per-call `from`, `traceTransfers: true` so the node
  *    synthesizes native-ETH moves as transfer logs, and
  *    `validation: false`. Validation-off means gas is not charged, which is
  *    how gas is separated from economic effects. **No balance override is
  *    applied** — `value` transfers are funded by the sender's real native
  *    balance.
- * 4. **Response validation** — the response is parsed before the reorg
+ * 2. **Response validation** — the response is parsed before the reorg
  *    re-fetch so revert/mismatch evidence already in hand surfaces instead
  *    of being downgraded to a bypassable {@link ExternalServiceError} by a
  *    failing re-fetch. The simulated block must be exactly
@@ -112,20 +107,20 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *    the former's successor while Anvil reports the pinned block itself.
  *    The result records whatever the node returns; consumers must read
  *    {@link ExecutionBlock.blockNumber} and never assume +1.
- * 5. **Reorg check** — the state block is re-fetched last to detect a reorg
+ * 3. **Reorg check** — the pinned state block is re-fetched last to detect a reorg
  *    that swapped its hash mid-flight (`InvalidSimulationResponseError`).
  *
  * The endpoint must support `eth_simulateV1` with per-call `from`; there is
  * no fallback backend.
  *
- * @param params - RPC endpoint, the plan to execute, and the pipeline's
- *   abort signal. The block pin rides on `plan.request.blockNumber`.
+ * @param params - RPC endpoint, execution plan, already-pinned state block,
+ *   and the pipeline's abort signal.
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
  *   malformed JSON-RPC envelopes, or a state block without number/hash.
- * @throws {InvalidSimulationResponseError} For a chain mismatch or a
- *   response that cannot be trusted (bad shape, call-count mismatch, block
+ * @throws {InvalidSimulationResponseError} For a response that cannot be
+ *   trusted (bad shape, call-count mismatch, block
  *   other than the pinned state block or its successor, a block timestamp
  *   earlier than the pinned block's, or a state-block hash that changed
  *   mid-flight).
@@ -136,12 +131,10 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
 export async function executePlan(params: {
   rpcUrl: string;
   plan: ExecutionPlan;
-  blockNumber?: bigint | BlockTag;
+  stateBlock: PinnedBlock;
   signal?: AbortSignal;
 }): Promise<SimulationExecution> {
-  const { rpcUrl, plan, signal } = params;
-  const blockNumber =
-    params.blockNumber ?? plan.request.blockNumber ?? "latest";
+  const { rpcUrl, plan, stateBlock, signal } = params;
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
@@ -152,48 +145,6 @@ export async function executePlan(params: {
       timeout: signal ? 0 : undefined,
     }),
   });
-
-  // The configured endpoint must serve the request's chain — checked first
-  // so a misconfigured endpoint fails non-bypassably instead of surfacing a
-  // bypassable transport error on the block lookup below. Error contexts
-  // require a resolved `blockNumber`, so tag requests carry none.
-  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
-  if (rpcChainId !== plan.request.chainId) {
-    throw new InvalidSimulationResponseError(
-      `The RPC configured for chain ${plan.request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
-      {
-        ...(typeof blockNumber === "bigint"
-          ? {
-              context: {
-                stage: "transport" as const,
-                chainId: plan.request.chainId,
-                mode: plan.request.mode,
-                blockNumber,
-              },
-            }
-          : {}),
-      },
-    );
-  }
-
-  // Resolve the state block exactly once so `latest` cannot drift.
-  const block = await rpc("eth_getBlock", () =>
-    client.getBlock(
-      typeof blockNumber === "bigint"
-        ? { blockNumber }
-        : { blockTag: blockNumber },
-    ),
-  );
-  if (block.number === null || block.hash === null) {
-    throw new ExternalServiceError(
-      "eth_getBlock returned a block without number or hash. Check that the endpoint resolved the requested state block.",
-    );
-  }
-  const stateBlock = {
-    number: block.number,
-    hash: block.hash,
-    timestamp: block.timestamp,
-  };
 
   // viem's simulateBlocks serializes per-call senders (`account` → `from`)
   // and formats the result for us.

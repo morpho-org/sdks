@@ -1,10 +1,13 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc4626Abi, zeroAddress } from "viem";
+import { BaseError, erc4626Abi, HttpRequestError, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { ExternalServiceError } from "../../errors.js";
+import {
+  ExternalServiceError,
+  MissingVerificationEvidenceError,
+} from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import { resolveAssets } from "./resolve-assets.js";
 
@@ -42,7 +45,7 @@ describe("resolveAssets", () => {
     const handle = createMockClient(mainnet);
     const operations: OperationLimit[] = [
       { ...limit, quote: { sharesMinted: 1n } },
-      { ...limit, asset: loan },
+      { ...limit, assetPaid: loan },
     ];
     const result = await resolveAssets({
       client: handle.client,
@@ -108,9 +111,23 @@ describe("resolveAssets", () => {
     ]);
     expect(handle.request).toHaveBeenCalledTimes(1);
   });
-  test("error: ExternalServiceError preserves metadata read failure", async () => {
+  test("error: non-transport metadata failure becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
-    handle.request.mockRejectedValue(new Error("RPC unavailable"));
+    handle.request.mockRejectedValue(new BaseError("execution reverted"));
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+  });
+  test("error: HttpRequestError remains bypassable", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      new HttpRequestError({ body: {}, url: "https://rpc.example" }),
+    );
     await expect(
       resolveAssets({
         client: handle.client,
@@ -119,5 +136,31 @@ describe("resolveAssets", () => {
         blockNumber: 1n,
       }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+  test("error: zero market token metadata becomes missing evidence", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [zeroAddress, collateral, zeroAddress, zeroAddress, 0n],
+    });
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueBorrow",
+          marketId,
+          quote: { assetsReceived: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    expect((error as Error).message).toContain(
+      `market:${marketId.toLowerCase()}`,
+    );
   });
 });

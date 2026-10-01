@@ -115,13 +115,22 @@ export type SimulationOperationSubject =
  * Supply at least one amount. Unquoted amounts are not checked.
  */
 export interface SlippageQuote {
-  /** Expected net assets credited to the receiver. */
+  /**
+   * Expected net assets credited to the receiver. For in-kind vault redemptions,
+   * this measures only the wallet balance of the vault asset, not Morpho positions.
+   */
   readonly assetsReceived?: bigint;
-  /** Expected net shares added to the position (debt shares for borrow/repay). */
+  /**
+   * Expected net shares added to the position. For debt shares, this is a
+   * maximum: minting more debt shares than quoted is adverse.
+   */
   readonly sharesMinted?: bigint;
   /** Expected net assets debited from the sender. */
   readonly assetsPaid?: bigint;
-  /** Expected net shares removed from the position (debt shares for borrow/repay). */
+  /**
+   * Expected net shares removed from the position. For debt shares, this is a
+   * minimum: burning fewer debt shares than quoted is adverse.
+   */
   readonly sharesBurned?: bigint;
 }
 
@@ -139,8 +148,10 @@ export interface SlippageLimits {
 export type OperationLimit = SlippageLimits & {
   /** Position/share owner; defaults to the transaction sender. */
   readonly account?: Address;
-  /** Explicit wallet asset, for example native ETH when unwrapping. Defaults to the action underlying. */
-  readonly asset?: Address;
+  /** Explicit asset paid; defaults to the action underlying. */
+  readonly assetPaid?: Address;
+  /** Explicit asset received; defaults to the action underlying. */
+  readonly assetReceived?: Address;
   /** Asset receiver; defaults to the transaction sender. */
   readonly receiver?: Address;
 } & (
@@ -150,7 +161,6 @@ export type OperationLimit = SlippageLimits & {
         readonly sourceMarketId: MarketId;
         readonly targetMarketId: MarketId;
       }
-    | { readonly type: "blueAuthorization"; readonly authorized: Address }
     | {
         readonly type: VaultOperationType;
         readonly vault: Address;
@@ -166,4 +176,215 @@ export type OperationLimit = SlippageLimits & {
 /** Optional caller-selected checks. No action discovery or default bounds. */
 export interface SimulationLimits {
   readonly operations?: readonly OperationLimit[];
+}
+
+type AssetMeasurementSource =
+  | {
+      readonly type: "market";
+      readonly marketId: MarketId;
+      readonly asset: "loan" | "collateral";
+    }
+  | { readonly type: "vault"; readonly vault: Address };
+
+type ShareMeasurementSource =
+  | {
+      readonly type: "position";
+      readonly marketId: MarketId;
+      readonly shares: "supplyShares" | "borrowShares";
+    }
+  | { readonly type: "balance"; readonly token: Address };
+
+/** Quote-field sources for one operation. @internal */
+export interface OperationMeasurementPlan {
+  readonly subject: SimulationOperationSubject;
+  readonly assetsPaid: AssetMeasurementSource;
+  readonly assetsReceived: AssetMeasurementSource;
+  readonly sharesMinted?: ShareMeasurementSource;
+  readonly sharesBurned?: ShareMeasurementSource;
+}
+
+/** Describe each quote field's evidence source with an exhaustive operation switch. @internal */
+export function operationMeasurementPlan(
+  limit: OperationLimit,
+): OperationMeasurementPlan {
+  switch (limit.type) {
+    case "blueSupply":
+    case "blueWithdraw":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        sharesMinted: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "supplyShares",
+        },
+        sharesBurned: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "supplyShares",
+        },
+      };
+    case "blueSupplyCollateral":
+    case "blueWithdrawCollateral":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "collateral",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "collateral",
+        },
+      };
+    case "blueBorrow":
+    case "blueRepay":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        sharesMinted: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+        sharesBurned: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+      };
+    case "blueSupplyCollateralBorrow":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "collateral",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        sharesMinted: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+        sharesBurned: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+      };
+    case "blueRepayWithdrawCollateral":
+      return {
+        subject: { operation: limit.type, marketId: limit.marketId },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "loan",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.marketId,
+          asset: "collateral",
+        },
+        sharesMinted: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+        sharesBurned: {
+          type: "position",
+          marketId: limit.marketId,
+          shares: "borrowShares",
+        },
+      };
+    case "blueRefinance":
+      return {
+        subject: {
+          operation: limit.type,
+          sourceMarketId: limit.sourceMarketId,
+          targetMarketId: limit.targetMarketId,
+        },
+        assetsPaid: {
+          type: "market",
+          marketId: limit.sourceMarketId,
+          asset: "loan",
+        },
+        assetsReceived: {
+          type: "market",
+          marketId: limit.sourceMarketId,
+          asset: "loan",
+        },
+        sharesMinted: {
+          type: "position",
+          marketId: limit.targetMarketId,
+          shares: "borrowShares",
+        },
+        sharesBurned: {
+          type: "position",
+          marketId: limit.sourceMarketId,
+          shares: "borrowShares",
+        },
+      };
+    case "vaultV1Deposit":
+    case "vaultV2Deposit":
+    case "vaultV1Withdraw":
+    case "vaultV2Withdraw":
+    case "vaultV1Redeem":
+    case "vaultV2Redeem":
+    case "vaultV2ForceWithdraw":
+    case "vaultV2ForceRedeem":
+    case "vaultV1InKindRedeem":
+    case "vaultV2InKindRedeem":
+      return {
+        subject: {
+          operation: limit.type,
+          vault: limit.vault,
+          ...(limit.adapter !== undefined ? { adapter: limit.adapter } : {}),
+        },
+        assetsPaid: { type: "vault", vault: limit.vault },
+        assetsReceived: { type: "vault", vault: limit.vault },
+        sharesMinted: { type: "balance", token: limit.vault },
+        sharesBurned: { type: "balance", token: limit.vault },
+      };
+    case "vaultV1MigrateToV2":
+      return {
+        subject: {
+          operation: limit.type,
+          sourceVault: limit.sourceVault,
+          targetVault: limit.targetVault,
+        },
+        assetsPaid: { type: "vault", vault: limit.sourceVault },
+        assetsReceived: { type: "vault", vault: limit.sourceVault },
+        sharesMinted: { type: "balance", token: limit.targetVault },
+        sharesBurned: { type: "balance", token: limit.sourceVault },
+      };
+    default: {
+      const exhaustive: never = limit;
+      return exhaustive;
+    }
+  }
 }

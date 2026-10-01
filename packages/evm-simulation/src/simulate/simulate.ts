@@ -56,35 +56,40 @@ import { runSimulation } from "./run-simulation.js";
  *   violated by the observed effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
- * @throws {SimulationRevertedError} when a user transaction reverts.
+ * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
  * @throws {MissingVerificationEvidenceError} when a quote cannot be measured for
- *   the supplied subject.
+ *   the supplied subject, metadata resolution fails, a planned state read
+ *   reverts, or native transfer traces are missing.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a block timestamp earlier than
- *   the pinned block's, or a state-block hash that changed mid-flight) or an
- *   endpoint whose `eth_chainId` differs from `params.chainId` (checked
- *   before any block lookup).
+ *   the pinned block's, a state-block hash that changed mid-flight, or an
+ *   endpoint whose `eth_chainId` differs from `params.chainId`; chain identity
+ *   is checked before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
  *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
  *   timeout budget, returns a malformed JSON-RPC envelope, or returns a state
- *   block without number/hash.
+ *   block without number/hash. Chain-id mismatches are reported as
+ *   `InvalidSimulationResponseError`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
- *   stamped with `txIdx`), per-account net `assetChanges`, and the
- *   `verification` block with per-operation outcomes, preparations and state
- *   changes. Each `verification.operations[i]` mirrors the
- *   `limits.operations[i]` entry it verified — `limits.operations` is the
- *   caller-supplied description of what the bundle does; entries without
- *   supplied bounds are observed but unchecked. `checkedLimits` identifies
- *   precisely what was checked. Measurements are scoped to the whole bundle.
+ *   stamped with `txIdx`), per-account net `assetChanges`, and per-operation
+ *   verification outcomes and preparations. Each `verification.operations[i]`
+ *   mirrors the `limits.operations[i]` entry it verified. Only the amounts
+ *   quoted in each entry are checked; `checkedLimits` identifies precisely
+ *   what was checked. Measurements are scoped to the whole bundle.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { encodeFunctionData, erc20Abi } from "viem";
+ * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
+ *
+ * const rpcUrl = "https://rpc.example";
+ * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
+ * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+ * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
  *
  * const result = await simulate(
  *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },

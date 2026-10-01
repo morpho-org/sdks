@@ -1,16 +1,13 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { expectTypeOf } from "vitest";
 import {
-  AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MarketConstraintViolationError,
   MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
   type SimulationExecutionContext,
@@ -19,7 +16,6 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
   type SimulationVerificationContext,
-  StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
@@ -201,10 +197,6 @@ describe("verification error classes", () => {
     [InvalidSimulationResponseError, "INVALID_SIMULATION_RESPONSE"],
     [MissingVerificationEvidenceError, "MISSING_VERIFICATION_EVIDENCE"],
     [AuthorizationRequestMismatchError, "AUTHORIZATION_REQUEST_MISMATCH"],
-    [AssetChangeMismatchError, "ASSET_CHANGE_MISMATCH"],
-    [PermissionChangeMismatchError, "PERMISSION_CHANGE_MISMATCH"],
-    [StateChangeMismatchError, "STATE_CHANGE_MISMATCH"],
-    [MarketConstraintViolationError, "MARKET_CONSTRAINT_VIOLATION"],
     [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
     [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
   ] as const;
@@ -359,7 +351,9 @@ describe("SimulationErrorContext", () => {
   });
 
   it("operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
+    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<
+      Exclude<OperationType, "blueAuthorization">
+    >();
     expectTypeOf<
       | BlueMarketOperationType
       | VaultOperationType
@@ -452,10 +446,6 @@ describe("SIMULATION_ERROR_CODES", () => {
     new InvalidSimulationResponseError("x", { context: CONTEXT }),
     new MissingVerificationEvidenceError("x", { context: CONTEXT }),
     new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
-    new AssetChangeMismatchError("x", { context: CONTEXT }),
-    new PermissionChangeMismatchError("x", { context: CONTEXT }),
-    new StateChangeMismatchError("x", { context: CONTEXT }),
-    new MarketConstraintViolationError("x", { context: CONTEXT }),
     new ConsumerLimitViolationError("x", { context: CONTEXT }),
     new UnexpectedSimulationError("x", { context: CONTEXT }),
   ];

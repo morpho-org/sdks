@@ -20,14 +20,15 @@ export function checkSlippage(params: {
   readonly limits: SlippageLimits;
   readonly observed: SlippageQuote;
   readonly context: SimulationVerificationContext;
+  readonly debtShares?: boolean;
 }): SlippageLimits {
-  const { limits, observed, context } = params;
+  const { limits, observed, context, debtShares = false } = params;
   const quote: { -readonly [K in keyof SlippageQuote]: SlippageQuote[K] } = {};
   for (const [field, output] of [
     ["assetsReceived", true],
-    ["sharesMinted", true],
+    ["sharesMinted", !debtShares],
     ["assetsPaid", false],
-    ["sharesBurned", false],
+    ["sharesBurned", debtShares],
   ] as const) {
     const expected = limits.quote[field];
     if (expected === undefined) continue;

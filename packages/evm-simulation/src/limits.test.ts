@@ -11,7 +11,12 @@ import {
 
 describe("OPERATION_TYPES", () => {
   test("behavior: operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
+    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<
+      | BlueMarketOperationType
+      | VaultOperationType
+      | "blueRefinance"
+      | "vaultV1MigrateToV2"
+    >();
     expectTypeOf<
       | BlueMarketOperationType
       | VaultOperationType

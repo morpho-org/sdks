@@ -26,4 +26,4 @@
 - Prefer typed failures and explicit backend support rules over broad catch/fallback logic.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
 
-- `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used only through its root entry point for the requirements adapter; every morpho-sdk bump requires the root AGENTS.md §7 dependent package bump audit for evm-simulation.
+- `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used through its root entry point for the requirements adapter and its `/abis` subpath for Morpho ABIs. Address lookups come from `@morpho-org/blue-sdk`. Every morpho-sdk bump requires the root AGENTS.md §7 dependent package bump audit for evm-simulation.

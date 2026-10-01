@@ -64,7 +64,7 @@ All symbols below are re-exported from the package root.
 - Authorizations and limits: `SimulationAuthorization` and its members (`Erc20ApprovalAuthorization`, `Erc2612PermitAuthorization`, `Permit2TransferAuthorization`, `BlueAuthorization`, `BlueAuthorizationSignature`) with their EIP-712 payloads (`Eip712Domain`, `Eip712Field`, `Erc2612PermitTypedData`, `Permit2TransferTypedData`, `BlueAuthorizationTypedData`); `SimulationLimits`, `OperationLimit`, and the shared `SlippageLimits` and `SlippageQuote`.
 - Slippage-check result types: `VerifiedSimulationResult`, `SimulationVerification`, `SimulatedOperation`, `AuthorizationPreparation`.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`; union of the per-stage `SimulationValidationContext`, `SimulationTransportContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
 - Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `BlueAuthorizationSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (operation groups and the operation-keyed subject union that key the execution/verification `SimulationErrorContext`).
 ### Optional limits
@@ -77,10 +77,11 @@ be between 0 and 100% inclusive; it has no default. Omit `limits` to skip checks
 Unquoted amounts stay unchecked. The simulator never decodes calldata or fetches
 a quote to infer constraints.
 
-Outputs must be at least `ceil(quote * (1 - tolerance))`; inputs must be at most
-`floor(quote * (1 + tolerance))`. Equality passes and favorable movement passes.
-Zero tolerance requires outputs no lower and inputs no higher than the quote.
-A zero quoted input permits no spending, even with a nonzero tolerance.
+Received assets and minted supply shares must be at least
+`ceil(quote * (1 - tolerance))`; paid assets and burned supply shares must be at
+most `floor(quote * (1 + tolerance))`. For debt shares, minting is capped at
+`floor(quote * (1 + tolerance))` and burning must be at least
+`ceil(quote * (1 - tolerance))`. Equality and favorable movement pass.
 
 ```ts
 const result = await simulate(config, {
@@ -103,13 +104,17 @@ const result = await simulate(config, {
 Measurements cover the named subject over the **whole bundle**. Entries do not
 attribute aggregate state changes to individual transactions. Use separate
 simulations for per-transaction limits. Asset bounds use net wallet balance
-changes (gas excluded); set `asset` explicitly for native funding or unwrapped
-receipts. Share bounds use the selected account's vault shares or
+changes (gas excluded); set `assetPaid` or `assetReceived` explicitly for native
+funding or unwrapped receipts. Share bounds use the selected account's vault shares or
 Blue position shares. Borrow/repay entries use debt shares; refinance selects
 source shares burned and target shares minted; migration selects source vault
 shares burned and target vault shares minted. Combined collateral/borrow actions
 measure collateral paid and loan assets received; repay/collateral-withdraw actions
 measure loan assets paid and collateral received.
+
+For `vaultV1InKindRedeem` and `vaultV2InKindRedeem`, `assetsReceived` measures
+only the receiver's wallet balance of the vault asset (the idle portion); it
+does not measure in-kind Morpho positions.
 
 Only slippage is checked; there are no separate refund or penalty checks.
 A quoted amount whose measurement is unavailable for its subject throws `MissingVerificationEvidenceError`; it never silently passes.
@@ -120,7 +125,7 @@ Only quoted amounts are observed. ERC-20 assets and vault shares use `balanceOf`
 Blue shares use `position`. Each distinct call runs before and after the bundle.
 Native amounts use the existing transfer traces. Without limits there are no
 slippage reads. Asset-only quotes resolve `asset()` or market parameters only
-when an explicit `asset` was not supplied; share-only quotes need no metadata
+when an explicit `assetPaid` or `assetReceived` was not supplied; share-only quotes need no metadata
 reads. No vault factories, full entities, allocations, risk metrics, allowances,
 or nonces are fetched for slippage.
 

@@ -166,7 +166,7 @@ describe.sequential("simulate — real native funding", () => {
           {
             type: "blueSupply",
             marketId: WstethWethBlue.id,
-            asset: ethAddress,
+            assetPaid: ethAddress,
             quote: { assetsPaid: assets },
             slippageTolerance: 0n,
           },

@@ -8,10 +8,7 @@ import {
   zeroAddress,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import {
-  InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
-} from "../../errors.js";
+import { InvalidSimulationResponseError } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import { decodeStateRead, planStateReads } from "./read-state.js";
 
@@ -132,23 +129,48 @@ describe("planStateReads", () => {
     });
     expect(plan.reads.map((r) => r.to)).toEqual([asset, vault]);
   });
-  test("error: MissingVerificationEvidenceError for collateral-only share quote", () => {
-    expect(() =>
-      planStateReads({
-        operations: [
-          {
-            limit: {
-              type: "blueSupplyCollateral",
-              marketId,
-              quote: { sharesMinted: 1n },
-              slippageTolerance: 0n,
-            },
+  test("behavior: refinance reads target debt shares minted and source debt shares burned", () => {
+    const sourceMarketId = new MarketParams({
+      loanToken: asset,
+      collateralToken: vault,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    }).id;
+    const targetMarketId = new MarketParams({
+      loanToken: vault,
+      collateralToken: asset,
+      oracle: zeroAddress,
+      irm: zeroAddress,
+      lltv: 0n,
+    }).id;
+    const plan = planStateReads({
+      operations: [
+        {
+          limit: {
+            type: "blueRefinance",
+            sourceMarketId,
+            targetMarketId,
+            quote: { sharesMinted: 1n, sharesBurned: 1n },
+            slippageTolerance: 0n,
           },
-        ],
-        owner,
-        morpho: zeroAddress,
-      }),
-    ).toThrow(MissingVerificationEvidenceError);
+        },
+      ],
+      owner,
+      morpho: zeroAddress,
+    });
+    expect(
+      plan.reads
+        .filter((read) => read.kind === "morpho.position")
+        .map((read) => ({ marketId: read.marketId, owner: read.owner })),
+    ).toEqual([
+      { marketId: targetMarketId, owner },
+      { marketId: sourceMarketId, owner },
+    ]);
+    expect(plan.operations[0]?.measurements).toMatchObject([
+      { field: "sharesMinted", shares: "borrowShares" },
+      { field: "sharesBurned", shares: "borrowShares" },
+    ]);
   });
 });
 

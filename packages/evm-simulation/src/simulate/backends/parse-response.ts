@@ -3,6 +3,7 @@ import { BaseError, type Hex, type SimulateBlocksReturnType } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
+  MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
@@ -24,7 +25,7 @@ export interface ExecutionBlock {
 /** A planned call and its normalized result. Only successful calls are carried.
  * @internal
  */
-export interface ExecutedCall {
+interface ExecutedCall {
   readonly planned: PlannedCall;
   readonly result: SimulationCall;
 }
@@ -73,8 +74,9 @@ const callErrorMessage = (call: SimulatedCall): string | undefined =>
  * @throws {InvalidSimulationResponseError} When the result is not exactly one
  *   block, on a call-count mismatch, or on a simulated block that is neither
  *   the pinned state block nor its immediate successor.
- * @throws {SimulationRevertedError} When a user-transaction call failed; the
- *   `details` payload carries the tagged user call results only.
+ * @throws {SimulationRevertedError} When a preparation or user-transaction
+ *   call failed; the `details` payload carries tagged user call results only.
+ * @throws {MissingVerificationEvidenceError} When a planned state read fails.
  * @internal
  */
 export function parseSimulationResponse(params: {
@@ -182,26 +184,25 @@ export function parseSimulationResponse(params: {
 
   // A preparation call that reverted did not produce its promised state.
   const failedPreparation = calls.find(
-    ({ planned, result }) => planned.type === "preparation" && !result.status,
+    (
+      entry,
+    ): entry is (typeof calls)[number] & {
+      planned: Extract<PlannedCall, { type: "preparation" }>;
+    } => entry.planned.type === "preparation" && !entry.result.status,
   );
   if (failedPreparation) {
     const message = callErrorMessage(failedPreparation.call);
-    throw new InvalidSimulationResponseError(
+    throw new SimulationRevertedError(
       `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
+      undefined,
+      "UNKNOWN_REVERT",
       {
-        context: {
-          stage: "preparation",
-          chainId: plan.request.chainId,
-          mode: plan.request.mode,
-          blockNumber: params.stateBlockNumber,
-          authorizationIndex:
-            failedPreparation.planned.type === "preparation"
-              ? failedPreparation.planned.authorizationIndex
-              : -1,
-          ...(failedPreparation.planned.type === "preparation"
-            ? { preparationCallIndex: failedPreparation.planned.callIndex }
-            : {}),
-        },
+        stage: "preparation",
+        chainId: plan.request.chainId,
+        mode: plan.request.mode,
+        blockNumber: params.stateBlockNumber,
+        authorizationIndex: failedPreparation.planned.authorizationIndex,
+        preparationCallIndex: failedPreparation.planned.callIndex,
       },
     );
   }
@@ -211,7 +212,7 @@ export function parseSimulationResponse(params: {
     if (planned.type !== "stateRead") continue;
     if (!result.status) {
       const message = callErrorMessage(call);
-      throw new InvalidSimulationResponseError(
+      throw new MissingVerificationEvidenceError(
         `State read "${planned.read.id}" failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
         {
           context: {
