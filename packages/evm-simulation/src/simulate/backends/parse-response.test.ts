@@ -1,4 +1,10 @@
-import { type Address, encodeFunctionResult, erc20Abi, getAddress } from "viem";
+import {
+  type Address,
+  encodeFunctionResult,
+  erc20Abi,
+  getAddress,
+  type SimulateBlocksReturnType,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
@@ -52,38 +58,48 @@ const allowanceHex = (value: bigint): `0x${string}` =>
     result: value,
   });
 
-const buildResponse = (
+// viem's simulateBlocks formats the RPC result; build that same shape.
+const buildBlocks = (
   plan: ReturnType<typeof makePlan>,
   overrides: Record<
     number,
-    { status?: "0x0" | "0x1"; returnData?: `0x${string}` }
+    { status?: "failure" | "success"; data?: `0x${string}` }
   > = {},
-) => [
-  {
-    number: "0x16e3601",
-    timestamp: `0x${NOW.toString(16)}`,
-    hash: `0x${"cd".repeat(32)}`,
-    parentHash: `0x${"ab".repeat(32)}`,
-    calls: plan.calls.map((call, index) => {
-      const override = overrides[index] ?? {};
-      return {
-        status: override.status ?? "0x1",
-        returnData:
-          override.returnData ??
+): SimulateBlocksReturnType =>
+  [
+    {
+      number: 24_000_001n,
+      timestamp: NOW,
+      hash: `0x${"cd".repeat(32)}`,
+      parentHash: `0x${"ab".repeat(32)}`,
+      calls: plan.calls.map((call, index) => {
+        const override = overrides[index] ?? {};
+        const status = override.status ?? "success";
+        const data =
+          override.data ??
           (call.type === "stateRead" && call.read.kind === "erc20.allowance"
             ? allowanceHex(1n)
-            : "0x"),
-        gasUsed: "0x100",
-        logs: [],
-      };
-    }),
-  },
-];
+            : "0x");
+        return {
+          status,
+          data,
+          gasUsed: 256n,
+          logs: [],
+          ...(status === "success"
+            ? { result: null }
+            : { error: new Error("reverted") }),
+        };
+      }),
+    },
+  ] as unknown as SimulateBlocksReturnType;
 
-const parse = (plan: ReturnType<typeof makePlan>, response: unknown) =>
+const parse = (
+  plan: ReturnType<typeof makePlan>,
+  blocks: SimulateBlocksReturnType,
+) =>
   parseSimulationResponse({
     plan,
-    response,
+    blocks,
     stateBlockNumber: 24_000_000n,
     stateBlockHash: BLOCK_HASH,
     stateBlockTimestamp: NOW,
@@ -97,7 +113,7 @@ describe("parseSimulationResponse", () => {
         calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
       },
     ]);
-    const execution = parse(plan, buildResponse(plan));
+    const execution = parse(plan, buildBlocks(plan));
     const phases = execution.stateReads.map((r) => r.phase);
     expect(phases.filter((p) => p === "before")).toHaveLength(reads.length);
     expect(phases.filter((p) => p === "after")).toHaveLength(reads.length);
@@ -117,7 +133,7 @@ describe("parseSimulationResponse", () => {
     const plan = makePlan();
     const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     expect(() =>
-      parse(plan, buildResponse(plan, { [txIndex]: { status: "0x0" } })),
+      parse(plan, buildBlocks(plan, { [txIndex]: { status: "failure" } })),
     ).toThrow(SimulationRevertedError);
   });
 
@@ -130,7 +146,7 @@ describe("parseSimulationResponse", () => {
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
     expect(() =>
-      parse(plan, buildResponse(plan, { [prepIndex]: { status: "0x0" } })),
+      parse(plan, buildBlocks(plan, { [prepIndex]: { status: "failure" } })),
     ).toThrow(InvalidSimulationResponseError);
   });
 
@@ -138,14 +154,14 @@ describe("parseSimulationResponse", () => {
     const plan = makePlan();
     const readIndex = plan.calls.findIndex((c) => c.type === "stateRead");
     expect(() =>
-      parse(plan, buildResponse(plan, { [readIndex]: { status: "0x0" } })),
+      parse(plan, buildBlocks(plan, { [readIndex]: { status: "failure" } })),
     ).toThrow(InvalidSimulationResponseError);
   });
 
   test("error: InvalidSimulationResponseError on call-count mismatch", () => {
     const plan = makePlan();
-    const response = buildResponse(plan);
-    response[0]!.calls.pop();
-    expect(() => parse(plan, response)).toThrow(InvalidSimulationResponseError);
+    const blocks = buildBlocks(plan);
+    blocks[0]!.calls.pop();
+    expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
   });
 });

@@ -8,15 +8,15 @@ import { runSimulation } from "./run-simulation.js";
  * Simulate a bundle of EVM transactions.
  *
  * Parses and normalizes the input → plans the execution as ordered user calls
- * interleaved with synthetic native-balance probes → resolves the chain
- * endpoint → executes once through `eth_simulateV1` under the full timeout
- * budget (chain identity check, single block resolution, pinned simulation) →
+ * → resolves the chain endpoint → executes once through `eth_simulateV1`
+ * under the full timeout budget (chain identity check, single block
+ * resolution, pinned simulation) →
  * derives ERC20/WETH9 transfers and net asset changes from the user calls only
  * → asserts no funds are retained by standalone `bundles` periphery contracts →
  * returns the result. The caller reads whichever fields they need:
  *
  * - `simulationTxs` → exactly the caller's ordered transactions, normalized
- *   (checksummed addresses, `value` defaulted to `0n`). Internal probes are
+ *   (checksummed addresses, `value` defaulted to `0n`). Internal state reads are
  *   never exposed.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`,
  *   `gasUsed`), aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe
@@ -30,7 +30,7 @@ import { runSimulation } from "./run-simulation.js";
  * against actual permissions and accepts no `authorizations`. `mode:
  * "preview"` accepts typed authorization descriptors, which the pipeline
  * prepares as simulated approval calls and verifies via in-block read-back
- * probes. `limits` are enforced as post-verification consumer constraints;
+ * state reads. `limits` are enforced as post-verification consumer constraints;
  * violations throw `ConsumerLimitViolationError`.
  *
  * **Funding.** `value` transfers are funded by the sender's real native
@@ -57,8 +57,8 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
  *   endpoint configured.
  * @throws {SimulationRevertedError} when a user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a probe fails or its data
- *   cannot be decoded.
+ * @throws {MissingVerificationEvidenceError} when observed evidence is
+ *   missing or cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block behind the pinned state,
  *   or a state-block hash that changed mid-flight).

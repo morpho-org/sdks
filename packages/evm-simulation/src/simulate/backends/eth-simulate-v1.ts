@@ -4,8 +4,9 @@ import {
   createPublicClient,
   ExecutionRevertedError,
   http,
-  numberToHex,
+  InsufficientFundsError,
 } from "viem";
+import { simulateBlocks } from "viem/actions";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
@@ -24,9 +25,8 @@ import { parseSimulationResponse } from "./parse-response.js";
  */
 const isNodeRevert = (error: unknown): error is Error =>
   error instanceof ExecutionRevertedError ||
-  (error instanceof Error &&
-    "code" in error &&
-    (error.code === 3 || /insufficient funds/i.test(error.message)));
+  error instanceof InsufficientFundsError ||
+  (error instanceof Error && "code" in error && error.code === 3);
 
 /**
  * Trim a caught error to a safe message: viem's `shortMessage` drops the
@@ -195,28 +195,23 @@ export async function executePlan(params: {
     timestamp: block.timestamp,
   };
 
-  // Raw request: per-call `from` is honored and the response is parsed by
-  // this package — not by viem's simulateCalls/simulateBlocks wrappers.
+  // viem's simulateBlocks serializes per-call senders (`account` → `from`)
+  // and formats the result for us.
   const response = await rpc("eth_simulateV1", () =>
-    client.request({
-      method: "eth_simulateV1",
-      params: [
+    simulateBlocks(client, {
+      blocks: [
         {
-          blockStateCalls: [
-            {
-              calls: plan.calls.map((call) => ({
-                from: call.transaction.from,
-                to: call.transaction.to,
-                data: call.transaction.data,
-                value: numberToHex(call.transaction.value),
-              })),
-            },
-          ],
-          traceTransfers: true,
-          validation: false,
+          calls: plan.calls.map((call) => ({
+            account: call.transaction.from,
+            to: call.transaction.to,
+            data: call.transaction.data,
+            value: call.transaction.value,
+          })),
         },
-        numberToHex(stateBlock.number),
       ],
+      traceTransfers: true,
+      validation: false,
+      blockNumber: stateBlock.number,
     }),
   );
 
@@ -227,7 +222,7 @@ export async function executePlan(params: {
   // re-fetch.
   const execution = parseSimulationResponse({
     plan,
-    response,
+    blocks: response,
     stateBlockNumber: stateBlock.number,
     stateBlockHash: stateBlock.hash,
     stateBlockTimestamp: stateBlock.timestamp,
