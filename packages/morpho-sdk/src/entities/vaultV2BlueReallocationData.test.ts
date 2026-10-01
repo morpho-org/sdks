@@ -1723,6 +1723,18 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       },
     ],
     [
+      "rounding-only relative capacity",
+      {
+        targetSupply: 2n,
+        targetTotalSupplyShares: 1_000_000n,
+        targetCaps: [
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+          { absoluteCap: 10_000n, relativeCap: 0n },
+        ],
+      },
+    ],
+    [
       "uint128 supply share capacity",
       { targetTotalSupplyShares: MathLib.MAX_UINT_128 },
     ],

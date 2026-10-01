@@ -1319,8 +1319,10 @@ export class VaultV2BlueReallocationData
             const minimumAllocation = minimumSupply.market.toSupplyAssets(
               adapterShares + minimumSupply.shares,
             );
-            const minimumAllocationChange =
-              minimumAllocation - adapterMarketCapAllocation.allocation;
+            const minimumAllocationChange = MathLib.max(
+              minimumAllocation - adapterMarketCapAllocation.allocation,
+              minimumSupply.assets,
+            );
             const blockedTargetIds = targetAllocations
               .filter(({ allocation, absoluteCap, relativeCap, id }) => {
                 const nextAllocation =
