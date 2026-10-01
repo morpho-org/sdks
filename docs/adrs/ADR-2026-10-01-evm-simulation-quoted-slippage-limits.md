@@ -82,14 +82,22 @@ Preview mode prepares each pending authorization as simulated calls and runs no 
 or read-back checks. It establishes success under the simulated permissions, not that a future
 signature will execute.
 
-Errors keep the existing classes and add `UnsupportedOperationError`,
-`InvalidSimulationResponseError`, `MissingVerificationEvidenceError`,
-`AuthorizationRequestMismatchError`, `ConsumerLimitViolationError` and `UnexpectedSimulationError`,
-each extending `SimulationPackageError`. `UnsupportedOperationError` reports an SDK requirement that
-`toSimulationAuthorizations` cannot convert, and `AuthorizationRequestMismatchError` reports a
-signature requirement passed to it without its typed-data payload. A quote outside its bound is `ConsumerLimitViolationError`,
-never `SimulationRevertedError`. A failed state read, native traces that do not cover the value sent,
-or unusable metadata is `MissingVerificationEvidenceError`. The 09-18 classes
+Errors keep the existing classes (`SimulationRevertedError`, `BlacklistViolationError`,
+`ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`) with their 09-18
+catalog rows, except that no condition depends on decoded calldata: `SimulationValidationError` no
+longer covers undecodable calldata or signature-consuming calls in preview. Six classes are added,
+each extending `SimulationPackageError`:
+
+| Class | `code` | Thrown when |
+| --- | --- | --- |
+| `UnsupportedOperationError` | `UNSUPPORTED_OPERATION` | `toSimulationAuthorizations` receives an SDK requirement it cannot convert |
+| `InvalidSimulationResponseError` | `INVALID_SIMULATION_RESPONSE` | the `eth_simulateV1` response cannot be parsed |
+| `MissingVerificationEvidenceError` | `MISSING_VERIFICATION_EVIDENCE` | a quoted amount's state read fails, native traces do not cover the value sent, or metadata is unusable |
+| `AuthorizationRequestMismatchError` | `AUTHORIZATION_REQUEST_MISMATCH` | a signature requirement reaches `toSimulationAuthorizations` without its typed-data payload |
+| `ConsumerLimitViolationError` | `CONSUMER_LIMIT_VIOLATION` | a measured amount falls outside its quote's bound; never `SimulationRevertedError` |
+| `UnexpectedSimulationError` | `UNEXPECTED_SIMULATION_ERROR` | a failure fits no other code |
+
+`SimulationErrorCode` is the union of these codes and the existing ones. The 09-18 classes
 `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `AssetChangeMismatchError`,
 `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`,
 `SlippageLimitExceededError` and `FeeMismatchError` are not introduced. In the typed error context,
@@ -100,7 +108,9 @@ only the checked `field`.
 This decision replaces these parts of ADR-2026-09-18: calldata decoding and its verification
 contract, the rejection of routes outside the supported list, the call-time request-freshness
 check, the `SimulationLimits` defaults (including `maxSignatureLifetimeSeconds`) and wallet bounds,
-the operation limits, the verification output, preview read-back checks, and the error catalog.
+the operation limits, the verification output, preview request validation (the Permit2 preview
+checks and checking requests against calldata and state), and the error catalog apart from the
+existing classes' rows.
 An expired deadline now surfaces as an execution revert. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
 `toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
@@ -110,7 +120,10 @@ other routes.
 
 This decision ships in the same unreleased major that ADR-2026-09-18 calls 6.0.0, so no released
 API is broken a second time; the package is on 4.x, so that major publishes as `evm-simulation`
-5.0.0. This record does not change 09-18's Migration section.
+5.0.0. 09-18's Migration section keeps its four-step deprecation flow, but its route restrictions
+(rejecting legacy, arbitrary-composition, partial-refinance, pre-liquidation and Midnight routes
+with `UnsupportedOperationError`) and the limits and verification output it announces are replaced
+by this decision.
 
 ## Invariants
 
