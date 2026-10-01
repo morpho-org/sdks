@@ -7,7 +7,8 @@ import {
   type SimulateParams,
   type SimulationMode,
 } from "./params.js";
-import type { SimulationTransaction } from "./types.js";
+import type { simulate } from "./simulate/index.js";
+import type { LegacySimulateParams, SimulationTransaction } from "./types.js";
 
 describe("SimulateParams", () => {
   test("default", () => {
@@ -47,5 +48,12 @@ describe("SimulateParams", () => {
       readonly chainId: number;
       readonly transactions: readonly SimulationTransaction[];
     }>().toMatchTypeOf<SimulateParams>();
+  });
+
+  test("behavior: simulate() still accepts the deprecated pre-v5 input", () => {
+    expectTypeOf<
+      Parameters<typeof simulate>[1]
+    >().toEqualTypeOf<LegacySimulateParams>();
+    expectTypeOf<SimulateParams>().not.toMatchTypeOf<LegacySimulateParams>();
   });
 });
