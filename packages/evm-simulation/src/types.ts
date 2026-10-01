@@ -42,6 +42,9 @@ export interface SimulationTransaction {
  * main transactions run. The package decides HOW to simulate each one:
  * - "approval" → prepend tx as-is
  * - "signature" → today: encode approve(spender, amount); future: ecrecover override?
+ *
+ * @deprecated Replaced by `PendingAuthorization` (the `SimulateParams.authorizations`
+ * element) once SDK-1293 cuts `simulate()` over.
  */
 export type SimulationAuthorization =
   | { type: "approval"; transaction: SimulationTransaction }
