@@ -18,8 +18,6 @@ import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { executePlan } from "./eth-simulate-v1.js";
 
-// import type { PinnedBlock } from "./resolve-pinned-block.js";
-
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const VAULT: Address = getAddress("0x3333333333333333333333333333333333333333");
 const USDC: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
