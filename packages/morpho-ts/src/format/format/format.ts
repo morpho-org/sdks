@@ -11,6 +11,23 @@ export enum Format {
   percent = "percent",
 }
 
+/**
+ * How values are reduced to the configured number of `digits`.
+ *
+ * - `"truncate"` (default): drops the extra digits.
+ * - `"halfUp"`: rounds half away from zero (`0.005` → `0.01`, `-0.005` → `-0.01`).
+ */
+export type RoundingMode = "truncate" | "halfUp";
+
+/**
+ * How `readable()` displays non-zero values smaller than the displayable precision.
+ *
+ * - `"legacy"` (default): `< 0.01`, with the sign and unit placed outside (`-< 0.01`, `$< 0.01`).
+ * - `"signed"`: `<0.01` for positives and `>-0.01` for negatives, with the unit
+ *   attached to the smallest displayable unit (`<$0.01`, `<0.01%`, `<0.0001 WETH`).
+ */
+export type ReadableNotation = "legacy" | "signed";
+
 interface UniversalFormatOptions {
   format: Format;
   default?: string;
@@ -24,12 +41,15 @@ interface BaseFormatOptions extends UniversalFormatOptions {
   sign?: boolean;
   unit?: string;
   readable?: boolean;
+  readableNotation?: ReadableNotation;
+  rounding?: RoundingMode;
   locale?: string;
 }
 
 interface FormatShortOptions extends BaseFormatOptions {
   format: Format.short;
   smallValuesWithCommas?: boolean;
+  compactThousands?: boolean;
 }
 interface FormatHexOptions extends UniversalFormatOptions {
   format: Format.hex;
@@ -106,16 +126,64 @@ const RANGES = [
     symbol: "k",
   },
 ];
+
+const COMPACT_THOUSANDS_RANGES = [
+  ...RANGES.slice(0, -1),
+  {
+    minDecimals: 3,
+    symbol: "K",
+  },
+];
+
+const _roundHalfUp = (bi: bigint, droppedDecimals: number) => {
+  if (droppedDecimals <= 0) return bi;
+
+  const unit = 10n ** BigInt(droppedDecimals);
+
+  return ((bi + unit / 2n) / unit) * unit;
+};
+
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+const _roundToDigits = (
+  bi: bigint,
+  decimals: number,
+  formatOptions: Omit<BaseFormatOptions, "format">,
+) => {
+  if (formatOptions.rounding !== "halfUp" || formatOptions.digits == null)
+    return bi;
+
+  const rounded = _roundHalfUp(bi, decimals - formatOptions.digits);
+
+  if (rounded === 0n && formatOptions.readable) return bi;
+
+  return rounded;
+};
+
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const _formatShort = (
-  bi: bigint,
+  _bi: bigint,
   decimals: number,
   formatOptions: Omit<FormatShortOptions, "format">,
 ) => {
+  const ranges = formatOptions.compactThousands
+    ? COMPACT_THOUSANDS_RANGES
+    : RANGES;
+  const findRange = (value: bigint) =>
+    ranges.find(
+      (range) => value.toString().length > range.minDecimals + decimals,
+    );
+  const roundInRange = (range: (typeof ranges)[number] | undefined) =>
+    _roundToDigits(
+      _bi,
+      decimals + (range ? (range.power ?? range.minDecimals) : 0),
+      formatOptions,
+    );
+
+  let bi = roundInRange(findRange(_bi));
+  const params = findRange(bi);
+  bi = roundInRange(params);
+
   const stringValue = bi.toString();
-  const params = RANGES.find(
-    (range) => stringValue.length > range.minDecimals + decimals,
-  );
   if (params) {
     return (
       _applyOptions(
@@ -221,7 +289,7 @@ const _applyOptions = (
     !isZero &&
     formatOptions.readable
   )
-    return `< 0${decimalSymbol}${"0".repeat(formatOptions.digits - 1)}1`;
+    return `${formatOptions.readableNotation === "signed" ? "<" : "< "}0${decimalSymbol}${"0".repeat(formatOptions.digits - 1)}1`;
 
   return value;
 };
@@ -252,18 +320,35 @@ function formatBI(
 
   switch (formatOptions.format) {
     case Format.commas:
-      value = _formatCommas(absBI, decimals, formatOptions);
+      value = _formatCommas(
+        _roundToDigits(absBI, decimals, formatOptions),
+        decimals,
+        formatOptions,
+      );
       break;
     case Format.number:
-      value = _formatNumber(absBI, decimals, formatOptions);
+      value = _formatNumber(
+        _roundToDigits(absBI, decimals, formatOptions),
+        decimals,
+        formatOptions,
+      );
       break;
     case Format.short:
       value = _formatShort(absBI, decimals, formatOptions);
       break;
     case Format.percent:
-      value = _formatNumber(absBI * 100n, decimals, formatOptions);
+      value = _formatNumber(
+        _roundToDigits(absBI * 100n, decimals, formatOptions),
+        decimals,
+        formatOptions,
+      );
       break;
   }
+
+  if (formatOptions.readableNotation === "signed" && value.startsWith("<"))
+    return (
+      (isNegative ? ">-" : "<") + _withUnit(value.slice(1), formatOptions.unit)
+    );
 
   return (
     (isNegative && !/^0\.0+$/.test(value)
@@ -491,14 +576,41 @@ export abstract class CommonFormatter extends BaseFormatter {
    * in a more human-readable format. For instance, very small non-zero numbers might be formatted
    * using a notation like `< 0.01` instead of showing many insignificant digits.
    *
+   * @param notation - How values below the displayable precision are written.
+   * Defaults to the configured `readableNotation`, or `"legacy"` if none is configured.
    * @returns A new formatter instance with the `readable` option set to `true`.
    *
    * @example
-   * const updatedFormatter = formatter.readable();
-   * console.log(updatedFormatter.of(0.0001, 2)); // Output: "< 0.01"
+   * const updatedFormatter = formatter.digits(2).readable();
+   * console.log(updatedFormatter.of(0.0001)); // Output: "< 0.01"
+   *
+   * @example
+   * const signedFormatter = formatter.digits(2).unit("$").readable("signed");
+   * console.log(signedFormatter.of(0.0001)); // Output: "<$0.01"
+   * console.log(signedFormatter.of(-0.0001)); // Output: ">-$0.01"
    */
-  readable() {
-    const newOptions = { ...this._options, readable: true };
+  readable(notation?: ReadableNotation) {
+    const newOptions = {
+      ...this._options,
+      readable: true,
+      readableNotation: notation ?? this._options.readableNotation,
+    };
+
+    return this._clone(newOptions);
+  }
+
+  /**
+   * Sets how values are reduced to the configured number of `digits`.
+   *
+   * @param mode - `"truncate"` (default) drops extra digits; `"halfUp"` rounds half away from zero.
+   * @returns A new formatter instance with the `rounding` option set.
+   *
+   * @example
+   * console.log(formatter.digits(2).of(1.005)); // Output: "1.00"
+   * console.log(formatter.digits(2).rounding("halfUp").of(1.005)); // Output: "1.01"
+   */
+  rounding(mode: RoundingMode) {
+    const newOptions = { ...this._options, rounding: mode };
 
     return this._clone(newOptions);
   }
@@ -751,6 +863,21 @@ export class ShortFormatter extends CommonFormatter {
    */
   smallValuesWithCommas() {
     const newOptions = { ...this._options, smallValuesWithCommas: true };
+
+    return this._clone(newOptions);
+  }
+
+  /**
+   * Abbreviates thousands from 1,000 with an uppercase `K`, instead of from 10,000 with a lowercase `k`.
+   *
+   * @returns A new `ShortFormatter` instance with the `compactThousands` option set to `true`.
+   *
+   * @example
+   * const formatter = format.short.digits(2).compactThousands();
+   * console.log(formatter.of(1234.5)); // Output: "1.23K"
+   */
+  compactThousands() {
+    const newOptions = { ...this._options, compactThousands: true };
 
     return this._clone(newOptions);
   }

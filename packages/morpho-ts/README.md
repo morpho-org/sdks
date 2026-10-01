@@ -128,7 +128,8 @@ format.number.of(123.45); // "123.45"
 - `.sign()`: Adds a sign to the number (`+` or `-`).
 - `.unit(string)`: Adds a unit to the number (e.g., `$`, `%`). <span style="color:#C73E59">*</span>
 - `.locale(string)`: Formats the number according to the specified locale. <span style="color:#C73E59">*</span>
-- `.readable()`: Makes the value more readable for small numbers.
+- `.readable(notation?)`: Shows non-zero values below the displayable precision as the smallest displayable unit instead of zero. `"legacy"` (default) writes `< 0.01`; `"signed"` writes `<0.01`, `>-0.01`, `<$0.01`, `<0.01%`.
+- `.rounding(mode)`: Sets how values are reduced to `.digits(...)`: `"truncate"` (default) or `"halfUp"` (rounds half away from zero, e.g. `1.005` → `1.01`).
 - `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`. <span style="color:#C73E59">*</span>
 
 
@@ -174,6 +175,7 @@ format.short.digits(2).smallValuesWithCommas().of(1000000_00000000n, 8); // "1.0
 
 - Same as [Number Formatter](#number-formatter).
 - `.smallValuesWithCommas()`: Formats small values using commas instead of short notation.
+- `.compactThousands()`: Abbreviates from 1,000 with an uppercase `K` (`1.23K`) instead of from 10,000 with a lowercase `k`.
 
 ---
 

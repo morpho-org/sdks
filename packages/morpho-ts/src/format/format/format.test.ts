@@ -887,4 +887,229 @@ describe("format", () => {
       });
     });
   });
+
+  describe("rounding", () => {
+    test("should truncate by default", () => {
+      expect(format.number.digits(2).of(0.005)).toEqual("0.00");
+      expect(format.commas.digits(2).of(1234.567)).toEqual("1,234.56");
+      expect(format.number.digits(2).rounding("truncate").of(1.999)).toEqual(
+        "1.99",
+      );
+    });
+
+    test("should round half up", () => {
+      expect(format.number.digits(2).rounding("halfUp").of(0.005)).toEqual(
+        "0.01",
+      );
+      expect(format.number.digits(2).rounding("halfUp").of(0.00499)).toEqual(
+        "0.00",
+      );
+      expect(format.number.digits(2).rounding("halfUp").of(1.005)).toEqual(
+        "1.01",
+      );
+      expect(format.number.digits(0).rounding("halfUp").of(2.5)).toEqual("3");
+      expect(format.commas.digits(2).rounding("halfUp").of(999.995)).toEqual(
+        "1,000.00",
+      );
+      expect(
+        format.number.digits(2).rounding("halfUp").of(123456789n, 4),
+      ).toEqual("12345.68");
+    });
+
+    test("should round negative values half away from zero", () => {
+      expect(format.number.digits(2).rounding("halfUp").of(-0.005)).toEqual(
+        "-0.01",
+      );
+      expect(format.number.digits(2).rounding("halfUp").of(-0.004)).toEqual(
+        "0.00",
+      );
+    });
+
+    test("should round percentages after scaling", () => {
+      expect(format.percent.digits(2).rounding("halfUp").of(0.123455)).toEqual(
+        "12.35",
+      );
+    });
+
+    test("should keep full precision without digits", () => {
+      expect(format.number.rounding("halfUp").of(1.23456)).toEqual("1.23456");
+    });
+
+    test("should round short values within their range", () => {
+      expect(format.short.digits(2).rounding("halfUp").of(12345.678)).toEqual(
+        "12.35k",
+      );
+      expect(format.short.digits(2).rounding("halfUp").of(999999.999)).toEqual(
+        "1.00M",
+      );
+      expect(
+        format.short
+          .digits(2)
+          .smallValuesWithCommas()
+          .rounding("halfUp")
+          .of(9999.995),
+      ).toEqual("10.00k");
+    });
+
+    test("should preserve cap semantics", () => {
+      expect(
+        format.number.digits(2).rounding("halfUp").min(0.01).of(0.001),
+      ).toEqual("< 0.01");
+      expect(
+        format.number.digits(2).rounding("halfUp").max(10).of(10.004),
+      ).toEqual("> 10.00");
+      expect(format.number.digits(2).rounding("halfUp").max(10).of(10)).toEqual(
+        "10.00",
+      );
+    });
+  });
+
+  describe("readable notation", () => {
+    test("should keep the legacy notation by default", () => {
+      expect(format.number.digits(2).readable().of(0.001)).toEqual("< 0.01");
+      expect(format.number.digits(2).readable().of(-0.001)).toEqual("-< 0.01");
+      expect(format.commas.digits(2).unit("$").readable().of(0.001)).toEqual(
+        "$< 0.01",
+      );
+      expect(format.number.digits(2).readable("legacy").of(0.001)).toEqual(
+        "< 0.01",
+      );
+    });
+
+    test("should use signed notation below display precision", () => {
+      expect(format.number.digits(2).readable("signed").of(0.001)).toEqual(
+        "<0.01",
+      );
+      expect(format.number.digits(2).readable("signed").of(-0.001)).toEqual(
+        ">-0.01",
+      );
+      expect(format.number.digits(2).readable("signed").of(-1n, 18)).toEqual(
+        ">-0.01",
+      );
+    });
+
+    test("should attach units to the smallest displayable unit", () => {
+      expect(
+        format.commas.digits(2).unit("$").readable("signed").of(0.001),
+      ).toEqual("<$0.01");
+      expect(
+        format.commas.digits(2).unit("$").readable("signed").of(-0.001),
+      ).toEqual(">-$0.01");
+      expect(
+        format.percent.digits(2).unit("%").readable("signed").of(0.000001),
+      ).toEqual("<0.01%");
+      expect(
+        format.number.digits(4).unit("WETH").readable("signed").of(0.00001),
+      ).toEqual("<0.0001 WETH");
+    });
+
+    test("should ignore the sign option below display precision", () => {
+      expect(
+        format.number.digits(2).sign().readable("signed").of(0.001),
+      ).toEqual("<0.01");
+    });
+
+    test("should localize the decimal symbol", () => {
+      expect(
+        format.number.digits(2).locale("fr-FR").readable("signed").of(0.001),
+      ).toEqual("<0,01");
+    });
+
+    test("should keep displayable and zero values unchanged", () => {
+      expect(format.number.digits(2).readable("signed").of(0)).toEqual("0.00");
+      expect(format.number.digits(2).readable("signed").of(0.01)).toEqual(
+        "0.01",
+      );
+      expect(format.number.digits(2).readable("signed").of(-0.01)).toEqual(
+        "-0.01",
+      );
+    });
+
+    test("should show values rounding up to the smallest unit", () => {
+      expect(
+        format.number.digits(2).rounding("halfUp").readable("signed").of(0.005),
+      ).toEqual("0.01");
+      expect(
+        format.number.digits(2).rounding("halfUp").readable("signed").of(0.004),
+      ).toEqual("<0.01");
+    });
+
+    test("should preserve cap semantics", () => {
+      expect(
+        format.number.digits(2).min(0.01).readable("signed").of(0.001),
+      ).toEqual("< 0.01");
+    });
+  });
+
+  describe("compactThousands", () => {
+    test("should keep lowercase k from 10,000 by default", () => {
+      expect(format.short.digits(2).of(1234.5)).toEqual("1234.50");
+      expect(format.short.digits(2).of(12345.678)).toEqual("12.34k");
+    });
+
+    test("should abbreviate from 1,000 with uppercase K", () => {
+      expect(format.short.digits(2).compactThousands().of(999.99)).toEqual(
+        "999.99",
+      );
+      expect(format.short.digits(2).compactThousands().of(1000)).toEqual(
+        "1.00K",
+      );
+      expect(format.short.digits(2).compactThousands().of(1234.5)).toEqual(
+        "1.23K",
+      );
+      expect(
+        format.short.digits(2).compactThousands().of(123456789n, 4),
+      ).toEqual("12.34K");
+      expect(format.short.digits(2).compactThousands().of(1234567)).toEqual(
+        "1.23M",
+      );
+      expect(format.short.digits(2).compactThousands().of(-1234.5)).toEqual(
+        "-1.23K",
+      );
+    });
+
+    test("should promote rounded values to the next range", () => {
+      expect(
+        format.short
+          .digits(2)
+          .compactThousands()
+          .rounding("halfUp")
+          .of(999.995),
+      ).toEqual("1.00K");
+      expect(
+        format.short.digits(2).compactThousands().rounding("halfUp").of(1235),
+      ).toEqual("1.24K");
+      expect(
+        format.short
+          .digits(2)
+          .compactThousands()
+          .rounding("halfUp")
+          .of(999999.999),
+      ).toEqual("1.00M");
+    });
+
+    test("should preserve cap semantics", () => {
+      expect(
+        format.short.digits(2).compactThousands().max(1000).of(1234),
+      ).toEqual("> 1.00K");
+      expect(
+        format.short.digits(2).compactThousands().min(2000).of(1234),
+      ).toEqual("< 2.00K");
+    });
+
+    test("should be configurable through createFormat", () => {
+      const guideFormat = createFormat({
+        all: { rounding: "halfUp", readableNotation: "signed" },
+        short: { digits: 2, compactThousands: true },
+      });
+
+      expect(guideFormat.short.of(1235)).toEqual("1.24K");
+      expect(guideFormat.number.digits(2).readable().of(-0.001)).toEqual(
+        ">-0.01",
+      );
+      expect(
+        guideFormat.number.digits(2).readable("legacy").of(-0.001),
+      ).toEqual("-< 0.01");
+    });
+  });
 });
