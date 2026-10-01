@@ -1,6 +1,7 @@
 import { type Address, type Hex, numberToHex } from "viem";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  ExternalServiceError,
   InvalidSimulationResponseError,
   UnsupportedChainError,
 } from "../errors.js";
@@ -12,11 +13,15 @@ import type { ExecutionPlan, PlannedCall } from "./plan/plan-execution.js";
 import { simulate } from "./simulate.js";
 
 const mockExecutePlan = vi.fn<typeof executePlan>();
-vi.mock("./backends/index.js", () => ({
-  executePlan: (
-    ...args: Parameters<typeof executePlan>
-  ): ReturnType<typeof executePlan> => mockExecutePlan(...args),
-}));
+vi.mock("./backends/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./backends/index.js")>();
+  return {
+    ...actual,
+    executePlan: (
+      ...args: Parameters<typeof executePlan>
+    ): ReturnType<typeof executePlan> => mockExecutePlan(...args),
+  };
+});
 
 const CHAIN_ID = 987_654_321;
 const RPC_URL = "https://rpc.example";
@@ -150,6 +155,21 @@ describe.sequential("runSimulation", () => {
       }),
     ).rejects.toBeInstanceOf(InvalidSimulationResponseError);
     expect(methods).toEqual(["eth_chainId"]);
+  });
+
+  test("error: eth_chainId transport failures do not expose the RPC URL", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof globalThis.fetch>()
+        .mockRejectedValue(new Error(`request failed: ${RPC_URL}`)),
+    );
+    const error = await simulate(config, {
+      chainId: CHAIN_ID,
+      transactions: [TRANSACTION],
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect((error as Error).message).not.toContain(RPC_URL);
   });
 
   test("error: a user-call count mismatch is an invalid response", async () => {

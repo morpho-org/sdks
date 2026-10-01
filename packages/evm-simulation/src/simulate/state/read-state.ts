@@ -10,12 +10,9 @@ import {
   isAddressEqual,
 } from "viem";
 import { InvalidSimulationResponseError } from "../../errors.js";
-import {
-  type OperationLimit,
-  operationMeasurementPlan,
-  type SlippageQuote,
-} from "../../limits.js";
+import type { OperationLimit, SlippageQuote } from "../../limits.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
+import { operationMeasurementPlan } from "../measurement-plan.js";
 import type { StateRead } from "./contract.js";
 
 /** One quoted amount's observation source. @internal */

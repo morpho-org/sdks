@@ -4,6 +4,7 @@ import {
   ExecutionRevertedError,
   http,
   InsufficientFundsError,
+  type PublicClient,
 } from "viem";
 import { simulateBlocks } from "viem/actions";
 import {
@@ -12,6 +13,7 @@ import {
   SimulationPackageError,
   SimulationRevertedError,
 } from "../../errors.js";
+import type { SimulationMode } from "../../params.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import type { SimulationExecution } from "./parse-response.js";
 import { parseSimulationResponse } from "./parse-response.js";
@@ -81,6 +83,33 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
     throw toBoundaryError(label, error);
   }
 };
+
+/** Validate the endpoint identity through the same URL-safe RPC boundary. @internal */
+export async function assertEndpointChain(params: {
+  readonly client: Pick<PublicClient, "getChainId">;
+  readonly chainId: number;
+  readonly mode: SimulationMode;
+  readonly blockNumber?: bigint;
+}): Promise<void> {
+  const { client, chainId, mode, blockNumber } = params;
+  const rpcChainId = await rpc("eth_chainId", () => client.getChainId());
+  if (rpcChainId === chainId) return;
+  throw new InvalidSimulationResponseError(
+    `The RPC configured for chain ${chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
+    {
+      ...(blockNumber !== undefined
+        ? {
+            context: {
+              stage: "transport" as const,
+              chainId,
+              mode,
+              blockNumber,
+            },
+          }
+        : {}),
+    },
+  );
+}
 
 /**
  * Execute an {@link ExecutionPlan} through a single `eth_simulateV1` call and
