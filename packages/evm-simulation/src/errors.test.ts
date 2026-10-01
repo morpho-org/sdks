@@ -13,10 +13,12 @@ import {
   PermissionChangeMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
+  type SimulationExecutionContext,
   type SimulationExecutionReason,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
+  type SimulationVerificationContext,
   StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
@@ -41,7 +43,7 @@ const CONTEXT: SimulationErrorContext = {
   chainId: 1,
   blockNumber: 100n,
 };
-const EXECUTION: Extract<SimulationErrorContext, { stage: "execution" }> = {
+const EXECUTION: SimulationExecutionContext = {
   stage: "execution",
   mode: "preview",
   chainId: 1,
@@ -303,13 +305,8 @@ describe("SimulationErrorContext", () => {
   });
 
   it("keys execution/verification contexts by operation group", () => {
-    type Verification = Extract<
-      SimulationErrorContext,
-      { stage: "verification" }
-    >;
-    expectTypeOf<
-      Exclude<Verification["operation"], undefined>
-    >().toEqualTypeOf<OperationType>();
+    type Verification = SimulationVerificationContext;
+    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
     expectTypeOf<
       Extract<Verification, { marketId: MarketId }>["operation"]
     >().toEqualTypeOf<BlueMarketOperationType>();
