@@ -7,7 +7,7 @@ This file states what the Morpho SDKs defend against and what they deliberately 
 The SDKs trust every endpoint the integrator configures:
 
 - the JSON-RPC node behind the viem client or WDK account, including deployless `eth_call` queries, multicall reads, `eth_getCode`, `eth_chainId` and `eth_sendRawTransaction`;
-- the `eth_simulateV1` endpoints configured in `evm-simulation`;
+- the `eth_simulateV1` endpoint configured in `evm-simulation`;
 - the ERC-4337 bundler and paymaster endpoints configured on the WDK account.
 
 A dishonest endpoint can return any state that decodes correctly, and it can keep that state consistent across calls. A second read, a fallback path or a cross-check through the same endpoint therefore adds no evidence. Detecting forgery would need a source the endpoint does not control, such as a light client with storage proofs or several independently operated nodes. The SDKs include neither.
