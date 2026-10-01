@@ -101,7 +101,7 @@ export interface VaultV1MigrateToV2Subject {
   readonly targetVault: Address;
 }
 
-/** Protocol entity the failing operation acts on, keyed by `operation`. */
+/** Protocol entity a decoded operation acts on, keyed by `operation`; shared by `SimulatedOperation` and the execution/verification error contexts. */
 export type SimulationOperationSubject =
   | BlueMarketOperationSubject
   | BlueRefinanceSubject
