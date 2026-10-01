@@ -10,7 +10,11 @@ import type { SimulationConfig } from "../types.js";
 import { groupAssetChanges } from "./asset-changes.js";
 import { createSimulationClient } from "./backends/client.js";
 import { executePlan } from "./backends/index.js";
-import { readBindings, readVaultEntities } from "./backends/read-bindings.js";
+import {
+  readBindings,
+  readNativeBalances,
+  readVaultEntities,
+} from "./backends/read-bindings.js";
 import { resolvePinnedBlock } from "./backends/resolve-pinned-block.js";
 import { checkAuthorizations } from "./check/authorizations.js";
 import type { CheckContext } from "./check/helpers.js";
@@ -25,7 +29,7 @@ import type { ParsedRequest } from "./request/parse-request.js";
 import { assembleResult } from "./result.js";
 import { accrue } from "./state/accrue.js";
 import { diffState } from "./state/diff.js";
-import { nativeReads } from "./state/native.js";
+import { nativeBalance, projectNativeAfter } from "./state/native.js";
 import {
   collectSubjects,
   decodeStateRead,
@@ -39,8 +43,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
  * pinned-state reads → request bindings → read planning
- * (`before` reads, preparations, user txs with intermediate native reads,
- * `after` reads) → execution → per-phase state parse → accrual → diffs →
+ * (`before` reads, preparations, user txs, `after` reads) → execution → per-phase state parse → accrual → diffs →
  * authorization/state-diff verification → per-operation economic checks with
  * inlined consumer limits → wallet/unrelated-state guards → bundle-retention
  * assertion → result assembly.
@@ -113,10 +116,13 @@ export async function runSimulation(params: {
     permit2: addresses.permit2,
     vaultData,
   });
-  const intermediateReads = nativeReads([
-    ...subjects.accounts,
-    ...subjects.bundles,
-  ]);
+  // Native balances are pinned by `eth_getBalance`, not probed in-block; the
+  // `after` phase projects them from `traceTransfers` (gas is never charged).
+  const nativeBefore = await readNativeBalances({
+    client,
+    accounts: [...subjects.accounts],
+    blockNumber: pinnedBlock.number,
+  });
 
   const preparations = preview
     ? prepareAuthorizations({
@@ -131,7 +137,6 @@ export async function runSimulation(params: {
     owner,
     preparations,
     reads,
-    intermediateReads,
   });
 
   // executePlan performs the boundary: chain-id check, single block
@@ -166,7 +171,20 @@ export async function runSimulation(params: {
       marketBindings: new Map(
         subjects.markets.map((binding) => [binding.marketId, binding]),
       ),
+      nativeBalances:
+        phase === "before"
+          ? [...nativeBefore].map(([account, assets]) =>
+              nativeBalance(account, assets),
+            )
+          : projectNativeAfter({
+              before: [...nativeBefore].map(([account, assets]) =>
+                nativeBalance(account, assets),
+              ),
+              transfers,
+            }),
     });
+
+  const transfers = parseTransfers(userCalls);
 
   const before = parse("before");
   const after = parse("after");
@@ -178,7 +196,6 @@ export async function runSimulation(params: {
   const diff = diffState(before, after);
   const actionDiff = diffState(accruedBefore, after);
 
-  const transfers = parseTransfers(userCalls);
   const assetChanges = groupAssetChanges(
     transfers.flatMap(({ token, from, to, amount }) => [
       { account: to, token, diff: amount },

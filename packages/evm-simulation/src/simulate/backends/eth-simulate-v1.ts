@@ -204,16 +204,6 @@ export async function executePlan(params: {
         {
           blockStateCalls: [
             {
-              ...(plan.stateOverrides.length === 0
-                ? {}
-                : {
-                    stateOverrides: Object.fromEntries(
-                      plan.stateOverrides.map((override) => [
-                        override.address,
-                        { code: override.code },
-                      ]),
-                    ),
-                  }),
               calls: plan.calls.map((call) => ({
                 from: call.transaction.from,
                 to: call.transaction.to,

@@ -13,7 +13,12 @@ import { type Address, ethAddress, isAddressEqual, zeroAddress } from "viem";
 import type { SimulationAuthorization } from "../../authorizations.js";
 import { InvalidSimulationResponseError } from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
-import type { MarketState, PositionState, VaultState } from "../../result.js";
+import type {
+  MarketState,
+  PositionState,
+  TokenBalance,
+  VaultState,
+} from "../../result.js";
 import type {
   MarketBinding,
   PreLiquidationBinding,
@@ -22,7 +27,6 @@ import type {
 import type { DecodedStateRead, StateRead } from "./contract.js";
 import { decodeErc20Value, erc20Reads, parseErc20 } from "./erc20.js";
 import { decodeMorphoValue, morphoReads, parseMorpho } from "./morpho.js";
-import { decodeNativeValue, nativeReads, parseNative } from "./native.js";
 import { decodePermit2Value, parsePermit2, permit2Reads } from "./permit2.js";
 import type {
   MarketInternals,
@@ -314,7 +318,7 @@ export type VaultData = ReadonlyMap<Address, AccrualVault | AccrualVaultV2>;
 
 /**
  * Build the ordered, deduped {@link StateRead} list for one phase. Order is
- * ERC-20 → Permit2 → Morpho → vaults → native; ids dedupe shared subjects.
+ * ERC-20 → Permit2 → Morpho → vaults; ids dedupe shared subjects.
  * @internal
  */
 export function planStateReads(params: {
@@ -329,7 +333,7 @@ export function planStateReads(params: {
   const balances: { token: Address; account: Address }[] = [];
   for (const token of subjects.tokens) {
     for (const account of subjects.accounts) {
-      if (token === ethAddress) continue; // native is probed separately
+      if (token === ethAddress) continue; // native balances are projected, not read
       balances.push({ token, account });
     }
   }
@@ -408,8 +412,6 @@ export function planStateReads(params: {
     }
   }
 
-  reads.push(...nativeReads([...subjects.accounts]));
-
   // Dedupe by id, keeping first occurrence (stable order).
   const seen = new Set<string>();
   return reads.filter((read) => {
@@ -446,8 +448,6 @@ export function decodeStateRead(
   data: `0x${string}`,
 ): DecodedStateRead {
   switch (read.kind) {
-    case "native.balance":
-      return { read, value: decodeNativeValue(read, data) };
     case "erc20.balance":
     case "erc20.allowance":
     case "erc2612.nonce":
@@ -497,15 +497,15 @@ export function parseState(params: {
   readonly morpho: Address;
   readonly vaultData: VaultData;
   readonly marketBindings: ReadonlyMap<MarketId, MarketBinding>;
+  /** Pinned `eth_getBalance` results (before) or their projection (after). */
+  readonly nativeBalances?: readonly TokenBalance[];
 }): ParsedState {
-  const { reads, subjects, vaultData, marketBindings } = params;
+  const { reads, subjects, vaultData, marketBindings, nativeBalances } = params;
 
   const erc20 = parseErc20(reads);
   const permit2Nonces = parsePermit2(reads);
   const morpho = parseMorpho(reads);
-  const nativeBalances = parseNative(reads);
-
-  const balances = [...erc20.balances, ...nativeBalances];
+  const balances = [...erc20.balances, ...(nativeBalances ?? [])];
 
   // Market internals + public market state.
   const marketInternals = new Map<MarketId, MarketInternals>();

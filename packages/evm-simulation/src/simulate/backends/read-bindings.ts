@@ -21,7 +21,7 @@ import {
 } from "@morpho-org/morpho-sdk/blue/fetch";
 import { _try } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
-import { readContract } from "viem/actions";
+import { getBalance, readContract } from "viem/actions";
 import {
   ExternalServiceError,
   SimulationPackageError,
@@ -294,6 +294,44 @@ export async function readVaultEntities(params: {
     if (error instanceof SimulationPackageError) throw error;
     throw new ExternalServiceError(
       `Pinned vault entity read error: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * Read `eth_getBalance` for every subject account at the pinned block. Native
+ * `after` balances are not read — they are projected from this pinned state
+ * plus the `traceTransfers` moves (gas is never charged).
+ *
+ * @param params - Read parameters.
+ * @param params.client - Shared simulation client.
+ * @param params.accounts - Accounts whose native balance is observed.
+ * @param params.blockNumber - Pinned state block.
+ * @returns Per-account `eth_getBalance` results.
+ * @internal
+ */
+export async function readNativeBalances(params: {
+  readonly client: Client;
+  readonly accounts: readonly Address[];
+  readonly blockNumber: bigint;
+}): Promise<ReadonlyMap<Address, bigint>> {
+  const { client, accounts, blockNumber } = params;
+  try {
+    const balances = new Map<Address, bigint>();
+    await Promise.all(
+      accounts.map(async (account) => {
+        balances.set(
+          account,
+          await getBalance(client, { address: account, blockNumber }),
+        );
+      }),
+    );
+    return balances;
+  } catch (error) {
+    if (error instanceof SimulationPackageError) throw error;
+    throw new ExternalServiceError(
+      `Pinned native balance read error: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
   }

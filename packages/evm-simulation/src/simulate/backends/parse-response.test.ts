@@ -7,7 +7,6 @@ import {
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
 import { erc20Reads } from "../state/erc20.js";
-import { nativeReads } from "../state/native.js";
 import { parseSimulationResponse } from "./parse-response.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -44,7 +43,6 @@ const makePlan = (
     owner: OWNER,
     preparations,
     reads,
-    intermediateReads: nativeReads([OWNER]),
   });
 
 const allowanceHex = (value: bigint): `0x${string}` =>
@@ -102,7 +100,6 @@ describe("parseSimulationResponse", () => {
     const execution = parse(plan, buildResponse(plan));
     const phases = execution.stateReads.map((r) => r.phase);
     expect(phases.filter((p) => p === "before")).toHaveLength(reads.length);
-    expect(phases.filter((p) => p === "intermediate")).toHaveLength(1);
     expect(phases.filter((p) => p === "after")).toHaveLength(reads.length);
 
     const txs = execution.calls.filter((c) => c.planned.type === "transaction");

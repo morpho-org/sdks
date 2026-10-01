@@ -11,13 +11,6 @@ import type { Address, Hex } from "viem";
  */
 export type StateRead =
   | {
-      readonly kind: "native.balance";
-      readonly id: string;
-      readonly to: Address;
-      readonly data: Hex;
-      readonly account: Address;
-    }
-  | {
       readonly kind: "erc20.balance";
       readonly id: string;
       readonly to: Address;
@@ -158,7 +151,7 @@ export type StateRead =
     };
 
 /** Phase of the simulated block at which a {@link StateRead} is executed. @internal */
-export type ReadPhase = "before" | "intermediate" | "after";
+export type ReadPhase = "before" | "after";
 
 /**
  * A {@link StateRead} paired with its decoded return value. `value` is the

@@ -6,11 +6,10 @@ import {
   SimulationRevertedError,
 } from "../../errors.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
-import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
-import { nativeReads } from "../state/native.js";
+import { erc20Reads } from "../state/erc20.js";
 import { decodeStateRead } from "../state/read-state.js";
 import { executePlan } from "./eth-simulate-v1.js";
 
@@ -34,8 +33,11 @@ function makePlan(transactions = 1): ExecutionPlan {
     request,
     owner: OWNER,
     preparations: [],
-    reads: nativeReads([OWNER]),
-    intermediateReads: [],
+    reads: erc20Reads({
+      balances: [{ token: USDC, account: OWNER }],
+      allowances: [],
+      nonces: [],
+    }),
   });
 }
 
@@ -112,9 +114,7 @@ describe.sequential("executePlan", () => {
     expect(evidence.block.blockNumber).toBe(STATE_BLOCK + 1n);
     expect(evidence.block.chainId).toBe(1);
     expect(evidence.stateReads).toHaveLength(2);
-    expect(evidence.stateReads[0]?.read.id).toBe(
-      "native.balance:0x1111111111111111111111111111111111111111",
-    );
+    expect(evidence.stateReads[0]?.read.kind).toBe("erc20.balance");
     expect(evidence.stateReads[0]?.phase).toBe("before");
     expect(Object.isFrozen(evidence)).toBe(true);
   });
@@ -133,23 +133,10 @@ describe.sequential("executePlan", () => {
           validation: false,
           blockStateCalls: [
             {
-              stateOverrides: {
-                [NATIVE_BALANCE_PROBE_ADDRESS]: {
-                  code: "0x6004353160005260206000f3",
-                },
-              },
               calls: [
-                {
-                  from: zeroAddress,
-                  to: NATIVE_BALANCE_PROBE_ADDRESS,
-                  value: "0x0",
-                },
+                { from: zeroAddress, to: USDC, value: "0x0" },
                 { from: OWNER, to: VAULT, data: "0x12", value: "0x0" },
-                {
-                  from: zeroAddress,
-                  to: NATIVE_BALANCE_PROBE_ADDRESS,
-                  value: "0x0",
-                },
+                { from: zeroAddress, to: USDC, value: "0x0" },
               ],
             },
           ],
@@ -157,21 +144,15 @@ describe.sequential("executePlan", () => {
         numberToHex(STATE_BLOCK),
       ],
     });
-    // No balance inflation override.
-    const overrides = (
-      request as {
-        params: [
-          {
-            blockStateCalls: [
-              { stateOverrides: Record<string, Record<string, string>> },
-            ];
-          },
-        ];
-      }
-    ).params[0].blockStateCalls[0].stateOverrides;
+    // No state overrides at all — no balance inflation, no injected probes.
     expect(
-      Object.values(overrides).every((entry) => !("balance" in entry)),
-    ).toBe(true);
+      "stateOverrides" in
+        (
+          request as {
+            params: [{ blockStateCalls: [Record<string, unknown>] }];
+          }
+        ).params[0].blockStateCalls[0],
+    ).toBe(false);
     // Four sequential RPC requests: chainId, pinned block, simulate, reorg-check block.
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(
@@ -421,7 +402,7 @@ describe.sequential("executePlan", () => {
     );
   });
 
-  test("behavior: probe snapshots carry decoded native balances", async () => {
+  test("behavior: state reads carry decoded before/after values", async () => {
     const calls = okCalls(3);
     calls[0] = { ...calls[0], returnData: encodeUint256(100n) };
     calls[2] = { ...calls[2], returnData: encodeUint256(90n) };

@@ -1,56 +1,50 @@
-import { type Address, ethAddress } from "viem";
+import { type Address, ethAddress, isAddressEqual } from "viem";
 import type { TokenBalance } from "../../result.js";
-import {
-  decodeNativeBalanceProbe,
-  encodeNativeBalanceProbe,
-  NATIVE_BALANCE_PROBE_ADDRESS,
-} from "../plan/native-balance-probe.js";
-import type { DecodedStateRead, StateRead } from "./contract.js";
-import { badRead } from "./erc20.js";
+import type { Transfer } from "../../types.js";
 
 /**
- * Encode native-balance reads for the given accounts through the injected
- * probe contract (the bytecode is injected via `stateOverrides`, so no
- * deployed helper is needed).
+ * Map one account's `eth_getBalance` reading at the pinned block to the
+ * {@link TokenBalance} shape used by `SimulationState.balances`.
  * @internal
  */
-export function nativeReads(accounts: readonly Address[]): StateRead[] {
-  return accounts.map((account) => ({
-    kind: "native.balance",
-    id: `native.balance:${account}`,
-    to: NATIVE_BALANCE_PROBE_ADDRESS,
-    data: encodeNativeBalanceProbe(account),
-    account,
-  }));
-}
+export const nativeBalance = (
+  account: Address,
+  assets: bigint,
+): TokenBalance => ({
+  account,
+  token: ethAddress,
+  assets,
+});
 
 /**
- * Decode a native-balance read's return data (32-byte `uint256`, matching the
- * probe bytecode's return surface).
+ * Project the `after`-phase native balances: `eth_getBalance` at the pinned
+ * block plus the net native transfers `traceTransfers` reported for each
+ * account. Gas is not charged (`validation: false`), so the projection is
+ * exact; accounts untouched by native moves keep their before balance.
  * @internal
  */
-export function decodeNativeValue(
-  read: Extract<StateRead, { readonly kind: "native.balance" }>,
-  data: `0x${string}`,
-): bigint {
-  const balance = decodeNativeBalanceProbe(data);
-  if (balance == null) badRead(read.id);
-  return balance;
-}
-
-/**
- * Project decoded native-balance reads into `TokenBalance` entries under
- * `ethAddress` — gas is excluded because `validation: false` skips charging.
- * @internal
- */
-export function parseNative(
-  reads: readonly DecodedStateRead[],
-): TokenBalance[] {
-  const balances: TokenBalance[] = [];
-  for (const { read, value } of reads) {
-    if (read.kind !== "native.balance") continue;
-    if (typeof value !== "bigint") badRead(read.id);
-    balances.push({ token: ethAddress, account: read.account, assets: value });
+export function projectNativeAfter(params: {
+  readonly before: readonly TokenBalance[];
+  readonly transfers: readonly Transfer[];
+}): TokenBalance[] {
+  const { before, transfers } = params;
+  const net = new Map<Address, bigint>();
+  for (const transfer of transfers) {
+    if (!isAddressEqual(transfer.token, ethAddress)) continue;
+    net.set(transfer.from, (net.get(transfer.from) ?? 0n) - transfer.amount);
+    net.set(transfer.to, (net.get(transfer.to) ?? 0n) + transfer.amount);
+  }
+  const seen = new Set<Address>();
+  const balances = before.map((balance) => {
+    seen.add(balance.account);
+    return {
+      ...balance,
+      assets: balance.assets + (net.get(balance.account) ?? 0n),
+    };
+  });
+  for (const [account, assets] of net) {
+    if (assets !== 0n && !seen.has(account))
+      balances.push({ account, token: ethAddress, assets });
   }
   return balances;
 }
