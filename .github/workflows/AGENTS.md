@@ -27,6 +27,7 @@
 - No secret with write, publish, or signing capability is moved into the ungated `test` job — or into any job reachable from a fork-accessible trigger.
 - RPC URLs stay `env:`-bound and are never interpolated into a `run:` string. Their every-branch scope is accepted **only** because they are low-sensitivity and write-access-only; a secret that gains write capability must not inherit this posture.
 - A new secret name added to any workflow gains a row in the inventory above **in the same PR**.
+- [`zizmor.yml`](./zizmor.yml) audits every workflow on each PR and push to `main`/`next`, and its `zizmor` job must be a required check on `main`. The job fails on any medium or higher finding, in every context. Where the token allows (same-repo PRs and pushes, not fork or Dependabot PRs) it also uploads all findings to code scanning, where the `main` ruleset must block merging on new warnings or errors from tool `zizmor`. Don't rename the job, add path filters, or make the gating step conditional: a scan that didn't run must block the merge, not pass. A suppressed finding uses an inline `# zizmor: ignore[<audit>]` comment on the flagged line followed by the reason; a bare ignore is a finding.
 
 ## Not a finding (de-noise)
 
