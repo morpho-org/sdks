@@ -78,7 +78,7 @@ export interface Transfer {
   /**
    * Index into `SimulationResult.simulationTxs` of the user transaction that
    * emitted the underlying log. `txIdx` only ever indexes caller-supplied
-   * transactions — internal probes are never exposed in the result.
+   * transactions.
    */
   readonly txIdx: number;
 }
@@ -87,8 +87,7 @@ export interface Transfer {
  * Happy-path return of `simulate`. All failures throw typed errors.
  *
  * - `simulationTxs` are exactly the caller's ordered transactions, normalized
- *   (checksummed `from`/`to`, `value` defaulted to `0n`) — internal probes are
- *   never exposed.
+ *   (checksummed `from`/`to`, `value` defaulted to `0n`).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the net per-asset balance change over the whole bundle,

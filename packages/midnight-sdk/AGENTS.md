@@ -7,6 +7,7 @@
 - Never deep-freeze class instances. Only use `deepFreeze` for function outputs that are intended as immutable onchain or signature descriptors immediately after construction.
 - Keep onchain quantities as `bigint`; API edges may accept `BigIntish` for caller ergonomics.
 - Never concatenate hex strings with template strings, manual `slice(2)` joins, or string `+`; use viem's `concat` for byte concatenation.
+- Derive default group IDs using the ratifier-specific leaf hash with `group = 0`, matching the router's group identity rule: use `RateRatifierV1.groupId` / `PriceRatifierV1.groupId` for V1 leaves; the generic offer-hash derivation applies only to Ecrecover/Setter.
 - Public encoders return neutral `{ to, data }` descriptors and never sign, submit, or mutate state.
 - Every exported symbol needs JSDoc and an explicit export from the appropriate public barrel: `src/index.ts` for the root package API or `src/api/index.ts` for the public `./api` subpath.
 - Shared primitives and Midnight deployment address helpers live in `@morpho-org/morpho-ts`. Do not re-export them from this package; import them directly from `morpho-ts` in source and tests. If a reusable non-protocol symbol is missing from `morpho-ts`, add it there before Midnight consumes it.

@@ -1,4 +1,4 @@
-import type { Address, ChainId } from "@morpho-org/blue-sdk";
+import type { Address, ChainId, MarketId } from "@morpho-org/blue-sdk";
 import { BaseError, ContractFunctionRevertedError } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -7,11 +7,25 @@ import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError,
+  MarketParamsIdMismatchError,
   UnsupportedPermitDomainExtensionsError,
 } from "./error.js";
 
 const TOKEN: Address = "0x1111111111111111111111111111111111111111";
 const ADAPTER: Address = "0x2222222222222222222222222222222222222222";
+
+describe("MarketParamsIdMismatchError", () => {
+  test("preserves both market ids and sets its name", () => {
+    const marketId = `0x${"11".repeat(32)}` as MarketId;
+    const receivedMarketId = `0x${"22".repeat(32)}` as MarketId;
+    const error = new MarketParamsIdMismatchError(marketId, receivedMarketId);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.marketId).toBe(marketId);
+    expect(error.receivedMarketId).toBe(receivedMarketId);
+    expect(error.name).toBe("MarketParamsIdMismatchError");
+  });
+});
 
 describe("isUnknownOfFactoryError", () => {
   test("returns false for a plain Error", () => {

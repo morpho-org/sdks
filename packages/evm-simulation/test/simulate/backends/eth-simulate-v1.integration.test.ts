@@ -26,14 +26,21 @@ const wethAbi = [
   },
 ] as const;
 
-function planFor(
-  transactions: readonly { to: Address; data: `0x${string}`; value?: bigint }[],
-  owner: Address,
-) {
+function planFor(options: {
+  readonly transactions: readonly {
+    to: Address;
+    data: `0x${string}`;
+    value?: bigint;
+  }[];
+  readonly owner: Address;
+  readonly blockNumber?: bigint | "latest";
+}) {
+  const { transactions, owner, blockNumber } = options;
   return planExecution(
     parseRequest({
       chainId: mainnet.id,
       transactions: transactions.map((tx) => ({ ...tx, from: owner })),
+      ...(blockNumber !== undefined ? { blockNumber } : {}),
     }),
   );
 }
@@ -44,15 +51,15 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     // block.number === the pin (no base+1 advancement like geth).
     const head = await client.getBlockNumber();
     const pinned = await client.getBlock({ blockNumber: head });
-    const plan = planFor(
-      [{ to: RECIPIENT, data: "0x" }],
-      client.account.address,
-    );
+    const plan = planFor({
+      transactions: [{ to: RECIPIENT, data: "0x" }],
+      owner: client.account.address,
+      blockNumber: head,
+    });
 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
     });
 
     expect(execution.block.chainId).toBe(mainnet.id);
@@ -67,51 +74,31 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const again = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
     });
     expect(again.block).toEqual(execution.block);
-    expect(again.nativeBalances).toEqual(execution.nativeBalances);
+    expect(again.transactions).toEqual(execution.transactions);
 
     // "latest" on the pinned fork resolves to the same pinned block.
     const latest = await executePlan({
       rpcUrl: client.transport.url!,
-      plan,
-      blockNumber: "latest",
+      plan: planFor({
+        transactions: [{ to: RECIPIENT, data: "0x" }],
+        owner: client.account.address,
+        blockNumber: "latest",
+      }),
     });
     expect(latest.block.stateBlockNumber).toBe(head);
-  });
-
-  test("probe readings report the owner's real native balance", async ({
-    client,
-  }) => {
-    const balance = await client.getBalance({
-      address: client.account.address,
-    });
-    const execution = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan: planFor([{ to: RECIPIENT, data: "0x" }], client.account.address),
-      blockNumber: await client.getBlockNumber(),
-    });
-
-    expect(execution.nativeBalances).toHaveLength(2);
-    for (const reading of execution.nativeBalances) {
-      expect(reading.account).toBe(client.account.address);
-      expect(reading.assets).toBe(balance);
-    }
   });
 
   test("sequential state: deposit then withdraw moves the native balance", async ({
     client,
   }) => {
     const amount = parseEther("0.5");
-    const before = await client.getBalance({
-      address: client.account.address,
-    });
 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
-      plan: planFor(
-        [
+      plan: planFor({
+        transactions: [
           {
             to: WETH,
             data: encodeFunctionData({
@@ -129,20 +116,15 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
             }),
           },
         ],
-        client.account.address,
-      ),
-      blockNumber: await client.getBlockNumber(),
+        owner: client.account.address,
+        blockNumber: await client.getBlockNumber(),
+      }),
     });
 
-    const [before_, intermediate, after] = execution.nativeBalances.map(
-      (r) => r.assets,
-    );
-    expect(before_).toBe(before);
-    // After the deposit the balance dropped by exactly `value` — validation:
-    // false means no gas is charged.
-    expect(intermediate).toBe(before - amount);
-    // The withdraw refunds it.
-    expect(after).toBe(before);
-    expect(execution.calls).toHaveLength(5);
+    expect(execution.transactions).toHaveLength(2);
+    expect(execution.transactions.every((t) => t.result.status)).toBe(true);
+    // The deposit logged the WETH mint to the sender; the withdraw burned it.
+    expect(execution.transactions[0]!.result.logs.length).toBeGreaterThan(0);
+    expect(execution.transactions[1]!.result.logs.length).toBeGreaterThan(0);
   });
 });

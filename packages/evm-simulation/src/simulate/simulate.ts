@@ -20,7 +20,7 @@ import { parseRequest } from "./request/index.js";
  * Simulate a bundle of EVM transactions.
  *
  * Parses and normalizes the input → plans the execution as ordered user calls
- * interleaved with synthetic native-balance probes → resolves the chain
+ * → resolves the chain
  * endpoint → executes once through `eth_simulateV1` under the full timeout
  * budget (chain identity check, single block resolution, pinned simulation) →
  * derives ERC20/WETH9 transfers and net asset changes from the user calls only
@@ -28,8 +28,7 @@ import { parseRequest } from "./request/index.js";
  * returns the result. The caller reads whichever fields they need:
  *
  * - `simulationTxs` → exactly the caller's ordered transactions, normalized
- *   (checksummed addresses, `value` defaulted to `0n`). Internal probes are
- *   never exposed.
+ *   (checksummed addresses, `value` defaulted to `0n`).
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`,
  *   `gasUsed`), aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe
  *   gas limit; consumers deriving one must add their own headroom.
@@ -72,12 +71,11 @@ import { parseRequest } from "./request/index.js";
  * @throws {SimulationRevertedError} when a user transaction or the bundle
  * reverts at the node (including unfundable `value`); `details` carries the
  * URL-free revert context.
- * @throws {MissingVerificationEvidenceError} when a probe fails or its data
- *   cannot be decoded.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, or a state-block hash that
- *   changed mid-flight).
+ *   changed mid-flight) or an endpoint whose `eth_chainId` differs from
+ *   `params.chainId` (checked before any block lookup).
  * @throws {BlacklistViolationError} when the simulation leaves value retained
  *   beyond the dust threshold by a `bundles` periphery contract
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
@@ -90,9 +88,14 @@ import { parseRequest } from "./request/index.js";
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
- * import { encodeFunctionData, erc20Abi } from "viem";
+ * import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
  *
- * const result = await simulate(
+ * const rpcUrl = "https://mainnet.example/rpc";
+ * const user: Address = getAddress("0x1111111111111111111111111111111111111111");
+ * const usdc: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+ * const recipient: Address = getAddress("0x2222222222222222222222222222222222222222");
+ *
+ * const result = await simulate( // result: SimulationResult
  *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
  *   {
  *     chainId: 1,
@@ -126,19 +129,12 @@ export async function simulate(
   const execution = await executeSimulation({
     config,
     plan,
-    blockNumber: request.blockNumber,
   });
 
-  const userCalls = execution.calls
-    .filter(
-      (
-        call,
-      ): call is typeof call & {
-        planned: { type: "transaction"; transactionIndex: number };
-      } => call.planned.type === "transaction",
-    )
-    .sort((a, b) => a.planned.transactionIndex - b.planned.transactionIndex)
-    .map((call) => call.result);
+  // Plan order is transactionIndex order, so no re-sort is needed.
+  const userCalls = execution.transactions.map(
+    (transaction) => transaction.result,
+  );
 
   const transfers = parseTransfers(userCalls, {
     wNative,

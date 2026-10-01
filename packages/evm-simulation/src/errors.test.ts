@@ -15,10 +15,13 @@ import {
   ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
+  type SimulationExecutionContext,
   type SimulationExecutionReason,
   SimulationPackageError,
+  type SimulationPreparationContext,
   SimulationRevertedError,
   SimulationValidationError,
+  type SimulationVerificationContext,
   SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
@@ -27,16 +30,12 @@ import {
   UnsupportedVerificationFeatureError,
 } from "./errors.js";
 import {
-  BLUE_MARKET_OPERATION_TYPES,
   type BlueMarketOperationType,
   OPERATION_TYPES,
-  type OperationLimit,
   type OperationType,
   type SimulationOperationSubject,
-  VAULT_OPERATION_TYPES,
   type VaultOperationType,
 } from "./limits.js";
-import { SIMULATION_MODES } from "./params.js";
 import type { SimulatedOperation } from "./result.js";
 
 const CONTEXT: SimulationErrorContext = {
@@ -45,7 +44,7 @@ const CONTEXT: SimulationErrorContext = {
   chainId: 1,
   blockNumber: 100n,
 };
-const EXECUTION: Extract<SimulationErrorContext, { stage: "execution" }> = {
+const EXECUTION: SimulationExecutionContext = {
   stage: "execution",
   mode: "preview",
   chainId: 1,
@@ -311,23 +310,28 @@ describe("SimulationErrorContext", () => {
   });
 
   it("keys execution/verification contexts by operation group", () => {
-    type Verification = Extract<
-      SimulationErrorContext,
-      { stage: "verification" }
-    >;
-    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
     expectTypeOf<
-      Extract<Verification, { marketId: MarketId }>["operation"]
-    >().toEqualTypeOf<BlueMarketOperationType>();
+      SimulationVerificationContext["operation"]
+    >().toEqualTypeOf<OperationType>();
+    expectTypeOf<SimulationVerificationContext>().toExtend<SimulationErrorContext>();
+    const base = {
+      stage: "verification",
+      mode: "final",
+      chainId: 1,
+      blockNumber: 1n,
+    } as const;
     expectTypeOf<
-      Extract<Verification, { operation: "blueRefinance" }>
-    >().not.toHaveProperty("marketId");
+      typeof base & { operation: BlueMarketOperationType; marketId: MarketId }
+    >().toExtend<SimulationVerificationContext>();
     expectTypeOf<
-      Extract<Verification, { vault: `0x${string}` }>["operation"]
-    >().toEqualTypeOf<VaultOperationType>();
+      typeof base & { operation: "blueRefinance"; marketId: MarketId }
+    >().not.toExtend<SimulationVerificationContext>();
     expectTypeOf<
-      Extract<Verification, { operation: "vaultV1MigrateToV2" }>
-    >().not.toHaveProperty("vault");
+      typeof base & { operation: VaultOperationType; vault: `0x${string}` }
+    >().toExtend<SimulationVerificationContext>();
+    expectTypeOf<
+      typeof base & { operation: "vaultV1MigrateToV2"; vault: `0x${string}` }
+    >().not.toExtend<SimulationVerificationContext>();
     expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
     expectTypeOf<
       SimulatedOperation["operation"]
@@ -337,12 +341,6 @@ describe("SimulationErrorContext", () => {
       operation: "blueRefinance";
       vault: `0x${string}`;
     }>().not.toExtend<SimulatedOperation>();
-    const base = {
-      stage: "verification",
-      mode: "final",
-      chainId: 1,
-      blockNumber: 1n,
-    } as const;
     expectTypeOf<
       typeof base & { operation: "blueSupply" }
     >().not.toExtend<SimulationErrorContext>();
@@ -367,56 +365,51 @@ describe("SimulationErrorContext", () => {
     >().toExtend<SimulationErrorContext>();
   });
 
-  it("operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationType>().toEqualTypeOf<OperationLimit["type"]>();
-    expectTypeOf<
-      | BlueMarketOperationType
-      | VaultOperationType
-      | "blueRefinance"
-      | "blueAuthorization"
-      | "vaultV1MigrateToV2"
-    >().toEqualTypeOf<OperationType>();
-    expect(
-      [
-        ...BLUE_MARKET_OPERATION_TYPES,
-        "blueRefinance",
-        "blueAuthorization",
-        ...VAULT_OPERATION_TYPES,
-        "vaultV1MigrateToV2",
-      ].sort(),
-    ).toEqual([...OPERATION_TYPES].sort());
-    expect([...OPERATION_TYPES]).toEqual([
-      "blueSupply",
-      "blueWithdraw",
-      "blueSupplyCollateral",
-      "blueBorrow",
-      "blueSupplyCollateralBorrow",
-      "blueRepay",
-      "blueWithdrawCollateral",
-      "blueRepayWithdrawCollateral",
-      "blueRefinance",
-      "blueAuthorization",
-      "vaultV1Deposit",
-      "vaultV2Deposit",
-      "vaultV1Withdraw",
-      "vaultV2Withdraw",
-      "vaultV1Redeem",
-      "vaultV2Redeem",
-      "vaultV2ForceWithdraw",
-      "vaultV2ForceRedeem",
-      "vaultV1InKindRedeem",
-      "vaultV2InKindRedeem",
-      "vaultV1MigrateToV2",
-    ]);
-    expect([...SIMULATION_MODES]).toEqual(["preview", "final"]);
-  });
-
   it("SimulationRevertedError only accepts preparation or execution contexts", () => {
     expectTypeOf<
       NonNullable<
         ConstructorParameters<typeof SimulationRevertedError>[3]
       >["stage"]
     >().toEqualTypeOf<"preparation" | "execution">();
+    expectTypeOf<
+      NonNullable<SimulationRevertedError["context"]>["stage"]
+    >().toEqualTypeOf<"preparation" | "execution">();
+  });
+
+  it("SimulationRevertedError stores a frozen preparation context", () => {
+    const preparation: SimulationPreparationContext = {
+      stage: "preparation",
+      mode: "preview",
+      chainId: 1,
+      blockNumber: 100n,
+      authorizationIndex: 1,
+      preparationCallIndex: 0,
+    };
+    const err = new SimulationRevertedError(
+      "x",
+      undefined,
+      "UNKNOWN_REVERT",
+      preparation,
+    );
+    expect(err.context).toEqual(preparation);
+    expect(Object.isFrozen(err.context)).toBe(true);
+    expect(isSimulationPackageError(err)).toBe(true);
+  });
+});
+
+describe("SimulationPackageError.name", () => {
+  it("falls back to the subclass name for consumer subclasses", () => {
+    class ConsumerError extends SimulationPackageError {
+      readonly code = "FEE_MISMATCH" as const;
+    }
+    expect(new ConsumerError("m").name).toBe("ConsumerError");
+  });
+
+  it("keeps the built-in name on subclasses of a built-in error", () => {
+    class MyValidationError extends SimulationValidationError {}
+    const err = new MyValidationError("m");
+    expect(err.name).toBe("SimulationValidationError");
+    expect(isSimulationPackageError(err)).toBe(true);
   });
 });
 

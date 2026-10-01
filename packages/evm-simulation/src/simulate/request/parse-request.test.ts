@@ -1,10 +1,9 @@
 import { type Address, getAddress, maxUint256, zeroAddress } from "viem";
 import { expectTypeOf } from "vitest";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
-import type { VerifiedSimulateParams } from "../../params.js";
+import type { SimulateParams } from "../../params.js";
 import type { SimulationTransaction } from "../../types.js";
-import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
 import {
   type ParsedRequest,
   type ParsedTransaction,
@@ -28,7 +27,7 @@ const tx = (overrides: object = {}) => ({
   ...overrides,
 });
 
-const erc20Approval: PendingAuthorization = {
+const erc20Approval: SimulationAuthorization = {
   type: "erc20Approval",
   token: getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
   owner: OWNER,
@@ -36,7 +35,7 @@ const erc20Approval: PendingAuthorization = {
   amount: 100n,
 };
 
-const permit2Auth: PendingAuthorization = {
+const permit2Auth: SimulationAuthorization = {
   type: "permit2SignatureTransfer",
   owner: OWNER,
   typedData: {
@@ -72,7 +71,7 @@ const permit2Auth: PendingAuthorization = {
   },
 };
 
-const parse = (input: unknown) => parseRequest(input as VerifiedSimulateParams);
+const parse = (input: unknown) => parseRequest(input as SimulateParams);
 
 describe("parseRequest", () => {
   test("default", () => {
@@ -322,6 +321,35 @@ describe("parseRequest", () => {
     ).toBe(true);
   });
 
+  test("error: same-sender errors name the raw transaction index", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [
+            tx({ to: "0xnotanaddress" }),
+            tx(),
+            tx({ from: SPENDER }),
+          ],
+        });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    const fieldErrors = (error as SimulationValidationError).fieldErrors ?? [];
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[0].to")),
+    ).toBe(true);
+    // The rejected first transaction must not shift the reported index.
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[2].from")),
+    ).toBe(true);
+    expect(
+      fieldErrors.some((field) => field.startsWith("transactions[1].from")),
+    ).toBe(false);
+  });
+
   test("behavior: accepts blockNumber 'finalized'", () => {
     const request = parse({
       chainId: 1,
@@ -329,15 +357,6 @@ describe("parseRequest", () => {
       blockNumber: "finalized",
     });
     expect(request.blockNumber).toBe("finalized");
-  });
-
-  test("error: SimulationValidationError for a transaction targeting the probe address", () => {
-    expect(() =>
-      parse({
-        chainId: 1,
-        transactions: [tx({ to: NATIVE_BALANCE_PROBE_ADDRESS })],
-      }),
-    ).toThrow(SimulationValidationError);
   });
 
   test("behavior: accepts limits within bounds", () => {
@@ -359,22 +378,22 @@ describe("parseRequest", () => {
   });
 
   test("error: SimulationValidationError for non-object input", () => {
-    expect(() =>
-      parseRequest(null as unknown as VerifiedSimulateParams),
-    ).toThrow(SimulationValidationError);
-    expect(() =>
-      parseRequest("x" as unknown as VerifiedSimulateParams),
-    ).toThrow(SimulationValidationError);
-    expect(() => parseRequest(42 as unknown as VerifiedSimulateParams)).toThrow(
+    expect(() => parseRequest(null as unknown as SimulateParams)).toThrow(
+      SimulationValidationError,
+    );
+    expect(() => parseRequest("x" as unknown as SimulateParams)).toThrow(
+      SimulationValidationError,
+    );
+    expect(() => parseRequest(42 as unknown as SimulateParams)).toThrow(
       SimulationValidationError,
     );
   });
 
-  test("type-level: VerifiedSimulateParams accepts readonly arrays", () => {
+  test("type-level: SimulateParams accepts readonly arrays", () => {
     expectTypeOf<{
       readonly chainId: number;
       readonly transactions: readonly Readonly<SimulationTransaction>[];
-    }>().toExtend<VerifiedSimulateParams>();
+    }>().toExtend<SimulateParams>();
   });
 
   test("type-level: ParsedRequest fields are readonly", () => {
@@ -384,7 +403,7 @@ describe("parseRequest", () => {
     expectTypeOf<ParsedRequest["chainId"]>().toEqualTypeOf<number>();
   });
 
-  const permitAuth: PendingAuthorization = {
+  const permitAuth: SimulationAuthorization = {
     type: "erc2612Permit",
     typedData: {
       domain: {
@@ -415,7 +434,7 @@ describe("parseRequest", () => {
     },
   };
 
-  const blueSigAuth: PendingAuthorization = {
+  const blueSigAuth: SimulationAuthorization = {
     type: "blueAuthorizationSignature",
     typedData: {
       domain: {

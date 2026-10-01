@@ -21,8 +21,9 @@ const fetchMock = vi.fn<typeof fetch>();
 const rpc = (result: unknown) =>
   Response.json({ jsonrpc: "2.0", id: 1, result });
 
-function respondHappy(callCount = 3) {
+function respondHappy(callCount = 1) {
   fetchMock
+    .mockResolvedValueOnce(rpc("0x1"))
     .mockResolvedValueOnce(
       rpc({
         number: numberToHex(20_000_000n),
@@ -30,7 +31,6 @@ function respondHappy(callCount = 3) {
         timestamp: numberToHex(1_700_000_000n),
       }),
     )
-    .mockResolvedValueOnce(rpc("0x1"))
     .mockResolvedValueOnce(
       rpc([
         {
@@ -57,11 +57,12 @@ function respondHappy(callCount = 3) {
     );
 }
 
-const makePlan = () =>
+const makePlan = (overrides: object = {}) =>
   planExecution(
     parseRequest({
       chainId: 1,
       transactions: [{ from: OWNER, to: VAULT, data: "0x12" }],
+      ...overrides,
     }),
   );
 
@@ -85,7 +86,7 @@ describe.sequential("executeSimulation", () => {
         plan: makePlan(),
       });
       expect(timeout).toHaveBeenCalledWith(timeoutMs ?? 5000);
-      // One shared signal across getBlock, chainId, eth_simulateV1 and the
+      // One shared signal across chainId, getBlock, eth_simulateV1 and the
       // reorg-check getBlock.
       const signals = fetchMock.mock.calls.map((call) => call[1]?.signal);
       expect(signals).toHaveLength(4);
@@ -97,11 +98,9 @@ describe.sequential("executeSimulation", () => {
     respondHappy();
     const execution = await executeSimulation({
       config,
-      plan: makePlan(),
-      blockNumber: 20_000_000n,
+      plan: makePlan({ blockNumber: 20_000_000n }),
     });
-    expect(execution.calls).toHaveLength(3);
-    expect(execution.nativeBalances).toHaveLength(2);
+    expect(execution.transactions).toHaveLength(1);
   });
 
   test("error: UnsupportedChainError without an endpoint", async () => {
@@ -113,6 +112,7 @@ describe.sequential("executeSimulation", () => {
 
   test("error: propagates SimulationRevertedError from the boundary", async () => {
     fetchMock
+      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc({
           number: numberToHex(20_000_000n),
@@ -120,7 +120,6 @@ describe.sequential("executeSimulation", () => {
           timestamp: numberToHex(1_700_000_000n),
         }),
       )
-      .mockResolvedValueOnce(rpc("0x1"))
       .mockResolvedValueOnce(
         rpc([
           {
@@ -130,23 +129,11 @@ describe.sequential("executeSimulation", () => {
             parentHash: `0x${"ab".repeat(32)}`,
             calls: [
               {
-                status: "0x1",
-                gasUsed: "0x0",
-                returnData: encodeUint256(0n),
-                logs: [],
-              },
-              {
                 status: "0x0",
                 gasUsed: "0x0",
                 returnData: "0x",
                 logs: [],
                 error: { code: 3, message: "reverted" },
-              },
-              {
-                status: "0x1",
-                gasUsed: "0x0",
-                returnData: encodeUint256(0n),
-                logs: [],
               },
             ],
           },

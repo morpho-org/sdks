@@ -24,6 +24,7 @@ export {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
+  MarketParamsIdMismatchError as BlueMarketParamsIdMismatchError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {
@@ -37,6 +38,10 @@ export {
   InvalidPositionAccrualStateError as InvalidMidnightPositionAccrualStateError,
   InvalidPositionAccrualTimestampError as InvalidMidnightPositionAccrualTimestampError,
   InvalidPositionLossFactorError as InvalidMidnightPositionLossFactorError,
+  InvalidRateRatifierV1RateError as InvalidMidnightRateRatifierV1RateError,
+  InvalidRateRatifierV1TickError as InvalidMidnightRateRatifierV1TickError,
+  InvalidRateRatifierV1TimeError as InvalidMidnightRateRatifierV1TimeError,
+  InvalidRatifierV1AddressError as InvalidMidnightRatifierV1AddressError,
   InvalidTickSpacingError as InvalidMidnightTickSpacingError,
   InvalidTreeError as InvalidMidnightTreeError,
   InvalidTreeHeightError as InvalidMidnightTreeHeightError,
@@ -45,6 +50,8 @@ export {
   MidnightMempoolValidationError,
   PayloadDecodeError as MidnightPayloadDecodeError,
   PriceGreaterThanOneError as MidnightPriceGreaterThanOneError,
+  RateRatifierV1BoundOverflowError as MidnightRateRatifierV1BoundOverflowError,
+  RatifierV1TakerNotAllowedError as MidnightRatifierV1TakerNotAllowedError,
   SettlementFeeExceedsPriceError as MidnightSettlementFeeExceedsPriceError,
   TickOutOfRangeError as MidnightTickOutOfRangeError,
   UnknownCollateralIndexError as UnknownMidnightCollateralIndexError,

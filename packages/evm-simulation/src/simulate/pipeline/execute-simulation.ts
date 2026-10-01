@@ -1,4 +1,3 @@
-import type { BlockTag } from "viem";
 import type { SimulationConfig } from "../../types.js";
 import { executePlan } from "../backends/index.js";
 import type { SimulationExecution } from "../backends/parse-response.js";
@@ -13,30 +12,34 @@ const DEFAULT_TIMEOUT_MS = 5000;
  * The single `AbortSignal.timeout` is shared by the boundary's chain check,
  * block resolution, and simulation request.
  * @internal
- * @param params - Configuration, the planned execution, and the resolved block pin.
- * @returns The executed calls, the pinned block, and probe readings.
+ * @param params - Configuration and the planned execution (which carries the
+ *   block pin on `plan.request.blockNumber`).
+ * @returns The executed transactions and the pinned block.
  * @throws {UnsupportedChainError} When the chain has no simulation endpoint.
  * @throws {ExternalServiceError} When the RPC fails or times out.
  * @throws {SimulationRevertedError} When execution reverts.
+ * @throws {InvalidSimulationResponseError} When the node response cannot be
+ *   trusted.
+ * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
+ *   or `limits` are present once the state block is pinned, until PR5/PR6.
  * @example
  * ```ts
  * import { executeSimulation } from "./execute-simulation.js";
  *
- * await executeSimulation({ config, plan, blockNumber: 20_000_000n });
+ * await executeSimulation({ config, plan });
  * ```
  */
 export async function executeSimulation(params: {
   readonly config: SimulationConfig;
   readonly plan: ExecutionPlan;
-  readonly blockNumber?: bigint | BlockTag;
 }): Promise<SimulationExecution> {
-  const { config, plan, blockNumber } = params;
+  const { config, plan } = params;
   const chain = resolveChain(config, plan.request.chainId);
 
+  // Backend output is trusted as execution evidence; shape checks cannot catch a well-formed forged result. See THREAT_MODEL.md, RPC.
   return executePlan({
     rpcUrl: chain.simulateV1Url,
     plan,
-    blockNumber,
     signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
 }

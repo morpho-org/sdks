@@ -13,7 +13,7 @@ import {
 import type {
   Eip712Domain,
   Eip712Field,
-  PendingAuthorization,
+  SimulationAuthorization,
 } from "../../authorizations.js";
 import { SimulationValidationError } from "../../errors.js";
 import type {
@@ -23,8 +23,8 @@ import type {
   SimulationLimits,
   VaultDeallocation,
 } from "../../limits.js";
-import type { SimulationMode, VerifiedSimulateParams } from "../../params.js";
-import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
+import type { SimulateParams, SimulationMode } from "../../params.js";
+
 import { resolveEffectiveLimits } from "./effective-limits.js";
 
 /** A normalized user transaction: checksummed addresses, `value` defaulted to `0n`.
@@ -45,7 +45,7 @@ export interface ParsedRequest {
   readonly mode: SimulationMode;
   readonly transactions: readonly ParsedTransaction[];
   /** Always empty in final mode. */
-  readonly authorizations: readonly PendingAuthorization[];
+  readonly authorizations: readonly SimulationAuthorization[];
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
   readonly limits?: SimulationLimits;
 }
@@ -117,8 +117,11 @@ interface FieldChecks {
       readonly type: string;
     }[];
     readonly path: string;
-  }): void;
-  authorization(value: unknown, path: string): PendingAuthorization | undefined;
+  }): readonly Eip712Field[] | undefined;
+  authorization(
+    value: unknown,
+    path: string,
+  ): SimulationAuthorization | undefined;
   operation(value: unknown, path: string): OperationLimit | undefined;
 }
 
@@ -130,27 +133,12 @@ const DOMAIN_KEYS = [
   "salt",
 ] as const;
 const TYPED_DATA_KEYS = ["domain", "primaryType", "types", "message"] as const;
-const ERC2612_MESSAGE_KEYS = [
-  "owner",
-  "spender",
-  "value",
-  "nonce",
-  "deadline",
-] as const;
-const PERMIT2_MESSAGE_KEYS = [
-  "permitted",
-  "spender",
-  "nonce",
-  "deadline",
-] as const;
+const ERC2612_MESSAGE_KEYS = ERC2612_PERMIT_FIELDS.map((field) => field.name);
+const PERMIT2_MESSAGE_KEYS = PERMIT2_TRANSFER_FIELDS.map((field) => field.name);
 const PERMIT2_PERMITTED_KEYS = ["token", "amount"] as const;
-const BLUE_AUTHORIZATION_MESSAGE_KEYS = [
-  "authorizer",
-  "authorized",
-  "isAuthorized",
-  "nonce",
-  "deadline",
-] as const;
+const BLUE_AUTHORIZATION_MESSAGE_KEYS = BLUE_AUTHORIZATION_FIELDS.map(
+  (field) => field.name,
+);
 const TRANSACTION_KEYS = ["from", "to", "data", "value"] as const;
 const LIMITS_KEYS = [
   "maxSlippageWad",
@@ -268,17 +256,18 @@ const createChecks = (): FieldChecks => {
         readField(domain, "verifyingContract"),
         `${path}.verifyingContract`,
       );
-      const salt = readField(domain, "salt");
-      if (salt !== undefined) check.bytes32(salt, `${path}.salt`);
+      const rawSalt = readField(domain, "salt");
+      const salt =
+        rawSalt !== undefined
+          ? check.bytes32(rawSalt, `${path}.salt`)
+          : undefined;
       if (!validChainId || verifyingContract === undefined) return undefined;
       return {
         ...(typeof name === "string" ? { name } : {}),
         ...(typeof version === "string" ? { version } : {}),
         chainId: chainId as number | bigint,
         verifyingContract,
-        ...(salt !== undefined && isRecord(domain)
-          ? { salt: salt as Hex }
-          : {}),
+        ...(salt !== undefined ? { salt } : {}),
       };
     },
 
@@ -291,10 +280,13 @@ const createChecks = (): FieldChecks => {
           (field, i) =>
             fields[i]?.name === field.name && fields[i]?.type === field.type,
         );
-      if (!equal)
+      if (!equal) {
         errors.push(
           `${path}: must list exactly ${expected.map((f) => `${f.name}: ${f.type}`).join(", ")}`,
         );
+        return undefined;
+      }
+      return fields;
     },
 
     authorization: (authorization, path) => {
@@ -339,37 +331,14 @@ const createChecks = (): FieldChecks => {
           return { type: "erc20Approval", token, owner, spender, amount };
         }
         case "erc2612Permit": {
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "Permit",
+            fields: ERC2612_PERMIT_FIELDS,
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "Permit")
-            errors.push(
-              `${path}.typedData.primaryType: must be "Permit" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const permitFields = isRecord(types)
-            ? readField(types, "Permit")
-            : undefined;
-          check.fields({
-            actual: permitFields,
-            expected: ERC2612_PERMIT_FIELDS,
-            path: `${path}.typedData.types.Permit`,
-          });
-          const message = readField(typedData, "message");
-          if (!isRecord(message)) {
-            errors.push(`${path}.typedData.message: must be an object`);
-            return undefined;
-          }
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: permitFields } = envelope;
           const messagePath = `${path}.typedData.message`;
           check.keys(message, {
             allow: ERC2612_MESSAGE_KEYS,
@@ -403,7 +372,7 @@ const createChecks = (): FieldChecks => {
             value === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(permitFields)
+            permitFields === undefined
           )
             return undefined;
           return {
@@ -412,12 +381,7 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Permit",
               types: {
-                Permit: (permitFields as readonly Eip712Field[]).map(
-                  ({ name, type: fieldType }) => ({
-                    name,
-                    type: fieldType,
-                  }),
-                ),
+                Permit: copyFields(permitFields),
               },
               message: { owner, spender, value, nonce, deadline },
             },
@@ -428,45 +392,29 @@ const createChecks = (): FieldChecks => {
             readField(authorization, "owner"),
             `${path}.owner`,
           );
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "PermitTransferFrom",
+            fields: PERMIT2_TRANSFER_FIELDS,
+            messageError: "must carry permitted token and amount",
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "PermitTransferFrom")
-            errors.push(
-              `${path}.typedData.primaryType: must be "PermitTransferFrom" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const transferFields = isRecord(types)
-            ? readField(types, "PermitTransferFrom")
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: transferFields } = envelope;
+          const rawTypedData = readField(authorization, "typedData");
+          const types = isRecord(rawTypedData)
+            ? readField(rawTypedData, "types")
             : undefined;
           const permissionFields = isRecord(types)
             ? readField(types, "TokenPermissions")
             : undefined;
-          check.fields({
-            actual: transferFields,
-            expected: PERMIT2_TRANSFER_FIELDS,
-            path: `${path}.typedData.types.PermitTransferFrom`,
-          });
-          check.fields({
+          const checkedPermissionFields = check.fields({
             actual: permissionFields,
             expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
             path: `${path}.typedData.types.TokenPermissions`,
           });
-          const message = readField(typedData, "message");
-          const permitted = isRecord(message)
-            ? readField(message, "permitted")
-            : undefined;
-          if (!isRecord(message) || !isRecord(permitted)) {
+          const permitted = readField(message, "permitted");
+          if (!isRecord(permitted)) {
             errors.push(
               `${path}.typedData.message: must carry permitted token and amount`,
             );
@@ -510,8 +458,8 @@ const createChecks = (): FieldChecks => {
             spender === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(transferFields) ||
-            !Array.isArray(permissionFields)
+            transferFields === undefined ||
+            checkedPermissionFields === undefined
           )
             return undefined;
           return {
@@ -521,18 +469,8 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "PermitTransferFrom",
               types: {
-                PermitTransferFrom: (
-                  transferFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
-                TokenPermissions: (
-                  permissionFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
+                PermitTransferFrom: copyFields(transferFields),
+                TokenPermissions: copyFields(checkedPermissionFields),
               },
               message: {
                 permitted: {
@@ -573,37 +511,14 @@ const createChecks = (): FieldChecks => {
           };
         }
         case "blueAuthorizationSignature": {
-          const typedData = readField(authorization, "typedData");
-          if (!isRecord(typedData)) {
-            errors.push(`${path}.typedData: must be an object`);
-            return undefined;
-          }
-          check.keys(typedData, {
-            allow: TYPED_DATA_KEYS,
-            path: `${path}.typedData`,
+          const envelope = typedDataEnvelope({
+            value: readField(authorization, "typedData"),
+            path,
+            primaryType: "Authorization",
+            fields: BLUE_AUTHORIZATION_FIELDS,
           });
-          const domain = check.domain(
-            readField(typedData, "domain"),
-            `${path}.typedData.domain`,
-          );
-          if (readField(typedData, "primaryType") !== "Authorization")
-            errors.push(
-              `${path}.typedData.primaryType: must be "Authorization" (got ${String(readField(typedData, "primaryType"))})`,
-            );
-          const types = readField(typedData, "types");
-          const authorizationFields = isRecord(types)
-            ? readField(types, "Authorization")
-            : undefined;
-          check.fields({
-            actual: authorizationFields,
-            expected: BLUE_AUTHORIZATION_FIELDS,
-            path: `${path}.typedData.types.Authorization`,
-          });
-          const message = readField(typedData, "message");
-          if (!isRecord(message)) {
-            errors.push(`${path}.typedData.message: must be an object`);
-            return undefined;
-          }
+          if (envelope === undefined) return undefined;
+          const { domain, message, fields: authorizationFields } = envelope;
           const messagePath = `${path}.typedData.message`;
           check.keys(message, {
             allow: BLUE_AUTHORIZATION_MESSAGE_KEYS,
@@ -637,7 +552,7 @@ const createChecks = (): FieldChecks => {
             isAuthorized === undefined ||
             nonce === undefined ||
             deadline === undefined ||
-            !Array.isArray(authorizationFields)
+            authorizationFields === undefined
           )
             return undefined;
           return {
@@ -646,12 +561,7 @@ const createChecks = (): FieldChecks => {
               domain,
               primaryType: "Authorization",
               types: {
-                Authorization: (
-                  authorizationFields as readonly Eip712Field[]
-                ).map(({ name, type: fieldType }) => ({
-                  name,
-                  type: fieldType,
-                })),
+                Authorization: copyFields(authorizationFields),
               },
               message: {
                 authorizer,
@@ -702,7 +612,7 @@ const createChecks = (): FieldChecks => {
         path,
       });
       const errorsBefore = errors.length;
-      const out = { ...(operation as OperationLimit) };
+      const out = { type } as OperationLimit;
       for (const field of spec.markets) {
         const value = check.marketId(
           readField(operation, field),
@@ -826,29 +736,91 @@ const createChecks = (): FieldChecks => {
       return errors.length === errorsBefore ? out : undefined;
     },
   };
+  const copyFields = (fields: readonly Eip712Field[]): Eip712Field[] =>
+    fields.map(({ name, type: fieldType }) => ({ name, type: fieldType }));
+
+  /** Shared typed-data envelope guard: domain, primaryType, primary field list
+   * and message record; message-specific checks stay in each branch. */
+  const typedDataEnvelope = (options: {
+    value: unknown;
+    path: string;
+    primaryType: string;
+    fields: readonly Eip712Field[];
+    messageError?: string;
+  }):
+    | {
+        domain: Eip712Domain | undefined;
+        message: object;
+        fields: readonly Eip712Field[] | undefined;
+      }
+    | undefined => {
+    const typedDataPath = `${options.path}.typedData`;
+    const value = options.value;
+    if (!isRecord(value)) {
+      errors.push(`${typedDataPath}: must be an object`);
+      return undefined;
+    }
+    check.keys(value, { allow: TYPED_DATA_KEYS, path: typedDataPath });
+    const domain = check.domain(
+      readField(value, "domain"),
+      `${typedDataPath}.domain`,
+    );
+    if (readField(value, "primaryType") !== options.primaryType)
+      errors.push(
+        `${typedDataPath}.primaryType: must be "${options.primaryType}" (got ${String(readField(value, "primaryType"))})`,
+      );
+    const types = readField(value, "types");
+    const fields = isRecord(types)
+      ? readField(types, options.primaryType)
+      : undefined;
+    const checkedFields = check.fields({
+      actual: fields,
+      expected: options.fields,
+      path: `${typedDataPath}.types.${options.primaryType}`,
+    });
+    const message = readField(value, "message");
+    if (!isRecord(message)) {
+      errors.push(
+        `${typedDataPath}.message: ${options.messageError ?? "must be an object"}`,
+      );
+      return undefined;
+    }
+    return { domain, message, fields: checkedFields };
+  };
+
   return check;
 };
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
 
-interface OperationSpec {
+type VariantOf<T extends OperationType> = Extract<OperationLimit, { type: T }>;
+/** Field names of a limit variant (validated tables are checked against this). */
+type FieldsOf<T extends OperationType> = readonly (Exclude<
+  keyof VariantOf<T>,
+  "type" | "transactionIndex"
+> &
+  string)[];
+
+interface OperationSpec<T extends OperationType> {
   /** Required 32-byte market ids. */
-  readonly markets: readonly string[];
+  readonly markets: FieldsOf<T>;
   /** Optional checksummed addresses. */
-  readonly addresses: readonly string[];
+  readonly addresses: FieldsOf<T>;
   /** Optional uint256 fields. */
-  readonly uints: readonly string[];
+  readonly uints: FieldsOf<T>;
   /** Optional booleans. */
-  readonly bools: readonly string[];
+  readonly bools: FieldsOf<T>;
   /** Optional arrays of market ids. */
-  readonly marketIdArrays: readonly string[];
+  readonly marketIdArrays: FieldsOf<T>;
   /** `expectedDeallocations` (VaultDeallocation[]). */
   readonly deallocations: boolean;
   /** `minSupplyAssetsByMarket` (MarketMinAssets[]). */
   readonly minSupplyByMarket: boolean;
 }
 
-const SPEC = (partial: Partial<OperationSpec>): OperationSpec => ({
+const SPEC = <T extends OperationType>(
+  partial: Partial<OperationSpec<T>>,
+): OperationSpec<T> => ({
   markets: [],
   addresses: [],
   uints: [],
@@ -859,13 +831,13 @@ const SPEC = (partial: Partial<OperationSpec>): OperationSpec => ({
   ...partial,
 });
 
-const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
-  blueSupply: SPEC({
+const OPERATION_SPECS = {
+  blueSupply: SPEC<"blueSupply">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: ["expectedAssets", "minSupplySharesMinted"],
   }),
-  blueWithdraw: SPEC({
+  blueWithdraw: SPEC<"blueWithdraw">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: [
@@ -876,12 +848,12 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueSupplyCollateral: SPEC({
+  blueSupplyCollateral: SPEC<"blueSupplyCollateral">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: ["expectedAssets", "maxLtvAfterWad"],
   }),
-  blueBorrow: SPEC({
+  blueBorrow: SPEC<"blueBorrow">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: [
@@ -894,7 +866,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueSupplyCollateralBorrow: SPEC({
+  blueSupplyCollateralBorrow: SPEC<"blueSupplyCollateralBorrow">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf", "expectedReceiver"],
     uints: [
@@ -908,7 +880,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueRepay: SPEC({
+  blueRepay: SPEC<"blueRepay">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf"],
     uints: [
@@ -919,12 +891,12 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueWithdrawCollateral: SPEC({
+  blueWithdrawCollateral: SPEC<"blueWithdrawCollateral">({
     markets: ["marketId"],
     addresses: ["expectedReceiver"],
     uints: ["expectedAssets", "maxLtvAfterWad", "minHealthFactorAfterWad"],
   }),
-  blueRepayWithdrawCollateral: SPEC({
+  blueRepayWithdrawCollateral: SPEC<"blueRepayWithdrawCollateral">({
     markets: ["marketId"],
     addresses: ["expectedOnBehalf", "expectedReceiver"],
     uints: [
@@ -938,7 +910,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     bools: ["expectedFullClose"],
   }),
-  blueRefinance: SPEC({
+  blueRefinance: SPEC<"blueRefinance">({
     markets: ["sourceMarketId", "targetMarketId"],
     uints: [
       "maxTargetBorrowAssets",
@@ -950,35 +922,35 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxReallocationPenaltyAssets",
     ],
   }),
-  blueAuthorization: SPEC({
+  blueAuthorization: SPEC<"blueAuthorization">({
     addresses: ["authorized"],
     bools: ["expectedIsAuthorized"],
   }),
-  vaultV1Deposit: SPEC({
+  vaultV1Deposit: SPEC<"vaultV1Deposit">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "minSharesMinted"],
   }),
-  vaultV2Deposit: SPEC({
+  vaultV2Deposit: SPEC<"vaultV2Deposit">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "minSharesMinted"],
   }),
-  vaultV1Withdraw: SPEC({
+  vaultV1Withdraw: SPEC<"vaultV1Withdraw">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "maxSharesBurned"],
   }),
-  vaultV2Withdraw: SPEC({
+  vaultV2Withdraw: SPEC<"vaultV2Withdraw">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedAssets", "maxSharesBurned"],
   }),
-  vaultV1Redeem: SPEC({
+  vaultV1Redeem: SPEC<"vaultV1Redeem">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedShares", "minAssetsReceived"],
   }),
-  vaultV2Redeem: SPEC({
+  vaultV2Redeem: SPEC<"vaultV2Redeem">({
     addresses: ["vault", "expectedReceiver"],
     uints: ["expectedShares", "minAssetsReceived"],
   }),
-  vaultV2ForceWithdraw: SPEC({
+  vaultV2ForceWithdraw: SPEC<"vaultV2ForceWithdraw">({
     addresses: ["vault", "expectedAdapter"],
     uints: [
       "expectedExitAssets",
@@ -987,7 +959,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
       "maxPenaltyAssets",
     ],
   }),
-  vaultV2ForceRedeem: SPEC({
+  vaultV2ForceRedeem: SPEC<"vaultV2ForceRedeem">({
     addresses: ["vault", "expectedRecipient", "expectedOnBehalf"],
     uints: [
       "expectedShares",
@@ -997,7 +969,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     ],
     deallocations: true,
   }),
-  vaultV1InKindRedeem: SPEC({
+  vaultV1InKindRedeem: SPEC<"vaultV1InKindRedeem">({
     addresses: ["vault"],
     uints: [
       "expectedAssets",
@@ -1009,7 +981,7 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     marketIdArrays: ["expectedMarketIds"],
     minSupplyByMarket: true,
   }),
-  vaultV2InKindRedeem: SPEC({
+  vaultV2InKindRedeem: SPEC<"vaultV2InKindRedeem">({
     addresses: ["vault"],
     uints: [
       "expectedAssets",
@@ -1021,15 +993,15 @@ const OPERATION_SPECS: Readonly<Record<OperationType, OperationSpec>> = {
     marketIdArrays: ["expectedMarketIds"],
     minSupplyByMarket: true,
   }),
-  vaultV1MigrateToV2: SPEC({
+  vaultV1MigrateToV2: SPEC<"vaultV1MigrateToV2">({
     addresses: ["sourceVault", "targetVault", "expectedReceiver"],
     uints: ["expectedAssets", "expectedShares", "minTargetSharesMinted"],
   }),
-};
+} satisfies { [T in OperationType]: OperationSpec<T> };
 
 // Required address/market fields are also declared above: a missing or invalid
 // value reports the same way — the spec names the field, not optionality.
-const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
+const REQUIRED_ADDRESSES = {
   blueSupply: [],
   blueWithdraw: [],
   blueSupplyCollateral: [],
@@ -1051,7 +1023,7 @@ const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
   vaultV1InKindRedeem: ["vault"],
   vaultV2InKindRedeem: ["vault"],
   vaultV1MigrateToV2: ["sourceVault", "targetVault"],
-};
+} satisfies { [T in OperationType]: FieldsOf<T> };
 
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
@@ -1064,13 +1036,13 @@ const REQUIRED_ADDRESSES: Readonly<Record<OperationType, readonly string[]>> = {
  * authorization owner must be the same checksummed address, typed-data domains
  * must bind to `chainId`, and `mode: "final"` rejects authorizations outright.
  *
- * @param input - Caller input (`VerifiedSimulateParams`-shaped).
+ * @param input - Caller input (`SimulateParams`-shaped).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
  * @throws {SimulationValidationError} On any value or cross-field violation.
  * @internal
  */
-export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
+export function parseRequest(input: SimulateParams): ParsedRequest {
   const check = createChecks();
   const fieldErrors = check.errors;
 
@@ -1105,6 +1077,9 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
   // transactions
   const rawTransactions = input.transactions;
   const transactions: ParsedTransaction[] = [];
+  // Raw index of each accepted transaction, so cross-field errors name the
+  // caller's index rather than the filtered position.
+  const transactionIndices: number[] = [];
   if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
     fieldErrors.push("transactions: must be a non-empty array");
   } else {
@@ -1126,6 +1101,7 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
         rawValue === undefined ? 0n : check.uint256(rawValue, `${path}.value`);
       if (from !== undefined && to !== undefined && data !== undefined) {
         transactions.push({ from, to, data, value: value ?? 0n });
+        transactionIndices.push(i);
       }
     }
   }
@@ -1163,7 +1139,7 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
 
   // authorizations
   const rawAuthorizations = input.authorizations;
-  const authorizations: PendingAuthorization[] = [];
+  const authorizations: SimulationAuthorization[] = [];
   if (rawAuthorizations !== undefined) {
     if (!Array.isArray(rawAuthorizations)) {
       fieldErrors.push("authorizations: must be an array");
@@ -1240,28 +1216,40 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
     for (const [i, tx] of transactions.entries()) {
       if (!isAddressEqual(tx.from, owner)) {
         fieldErrors.push(
-          `transactions[${i}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
-        );
-      }
-      if (isAddressEqual(tx.to, NATIVE_BALANCE_PROBE_ADDRESS)) {
-        fieldErrors.push(
-          `transactions[${i}].to: ${NATIVE_BALANCE_PROBE_ADDRESS} is reserved for the native-balance probe whose code is injected into the simulation; it cannot be a transaction target`,
+          `transactions[${transactionIndices[i]}].from: all transactions must share the same from address (expected ${owner}, got ${tx.from})`,
         );
       }
     }
   }
 
   for (const [i, authorization] of authorizations.entries()) {
-    const authorizationOwnerAddress =
-      authorization.type === "erc20Approval"
-        ? authorization.owner
-        : authorization.type === "erc2612Permit"
-          ? authorization.typedData.message.owner
-          : authorization.type === "permit2SignatureTransfer"
-            ? authorization.owner
-            : authorization.type === "blueAuthorization"
-              ? authorization.authorizer
-              : authorization.typedData.message.authorizer;
+    const { owner: authorizationOwnerAddress, domainChainId } = (() => {
+      switch (authorization.type) {
+        case "erc20Approval":
+          return { owner: authorization.owner, domainChainId: undefined };
+        case "permit2SignatureTransfer":
+          return {
+            owner: authorization.owner,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        case "erc2612Permit":
+          return {
+            owner: authorization.typedData.message.owner,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        case "blueAuthorization":
+          return { owner: authorization.authorizer, domainChainId: undefined };
+        case "blueAuthorizationSignature":
+          return {
+            owner: authorization.typedData.message.authorizer,
+            domainChainId: authorization.typedData.domain.chainId,
+          };
+        default: {
+          const _exhaustive: never = authorization;
+          return _exhaustive;
+        }
+      }
+    })();
     if (
       owner !== undefined &&
       !isAddressEqual(authorizationOwnerAddress, owner)
@@ -1270,12 +1258,6 @@ export function parseRequest(input: VerifiedSimulateParams): ParsedRequest {
         `authorizations[${i}]: owner must equal the bundle sender ${owner} (got ${authorizationOwnerAddress})`,
       );
     }
-    const domainChainId =
-      authorization.type === "erc2612Permit" ||
-      authorization.type === "permit2SignatureTransfer" ||
-      authorization.type === "blueAuthorizationSignature"
-        ? authorization.typedData.domain.chainId
-        : undefined;
     if (
       domainChainId !== undefined &&
       typeof chainId === "number" &&

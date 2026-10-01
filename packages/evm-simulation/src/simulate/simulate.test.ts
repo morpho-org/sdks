@@ -8,7 +8,7 @@ import {
   SimulationValidationError,
   UnsupportedChainError,
 } from "../errors.js";
-import type { VerifiedSimulateParams } from "../params.js";
+import type { SimulateParams } from "../params.js";
 import {
   encodeUint256,
   makeTransferLog,
@@ -37,20 +37,16 @@ const SPENDER: Address = getAddress(
 );
 
 /**
- * Build an execution for a plan: probe/user calls tagged per `plan.calls`,
- * probe readings reporting a zero native balance.
+ * Build an execution for a plan: one executed transaction per user call.
  */
 function makeExecution(
   plan: ExecutionPlan,
   userLogs: RawLog[][] = [],
 ): SimulationExecution {
-  const calls = plan.calls.map((planned) => ({
-    planned,
+  const transactions = plan.calls.map((planned) => ({
+    transactionIndex: planned.transactionIndex,
     result: {
-      logs:
-        planned.type === "transaction"
-          ? (userLogs[planned.transactionIndex] ?? [])
-          : [],
+      logs: userLogs[planned.transactionIndex] ?? [],
       status: true,
       returnData: "0x" as Hex,
       gasUsed: 0n,
@@ -66,18 +62,7 @@ function makeExecution(
       blockNumber: 2n,
       blockTimestamp: 1_700_000_012n,
     },
-    calls,
-    nativeBalances: plan.calls
-      .filter(
-        (planned): planned is typeof planned & { type: "nativeBalanceProbe" } =>
-          planned.type === "nativeBalanceProbe",
-      )
-      .map((planned) => ({
-        probeId: planned.probeId,
-        phase: planned.phase,
-        account: planned.account,
-        assets: 0n,
-      })),
+    transactions,
   };
 }
 
@@ -91,13 +76,13 @@ function makeConfig(
   };
 }
 
-function makeParams(overrides: object = {}): VerifiedSimulateParams {
+function makeParams(overrides: object = {}): SimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
     blockNumber: 20000000n,
     ...overrides,
-  } as VerifiedSimulateParams;
+  } as SimulateParams;
 }
 
 beforeEach(() => {
@@ -127,7 +112,6 @@ describe.sequential("simulate — success", () => {
     expect(result.simulationTxs).toEqual([
       { from: USER, to: VAULT, data: "0x12345678", value: 0n },
     ]);
-    // Only the user call is exposed — probes stay internal.
     expect(result.calls).toHaveLength(1);
   });
 
@@ -198,15 +182,11 @@ describe.sequential("simulate — success", () => {
     mockExecuteSimulation.mockImplementationOnce(({ plan }) => {
       const execution = makeExecution(plan);
       let i = 0;
-      const calls = execution.calls.map((call) =>
-        call.planned.type === "transaction"
-          ? {
-              ...call,
-              result: { ...call.result, gasUsed: [21_000n, 42_000n][i++]! },
-            }
-          : call,
-      );
-      return Promise.resolve({ ...execution, calls });
+      const transactions = execution.transactions.map((transaction) => ({
+        ...transaction,
+        result: { ...transaction.result, gasUsed: [21_000n, 42_000n][i++]! },
+      }));
+      return Promise.resolve({ ...execution, transactions });
     });
 
     const result = await simulate(
@@ -254,6 +234,28 @@ describe.sequential("simulate — success", () => {
 });
 
 describe.sequential("simulate — modes and unsupported features", () => {
+  it("forwards blockNumber to executeSimulation", async () => {
+    await simulate(makeConfig(), makeParams({ blockNumber: 20000000n }));
+    expect(mockExecuteSimulation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          request: expect.objectContaining({ blockNumber: 20000000n }),
+        }),
+      }),
+    );
+  });
+
+  it("forwards a block tag to executeSimulation", async () => {
+    await simulate(makeConfig(), makeParams({ blockNumber: "finalized" }));
+    expect(mockExecuteSimulation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          request: expect.objectContaining({ blockNumber: "finalized" }),
+        }),
+      }),
+    );
+  });
+
   it("defaults to final mode", async () => {
     await simulate(makeConfig(), makeParams());
     const plan = mockExecuteSimulation.mock.calls[0]![0].plan;

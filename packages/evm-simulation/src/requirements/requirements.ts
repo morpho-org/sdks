@@ -30,7 +30,6 @@ import type {
   BlueAuthorizationTypedData,
   Eip712Domain,
   Erc2612PermitTypedData,
-  PendingAuthorization,
   Permit2TransferTypedData,
   SimulationAuthorization,
 } from "../authorizations.js";
@@ -337,7 +336,7 @@ const BLUE_AUTHORIZATION_FIELDS = [
 const toErc2612Permit = (
   action: PermitAction,
   ctx: Ctx,
-): PendingAuthorization => {
+): SimulationAuthorization => {
   const { owner } = ctx;
   const domain = parseDomain(action.typedData?.domain, mismatch(ctx));
   const fail = mismatch(ctx);
@@ -404,7 +403,7 @@ const toErc2612Permit = (
 const toPermit2SignatureTransfer = (
   action: Permit2SignatureTransferAction,
   ctx: Ctx,
-): PendingAuthorization => {
+): SimulationAuthorization => {
   const { owner } = ctx;
   const fail = mismatch(ctx);
   const v = validators(fail);
@@ -492,7 +491,7 @@ const toPermit2SignatureTransfer = (
 const toBlueAuthorizationSignature = (
   action: AuthorizationAction,
   ctx: Ctx,
-): PendingAuthorization => {
+): SimulationAuthorization => {
   const { owner } = ctx;
   const fail = mismatch(ctx);
   const v = validators(fail);
@@ -607,7 +606,7 @@ const decodeSetAuthorization = (data: `0x${string}`, failUnsupported: Fail) => {
 const toErc20Approval = (
   requirement: Readonly<Transaction<ERC20ApprovalAction>>,
   ctx: Ctx,
-): PendingAuthorization => {
+): SimulationAuthorization => {
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
   const fail = mismatch(ctx);
@@ -649,7 +648,7 @@ const toErc20Approval = (
 const toBlueAuthorization = (
   requirement: Readonly<Transaction<BlueAuthorizationAction>>,
   ctx: Ctx,
-): PendingAuthorization => {
+): SimulationAuthorization => {
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
   const fail = mismatch(ctx);

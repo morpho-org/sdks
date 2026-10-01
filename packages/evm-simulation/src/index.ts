@@ -17,8 +17,13 @@ export type {
   RetainedAsset,
   SimulationErrorCode,
   SimulationErrorContext,
+  SimulationExecutionContext,
   SimulationExecutionReason,
+  SimulationPreparationContext,
   SimulationStage,
+  SimulationTransportContext,
+  SimulationValidationContext,
+  SimulationVerificationContext,
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
@@ -47,9 +52,12 @@ export {
 } from "./errors.js";
 export type {
   BlueAuthorizationLimit,
+  BlueAuthorizationSubject,
   BlueBorrowLimit,
+  BlueMarketOperationSubject,
   BlueMarketOperationType,
   BlueRefinanceLimit,
+  BlueRefinanceSubject,
   BlueRepayLimit,
   BlueRepayWithdrawCollateralLimit,
   BlueSupplyCollateralBorrowLimit,
@@ -65,9 +73,11 @@ export type {
   VaultDeallocation,
   VaultDepositLimit,
   VaultInKindRedeemLimit,
+  VaultOperationSubject,
   VaultOperationType,
   VaultRedeemLimit,
   VaultV1MigrateToV2Limit,
+  VaultV1MigrateToV2Subject,
   VaultV2ForceRedeemLimit,
   VaultV2ForceWithdrawLimit,
   VaultWithdrawLimit,
@@ -83,6 +93,20 @@ export type {
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
 export { toSimulationAuthorizations } from "./requirements/index.js";
+export type {
+  AuthorizationPreparation,
+  Fee,
+  MorphoAuthorizationChange,
+  Permit2NonceChange,
+  SequentialNonceChange,
+  SignatureNonceChange,
+  SimulatedOperation,
+  SimulationStateChange,
+  SimulationVerification,
+  TokenAllowance,
+  TokenBalance,
+  VerifiedSimulationResult,
+} from "./result.js";
 export { simulate } from "./simulate/index.js";
 // Default limit constants
 export {
