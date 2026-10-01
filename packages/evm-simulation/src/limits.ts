@@ -1,7 +1,7 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
-/** Every decoded operation type; source of `OperationType`. */
+/** Every operation type; source of `OperationType`. */
 export const OPERATION_TYPES = [
   "blueSupply",
   "blueWithdraw",
@@ -26,7 +26,7 @@ export const OPERATION_TYPES = [
   "vaultV1MigrateToV2",
 ] as const;
 
-/** Discriminator for decoded operations and their limits. */
+/** Discriminator for operations and their limits. */
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
 /** Operations acting on one Blue market; source of `BlueMarketOperationType`. */

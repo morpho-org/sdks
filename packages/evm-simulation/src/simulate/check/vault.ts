@@ -14,7 +14,6 @@ import type { ParsedState, VaultInternals } from "../state/types.js";
 import { checkExitOperation } from "./exits.js";
 import {
   type CheckContext,
-  type CheckedOperation,
   fail,
   findVault,
   limitViolation,
@@ -93,7 +92,7 @@ export function checkVaultOperation(
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
-): CheckedOperation {
+): void {
   switch (limit.type) {
     case "vaultV1Deposit":
     case "vaultV2Deposit": {
@@ -143,7 +142,7 @@ export function checkVaultOperation(
           `${minted}`,
           "Decrease the bound or adjust the operation.",
         );
-      return { operation: limit, outcome: { sharesMinted: minted } };
+      return;
     }
 
     case "vaultV1Withdraw":
@@ -180,7 +179,7 @@ export function checkVaultOperation(
           `${burned}`,
           "Increase the bound or reduce the operation.",
         );
-      return { operation: limit, outcome: { sharesBurned: burned } };
+      return;
     }
 
     case "vaultV1Redeem":
@@ -222,7 +221,7 @@ export function checkVaultOperation(
           `${credit}`,
           "Decrease the bound or adjust the operation.",
         );
-      return { operation: limit, outcome: { assetsReceived: credit } };
+      return;
     }
 
     case "vaultV1MigrateToV2":
@@ -230,7 +229,8 @@ export function checkVaultOperation(
     case "vaultV2ForceRedeem":
     case "vaultV1InKindRedeem":
     case "vaultV2InKindRedeem":
-      return checkExitOperation(ctx, limit, accruedBefore, after, actionDiff);
+      checkExitOperation(ctx, limit, accruedBefore, after, actionDiff);
+      return;
 
     default: {
       const _exhaustive: never = limit;

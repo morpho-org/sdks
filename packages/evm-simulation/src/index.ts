@@ -32,23 +32,19 @@ export {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
-  FeeMismatchError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
   PermissionChangeMismatchError,
-  ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
-  UnsupportedVerificationFeatureError,
 } from "./errors.js";
 export type {
   BlueAuthorizationLimit,
@@ -95,7 +91,6 @@ export { SIMULATION_MODES } from "./params.js";
 export { toSimulationAuthorizations } from "./requirements/index.js";
 export type {
   AuthorizationPreparation,
-  Fee,
   MorphoAuthorizationChange,
   Permit2NonceChange,
   SequentialNonceChange,

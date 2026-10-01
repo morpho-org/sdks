@@ -102,8 +102,6 @@ function makeResult(): VerifiedSimulationResult {
         vaults: [],
         markets: [],
       },
-      conversions: [],
-      fees: [],
     },
   } as unknown as VerifiedSimulationResult;
 }

@@ -38,7 +38,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Run the verified simulation pipeline in a single `eth_simulateV1` call:
- * pinned-state reads → request bindings → operation decode → read planning
+ * pinned-state reads → request bindings → read planning
  * (`before` reads, preparations, user txs with intermediate native reads,
  * `after` reads) → execution → per-phase state parse → accrual → diffs →
  * authorization/state-diff verification → per-operation economic checks with

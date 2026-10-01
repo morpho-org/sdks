@@ -72,8 +72,6 @@ export function assembleResult(params: {
     after: toPublicState(after),
     diff,
     actionDiff,
-    conversions: [],
-    fees: [],
   };
 
   return deepFreeze({

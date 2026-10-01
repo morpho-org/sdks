@@ -11,7 +11,6 @@ import type { SimulationStateChange } from "../../result.js";
 import type { ParsedState } from "../state/types.js";
 import {
   type CheckContext,
-  type CheckedOperation,
   eq,
   fail,
   findVault,
@@ -51,7 +50,7 @@ export function checkExitOperation(
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
-): CheckedOperation {
+): void {
   switch (limit.type) {
     case "vaultV1MigrateToV2": {
       const source = findVault(accruedBefore, limit.sourceVault, ctx, limit);
@@ -158,10 +157,7 @@ export function checkExitOperation(
           `${minted}`,
           "Decrease the bound or adjust the operation.",
         );
-      return {
-        operation: limit,
-        outcome: { targetSharesMinted: minted, sourceSharesBurned: burned },
-      };
+      return;
     }
 
     case "vaultV2ForceWithdraw":
@@ -289,14 +285,7 @@ export function checkExitOperation(
             `${penaltyAssets}`,
             "Increase the bound or reduce the operation.",
           );
-        return {
-          operation: limit,
-          outcome: {
-            sharesBurned: burned,
-            assetsReceived: credit,
-            penaltyAssets,
-          },
-        };
+        return;
       }
 
       if (limit.expectedShares !== undefined && limit.expectedShares !== burned)
@@ -357,14 +346,7 @@ export function checkExitOperation(
           `${penaltyAssets}`,
           "Increase the bound or reduce the operation.",
         );
-      return {
-        operation: limit,
-        outcome: {
-          assetsReceived: credit,
-          penaltyAssets,
-          sharesBurned: burned,
-        },
-      };
+      return;
     }
 
     case "vaultV1InKindRedeem":
@@ -495,16 +477,7 @@ export function checkExitOperation(
             `Market "${minimum.marketId}" did not supply the declared minimum.`,
           );
       }
-      return {
-        operation: limit,
-        outcome: {
-          sharesBurned: burned,
-          idleAssetsReceived: credit,
-          supplyAssetsByMarket: supplyAssetsByMarket as never,
-          penaltyAssets: 0n,
-          residualShareAllowance: 0n,
-        },
-      };
+      return;
     }
 
     default: {

@@ -293,17 +293,6 @@ export const borrowApyAfter = (market: Market): bigint => {
   return rate == null ? 0n : MathLib.wTaylorCompounded(rate, SECONDS_PER_YEAR);
 };
 
-/**
- * A declared operation limit paired with the outcome observed for its
- * subject. `operation` is the caller's {@link OperationLimit} entry; `outcome`
- * carries only fields that remain computable from the before/after state.
- * @internal
- */
-export interface CheckedOperation {
-  readonly operation: OperationLimit;
-  readonly outcome: Readonly<Record<string, bigint | boolean | RiskMetric>>;
-}
-
 /** Format a {@link RiskMetric} for limit-violation messages. @internal */
 export const fmtRisk = (metric: RiskMetric): string =>
   metric.type === "finite" ? `${metric.valueWad}` : metric.type;

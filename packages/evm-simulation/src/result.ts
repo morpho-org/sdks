@@ -9,13 +9,13 @@ import type {
   SimulationTransaction,
 } from "./types.js";
 
-/** @internal One operation decoded from the caller's transactions. */
+/** One operation described by the caller's `limits.operations`. */
 export type SimulatedOperation = {
   /** Index into `simulationTxs`, when the caller pinned one. */
   readonly transactionIndex?: number;
 } & SimulationOperationSubject;
 
-/** @internal How a pending authorization was modeled in preview. */
+/** How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
   readonly authorization: SimulationAuthorization;
@@ -31,14 +31,14 @@ export interface AuthorizationPreparation {
   };
 }
 
-/** @internal One account's balance of one token. */
+/** One account's balance of one token. */
 export interface TokenBalance {
   readonly account: Address;
   readonly token: Address;
   readonly assets: bigint;
 }
 
-/** @internal One ERC-20 allowance. */
+/** One ERC-20 allowance. */
 export interface TokenAllowance {
   readonly token: Address;
   readonly owner: Address;
@@ -78,7 +78,7 @@ export interface Permit2NonceChange {
 /** One signature nonce before and after the bundle. */
 export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
 
-/** @internal One user's position in one Blue market. */
+/** One user's position in one Blue market. */
 export interface PositionState {
   readonly marketId: MarketId;
   readonly user: Address;
@@ -93,7 +93,7 @@ export interface PositionState {
   readonly healthFactorWad?: bigint;
 }
 
-/** @internal One Blue market's state. */
+/** One Blue market's state. */
 export interface MarketState {
   readonly marketId: MarketId;
   readonly totalSupplyAssets: bigint;
@@ -111,7 +111,7 @@ export interface MarketState {
   readonly oraclePrice?: bigint;
 }
 
-/** @internal One vault allocation. */
+/** One vault allocation. */
 interface VaultAllocation {
   /** Set for Vault V2. */
   readonly adapter?: Address;
@@ -119,7 +119,7 @@ interface VaultAllocation {
   readonly assets: bigint;
 }
 
-/** @internal One Vault V1 (MetaMorpho) or Vault V2 vault's state. */
+/** One Vault V1 (MetaMorpho) or Vault V2 vault's state. */
 export interface VaultState {
   readonly vault: Address;
   readonly version: "v1" | "v2";
@@ -132,7 +132,7 @@ export interface VaultState {
   readonly allocations: readonly VaultAllocation[];
 }
 
-/** @internal Full state at one point; unchanged entries are included. */
+/** Full state at one point; unchanged entries are included. */
 export interface SimulationState {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
@@ -143,7 +143,7 @@ export interface SimulationState {
   readonly vaults: readonly VaultState[];
 }
 
-/** @internal Signed differences (after − before) of the amounts in `SimulationState`. */
+/** Signed differences (after − before) of the amounts in `SimulationState`. */
 export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
@@ -175,35 +175,7 @@ export interface SimulationStateChange {
   }[];
 }
 
-/** @internal An asset/share conversion and the bounds it was checked against. */
-interface Conversion {
-  readonly transactionIndex: number;
-  readonly marketId?: MarketId;
-  readonly vault?: Address;
-  readonly assets: bigint;
-  readonly shares: bigint;
-  readonly quotedSharePriceE27: bigint;
-  readonly actualSharePriceE27: bigint;
-  readonly minSharePriceE27: bigint;
-  readonly maxSharePriceE27: bigint;
-}
-
-/** @internal A fee observed during the simulation. */
-export interface Fee {
-  readonly transactionIndex: number;
-  readonly type:
-    | "referral"
-    | "performance"
-    | "management"
-    | "exitPenalty"
-    | "reallocationPenalty";
-  readonly token: Address;
-  readonly recipient: Address;
-  readonly expectedAmount: bigint;
-  readonly observedAmount: bigint;
-}
-
-/** @internal Verification report attached to a verified simulation result. */
+/** Verification report attached to a verified simulation result. */
 export interface SimulationVerification {
   readonly mode: SimulationMode;
   readonly chainId: number;
@@ -220,11 +192,9 @@ export interface SimulationVerification {
   readonly diff: SimulationStateChange;
   /** Changes caused by the user's transactions only. */
   readonly actionDiff: SimulationStateChange;
-  readonly conversions: readonly Conversion[];
-  readonly fees: readonly Fee[];
 }
 
-/** @internal `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
+/** `simulationTxs` equals the caller's `transactions`; `txIdx` indexes only those. */
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }

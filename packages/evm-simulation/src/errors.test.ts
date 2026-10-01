@@ -6,25 +6,21 @@ import {
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
-  FeeMismatchError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
   MarketConstraintViolationError,
   MissingVerificationEvidenceError,
   PermissionChangeMismatchError,
-  ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
   type SimulationExecutionReason,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  SlippageLimitExceededError,
   StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
-  UnsupportedVerificationFeatureError,
 } from "./errors.js";
 import {
   BLUE_MARKET_OPERATION_TYPES,
@@ -200,8 +196,6 @@ describe("ExternalServiceError", () => {
 describe("verification error classes", () => {
   const cases = [
     [UnsupportedOperationError, "UNSUPPORTED_OPERATION"],
-    [ProtocolBindingMismatchError, "PROTOCOL_BINDING_MISMATCH"],
-    [UnsupportedVerificationFeatureError, "UNSUPPORTED_VERIFICATION_FEATURE"],
     [InvalidSimulationResponseError, "INVALID_SIMULATION_RESPONSE"],
     [MissingVerificationEvidenceError, "MISSING_VERIFICATION_EVIDENCE"],
     [AuthorizationRequestMismatchError, "AUTHORIZATION_REQUEST_MISMATCH"],
@@ -209,8 +203,6 @@ describe("verification error classes", () => {
     [PermissionChangeMismatchError, "PERMISSION_CHANGE_MISMATCH"],
     [StateChangeMismatchError, "STATE_CHANGE_MISMATCH"],
     [MarketConstraintViolationError, "MARKET_CONSTRAINT_VIOLATION"],
-    [SlippageLimitExceededError, "SLIPPAGE_LIMIT_EXCEEDED"],
-    [FeeMismatchError, "FEE_MISMATCH"],
     [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
     [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
   ] as const;
@@ -441,8 +433,8 @@ describe("context on legacy errors", () => {
   });
 
   it("verification errors extend SimulationPackageError directly", () => {
-    const err = new FeeMismatchError("x", { context: CONTEXT });
-    expect(Object.getPrototypeOf(FeeMismatchError)).toBe(
+    const err = new ConsumerLimitViolationError("x", { context: CONTEXT });
+    expect(Object.getPrototypeOf(ConsumerLimitViolationError)).toBe(
       SimulationPackageError,
     );
     expect(err.context).toEqual(CONTEXT);
@@ -460,8 +452,6 @@ describe("SIMULATION_ERROR_CODES", () => {
     new SimulationValidationError("x"),
     new UnsupportedChainError(1),
     new UnsupportedOperationError("x", { context: CONTEXT }),
-    new ProtocolBindingMismatchError("x", { context: CONTEXT }),
-    new UnsupportedVerificationFeatureError("x", { context: CONTEXT }),
     new InvalidSimulationResponseError("x", { context: CONTEXT }),
     new MissingVerificationEvidenceError("x", { context: CONTEXT }),
     new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
@@ -469,8 +459,6 @@ describe("SIMULATION_ERROR_CODES", () => {
     new PermissionChangeMismatchError("x", { context: CONTEXT }),
     new StateChangeMismatchError("x", { context: CONTEXT }),
     new MarketConstraintViolationError("x", { context: CONTEXT }),
-    new SlippageLimitExceededError("x", { context: CONTEXT }),
-    new FeeMismatchError("x", { context: CONTEXT }),
     new ConsumerLimitViolationError("x", { context: CONTEXT }),
     new UnexpectedSimulationError("x", { context: CONTEXT }),
   ];
@@ -512,16 +500,18 @@ describe("isSimulationPackageError", () => {
       true,
     );
     expect(
-      isSimulationPackageError(new FeeMismatchError("x", { context: CONTEXT })),
+      isSimulationPackageError(
+        new ConsumerLimitViolationError("x", { context: CONTEXT }),
+      ),
     ).toBe(true);
   });
 
   it("is true for a plain object with a known code", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "boom",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
         context: {
           stage: "validation",
           mode: "final",
@@ -535,18 +525,18 @@ describe("isSimulationPackageError", () => {
   it("is true for a plain object without context", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "boom",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
       }),
     ).toBe(true);
   });
 
   it("is false for a malformed context", () => {
     const base = {
-      name: "FeeMismatchError",
+      name: "ConsumerLimitViolationError",
       message: "m",
-      code: "FEE_MISMATCH",
+      code: "CONSUMER_LIMIT_VIOLATION",
     };
     expect(isSimulationPackageError({ ...base, context: {} })).toBe(false);
     expect(isSimulationPackageError({ ...base, context: [] })).toBe(false);
@@ -634,22 +624,33 @@ describe("isSimulationPackageError", () => {
   it("is false without a message string", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
-        code: "FEE_MISMATCH",
+        name: "ConsumerLimitViolationError",
+        code: "CONSUMER_LIMIT_VIOLATION",
       }),
     ).toBe(false);
   });
 
   it("is false without a name string", () => {
     expect(
-      isSimulationPackageError({ message: "m", code: "FEE_MISMATCH" }),
+      isSimulationPackageError({
+        message: "m",
+        code: "CONSUMER_LIMIT_VIOLATION",
+      }),
     ).toBe(false);
     expect(
-      isSimulationPackageError({ name: 1, message: "m", code: "FEE_MISMATCH" }),
+      isSimulationPackageError({
+        name: 1,
+        message: "m",
+        code: "CONSUMER_LIMIT_VIOLATION",
+      }),
     ).toBe(false);
   });
 
-  const base = { name: "FeeMismatchError", message: "m", code: "FEE_MISMATCH" };
+  const base = {
+    name: "ConsumerLimitViolationError",
+    message: "m",
+    code: "CONSUMER_LIMIT_VIOLATION",
+  };
   const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
 
   it("requires a known operation on execution and verification contexts", () => {
@@ -716,9 +717,9 @@ describe("isSimulationPackageError", () => {
     expect(isSimulationPackageError(new Error("x"))).toBe(false);
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "m",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
         context: "nope",
       }),
     ).toBe(false);

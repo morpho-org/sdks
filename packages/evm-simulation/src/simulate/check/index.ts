@@ -7,23 +7,16 @@ import type {
 import type { ParsedState } from "../state/types.js";
 import { checkBlueOperation } from "./blue.js";
 import { checkExitOperation } from "./exits.js";
-import {
-  type CheckContext,
-  type CheckedOperation,
-  operationSubject,
-} from "./helpers.js";
+import { type CheckContext, operationSubject } from "./helpers.js";
 import { checkRefinanceOperation } from "./refinance.js";
 import { checkVaultOperation } from "./vault.js";
 
 /** Public per-operation record: optional transaction index plus subject keys. @internal */
-const toSimulatedOperation = (
-  checked: CheckedOperation,
-): SimulatedOperation => ({
-  ...("transactionIndex" in checked.operation &&
-  checked.operation.transactionIndex !== undefined
-    ? { transactionIndex: checked.operation.transactionIndex }
+const toSimulatedOperation = (limit: OperationLimit): SimulatedOperation => ({
+  ...("transactionIndex" in limit && limit.transactionIndex !== undefined
+    ? { transactionIndex: limit.transactionIndex }
     : {}),
-  ...operationSubject(checked.operation),
+  ...operationSubject(limit),
 });
 
 /**
@@ -44,11 +37,8 @@ export function checkOperations(params: {
   const operations: SimulatedOperation[] = [];
 
   for (const limit of ctx.limits.operations) {
-    operations.push(
-      toSimulatedOperation(
-        dispatch(ctx, limit, accruedBefore, after, actionDiff),
-      ),
-    );
+    dispatch(ctx, limit, accruedBefore, after, actionDiff);
+    operations.push(toSimulatedOperation(limit));
   }
 
   return { operations };
@@ -61,7 +51,7 @@ function dispatch(
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
-): CheckedOperation {
+): void {
   switch (limit.type) {
     case "blueSupply":
     case "blueWithdraw":
@@ -72,28 +62,26 @@ function dispatch(
     case "blueWithdrawCollateral":
     case "blueRepayWithdrawCollateral":
     case "blueAuthorization":
-      return checkBlueOperation(ctx, limit, accruedBefore, after, actionDiff);
+      checkBlueOperation(ctx, limit, accruedBefore, after, actionDiff);
+      return;
     case "blueRefinance":
-      return checkRefinanceOperation(
-        ctx,
-        limit,
-        accruedBefore,
-        after,
-        actionDiff,
-      );
+      checkRefinanceOperation(ctx, limit, accruedBefore, after, actionDiff);
+      return;
     case "vaultV1Deposit":
     case "vaultV2Deposit":
     case "vaultV1Withdraw":
     case "vaultV2Withdraw":
     case "vaultV1Redeem":
     case "vaultV2Redeem":
-      return checkVaultOperation(ctx, limit, accruedBefore, after, actionDiff);
+      checkVaultOperation(ctx, limit, accruedBefore, after, actionDiff);
+      return;
     case "vaultV1MigrateToV2":
     case "vaultV2ForceWithdraw":
     case "vaultV2ForceRedeem":
     case "vaultV1InKindRedeem":
     case "vaultV2InKindRedeem":
-      return checkExitOperation(ctx, limit, accruedBefore, after, actionDiff);
+      checkExitOperation(ctx, limit, accruedBefore, after, actionDiff);
+      return;
     default: {
       const _exhaustive: never = limit;
       throw new UnexpectedSimulationError(

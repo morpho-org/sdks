@@ -4,7 +4,6 @@ import type { SimulationStateChange } from "../../result.js";
 import type { ParsedState } from "../state/types.js";
 import {
   type CheckContext,
-  type CheckedOperation,
   eq,
   fail,
   findMarket,
@@ -30,7 +29,7 @@ export function checkRefinanceOperation(
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
-): CheckedOperation {
+): void {
   const account = ctx.owner;
   const sourceMarketId = limit.sourceMarketId;
   const targetMarketId = limit.targetMarketId;
@@ -71,9 +70,9 @@ export function checkRefinanceOperation(
     );
 
   const targetMarketAfter = findMarket(after, targetMarketId, ctx, limit);
-  const targetInternals = after.internals.markets.get(targetMarketId);
-  if (targetInternals == null)
-    return fail(
+  const targetInternals =
+    after.internals.markets.get(targetMarketId) ??
+    fail(
       ctx,
       limit,
       `Refinance target market "${targetMarketId}" internals missing`,
@@ -213,15 +212,5 @@ export function checkRefinanceOperation(
       "Increase the bound or reduce the operation.",
     );
 
-  return {
-    operation: limit,
-    outcome: {
-      targetBorrowAssets: newDebt,
-      targetBorrowSharesMinted: minted,
-      sourceResidualBorrowShares: sourceAfter.borrowShares,
-      targetLtvAfterWad: risk.ltvWad,
-      targetHealthFactorAfterWad: risk.healthFactorWad,
-      loanDustAssets: loanDust,
-    },
-  };
+  return;
 }

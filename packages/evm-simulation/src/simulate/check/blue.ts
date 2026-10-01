@@ -8,7 +8,6 @@ import type { ParsedState } from "../state/types.js";
 import {
   borrowApyAfter,
   type CheckContext,
-  type CheckedOperation,
   checkLtv,
   eq,
   fail,
@@ -60,7 +59,7 @@ export function checkBlueOperation(
   accruedBefore: ParsedState,
   after: ParsedState,
   actionDiff: SimulationStateChange,
-): CheckedOperation {
+): void {
   if (limit.type === "blueAuthorization") {
     const observed = after.morphoAuthorizations.find(
       (a) => eq(a.authorizer, ctx.owner) && eq(a.authorized, limit.authorized),
@@ -83,7 +82,7 @@ export function checkBlueOperation(
         `${observed}`,
         "The bundle does not match the declared constraint.",
       );
-    return { operation: limit, outcome: { isAuthorized: observed! } };
+    return;
   }
 
   const marketId = limit.marketId;
@@ -189,10 +188,7 @@ export function checkBlueOperation(
           `${sharesMinted}`,
           "Decrease the bound or adjust the operation.",
         );
-      return {
-        operation: limit,
-        outcome: { supplySharesMinted: sharesMinted },
-      };
+      return;
     }
 
     case "blueWithdraw": {
@@ -242,14 +238,7 @@ export function checkBlueOperation(
           "Increase the bound or reduce the operation.",
         );
       pinUtilization(limit.maxUtilizationAfterWad);
-      return {
-        operation: limit,
-        outcome: {
-          assetsReceived: credit,
-          supplySharesBurned: sharesBurned,
-          utilizationAfterWad: utilization,
-        },
-      };
+      return;
     }
 
     case "blueSupplyCollateral": {
@@ -268,7 +257,7 @@ export function checkBlueOperation(
           "The bundle does not match the declared constraint.",
         );
       pinLtv(limit.maxLtvAfterWad);
-      return { operation: limit, outcome: { ltvAfterWad: risk.ltvWad } };
+      return;
     }
 
     case "blueBorrow": {
@@ -324,16 +313,7 @@ export function checkBlueOperation(
           `${borrowApy}`,
           "Increase the bound or reduce the operation.",
         );
-      return {
-        operation: limit,
-        outcome: {
-          borrowSharesMinted,
-          ltvAfterWad: risk.ltvWad,
-          healthFactorAfterWad: risk.healthFactorWad,
-          utilizationAfterWad: utilization,
-          borrowApyAfterWad: borrowApy,
-        },
-      };
+      return;
     }
 
     case "blueSupplyCollateralBorrow": {
@@ -406,16 +386,7 @@ export function checkBlueOperation(
           `${borrowApy}`,
           "Increase the bound or reduce the operation.",
         );
-      return {
-        operation: limit,
-        outcome: {
-          borrowSharesMinted,
-          ltvAfterWad: risk.ltvWad,
-          healthFactorAfterWad: risk.healthFactorWad,
-          utilizationAfterWad: utilization,
-          borrowApyAfterWad: borrowApy,
-        },
-      };
+      return;
     }
 
     case "blueRepay":
@@ -497,14 +468,6 @@ export function checkBlueOperation(
           "Decrease the bound or adjust the operation.",
         );
 
-      let outcome: CheckedOperation["outcome"] = {
-        assetsPaid,
-        borrowSharesBurned,
-        residualBorrowShares: residual,
-        refundAssets,
-        ltvAfterWad: risk.ltvWad,
-        healthFactorAfterWad: risk.healthFactorWad,
-      };
       if (limit.type === "blueRepayWithdrawCollateral") {
         const collateralWithdrawn =
           observed.positionBefore.collateral -
@@ -531,9 +494,8 @@ export function checkBlueOperation(
           );
         pinLtv(limit.maxLtvAfterWad);
         pinHealth(limit.minHealthFactorAfterWad);
-        outcome = { ...outcome, collateralWithdrawn };
       }
-      return { operation: limit, outcome };
+      return;
     }
 
     case "blueWithdrawCollateral": {
@@ -551,11 +513,6 @@ export function checkBlueOperation(
           `${collateralWithdrawn}`,
           "The bundle does not match the declared constraint.",
         );
-      const credit = receiverCredit(
-        actionDiff,
-        limit.expectedReceiver ?? ctx.owner,
-        internalsBefore.params.collateralToken,
-      );
       checkLtv(
         ctx,
         limit,
@@ -565,15 +522,7 @@ export function checkBlueOperation(
       );
       pinLtv(limit.maxLtvAfterWad);
       pinHealth(limit.minHealthFactorAfterWad);
-      return {
-        operation: limit,
-        outcome: {
-          collateralWithdrawn,
-          assetsReceived: credit,
-          ltvAfterWad: risk.ltvWad,
-          healthFactorAfterWad: risk.healthFactorWad,
-        },
-      };
+      return;
     }
 
     default: {
