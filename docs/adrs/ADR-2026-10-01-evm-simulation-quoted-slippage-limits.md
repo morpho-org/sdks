@@ -101,16 +101,23 @@ each extending `SimulationPackageError`:
 `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `AssetChangeMismatchError`,
 `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`,
 `SlippageLimitExceededError` and `FeeMismatchError` are not introduced. In the typed error context,
-an execution or verification failure takes its `operation` and subject fields from the caller's
-`OperationLimit`, not from decoded calldata. A verification failure not bound to one limit carries
-only the checked `field`.
+a verification failure bound to a limit takes its `operation` and subject fields from that
+`OperationLimit`, not from decoded calldata, and one not bound to a limit carries only the checked
+`field`. Nothing links a reverted transaction to a limit, so a revert of a caller transaction or
+of the node carries no execution-stage context; a caller-transaction revert reports the
+per-transaction results, including the failing `transactionIndex`, on the error. A reverted
+preview preparation call carries the preparation-stage context with its `authorizationIndex` and
+`preparationCallIndex`.
 
 This decision replaces these parts of ADR-2026-09-18: calldata decoding and its verification
 contract, the rejection of routes outside the supported list, the call-time request-freshness
 check, the `SimulationLimits` defaults (including `maxSignatureLifetimeSeconds`) and wallet bounds,
 the operation limits, the verification output, preview request validation (the Permit2 preview
-checks and checking requests against calldata and state), and the error catalog apart from the
-existing classes' rows.
+checks and checking requests against calldata and state), the error catalog apart from the
+existing classes' rows, and the Invariants that depend on those parts: route reconciliation,
+tighten-only SDK protections, exact-request preview validation, the Permit2 preview checks,
+explicit failure of unsupported routes, and the call-time freshness clock. Determinism holds at the
+pinned block alone.
 An expired deadline now surfaces as an execution revert. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
 `toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
