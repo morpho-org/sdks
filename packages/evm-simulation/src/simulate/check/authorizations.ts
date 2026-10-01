@@ -51,16 +51,15 @@ const isAuthorized = (
     (a) => eq(a.authorizer, authorizer) && eq(a.authorized, authorized),
   )?.isAuthorized;
 
-/** ERC-20 amount pulled from `owner` to `spender` inside the user calls. */
+/** ERC-20 amount pulled out of `owner`'s wallet inside the user calls. */
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const pulledAmount = (
   transfers: readonly Transfer[],
   owner: Address,
   token: Address,
-  spender: Address,
 ): bigint =>
   transfers
-    .filter((t) => eq(t.token, token) && eq(t.from, owner) && eq(t.to, spender))
+    .filter((t) => eq(t.token, token) && eq(t.from, owner))
     .reduce((total, t) => total + t.amount, 0n);
 
 const deadlineOk = (ctx: CheckContext, deadline: bigint): boolean =>
@@ -91,9 +90,9 @@ const mismatch = (ctx: CheckContext, message: string, field: string): never => {
  * `stateOverride`), and the `after` state proves the grant landed:
  *
  * - `erc20Approval`: `after.allowance == max(0, before + amount − pulled)`,
- *   where `pulled` is the sum of owner→spender ERC-20 transfers inside the
- *   user calls (`pulled > 0` or `amount == 0` required — a pull that never
- *   fired means the approval was never needed);
+ *   where `pulled` is the sum of owner→* ERC-20 transfers of the token inside
+ *   the user calls (`pulled > 0` or `amount == 0` required — a pull that
+ *   never fired means the approval was never needed);
  * - `erc2612Permit` / share permits: allowance granted to the permit
  *   spender, nonce unchanged (the preparation `approve` replaced the
  *   signature consumption);
@@ -150,12 +149,7 @@ export function checkAuthorizations(params: {
 
     switch (auth.type) {
       case "erc20Approval": {
-        const pulled = pulledAmount(
-          transfers,
-          auth.owner,
-          auth.token,
-          auth.spender,
-        );
+        const pulled = pulledAmount(transfers, auth.owner, auth.token);
         if (preview) {
           if (prepared.length === 0)
             throw new AuthorizationRequestMismatchError(
@@ -379,12 +373,7 @@ export function checkAuthorizations(params: {
       ) {
         const spender = bundleSpender(ctx, op.route);
         if (spender == null) continue;
-        const pulled = pulledAmount(
-          transfers,
-          ctx.owner,
-          op.funding.token,
-          spender,
-        );
+        const pulled = pulledAmount(transfers, ctx.owner, op.funding.token);
         if (pulled === 0n) continue;
         const allowanceBefore =
           findAllowance(before, ctx.owner, op.funding.token, spender)?.amount ??

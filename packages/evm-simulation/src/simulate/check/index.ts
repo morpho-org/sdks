@@ -684,6 +684,19 @@ export function checkOperations(params: {
         if (operation.type === "vaultV2ForceRedeem")
           for (const leg of operation.deallocations)
             if (leg.marketId != null) touchedMarketIds.add(leg.marketId);
+        // The vault's own market allocations legitimately change as deposits
+        // are allocated and exits are deallocated.
+        for (const vaultAddress of [
+          "vault" in operation ? operation.vault : undefined,
+          "sourceVault" in operation ? operation.sourceVault : undefined,
+          "targetVault" in operation ? operation.targetVault : undefined,
+        ]) {
+          if (vaultAddress == null) continue;
+          for (const allocation of after.internals.vaults.get(vaultAddress)
+            ?.allocations ?? [])
+            if (allocation.marketId != null)
+              touchedMarketIds.add(allocation.marketId);
+        }
         const { checked: verified, fee } = checkVaultOperation(
           ctx,
           operation,

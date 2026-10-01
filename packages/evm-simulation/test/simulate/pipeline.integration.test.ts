@@ -12,7 +12,6 @@ import { type Address, encodeFunctionData, maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
 import {
-  AuthorizationRequestMismatchError,
   ConsumerLimitViolationError,
   MarketConstraintViolationError,
   SimulationRevertedError,
@@ -394,7 +393,7 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
 });
 
 describe.sequential("simulate pipeline — negatives", () => {
-  test("error: AuthorizationRequestMismatchError for mismatched approval amount", async ({
+  test("error: SimulationRevertedError for mismatched approval amount", async ({
     client,
   }) => {
     const morpho = client
@@ -430,10 +429,10 @@ describe.sequential("simulate pipeline — negatives", () => {
           },
         ],
       }),
-    ).rejects.toBeInstanceOf(AuthorizationRequestMismatchError);
+    ).rejects.toBeInstanceOf(SimulationRevertedError);
   }, 60_000);
 
-  test("error: AuthorizationRequestMismatchError in final mode without allowance", async ({
+  test("error: SimulationRevertedError in final mode without allowance", async ({
     client,
   }) => {
     const morpho = client
@@ -459,7 +458,7 @@ describe.sequential("simulate pipeline — negatives", () => {
           },
         ],
       }),
-    ).rejects.toBeInstanceOf(AuthorizationRequestMismatchError);
+    ).rejects.toBeInstanceOf(SimulationRevertedError);
   }, 60_000);
 
   test("error: ConsumerLimitViolationError for an operation bound above the simulated outcome", async ({

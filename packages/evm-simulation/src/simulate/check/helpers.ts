@@ -32,6 +32,7 @@ import type {
   RiskMetric,
 } from "../state/types.js";
 
+/** Case-insensitive address equality. @internal */
 export const eq = (a: Address, b: Address) => isAddressEqual(a, b);
 
 /** Context every check receives. @internal */
