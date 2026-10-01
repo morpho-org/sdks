@@ -1,4 +1,7 @@
-import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
+import {
+  getChainAddresses,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import type {
   ActionRequirement,
   AuthorizationAction,
@@ -14,7 +17,6 @@ import {
   isRequirementSignature,
 } from "@morpho-org/morpho-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
-import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try, isDefined } from "@morpho-org/morpho-ts";
 import {
   type Address,
@@ -53,29 +55,6 @@ interface Ctx {
   readonly preLiquidations: readonly Address[];
 }
 
-/**
- * Registered bundles contracts an approval or token permit may name as spender.
- * Canonical Permit2 is added for `approve` calldata (the Permit2 prerequisite
- * allowance), not for signed transfers — the signed transfer's spender is the
- * bundles contract itself.
- */
-const bundlesSpenders = (ctx: Ctx): readonly Address[] =>
-  [
-    ctx.addresses.bundles?.blueBundlesV1,
-    ctx.addresses.bundles?.vaultBundlesV1,
-    ctx.addresses.bundles?.vaultExitBundlesV1,
-  ].filter(isDefined);
-
-/**
- * Spenders a Permit2 `PermitTransferFrom` may name: Blue and Vault bundles.
- * VaultExitBundlesV1 takes share permits, not Permit2 transfers.
- */
-const permit2Spenders = (ctx: Ctx): readonly Address[] =>
-  [
-    ctx.addresses.bundles?.blueBundlesV1,
-    ctx.addresses.bundles?.vaultBundlesV1,
-  ].filter(isDefined);
-
 const failUnlessRegistered = (spec: {
   readonly fail: Fail;
   readonly field: string;
@@ -94,17 +73,6 @@ const isMidnight = (ctx: Ctx, address: Address): boolean =>
   [ctx.addresses.midnight, ctx.addresses.midnightBundles]
     .filter(isDefined)
     .some((midnight) => isAddressEqual(midnight, address));
-
-/**
- * Operators a Morpho authorization may bind: the registered BlueBundlesV1 or a
- * bound pre-liquidation contract.
- */
-const authorizationOperators = (ctx: Ctx): readonly Address[] => [
-  ...(isDefined(ctx.addresses.bundles?.blueBundlesV1)
-    ? [ctx.addresses.bundles.blueBundlesV1]
-    : []),
-  ...ctx.preLiquidations,
-];
 
 const authorizationContext = (ctx: Ctx): SimulationErrorContext => ({
   stage: "preparation",
@@ -364,11 +332,21 @@ const toErc2612Permit = (
     expected: action.args.spender,
     field: "message.spender",
   });
+  if (isMidnight(ctx, spender)) {
+    return unsupported(ctx)(
+      `Permit spender "${spender}" is a Midnight contract. Midnight requirements are not supported`,
+    );
+  }
   failUnlessRegistered({
     fail,
     field: "message.spender",
     observed: spender,
-    allowed: bundlesSpenders(ctx),
+    // ERC-2612 permits name the bundles contract that pulls the token.
+    allowed: [
+      ctx.addresses.bundles?.blueBundlesV1,
+      ctx.addresses.bundles?.vaultBundlesV1,
+      ctx.addresses.bundles?.vaultExitBundlesV1,
+    ].filter(isDefined),
   });
   v.equalBigint(value, {
     expected: action.args.amount,
@@ -459,7 +437,11 @@ const toPermit2SignatureTransfer = (
     fail,
     field: "message.spender",
     observed: spender,
-    allowed: permit2Spenders(ctx),
+    // VaultExitBundlesV1 takes share permits, not Permit2 transfers.
+    allowed: [
+      ctx.addresses.bundles?.blueBundlesV1,
+      ctx.addresses.bundles?.vaultBundlesV1,
+    ].filter(isDefined),
   });
   v.equalBigint(amount, {
     expected: action.args.amount,
@@ -567,42 +549,6 @@ const toBlueAuthorizationSignature = (
   return { type: "blueAuthorizationSignature", typedData: parsed };
 };
 
-const decodeErc20Approve = (data: `0x${string}`, failUnsupported: Fail) => {
-  let decoded: DecodeFunctionDataReturnType<typeof erc20Abi>;
-  try {
-    decoded = decodeFunctionData({ abi: erc20Abi, data });
-  } catch (cause) {
-    return failUnsupported(
-      "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
-      { cause },
-    );
-  }
-  if (decoded.functionName !== "approve") {
-    return failUnsupported(
-      `Approval transaction decoded to "${decoded.functionName}", expected "approve". Only ERC-20 approve prerequisites are supported`,
-    );
-  }
-  return decoded.args;
-};
-
-const decodeSetAuthorization = (data: `0x${string}`, failUnsupported: Fail) => {
-  let decoded: DecodeFunctionDataReturnType<typeof blueAbi>;
-  try {
-    decoded = decodeFunctionData({ abi: blueAbi, data });
-  } catch (cause) {
-    return failUnsupported(
-      "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
-      { cause },
-    );
-  }
-  if (decoded.functionName !== "setAuthorization") {
-    return failUnsupported(
-      `Blue authorization transaction decoded to "${decoded.functionName}", expected "setAuthorization". Only setAuthorization prerequisites are supported`,
-    );
-  }
-  return decoded.args;
-};
-
 const toErc20Approval = (
   requirement: Readonly<Transaction<ERC20ApprovalAction>>,
   ctx: Ctx,
@@ -617,7 +563,21 @@ const toErc20Approval = (
     );
   }
 
-  const [spender, amount] = decodeErc20Approve(data, unsupported(ctx));
+  let decodedApprove: DecodeFunctionDataReturnType<typeof erc20Abi>;
+  try {
+    decodedApprove = decodeFunctionData({ abi: erc20Abi, data });
+  } catch (cause) {
+    return unsupported(ctx)(
+      "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
+      { cause },
+    );
+  }
+  if (decodedApprove.functionName !== "approve") {
+    return unsupported(ctx)(
+      `Approval transaction decoded to "${decodedApprove.functionName}", expected "approve". Only ERC-20 approve prerequisites are supported`,
+    );
+  }
+  const [spender, amount] = decodedApprove.args;
   const v = validators(fail);
   v.equalAddress(spender, {
     expected: action.args.spender,
@@ -636,10 +596,13 @@ const toErc20Approval = (
     fail,
     field: "calldata spender",
     observed: spender,
+    // Approvals may also target canonical Permit2 (the Permit2 prerequisite).
     allowed: [
-      ...bundlesSpenders(ctx),
-      ...(isDefined(ctx.addresses.permit2) ? [ctx.addresses.permit2] : []),
-    ],
+      ctx.addresses.bundles?.blueBundlesV1,
+      ctx.addresses.bundles?.vaultBundlesV1,
+      ctx.addresses.bundles?.vaultExitBundlesV1,
+      ctx.addresses.permit2,
+    ].filter(isDefined),
   });
 
   return { type: "erc20Approval", token: to, owner, spender, amount };
@@ -664,10 +627,21 @@ const toBlueAuthorization = (
     );
   }
 
-  const [authorized, isAuthorized] = decodeSetAuthorization(
-    data,
-    unsupported(ctx),
-  );
+  let decodedSetAuthorization: DecodeFunctionDataReturnType<typeof blueAbi>;
+  try {
+    decodedSetAuthorization = decodeFunctionData({ abi: blueAbi, data });
+  } catch (cause) {
+    return unsupported(ctx)(
+      "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
+      { cause },
+    );
+  }
+  if (decodedSetAuthorization.functionName !== "setAuthorization") {
+    return unsupported(ctx)(
+      `Blue authorization transaction decoded to "${decodedSetAuthorization.functionName}", expected "setAuthorization". Only setAuthorization prerequisites are supported`,
+    );
+  }
+  const [authorized, isAuthorized] = decodedSetAuthorization.args;
   const v = validators(fail);
   v.equalAddress(authorized, {
     expected: action.args.authorized,
@@ -682,7 +656,12 @@ const toBlueAuthorization = (
     fail,
     field: "calldata authorized",
     observed: authorized,
-    allowed: authorizationOperators(ctx),
+    // Operators a Morpho authorization may bind: BlueBundlesV1 or a
+    // caller-supplied pre-liquidation contract.
+    allowed: [
+      ctx.addresses.bundles?.blueBundlesV1,
+      ...ctx.preLiquidations,
+    ].filter(isDefined),
   });
   v.equalBoolean(isAuthorized, {
     expected: action.args.isAuthorized,
@@ -776,7 +755,12 @@ export function toSimulationAuthorizations(params: {
     UnsupportedChainIdError,
   );
   if (addresses == null) {
-    throw new UnsupportedChainError(chainId);
+    throw new UnsupportedChainError(chainId, {
+      stage: "validation",
+      chainId,
+      mode,
+      blockNumber,
+    });
   }
 
   return requirements.map((requirement, index) => {

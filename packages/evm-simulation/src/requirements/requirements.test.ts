@@ -509,6 +509,18 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(UnsupportedOperationError);
   });
 
+  test("error: UnsupportedOperationError on a permit naming a Midnight spender", () => {
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [permitRequirement({ spender: midnightBundles })],
+      }),
+    ).toThrowError(UnsupportedOperationError);
+  });
+
   test("error: UnsupportedOperationError on midnight offer-root signature", () => {
     const midnightSignature = {
       action: {
@@ -1074,6 +1086,21 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
+  test("error: AuthorizationRequestMismatchError on authorization authorizer mismatch", async () => {
+    const requirement = await blueAuthorizationSignatureRequirement({
+      owner: OTHER,
+    });
+    expect(() =>
+      toSimulationAuthorizations({
+        chainId: CHAIN_ID,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+        owner: OWNER,
+        requirements: [requirement],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
+  });
+
   test("error: AuthorizationRequestMismatchError on a Permit2 spender that only takes share permits", () => {
     const requirement = encodeErc20Permit2SignatureTransfer({
       token: TOKEN,
@@ -1268,6 +1295,14 @@ describe("toSimulationAuthorizations", () => {
         },
       ]),
     ).toThrowError(AuthorizationRequestMismatchError);
+    expect(
+      call([
+        {
+          ...permit2Req,
+          action: tamperPermit2({ nonce: NONCE + 1n }),
+        },
+      ]),
+    ).toThrowError(AuthorizationRequestMismatchError);
 
     const signature = await blueAuthorizationSignatureRequirement({});
     const tamperAuthorization = (message: Record<string, unknown>) =>
@@ -1379,16 +1414,165 @@ describe("toSimulationAuthorizations", () => {
     }
   });
 
+  test.each([
+    [
+      "non-bigint permit message.value",
+      () => ({
+        ...permitRequirement({}),
+        action: {
+          ...permitRequirement({}).action,
+          typedData: {
+            ...permitRequirement({}).action.typedData,
+            message: {
+              ...(permitRequirement({}).action.typedData.message as Record<
+                string,
+                unknown
+              >),
+              value: "1000000",
+            },
+          },
+        },
+      }),
+    ],
+    [
+      "non-address permit message.owner",
+      () => ({
+        ...permitRequirement({}),
+        action: {
+          ...permitRequirement({}).action,
+          typedData: {
+            ...permitRequirement({}).action.typedData,
+            message: {
+              ...(permitRequirement({}).action.typedData.message as Record<
+                string,
+                unknown
+              >),
+              owner: 7,
+            },
+          },
+        },
+      }),
+    ],
+    [
+      "wrong-shape permit types tuple",
+      () => ({
+        ...permitRequirement({}),
+        action: {
+          ...permitRequirement({}).action,
+          typedData: {
+            ...permitRequirement({}).action.typedData,
+            types: {
+              Permit: [{ name: "owner" }],
+            },
+          },
+        },
+      }),
+    ],
+    [
+      "non-number domain.chainId",
+      () => ({
+        ...permitRequirement({}),
+        action: {
+          ...permitRequirement({}).action,
+          typedData: {
+            ...permitRequirement({}).action.typedData,
+            domain: {
+              ...(permitRequirement({}).action.typedData.domain as Record<
+                string,
+                unknown
+              >),
+              chainId: "1",
+            },
+          },
+        },
+      }),
+    ],
+    [
+      "non-hex domain.salt",
+      () => ({
+        ...permitRequirement({}),
+        action: {
+          ...permitRequirement({}).action,
+          typedData: {
+            ...permitRequirement({}).action.typedData,
+            domain: {
+              ...(permitRequirement({}).action.typedData.domain as Record<
+                string,
+                unknown
+              >),
+              salt: "not-hex",
+            },
+          },
+        },
+      }),
+    ],
+  ] as [string, () => ActionRequirement][])(
+    "error: AuthorizationRequestMismatchError on %s",
+    (_name, make) => {
+      expect(() =>
+        toSimulationAuthorizations({
+          chainId: CHAIN_ID,
+          mode: "final",
+          blockNumber: BLOCK_NUMBER,
+          owner: OWNER,
+          requirements: [make()],
+        }),
+      ).toThrowError(AuthorizationRequestMismatchError);
+    },
+  );
+
+  test.each([
+    [
+      "undecodable approval calldata",
+      () =>
+        ({
+          ...encodeErc20Approval({
+            token: TOKEN,
+            spender: vaultBundlesV1,
+            amount: 42n,
+            chainId: CHAIN_ID,
+          }),
+          data: "0x12345678" as `0x${string}`,
+        }) as ActionRequirement,
+    ],
+    [
+      "undecodable blueAuthorization calldata",
+      () => blueAuthorizationCall({ data: "0x12345678" }),
+    ],
+  ] as [string, () => ActionRequirement][])(
+    "error: UnsupportedOperationError on %s",
+    (_name, make) => {
+      expect(() =>
+        toSimulationAuthorizations({
+          chainId: CHAIN_ID,
+          mode: "final",
+          blockNumber: BLOCK_NUMBER,
+          owner: OWNER,
+          requirements: [make()],
+        }),
+      ).toThrowError(UnsupportedOperationError);
+    },
+  );
+
   test("error: UnsupportedChainError on an unregistered chain", () => {
-    expect(() =>
+    try {
       toSimulationAuthorizations({
         chainId: 999_999,
         mode: "final",
         blockNumber: BLOCK_NUMBER,
         owner: OWNER,
         requirements: [],
-      }),
-    ).toThrowError(UnsupportedChainError);
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnsupportedChainError);
+      expect((error as UnsupportedChainError).context).toMatchObject({
+        stage: "validation",
+        chainId: 999_999,
+        mode: "final",
+        blockNumber: BLOCK_NUMBER,
+      });
+    }
   });
 
   test("error: authorization context carries the failing requirement index", () => {
