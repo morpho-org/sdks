@@ -12,14 +12,7 @@ import {
   isRequirementBlueAuthorization,
   isRequirementSignature,
 } from "@morpho-org/morpho-sdk";
-import { blueAbi } from "@morpho-org/morpho-sdk/abis";
-import {
-  AbiFunctionSignatureNotFoundError,
-  type Address,
-  type DecodeFunctionDataReturnType,
-  decodeFunctionData,
-  erc20Abi,
-} from "viem";
+import type { Address } from "viem";
 import type {
   BlueAuthorizationTypedData,
   Erc2612PermitTypedData,
@@ -118,88 +111,34 @@ const toBlueAuthorizationSignature = (
 const toErc20Approval = (
   requirement: Readonly<Transaction<ERC20ApprovalAction>>,
   ctx: Ctx,
-): SimulationAuthorization => {
-  const { to, data } = requirement;
-  const fail = mismatch(ctx);
-
-  let decodedApprove: DecodeFunctionDataReturnType<typeof erc20Abi>;
-  try {
-    decodedApprove = decodeFunctionData({ abi: erc20Abi, data });
-  } catch (cause) {
-    if (cause instanceof AbiFunctionSignatureNotFoundError) {
-      return unsupported(ctx)(
-        "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
-        { cause },
-      );
-    }
-    return fail(
-      "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
-      { cause },
-    );
-  }
-  if (decodedApprove.functionName !== "approve") {
-    return unsupported(ctx)(
-      `Approval transaction decoded to "${decodedApprove.functionName}", expected "approve". Only ERC-20 approve prerequisites are supported`,
-    );
-  }
-  const [spender, amount] = decodedApprove.args;
-
-  return {
-    type: "erc20Approval",
-    token: to,
-    owner: ctx.owner,
-    spender,
-    amount,
-  };
-};
+): SimulationAuthorization => ({
+  type: "erc20Approval",
+  token: requirement.to,
+  owner: ctx.owner,
+  spender: requirement.action.args.spender,
+  amount: requirement.action.args.amount,
+});
 
 const toBlueAuthorization = (
   requirement: Readonly<Transaction<BlueAuthorizationAction>>,
   ctx: Ctx,
-): SimulationAuthorization => {
-  const { data } = requirement;
-  const fail = mismatch(ctx);
-
-  let decodedSetAuthorization: DecodeFunctionDataReturnType<typeof blueAbi>;
-  try {
-    decodedSetAuthorization = decodeFunctionData({ abi: blueAbi, data });
-  } catch (cause) {
-    if (cause instanceof AbiFunctionSignatureNotFoundError) {
-      return unsupported(ctx)(
-        "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
-        { cause },
-      );
-    }
-    return fail(
-      "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
-      { cause },
-    );
-  }
-  if (decodedSetAuthorization.functionName !== "setAuthorization") {
-    return unsupported(ctx)(
-      `Blue authorization transaction decoded to "${decodedSetAuthorization.functionName}", expected "setAuthorization". Only setAuthorization prerequisites are supported`,
-    );
-  }
-  const [authorized, isAuthorized] = decodedSetAuthorization.args;
-
-  return {
-    type: "blueAuthorization",
-    authorizer: ctx.owner,
-    authorized,
-    isAuthorized,
-  };
-};
+): SimulationAuthorization => ({
+  type: "blueAuthorization",
+  authorizer: ctx.owner,
+  authorized: requirement.action.args.authorized,
+  isAuthorized: requirement.action.args.isAuthorized,
+});
 
 /**
  * Maps morpho-sdk action requirements, in order, onto simulation authorization descriptors.
  *
- * The adapter is a pure mapper — no validation lives here; `simulate()`'s request parser validates
- * each authorization's shape and semantics when the request is parsed. Call requirements
- * (`erc20Approval`, `blueAuthorization`) are decoded from their calldata to build the descriptor.
- * Signature requirements (`permit`, `permit2SignatureTransfer`, `authorization`) carry their
- * EIP-712 payload through unchanged; a missing payload throws
- * {@link AuthorizationRequestMismatchError}. Any other requirement type throws
- * {@link UnsupportedOperationError}.
+ * The adapter is a pure mapper — nothing is decoded or validated; `simulate()`'s request parser
+ * validates each authorization's shape and semantics when the request is parsed. Call requirements
+ * (`erc20Approval`, `blueAuthorization`) are mapped straight from `action.args` (the approval
+ * token is the requirement's `to`). Signature requirements (`permit`,
+ * `permit2SignatureTransfer`, `authorization`) carry their EIP-712 payload through unchanged; a
+ * missing payload throws {@link AuthorizationRequestMismatchError}. Any other requirement type
+ * throws {@link UnsupportedOperationError}.
  *
  * The function is pure and synchronous: no RPC reads, no clock, no signing.
  *
@@ -210,10 +149,9 @@ const toBlueAuthorization = (
  * @param params.owner - The account the requirements were resolved for (transaction sender).
  * @param params.requirements - Requirements returned by `ActionOutput.getRequirements()`.
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
- * @throws {AuthorizationRequestMismatchError} when a signature requirement carries no `typedData`
- *   or calldata cannot be decoded into its arguments.
+ * @throws {AuthorizationRequestMismatchError} when a signature requirement carries no `typedData`.
  * @throws {UnsupportedOperationError} when a requirement's action type is not a supported
- *   authorization, or call data does not decode to the expected function.
+ *   authorization.
  * @example
  * ```ts
  * import { toSimulationAuthorizations } from "@morpho-org/evm-simulation";

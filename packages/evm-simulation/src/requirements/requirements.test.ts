@@ -3,7 +3,6 @@ import {
   type ActionRequirement,
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
-  type ERC20ApprovalAction,
   type Erc2612RequirementSignature,
   encodeBlueSignatureAuthorization,
   encodeErc20Approval,
@@ -20,7 +19,6 @@ import {
   type Address,
   type Client,
   encodeFunctionData,
-  erc20Abi,
   getAddress,
   toHex,
 } from "viem";
@@ -363,32 +361,6 @@ describe("toSimulationAuthorizations", () => {
     expect(authorizations[0]).toMatchObject({ spender: permit2 });
   });
 
-  test("error: UnsupportedOperationError on non-approve approval calldata", () => {
-    const approval: Transaction<ERC20ApprovalAction> = {
-      to: TOKEN,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "transfer",
-        args: [vaultBundlesV1, 10n],
-      }),
-      action: {
-        type: "erc20Approval",
-        args: { spender: vaultBundlesV1, amount: 10n },
-      },
-    };
-
-    expect(() =>
-      toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
-        owner: OWNER,
-        requirements: [approval],
-      }),
-    ).toThrowError(UnsupportedOperationError);
-  });
-
   test("error: UnsupportedOperationError on midnight offer-root signature", () => {
     const midnightSignature = {
       action: {
@@ -498,37 +470,6 @@ describe("toSimulationAuthorizations", () => {
     ).toBe("erc2612Permit");
   });
 
-  test("error: UnsupportedOperationError when blueAuthorization data encodes another Morpho function", () => {
-    const requirement = blueAuthorizationCall({
-      data: encodeFunctionData({
-        abi: blueAbi,
-        functionName: "supply",
-        args: [
-          {
-            loanToken: TOKEN,
-            collateralToken: OTHER,
-            oracle: OTHER,
-            irm: OTHER,
-            lltv: 860_000000000000000n,
-          },
-          0n,
-          0n,
-          OTHER,
-          "0x",
-        ],
-      }),
-    });
-    expect(() =>
-      toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
-        owner: OWNER,
-        requirements: [requirement],
-      }),
-    ).toThrowError(UnsupportedOperationError);
-  });
-
   test("error: AuthorizationRequestMismatchError on a requirement without typedData", () => {
     const requirement = permitRequirement({});
     const { typedData: _typedData, ...action } = requirement.action;
@@ -544,90 +485,10 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
-  test.each([
-    [
-      "truncated approve calldata",
-      () => ({
-        ...encodeErc20Approval({
-          token: TOKEN,
-          spender: vaultBundlesV1,
-          amount: 42n,
-          chainId: CHAIN_ID,
-        }),
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [vaultBundlesV1, 42n],
-        }).slice(0, 20) as `0x${string}`,
-      }),
-    ],
-    [
-      "truncated setAuthorization calldata",
-      () =>
-        blueAuthorizationCall({
-          data: encodeFunctionData({
-            abi: blueAbi,
-            functionName: "setAuthorization",
-            args: [blueBundlesV1, true],
-          }).slice(0, 20) as `0x${string}`,
-        }),
-    ],
-  ] as [string, () => ActionRequirement][])(
-    "error: AuthorizationRequestMismatchError on %s",
-    (_name, make) => {
-      expect(() =>
-        toSimulationAuthorizations({
-          chainId: CHAIN_ID,
-          mode: "final",
-          blockNumber: BLOCK_NUMBER,
-          owner: OWNER,
-          requirements: [make()],
-        }),
-      ).toThrowError(AuthorizationRequestMismatchError);
-    },
-  );
-
-  test.each([
-    [
-      "undecodable approval calldata",
-      () =>
-        ({
-          ...encodeErc20Approval({
-            token: TOKEN,
-            spender: vaultBundlesV1,
-            amount: 42n,
-            chainId: CHAIN_ID,
-          }),
-          data: "0x12345678" as `0x${string}`,
-        }) as ActionRequirement,
-    ],
-    [
-      "undecodable blueAuthorization calldata",
-      () => blueAuthorizationCall({ data: "0x12345678" }),
-    ],
-  ] as [string, () => ActionRequirement][])(
-    "error: UnsupportedOperationError on %s",
-    (_name, make) => {
-      expect(() =>
-        toSimulationAuthorizations({
-          chainId: CHAIN_ID,
-          mode: "final",
-          blockNumber: BLOCK_NUMBER,
-          owner: OWNER,
-          requirements: [make()],
-        }),
-      ).toThrowError(UnsupportedOperationError);
-    },
-  );
-
   test("error: authorization context carries the failing requirement index", () => {
-    const tampered = blueAuthorizationCall({
-      data: encodeFunctionData({
-        abi: blueAbi,
-        functionName: "setAuthorization",
-        args: [OTHER, true],
-      }).slice(0, 20) as `0x${string}`,
-    });
+    const noTypedData = permitRequirement({});
+    const { typedData: _typedData, ...action } = noTypedData.action;
+    const tampered = { ...noTypedData, action } as ActionRequirement;
     try {
       toSimulationAuthorizations({
         chainId: CHAIN_ID,
