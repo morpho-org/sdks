@@ -898,8 +898,9 @@ export class VaultV2BlueReallocationData
    * or allocator capacity are skipped before projecting source interest. The
    * adapter's minimum share minting requirement, supply-share limits, and target
    * absolute or zero relative caps are checked against a one-asset deposit.
-   * Shared cap IDs that a source withdrawal can reduce remain eligible, as do deposits whose
-   * allocation does not increase after rounding.
+   * Shared cap IDs that a source withdrawal can reduce remain eligible. Each
+   * accepted leg counts at least its requested `assets` against the target cap
+   * IDs, so a leg sized to a cap leaves no rounding headroom.
    *
    * Shared-cap discovery is conservative. Operation planning searches at most
    * 1,024 base units above its targeted amount for the nearest executable fit.
@@ -1318,8 +1319,10 @@ export class VaultV2BlueReallocationData
             const minimumAllocation = minimumSupply.market.toSupplyAssets(
               adapterShares + minimumSupply.shares,
             );
-            const minimumAllocationChange =
-              minimumAllocation - adapterMarketCapAllocation.allocation;
+            const minimumAllocationChange = MathLib.max(
+              minimumAllocation - adapterMarketCapAllocation.allocation,
+              minimumSupply.assets,
+            );
             const blockedTargetIds = targetAllocations
               .filter(({ allocation, absoluteCap, relativeCap, id }) => {
                 const nextAllocation =
@@ -2045,22 +2048,16 @@ export class VaultV2BlueReallocationData
       targetAdapter.markets.push(supply.market);
     data.setMarkets([supply.market], probe ? [targetAdapter] : undefined);
 
-    const targetChange =
+    const simulatedChange =
       supply.market.toSupplyAssets(targetSupplyShares) - oldTargetAllocation;
+    // The adapter's rounded expected-assets delta can differ by one wei at inclusion,
+    // so cap tracking assumes each accepted leg adds at least its requested assets.
+    const targetChange = MathLib.max(simulatedChange, reallocation.assets);
     for (const id of targetIds) {
       const allocation = data.getAllocation(reallocation.vault, id);
-      const nextAllocation = allocation.allocation + targetChange;
-      if (nextAllocation < 0n) {
-        throw new ReallocationAllocationUnderflowError({
-          vault: reallocation.vault,
-          id,
-          allocation: allocation.allocation,
-          change: targetChange,
-        });
-      }
       data.mutableAllocations[allocationsKey]![id] = {
         ...allocation,
-        allocation: nextAllocation,
+        allocation: allocation.allocation + targetChange,
       };
     }
 

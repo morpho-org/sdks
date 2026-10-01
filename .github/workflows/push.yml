@@ -22,13 +22,13 @@ jobs:
     permissions:
       contents: read
 
-    uses: ./.github/workflows/lint.yml
+    uses: $/.github/workflows/lint.yml
 
   build:
     permissions:
       contents: read
 
-    uses: ./.github/workflows/build.yml
+    uses: $/.github/workflows/build.yml
 
   test:
     concurrency:
@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
 
-    uses: ./.github/workflows/test.yml
+    uses: $/.github/workflows/test.yml
     secrets:
       MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -54,7 +54,7 @@ jobs:
       - build
       - test
 
-    uses: ./.github/workflows/version-pr.yml
+    uses: $/.github/workflows/version-pr.yml
     secrets:
       VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
       VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -72,4 +72,4 @@ jobs:
       - test
       - version-pr
 
-    uses: ./.github/workflows/publish.yml
+    uses: $/.github/workflows/publish.yml
