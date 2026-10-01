@@ -149,7 +149,7 @@ export async function assertEndpointChain(params: {
  * @returns Deep-frozen {@link SimulationExecution} — per-transaction call
  *   results and the resolved {@link ExecutionBlock}.
  * @throws {ExternalServiceError} For transport failures, timeouts,
- *   malformed JSON-RPC envelopes, or a state block without number/hash.
+ *   or malformed JSON-RPC envelopes.
  * @throws {InvalidSimulationResponseError} For a response that cannot be
  *   trusted (bad shape, call-count mismatch, block
  *   other than the pinned state block or its successor, a block timestamp

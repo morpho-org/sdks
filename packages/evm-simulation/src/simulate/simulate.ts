@@ -72,8 +72,8 @@ import { runSimulation } from "./run-simulation.js";
  *   (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1, MidnightBundlesV1).
  *   Never bypassable.
  * @throws {ExternalServiceError} when the RPC is unavailable within the
- *   timeout budget, returns a malformed JSON-RPC envelope, or returns a state
- *   block without number/hash. Chain-id mismatches are reported as
+ *   timeout budget or returns a malformed JSON-RPC envelope. Chain-id
+ *   mismatches and a state block without number/hash are reported as
  *   `InvalidSimulationResponseError`.
  * @returns A frozen {@link VerifiedSimulationResult} carrying the normalized
  *   `simulationTxs`, per-tx `calls` (aligned 1:1), parsed `transfers` (each
