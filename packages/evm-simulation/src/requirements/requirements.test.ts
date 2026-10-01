@@ -386,55 +386,6 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
-  test("error: AuthorizationRequestMismatchError on wrong primaryType", () => {
-    const requirement = permitRequirement({});
-    const tampered: ActionRequirement = {
-      ...requirement,
-      action: {
-        ...requirement.action,
-        typedData: { ...requirement.action.typedData, primaryType: "Nope" },
-      },
-    };
-    expect(() =>
-      toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
-        owner: OWNER,
-        requirements: [tampered],
-      }),
-    ).toThrowError(AuthorizationRequestMismatchError);
-  });
-
-  test("error: AuthorizationRequestMismatchError on wrong types tuple order", () => {
-    const requirement = permitRequirement({});
-    const fields = [
-      ...(requirement.action.typedData.types.Permit as readonly {
-        name: string;
-        type: string;
-      }[]),
-    ].reverse();
-    const tampered: ActionRequirement = {
-      ...requirement,
-      action: {
-        ...requirement.action,
-        typedData: {
-          ...requirement.action.typedData,
-          types: { Permit: fields },
-        },
-      },
-    };
-    expect(() =>
-      toSimulationAuthorizations({
-        chainId: CHAIN_ID,
-        mode: "final",
-        blockNumber: BLOCK_NUMBER,
-        owner: OWNER,
-        requirements: [tampered],
-      }),
-    ).toThrowError(AuthorizationRequestMismatchError);
-  });
-
   test("error: AuthorizationRequestMismatchError on decoded spender mismatch", () => {
     const approval: Transaction<ERC20ApprovalAction> = {
       to: TOKEN,
@@ -942,71 +893,6 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
-  test("error: AuthorizationRequestMismatchError on sibling types keys", async () => {
-    const withExtraType = (
-      requirement: ActionRequirement,
-      extra: Record<string, unknown>,
-    ): ActionRequirement => {
-      const typedData = (
-        requirement.action as { readonly typedData: RequirementTypedData }
-      ).typedData;
-      return {
-        ...requirement,
-        action: {
-          ...requirement.action,
-          typedData: {
-            ...typedData,
-            types: { ...typedData.types, ...extra },
-          },
-        },
-      } as ActionRequirement;
-    };
-
-    const eip712Domain = {
-      EIP712Domain: [
-        { name: "name", type: "string" },
-        { name: "chainId", type: "uint256" },
-        { name: "verifyingContract", type: "address" },
-      ],
-    };
-
-    for (const requirement of [
-      permitRequirement({}),
-      encodeErc20Permit2SignatureTransfer({
-        token: TOKEN,
-        spender: vaultBundlesV1,
-        amount: 123n,
-        chainId: CHAIN_ID,
-        nonce: NONCE,
-        deadline: DEADLINE,
-      }),
-      await blueAuthorizationSignatureRequirement({}),
-    ]) {
-      expect(() =>
-        toSimulationAuthorizations({
-          chainId: CHAIN_ID,
-          mode: "final",
-          blockNumber: BLOCK_NUMBER,
-          owner: OWNER,
-          requirements: [withExtraType(requirement, eip712Domain)],
-        }),
-      ).toThrowError(AuthorizationRequestMismatchError);
-      expect(() =>
-        toSimulationAuthorizations({
-          chainId: CHAIN_ID,
-          mode: "final",
-          blockNumber: BLOCK_NUMBER,
-          owner: OWNER,
-          requirements: [
-            withExtraType(requirement, {
-              Extra: [{ name: "x", type: "uint256" }],
-            }),
-          ],
-        }),
-      ).toThrowError(AuthorizationRequestMismatchError);
-    }
-  });
-
   test("error: AuthorizationRequestMismatchError on unregistered approve spender", () => {
     const approval = encodeErc20Approval({
       token: TOKEN,
@@ -1356,156 +1242,22 @@ describe("toSimulationAuthorizations", () => {
     ).toThrowError(AuthorizationRequestMismatchError);
   });
 
-  test("error: AuthorizationRequestMismatchError on non-canonical typed data domains", async () => {
-    const call = (requirements: ActionRequirement[]) => () =>
+  test("error: AuthorizationRequestMismatchError on a requirement without typedData", () => {
+    const requirement = permitRequirement({});
+    const { typedData: _typedData, ...action } = requirement.action;
+    const tampered = { ...requirement, action } as ActionRequirement;
+    expect(() =>
       toSimulationAuthorizations({
         chainId: CHAIN_ID,
         mode: "final",
         blockNumber: BLOCK_NUMBER,
         owner: OWNER,
-        requirements,
-      });
-    const tamperDomain = <
-      Action extends { readonly typedData: { readonly domain?: unknown } },
-    >(
-      action: Action,
-      domain: Record<string, unknown>,
-    ) => ({
-      ...action,
-      typedData: {
-        ...action.typedData,
-        domain: {
-          ...(action.typedData.domain as Record<string, unknown>),
-          ...domain,
-        },
-      },
-    });
-
-    const signature = await blueAuthorizationSignatureRequirement({});
-    for (const domain of [
-      { name: "Authorization" },
-      { version: "1" },
-      { salt: `0x${"00".repeat(32)}` },
-    ]) {
-      expect(
-        call([
-          { ...signature, action: tamperDomain(signature.action, domain) },
-        ]),
-      ).toThrowError(AuthorizationRequestMismatchError);
-    }
-
-    const permit2Req = encodeErc20Permit2SignatureTransfer({
-      token: TOKEN,
-      spender: vaultBundlesV1,
-      amount: 123n,
-      chainId: CHAIN_ID,
-      nonce: NONCE,
-      deadline: DEADLINE,
-    });
-    for (const action of [
-      tamperDomain(permit2Req.action, { name: "NotPermit2" }),
-      tamperDomain(permit2Req.action, { name: undefined }),
-      tamperDomain(permit2Req.action, { version: "1" }),
-      tamperDomain(permit2Req.action, { salt: `0x${"00".repeat(32)}` }),
-    ]) {
-      expect(call([{ ...permit2Req, action }])).toThrowError(
-        AuthorizationRequestMismatchError,
-      );
-    }
+        requirements: [tampered],
+      }),
+    ).toThrowError(AuthorizationRequestMismatchError);
   });
 
   test.each([
-    [
-      "non-bigint permit message.value",
-      () => ({
-        ...permitRequirement({}),
-        action: {
-          ...permitRequirement({}).action,
-          typedData: {
-            ...permitRequirement({}).action.typedData,
-            message: {
-              ...(permitRequirement({}).action.typedData.message as Record<
-                string,
-                unknown
-              >),
-              value: "1000000",
-            },
-          },
-        },
-      }),
-    ],
-    [
-      "non-address permit message.owner",
-      () => ({
-        ...permitRequirement({}),
-        action: {
-          ...permitRequirement({}).action,
-          typedData: {
-            ...permitRequirement({}).action.typedData,
-            message: {
-              ...(permitRequirement({}).action.typedData.message as Record<
-                string,
-                unknown
-              >),
-              owner: 7,
-            },
-          },
-        },
-      }),
-    ],
-    [
-      "wrong-shape permit types tuple",
-      () => ({
-        ...permitRequirement({}),
-        action: {
-          ...permitRequirement({}).action,
-          typedData: {
-            ...permitRequirement({}).action.typedData,
-            types: {
-              Permit: [{ name: "owner" }],
-            },
-          },
-        },
-      }),
-    ],
-    [
-      "non-number domain.chainId",
-      () => ({
-        ...permitRequirement({}),
-        action: {
-          ...permitRequirement({}).action,
-          typedData: {
-            ...permitRequirement({}).action.typedData,
-            domain: {
-              ...(permitRequirement({}).action.typedData.domain as Record<
-                string,
-                unknown
-              >),
-              chainId: "1",
-            },
-          },
-        },
-      }),
-    ],
-    [
-      "non-hex domain.salt",
-      () => ({
-        ...permitRequirement({}),
-        action: {
-          ...permitRequirement({}).action,
-          typedData: {
-            ...permitRequirement({}).action.typedData,
-            domain: {
-              ...(permitRequirement({}).action.typedData.domain as Record<
-                string,
-                unknown
-              >),
-              salt: "not-hex",
-            },
-          },
-        },
-      }),
-    ],
     [
       "truncated approve calldata",
       () => ({

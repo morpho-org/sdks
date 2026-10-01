@@ -24,14 +24,10 @@ import {
   type DecodeFunctionDataReturnType,
   decodeFunctionData,
   erc20Abi,
-  getAddress,
-  isAddress,
   isAddressEqual,
-  isHex,
 } from "viem";
 import type {
   BlueAuthorizationTypedData,
-  Eip712Domain,
   Erc2612PermitTypedData,
   Permit2TransferTypedData,
   SimulationAuthorization,
@@ -107,88 +103,7 @@ const unsupported =
     });
   };
 
-const describeValue = (value: unknown): string =>
-  typeof value === "bigint"
-    ? `"${value}"`
-    : typeof value === "string"
-      ? `"${value}"`
-      : typeof value === "object" && value !== null
-        ? "an object"
-        : typeof value;
-
-/** Runtime validators for loosely typed EIP-712 payloads, all failing through `fail`. */
-const validators = (fail: Fail) => ({
-  record(value: unknown, field: string): Record<string, unknown> {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      fail(
-        `Typed data ${field} expected an object, got ${describeValue(value)}`,
-      );
-    }
-    return value as Record<string, unknown>;
-  },
-  address(value: unknown, field: string): Address {
-    if (typeof value !== "string" || !isAddress(value)) {
-      fail(
-        `Typed data ${field} expected an address, got ${describeValue(value)}`,
-      );
-    }
-    return getAddress(value);
-  },
-  bigint(value: unknown, field: string): bigint {
-    if (typeof value !== "bigint") {
-      fail(
-        `Typed data ${field} expected a bigint, got ${describeValue(value)}`,
-      );
-    }
-    return value;
-  },
-  boolean(value: unknown, field: string): boolean {
-    if (typeof value !== "boolean") {
-      fail(
-        `Typed data ${field} expected a boolean, got ${describeValue(value)}`,
-      );
-    }
-    return value;
-  },
-  optionalString(value: unknown, field: string): string | undefined {
-    if (value === undefined) return undefined;
-    if (typeof value !== "string") {
-      fail(
-        `Typed data ${field} expected a string, got ${describeValue(value)}`,
-      );
-    }
-    return value;
-  },
-  typesTuple(
-    value: unknown,
-    spec: {
-      readonly field: string;
-      readonly expected: readonly {
-        readonly name: string;
-        readonly type: string;
-      }[];
-    },
-  ): void {
-    const { field, expected } = spec;
-    if (!Array.isArray(value)) {
-      fail(
-        `Typed data ${field} expected an array, got ${describeValue(value)}`,
-      );
-    }
-    if (value.length !== expected.length) {
-      fail(
-        `Typed data ${field} expected "${expected.length}" fields, got "${value.length}"`,
-      );
-    }
-    for (const [index, field_] of expected.entries()) {
-      const entry = this.record(value[index], `${field}[${index}]`);
-      if (entry.name !== field_.name || entry.type !== field_.type) {
-        fail(
-          `Typed data ${field}[${index}] expected "${field_.name} ${field_.type}", got ${describeValue(entry.name)} ${describeValue(entry.type)}`,
-        );
-      }
-    }
-  },
+const comparators = (fail: Fail) => ({
   equalAddress(
     actual: Address,
     spec: { readonly expected: Address; readonly field: string },
@@ -209,145 +124,45 @@ const validators = (fail: Fail) => ({
       );
     }
   },
-  equalBoolean(
-    actual: boolean,
-    spec: { readonly expected: boolean; readonly field: string },
-  ): void {
-    if (actual !== spec.expected) {
-      fail(
-        `Authorization ${spec.field} expected "${spec.expected}", got "${actual}"`,
-      );
-    }
-  },
-  exactTypes(
-    types: Record<string, unknown>,
-    expected: readonly string[],
-  ): void {
-    const keys = Object.keys(types);
-    if (
-      keys.length !== expected.length ||
-      !expected.every((name) => keys.includes(name))
-    ) {
-      fail(
-        `Typed data types expected exactly "${expected.join('", "')}", got "${keys.join('", "')}"`,
-      );
-    }
-  },
   domainChainId(actual: number | bigint, expected: number): void {
     if (Number(actual) !== expected) {
       fail(`Typed data domain.chainId expected "${expected}", got "${actual}"`);
     }
   },
-  primaryType(actual: unknown, expected: string): void {
-    if (actual !== expected) {
-      fail(
-        `Typed data primaryType expected "${expected}", got ${describeValue(actual)}`,
-      );
-    }
-  },
 });
-
-const parseDomain = (value: unknown, fail: Fail): Eip712Domain => {
-  const v = validators(fail);
-  const domain = v.record(value, "domain");
-
-  const chainId = domain.chainId;
-  if (typeof chainId !== "number" && typeof chainId !== "bigint") {
-    fail(
-      `Typed data domain.chainId expected a number or bigint, got ${describeValue(chainId)}`,
-    );
-  }
-
-  const salt = domain.salt;
-  if (salt !== undefined && (typeof salt !== "string" || !isHex(salt))) {
-    fail(
-      `Typed data domain.salt expected a hex string, got ${describeValue(salt)}`,
-    );
-  }
-
-  const name = v.optionalString(domain.name, "domain.name");
-  const version = v.optionalString(domain.version, "domain.version");
-
-  return {
-    ...(name === undefined ? {} : { name }),
-    ...(version === undefined ? {} : { version }),
-    chainId,
-    verifyingContract: v.address(
-      domain.verifyingContract,
-      "domain.verifyingContract",
-    ),
-    ...(salt === undefined ? {} : { salt }),
-  };
-};
-
-const ERC2612_PERMIT_FIELDS = [
-  { name: "owner", type: "address" },
-  { name: "spender", type: "address" },
-  { name: "value", type: "uint256" },
-  { name: "nonce", type: "uint256" },
-  { name: "deadline", type: "uint256" },
-] as const;
-
-const PERMIT2_TRANSFER_FROM_FIELDS = [
-  { name: "permitted", type: "TokenPermissions" },
-  { name: "spender", type: "address" },
-  { name: "nonce", type: "uint256" },
-  { name: "deadline", type: "uint256" },
-] as const;
-
-const PERMIT2_TOKEN_PERMISSIONS_FIELDS = [
-  { name: "token", type: "address" },
-  { name: "amount", type: "uint256" },
-] as const;
-
-const BLUE_AUTHORIZATION_FIELDS = [
-  { name: "authorizer", type: "address" },
-  { name: "authorized", type: "address" },
-  { name: "isAuthorized", type: "bool" },
-  { name: "nonce", type: "uint256" },
-  { name: "deadline", type: "uint256" },
-] as const;
 
 const toErc2612Permit = (
   action: PermitAction,
   ctx: Ctx,
 ): SimulationAuthorization => {
   const { owner } = ctx;
-  const domain = parseDomain(action.typedData?.domain, mismatch(ctx));
   const fail = mismatch(ctx);
-  const v = validators(fail);
+  const v = comparators(fail);
+
+  if (action.typedData == null) {
+    fail("Permit requirement carries no typedData payload");
+  }
+  const typedData = action.typedData as Erc2612PermitTypedData;
+  const { domain, message } = typedData;
+
   v.domainChainId(domain.chainId, ctx.chainId);
-
-  const typedData = action.typedData;
-  v.primaryType(typedData?.primaryType, "Permit");
-  const types = v.record(typedData?.types, "types");
-  v.exactTypes(types, ["Permit"]);
-  v.typesTuple(types.Permit, {
-    field: "types.Permit",
-    expected: ERC2612_PERMIT_FIELDS,
+  v.equalAddress(message.owner, {
+    expected: owner,
+    field: "message.owner",
   });
-  const message = v.record(typedData?.message, "message");
-
-  const messageOwner = v.address(message.owner, "message.owner");
-  const spender = v.address(message.spender, "message.spender");
-  const value = v.bigint(message.value, "message.value");
-  const nonce = v.bigint(message.nonce, "message.nonce");
-  const deadline = v.bigint(message.deadline, "message.deadline");
-
-  v.equalAddress(messageOwner, { expected: owner, field: "message.owner" });
-  v.equalAddress(spender, {
+  v.equalAddress(message.spender, {
     expected: action.args.spender,
     field: "message.spender",
   });
-  if (isMidnight(ctx, spender)) {
+  if (isMidnight(ctx, message.spender)) {
     return unsupported(ctx)(
-      `Permit spender "${spender}" is a Midnight contract. Midnight requirements are not supported`,
+      `Permit spender "${message.spender}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
   failUnlessRegistered({
     fail,
     field: "message.spender",
-    observed: spender,
+    observed: message.spender,
     // ERC-2612 permits name the bundles contract that pulls the token.
     allowed: [
       ctx.addresses.bundles?.blueBundlesV1,
@@ -355,34 +170,22 @@ const toErc2612Permit = (
       ctx.addresses.bundles?.vaultExitBundlesV1,
     ].filter(isDefined),
   });
-  v.equalBigint(value, {
+  v.equalBigint(message.value, {
     expected: action.args.amount,
     field: "message.value",
   });
-  v.equalBigint(deadline, {
+  v.equalBigint(message.deadline, {
     expected: action.args.deadline,
     field: "message.deadline",
   });
   if (action.args.nonce != null) {
-    v.equalBigint(nonce, {
+    v.equalBigint(message.nonce, {
       expected: action.args.nonce,
       field: "message.nonce",
     });
   }
 
-  const parsed: Erc2612PermitTypedData = {
-    domain,
-    primaryType: "Permit",
-    types: { Permit: ERC2612_PERMIT_FIELDS },
-    message: {
-      owner: messageOwner,
-      spender,
-      value,
-      nonce,
-      deadline,
-    },
-  };
-  return { type: "erc2612Permit", typedData: parsed };
+  return { type: "erc2612Permit", typedData };
 };
 
 const toPermit2SignatureTransfer = (
@@ -391,90 +194,49 @@ const toPermit2SignatureTransfer = (
 ): SimulationAuthorization => {
   const { owner } = ctx;
   const fail = mismatch(ctx);
-  const v = validators(fail);
-  const typedData = action.typedData;
-  v.primaryType(typedData?.primaryType, "PermitTransferFrom");
-  const types = v.record(typedData?.types, "types");
-  v.exactTypes(types, ["PermitTransferFrom", "TokenPermissions"]);
-  v.typesTuple(types.PermitTransferFrom, {
-    field: "types.PermitTransferFrom",
-    expected: PERMIT2_TRANSFER_FROM_FIELDS,
-  });
-  v.typesTuple(types.TokenPermissions, {
-    field: "types.TokenPermissions",
-    expected: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
-  });
-  const domain = parseDomain(typedData?.domain, fail);
+  const v = comparators(fail);
+
+  if (action.typedData == null) {
+    fail("Permit2 requirement carries no typedData payload");
+  }
+  const typedData = action.typedData as Permit2TransferTypedData;
+  const { domain, message } = typedData;
+
   v.domainChainId(domain.chainId, ctx.chainId);
-  if (domain.name !== "Permit2") {
-    fail(
-      `Typed data domain.name expected "Permit2", got ${describeValue(domain.name)}`,
-    );
-  }
-  if (domain.version !== undefined) {
-    fail(
-      `Typed data domain.version must be absent for Permit2, got ${describeValue(domain.version)}`,
-    );
-  }
-  if (domain.salt !== undefined) {
-    fail(
-      `Typed data domain.salt must be absent for Permit2, got ${describeValue(domain.salt)}`,
-    );
-  }
   const permit2 = ctx.addresses.permit2;
   if (permit2 == null || !isAddressEqual(domain.verifyingContract, permit2)) {
     fail(
       `Typed data domain.verifyingContract expected the chain's canonical Permit2 "${permit2 ?? "unregistered"}", got "${domain.verifyingContract}"`,
     );
   }
-  const message = v.record(typedData?.message, "message");
-  const permitted = v.record(message.permitted, "message.permitted");
-  const token = v.address(permitted.token, "message.permitted.token");
-
-  const amount = v.bigint(permitted.amount, "message.permitted.amount");
-  const spender = v.address(message.spender, "message.spender");
-  const nonce = v.bigint(message.nonce, "message.nonce");
-  const deadline = v.bigint(message.deadline, "message.deadline");
-
-  v.equalAddress(spender, {
+  v.equalAddress(message.spender, {
     expected: action.args.spender,
     field: "message.spender",
   });
   failUnlessRegistered({
     fail,
     field: "message.spender",
-    observed: spender,
+    observed: message.spender,
     // VaultExitBundlesV1 takes share permits, not Permit2 transfers.
     allowed: [
       ctx.addresses.bundles?.blueBundlesV1,
       ctx.addresses.bundles?.vaultBundlesV1,
     ].filter(isDefined),
   });
-  v.equalBigint(amount, {
+  v.equalBigint(message.permitted.amount, {
     expected: action.args.amount,
     field: "message.permitted.amount",
   });
-  v.equalBigint(nonce, { expected: action.args.nonce, field: "message.nonce" });
-  v.equalBigint(deadline, {
+  v.equalBigint(message.nonce, {
+    expected: action.args.nonce,
+    field: "message.nonce",
+  });
+  v.equalBigint(message.deadline, {
     expected: action.args.deadline,
     field: "message.deadline",
   });
 
-  const parsed: Permit2TransferTypedData = {
-    domain,
-    primaryType: "PermitTransferFrom",
-    types: {
-      PermitTransferFrom: PERMIT2_TRANSFER_FROM_FIELDS,
-      TokenPermissions: PERMIT2_TOKEN_PERMISSIONS_FIELDS,
-    },
-    message: {
-      permitted: { token, amount },
-      spender,
-      nonce,
-      deadline,
-    },
-  };
-  return { type: "permit2SignatureTransfer", owner, typedData: parsed };
+  return { type: "permit2SignatureTransfer", owner, typedData };
 };
 
 const toBlueAuthorizationSignature = (
@@ -483,77 +245,49 @@ const toBlueAuthorizationSignature = (
 ): SimulationAuthorization => {
   const { owner } = ctx;
   const fail = mismatch(ctx);
-  const v = validators(fail);
+  const v = comparators(fail);
 
-  const typedData = action.typedData;
-  v.primaryType(typedData?.primaryType, "Authorization");
-  const types = v.record(typedData?.types, "types");
-  v.exactTypes(types, ["Authorization"]);
-  v.typesTuple(types.Authorization, {
-    field: "types.Authorization",
-    expected: BLUE_AUTHORIZATION_FIELDS,
-  });
-  const domain = parseDomain(typedData?.domain, fail);
+  if (action.typedData == null) {
+    fail("Authorization requirement carries no typedData payload");
+  }
+  const typedData = action.typedData as BlueAuthorizationTypedData;
+  const { domain, message } = typedData;
+
   v.domainChainId(domain.chainId, ctx.chainId);
-  if (domain.name !== undefined) {
-    fail(
-      `Typed data domain.name must be absent for Authorization, got ${describeValue(domain.name)}`,
-    );
-  }
-  if (domain.version !== undefined) {
-    fail(
-      `Typed data domain.version must be absent for Authorization, got ${describeValue(domain.version)}`,
-    );
-  }
-  if (domain.salt !== undefined) {
-    fail(
-      `Typed data domain.salt must be absent for Authorization, got ${describeValue(domain.salt)}`,
-    );
-  }
   v.equalAddress(domain.verifyingContract, {
     expected: ctx.addresses.blue,
     field: "domain.verifyingContract",
   });
-  const message = v.record(typedData?.message, "message");
-
-  const authorizer = v.address(message.authorizer, "message.authorizer");
-  const authorized = v.address(message.authorized, "message.authorized");
-  const isAuthorized = v.boolean(message.isAuthorized, "message.isAuthorized");
-  const nonce = v.bigint(message.nonce, "message.nonce");
-  const deadline = v.bigint(message.deadline, "message.deadline");
-
-  v.equalAddress(authorizer, { expected: owner, field: "message.authorizer" });
-  v.equalAddress(authorized, {
+  v.equalAddress(message.authorizer, {
+    expected: owner,
+    field: "message.authorizer",
+  });
+  v.equalAddress(message.authorized, {
     expected: action.args.authorized,
     field: "message.authorized",
   });
-  if (isMidnight(ctx, authorized)) {
+  if (isMidnight(ctx, message.authorized)) {
     return unsupported(ctx)(
-      `Authorization operator "${authorized}" is a Midnight contract. Midnight requirements are not supported`,
+      `Authorization operator "${message.authorized}" is a Midnight contract. Midnight requirements are not supported`,
     );
   }
   const blueBundles = ctx.addresses.bundles?.blueBundlesV1;
-  if (blueBundles == null || !isAddressEqual(authorized, blueBundles)) {
+  if (blueBundles == null || !isAddressEqual(message.authorized, blueBundles)) {
     fail(
-      `Authorization message.authorized expected BlueBundlesV1 "${blueBundles ?? "unregistered"}", got "${authorized}". Only BlueBundlesV1 authorizations are signed`,
+      `Authorization message.authorized expected BlueBundlesV1 "${blueBundles ?? "unregistered"}", got "${message.authorized}". Only BlueBundlesV1 authorizations are signed`,
     );
   }
-  v.equalBoolean(isAuthorized, {
-    expected: action.args.isAuthorized,
-    field: "message.isAuthorized",
-  });
-  v.equalBigint(deadline, {
+  if (message.isAuthorized !== action.args.isAuthorized) {
+    fail(
+      `Authorization message.isAuthorized expected "${action.args.isAuthorized}", got "${message.isAuthorized}"`,
+    );
+  }
+  v.equalBigint(message.deadline, {
     expected: action.args.deadline,
     field: "message.deadline",
   });
 
-  const parsed: BlueAuthorizationTypedData = {
-    domain,
-    primaryType: "Authorization",
-    types: { Authorization: BLUE_AUTHORIZATION_FIELDS },
-    message: { authorizer, authorized, isAuthorized, nonce, deadline },
-  };
-  return { type: "blueAuthorizationSignature", typedData: parsed };
+  return { type: "blueAuthorizationSignature", typedData };
 };
 
 const toErc20Approval = (
@@ -563,6 +297,7 @@ const toErc20Approval = (
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
   const fail = mismatch(ctx);
+  const v = comparators(fail);
 
   if (value !== 0n) {
     fail(
@@ -591,7 +326,6 @@ const toErc20Approval = (
     );
   }
   const [spender, amount] = decodedApprove.args;
-  const v = validators(fail);
   v.equalAddress(spender, {
     expected: action.args.spender,
     field: "calldata spender",
@@ -628,6 +362,7 @@ const toBlueAuthorization = (
   const { owner } = ctx;
   const { to, data, value, action } = requirement;
   const fail = mismatch(ctx);
+  const v = comparators(fail);
 
   if (!isAddressEqual(to, ctx.addresses.blue)) {
     fail(
@@ -661,7 +396,6 @@ const toBlueAuthorization = (
     );
   }
   const [authorized, isAuthorized] = decodedSetAuthorization.args;
-  const v = validators(fail);
   v.equalAddress(authorized, {
     expected: action.args.authorized,
     field: "calldata authorized",
@@ -682,10 +416,11 @@ const toBlueAuthorization = (
       ...ctx.preLiquidations,
     ].filter(isDefined),
   });
-  v.equalBoolean(isAuthorized, {
-    expected: action.args.isAuthorized,
-    field: "calldata newIsAuthorized",
-  });
+  if (isAuthorized !== action.args.isAuthorized) {
+    fail(
+      `Authorization calldata newIsAuthorized expected "${action.args.isAuthorized}", got "${isAuthorized}"`,
+    );
+  }
 
   return {
     type: "blueAuthorization",
@@ -700,8 +435,9 @@ const toBlueAuthorization = (
  *
  * Call requirements (`erc20Approval`, `blueAuthorization`) are verified by decoding their calldata
  * and cross-checking it against the action metadata. Signature requirements (`permit`,
- * `permit2SignatureTransfer`, `authorization`) are parsed field-by-field into the exact typed-data
- * shapes the simulator expects; malformed payloads or values that disagree with `action.args` throw
+ * `permit2SignatureTransfer`, `authorization`) pass their EIP-712 payload through unchanged — the
+ * envelope shape is validated by `simulate()`'s request parser — while the adapter cross-checks it
+ * against the action metadata, the owner, and the chain registry. Disagreements throw
  * {@link AuthorizationRequestMismatchError}. Any other requirement type throws
  * {@link UnsupportedOperationError}.
  *
@@ -719,7 +455,7 @@ const toBlueAuthorization = (
  * @returns One {@link SimulationAuthorization} per input requirement, in the same order.
  * @throws {UnsupportedChainError} when `chainId` is absent from the address registry.
  * @throws {AuthorizationRequestMismatchError} when decoded calldata or typed data disagrees with the
- *   requirement's action metadata, or when the payload is malformed.
+ *   requirement's action metadata, or when a signature requirement carries no `typedData`.
  * @throws {UnsupportedOperationError} when a requirement targets an operation the simulator does not
  *   support (Midnight calls, Midnight offer-root signatures, unknown action types, or call data that
  *   does not decode to the expected function).
