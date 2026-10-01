@@ -1,5 +1,13 @@
 # @morpho-org/morpho-sdk
 
+## 6.3.1
+
+### Patch Changes
+
+- [#1239](https://github.com/morpho-org/sdks/pull/1239) [`e2a77d2`](https://github.com/morpho-org/sdks/commit/e2a77d2c720368df509351fb05eaad9651ff6691) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Account the target allocation as at least the requested assets after each accepted Vault V2 Blue reallocation leg, so a leg sized to an absolute cap leaves no rounding headroom and the planner no longer emits a 1-wei follow-up leg that reverts with AbsoluteCapExceeded().
+
+  Deposits whose allocation does not increase after rounding are no longer treated as eligible under full absolute or zero relative target caps.
+
 ## 6.3.0
 
 ### Minor Changes
