@@ -1,10 +1,8 @@
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, erc20Abi, getAddress } from "viem";
-import type { PendingAuthorization } from "../../authorizations.js";
-import type { SimulationTransaction } from "../../types.js";
-import type { PermissionState } from "../internal/evidence.js";
-import type { PlannedPreparation } from "../internal/stages.js";
+import type { PendingAuthorization } from "../authorizations.js";
+import type { SimulationTransaction } from "../types.js";
 
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const approvalTx = (
@@ -39,6 +37,12 @@ const blueAuthorizationTx = (
   value: 0n,
 });
 
+/** One authorization's preparation calls, in execution order. @internal */
+export interface PlannedPreparation {
+  readonly authorizationIndex: number;
+  readonly calls: readonly Required<Readonly<SimulationTransaction>>[];
+}
+
 /**
  * Build the ordered preparation calls a preview execution runs before the
  * user transactions, so each pending wallet request is satisfied onchain.
@@ -51,12 +55,13 @@ const blueAuthorizationTx = (
  * - `blueAuthorization` / `blueAuthorizationSignature` →
  *   `setAuthorization(authorized, true)`.
  *
- * Each call is paired with the {@link PermissionState} the prepared-phase
- * probes must read back. Final mode produces no preparations.
+ * Authorizations carrying a `stateOverride` produce no calls — the override
+ * is injected at the `eth_simulateV1` boundary instead. Final mode produces
+ * no preparations.
  *
  * @internal
  */
-export function preparePreviewAuthorizations(params: {
+export function prepareAuthorizations(params: {
   readonly authorizations: readonly PendingAuthorization[];
   readonly owner: Address;
   readonly morpho: Address;
@@ -67,59 +72,42 @@ export function preparePreviewAuthorizations(params: {
 
   authorizations.forEach((auth, authorizationIndex) => {
     const calls: Required<Readonly<SimulationTransaction>>[] = [];
-    const expectedStates: PermissionState[] = [];
-
-    // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
-    const approve = (token: Address, spender: Address, amount: bigint) => {
-      calls.push(approvalTx(owner, token, spender, amount));
-      expectedStates.push({
-        type: "erc20Allowance",
-        token,
-        owner,
-        spender,
-        amount,
-      });
-    };
 
     switch (auth.type) {
       case "erc20Approval":
-        approve(auth.token, auth.spender, auth.amount);
+        calls.push(approvalTx(owner, auth.token, auth.spender, auth.amount));
         break;
       case "erc2612Permit": {
         const { message, domain } = auth.typedData;
-        approve(domain.verifyingContract, message.spender, message.value);
+        calls.push(
+          approvalTx(
+            owner,
+            domain.verifyingContract,
+            message.spender,
+            message.value,
+          ),
+        );
         break;
       }
       case "permit2SignatureTransfer": {
         const { message } = auth.typedData;
-        approve(
-          message.permitted.token,
-          message.spender,
-          message.permitted.amount,
+        calls.push(
+          approvalTx(
+            owner,
+            message.permitted.token,
+            message.spender,
+            message.permitted.amount,
+          ),
         );
         break;
       }
       case "blueAuthorization":
         calls.push(blueAuthorizationTx(owner, morpho, auth.authorized));
-        expectedStates.push({
-          type: "blueAuthorization",
-          morpho,
-          authorizer: owner,
-          authorized: auth.authorized,
-          isAuthorized: true,
-        });
         break;
       case "blueAuthorizationSignature":
         calls.push(
           blueAuthorizationTx(owner, morpho, auth.typedData.message.authorized),
         );
-        expectedStates.push({
-          type: "blueAuthorization",
-          morpho,
-          authorizer: owner,
-          authorized: auth.typedData.message.authorized,
-          isAuthorized: true,
-        });
         break;
     }
 
@@ -127,7 +115,6 @@ export function preparePreviewAuthorizations(params: {
       preparations.push({
         authorizationIndex,
         calls: deepFreeze(calls),
-        expected: deepFreeze(expectedStates),
       });
     }
   });

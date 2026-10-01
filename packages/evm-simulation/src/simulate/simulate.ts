@@ -1,8 +1,8 @@
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
-import { runPipeline } from "./pipeline/run-pipeline.js";
 import { parseRequest } from "./request/index.js";
+import { runSimulation } from "./run-simulation.js";
 
 /**
  * Simulate a bundle of EVM transactions.
@@ -100,5 +100,5 @@ export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,
 ): Promise<VerifiedSimulationResult> {
-  return runPipeline({ config, request: parseRequest(params) });
+  return runSimulation({ config, request: parseRequest(params) });
 }

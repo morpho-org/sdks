@@ -3,19 +3,15 @@ import { vi } from "vitest";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
-import type {
-  DecodedBundle,
-  ExecutionPlan,
-  ValidatedAuthorizations,
-} from "../../simulate/internal/stages.js";
-import { brandPinned, brandValidated } from "../../simulate/internal/stages.js";
 import { encodeUint256, makeTransferLog } from "../../test-helpers/index.js";
 import { NATIVE_BALANCE_PROBE_ADDRESS } from "../plan/native-balance-probe.js";
+import type { ExecutionPlan } from "../plan/plan-execution.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
+import { nativeReads } from "../state/native.js";
+import { decodeStateRead } from "../state/read-state.js";
 import { executePlan } from "./eth-simulate-v1.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -34,41 +30,13 @@ function makePlan(transactions = 1): ExecutionPlan {
       data: "0x12",
     })),
   });
-  const validated: ValidatedAuthorizations = brandValidated({
-    inputs: brandPinned({
-      bundle: {
-        request,
-        owner: OWNER,
-        operations: [],
-      } as unknown as DecodedBundle,
-      context: {
-        chainId: 1,
-        stateBlockNumber: STATE_BLOCK,
-        stateBlockHash: `0x${"ab".repeat(32)}`,
-        stateBlockTimestamp: 1_700_000_000n,
-        blockNumber: STATE_BLOCK,
-        blockTimestamp: 1_700_000_000n,
-      },
-      before: {
-        wallet: [],
-        permissions: [],
-        positions: [],
-        vaults: [],
-        markets: [],
-      },
-      internals: { vaultData: new Map() },
-    }),
-    limits: {
-      maxSlippageWad: 0n,
-      minLltvBufferWad: 0n,
-      maxSignatureLifetimeSeconds: 0n,
-      operations: [],
-    },
+  return planExecution({
+    request,
+    owner: OWNER,
     preparations: [],
-    matches: [],
-    expected: [],
+    reads: nativeReads([OWNER]),
+    intermediateReads: [],
   });
-  return planExecution(validated, { full: [], permissions: [] });
 }
 
 const rpc = (result: unknown) =>
@@ -143,11 +111,11 @@ describe.sequential("executePlan", () => {
     expect(evidence.block.stateBlockNumber).toBe(STATE_BLOCK);
     expect(evidence.block.blockNumber).toBe(STATE_BLOCK + 1n);
     expect(evidence.block.chainId).toBe(1);
-    expect(evidence.nativeBalances).toHaveLength(2);
-    expect(evidence.nativeBalances[0]?.probeId).toBe(
-      "nativeBalance:0x1111111111111111111111111111111111111111",
+    expect(evidence.stateReads).toHaveLength(2);
+    expect(evidence.stateReads[0]?.read.id).toBe(
+      "native.balance:0x1111111111111111111111111111111111111111",
     );
-    expect(evidence.nativeBalances[0]?.phase).toBe("before");
+    expect(evidence.stateReads[0]?.phase).toBe("before");
     expect(Object.isFrozen(evidence)).toBe(true);
   });
 
@@ -366,20 +334,7 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
     await expect(executePlan(params)).rejects.toBeInstanceOf(
-      MissingVerificationEvidenceError,
-    );
-  });
-
-  test("error: MissingVerificationEvidenceError on undecodable probe data", async () => {
-    const calls = okCalls(3);
-    calls[0] = { status: "0x1", gasUsed: "0x0", returnData: "0x1234" };
-    fetchMock
-      .mockResolvedValueOnce(rpc(blockResult()))
-      .mockResolvedValueOnce(rpc("0x1"))
-      .mockResolvedValueOnce(rpc(simulateResult(calls)))
-      .mockResolvedValueOnce(rpc(blockResult()));
-    await expect(executePlan(params)).rejects.toBeInstanceOf(
-      MissingVerificationEvidenceError,
+      InvalidSimulationResponseError,
     );
   });
 
@@ -478,7 +433,11 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(simulateResult(calls)))
       .mockResolvedValueOnce(rpc(blockResult()));
     const evidence = await executePlan(params);
-    expect(evidence.nativeBalances.map((s) => s.assets)).toEqual([100n, 90n]);
+    expect(
+      evidence.stateReads.map(
+        (s) => decodeStateRead(s.read, s.returnData).value,
+      ),
+    ).toEqual([100n, 90n]);
   });
 
   test("behavior: user call logs are normalized into SimulationCall", async () => {
@@ -503,10 +462,11 @@ describe.sequential("executePlan", () => {
       .mockResolvedValueOnce(rpc(blockResult()));
     const evidence = await executePlan(params);
     const userCall = evidence.calls[1]!;
-    expect(userCall.planned.identity).toEqual({
-      type: "transaction",
-      transactionIndex: 0,
-    });
+    expect(userCall.planned.type).toBe("transaction");
+    expect(
+      userCall.planned.type === "transaction" &&
+        userCall.planned.transactionIndex === 0,
+    ).toBe(true);
     expect(userCall.result.status).toBe(true);
     expect(userCall.result.gasUsed).toBe(42_000n);
     expect(userCall.result.returnData).toBe("0xfeed");

@@ -10,15 +10,15 @@ import {
 import type { SimulateParams } from "../params.js";
 import type { VerifiedSimulationResult } from "../result.js";
 import type { SimulationConfig } from "../types.js";
-import type { runPipeline } from "./pipeline/run-pipeline.js";
+import type { runSimulation } from "./run-simulation.js";
 import { simulate } from "./simulate.js";
 
-const mockRunPipeline = vi.fn<typeof runPipeline>();
+const mockRunSimulation = vi.fn<typeof runSimulation>();
 
-vi.mock("./pipeline/run-pipeline.js", () => ({
-  runPipeline: (
-    ...args: Parameters<typeof runPipeline>
-  ): ReturnType<typeof runPipeline> => mockRunPipeline(...args),
+vi.mock("./run-simulation.js", () => ({
+  runSimulation: (
+    ...args: Parameters<typeof runSimulation>
+  ): ReturnType<typeof runSimulation> => mockRunSimulation(...args),
 }));
 
 const USDC: Address = getAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
@@ -55,9 +55,6 @@ function makeResult(): VerifiedSimulationResult {
     assetChanges: [],
     verification: {
       chainId: 1,
-      stateBlockNumber: 1n,
-      stateBlockHash: `0x${"ab".repeat(32)}` as Hex,
-      stateBlockTimestamp: 1n,
       blockNumber: 2n,
       blockTimestamp: 1n,
       mode: "final",
@@ -66,64 +63,69 @@ function makeResult(): VerifiedSimulationResult {
         maxSlippageWad: 0n,
         minLltvBufferWad: 0n,
         maxSignatureLifetimeSeconds: 0n,
-        wallet: { maxDebit: [], minCredit: [] },
         operations: [],
       },
       operations: [],
       before: {
-        wallet: [],
-        permissions: [],
+        balances: [],
+        allowances: [],
+        morphoAuthorizations: [],
+        nonces: [],
         positions: [],
         vaults: [],
         markets: [],
       },
       after: {
-        wallet: [],
-        permissions: [],
+        balances: [],
+        allowances: [],
+        morphoAuthorizations: [],
+        nonces: [],
         positions: [],
         vaults: [],
         markets: [],
       },
       diff: {
-        wallet: [],
-        permissions: [],
+        balances: [],
+        allowances: [],
+        morphoAuthorizations: [],
+        nonces: [],
         positions: [],
         vaults: [],
         markets: [],
       },
       actionDiff: {
-        wallet: [],
-        permissions: [],
+        balances: [],
+        allowances: [],
+        morphoAuthorizations: [],
+        nonces: [],
         positions: [],
         vaults: [],
         markets: [],
       },
-      assetChanges: [],
       conversions: [],
       fees: [],
-      permissionEvidence: [],
     },
   } as unknown as VerifiedSimulationResult;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRunPipeline.mockResolvedValue(makeResult());
+  mockRunSimulation.mockResolvedValue(makeResult());
 });
 
 describe.sequential("simulate — pipeline delegation", () => {
-  it("delegates to runPipeline with the parsed request and config", async () => {
+  it("delegates to runSimulation with the parsed request and config", async () => {
     const result = await simulate(makeConfig(), makeParams());
     expect(result).toEqual(makeResult());
-    expect(mockRunPipeline).toHaveBeenCalledTimes(1);
-    const arg = mockRunPipeline.mock.calls[0]![0];
+    expect(mockRunSimulation).toHaveBeenCalledTimes(1);
+    const arg = mockRunSimulation.mock.calls[0]![0];
     expect(arg.config).toEqual(makeConfig());
     expect(arg.request.chainId).toBe(1);
   });
 
   it("defaults to final mode", async () => {
     await simulate(makeConfig(), makeParams());
-    expect(mockRunPipeline.mock.calls[0]![0].request.mode ?? "final").toBe(
+    expect(mockRunSimulation.mock.calls[0]![0].request.mode ?? "final").toBe(
       "final",
     );
   });
@@ -151,7 +153,7 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeParams({ mode: "preview", authorizations }),
     );
     expect(result).toEqual(makeResult());
-    expect(mockRunPipeline).toHaveBeenCalledTimes(1);
+    expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
   it("limits execute through the pipeline", async () => {
@@ -160,7 +162,7 @@ describe.sequential("simulate — pipeline delegation", () => {
       makeParams({ limits: { maxSlippageWad: 1n } }),
     );
     expect(result).toEqual(makeResult());
-    expect(mockRunPipeline).toHaveBeenCalledTimes(1);
+    expect(mockRunSimulation).toHaveBeenCalledTimes(1);
   });
 
   it("legacy signature authorization variant throws SimulationValidationError", async () => {
@@ -175,20 +177,20 @@ describe.sequential("simulate — pipeline delegation", () => {
         }),
       ),
     ).rejects.toThrow(SimulationValidationError);
-    expect(mockRunPipeline).not.toHaveBeenCalled();
+    expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 
   it("final mode with authorizations throws SimulationValidationError", async () => {
     await expect(
       simulate(makeConfig(), makeParams({ authorizations: [] } as never)),
     ).rejects.toThrow(SimulationValidationError);
-    expect(mockRunPipeline).not.toHaveBeenCalled();
+    expect(mockRunSimulation).not.toHaveBeenCalled();
   });
 });
 
 describe.sequential("simulate — error propagation", () => {
   it("propagates SimulationRevertedError from the pipeline", async () => {
-    mockRunPipeline.mockRejectedValueOnce(
+    mockRunSimulation.mockRejectedValueOnce(
       new SimulationRevertedError("ERC20: transfer amount exceeds balance"),
     );
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
@@ -197,14 +199,16 @@ describe.sequential("simulate — error propagation", () => {
   });
 
   it("propagates ExternalServiceError", async () => {
-    mockRunPipeline.mockRejectedValueOnce(new ExternalServiceError("RPC down"));
+    mockRunSimulation.mockRejectedValueOnce(
+      new ExternalServiceError("RPC down"),
+    );
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
   });
 
   it("propagates UnsupportedChainError", async () => {
-    mockRunPipeline.mockRejectedValueOnce(new UnsupportedChainError(999999));
+    mockRunSimulation.mockRejectedValueOnce(new UnsupportedChainError(999999));
     await expect(
       simulate(makeConfig(), makeParams({ chainId: 999999 })),
     ).rejects.toThrow(UnsupportedChainError);

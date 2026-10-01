@@ -5,47 +5,51 @@ import {
   UnexpectedSimulationError,
 } from "../../errors.js";
 import type { MarketMinAssets, OperationLimit } from "../../limits.js";
+import type {
+  Fee,
+  SimulatedOperation,
+  SimulationStateChange,
+} from "../../result.js";
+import type { Transfer as TxTransfer } from "../../types.js";
+import type { ParsedState, RiskMetric } from "../state/types.js";
+import { checkBlueOperation } from "./blue.js";
 import {
-  type At,
-  type CheckFields,
-  verificationContext,
-} from "../internal/error-context.js";
-import type { RiskMetric } from "../internal/evidence.js";
-import type { LimitOf, OperationLimitFields } from "../internal/limits.js";
-import type { VerifiedOperation } from "../internal/result.js";
-import {
-  type BoundOperationLimit,
-  brandConstrained,
-  type ConstrainedEffects,
-  type VerifiedEffects,
-} from "../internal/stages.js";
+  type CheckContext,
+  type CheckedOperation,
+  checkContext,
+  operationSubject,
+} from "./helpers.js";
+import { checkVaultOperation } from "./vault.js";
 
-type OperationType = keyof OperationLimitFields;
+type OperationType = OperationLimit["type"];
 
-/** The decoded operation carried by a verified operation of type `T`. */
 type OpOf<T extends OperationType> = Extract<
   DecodedOperation,
   { readonly type: T }
 >;
-
-/** The verified outcome carried by a verified operation of type `T`. */
 type OutcomeOf<T extends OperationType> = Extract<
-  VerifiedOperation,
+  CheckedOperation,
   { readonly operation: { readonly type: T } }
 >["outcome"];
 
-type VerifiedOf<T extends OperationType> = Extract<
-  VerifiedOperation,
-  { readonly operation: { readonly type: T } }
+type LimitOf<T extends OperationType> = OperationLimit extends infer U
+  ? U extends OperationLimit
+    ? T extends U["type"]
+      ? U
+      : never
+    : never
+  : never;
+
+type LimitFields<T extends OperationType> = Omit<
+  LimitOf<T>,
+  "type" | "transactionIndex"
 >;
 
 /**
  * How one operation-limit field is checked: `"equals"` compares a decoded
- * operation field against the declared value (`expected*` semantics plus the
- * identity fields such as `marketId`/`vault`); `"min"`/`"max"` bound a numeric
- * or {@link RiskMetric} outcome field; `"minByMarket"` requires each declared
- * `{marketId, minAssets}` leg to be covered by the observed per-market supply
- * credits.
+ * operation field; `"min"`/`"max"` bound a numeric or {@link RiskMetric}
+ * outcome; `"minByMarket"` requires each declared `{marketId, minAssets}` leg
+ * covered by observed per-market credits.
  */
 type FieldBinding<T extends OperationType, V> =
   | { readonly kind: "equals"; readonly read: (op: OpOf<T>) => V | undefined }
@@ -60,17 +64,12 @@ type FieldBinding<T extends OperationType, V> =
       ) => readonly { readonly marketId: MarketId; readonly assets: bigint }[];
     };
 
-/**
- * Explicit constraint table — every field of every operation limit is bound
- * to exactly one typed accessor. An unknown limit key or a missing entry is a
- * compile error, so a constraint can never silently degrade into an
- * `undefined` comparison.
- */
+/** Explicit per-type constraint table; an unknown key is a compile error. */
 const BINDINGS: {
   [T in OperationType]: {
-    readonly [F in keyof OperationLimitFields[T]]-?: FieldBinding<
+    readonly [F in keyof LimitFields<T>]-?: FieldBinding<
       T,
-      NonNullable<OperationLimitFields[T][F]>
+      NonNullable<LimitFields<T>[F]>
     >;
   };
 } = {
@@ -142,10 +141,7 @@ const BINDINGS: {
       kind: "equals",
       read: (op) => op.collateralAssets,
     },
-    expectedBorrowAssets: {
-      kind: "equals",
-      read: (op) => op.borrowAssets,
-    },
+    expectedBorrowAssets: { kind: "equals", read: (op) => op.borrowAssets },
     expectedOnBehalf: { kind: "equals", read: (op) => op.onBehalf },
     expectedReceiver: { kind: "equals", read: (op) => op.receiver },
     maxBorrowSharesMinted: {
@@ -183,10 +179,7 @@ const BINDINGS: {
       kind: "max",
       read: (outcome) => outcome.residualBorrowShares,
     },
-    minRefundAssets: {
-      kind: "min",
-      read: (outcome) => outcome.refundAssets,
-    },
+    minRefundAssets: { kind: "min", read: (outcome) => outcome.refundAssets },
   },
   blueWithdrawCollateral: {
     marketId: { kind: "equals", read: (op) => op.market.marketId },
@@ -216,10 +209,7 @@ const BINDINGS: {
       kind: "max",
       read: (outcome) => outcome.residualBorrowShares,
     },
-    minRefundAssets: {
-      kind: "min",
-      read: (outcome) => outcome.refundAssets,
-    },
+    minRefundAssets: { kind: "min", read: (outcome) => outcome.refundAssets },
     maxLtvAfterWad: { kind: "max", read: (outcome) => outcome.ltvAfterWad },
     minHealthFactorAfterWad: {
       kind: "min",
@@ -273,10 +263,7 @@ const BINDINGS: {
   },
   vaultV1Deposit: {
     vault: { kind: "equals", read: (op) => op.vault },
-    expectedAssets: {
-      kind: "equals",
-      read: (op) => op.funding.assets,
-    },
+    expectedAssets: { kind: "equals", read: (op) => op.funding.assets },
     expectedReceiver: { kind: "equals", read: (op) => op.receiver },
     minSharesMinted: {
       kind: "min",
@@ -285,10 +272,7 @@ const BINDINGS: {
   },
   vaultV2Deposit: {
     vault: { kind: "equals", read: (op) => op.vault },
-    expectedAssets: {
-      kind: "equals",
-      read: (op) => op.funding.assets,
-    },
+    expectedAssets: { kind: "equals", read: (op) => op.funding.assets },
     expectedReceiver: { kind: "equals", read: (op) => op.receiver },
     minSharesMinted: {
       kind: "min",
@@ -434,14 +418,8 @@ const BINDINGS: {
       kind: "min",
       read: (outcome) => outcome.targetSharesMinted,
     },
-    expectedAssets: {
-      kind: "equals",
-      read: (op) => op.amount.assets,
-    },
-    expectedShares: {
-      kind: "equals",
-      read: (op) => op.amount.shares,
-    },
+    expectedAssets: { kind: "equals", read: (op) => op.amount.assets },
+    expectedShares: { kind: "equals", read: (op) => op.amount.shares },
   },
 };
 
@@ -460,26 +438,13 @@ const isDeallocationLike = (
   "adapter" in value &&
   "amount" in value;
 
-/** Keep only scalar bound values the check context accepts. @internal */
-const scalar = (key: "expected" | "observed", value: unknown): CheckFields =>
-  typeof value === "bigint" ||
-  typeof value === "boolean" ||
-  (typeof value === "string" && value.startsWith("0x"))
-    ? { [key]: value as bigint | boolean | `0x${string}` }
-    : {};
-
 const isSupplyMinimum = (value: unknown): value is MarketMinAssets =>
   typeof value === "object" &&
   value !== null &&
   "marketId" in value &&
   "minAssets" in value;
 
-/**
- * Element-wise equality without `JSON.stringify`: hex strings compare
- * case-insensitively (covers `Address` and `MarketId`), bigint/boolean/number
- * compare by `===`, arrays recurse element-wise, and deallocation-like
- * records compare on `adapter`/`marketId`/`amount` only.
- */
+/** Element-wise equality: hex strings case-insensitive, bigint/boolean `===`, arrays recurse, deallocation records on adapter/marketId/amount. */
 const valuesEqual = (expected: unknown, observed: unknown): boolean => {
   if (typeof expected === "string" && typeof observed === "string")
     return expected.toLowerCase() === observed.toLowerCase();
@@ -506,367 +471,28 @@ const describe = (value: unknown): string => {
   return String(value);
 };
 
-const unmatched = (limit: OperationLimit, at: At): never => {
-  throw new ConsumerLimitViolationError(
-    `No verified operation matches operation limit type "${limit.type}"${limit.transactionIndex === undefined ? "" : ` at transaction ${limit.transactionIndex}`}. Check the limit list against the bundle's decoded operations.`,
-    {
-      context: verificationContext(at.context, at.mode, {
-        field: limit.type,
-        failedTransactionIndex: limit.transactionIndex,
-      }),
-    },
-  );
+const scalar = (
+  key: "expected" | "observed",
+  value: unknown,
+):
+  | { readonly expected: bigint | boolean | `0x${string}` }
+  | { readonly observed: bigint | boolean | `0x${string}` }
+  | { readonly expected?: never; readonly observed?: never } => {
+  if (typeof value !== "bigint" && typeof value !== "boolean") {
+    if (typeof value !== "string" || !value.startsWith("0x")) return {};
+    const hex = value as `0x${string}`;
+    return key === "expected" ? { expected: hex } : { observed: hex };
+  }
+  return key === "expected" ? { expected: value } : { observed: value };
 };
 
 /**
- * Bind caller-declared operation limits to their verified operations and
- * check wallet debit/credit bounds plus every declared operation constraint.
- *
- * @internal
- * @param effects - Policy-verified effects carrying the effective limits.
- * @returns The branded {@link ConstrainedEffects} stage output.
- * @throws {ConsumerLimitViolationError} on any violated bound.
- */
-export function enforceLimits(effects: VerifiedEffects): ConstrainedEffects {
-  const { verification } = effects;
-  const { limits } = verification;
-  const at: At = {
-    context: effects.evidence.context,
-    mode: verification.mode,
-  };
-
-  const boundLimits: BoundOperationLimit[] = [];
-  const findVerified = <T extends OperationType>(
-    type: T,
-    transactionIndex: number | undefined,
-  ): VerifiedOf<T> | undefined =>
-    verification.operations.find(
-      (o): o is VerifiedOf<T> =>
-        o.operation.type === type &&
-        (transactionIndex === undefined ||
-          o.operation.transactionIndex === transactionIndex),
-    );
-
-  for (const limit of limits.operations) {
-    switch (limit.type) {
-      case "blueSupply": {
-        const verified =
-          findVerified("blueSupply", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueWithdraw": {
-        const verified =
-          findVerified("blueWithdraw", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueSupplyCollateral": {
-        const verified =
-          findVerified("blueSupplyCollateral", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueBorrow": {
-        const verified =
-          findVerified("blueBorrow", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueSupplyCollateralBorrow": {
-        const verified =
-          findVerified("blueSupplyCollateralBorrow", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueRepay": {
-        const verified =
-          findVerified("blueRepay", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueWithdrawCollateral": {
-        const verified =
-          findVerified("blueWithdrawCollateral", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueRepayWithdrawCollateral": {
-        const verified =
-          findVerified("blueRepayWithdrawCollateral", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueRefinance": {
-        const verified =
-          findVerified("blueRefinance", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "blueAuthorization": {
-        const verified =
-          findVerified("blueAuthorization", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV1Deposit": {
-        const verified =
-          findVerified("vaultV1Deposit", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2Deposit": {
-        const verified =
-          findVerified("vaultV2Deposit", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV1Withdraw": {
-        const verified =
-          findVerified("vaultV1Withdraw", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2Withdraw": {
-        const verified =
-          findVerified("vaultV2Withdraw", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV1Redeem": {
-        const verified =
-          findVerified("vaultV1Redeem", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2Redeem": {
-        const verified =
-          findVerified("vaultV2Redeem", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2ForceWithdraw": {
-        const verified =
-          findVerified("vaultV2ForceWithdraw", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2ForceRedeem": {
-        const verified =
-          findVerified("vaultV2ForceRedeem", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV1InKindRedeem": {
-        const verified =
-          findVerified("vaultV1InKindRedeem", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV2InKindRedeem": {
-        const verified =
-          findVerified("vaultV2InKindRedeem", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      case "vaultV1MigrateToV2": {
-        const verified =
-          findVerified("vaultV1MigrateToV2", limit.transactionIndex) ??
-          unmatched(limit, at);
-        checkOperationLimit(
-          verified.operation,
-          verified.outcome,
-          limit,
-          limit.type,
-          at,
-        );
-        boundLimits.push({ operation: verified.operation, limit });
-        break;
-      }
-      default: {
-        const _exhaustive: never = limit;
-        throw new UnexpectedSimulationError(
-          `Unhandled operation limit type "${JSON.stringify(_exhaustive)}"`,
-          {
-            context: verificationContext(at.context, at.mode, {
-              field: "operationLimit",
-            }),
-          },
-        );
-      }
-    }
-  }
-
-  return brandConstrained({ effects, boundLimits });
-}
-
-/**
  * Check every declared field of one bound operation limit against the
- * explicit {@link BINDINGS} table. `"equals"` bindings compare the decoded
- * operation field; `"min"`/`"max"` bindings bound a numeric outcome — a
- * non-finite {@link RiskMetric} (`debtFree`/`unbounded`) means "infinite",
- * failing every `"max"` cap and passing every `"min"` bound; `"minByMarket"`
- * requires each declared market leg to be covered by the observed credits.
+ * {@link BINDINGS} table. `"equals"` bindings compare the decoded operation
+ * field; `"min"`/`"max"` bindings bound a numeric outcome — a non-finite
+ * {@link RiskMetric} means "infinite", failing every `"max"` cap and passing
+ * every `"min"` bound; `"minByMarket"` requires each declared market leg
+ * covered.
  */
 // biome-ignore lint/complexity/useMaxParams: each check needs operation, outcome, limit and context
 function checkOperationLimit<T extends OperationType>(
@@ -874,14 +500,13 @@ function checkOperationLimit<T extends OperationType>(
   outcome: OutcomeOf<T>,
   limit: LimitOf<T>,
   type: T,
-  at: At,
+  ctx: CheckContext,
 ): void {
   const table = BINDINGS[type];
-  const operationIndex = operation.transactionIndex;
 
   // biome-ignore lint/complexity/useMaxParams: violation reports need field, bound, observed and hint
   const violation = (
-    field: keyof OperationLimitFields[T],
+    field: keyof LimitFields<T>,
     expected: unknown,
     observed: unknown,
     hint: string,
@@ -889,17 +514,22 @@ function checkOperationLimit<T extends OperationType>(
     new ConsumerLimitViolationError(
       `Operation limit "${type}.${String(field)}" expected "${describe(expected)}", observed "${describe(observed)}". ${hint}`,
       {
-        context: verificationContext(at.context, at.mode, {
+        context: {
+          stage: "verification",
+          chainId: ctx.chainId,
+          mode: ctx.mode,
+          blockNumber: ctx.block.blockNumber,
+          ...operationSubject(operation),
           field: `${type}.${String(field)}`,
           ...scalar("expected", expected),
           ...scalar("observed", observed),
-          failedTransactionIndex: operationIndex,
-        }),
+          failedTransactionIndex: operation.transactionIndex,
+        },
       },
     );
 
   const { type: _type, transactionIndex: _index, ...declared } = limit;
-  const fields = keysOf(table) as (keyof OperationLimitFields[T])[];
+  const fields = keysOf(table) as (keyof LimitFields<T>)[];
   for (const field of fields) {
     const bound: unknown = Reflect.get(declared, field);
     if (bound === undefined) continue;
@@ -940,11 +570,7 @@ function checkOperationLimit<T extends OperationType>(
     if (typeof bound !== "bigint") {
       throw new UnexpectedSimulationError(
         `Bound for "${type}.${String(field)}" is not numeric; min*/max* limits must declare bigint values`,
-        {
-          context: verificationContext(at.context, at.mode, {
-            field: `${type}.${String(field)}`,
-          }),
-        },
+        { context: checkContext(ctx, `${type}.${String(field)}`) },
       );
     }
     const observed = binding.read(outcome);
@@ -968,4 +594,389 @@ function checkOperationLimit<T extends OperationType>(
           : "Increase the bound or reduce the operation.",
       );
   }
+}
+
+const unmatched = (ctx: CheckContext, limit: OperationLimit): never => {
+  throw new ConsumerLimitViolationError(
+    `No verified operation matches operation limit type "${limit.type}"${limit.transactionIndex === undefined ? "" : ` at transaction ${limit.transactionIndex}`}. Check the limit list against the bundle's decoded operations.`,
+    {
+      context: checkContext(ctx, limit.type, {
+        failedTransactionIndex: limit.transactionIndex,
+      }),
+    },
+  );
+};
+
+/** Public per-operation record: transaction index plus subject entity keys. @internal */
+export const toSimulatedOperation = (
+  checked: CheckedOperation,
+): SimulatedOperation => ({
+  transactionIndex: checked.operation.transactionIndex,
+  ...operationSubject(checked.operation),
+});
+
+/**
+ * Run the per-operation economic checks plus every declared consumer limit
+ * (`limits.operations`), inlined on the checked outcome.
+ *
+ * @returns The checked operations plus the collected conversion/fee records.
+ * @throws {UnsupportedOperationError} on a type with no check.
+ * @internal
+ */
+export function checkOperations(params: {
+  readonly ctx: CheckContext;
+  readonly operations: readonly DecodedOperation[];
+  readonly accruedBefore: ParsedState;
+  readonly after: ParsedState;
+  readonly diff: SimulationStateChange;
+  readonly actionDiff: SimulationStateChange;
+  readonly transfers: readonly TxTransfer[];
+}): {
+  readonly operations: readonly CheckedOperation[];
+  readonly fees: readonly Fee[];
+  readonly touchedMarketIds: ReadonlySet<MarketId>;
+} {
+  const { ctx, operations, accruedBefore, after, actionDiff } = params;
+
+  const checked: CheckedOperation[] = [];
+  const fees: Fee[] = [];
+  const touchedMarketIds = new Set<MarketId>();
+
+  for (const operation of operations) {
+    switch (operation.type) {
+      case "blueSupply":
+      case "blueWithdraw":
+      case "blueSupplyCollateral":
+      case "blueBorrow":
+      case "blueSupplyCollateralBorrow":
+      case "blueRepay":
+      case "blueWithdrawCollateral":
+      case "blueRepayWithdrawCollateral":
+      case "blueAuthorization": {
+        if ("market" in operation)
+          touchedMarketIds.add(operation.market.marketId);
+        checked.push(checkBlueOperation(ctx, operation, accruedBefore, after));
+        break;
+      }
+      case "blueRefinance": {
+        touchedMarketIds.add(operation.sourceMarket.marketId);
+        touchedMarketIds.add(operation.targetMarket.marketId);
+        checked.push(checkBlueOperation(ctx, operation, accruedBefore, after));
+        break;
+      }
+      case "vaultV1Deposit":
+      case "vaultV2Deposit":
+      case "vaultV1Withdraw":
+      case "vaultV2Withdraw":
+      case "vaultV1Redeem":
+      case "vaultV2Redeem":
+      case "vaultV1MigrateToV2":
+      case "vaultV2ForceWithdraw":
+      case "vaultV2ForceRedeem":
+      case "vaultV1InKindRedeem":
+      case "vaultV2InKindRedeem": {
+        if (
+          operation.type === "vaultV1InKindRedeem" ||
+          operation.type === "vaultV2InKindRedeem"
+        )
+          for (const leg of operation.markets)
+            touchedMarketIds.add(leg.marketId);
+        if (operation.type === "vaultV2ForceRedeem")
+          for (const leg of operation.deallocations)
+            if (leg.marketId != null) touchedMarketIds.add(leg.marketId);
+        const { checked: verified, fee } = checkVaultOperation(
+          ctx,
+          operation,
+          accruedBefore,
+          after,
+          actionDiff,
+        );
+        checked.push(verified);
+        if (fee != null) fees.push(fee);
+        break;
+      }
+      default: {
+        const _exhaustive: never = operation;
+        throw new UnexpectedSimulationError(
+          `Operation type has no verification contract: ${JSON.stringify(_exhaustive)}`,
+          { context: checkContext(ctx, "operation") },
+        );
+      }
+    }
+  }
+
+  // Consumer limits are inlined here, bound to the checked outcomes.
+  const findChecked = <T extends OperationType>(
+    type: T,
+    transactionIndex: number | undefined,
+  ): Extract<CheckedOperation, { operation: { type: T } }> | undefined =>
+    checked.find(
+      (o): o is Extract<CheckedOperation, { operation: { type: T } }> =>
+        o.operation.type === type &&
+        (transactionIndex === undefined ||
+          o.operation.transactionIndex === transactionIndex),
+    );
+
+  for (const limit of ctx.limits.operations) {
+    switch (limit.type) {
+      case "blueSupply": {
+        const v =
+          findChecked("blueSupply", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(v.operation, v.outcome, limit, "blueSupply", ctx);
+        break;
+      }
+      case "blueWithdraw": {
+        const v =
+          findChecked("blueWithdraw", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(v.operation, v.outcome, limit, "blueWithdraw", ctx);
+        break;
+      }
+      case "blueSupplyCollateral": {
+        const v =
+          findChecked("blueSupplyCollateral", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueSupplyCollateral",
+          ctx,
+        );
+        break;
+      }
+      case "blueBorrow": {
+        const v =
+          findChecked("blueBorrow", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(v.operation, v.outcome, limit, "blueBorrow", ctx);
+        break;
+      }
+      case "blueSupplyCollateralBorrow": {
+        const v =
+          findChecked("blueSupplyCollateralBorrow", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueSupplyCollateralBorrow",
+          ctx,
+        );
+        break;
+      }
+      case "blueRepay": {
+        const v =
+          findChecked("blueRepay", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(v.operation, v.outcome, limit, "blueRepay", ctx);
+        break;
+      }
+      case "blueWithdrawCollateral": {
+        const v =
+          findChecked("blueWithdrawCollateral", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueWithdrawCollateral",
+          ctx,
+        );
+        break;
+      }
+      case "blueRepayWithdrawCollateral": {
+        const v =
+          findChecked("blueRepayWithdrawCollateral", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueRepayWithdrawCollateral",
+          ctx,
+        );
+        break;
+      }
+      case "blueRefinance": {
+        const v =
+          findChecked("blueRefinance", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueRefinance",
+          ctx,
+        );
+        break;
+      }
+      case "blueAuthorization": {
+        const v =
+          findChecked("blueAuthorization", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "blueAuthorization",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV1Deposit": {
+        const v =
+          findChecked("vaultV1Deposit", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV1Deposit",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2Deposit": {
+        const v =
+          findChecked("vaultV2Deposit", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2Deposit",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV1Withdraw": {
+        const v =
+          findChecked("vaultV1Withdraw", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV1Withdraw",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2Withdraw": {
+        const v =
+          findChecked("vaultV2Withdraw", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2Withdraw",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV1Redeem": {
+        const v =
+          findChecked("vaultV1Redeem", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV1Redeem",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2Redeem": {
+        const v =
+          findChecked("vaultV2Redeem", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2Redeem",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2ForceWithdraw": {
+        const v =
+          findChecked("vaultV2ForceWithdraw", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2ForceWithdraw",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2ForceRedeem": {
+        const v =
+          findChecked("vaultV2ForceRedeem", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2ForceRedeem",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV1InKindRedeem": {
+        const v =
+          findChecked("vaultV1InKindRedeem", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV1InKindRedeem",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV2InKindRedeem": {
+        const v =
+          findChecked("vaultV2InKindRedeem", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV2InKindRedeem",
+          ctx,
+        );
+        break;
+      }
+      case "vaultV1MigrateToV2": {
+        const v =
+          findChecked("vaultV1MigrateToV2", limit.transactionIndex) ??
+          unmatched(ctx, limit);
+        checkOperationLimit(
+          v.operation,
+          v.outcome,
+          limit,
+          "vaultV1MigrateToV2",
+          ctx,
+        );
+        break;
+      }
+      default: {
+        const _exhaustive: never = limit;
+        throw new UnexpectedSimulationError(
+          `Unhandled operation limit type "${JSON.stringify(_exhaustive)}"`,
+          { context: checkContext(ctx, "operationLimit") },
+        );
+      }
+    }
+  }
+
+  return { operations: checked, fees, touchedMarketIds };
 }

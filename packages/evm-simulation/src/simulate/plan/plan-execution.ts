@@ -1,7 +1,8 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 import { zeroAddress } from "viem";
-import type { SimulationRequest, SimulationTransaction } from "../../types.js";
+import type { SimulationTransaction } from "../../types.js";
+import type { ParsedRequest } from "../request/parse-request.js";
 import type { ReadPhase, StateRead } from "../state/contract.js";
 import {
   NATIVE_BALANCE_PROBE_ADDRESS,
@@ -34,7 +35,7 @@ export type PlannedCall = {
 
 /** The ordered call plan for one simulation. @internal */
 export interface ExecutionPlan {
-  readonly request: SimulationRequest;
+  readonly request: ParsedRequest;
   readonly owner: Address;
   readonly calls: readonly PlannedCall[];
   readonly stateOverrides: readonly {
@@ -64,7 +65,7 @@ export interface ExecutionPlan {
  * @internal
  */
 export function planExecution(params: {
-  readonly request: SimulationRequest;
+  readonly request: ParsedRequest;
   readonly owner: Address;
   readonly preparations: readonly {
     readonly authorizationIndex: number;

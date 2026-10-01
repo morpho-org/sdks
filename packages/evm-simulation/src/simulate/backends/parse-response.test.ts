@@ -1,20 +1,14 @@
 import { type Address, encodeFunctionResult, erc20Abi, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
+  InvalidSimulationResponseError,
   SimulationRevertedError,
 } from "../../errors.js";
-import type {
-  DecodedBundle,
-  ParsedRequest,
-  ValidatedAuthorizations,
-} from "../../simulate/internal/stages.js";
-import { brandPinned, brandValidated } from "../../simulate/internal/stages.js";
 import { planExecution } from "../plan/plan-execution.js";
 import { parseRequest } from "../request/index.js";
+import { erc20Reads } from "../state/erc20.js";
+import { nativeReads } from "../state/native.js";
 import { parseSimulationResponse } from "./parse-response.js";
-import { toExecutionEvidence } from "./to-execution-evidence.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
 const TARGET: Address = getAddress(
@@ -28,75 +22,30 @@ const SPENDER: Address = getAddress(
 const NOW = 1_700_000_000n;
 const BLOCK_HASH: `0x${string}` = `0x${"ab".repeat(32)}`;
 
-const request = {
+const parsed = parseRequest({
   chainId: 1,
-  transactions: [
-    { from: OWNER, to: TARGET, data: "0x12345678" as `0x${string}` },
-  ],
-};
+  transactions: [{ from: OWNER, to: TARGET, data: "0x12345678" }],
+});
 
-const parsed: ParsedRequest = parseRequest(request);
+const reads = erc20Reads({
+  balances: [],
+  allowances: [{ token: TOKEN, owner: OWNER, spender: SPENDER }],
+  nonces: [],
+});
 
-const erc20Read = {
-  type: "erc20Allowance",
-  token: TOKEN,
-  owner: OWNER,
-  spender: SPENDER,
-} as const;
-
-const validated = (withPreparation: boolean): ValidatedAuthorizations =>
-  brandValidated({
-    inputs: brandPinned({
-      bundle: {
-        request: parsed,
-        owner: OWNER,
-        operations: [],
-      } as unknown as DecodedBundle,
-      context: {
-        chainId: 1,
-        stateBlockNumber: 24_000_000n,
-        stateBlockHash: BLOCK_HASH,
-        stateBlockTimestamp: NOW,
-        blockNumber: 24_000_000n,
-        blockTimestamp: NOW,
-      },
-      before: {
-        wallet: [],
-        permissions: [],
-        positions: [],
-        vaults: [],
-        markets: [],
-      },
-      internals: { vaultData: new Map() },
-    }),
-    limits: {
-      maxSlippageWad: 0n,
-      minLltvBufferWad: 0n,
-      maxSignatureLifetimeSeconds: 0n,
-      operations: [],
-    },
-    preparations: withPreparation
-      ? [
-          {
-            authorizationIndex: 2,
-            calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
-            expected: [
-              {
-                type: "erc20Allowance",
-                token: TOKEN,
-                owner: OWNER,
-                spender: SPENDER,
-                amount: 1n,
-              },
-            ],
-          },
-        ]
-      : [],
-    matches: withPreparation
-      ? [{ authorizationIndex: 2, expectedIndex: 0 }]
-      : [],
-    expected: [],
-  }) as ValidatedAuthorizations;
+const makePlan = (
+  preparations: {
+    authorizationIndex: number;
+    calls: { from: Address; to: Address; data: `0x${string}`; value: bigint }[];
+  }[] = [],
+) =>
+  planExecution({
+    request: parsed,
+    owner: OWNER,
+    preparations,
+    reads,
+    intermediateReads: nativeReads([OWNER]),
+  });
 
 const allowanceHex = (value: bigint): `0x${string}` =>
   encodeFunctionResult({
@@ -104,11 +53,9 @@ const allowanceHex = (value: bigint): `0x${string}` =>
     functionName: "allowance",
     result: value,
   });
-const balanceHex = (value: bigint): `0x${string}` =>
-  `0x${value.toString(16).padStart(64, "0")}`;
 
 const buildResponse = (
-  plan: ReturnType<typeof planExecution>,
+  plan: ReturnType<typeof makePlan>,
   overrides: Record<
     number,
     { status?: "0x0" | "0x1"; returnData?: `0x${string}` }
@@ -121,17 +68,13 @@ const buildResponse = (
     parentHash: `0x${"ab".repeat(32)}`,
     calls: plan.calls.map((call, index) => {
       const override = overrides[index] ?? {};
-      const defaultReturn =
-        call.identity.type === "probe" &&
-        "read" in call &&
-        call.read.type !== "nativeBalance"
-          ? allowanceHex(1n)
-          : call.identity.type === "probe"
-            ? balanceHex(7n)
-            : "0x";
       return {
         status: override.status ?? "0x1",
-        returnData: override.returnData ?? defaultReturn,
+        returnData:
+          override.returnData ??
+          (call.type === "stateRead" && call.read.kind === "erc20.allowance"
+            ? allowanceHex(1n)
+            : "0x"),
         gasUsed: "0x100",
         logs: [],
       };
@@ -139,7 +82,7 @@ const buildResponse = (
   },
 ];
 
-const parse = (plan: ReturnType<typeof planExecution>, response: unknown) =>
+const parse = (plan: ReturnType<typeof makePlan>, response: unknown) =>
   parseSimulationResponse({
     plan,
     response,
@@ -149,92 +92,63 @@ const parse = (plan: ReturnType<typeof planExecution>, response: unknown) =>
   });
 
 describe("parseSimulationResponse", () => {
-  test("default: probes decoded into phase buckets, preparations grouped", () => {
-    const plan = planExecution(validated(true), {
-      full: [erc20Read],
-      permissions: [erc20Read],
-    });
-    const evidence = toExecutionEvidence(parse(plan, buildResponse(plan)));
-    expect(evidence.probeReads.before.length).toBeGreaterThan(0);
-    // prepared phase carries the permissions reads plus the native probe.
-    expect(evidence.probeReads.prepared).toHaveLength(2);
-    expect(evidence.probeReads.after.length).toBeGreaterThan(0);
-    const allowance = evidence.probeReads.prepared.find(
-      (r) => r.type === "erc20Allowance",
-    );
-    expect(allowance?.type).toBe("erc20Allowance");
-    expect(evidence.preparations).toHaveLength(1);
-    expect(evidence.preparations[0]?.authorizationIndex).toBe(2);
-    // user calls keep caller transactionIndex
-    const txs = evidence.calls.filter((c) => c.identity.type === "transaction");
+  test("default: state reads grouped by phase, preparations carried", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 2,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const execution = parse(plan, buildResponse(plan));
+    const phases = execution.stateReads.map((r) => r.phase);
+    expect(phases.filter((p) => p === "before")).toHaveLength(reads.length);
+    expect(phases.filter((p) => p === "intermediate")).toHaveLength(1);
+    expect(phases.filter((p) => p === "after")).toHaveLength(reads.length);
+
+    const txs = execution.calls.filter((c) => c.planned.type === "transaction");
     expect(txs).toHaveLength(1);
+    const preps = execution.calls.filter(
+      (c) => c.planned.type === "preparation",
+    );
     expect(
-      txs[0]?.identity.type === "transaction"
-        ? txs[0].identity.transactionIndex
-        : -1,
-    ).toBe(0);
+      preps[0]?.planned.type === "preparation" &&
+        preps[0].planned.authorizationIndex === 2,
+    ).toBe(true);
   });
 
   test("error: SimulationRevertedError on user call revert", () => {
-    const plan = planExecution(validated(false), {
-      full: [erc20Read],
-      permissions: [],
-    });
-    const txIndex = plan.calls.findIndex(
-      (c) => c.identity.type === "transaction",
-    );
+    const plan = makePlan();
+    const txIndex = plan.calls.findIndex((c) => c.type === "transaction");
     expect(() =>
       parse(plan, buildResponse(plan, { [txIndex]: { status: "0x0" } })),
     ).toThrow(SimulationRevertedError);
   });
 
-  test("error: PermissionChangeMismatchError on preparation revert", () => {
-    const plan = planExecution(validated(true), {
-      full: [],
-      permissions: [erc20Read],
-    });
-    const prepIndex = plan.calls.findIndex(
-      (c) => c.identity.type === "authorization",
-    );
-
+  test("error: InvalidSimulationResponseError on preparation revert", () => {
+    const plan = makePlan([
+      {
+        authorizationIndex: 0,
+        calls: [{ from: OWNER, to: TOKEN, data: "0x095ea7b3", value: 0n }],
+      },
+    ]);
+    const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
     expect(() =>
-      toExecutionEvidence(
-        parse(plan, buildResponse(plan, { [prepIndex]: { status: "0x0" } })),
-      ),
-    ).toThrow(PermissionChangeMismatchError);
+      parse(plan, buildResponse(plan, { [prepIndex]: { status: "0x0" } })),
+    ).toThrow(InvalidSimulationResponseError);
   });
 
-  test("error: MissingVerificationEvidenceError on probe failure", () => {
-    const plan = planExecution(validated(false), {
-      full: [erc20Read],
-      permissions: [],
-    });
-    const probeIndex = plan.calls.findIndex((c) => c.identity.type === "probe");
+  test("error: InvalidSimulationResponseError on failed state read", () => {
+    const plan = makePlan();
+    const readIndex = plan.calls.findIndex((c) => c.type === "stateRead");
     expect(() =>
-      toExecutionEvidence(
-        parse(plan, buildResponse(plan, { [probeIndex]: { status: "0x0" } })),
-      ),
-    ).toThrow(MissingVerificationEvidenceError);
+      parse(plan, buildResponse(plan, { [readIndex]: { status: "0x0" } })),
+    ).toThrow(InvalidSimulationResponseError);
   });
 
-  test("error: MissingVerificationEvidenceError on undecodable probe data", () => {
-    const plan = planExecution(validated(false), {
-      full: [erc20Read],
-      permissions: [],
-    });
-    const probeIndex = plan.calls.findIndex(
-      (c) =>
-        c.identity.type === "probe" &&
-        "read" in c &&
-        c.read.type === "erc20Allowance",
-    );
-    expect(() =>
-      toExecutionEvidence(
-        parse(
-          plan,
-          buildResponse(plan, { [probeIndex]: { returnData: "0xdead" } }),
-        ),
-      ),
-    ).toThrow(MissingVerificationEvidenceError);
+  test("error: InvalidSimulationResponseError on call-count mismatch", () => {
+    const plan = makePlan();
+    const response = buildResponse(plan);
+    response[0]!.calls.pop();
+    expect(() => parse(plan, response)).toThrow(InvalidSimulationResponseError);
   });
 });

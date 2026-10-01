@@ -4,7 +4,8 @@ import { expect } from "vitest";
 import { executePlan } from "../../../src/simulate/backends/eth-simulate-v1.js";
 import { planExecution } from "../../../src/simulate/plan/plan-execution.js";
 import { parseRequest } from "../../../src/simulate/request/parse-request.js";
-import { makeValidated } from "../../../src/test-helpers/index.js";
+import { nativeReads } from "../../../src/simulate/state/native.js";
+import { decodeStateRead } from "../../../src/simulate/state/read-state.js";
 import { test } from "../../setup.js";
 
 const WETH: Address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -31,17 +32,26 @@ function planFor(
   transactions: readonly { to: Address; data: `0x${string}`; value?: bigint }[],
   owner: Address,
 ) {
-  return planExecution(
-    makeValidated({
-      request: parseRequest({
-        chainId: mainnet.id,
-        transactions: transactions.map((tx) => ({ ...tx, from: owner })),
-      }),
-      owner,
+  return planExecution({
+    request: parseRequest({
+      chainId: mainnet.id,
+      transactions: transactions.map((tx) => ({ ...tx, from: owner })),
     }),
-    { full: [], permissions: [] },
-  );
+    owner,
+    preparations: [],
+    reads: nativeReads([owner]),
+    intermediateReads: nativeReads([owner]),
+  });
 }
+
+const readAssets = (execution: Awaited<ReturnType<typeof executePlan>>) =>
+  execution.stateReads
+    .filter((r) => r.read.kind === "native.balance")
+    .map((r) => ({
+      phase: r.phase,
+      account: r.read.kind === "native.balance" ? r.read.account : undefined,
+      assets: decodeStateRead(r.read, r.returnData).value,
+    }));
 
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
   test("deterministic pinned metadata", async ({ client }) => {
@@ -75,7 +85,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       blockNumber: head,
     });
     expect(again.block).toEqual(execution.block);
-    expect(again.nativeBalances).toEqual(execution.nativeBalances);
+    expect(again.stateReads).toEqual(execution.stateReads);
 
     // "latest" on the pinned fork resolves to the same pinned block.
     const latest = await executePlan({
@@ -98,8 +108,9 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       blockNumber: await client.getBlockNumber(),
     });
 
-    expect(execution.nativeBalances).toHaveLength(2);
-    for (const reading of execution.nativeBalances) {
+    const readings = readAssets(execution);
+    expect(readings).toHaveLength(3);
+    for (const reading of readings) {
       expect(reading.account).toBe(client.account.address);
       expect(reading.assets).toBe(balance);
     }
@@ -139,15 +150,16 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
       blockNumber: await client.getBlockNumber(),
     });
 
-    const [before_, intermediate, after] = execution.nativeBalances.map(
+    const [before_, afterTx0, afterTx1, after] = readAssets(execution).map(
       (r) => r.assets,
     );
     expect(before_).toBe(before);
     // After the deposit the balance dropped by exactly `value` — validation:
     // false means no gas is charged.
-    expect(intermediate).toBe(before - amount);
+    expect(afterTx0).toBe(before - amount);
     // The withdraw refunds it.
+    expect(afterTx1).toBe(before);
     expect(after).toBe(before);
-    expect(execution.calls).toHaveLength(5);
+    expect(execution.calls).toHaveLength(6);
   });
 });

@@ -1,4 +1,9 @@
-import { MarketUtils, UnsupportedChainIdError } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  type AccrualVaultV2,
+  MarketUtils,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
 import {
   blueAbi,
   bluePreLiquidationAbi,
@@ -9,6 +14,10 @@ import {
   vaultV2FactoryAbi,
 } from "@morpho-org/morpho-sdk/abis";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
+import {
+  fetchAccrualVault,
+  fetchAccrualVaultV2,
+} from "@morpho-org/morpho-sdk/blue/fetch";
 import { _try } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import { readContract } from "viem/actions";
@@ -178,6 +187,45 @@ export async function readBindings(params: {
     if (error instanceof SimulationPackageError) throw error;
     throw new ExternalServiceError(
       `Pinned binding read error: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * Fetch the `AccrualVault`/`AccrualVaultV2` entity handles for every bound
+ * vault at the pinned block. The entities carry accrual state, cap tables
+ * and `forceDeallocatePenalties` that no single view call exposes; in-block
+ * reads still verify every public field they underpin.
+ *
+ * @internal
+ */
+export async function readVaultEntities(params: {
+  readonly client: Client;
+  readonly vaults: readonly VaultBinding[];
+  readonly blockNumber: bigint;
+}): Promise<ReadonlyMap<Address, AccrualVault | AccrualVaultV2>> {
+  const { client, vaults, blockNumber } = params;
+  try {
+    const entities = new Map<Address, AccrualVault | AccrualVaultV2>();
+    await Promise.all(
+      vaults.map(async (binding) => {
+        const vault =
+          binding.kind === "vaultV1"
+            ? await fetchAccrualVault(binding.address, client, {
+                blockNumber,
+              })
+            : await fetchAccrualVaultV2(binding.address, client, {
+                blockNumber,
+              });
+        entities.set(binding.address, vault);
+      }),
+    );
+    return entities;
+  } catch (error) {
+    if (error instanceof SimulationPackageError) throw error;
+    throw new ExternalServiceError(
+      `Pinned vault entity read error: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
   }

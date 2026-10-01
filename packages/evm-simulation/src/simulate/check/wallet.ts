@@ -2,26 +2,26 @@ import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
 import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
 import { _try } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress } from "viem";
+import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AssetChangeMismatchError,
   SlippageLimitExceededError,
   UnsupportedChainError,
 } from "../../errors.js";
+import type { SimulationStateChange } from "../../result.js";
 import type { SimulationLogger, Transfer } from "../../types.js";
-import { type At, verificationContext } from "../internal/error-context.js";
-import type { VerificationDiff, WalletBalance } from "../internal/evidence.js";
-import type { DecodedBundle } from "../internal/stages.js";
 import { assertNoBundlesRetention } from "../pipeline/bundles-retention.js";
+import { type CheckContext, checkContext } from "./helpers.js";
 
 /**
- * Verify wallet-level effects against the decoded bundle (design §12).
+ * Verify wallet-level effects against the decoded bundle.
  *
  * Owner debits must exactly match decoded funding amounts (erc20 funding
- * assets, native `tx.value` via the native-balance probe). Receiver credits
+ * assets, native `tx.value` via the native-balance reads). Receiver credits
  * are checked for non-negativity; any net change on an account outside the
  * known set (owner, receivers, referral recipients, bundles, morpho, vaults)
  * is unexplained. Restricted bundle contracts must retain nothing, enforced
- * through the existing {@link assertNoBundlesRetention} guard.
+ * through {@link assertNoBundlesRetention}.
  *
  * @throws {AssetChangeMismatchError} on an unexplained or mismatched balance
  *   change.
@@ -29,13 +29,12 @@ import { assertNoBundlesRetention } from "../pipeline/bundles-retention.js";
  *   decoded output bound.
  * @internal
  */
-export function verifyWallet(params: {
-  readonly bundle: DecodedBundle;
-  readonly totalDiff: VerificationDiff;
-  readonly actionDiff: VerificationDiff;
+export function checkWallet(params: {
+  readonly ctx: CheckContext;
+  readonly operations: readonly DecodedOperation[];
+  readonly actionDiff: SimulationStateChange;
   readonly transfers: readonly Transfer[];
   readonly logger?: SimulationLogger;
-  readonly at: At;
   /**
    * Expected owner debit overrides keyed `account:token` (lowercased) for ops
    * whose funding amount is a cap refunded at execution — repay legs pull
@@ -43,20 +42,22 @@ export function verifyWallet(params: {
    * paid amount, not the encoded cap.
    */
   readonly fundingDebitOverrides?: ReadonlyMap<string, bigint>;
-}): {
-  readonly assetChanges: readonly WalletBalance[];
-  readonly retention: "passed";
-} {
-  const { bundle, actionDiff, transfers, logger, at, fundingDebitOverrides } =
-    params;
-  const owner = bundle.owner;
-  const chainId = bundle.request.chainId;
+}): void {
+  const {
+    ctx,
+    operations,
+    actionDiff,
+    transfers,
+    logger,
+    fundingDebitOverrides,
+  } = params;
+  const owner = ctx.owner;
 
   const addresses = _try(
-    () => getChainAddresses(chainId),
+    () => getChainAddresses(ctx.chainId),
     UnsupportedChainIdError,
   );
-  if (addresses == null) throw new UnsupportedChainError(chainId);
+  if (addresses == null) throw new UnsupportedChainError(ctx.chainId);
 
   // Accounts allowed to carry balance changes.
   const knownAccounts = new Set<string>([owner.toLowerCase()]);
@@ -88,7 +89,7 @@ export function verifyWallet(params: {
         0n) + assets,
     );
 
-  for (const op of bundle.operations) {
+  for (const op of operations) {
     if ("receiver" in op) knownAccounts.add(op.receiver.toLowerCase());
     if ("referralFee" in op && op.referralFee != null)
       knownAccounts.add(op.referralFee.recipient.toLowerCase());
@@ -110,7 +111,7 @@ export function verifyWallet(params: {
         knownTokens.add(op.funding.token.toLowerCase());
       } else if (op.funding.type === "native") {
         // Native funding is a tx.value pull — debited from the owner's
-        // native balance, surfaced through the native-balance probe.
+        // native balance, surfaced through the native-balance reads.
         const override = fundingDebitOverrides?.get(
           `${owner.toLowerCase()}:${ethAddress}`,
         );
@@ -136,16 +137,12 @@ export function verifyWallet(params: {
     // is asserted by the route verifier, so no debit expectation is set here.
   }
 
-  for (const change of actionDiff.wallet) {
+  for (const change of actionDiff.balances) {
     const key = `${change.account.toLowerCase()}:${change.token.toLowerCase()}`;
     if (!knownAccounts.has(change.account.toLowerCase())) {
       throw new AssetChangeMismatchError(
         `Unexplained balance change on account "${change.account}" token "${change.token}": "${change.assets}". Only the owner, receivers, referral recipients, bundles, morpho and bound vaults may move.`,
-        {
-          context: verificationContext(at.context, at.mode, {
-            field: "walletDiff",
-          }),
-        },
+        { context: checkContext(ctx, "walletDiff") },
       );
     }
     const expected = expectedDebits.get(key);
@@ -153,11 +150,7 @@ export function verifyWallet(params: {
       if (change.assets !== -expected) {
         throw new AssetChangeMismatchError(
           `Owner debit on "${change.token}" was "${-change.assets}", expected exactly "${expected}"`,
-          {
-            context: verificationContext(at.context, at.mode, {
-              field: "ownerDebit",
-            }),
-          },
+          { context: checkContext(ctx, "ownerDebit") },
         );
       }
       expectedDebits.delete(key);
@@ -168,11 +161,7 @@ export function verifyWallet(params: {
       if (change.assets < credit) {
         throw new SlippageLimitExceededError(
           `Receiver credit on "${change.token}" was "${change.assets}", below the expected "${credit}"`,
-          {
-            context: verificationContext(at.context, at.mode, {
-              field: "receiverCredit",
-            }),
-          },
+          { context: checkContext(ctx, "receiverCredit") },
         );
       }
       expectedCredits.delete(key);
@@ -182,22 +171,14 @@ export function verifyWallet(params: {
     const [account, token] = key.split(":");
     throw new AssetChangeMismatchError(
       `Expected owner debit of "${expected}" on token "${token}" for account "${account}" was not observed in the action diff`,
-      {
-        context: verificationContext(at.context, at.mode, {
-          field: "ownerDebit",
-        }),
-      },
+      { context: checkContext(ctx, "ownerDebit") },
     );
   }
 
-  const assetChanges = actionDiff.wallet;
-
   assertNoBundlesRetention({
-    chainId,
+    chainId: ctx.chainId,
     transfers: transfers as Transfer[],
     assetChanges: [],
     logger,
   });
-
-  return { assetChanges, retention: "passed" };
 }

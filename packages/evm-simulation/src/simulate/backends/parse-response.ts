@@ -278,7 +278,21 @@ export function parseSimulationResponse(params: {
   if (failedPreparation) {
     throw new InvalidSimulationResponseError(
       `Authorization preparation call failed during simulation${failedPreparation.call.error?.message !== undefined ? `: ${failedPreparation.call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
-      { context: { ...errorContext, stage: "preparation" } },
+      {
+        context: {
+          stage: "preparation",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: params.stateBlockNumber,
+          authorizationIndex:
+            failedPreparation.planned.type === "preparation"
+              ? failedPreparation.planned.authorizationIndex
+              : -1,
+          ...(failedPreparation.planned.type === "preparation"
+            ? { preparationCallIndex: failedPreparation.planned.callIndex }
+            : {}),
+        },
+      },
     );
   }
 
@@ -288,7 +302,15 @@ export function parseSimulationResponse(params: {
     if (!result.status) {
       throw new InvalidSimulationResponseError(
         `State read "${planned.read.id}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
-        { context: { ...errorContext, stage: "verification" } },
+        {
+          context: {
+            stage: "verification",
+            chainId: plan.request.chainId,
+            mode: plan.request.mode,
+            blockNumber: params.stateBlockNumber,
+            field: planned.read.id,
+          },
+        },
       );
     }
     stateReads.push({
