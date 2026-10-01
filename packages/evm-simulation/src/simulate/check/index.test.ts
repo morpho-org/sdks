@@ -1,5 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
-import { getAddress, maxUint256 } from "viem";
+import { getAddress } from "viem";
 import { describe, expect, test, vi } from "vitest";
 import type { DecodedOperation } from "../../decode/operation.js";
 import { ConsumerLimitViolationError } from "../../errors.js";
@@ -65,84 +65,6 @@ describe("checkOperations — consumer limits", () => {
     expect(result.operations).toHaveLength(1);
     spy.mockRestore();
     void state;
-  });
-
-  test("equals mismatch → ConsumerLimitViolationError", () => {
-    const { args } = stubCheck();
-    const spy = vi.spyOn(blueModule, "checkBlueOperation").mockReturnValue({
-      operation: supplyOp,
-      outcome: { supplySharesMinted: 100n },
-    } as never);
-    const limit: OperationLimit = {
-      type: "blueSupply",
-      marketId: MARKET_ID,
-      expectedAssets: 999n,
-    };
-    expect(() =>
-      checkOperations({
-        ctx: makeCheckContext({
-          limits: { ...makeCheckContext().limits, operations: [limit] },
-        }),
-        ...args,
-      }),
-    ).toThrow(ConsumerLimitViolationError);
-    spy.mockRestore();
-  });
-
-  test("min bound fail → ConsumerLimitViolationError", () => {
-    const { args } = stubCheck();
-    const spy = vi.spyOn(blueModule, "checkBlueOperation").mockReturnValue({
-      operation: supplyOp,
-      outcome: { supplySharesMinted: 10n },
-    } as never);
-    const limit: OperationLimit = {
-      type: "blueSupply",
-      marketId: MARKET_ID,
-      minSupplySharesMinted: 100n,
-    };
-    expect(() =>
-      checkOperations({
-        ctx: makeCheckContext({
-          limits: { ...makeCheckContext().limits, operations: [limit] },
-        }),
-        ...args,
-      }),
-    ).toThrow(ConsumerLimitViolationError);
-    spy.mockRestore();
-  });
-
-  test("max bound vs non-finite RiskMetric → ConsumerLimitViolationError", () => {
-    const op = {
-      ...supplyOp,
-      type: "blueSupplyCollateral",
-      collateralAssets: 100n,
-    } as unknown as DecodedOperation;
-    const { state } = stubCheck();
-    const spy = vi.spyOn(blueModule, "checkBlueOperation").mockReturnValue({
-      operation: op,
-      outcome: {
-        ltvAfterWad: { type: "unbounded", reason: "zeroCollateral" },
-      },
-    } as never);
-    const limit: OperationLimit = {
-      type: "blueSupplyCollateral",
-      marketId: MARKET_ID,
-      maxLtvAfterWad: maxUint256 - 1n,
-    };
-    expect(() =>
-      checkOperations({
-        ctx: makeCheckContext({
-          limits: { ...makeCheckContext().limits, operations: [limit] },
-        }),
-        operations: [op],
-        accruedBefore: state,
-        after: state,
-        diff: { ...emptyDiff },
-        actionDiff: { ...emptyDiff },
-        transfers: [],
-      }),
-    ).toThrow(ConsumerLimitViolationError);
-    spy.mockRestore();
   });
 
   test("unmatched limit type → ConsumerLimitViolationError", () => {

@@ -70,6 +70,7 @@ export async function runSimulation(params: {
   );
   if (addresses == null) throw new UnsupportedChainError(request.chainId);
   if (addresses.blue == null) throw new UnsupportedChainError(request.chainId);
+  const morpho = addresses.blue;
 
   const pinnedBlock = await resolvePinnedBlock({
     client,
@@ -116,7 +117,7 @@ export async function runSimulation(params: {
   const reads = planStateReads({
     subjects,
     owner,
-    morpho: addresses.blue,
+    morpho,
     permit2: addresses.permit2,
     vaultData,
   });
@@ -129,7 +130,7 @@ export async function runSimulation(params: {
     ? prepareAuthorizations({
         authorizations: request.authorizations,
         owner,
-        morpho: addresses.blue,
+        morpho,
       })
     : [];
 
@@ -168,7 +169,7 @@ export async function runSimulation(params: {
       reads: decodePhase(phase),
       subjects,
       owner,
-      morpho: addresses.blue!,
+      morpho,
       vaultData,
       marketBindings: new Map(
         subjects.markets.map((binding) => [binding.marketId, binding]),

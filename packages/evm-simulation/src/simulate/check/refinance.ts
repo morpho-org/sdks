@@ -6,14 +6,18 @@ import {
   SlippageLimitExceededError,
 } from "../../errors.js";
 import type { SimulationStateChange } from "../../result.js";
-import type { ParsedState } from "../state/types.js";
+import type { ParsedState, RiskMetric } from "../state/types.js";
 import {
   type CheckContext,
   type CheckedOperation,
   eq,
+  expectEquals,
+  expectMax,
+  expectMin,
   fail,
   findMarket,
   findPosition,
+  matchLimits,
   opContext,
   riskOn,
   toMarketEntity,
@@ -191,4 +195,93 @@ export function checkRefinanceOperation(
       reallocationPenaltyAssets: penaltyAssets,
     },
   } as CheckedOperation;
+}
+
+/**
+ * Assert every consumer limit declared for one checked refinance. Called by
+ * {@link checkOperations} right after the economic check that produced the
+ * outcome.
+ * @internal
+ */
+export function checkRefinanceLimits(
+  ctx: CheckContext,
+  checked: CheckedOperation,
+): void {
+  const { operation: op, outcome } = checked;
+  if (op.type !== "blueRefinance") return;
+  const o = outcome as {
+    targetBorrowAssets: bigint;
+    targetBorrowSharesMinted: bigint;
+    sourceResidualBorrowShares: bigint;
+    targetLtvAfterWad: RiskMetric;
+    targetHealthFactorAfterWad: RiskMetric;
+    loanDustAssets: bigint;
+    reallocationPenaltyAssets: bigint;
+  };
+  for (const limit of matchLimits(ctx, op)) {
+    if (limit.type !== "blueRefinance") continue;
+    expectEquals(
+      ctx,
+      op,
+      "sourceMarketId",
+      limit.sourceMarketId,
+      op.sourceMarket.marketId,
+    );
+    expectEquals(
+      ctx,
+      op,
+      "targetMarketId",
+      limit.targetMarketId,
+      op.targetMarket.marketId,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxTargetBorrowAssets",
+      limit.maxTargetBorrowAssets,
+      o.targetBorrowAssets,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxTargetBorrowSharesMinted",
+      limit.maxTargetBorrowSharesMinted,
+      o.targetBorrowSharesMinted,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxSourceResidualBorrowShares",
+      limit.maxSourceResidualBorrowShares,
+      o.sourceResidualBorrowShares,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxTargetLtvAfterWad",
+      limit.maxTargetLtvAfterWad,
+      o.targetLtvAfterWad,
+    );
+    expectMin(
+      ctx,
+      op,
+      "minTargetHealthFactorAfterWad",
+      limit.minTargetHealthFactorAfterWad,
+      o.targetHealthFactorAfterWad,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxLoanDustAssets",
+      limit.maxLoanDustAssets,
+      o.loanDustAssets,
+    );
+    expectMax(
+      ctx,
+      op,
+      "maxReallocationPenaltyAssets",
+      limit.maxReallocationPenaltyAssets,
+      o.reallocationPenaltyAssets,
+    );
+  }
 }

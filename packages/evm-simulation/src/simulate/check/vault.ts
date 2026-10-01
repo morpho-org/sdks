@@ -8,8 +8,12 @@ import { checkReferralFee } from "./fees.js";
 import {
   type CheckContext,
   type CheckedOperation,
+  expectEquals,
+  expectMax,
+  expectMin,
   fail,
   findVault,
+  matchLimits,
   opContext,
   receiverCredit,
 } from "./helpers.js";
@@ -263,6 +267,113 @@ export function checkVaultOperation(
         `checkVaultOperation received ${JSON.stringify(_exhaustive)}`,
         { context: opContext(ctx, operation as DecodedOperation) },
       );
+    }
+  }
+}
+
+/**
+ * Assert every consumer limit declared for one checked vault deposit /
+ * withdraw / redeem (V1 and V2 share a limit shape). Called by
+ * {@link checkOperations} right after the economic check that produced the
+ * outcome.
+ * @internal
+ */
+export function checkVaultOperationLimits(
+  ctx: CheckContext,
+  checked: CheckedOperation,
+): void {
+  const { operation: op, outcome } = checked;
+  for (const limit of matchLimits(ctx, op)) {
+    switch (limit.type) {
+      case "vaultV1Deposit":
+      case "vaultV2Deposit": {
+        if (op.type !== "vaultV1Deposit" && op.type !== "vaultV2Deposit")
+          continue;
+        const o = outcome as { sharesMinted: bigint };
+        expectEquals(ctx, op, "vault", limit.vault, op.vault);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.funding.assets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minSharesMinted",
+          limit.minSharesMinted,
+          o.sharesMinted,
+        );
+        break;
+      }
+      case "vaultV1Withdraw":
+      case "vaultV2Withdraw": {
+        if (op.type !== "vaultV1Withdraw" && op.type !== "vaultV2Withdraw")
+          continue;
+        const o = outcome as { sharesBurned: bigint };
+        expectEquals(ctx, op, "vault", limit.vault, op.vault);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.assets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxSharesBurned",
+          limit.maxSharesBurned,
+          o.sharesBurned,
+        );
+        break;
+      }
+      case "vaultV1Redeem":
+      case "vaultV2Redeem": {
+        if (op.type !== "vaultV1Redeem" && op.type !== "vaultV2Redeem")
+          continue;
+        const o = outcome as { assetsReceived: bigint };
+        expectEquals(ctx, op, "vault", limit.vault, op.vault);
+        expectEquals(
+          ctx,
+          op,
+          "expectedShares",
+          limit.expectedShares,
+          op.shares,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minAssetsReceived",
+          limit.minAssetsReceived,
+          o.assetsReceived,
+        );
+        break;
+      }
+      default:
+        break;
     }
   }
 }

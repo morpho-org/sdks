@@ -10,6 +10,7 @@ import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import type { DecodedOperation } from "../../decode/operation.js";
 import {
+  ConsumerLimitViolationError,
   MarketConstraintViolationError,
   type SimulationErrorContext,
   StateChangeMismatchError,
@@ -415,3 +416,180 @@ export type CheckedOperation = {
     readonly outcome: OperationOutcomeFields[Type];
   };
 }[DecodedOperation["type"]];
+
+/** Scalar value carried by a limit check. @internal */
+export type LimitValue = bigint | boolean | Address | MarketId | RiskMetric;
+
+const describeLimit = (
+  value: LimitValue | readonly unknown[] | undefined,
+): string => {
+  if (value === undefined) return "undefined";
+  if (typeof value === "bigint" || typeof value === "boolean")
+    return `${value}`;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value))
+    return `[${value.map((v) => describeLimit(v as LimitValue)).join(", ")}]`;
+  if (typeof value === "object" && "type" in value)
+    return value.type === "finite" ? `${value.valueWad}` : value.type;
+  return JSON.stringify(value, (_key, entry) =>
+    typeof entry === "bigint" ? entry.toString() : (entry as unknown),
+  );
+};
+
+const scalarLimit = (
+  value: LimitValue | undefined,
+): bigint | boolean | `0x${string}` | undefined => {
+  if (typeof value === "bigint" || typeof value === "boolean") return value;
+  if (typeof value === "string" && value.startsWith("0x"))
+    return value as `0x${string}`;
+  return undefined;
+};
+
+/**
+ * Throw a {@link ConsumerLimitViolationError} for one limit field, with the
+ * `expected "...", got "..."` context format used by every limit check.
+ * @internal
+ */
+// biome-ignore lint/complexity/useMaxParams: violation reports need field, bound, observed and hint
+export const limitViolation = (
+  ctx: CheckContext,
+  op: DecodedOperation,
+  field: string,
+  expected: LimitValue | readonly unknown[] | undefined,
+  observed: LimitValue | readonly unknown[] | undefined,
+  hint: string,
+): never => {
+  const expectedScalar =
+    expected == null || Array.isArray(expected)
+      ? undefined
+      : scalarLimit(expected as LimitValue);
+  const observedScalar =
+    observed == null || Array.isArray(observed)
+      ? undefined
+      : scalarLimit(observed as LimitValue);
+  throw new ConsumerLimitViolationError(
+    `Operation limit "${op.type}.${field}" expected "${describeLimit(expected)}", observed "${describeLimit(observed)}". ${hint}`,
+    {
+      context: {
+        stage: "verification",
+        chainId: ctx.chainId,
+        mode: ctx.mode,
+        blockNumber: ctx.block.blockNumber,
+        ...operationSubject(op),
+        field: `${op.type}.${field}`,
+        ...(expectedScalar === undefined ? {} : { expected: expectedScalar }),
+        ...(observedScalar === undefined ? {} : { observed: observedScalar }),
+        failedTransactionIndex: op.transactionIndex,
+      },
+    },
+  );
+};
+
+/** Case-insensitive hex equality (addresses and market ids). @internal */
+export const eqLimit = (
+  a: Address | MarketId | undefined,
+  b: Address | MarketId | undefined,
+): boolean =>
+  a === undefined || b === undefined
+    ? a === b
+    : a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Assert `observed === bound` when `bound` is declared; `equals` limits pin
+ * decoded operation fields (hex strings compare case-insensitively, scalars
+ * with `===`).
+ * @internal
+ */
+// biome-ignore lint/complexity/useMaxParams: limit checks read clearest with positional arguments
+export const expectEquals = (
+  ctx: CheckContext,
+  op: DecodedOperation,
+  field: string,
+  bound: Address | MarketId | bigint | boolean | undefined,
+  observed: Address | MarketId | bigint | boolean | undefined,
+): void => {
+  if (bound === undefined) return;
+  const same =
+    typeof bound === "string" || typeof observed === "string"
+      ? eqLimit(bound as Address | MarketId, observed as Address | MarketId)
+      : bound === observed;
+  if (!same)
+    limitViolation(
+      ctx,
+      op,
+      field,
+      bound as LimitValue,
+      observed as LimitValue,
+      "The bundle does not match the declared constraint.",
+    );
+};
+
+/**
+ * Assert `observed >= bound` when `bound` is declared. A non-finite
+ * {@link RiskMetric} observed value ("infinite") passes every `min` bound.
+ * @internal
+ */
+// biome-ignore lint/complexity/useMaxParams: limit checks read clearest with positional arguments
+export const expectMin = (
+  ctx: CheckContext,
+  op: DecodedOperation,
+  field: string,
+  bound: bigint | undefined,
+  observed: bigint | RiskMetric,
+): void => {
+  if (bound === undefined) return;
+  const numeric =
+    typeof observed === "bigint" ? observed : riskMetricWad(observed);
+  if (numeric !== null && numeric < bound)
+    limitViolation(
+      ctx,
+      op,
+      field,
+      bound,
+      observed,
+      "Decrease the bound or adjust the operation.",
+    );
+};
+
+/**
+ * Assert `observed <= bound` when `bound` is declared. A non-finite
+ * {@link RiskMetric} observed value fails every `max` cap.
+ * @internal
+ */
+// biome-ignore lint/complexity/useMaxParams: limit checks read clearest with positional arguments
+export const expectMax = (
+  ctx: CheckContext,
+  op: DecodedOperation,
+  field: string,
+  bound: bigint | undefined,
+  observed: bigint | RiskMetric,
+): void => {
+  if (bound === undefined) return;
+  const numeric =
+    typeof observed === "bigint" ? observed : riskMetricWad(observed);
+  if (numeric === null || numeric > bound)
+    limitViolation(
+      ctx,
+      op,
+      field,
+      bound,
+      observed,
+      "Increase the bound or reduce the operation.",
+    );
+};
+
+/** Numeric value of a {@link RiskMetric}; `null` when non-finite. @internal */
+export const riskMetricWad = (metric: RiskMetric): bigint | null =>
+  metric.type === "finite" ? metric.valueWad : null;
+
+/** Consumer limits matching one decoded operation (type + optional `transactionIndex`). @internal */
+export const matchLimits = (
+  ctx: CheckContext,
+  op: DecodedOperation,
+): readonly OperationLimit[] =>
+  ctx.limits.operations.filter(
+    (limit) =>
+      limit.type === op.type &&
+      (limit.transactionIndex === undefined ||
+        limit.transactionIndex === op.transactionIndex),
+  );

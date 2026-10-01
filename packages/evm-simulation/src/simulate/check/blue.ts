@@ -11,9 +11,13 @@ import {
   type CheckContext,
   type CheckedOperation,
   checkLtv,
+  expectEquals,
+  expectMax,
+  expectMin,
   fail,
   findMarket,
   findPosition,
+  matchLimits,
   opContext,
   reallocationPenalty,
   riskOn,
@@ -403,4 +407,455 @@ export function fundingDebitOverrides(
     overrides.set(key, (overrides.get(key) ?? 0n) + paid);
   }
   return overrides;
+}
+
+/**
+ * Assert every consumer limit declared for one checked Blue operation.
+ * Called by {@link checkOperations} right after the economic check that
+ * produced the outcome.
+ * @internal
+ */
+export function checkBlueOperationLimits(
+  ctx: CheckContext,
+  checked: CheckedOperation,
+): void {
+  const { operation: op, outcome } = checked;
+  for (const limit of matchLimits(ctx, op)) {
+    switch (limit.type) {
+      case "blueSupply": {
+        if (op.type !== "blueSupply") continue;
+        const o = outcome as { supplySharesMinted: bigint };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.assets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedOnBehalf",
+          limit.expectedOnBehalf,
+          op.onBehalf,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minSupplySharesMinted",
+          limit.minSupplySharesMinted,
+          o.supplySharesMinted,
+        );
+        break;
+      }
+      case "blueWithdraw": {
+        if (op.type !== "blueWithdraw") continue;
+        const o = outcome as {
+          assetsReceived: bigint;
+          supplySharesBurned: bigint;
+          utilizationAfterWad: RiskMetric;
+          reallocationPenaltyAssets: bigint;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedFullClose",
+          limit.expectedFullClose,
+          op.fullClose,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minAssetsReceived",
+          limit.minAssetsReceived,
+          o.assetsReceived,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxSupplySharesBurned",
+          limit.maxSupplySharesBurned,
+          o.supplySharesBurned,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxUtilizationAfterWad",
+          limit.maxUtilizationAfterWad,
+          o.utilizationAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxReallocationPenaltyAssets",
+          limit.maxReallocationPenaltyAssets,
+          o.reallocationPenaltyAssets,
+        );
+        break;
+      }
+      case "blueSupplyCollateral": {
+        if (op.type !== "blueSupplyCollateral") continue;
+        const o = outcome as { ltvAfterWad: RiskMetric };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.collateralAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedOnBehalf",
+          limit.expectedOnBehalf,
+          op.onBehalf,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxLtvAfterWad",
+          limit.maxLtvAfterWad,
+          o.ltvAfterWad,
+        );
+        break;
+      }
+      case "blueBorrow": {
+        if (op.type !== "blueBorrow") continue;
+        const o = outcome as {
+          borrowSharesMinted: bigint;
+          ltvAfterWad: RiskMetric;
+          healthFactorAfterWad: RiskMetric;
+          utilizationAfterWad: RiskMetric;
+          borrowApyAfterWad: bigint;
+          reallocationPenaltyAssets: bigint;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.borrowAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxBorrowSharesMinted",
+          limit.maxBorrowSharesMinted,
+          o.borrowSharesMinted,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxLtvAfterWad",
+          limit.maxLtvAfterWad,
+          o.ltvAfterWad,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minHealthFactorAfterWad",
+          limit.minHealthFactorAfterWad,
+          o.healthFactorAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxUtilizationAfterWad",
+          limit.maxUtilizationAfterWad,
+          o.utilizationAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxAfterBorrowApyWad",
+          limit.maxAfterBorrowApyWad,
+          o.borrowApyAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxReallocationPenaltyAssets",
+          limit.maxReallocationPenaltyAssets,
+          o.reallocationPenaltyAssets,
+        );
+        break;
+      }
+      case "blueSupplyCollateralBorrow": {
+        if (op.type !== "blueSupplyCollateralBorrow") continue;
+        const o = outcome as {
+          borrowSharesMinted: bigint;
+          ltvAfterWad: RiskMetric;
+          healthFactorAfterWad: RiskMetric;
+          utilizationAfterWad: RiskMetric;
+          borrowApyAfterWad: bigint;
+          reallocationPenaltyAssets: bigint;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedCollateralAssets",
+          limit.expectedCollateralAssets,
+          op.collateralAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedBorrowAssets",
+          limit.expectedBorrowAssets,
+          op.borrowAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedOnBehalf",
+          limit.expectedOnBehalf,
+          op.onBehalf,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxBorrowSharesMinted",
+          limit.maxBorrowSharesMinted,
+          o.borrowSharesMinted,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxLtvAfterWad",
+          limit.maxLtvAfterWad,
+          o.ltvAfterWad,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minHealthFactorAfterWad",
+          limit.minHealthFactorAfterWad,
+          o.healthFactorAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxUtilizationAfterWad",
+          limit.maxUtilizationAfterWad,
+          o.utilizationAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxAfterBorrowApyWad",
+          limit.maxAfterBorrowApyWad,
+          o.borrowApyAfterWad,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxReallocationPenaltyAssets",
+          limit.maxReallocationPenaltyAssets,
+          o.reallocationPenaltyAssets,
+        );
+        break;
+      }
+      case "blueRepay": {
+        if (op.type !== "blueRepay") continue;
+        const o = outcome as {
+          assetsPaid: bigint;
+          borrowSharesBurned: bigint;
+          residualBorrowShares: bigint;
+          refundAssets: bigint;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedOnBehalf",
+          limit.expectedOnBehalf,
+          op.onBehalf,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedFullClose",
+          limit.expectedFullClose,
+          op.fullClose,
+        );
+        expectMax(ctx, op, "maxAssetsPaid", limit.maxAssetsPaid, o.assetsPaid);
+        expectMin(
+          ctx,
+          op,
+          "minBorrowSharesBurned",
+          limit.minBorrowSharesBurned,
+          o.borrowSharesBurned,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxResidualBorrowShares",
+          limit.maxResidualBorrowShares,
+          o.residualBorrowShares,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minRefundAssets",
+          limit.minRefundAssets,
+          o.refundAssets,
+        );
+        break;
+      }
+      case "blueWithdrawCollateral": {
+        if (op.type !== "blueWithdrawCollateral") continue;
+        const o = outcome as {
+          ltvAfterWad: RiskMetric;
+          healthFactorAfterWad: RiskMetric;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedAssets",
+          limit.expectedAssets,
+          op.collateralAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxLtvAfterWad",
+          limit.maxLtvAfterWad,
+          o.ltvAfterWad,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minHealthFactorAfterWad",
+          limit.minHealthFactorAfterWad,
+          o.healthFactorAfterWad,
+        );
+        break;
+      }
+      case "blueRepayWithdrawCollateral": {
+        if (op.type !== "blueRepayWithdrawCollateral") continue;
+        const o = outcome as {
+          assetsPaid: bigint;
+          borrowSharesBurned: bigint;
+          residualBorrowShares: bigint;
+          refundAssets: bigint;
+          ltvAfterWad: RiskMetric;
+          healthFactorAfterWad: RiskMetric;
+        };
+        expectEquals(ctx, op, "marketId", limit.marketId, op.market.marketId);
+        expectEquals(
+          ctx,
+          op,
+          "expectedWithdrawAssets",
+          limit.expectedWithdrawAssets,
+          op.collateralAssets,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedOnBehalf",
+          limit.expectedOnBehalf,
+          op.onBehalf,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedReceiver",
+          limit.expectedReceiver,
+          op.receiver,
+        );
+        expectEquals(
+          ctx,
+          op,
+          "expectedFullClose",
+          limit.expectedFullClose,
+          op.fullClose,
+        );
+        expectMax(ctx, op, "maxAssetsPaid", limit.maxAssetsPaid, o.assetsPaid);
+        expectMin(
+          ctx,
+          op,
+          "minBorrowSharesBurned",
+          limit.minBorrowSharesBurned,
+          o.borrowSharesBurned,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxResidualBorrowShares",
+          limit.maxResidualBorrowShares,
+          o.residualBorrowShares,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minRefundAssets",
+          limit.minRefundAssets,
+          o.refundAssets,
+        );
+        expectMax(
+          ctx,
+          op,
+          "maxLtvAfterWad",
+          limit.maxLtvAfterWad,
+          o.ltvAfterWad,
+        );
+        expectMin(
+          ctx,
+          op,
+          "minHealthFactorAfterWad",
+          limit.minHealthFactorAfterWad,
+          o.healthFactorAfterWad,
+        );
+        break;
+      }
+      case "blueAuthorization": {
+        if (op.type !== "blueAuthorization") continue;
+        expectEquals(ctx, op, "authorized", limit.authorized, op.authorized);
+        expectEquals(
+          ctx,
+          op,
+          "expectedIsAuthorized",
+          limit.expectedIsAuthorized,
+          op.isAuthorized,
+        );
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
