@@ -117,8 +117,12 @@ checks and checking requests against calldata and state), the error catalog apar
 existing classes' rows, and the Invariants that depend on those parts: route reconciliation,
 tighten-only SDK protections, exact-request preview validation, the Permit2 preview checks,
 explicit failure of unsupported routes, and the call-time freshness clock. Determinism holds at the
-pinned block alone.
-An expired deadline now surfaces as an execution revert. The rest of it stays in force, including
+pinned block alone. It also replaces the verification of untrusted `SimulationAuthorization`
+descriptors against calldata and state, the builder/attestor guarantee resting on it, and the rule
+that a successful preview authorizes requesting the pending wallet actions: descriptors are not
+checked against the bundle, and a successful preview does not show that the wallet requests match
+it. A deadline encoded in the executed transactions surfaces as an execution revert once it has
+expired; preview does not check the deadlines of pending authorizations. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
 `toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
 The Morpho-specific failure-message requirement also stays; its coverage scope is still the
