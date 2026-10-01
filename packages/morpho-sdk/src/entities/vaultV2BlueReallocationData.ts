@@ -2055,18 +2055,9 @@ export class VaultV2BlueReallocationData
     const targetChange = MathLib.max(simulatedChange, reallocation.assets);
     for (const id of targetIds) {
       const allocation = data.getAllocation(reallocation.vault, id);
-      const nextAllocation = allocation.allocation + targetChange;
-      if (nextAllocation < 0n) {
-        throw new ReallocationAllocationUnderflowError({
-          vault: reallocation.vault,
-          id,
-          allocation: allocation.allocation,
-          change: targetChange,
-        });
-      }
       data.mutableAllocations[allocationsKey]![id] = {
         ...allocation,
-        allocation: nextAllocation,
+        allocation: allocation.allocation + targetChange,
       };
     }
 
