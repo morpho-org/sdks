@@ -31,10 +31,18 @@ The optional `logger` continues to receive parsing and retention warnings.
 Keep handling `SimulationRevertedError`, `BlacklistViolationError`,
 `ExternalServiceError`, `SimulationValidationError`, and `UnsupportedChainError`
 by class identity. Their class identities and codes are preserved; see the
-SDK-1293 section for the changed `SimulationRevertedError.details` shape. One
-reclassification: an endpoint reporting a different `chainId` than configured
-now throws `InvalidSimulationResponseError` (non-bypassable) instead of
-`ExternalServiceError`.
+SDK-1293 section for the changed `SimulationRevertedError.details` shape.
+Several node-side failures that v4 reported as the bypassable
+`ExternalServiceError` now throw the non-bypassable
+`InvalidSimulationResponseError`: an endpoint whose `eth_chainId` differs from
+the configured chain, a malformed `eth_simulateV1` block envelope, a call count
+that does not match the request, a simulated block that is neither the pinned
+state block nor its immediate successor (or a successor whose `parentHash` does
+not match), a block timestamp earlier than the pinned block's, and a pinned
+state block whose hash changed during the simulation. Callers that bypass
+`ExternalServiceError` to proceed unsimulated must handle these as hard
+failures. `ExternalServiceError` remains for transport failures, timeouts and
+malformed JSON-RPC envelopes.
 Failures and timeouts reject the call; they do not produce a successful result.
 
 `simulationTxs`, `calls`, `transfers`, and `assetChanges` retain their shapes in
