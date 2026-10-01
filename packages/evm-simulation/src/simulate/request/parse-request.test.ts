@@ -450,6 +450,37 @@ describe("parseRequest", () => {
     ).toThrow(SimulationValidationError);
   });
 
+  test("error: rejects adapter on a vault limit as an unknown key", () => {
+    const error = (() => {
+      try {
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [
+              {
+                type: "vaultV2Deposit",
+                vault: SPENDER,
+                adapter: TARGET,
+                quote: { sharesMinted: 1n },
+                slippageTolerance: 0n,
+              },
+            ],
+          },
+        });
+      } catch (caughtError) {
+        return caughtError;
+      }
+    })();
+
+    expect(error).toBeInstanceOf(SimulationValidationError);
+    expect(error).toMatchObject({
+      fieldErrors: expect.arrayContaining([
+        "limits.operations[0].adapter: unknown field",
+      ]),
+    });
+  });
+
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
     const error = (() => {
       try {

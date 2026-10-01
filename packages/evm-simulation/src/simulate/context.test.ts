@@ -8,7 +8,6 @@ const MARKET = `0x${"11".repeat(32)}` as MarketId;
 const SOURCE_MARKET = `0x${"22".repeat(32)}` as MarketId;
 const TARGET_MARKET = `0x${"33".repeat(32)}` as MarketId;
 const VAULT = getAddress("0x4444444444444444444444444444444444444444");
-const ADAPTER = getAddress("0x5555555555555555555555555555555555555555");
 const TARGET_VAULT = getAddress("0x6666666666666666666666666666666666666666");
 
 const subjects: {
@@ -40,17 +39,6 @@ const subjects: {
       sourceMarketId: SOURCE_MARKET,
       targetMarketId: TARGET_MARKET,
     },
-  },
-  {
-    name: "vault with adapter",
-    limit: {
-      type: "vaultV2Deposit",
-      vault: VAULT,
-      adapter: ADAPTER,
-      quote: { sharesMinted: 1n },
-      slippageTolerance: 0n,
-    },
-    expected: { operation: "vaultV2Deposit", vault: VAULT, adapter: ADAPTER },
   },
   {
     name: "vault migration source and target",

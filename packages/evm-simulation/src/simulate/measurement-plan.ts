@@ -130,7 +130,6 @@ export function operationMeasurementPlan(
         subject: {
           operation: limit.type,
           vault: limit.vault,
-          ...(limit.adapter !== undefined ? { adapter: limit.adapter } : {}),
         },
         assetsPaid: vault(limit.vault),
         assetsReceived: vault(limit.vault),

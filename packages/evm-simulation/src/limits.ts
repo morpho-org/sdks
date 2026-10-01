@@ -90,8 +90,6 @@ export interface VaultOperationSubject {
   readonly operation: VaultOperationType;
   /** Vault the operation acts on. */
   readonly vault: Address;
-  /** Vault V2 adapter the operation routes through. */
-  readonly adapter?: Address;
 }
 
 /** Subject of a Vault V1 → V2 migration. */
@@ -172,7 +170,6 @@ export type OperationLimit = SlippageLimits & {
     | {
         readonly type: VaultOperationType;
         readonly vault: Address;
-        readonly adapter?: Address;
       }
     | {
         readonly type: "vaultV1MigrateToV2";
