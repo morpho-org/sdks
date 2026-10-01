@@ -1,6 +1,6 @@
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import {
   AuthorizationRequestMismatchError,
   PermissionChangeMismatchError,
@@ -29,7 +29,7 @@ const emptyState = (
   ...overrides,
 });
 
-const approvalAuth: PendingAuthorization = {
+const approvalAuth: SimulationAuthorization = {
   type: "erc20Approval",
   token: TOKEN,
   owner: TEST_OWNER,

@@ -41,7 +41,8 @@ describe("permit2Reads + parsePermit2", () => {
         verifyingContract: PERMIT2,
         owner: OWNER,
         nonce: 5n,
-        used: true,
+        before: 1n << 5n,
+        after: 1n << 5n,
       },
     ]);
   });

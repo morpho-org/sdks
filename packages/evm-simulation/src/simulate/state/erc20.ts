@@ -8,7 +8,7 @@ import {
 } from "viem";
 import { InvalidSimulationResponseError } from "../../errors.js";
 import type {
-  SignatureNonce,
+  SequentialNonceChange,
   TokenAllowance,
   TokenBalance,
 } from "../../result.js";
@@ -92,11 +92,11 @@ export function erc20Reads(subjects: Erc20Subjects): StateRead[] {
 export function parseErc20(reads: readonly DecodedStateRead[]): {
   readonly balances: TokenBalance[];
   readonly allowances: TokenAllowance[];
-  readonly nonces: SignatureNonce[];
+  readonly nonces: SequentialNonceChange[];
 } {
   const balances: TokenBalance[] = [];
   const allowances: TokenAllowance[] = [];
-  const nonces: SignatureNonce[] = [];
+  const nonces: SequentialNonceChange[] = [];
   for (const { read, value } of reads) {
     switch (read.kind) {
       case "erc20.balance":
@@ -122,7 +122,8 @@ export function parseErc20(reads: readonly DecodedStateRead[]): {
           type: "erc2612",
           verifyingContract: read.token,
           owner: read.owner,
-          nonce: value,
+          before: value,
+          after: value,
         });
         break;
       default:

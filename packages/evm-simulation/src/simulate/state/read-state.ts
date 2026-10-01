@@ -10,7 +10,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, ethAddress, isAddressEqual, zeroAddress } from "viem";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import type {
   PreLiquidationBinding,
   VaultBinding,
@@ -99,7 +99,7 @@ export interface StateSubjects {
 export function collectSubjects(params: {
   readonly owner: Address;
   readonly operations: readonly DecodedOperation[];
-  readonly authorizations: readonly PendingAuthorization[];
+  readonly authorizations: readonly SimulationAuthorization[];
   readonly vaults: readonly VaultBinding[];
   readonly preLiquidations: readonly PreLiquidationBinding[];
   readonly addresses: ChainAddresses;

@@ -1,5 +1,5 @@
 import { type Address, maxUint256 } from "viem";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import type { DecodedOperation } from "../../decode/operation.js";
 import {
   AuthorizationRequestMismatchError,
@@ -8,7 +8,7 @@ import {
 } from "../../errors.js";
 import type {
   AuthorizationPreparation,
-  SignatureNonce,
+  SignatureNonceChange,
   SimulationState,
   TokenAllowance,
 } from "../../result.js";
@@ -30,10 +30,10 @@ const findAllowance = (
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
 const findNonce = (
   state: SimulationState,
-  type: SignatureNonce["type"],
+  type: SignatureNonceChange["type"],
   verifyingContract: Address,
   owner: Address,
-): SignatureNonce | undefined =>
+): SignatureNonceChange | undefined =>
   state.nonces.find(
     (n) =>
       n.type === type &&
@@ -49,7 +49,7 @@ const isAuthorized = (
 ): boolean | undefined =>
   state.morphoAuthorizations.find(
     (a) => eq(a.authorizer, authorizer) && eq(a.authorized, authorized),
-  )?.isAuthorized;
+  )?.after;
 
 /** ERC-20 amount pulled out of `owner`'s wallet inside the user calls. */
 // biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
@@ -116,7 +116,7 @@ const mismatch = (ctx: CheckContext, message: string, field: string): never => {
  */
 export function checkAuthorizations(params: {
   readonly ctx: CheckContext;
-  readonly authorizations: readonly PendingAuthorization[];
+  readonly authorizations: readonly SimulationAuthorization[];
   readonly operations: readonly DecodedOperation[];
   readonly before: SimulationState;
   readonly after: SimulationState;
@@ -219,21 +219,21 @@ export function checkAuthorizations(params: {
           if (
             nonceBefore != null &&
             nonceAfter != null &&
-            nonceAfter.nonce !== nonceBefore.nonce
+            nonceAfter.after !== nonceBefore.after
           )
             mismatch(
               ctx,
-              `erc2612 nonce for ${message.owner} moved "${nonceBefore.nonce}" → "${nonceAfter.nonce}" in preview`,
+              `erc2612 nonce for ${message.owner} moved "${nonceBefore.after}" → "${nonceAfter.after}" in preview`,
               "erc2612Nonce",
             );
         } else if (
           nonceBefore != null &&
           nonceAfter != null &&
-          nonceAfter.nonce !== nonceBefore.nonce + 1n
+          nonceAfter.after !== nonceBefore.after + 1n
         ) {
           mismatch(
             ctx,
-            `erc2612 nonce for ${message.owner} is "${nonceAfter.nonce}", expected "${nonceBefore.nonce + 1n}"`,
+            `erc2612 nonce for ${message.owner} is "${nonceAfter.after}", expected "${nonceBefore.after + 1n}"`,
             "erc2612Nonce",
           );
         }
@@ -263,7 +263,7 @@ export function checkAuthorizations(params: {
           if (
             bitBefore != null &&
             bitAfter != null &&
-            bitAfter.nonce !== bitBefore.nonce
+            bitAfter.after !== bitBefore.after
           )
             mismatch(
               ctx,
@@ -272,12 +272,20 @@ export function checkAuthorizations(params: {
             );
         } else {
           // Embedded signature: the bit must be unset before and set after.
-          if (bitBefore?.used === true)
+          if (
+            bitBefore != null &&
+            (bitBefore.after & (1n << (message.nonce & 0xffn))) !== 0n
+          )
             throw new AuthorizationRequestMismatchError(
               `Permit2 nonce "${message.nonce}" for ${auth.owner} is already spent at the before state`,
               { context: prepContext(ctx, authorizationIndex) },
             );
-          if (bitBefore != null && bitAfter != null && bitAfter.used !== true)
+          if (
+            bitBefore != null &&
+            bitAfter != null &&
+            bitAfter.type === "permit2" &&
+            (bitAfter.after & (1n << (bitAfter.nonce & 0xffn))) === 0n
+          )
             mismatch(
               ctx,
               `Permit2 nonce "${message.nonce}" for ${auth.owner} was not spent by the simulation`,
@@ -327,21 +335,21 @@ export function checkAuthorizations(params: {
             if (
               nonceBefore != null &&
               nonceAfter != null &&
-              nonceAfter.nonce !== nonceBefore.nonce
+              nonceAfter.after !== nonceBefore.after
             )
               mismatch(
                 ctx,
-                `Blue nonce for ${authorizer} moved "${nonceBefore.nonce}" → "${nonceAfter.nonce}" in preview`,
+                `Blue nonce for ${authorizer} moved "${nonceBefore.after}" → "${nonceAfter.after}" in preview`,
                 "blueNonce",
               );
           } else if (
             nonceBefore != null &&
             nonceAfter != null &&
-            nonceAfter.nonce !== nonceBefore.nonce + 1n
+            nonceAfter.after !== nonceBefore.after + 1n
           ) {
             mismatch(
               ctx,
-              `Blue nonce for ${authorizer} is "${nonceAfter.nonce}", expected "${nonceBefore.nonce + 1n}"`,
+              `Blue nonce for ${authorizer} is "${nonceAfter.after}", expected "${nonceBefore.after + 1n}"`,
               "blueNonce",
             );
           }

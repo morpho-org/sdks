@@ -92,5 +92,43 @@ export function diffState(
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry != null);
 
-  return { balances, allowances, positions, markets, vaults };
+  const morphoAuthorizations = after.morphoAuthorizations
+    .map((auth) => {
+      const prior = before.morphoAuthorizations.find(
+        (p) =>
+          eq(p.authorizer, auth.authorizer) &&
+          eq(p.authorized, auth.authorized),
+      );
+      const priorValue = prior?.after ?? false;
+      return auth.after === priorValue ? null : { ...auth, before: priorValue };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry != null);
+
+  const nonces = after.nonces
+    .map((nonce) => {
+      const prior = before.nonces.find(
+        (p) =>
+          p.type === nonce.type &&
+          eq(p.verifyingContract, nonce.verifyingContract) &&
+          eq(p.owner, nonce.owner) &&
+          (p.type !== "permit2" ||
+            nonce.type !== "permit2" ||
+            p.nonce === nonce.nonce),
+      );
+      const priorValue = prior?.after ?? 0n;
+      return nonce.after === priorValue
+        ? null
+        : { ...nonce, before: priorValue };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry != null);
+
+  return {
+    balances,
+    allowances,
+    morphoAuthorizations,
+    nonces,
+    positions,
+    markets,
+    vaults,
+  };
 }

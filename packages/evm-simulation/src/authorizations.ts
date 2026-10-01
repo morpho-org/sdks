@@ -95,13 +95,10 @@ export interface BlueAuthorizationSignature {
   readonly typedData: BlueAuthorizationTypedData;
 }
 
-/** @internal A wallet request the user has not completed yet. */
-export type PendingAuthorization =
+/** A pending wallet request passed to `simulate()` — the five typed variants. */
+export type SimulationAuthorization =
   | Erc20ApprovalAuthorization
   | Erc2612PermitAuthorization
   | Permit2TransferAuthorization
   | BlueAuthorization
   | BlueAuthorizationSignature;
-
-/** A pending wallet request passed to `simulate()` — the five typed variants. */
-export type SimulationAuthorization = PendingAuthorization;

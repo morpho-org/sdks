@@ -2,7 +2,7 @@ import type { AccrualVault, MarketId } from "@morpho-org/blue-sdk";
 import type { ChainAddresses } from "@morpho-org/morpho-ts";
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { PendingAuthorization } from "../../authorizations.js";
+import type { SimulationAuthorization } from "../../authorizations.js";
 import type { DecodedOperation } from "../../decode/operation.js";
 import { collectSubjects, planStateReads } from "./read-state.js";
 
@@ -48,7 +48,7 @@ const supplyOp: DecodedOperation = {
   authorizationSignature: { type: "none" },
 } as unknown as DecodedOperation;
 
-const approval: PendingAuthorization = {
+const approval: SimulationAuthorization = {
   type: "erc20Approval",
   token: TOKEN,
   owner: OWNER,

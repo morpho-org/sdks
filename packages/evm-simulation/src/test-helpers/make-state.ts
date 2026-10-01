@@ -176,6 +176,8 @@ export function makeCheckContext(
 export const emptyDiff = {
   balances: [],
   allowances: [],
+  morphoAuthorizations: [],
+  nonces: [],
   positions: [],
   markets: [],
   vaults: [],

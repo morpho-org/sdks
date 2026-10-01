@@ -5,7 +5,7 @@ import {
   encodeFunctionData,
   type Hex,
 } from "viem";
-import type { SignatureNonce } from "../../result.js";
+import type { Permit2NonceChange } from "../../result.js";
 import type { DecodedStateRead, StateRead } from "./contract.js";
 import { badRead } from "./erc20.js";
 
@@ -65,14 +65,14 @@ export function decodePermit2Value(
 }
 
 /**
- * Project decoded bitmap words into per-nonce `SignatureNonce` entries —
- * each tracked nonce reports whether its bit is spent.
+ * Project decoded bitmap words into per-nonce `Permit2NonceChange` entries —
+ * `before`/`after` both hold the read bitmap word at this state point.
  * @internal
  */
 export function parsePermit2(
   reads: readonly DecodedStateRead[],
-): SignatureNonce[] {
-  const nonces: SignatureNonce[] = [];
+): Permit2NonceChange[] {
+  const nonces: Permit2NonceChange[] = [];
   for (const { read, value } of reads) {
     if (read.kind !== "permit2.nonceBitmap") continue;
     if (typeof value !== "bigint") badRead(read.id);
@@ -81,7 +81,8 @@ export function parsePermit2(
       verifyingContract: read.permit2,
       owner: read.owner,
       nonce: read.nonce,
-      used: (value & (1n << (read.nonce % 256n))) !== 0n,
+      before: value,
+      after: value,
     });
   }
   return nonces;

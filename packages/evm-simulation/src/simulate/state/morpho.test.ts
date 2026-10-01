@@ -113,14 +113,15 @@ describe("morphoReads + parseMorpho", () => {
       },
     ]);
     expect(parsed.authorizations).toEqual([
-      { authorizer: OWNER, authorized: AUTHORIZED, isAuthorized: true },
+      { authorizer: OWNER, authorized: AUTHORIZED, before: true, after: true },
     ]);
     expect(parsed.nonces).toEqual([
       {
         type: "blueAuthorization",
         verifyingContract: MORPHO,
         owner: OWNER,
-        nonce: 4n,
+        before: 4n,
+        after: 4n,
       },
     ]);
     expect(parsed.oraclePrices.get(ORACLE)).toBe(10n ** 36n);

@@ -13,7 +13,10 @@ import {
   zeroAddress,
 } from "viem";
 import { InvalidSimulationResponseError } from "../../errors.js";
-import type { MorphoAuthorizationState, SignatureNonce } from "../../result.js";
+import type {
+  MorphoAuthorizationChange,
+  SequentialNonceChange,
+} from "../../result.js";
 import type { DecodedStateRead, StateRead } from "./contract.js";
 import { badRead } from "./erc20.js";
 
@@ -343,8 +346,8 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
     MarketId,
     { readonly address: Address; readonly preLltvWad: bigint }
   >;
-  readonly authorizations: MorphoAuthorizationState[];
-  readonly nonces: SignatureNonce[];
+  readonly authorizations: MorphoAuthorizationChange[];
+  readonly nonces: SequentialNonceChange[];
 } {
   const positions: (MorphoPositionTuple & {
     marketId: MarketId;
@@ -367,8 +370,8 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
     MarketId,
     { address: Address; preLltvWad: bigint }
   >();
-  const authorizations: MorphoAuthorizationState[] = [];
-  const nonces: SignatureNonce[] = [];
+  const authorizations: MorphoAuthorizationChange[] = [];
+  const nonces: SequentialNonceChange[] = [];
 
   const irmEntry = (marketId: MarketId) => {
     let entry = irmRates.get(marketId);
@@ -427,7 +430,8 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
         authorizations.push({
           authorizer: read.authorizer,
           authorized: read.authorized,
-          isAuthorized: value,
+          before: value,
+          after: value,
         });
         break;
       case "morpho.nonce":
@@ -436,7 +440,8 @@ export function parseMorpho(reads: readonly DecodedStateRead[]): {
           type: "blueAuthorization",
           verifyingContract: read.morpho,
           owner: read.owner,
-          nonce: value,
+          before: value,
+          after: value,
         });
         break;
       default:

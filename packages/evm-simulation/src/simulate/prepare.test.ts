@@ -1,6 +1,6 @@
 import { type Address, getAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import type { PendingAuthorization } from "../authorizations.js";
+import type { SimulationAuthorization } from "../authorizations.js";
 import { prepareAuthorizations } from "./prepare.js";
 
 const OWNER: Address = getAddress("0x1111111111111111111111111111111111111111");
@@ -12,7 +12,7 @@ const SPENDER: Address = getAddress(
   "0x3333333333333333333333333333333333333333",
 );
 
-const prepare = (authorizations: PendingAuthorization[]) =>
+const prepare = (authorizations: SimulationAuthorization[]) =>
   prepareAuthorizations({ authorizations, owner: OWNER, morpho: MORPHO });
 
 describe("prepareAuthorizations", () => {

@@ -28,6 +28,8 @@ describe("diffState", () => {
     expect(diffState(s, s)).toEqual({
       balances: [],
       allowances: [],
+      morphoAuthorizations: [],
+      nonces: [],
       positions: [],
       markets: [],
       vaults: [],

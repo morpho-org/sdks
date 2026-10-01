@@ -1,6 +1,6 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address, Hex } from "viem";
-import type { PendingAuthorization } from "./authorizations.js";
+import type { SimulationAuthorization } from "./authorizations.js";
 import type { SimulationLimits, SimulationOperationSubject } from "./limits.js";
 import type { SimulationMode } from "./params.js";
 import type {
@@ -18,7 +18,7 @@ export type SimulatedOperation = {
 /** @internal How a pending authorization was modeled in preview. */
 export interface AuthorizationPreparation {
   readonly authorizationIndex: number;
-  readonly authorization: PendingAuthorization;
+  readonly authorization: SimulationAuthorization;
   /** Approval calls simulated before the user transactions; empty when a state override was used. */
   readonly calls: readonly {
     readonly transaction: SimulationTransaction;
@@ -46,23 +46,37 @@ export interface TokenAllowance {
   readonly amount: bigint;
 }
 
-/** @internal One Morpho `isAuthorized` state. */
-export interface MorphoAuthorizationState {
+/** One Morpho `isAuthorized` flag before and after the bundle. */
+export interface MorphoAuthorizationChange {
   readonly authorizer: Address;
   readonly authorized: Address;
-  readonly isAuthorized: boolean;
+  readonly before: boolean;
+  readonly after: boolean;
 }
 
-/** @internal One signature nonce tracked by the simulation. */
-export interface SignatureNonce {
-  readonly type: "erc2612" | "blueAuthorization" | "permit2";
-  /** Token for erc2612, Morpho for blueAuthorization, Permit2 for permit2. */
+/** One sequential signature nonce before and after the bundle. */
+export interface SequentialNonceChange {
+  readonly type: "erc2612" | "blueAuthorization";
+  /** Token for erc2612, Morpho for blueAuthorization. */
   readonly verifyingContract: Address;
   readonly owner: Address;
-  readonly nonce: bigint;
-  /** Permit2 only: whether this unordered nonce is spent. */
-  readonly used?: boolean;
+  readonly before: bigint;
+  readonly after: bigint;
 }
+
+/** One Permit2 `nonceBitmap(owner, nonce >> 8n)` word before and after the bundle. */
+export interface Permit2NonceChange {
+  readonly type: "permit2";
+  readonly verifyingContract: Address;
+  readonly owner: Address;
+  /** Signed unordered nonce; the word read is `nonce >> 8n` and the bit checked is `nonce & 0xffn`. */
+  readonly nonce: bigint;
+  readonly before: bigint;
+  readonly after: bigint;
+}
+
+/** One signature nonce before and after the bundle. */
+export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
 
 /** @internal One user's position in one Blue market. */
 export interface PositionState {
@@ -122,8 +136,8 @@ export interface VaultState {
 export interface SimulationState {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
-  readonly morphoAuthorizations: readonly MorphoAuthorizationState[];
-  readonly nonces: readonly SignatureNonce[];
+  readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
+  readonly nonces: readonly SignatureNonceChange[];
   readonly positions: readonly PositionState[];
   readonly markets: readonly MarketState[];
   readonly vaults: readonly VaultState[];
@@ -133,6 +147,8 @@ export interface SimulationState {
 export interface SimulationStateChange {
   readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
+  readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
+  readonly nonces: readonly SignatureNonceChange[];
   readonly positions: readonly {
     readonly marketId: MarketId;
     readonly user: Address;
@@ -212,15 +228,3 @@ export interface SimulationVerification {
 export interface VerifiedSimulationResult extends SimulationResult {
   readonly verification: SimulationVerification;
 }
-
-/** Parent-surface alias for {@link MorphoAuthorizationState}. @internal */
-export type MorphoAuthorizationChange = MorphoAuthorizationState;
-
-/** Parent-surface alias for {@link SignatureNonce}. @internal */
-export type SignatureNonceChange = SignatureNonce;
-
-/** Parent-surface alias for {@link SignatureNonce}. @internal */
-export type SequentialNonceChange = SignatureNonce;
-
-/** Parent-surface alias for {@link SignatureNonce}. @internal */
-export type Permit2NonceChange = SignatureNonce;

@@ -52,7 +52,8 @@ describe("erc20Reads + parseErc20", () => {
         type: "erc2612",
         verifyingContract: TOKEN,
         owner: OWNER,
-        nonce: 3n,
+        before: 3n,
+        after: 3n,
       },
     ]);
   });

@@ -51,6 +51,8 @@ describe("check helpers", () => {
           },
         ],
         allowances: [],
+        morphoAuthorizations: [],
+        nonces: [],
         positions: [],
         markets: [],
         vaults: [],
