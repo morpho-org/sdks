@@ -25,14 +25,7 @@ export interface AuthorizationPreparation {
   }[];
 }
 
-/** One account's balance of one token. */
-export interface TokenBalance {
-  readonly account: Address;
-  readonly token: Address;
-  readonly assets: bigint;
-}
-
-/** One ERC-20 allowance. */
+/** Signed change (after − before) of one ERC-20 allowance over the bundle. */
 export interface TokenAllowance {
   readonly token: Address;
   readonly owner: Address;
@@ -75,10 +68,10 @@ export type SignatureNonceChange = SequentialNonceChange | Permit2NonceChange;
 /**
  * Everything the bundle changed, including preparation calls and
  * interest accrual. Numeric entries are signed differences (after − before);
- * authorizations and nonces carry both values.
+ * authorizations and nonces carry both values. Token balance changes are not
+ * repeated here: `SimulationResult.assetChanges` is their single source.
  */
 export interface SimulationStateChange {
-  readonly balances: readonly TokenBalance[];
   readonly allowances: readonly TokenAllowance[];
   readonly morphoAuthorizations: readonly MorphoAuthorizationChange[];
   readonly nonces: readonly SignatureNonceChange[];

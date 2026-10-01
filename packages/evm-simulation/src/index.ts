@@ -103,7 +103,6 @@ export type {
   SimulationStateChange,
   SimulationVerification,
   TokenAllowance,
-  TokenBalance,
   VerifiedSimulationResult,
 } from "./result.js";
 export { simulate } from "./simulate/index.js";
