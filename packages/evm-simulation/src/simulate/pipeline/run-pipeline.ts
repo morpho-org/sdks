@@ -74,7 +74,8 @@ export async function runPipeline(params: {
   const bundle = brandDecoded({ request, ...decoded });
 
   const limits = resolveEffectiveLimits(request.limits);
-  // Validation only: rejects unbindable operation limits before any pinned read.
+  // Validation only. Decoding needs the bindings read above; this rejects
+  // unbindable limits before the pinned-state reads and eth_simulateV1.
   bindOperationLimits(bundle.operations, limits);
 
   const inputs = await readPinnedInputs({
