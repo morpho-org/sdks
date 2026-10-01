@@ -720,14 +720,7 @@ const MARKET_SUBJECT = {
 } as const;
 const VAULT_SUBJECT = {
   markets: [],
-  addresses: [
-    "vault",
-    "account",
-    "receiver",
-    "assetPaid",
-    "assetReceived",
-    "adapter",
-  ],
+  addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: ["vault"],
 } as const;
 type LimitOperationType = Exclude<OperationType, "blueAuthorization">;
