@@ -177,17 +177,26 @@ export function parseSimulationResponse(params: {
 
   for (const [index, call] of block.calls.entries()) {
     const planned = plan.calls[index]!;
-    const logs: RawLog[] = (call.logs ?? []).map((log) => ({
-      address: log.address,
-      topics: log.topics,
-      data: log.data ?? "0x",
-    }));
-    const result: SimulationCall = {
-      logs,
-      status: call.status === "0x1",
-      returnData: call.returnData,
-      gasUsed: BigInt(call.gasUsed),
-    };
+    let result: SimulationCall;
+    try {
+      result = {
+        logs: (call.logs ?? []).map(
+          (log): RawLog => ({
+            address: log.address,
+            topics: log.topics,
+            data: log.data ?? "0x",
+          }),
+        ),
+        status: call.status === "0x1",
+        returnData: call.returnData,
+        gasUsed: BigInt(call.gasUsed),
+      };
+    } catch (cause) {
+      throw new InvalidSimulationResponseError(
+        `eth_simulateV1 returned a malformed call result at position ${index}.`,
+        { context: errorContext, cause },
+      );
+    }
 
     transactions.push({
       transactionIndex: planned.transactionIndex,
