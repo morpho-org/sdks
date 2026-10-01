@@ -526,15 +526,20 @@ export interface MidnightCancelOfferAction
     }
   > {}
 
+/** One offer group to cancel, guarded by the maximum consumption accepted at execution. */
+export interface MidnightGroupCancellation {
+  /** Offer group id to mark fully consumed. */
+  readonly group: Hex;
+  /** Largest current group consumption accepted; the whole call reverts above it. */
+  readonly maxConsumed: bigint;
+}
+
 /** Metadata for a guarded Midnight Bundles V2 batch offer-group cancellation. */
 export interface MidnightCancelOffersAction
   extends BaseAction<
     "midnightCancelOffers",
     {
-      readonly cancellations: readonly {
-        readonly group: Hex;
-        readonly maxConsumed: bigint;
-      }[];
+      readonly cancellations: readonly MidnightGroupCancellation[];
       readonly deadline: bigint;
     }
   > {}
