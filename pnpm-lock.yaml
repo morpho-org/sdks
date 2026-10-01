@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    fast-check:
+      specifier: ^4.9.0
+      version: 4.9.0
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -234,7 +237,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       fast-check:
-        specifier: ^4.9.0
+        specifier: 'catalog:'
         version: 4.9.0
       typescript:
         specifier: 'catalog:'
@@ -268,7 +271,7 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
       fast-check:
-        specifier: ^4.9.0
+        specifier: 'catalog:'
         version: 4.9.0
       typescript:
         specifier: 'catalog:'
@@ -302,7 +305,14 @@ importers:
         version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
 
   packages/morpho-ts:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^2.4.0
+        version: 2.4.0
     devDependencies:
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.9.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

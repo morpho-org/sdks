@@ -60,6 +60,7 @@ export type { ErrorClass } from "@morpho-org/morpho-ts";
 export {
   _try,
   DivisionByZeroError,
+  InvalidAddressError,
   InvalidBitLengthError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,

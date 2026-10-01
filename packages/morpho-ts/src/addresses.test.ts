@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-
+import { getChecksumAddress } from "./address.js";
 import {
   addresses,
   addressesRegistry,
@@ -16,6 +16,7 @@ import {
 import { ChainId } from "./chain.js";
 import {
   IncompleteChainRegistryError,
+  InvalidAddressError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
@@ -28,7 +29,7 @@ const randomAddress = (): `0x${string}` => {
     `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as `0x${string}`;
   nextAddressIndex += 1n;
 
-  return address;
+  return getChecksumAddress(address);
 };
 
 const createMidnightAddresses = () => ({
@@ -1194,7 +1195,7 @@ describe("registerCustomAddresses", () => {
         }),
       ).not.toThrow();
       expect(Object.keys(unwrappedTokensMapping[chainId] ?? {})).toEqual([
-        first,
+        wrappedToken,
       ]);
       expect(getUnwrappedToken(second, chainId)).toBe(unwrappedToken);
 
@@ -1418,5 +1419,245 @@ describe("registerCustomAddresses", () => {
     expect(deployments[chainId]?.wNative).toBeUndefined();
     expect(blueDeployments[chainId]).toBe(deployments[chainId]);
     expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
+  });
+});
+
+describe("registerCustomAddresses EIP-55 canonicalisation", () => {
+  test("behavior: stores lowercase custom addresses in checksum form", () => {
+    const chainId = 31_337_302;
+    const blue = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+    const adaptiveCurveIrm = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359";
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          ...createMidnightAddresses(),
+          blue: blue.toLowerCase() as `0x${string}`,
+          adaptiveCurveIrm: adaptiveCurveIrm.toLowerCase() as `0x${string}`,
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.blue).toBe(blue);
+    expect(addressesRegistry[chainId]?.adaptiveCurveIrm).toBe(adaptiveCurveIrm);
+    expect(getChainAddress(chainId, "blue")).toBe(blue);
+  });
+
+  test("behavior: accepts a lowercase alias of a registered address", () => {
+    const chainId = 31_337_303;
+    const chainAddresses = createChainAddresses();
+
+    registerCustomAddresses({
+      addresses: { [chainId]: chainAddresses },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...chainAddresses,
+            blue: chainAddresses.blue.toLowerCase() as `0x${string}`,
+            adaptiveCurveIrm:
+              chainAddresses.adaptiveCurveIrm.toLowerCase() as `0x${string}`,
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: InvalidAddressError on malformed custom address leaves registry untouched", () => {
+    const chainId = 31_337_304;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: "0x12" as `0x${string}`,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on custom address without 0x prefix", () => {
+    const chainId = 31_337_305;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress().slice(2) as `0x${string}`,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on mis-checksummed address leaves registry untouched", () => {
+    const chainId = 31_337_306;
+    const misChecksummed =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: misChecksummed,
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("behavior: stores lowercase unwrapped token entries in checksum form", () => {
+    const chainId = 31_337_307;
+    const wrapped = "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB";
+    const unwrapped = "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb";
+
+    registerCustomAddresses({
+      unwrappedTokens: {
+        [chainId]: {
+          [wrapped.toLowerCase()]: unwrapped.toLowerCase(),
+        } as Record<`0x${string}`, `0x${string}`>,
+      },
+    });
+
+    expect(unwrappedTokensMapping[chainId]).toEqual({ [wrapped]: unwrapped });
+    expect(getUnwrappedToken(wrapped, chainId)).toBe(unwrapped);
+  });
+
+  test("error: InvalidAddressError on malformed unwrapped token", () => {
+    const chainId = 31_337_308;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { "0x12": randomAddress() } as Record<
+            `0x${string}`,
+            `0x${string}`
+          >,
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on mixed addresses/unwrappedTokens call leaves both registries untouched", () => {
+    const chainId = 31_337_309;
+    const misChecksummedKey =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress(),
+            adaptiveCurveIrm: randomAddress(),
+          },
+        },
+        unwrappedTokens: {
+          [chainId]: { [misChecksummedKey]: randomAddress() },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("behavior: string deployment values are not treated as addresses", () => {
+    const chainId = 31_337_310;
+
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: {
+            blue: 1n,
+            adaptiveCurveIrm: 2n,
+            wNative: "0x12",
+          } as unknown as ChainDeployments,
+        },
+      }),
+    ).not.toThrow(InvalidAddressError);
+  });
+
+  test("behavior: nested bundle addresses are canonicalised", () => {
+    const chainId = 31_337_311;
+    const vaultExitBundlesV1 = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          ...createMidnightAddresses(),
+          blue: randomAddress(),
+          adaptiveCurveIrm: randomAddress(),
+          bundles: {
+            vaultExitBundlesV1:
+              vaultExitBundlesV1.toLowerCase() as `0x${string}`,
+          },
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.bundles?.vaultExitBundlesV1).toBe(
+      vaultExitBundlesV1,
+    );
+  });
+
+  test("error: InvalidAddressError on mis-checksummed nested bundle address", () => {
+    const chainId = 31_337_312;
+    const misChecksummed =
+      `0x${"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".replace("A", "a")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createMidnightAddresses(),
+            blue: randomAddress(),
+            adaptiveCurveIrm: randomAddress(),
+            bundles: { vaultExitBundlesV1: misChecksummed },
+          },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(addressesRegistry[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on malformed unwrapped token value", () => {
+    const chainId = 31_337_313;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { [randomAddress()]: "0x12" },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
+  });
+
+  test("error: InvalidAddressError on mis-checksummed unwrapped token value", () => {
+    const chainId = 31_337_314;
+    const misChecksummed =
+      `0x${"D1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb".replace("D", "d")}` as `0x${string}`;
+
+    expect(() =>
+      registerCustomAddresses({
+        unwrappedTokens: {
+          [chainId]: { [randomAddress()]: misChecksummed },
+        },
+      }),
+    ).toThrow(InvalidAddressError);
+    expect(unwrappedTokensMapping[chainId]).toBeUndefined();
   });
 });

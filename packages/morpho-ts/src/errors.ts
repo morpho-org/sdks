@@ -165,6 +165,29 @@ export class UnknownAddressError extends Error {
   }
 }
 
+/**
+ * Thrown when a string is not a 20-byte hex address, or carries an invalid
+ * EIP-55 mixed-case checksum.
+ *
+ * @example
+ * ```ts
+ * import { InvalidAddressError } from "@morpho-org/morpho-ts";
+ *
+ * throw new InvalidAddressError("0x1234");
+ * ```
+ */
+export class InvalidAddressError extends Error {
+  public readonly address: string;
+
+  public constructor(address: string) {
+    super(
+      `Address "${address}" is not a valid EIP-55 address. Provide a 20-byte hex address with a valid or absent checksum.`,
+    );
+    this.address = address;
+    this.name = "InvalidAddressError";
+  }
+}
+
 /** Constructor type for errors accepted by `_try`. */
 export interface ErrorClass<E extends Error = Error> {
   // biome-ignore lint/suspicious/noExplicitAny: match any type of error constructor arg.

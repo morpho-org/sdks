@@ -416,5 +416,5 @@ describe.sequential("simulate — timeout", () => {
     await expect(
       simulate(makeConfig({ timeoutMs: 1 }), makeParams()),
     ).rejects.toThrow(ExternalServiceError);
-  });
+  }, 1000);
 });
