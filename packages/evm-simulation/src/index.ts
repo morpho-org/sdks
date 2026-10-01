@@ -108,6 +108,7 @@ export type {
   AccountAssetChanges,
   AssetChange,
   ChainSimulationConfig,
+  LegacySimulateParams,
   RawLog,
   SimulationAuthorization,
   SimulationCall,
