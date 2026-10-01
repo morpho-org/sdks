@@ -97,6 +97,11 @@ context. Omit `limits` to skip slippage checks; unquoted amounts are unchecked.
 There are no implicit economic-policy defaults, penalty/refund checks, or
 `transactionIndex` on limits. Measurements cover the named subject across the
 whole bundle; use separate simulations for per-transaction checks.
+The former single `asset` override is replaced by `assetPaid` and
+`assetReceived`, so two-asset operations can select each token independently.
+For `vaultV1InKindRedeem` and `vaultV2InKindRedeem`, `assetsReceived` measures
+only the receiver's vault-asset wallet balance (the idle portion), not in-kind
+Morpho positions.
 
 No transaction calldata is decoded to supply missing limits. Read
 `verification.operations[].checkedLimits` for the quote and tolerance checked;

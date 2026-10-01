@@ -27,21 +27,17 @@ export type {
 } from "./errors.js";
 // Errors (for instanceof checks by consumers)
 export {
-  AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MarketConstraintViolationError,
   MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
   SIMULATION_ERROR_CODES,
   SimulationPackageError,
   SimulationRevertedError,
   SimulationValidationError,
-  StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,

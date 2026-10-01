@@ -12,6 +12,7 @@ import {
   type Address,
   encodeFunctionData,
   erc20Abi,
+  isAddressEqual,
   maxUint256,
   parseUnits,
 } from "viem";
@@ -351,45 +352,6 @@ describe.sequential("simulate pipeline — blue borrow/repay", () => {
       functionName: "setAuthorization",
       args: [addresses.bundles!.blueBundlesV1!, true],
     });
-    const auth = await client.readContract({
-      address: addresses.blue,
-      abi: [
-        {
-          type: "function",
-          name: "isAuthorized",
-          stateMutability: "view",
-          inputs: [
-            { name: "authorizer", type: "address" },
-            { name: "authorized", type: "address" },
-          ],
-          outputs: [{ type: "bool" }],
-        },
-      ],
-      functionName: "isAuthorized",
-      args: [client.account.address, addresses.bundles!.blueBundlesV1!],
-    });
-    console.error(
-      "IS_AUTHORIZED",
-      auth,
-      "APPROVED",
-      await client.readContract({
-        address: CBBTC,
-        abi: [
-          {
-            type: "function",
-            name: "allowance",
-            stateMutability: "view",
-            inputs: [
-              { name: "o", type: "address" },
-              { name: "s", type: "address" },
-            ],
-            outputs: [{ type: "uint256" }],
-          },
-        ],
-        functionName: "allowance",
-        args: [client.account.address, addresses.bundles!.blueBundlesV1!],
-      }),
-    );
     const p = CbbtcUsdcBlue;
     const data = encodeFunctionData({
       abi: blueBundlesV1Abi,
@@ -834,8 +796,8 @@ describe.sequential("simulate pipeline — vault V2", () => {
     const sharesMinted = unchecked.transfers
       .filter(
         (transfer) =>
-          transfer.token.toLowerCase() === KEYROCK.toLowerCase() &&
-          transfer.to.toLowerCase() === recipient.toLowerCase(),
+          isAddressEqual(transfer.token, KEYROCK) &&
+          isAddressEqual(transfer.to, recipient),
       )
       .reduce((total, transfer) => total + transfer.amount, 0n);
     expect(sharesMinted).toBeGreaterThan(0n);

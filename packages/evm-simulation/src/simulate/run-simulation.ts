@@ -1,7 +1,11 @@
-import { UnsupportedChainIdError } from "@morpho-org/blue-sdk";
-import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
-import { _try } from "@morpho-org/morpho-ts";
 import {
+  getChainAddresses,
+  UnsupportedChainIdError,
+} from "@morpho-org/blue-sdk";
+import { _try } from "@morpho-org/morpho-ts";
+import { zeroAddress } from "viem";
+import {
+  ExternalServiceError,
   InvalidSimulationResponseError,
   UnsupportedChainError,
 } from "../errors.js";
@@ -46,14 +50,46 @@ export async function runSimulation(params: {
   const signal = AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   const client = createSimulationClient(chain.simulateV1Url, signal);
 
+  const limits = { operations: request.limits?.operations ?? [] };
+  const preview = request.mode === "preview";
+  const owner = request.transactions[0]!.from;
   const addresses = _try(
     () => getChainAddresses(request.chainId),
     UnsupportedChainIdError,
   );
-  if (addresses == null) throw new UnsupportedChainError(request.chainId);
-  if (addresses.blue == null) throw new UnsupportedChainError(request.chainId);
-  const morpho = addresses.blue;
+  const requiresMorpho =
+    limits.operations.length > 0 ||
+    (preview && request.authorizations.length > 0);
+  if (requiresMorpho && addresses?.blue == null)
+    throw new UnsupportedChainError(request.chainId);
+  const morpho = addresses?.blue ?? zeroAddress;
 
+  let rpcChainId: number;
+  try {
+    rpcChainId = await client.getChainId();
+  } catch (cause) {
+    throw new ExternalServiceError(
+      `eth_chainId error: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+  }
+  if (rpcChainId !== request.chainId) {
+    throw new InvalidSimulationResponseError(
+      `The RPC configured for chain ${request.chainId} reports chain ${rpcChainId}. Fix SimulationConfig.chains.`,
+      {
+        ...(typeof request.blockNumber === "bigint"
+          ? {
+              context: {
+                stage: "transport" as const,
+                chainId: request.chainId,
+                mode: request.mode,
+                blockNumber: request.blockNumber,
+              },
+            }
+          : {}),
+      },
+    );
+  }
   const pinnedBlock = await resolvePinnedBlock({
     client,
     blockNumber: request.blockNumber,
@@ -63,15 +99,12 @@ export async function runSimulation(params: {
   // With no calldata decoding, the caller's declared `limits.operations`
   // entries are the operations: subjects for state reads and per-operation
   // checks come straight from the limit list.
-  const limits = { operations: request.limits?.operations ?? [] };
-  const preview = request.mode === "preview";
-  const owner = request.transactions[0]!.from;
-
   const resolved = await resolveAssets({
     client,
     morpho,
     operations: limits.operations,
     blockNumber: pinnedBlock.number,
+    signal,
   });
   const observations = planStateReads({ operations: resolved, owner, morpho });
 
@@ -90,12 +123,11 @@ export async function runSimulation(params: {
     reads: observations.reads,
   });
 
-  // executePlan performs the boundary: chain-id check, single block
-  // resolution + reorg re-check, and the single eth_simulateV1 call.
+  // Execute against the block resolved once above; the boundary rechecks its hash.
   const execution = await executePlan({
     rpcUrl: chain.simulateV1Url,
     plan,
-    blockNumber: pinnedBlock.number,
+    stateBlock: pinnedBlock,
     signal,
   });
 
@@ -119,7 +151,14 @@ export async function runSimulation(params: {
             ] as const,
         ),
     );
-  const transfers = parseTransfers(userCalls);
+  const chainAddresses = addresses;
+  const transfers = parseTransfers(userCalls, {
+    wNative:
+      chainAddresses === undefined
+        ? undefined
+        : (chainAddresses.wNative ?? null),
+    logger: config.logger,
+  });
 
   const assetChanges = groupAssetChanges(
     transfers.flatMap(({ token, from, to, amount }) => [
@@ -155,6 +194,7 @@ export async function runSimulation(params: {
     before: decodePhase("before"),
     after: decodePhase("after"),
     transfers,
+    requestTransactions: request.transactions,
   });
 
   assertNoBundlesRetention({
@@ -170,5 +210,7 @@ export async function runSimulation(params: {
     operations: checked,
     authorizations,
     userCalls,
+    transfers,
+    assetChanges,
   });
 }

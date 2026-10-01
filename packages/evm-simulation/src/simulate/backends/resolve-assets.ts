@@ -1,8 +1,20 @@
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
-import { type Address, type Client, erc4626Abi } from "viem";
+import {
+  type Address,
+  BaseError,
+  type Client,
+  erc4626Abi,
+  HttpRequestError,
+  isAddressEqual,
+  TimeoutError,
+  zeroAddress,
+} from "viem";
 import { readContract } from "viem/actions";
-import { ExternalServiceError } from "../../errors.js";
-import type { OperationLimit } from "../../limits.js";
+import {
+  ExternalServiceError,
+  MissingVerificationEvidenceError,
+} from "../../errors.js";
+import { type OperationLimit, operationMeasurementPlan } from "../../limits.js";
 
 /** Caller-selected operation with only the quoted wallet assets resolved. @internal */
 export interface ResolvedSlippageOperation {
@@ -16,7 +28,8 @@ export interface ResolvedSlippageOperation {
  * Share-only quotes need no RPC reads; vault versions and factories are not discovered.
  * @param params - Caller operations, Morpho address, client, and pinned state block.
  * @returns Operations with the token addresses required by their asset quotes.
- * @throws {ExternalServiceError} When a required metadata read fails.
+ * @throws {ExternalServiceError} For transport failures during a required metadata read.
+ * @throws {MissingVerificationEvidenceError} For reverted, malformed, or empty metadata.
  * @internal
  */
 export async function resolveAssets(params: {
@@ -24,48 +37,46 @@ export async function resolveAssets(params: {
   readonly morpho: Address;
   readonly operations: readonly OperationLimit[];
   readonly blockNumber: bigint;
+  readonly signal?: AbortSignal;
 }): Promise<readonly ResolvedSlippageOperation[]> {
-  const { client, morpho, operations, blockNumber } = params;
+  const { client, morpho, operations, blockNumber, signal } = params;
   const tokens = new Map<string, readonly [Address, Address]>();
   const resolved: ResolvedSlippageOperation[] = [];
   for (const limit of operations) {
-    const paid = limit.quote.assetsPaid !== undefined;
-    const received = limit.quote.assetsReceived !== undefined;
-    if (!paid && !received) {
-      resolved.push({ limit });
-      continue;
-    }
-    let loan = limit.asset;
-    let collateral = limit.asset;
-    if (loan === undefined) {
-      const marketId =
-        "marketId" in limit
-          ? limit.marketId
-          : "sourceMarketId" in limit
-            ? limit.sourceMarketId
-            : undefined;
-      const vault =
-        "vault" in limit
-          ? limit.vault
-          : "sourceVault" in limit
-            ? limit.sourceVault
-            : undefined;
-      const key = (marketId ?? vault)?.toLowerCase();
-      let pair = key === undefined ? undefined : tokens.get(key);
+    const plan = operationMeasurementPlan(limit);
+    const result: {
+      limit: OperationLimit;
+      assetsPaid?: Address;
+      assetsReceived?: Address;
+    } = { limit };
+    for (const field of ["assetsPaid", "assetsReceived"] as const) {
+      if (limit.quote[field] === undefined) continue;
+      const explicit =
+        field === "assetsPaid" ? limit.assetPaid : limit.assetReceived;
+      if (explicit !== undefined) {
+        result[field] = explicit;
+        continue;
+      }
+      const source = plan[field];
+      const key =
+        source.type === "market"
+          ? `market:${source.marketId.toLowerCase()}`
+          : `vault:${source.vault.toLowerCase()}`;
+      let pair = tokens.get(key);
       if (pair === undefined) {
         try {
-          if (marketId !== undefined) {
+          if (source.type === "market") {
             const values = await readContract(client, {
               address: morpho,
               abi: blueAbi,
               functionName: "idToMarketParams",
-              args: [marketId],
+              args: [source.marketId],
               blockNumber,
             });
             pair = [values[0], values[1]];
-          } else if (vault !== undefined) {
+          } else {
             const asset = await readContract(client, {
-              address: vault,
+              address: source.vault,
               abi: erc4626Abi,
               functionName: "asset",
               blockNumber,
@@ -73,37 +84,42 @@ export async function resolveAssets(params: {
             pair = [asset, asset];
           }
         } catch (cause) {
-          throw new ExternalServiceError(
-            "Cannot resolve the quoted asset. Supply the asset explicitly or check the RPC endpoint.",
+          if (
+            (cause instanceof BaseError &&
+              cause.walk(
+                (error) =>
+                  error instanceof HttpRequestError ||
+                  error instanceof TimeoutError,
+              ) !== null) ||
+            signal?.aborted ||
+            (cause instanceof Error && cause.name === "AbortError")
+          ) {
+            throw new ExternalServiceError(
+              "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
+              { cause },
+            );
+          }
+          throw new MissingVerificationEvidenceError(
+            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
             { cause },
           );
         }
-        if (key !== undefined && pair !== undefined) tokens.set(key, pair);
+        if (
+          isAddressEqual(pair[0], zeroAddress) ||
+          isAddressEqual(pair[1], zeroAddress)
+        ) {
+          throw new MissingVerificationEvidenceError(
+            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
+          );
+        }
+        tokens.set(key, pair);
       }
-      [loan, collateral] = pair ?? [undefined, undefined];
+      result[field] =
+        source.type === "market"
+          ? pair[source.asset === "loan" ? 0 : 1]
+          : pair[0];
     }
-    const collateralOnly =
-      limit.type === "blueSupplyCollateral" ||
-      limit.type === "blueWithdrawCollateral";
-    resolved.push({
-      limit,
-      ...(paid
-        ? {
-            assetsPaid:
-              collateralOnly || limit.type === "blueSupplyCollateralBorrow"
-                ? collateral
-                : loan,
-          }
-        : {}),
-      ...(received
-        ? {
-            assetsReceived:
-              collateralOnly || limit.type === "blueRepayWithdrawCollateral"
-                ? collateral
-                : loan,
-          }
-        : {}),
-    });
+    resolved.push(result);
   }
   return resolved;
 }

@@ -1,3 +1,4 @@
+import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, encodeFunctionData, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { expect } from "vitest";
@@ -41,12 +42,18 @@ function planFor(
   });
 }
 
+const pin = async (client: AnvilTestClient<typeof mainnet>) => {
+  const number = await client.getBlockNumber();
+  const block = await client.getBlock({ blockNumber: number });
+  return { number, hash: block.hash!, timestamp: block.timestamp };
+};
+
 describe.sequential("executePlan — pinned execution on a mainnet fork", () => {
   test("deterministic pinned metadata", async ({ client }) => {
     // Anvil requires the eth_simulateV1 pin to equal node head and reports
     // block.number === the pin (no base+1 advancement like geth).
-    const head = await client.getBlockNumber();
-    const pinned = await client.getBlock({ blockNumber: head });
+    const stateBlock = await pin(client);
+    const head = stateBlock.number;
     const plan = planFor(
       [{ to: RECIPIENT, data: "0x" }],
       client.account.address,
@@ -55,12 +62,12 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
+      stateBlock,
     });
 
     expect(execution.block.chainId).toBe(mainnet.id);
     expect(execution.block.stateBlockNumber).toBe(head);
-    expect(execution.block.stateBlockHash).toBe(pinned.hash);
+    expect(execution.block.stateBlockHash).toBe(stateBlock.hash);
     expect(execution.block.blockNumber).toBeGreaterThanOrEqual(head);
     expect(execution.block.blockTimestamp).toBeGreaterThanOrEqual(
       execution.block.stateBlockTimestamp,
@@ -70,18 +77,10 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const again = await executePlan({
       rpcUrl: client.transport.url!,
       plan,
-      blockNumber: head,
+      stateBlock,
     });
     expect(again.block).toEqual(execution.block);
     expect(again.stateReads).toEqual(execution.stateReads);
-
-    // "latest" on the pinned fork resolves to the same pinned block.
-    const latest = await executePlan({
-      rpcUrl: client.transport.url!,
-      plan,
-      blockNumber: "latest",
-    });
-    expect(latest.block.stateBlockNumber).toBe(head);
   });
 
   test("native value moves report as traceTransfers logs", async ({
@@ -91,13 +90,14 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     const before = await client.getBalance({
       address: client.account.address,
     });
+    const stateBlock = await pin(client);
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan: planFor(
         [{ to: RECIPIENT, data: "0x", value: amount }],
         client.account.address,
       ),
-      blockNumber: await client.getBlockNumber(),
+      stateBlock,
     });
     expect(execution.calls).toHaveLength(1);
     // traceTransfers synthesizes the native move as a transfer log, which is
@@ -112,6 +112,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
     client,
   }) => {
     const amount = parseEther("0.5");
+    const stateBlock = await pin(client);
     const execution = await executePlan({
       rpcUrl: client.transport.url!,
       plan: planFor(
@@ -135,7 +136,7 @@ describe.sequential("executePlan — pinned execution on a mainnet fork", () => 
         ],
         client.account.address,
       ),
-      blockNumber: await client.getBlockNumber(),
+      stateBlock,
     });
     expect(execution.calls).toHaveLength(2);
     expect(execution.calls.every((c) => c.result.status)).toBe(true);

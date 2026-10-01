@@ -43,6 +43,7 @@ describe("verifySlippage", () => {
         before: new Map(),
         after: new Map(),
         transfers: [],
+        requestTransactions: [],
       }),
     ).toEqual([]);
   });
@@ -58,6 +59,7 @@ describe("verifySlippage", () => {
       operations: plan.operations,
       before: new Map([[id, 20n]]),
       transfers: [],
+      requestTransactions: [],
     };
     expect(
       verifySlippage({ ...input, after: new Map([[id, 119n]]) })[0],
@@ -106,6 +108,7 @@ describe("verifySlippage", () => {
           txIdx: 0,
         },
       ],
+      requestTransactions: [],
     };
     expect(verifySlippage(input)[0]?.checkedLimits.quote).toEqual({
       assetsPaid: 10n,
@@ -139,8 +142,14 @@ describe("verifySlippage", () => {
       ["position", { supplyShares: 1n, borrowShares: 20n }],
     ]);
     expect(
-      verifySlippage({ ctx, operations, before, after, transfers: [] })[0]
-        ?.checkedLimits.quote,
+      verifySlippage({
+        ctx,
+        operations,
+        before,
+        after,
+        transfers: [],
+        requestTransactions: [],
+      })[0]?.checkedLimits.quote,
     ).toEqual({ sharesBurned: 10n });
     expect(() =>
       verifySlippage({
@@ -149,6 +158,29 @@ describe("verifySlippage", () => {
         before,
         after: new Map(),
         transfers: [],
+        requestTransactions: [],
+      }),
+    ).toThrow(MissingVerificationEvidenceError);
+  });
+  test("error: native quote requires traces for a positive-value transaction", () => {
+    const nativeLimit = {
+      ...limit,
+      quote: { assetsPaid: 10n },
+      slippageTolerance: 10_000000000000000n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: nativeLimit, assetsPaid: ethAddress }],
+      owner,
+      morpho: zeroAddress,
+    });
+    expect(() =>
+      verifySlippage({
+        ctx,
+        operations: plan.operations,
+        before: new Map(),
+        after: new Map(),
+        transfers: [],
+        requestTransactions: [{ from: owner, value: 10n }],
       }),
     ).toThrow(MissingVerificationEvidenceError);
   });

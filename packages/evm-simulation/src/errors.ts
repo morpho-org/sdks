@@ -19,10 +19,6 @@ export const SIMULATION_ERROR_CODES = [
   "INVALID_SIMULATION_RESPONSE",
   "MISSING_VERIFICATION_EVIDENCE",
   "AUTHORIZATION_REQUEST_MISMATCH",
-  "ASSET_CHANGE_MISMATCH",
-  "PERMISSION_CHANGE_MISMATCH",
-  "STATE_CHANGE_MISMATCH",
-  "MARKET_CONSTRAINT_VIOLATION",
   "CONSUMER_LIMIT_VIOLATION",
   "UNEXPECTED_SIMULATION_ERROR",
 ] as const;
@@ -271,30 +267,6 @@ export class AuthorizationRequestMismatchError extends SimulationPackageError {
   readonly code = "AUTHORIZATION_REQUEST_MISMATCH";
 }
 
-/** An observed asset change violates the expected bounds. */
-export class AssetChangeMismatchError extends SimulationPackageError {
-  override readonly name = "AssetChangeMismatchError";
-  readonly code = "ASSET_CHANGE_MISMATCH";
-}
-
-/** An observed permission change (allowance or authorization) violates the expected bounds. */
-export class PermissionChangeMismatchError extends SimulationPackageError {
-  override readonly name = "PermissionChangeMismatchError";
-  readonly code = "PERMISSION_CHANGE_MISMATCH";
-}
-
-/** An observed state change violates the expected bounds. */
-export class StateChangeMismatchError extends SimulationPackageError {
-  override readonly name = "StateChangeMismatchError";
-  readonly code = "STATE_CHANGE_MISMATCH";
-}
-
-/** An operation left a market outside its allowed constraints. */
-export class MarketConstraintViolationError extends SimulationPackageError {
-  override readonly name = "MarketConstraintViolationError";
-  readonly code = "MARKET_CONSTRAINT_VIOLATION";
-}
-
 /** A consumer-supplied limit was violated. */
 export class ConsumerLimitViolationError extends SimulationPackageError {
   override readonly name = "ConsumerLimitViolationError";
@@ -318,10 +290,6 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
     MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
     AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
-    ASSET_CHANGE_MISMATCH: "AssetChangeMismatchError",
-    PERMISSION_CHANGE_MISMATCH: "PermissionChangeMismatchError",
-    STATE_CHANGE_MISMATCH: "StateChangeMismatchError",
-    MARKET_CONSTRAINT_VIOLATION: "MarketConstraintViolationError",
     CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
     UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
   });

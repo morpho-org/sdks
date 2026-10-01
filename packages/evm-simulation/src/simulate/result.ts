@@ -5,10 +5,12 @@ import type {
   SimulationVerification,
   VerifiedSimulationResult,
 } from "../result.js";
-import type { SimulationCall } from "../types.js";
-import { type AssetChangeEntry, groupAssetChanges } from "./asset-changes.js";
+import type {
+  AccountAssetChanges,
+  SimulationCall,
+  Transfer,
+} from "../types.js";
 import type { CheckContext } from "./context.js";
-import { parseTransfers } from "./parsing/index.js";
 import type { ParsedRequest } from "./request/parse-request.js";
 
 /**
@@ -23,16 +25,18 @@ export function assembleResult(params: {
   readonly operations: readonly SimulatedOperation[];
   readonly authorizations: readonly AuthorizationPreparation[];
   readonly userCalls: readonly SimulationCall[];
+  readonly transfers: readonly Transfer[];
+  readonly assetChanges: readonly AccountAssetChanges[];
 }): VerifiedSimulationResult {
-  const { ctx, request, operations, authorizations, userCalls } = params;
-
-  const transfers = parseTransfers(userCalls);
-
-  const entries: AssetChangeEntry[] = [];
-  for (const { token, from, to, amount } of transfers) {
-    entries.push({ account: to, token, diff: amount });
-    entries.push({ account: from, token, diff: -amount });
-  }
+  const {
+    ctx,
+    request,
+    operations,
+    authorizations,
+    userCalls,
+    transfers,
+    assetChanges,
+  } = params;
 
   const verification: SimulationVerification = {
     mode: ctx.mode,
@@ -48,7 +52,7 @@ export function assembleResult(params: {
     simulationTxs: request.transactions,
     calls: userCalls,
     transfers,
-    assetChanges: groupAssetChanges(entries),
+    assetChanges,
     verification,
   });
 }

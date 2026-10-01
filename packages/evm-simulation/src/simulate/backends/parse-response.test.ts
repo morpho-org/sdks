@@ -8,6 +8,7 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   InvalidSimulationResponseError,
+  MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
 import { makeBalanceRead } from "../../test-helpers/make-balance-read.js";
@@ -130,7 +131,7 @@ describe("parseSimulationResponse", () => {
     ).toThrow(SimulationRevertedError);
   });
 
-  test("error: InvalidSimulationResponseError on preparation revert", () => {
+  test("error: SimulationRevertedError on preparation revert", () => {
     const plan = makePlan([
       {
         authorizationIndex: 0,
@@ -138,17 +139,33 @@ describe("parseSimulationResponse", () => {
       },
     ]);
     const prepIndex = plan.calls.findIndex((c) => c.type === "preparation");
-    expect(() =>
-      parse(plan, buildBlocks(plan, { [prepIndex]: { status: "failure" } })),
-    ).toThrow(InvalidSimulationResponseError);
+    const error = (() => {
+      try {
+        parse(plan, buildBlocks(plan, { [prepIndex]: { status: "failure" } }));
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).toMatchObject({
+      reasonCode: "UNKNOWN_REVERT",
+      context: {
+        stage: "preparation",
+        chainId: 1,
+        mode: "final",
+        blockNumber: 24_000_000n,
+        authorizationIndex: 0,
+        preparationCallIndex: 0,
+      },
+    });
   });
 
-  test("error: InvalidSimulationResponseError on failed state read", () => {
+  test("error: MissingVerificationEvidenceError on failed state read", () => {
     const plan = makePlan();
     const readIndex = plan.calls.findIndex((c) => c.type === "stateRead");
     expect(() =>
       parse(plan, buildBlocks(plan, { [readIndex]: { status: "failure" } })),
-    ).toThrow(InvalidSimulationResponseError);
+    ).toThrow(MissingVerificationEvidenceError);
   });
 
   test("error: InvalidSimulationResponseError on call-count mismatch", () => {

@@ -582,7 +582,7 @@ const createChecks = (): FieldChecks => {
         );
         return undefined;
       }
-      const spec = OPERATION_SPECS[type as OperationType];
+      const spec = OPERATION_SPECS[type as LimitOperationType];
       const requiredAddresses = new Set(spec.requiredAddresses);
       check.keys(operation, {
         allow: [
@@ -634,6 +634,17 @@ const createChecks = (): FieldChecks => {
         }
         if (Object.keys(normalizedQuote).length === 0)
           errors.push(`${path}.quote: supply at least one quoted amount`);
+        if (
+          type === "blueSupplyCollateral" ||
+          type === "blueWithdrawCollateral"
+        ) {
+          for (const field of ["sharesMinted", "sharesBurned"] as const) {
+            if (normalizedQuote[field] !== undefined)
+              errors.push(
+                `${path}.quote.${field}: cannot be measured for "${type}"`,
+              );
+          }
+        }
         Reflect.set(out, "quote", normalizedQuote);
       }
       return errors.length === errorsBefore ? out : undefined;
@@ -704,16 +715,24 @@ const QUOTE_FIELDS = [
 ] as const;
 const MARKET_SUBJECT = {
   markets: ["marketId"],
-  addresses: ["account", "receiver", "asset"],
+  addresses: ["account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: [],
 } as const;
 const VAULT_SUBJECT = {
   markets: [],
-  addresses: ["vault", "account", "receiver", "asset", "adapter"],
+  addresses: [
+    "vault",
+    "account",
+    "receiver",
+    "assetPaid",
+    "assetReceived",
+    "adapter",
+  ],
   requiredAddresses: ["vault"],
 } as const;
+type LimitOperationType = Exclude<OperationType, "blueAuthorization">;
 const OPERATION_SPECS: Record<
-  OperationType,
+  LimitOperationType,
   {
     readonly markets: readonly string[];
     readonly addresses: readonly string[];
@@ -731,11 +750,6 @@ const OPERATION_SPECS: Record<
   blueRefinance: {
     ...MARKET_SUBJECT,
     markets: ["sourceMarketId", "targetMarketId"],
-  },
-  blueAuthorization: {
-    markets: [],
-    addresses: ["authorized", "account", "receiver", "asset"],
-    requiredAddresses: ["authorized"],
   },
   vaultV1Deposit: VAULT_SUBJECT,
   vaultV2Deposit: VAULT_SUBJECT,
