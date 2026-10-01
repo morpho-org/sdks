@@ -92,6 +92,7 @@ export type {
   SimulationMode,
 } from "./params.js";
 export { SIMULATION_MODES } from "./params.js";
+export { toSimulationAuthorizations } from "./requirements/index.js";
 export type {
   AuthorizationPreparation,
   Fee,
