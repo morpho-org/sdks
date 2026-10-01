@@ -21,23 +21,6 @@ const approvalTx = (
   value: 0n,
 });
 
-// biome-ignore lint/complexity/useMaxParams: lookup helpers read clearest with positional arguments
-const blueAuthorizationTx = (
-  owner: Address,
-  morpho: Address,
-  authorized: Address,
-  isAuthorized: boolean,
-): Required<Readonly<SimulationTransaction>> => ({
-  from: getAddress(owner),
-  to: getAddress(morpho),
-  data: encodeFunctionData({
-    abi: blueAbi,
-    functionName: "setAuthorization",
-    args: [authorized, isAuthorized],
-  }),
-  value: 0n,
-});
-
 /** One authorization's preparation calls, in execution order. @internal */
 export interface PlannedPreparation {
   readonly authorizationIndex: number;
@@ -102,25 +85,21 @@ export function prepareAuthorizations(params: {
         break;
       }
       case "blueAuthorization":
-        calls.push(
-          blueAuthorizationTx(
-            owner,
-            morpho,
-            auth.authorized,
-            auth.isAuthorized,
-          ),
-        );
+      case "blueAuthorizationSignature": {
+        const { authorized, isAuthorized } =
+          auth.type === "blueAuthorization" ? auth : auth.typedData.message;
+        calls.push({
+          from: getAddress(owner),
+          to: getAddress(morpho),
+          data: encodeFunctionData({
+            abi: blueAbi,
+            functionName: "setAuthorization",
+            args: [authorized, isAuthorized],
+          }),
+          value: 0n,
+        });
         break;
-      case "blueAuthorizationSignature":
-        calls.push(
-          blueAuthorizationTx(
-            owner,
-            morpho,
-            auth.typedData.message.authorized,
-            auth.typedData.message.isAuthorized,
-          ),
-        );
-        break;
+      }
     }
 
     if (calls.length > 0) {
