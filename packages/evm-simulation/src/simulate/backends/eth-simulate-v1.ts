@@ -1,16 +1,17 @@
 import {
   BaseError,
+  type BlockTag,
   createPublicClient,
   ExecutionRevertedError,
   http,
-  numberToHex,
+  InsufficientFundsError,
 } from "viem";
+import { simulateBlocks } from "viem/actions";
 import {
   ExternalServiceError,
   InvalidSimulationResponseError,
   SimulationPackageError,
   SimulationRevertedError,
-  UnsupportedVerificationFeatureError,
 } from "../../errors.js";
 import type { ExecutionPlan } from "../plan/plan-execution.js";
 import type { SimulationExecution } from "./parse-response.js";
@@ -24,9 +25,8 @@ import { parseSimulationResponse } from "./parse-response.js";
  */
 const isNodeRevert = (error: unknown): error is Error =>
   error instanceof ExecutionRevertedError ||
-  (error instanceof Error &&
-    "code" in error &&
-    (error.code === 3 || /insufficient funds/i.test(error.message)));
+  error instanceof InsufficientFundsError ||
+  (error instanceof Error && "code" in error && error.code === 3);
 
 /**
  * Trim a caught error to a safe message: viem's `shortMessage` drops the
@@ -131,17 +131,17 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *   mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts or the
  *   node reports a bundle-level revert (code 3 / insufficient funds).
- * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
- *   or `limits` are present once the state block is pinned, until PR5/PR6.
  * @internal
  */
 export async function executePlan(params: {
   rpcUrl: string;
   plan: ExecutionPlan;
+  blockNumber?: bigint | BlockTag;
   signal?: AbortSignal;
 }): Promise<SimulationExecution> {
   const { rpcUrl, plan, signal } = params;
-  const blockNumber = plan.request.blockNumber ?? "latest";
+  const blockNumber =
+    params.blockNumber ?? plan.request.blockNumber ?? "latest";
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
@@ -195,60 +195,23 @@ export async function executePlan(params: {
     timestamp: block.timestamp,
   };
 
-  // Feature gate once the state block is pinned (every error context carries
-  // `blockNumber`): preview authorizations and consumer limits parse and
-  // normalize, but are rejected until PR5/PR6 verify them rather than
-  // silently ignored.
-  if (plan.request.authorizations.length > 0) {
-    throw new UnsupportedVerificationFeatureError(
-      "Preview authorization preparation and verification are not implemented yet on the v5 integration branch. Submit the bundle without authorizations or wait for the authorization verification release.",
-      {
-        context: {
-          stage: "preparation",
-          mode: plan.request.mode,
-          chainId: plan.request.chainId,
-          blockNumber: stateBlock.number,
-          authorizationIndex: 0,
-        },
-      },
-    );
-  }
-  if (plan.request.limits !== undefined) {
-    throw new UnsupportedVerificationFeatureError(
-      "Consumer limit enforcement is not implemented yet on the v5 integration branch. Submit the bundle without limits or wait for the verification release.",
-      {
-        context: {
-          stage: "validation",
-          mode: plan.request.mode,
-          chainId: plan.request.chainId,
-          blockNumber: stateBlock.number,
-        },
-      },
-    );
-  }
-
-  // Raw request: per-call `from` is honored and the response is parsed by
-  // this package — not by viem's simulateCalls/simulateBlocks wrappers.
+  // viem's simulateBlocks serializes per-call senders (`account` → `from`)
+  // and formats the result for us.
   const response = await rpc("eth_simulateV1", () =>
-    client.request({
-      method: "eth_simulateV1",
-      params: [
+    simulateBlocks(client, {
+      blocks: [
         {
-          blockStateCalls: [
-            {
-              calls: plan.calls.map((call) => ({
-                from: call.transaction.from,
-                to: call.transaction.to,
-                data: call.transaction.data,
-                value: numberToHex(call.transaction.value),
-              })),
-            },
-          ],
-          traceTransfers: true,
-          validation: false,
+          calls: plan.calls.map((call) => ({
+            account: call.transaction.from,
+            to: call.transaction.to,
+            data: call.transaction.data,
+            value: call.transaction.value,
+          })),
         },
-        numberToHex(stateBlock.number),
       ],
+      traceTransfers: true,
+      validation: false,
+      blockNumber: stateBlock.number,
     }),
   );
 
@@ -259,7 +222,7 @@ export async function executePlan(params: {
   // re-fetch.
   const execution = parseSimulationResponse({
     plan,
-    response,
+    blocks: response,
     stateBlockNumber: stateBlock.number,
     stateBlockHash: stateBlock.hash,
     stateBlockTimestamp: stateBlock.timestamp,

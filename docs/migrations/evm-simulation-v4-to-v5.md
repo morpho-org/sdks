@@ -67,15 +67,41 @@ Other contract changes in this step: all input fields are `readonly`,
 `value` transfers are funded by the sender's real native balance (no balance
 inflation — under-funded bundles revert like on-chain), and `simulationTxs` /
 `txIdx` index user transactions only — no prepended approval calls appear in
-the result. Authorization preparation and consumer-limit enforcement ship in
-later PRs: passing `authorizations` or `limits` throws
-`UnsupportedVerificationFeatureError` once the state block is pinned, before the `eth_simulateV1` call, rather
-than being silently ignored. `SimulationRevertedError.details` now carries a
-URL-free `{ code, shortMessage }` record for a node-level revert (with the viem
-error on `cause`) or the frozen `{ transactionIndex, result }[]` of the user
-transactions when one of them reverted — not the v4 raw call list.
-The [ADR](../adrs/ADR-2026-09-18-evm-simulation-calldata-verification.md)
-describes the target contract.
+the result. `SimulationRevertedError.details` carries a URL-free
+`{ code, shortMessage }` for node-level reverts or per-transaction results.
+
+## Optional caller limits (SDK-1295)
+
+`simulate()` now returns any requested slippage checks in
+`VerifiedSimulationResult.verification`. Preview requirements can be converted
+with `toSimulationAuthorizations`; preparation and user reverts propagate without
+an independent authorization or nonce-verification layer.
+
+Replace the earlier unreleased action-specific and absolute bounds with
+`SlippageLimits`: a caller-supplied `quote` and required `slippageTolerance`.
+Quotes contain one or more raw-unit `assetsReceived`, `sharesMinted`, `assetsPaid`,
+or `sharesBurned` amounts. Tolerance is a WAD-scaled percentage (1e16 = 1%),
+from 0 through 1e18 inclusive. Outputs may fall and inputs may rise by at most
+that percentage; integer rounding never increases the allowed deviation.
+
+Keep each entry's action and subject, and use `account`/`receiver` for observation
+context. Omit `limits` to skip slippage checks; unquoted amounts are unchecked.
+There are no implicit economic-policy defaults, penalty/refund checks, or
+`transactionIndex` on limits. Measurements cover the named subject across the
+whole bundle; use separate simulations for per-transaction checks.
+
+No transaction calldata is decoded to supply missing limits. Read
+`verification.operations[].checkedLimits` for the quote and tolerance checked;
+unchecked outcomes are observations, not economic guarantees. See the
+[package README](../../packages/evm-simulation/README.md#optional-limits) for units,
+subject scope, and which measurements require additional evidence.
+
+The unreleased broad state-reporting fields (`verification.before`, `after`,
+`diff`, and `actionDiff`) and their snapshot/diff types are removed. Read planning
+now depends only on quoted amounts: balances for assets/vault shares, positions
+for Blue shares, and existing transfer traces for native assets. Omitted limits
+produce no slippage reads. Use the existing `transfers` and `assetChanges` for
+transfer reporting, and `verification.operations` for checked quotes.
 
 ## Release exception and audit
 

@@ -74,6 +74,74 @@ const permit2Auth: SimulationAuthorization = {
 const parse = (input: unknown) => parseRequest(input as SimulateParams);
 
 describe("parseRequest", () => {
+  test.each([
+    { quote: {}, slippageTolerance: 0n },
+    { quote: { sharesMinted: 1n } },
+    { slippageTolerance: 0n },
+    { quote: { sharesMinted: -1n }, slippageTolerance: 0n },
+    { quote: { sharesMinted: 1n }, slippageTolerance: -1n },
+    { quote: { sharesMinted: 1n }, slippageTolerance: 10n ** 18n + 1n },
+    { quote: { sharesMinted: 1n }, slippageTolerance: 0.01 },
+    { quote: { sharesMinted: 1n, unexpected: 1n }, slippageTolerance: 0n },
+  ])(
+    "error: SimulationValidationError for malformed quote/tolerance %#",
+    (fields) => {
+      expect(() =>
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: {
+            operations: [{ type: "vaultV2Deposit", vault: TARGET, ...fields }],
+          },
+        }),
+      ).toThrow(SimulationValidationError);
+    },
+  );
+  test.each([0n, 10_000000000000000n, 10n ** 18n])(
+    "behavior: accepts tolerance %s and preserves a zero quote",
+    (slippageTolerance) => {
+      const operation = {
+        type: "vaultV2Deposit",
+        vault: TARGET,
+        quote: { assetsPaid: 0n },
+        slippageTolerance,
+      };
+      expect(
+        parse({
+          chainId: 1,
+          transactions: [tx()],
+          limits: { operations: [operation] },
+        }).limits?.operations,
+      ).toEqual([operation]);
+    },
+  );
+  test.each([
+    "minAssetsReceived",
+    "minSharesMinted",
+    "maxAssetsPaid",
+    "maxSharesBurned",
+    "maxPenaltyAssets",
+    "minRefundAssets",
+  ])("error: SimulationValidationError for removed bound %s", (field) => {
+    expect(() =>
+      parse({
+        chainId: 1,
+        transactions: [tx()],
+        limits: {
+          operations: [
+            {
+              type: "vaultV2Deposit",
+              vault: TARGET,
+              quote: { sharesMinted: 1n },
+              slippageTolerance: 0n,
+              [field]: 0n,
+            },
+          ],
+        },
+      }),
+    ).toThrow(SimulationValidationError);
+  });
+
   test("default", () => {
     const request = parse({
       chainId: 1,
@@ -105,7 +173,10 @@ describe("parseRequest", () => {
           {
             type: "vaultV1Deposit",
             vault: SPENDER.toLowerCase(),
-            expectedAssets: 1n,
+            slippageTolerance: 0n,
+            quote: {
+              assetsPaid: 1n,
+            },
           },
         ],
       },
@@ -253,9 +324,11 @@ describe("parseRequest", () => {
   });
 
   test.each([
-    ["expectedAssets only", { expectedAssets: 1n }],
-    ["expectedShares only", { expectedShares: 1n }],
-    ["neither", {}],
+    ["asset quote only", { quote: { assetsPaid: 1n }, slippageTolerance: 0n }],
+    [
+      "share quote only",
+      { quote: { sharesMinted: 1n }, slippageTolerance: 0n },
+    ],
   ])(
     "behavior: accepts a vaultV1MigrateToV2 limit with %s",
     (_name, fields) => {
@@ -300,9 +373,6 @@ describe("parseRequest", () => {
       }
     })();
     expect(error).toBeInstanceOf(SimulationValidationError);
-    expect((error as SimulationValidationError).fieldErrors).toContainEqual(
-      "limits.operations[0]: set expectedAssets or expectedShares, not both",
-    );
   });
 
   test("error: SimulationValidationError for blockNumber 'pending'", () => {
@@ -364,12 +434,12 @@ describe("parseRequest", () => {
       chainId: 1,
       transactions: [tx()],
       limits: {
-        maxSlippageWad: 1n,
         operations: [
           {
             type: "blueAuthorization",
             authorized: SPENDER,
-            transactionIndex: 0,
+            quote: { assetsPaid: 0n },
+            slippageTolerance: 0n,
           },
         ],
       },
@@ -472,13 +542,21 @@ describe("parseRequest", () => {
       transactions: [tx()],
       authorizations: [erc20Approval, permit2Auth],
       limits: {
-        maxSlippageWad: 1n,
-        operations: [{ type: "blueAuthorization", authorized: SPENDER }],
+        operations: [
+          {
+            type: "blueAuthorization",
+            authorized: SPENDER,
+            quote: { assetsPaid: 0n },
+            slippageTolerance: 0n,
+          },
+        ],
       },
     };
     const request = parse(input);
     expect(Object.isFrozen(input.authorizations[0])).toBe(false);
     expect(Object.isFrozen(input.limits)).toBe(false);
+    expect(Object.isFrozen(input.limits.operations[0]!.quote)).toBe(false);
+    expect(Object.isFrozen(request.limits?.operations?.[0]?.quote)).toBe(true);
     expect(request.authorizations[0]).not.toBe(erc20Approval);
     expect(request.authorizations[0]).toEqual(erc20Approval);
     expect(request.authorizations[1]).not.toBe(permit2Auth);
@@ -537,7 +615,6 @@ describe("parseRequest", () => {
             {
               type: "blueAuthorization",
               authorized: SPENDER,
-              transactionIndex: 0,
             },
           ],
         },
@@ -874,7 +951,7 @@ describe("parseRequest", () => {
     ).toThrow(SimulationValidationError);
   });
 
-  test("behavior: accepts a blueWithdraw limit with utilization and penalty bounds", () => {
+  test("behavior: accepts a blueWithdraw limit with share and asset bounds", () => {
     const request = parse({
       chainId: 1,
       transactions: [tx()],
@@ -883,8 +960,11 @@ describe("parseRequest", () => {
           {
             type: "blueWithdraw",
             marketId: _MARKET_ID,
-            maxUtilizationAfterWad: 1n,
-            maxReallocationPenaltyAssets: 2n,
+            slippageTolerance: 0n,
+            quote: {
+              sharesBurned: 1n,
+              assetsPaid: 2n,
+            },
           },
         ],
       },

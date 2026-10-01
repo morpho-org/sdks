@@ -23,6 +23,6 @@ export interface SimulateParams {
   /** Resolved once; defaults to "latest". Only canonical (mined) blocks can be
    * pinned; `pending` has no stable hash and is rejected at runtime. */
   readonly blockNumber?: bigint | Exclude<BlockTag, "pending">;
-  /** Consumers may only tighten; omitted values use SDK defaults. */
+  /** Caller-selected quotes and percentage tolerances. Omitted limits are unchecked. */
   readonly limits?: SimulationLimits;
 }
