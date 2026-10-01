@@ -148,9 +148,17 @@ export interface SlippageLimits {
 export type OperationLimit = SlippageLimits & {
   /** Position/share owner; defaults to the transaction sender. */
   readonly account?: Address;
-  /** Explicit asset paid; defaults to the action underlying. */
+  /**
+   * Explicit asset paid; defaults to the action underlying. Use viem's
+   * `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) for native ETH;
+   * sentinels such as `zeroAddress` are read as ERC-20 tokens.
+   */
   readonly assetPaid?: Address;
-  /** Explicit asset received; defaults to the action underlying. */
+  /**
+   * Explicit asset received; defaults to the action underlying. Use viem's
+   * `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) for native ETH;
+   * sentinels such as `zeroAddress` are read as ERC-20 tokens.
+   */
   readonly assetReceived?: Address;
   /** Asset receiver; defaults to the transaction sender. */
   readonly receiver?: Address;
