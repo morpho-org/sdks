@@ -43,12 +43,33 @@ The bounds are inclusive and favorable movement passes:
   least `ceil(quote × (1 − tolerance))`.
 - Share quotes on `blueSupplyCollateral` and `blueWithdrawCollateral` are rejected at parse time.
 
+Each operation type fixes what each quote field measures. "Supply" and "debt" above refer to the
+share side in the last two columns:
+
+| `type` | `assetsPaid` | `assetsReceived` | `sharesMinted` | `sharesBurned` |
+| --- | --- | --- | --- | --- |
+| `blueSupply`, `blueWithdraw` | loan token | loan token | supply shares | supply shares |
+| `blueSupplyCollateral`, `blueWithdrawCollateral` | collateral token | collateral token | rejected | rejected |
+| `blueBorrow`, `blueRepay` | loan token | loan token | debt shares | debt shares |
+| `blueSupplyCollateralBorrow` | collateral token | loan token | debt shares | debt shares |
+| `blueRepayWithdrawCollateral` | loan token | collateral token | debt shares | debt shares |
+| `blueRefinance` | source loan token | source loan token | target debt shares | source debt shares |
+| vault deposit, withdraw, redeem, force and in-kind variants | vault asset | vault asset | vault shares | vault shares |
+| `vaultV1MigrateToV2` | source vault asset | source vault asset | target vault shares | source vault shares |
+
+Blue shares are read from `position` (`supplyShares` or `borrowShares`), vault shares through the
+vault's `balanceOf`, and tokens through `balanceOf` unless `assetPaid`/`assetReceived` selects
+another token or native ETH. An in-kind redeem pays out a Blue position, which `assetsReceived`
+does not observe; quote its shares instead.
+
 Each quoted amount is measured over the whole bundle for the selected subject: ERC-20 and vault
 share balances through `balanceOf`, Blue shares through `position`, both read before and after
 execution at the pinned block, and native ETH through `traceTransfers`. Unquoted amounts are not
-read. Selecting the right subject is the caller's responsibility: a route the selector does not
-observe, such as native ETH funding a wNative market measured on the wNative balance, reads as zero
-movement and passes a maximum bound.
+read. Limits that select the same subject and field read the same net change over the bundle, so a
+caller quoting two steps that touch one balance, such as a borrow whose proceeds a later deposit
+pays in, must quote the net amount. Selecting the right subject is the caller's responsibility: a
+route the selector does not observe, such as native ETH funding a wNative market measured on the
+wNative balance, reads as zero movement and passes a maximum bound.
 
 `SimulationVerification` carries `mode`, `chainId`, `blockNumber`, `blockTimestamp`, the effective
 `limits`, one `SimulatedOperation` per limit with its `checkedLimits`, `account` and `receiver`, and
@@ -63,7 +84,8 @@ Errors keep the existing classes and add `UnsupportedOperationError`,
 `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`,
 `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError` and `UnexpectedSimulationError`,
 each extending `SimulationPackageError`. `UnsupportedOperationError` reports an SDK requirement that
-`toSimulationAuthorizations` cannot convert. A quote outside its bound is `ConsumerLimitViolationError`,
+`toSimulationAuthorizations` cannot convert, and `AuthorizationRequestMismatchError` reports a
+signature requirement passed to it without its typed-data payload. A quote outside its bound is `ConsumerLimitViolationError`,
 never `SimulationRevertedError`. A failed state read, native traces that do not cover the value sent,
 or unusable metadata is `MissingVerificationEvidenceError`. The 09-18 classes
 `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `AssetChangeMismatchError`,
@@ -74,14 +96,20 @@ an execution or verification failure takes its `operation` and subject fields fr
 only the checked `field`.
 
 This decision replaces these parts of ADR-2026-09-18: calldata decoding and its verification
-contract, the supported-route list and the rejection of other routes, the `SimulationLimits`
-defaults and wallet bounds, the operation limits, the verification output, preview read-back
-checks, and the error catalog. The rest of it stays in force, including
+contract, the rejection of routes outside the supported list, the call-time request-freshness
+check, the `SimulationLimits` defaults (including `maxSignatureLifetimeSeconds`) and wallet bounds,
+the operation limits, the verification output, preview read-back checks, and the error catalog.
+An expired deadline now surfaces as an execution revert. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
 `toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
+The Morpho-specific failure-message requirement also stays; its coverage scope is still the
+contracts reachable through the supported v6 routes, even though `simulate()` no longer rejects
+other routes.
 
-The change ships in the same unreleased `evm-simulation` major as ADR-2026-09-18, so no released
-API is broken a second time.
+ADR-2026-09-18 calls the next major 6.0.0. It is the same unreleased major, published as
+`evm-simulation` 5.0.0 because the package is on 4.x, so no released API is broken a second time.
+Its deprecation minor is waived by the `AGENTS.md` §7 EVM simulation v5 retirement exception
+(SDK-1291).
 
 ## Invariants
 
