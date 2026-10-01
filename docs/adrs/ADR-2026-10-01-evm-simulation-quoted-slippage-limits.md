@@ -124,7 +124,9 @@ checked against the bundle, and a successful preview does not show that the wall
 it. A deadline encoded in the executed transactions surfaces as an execution revert once it has
 expired; preview does not check the deadlines of pending authorizations. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
-`toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context.
+`toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context apart from its execution-stage fields: no context carries a
+decoded `operation`/subject, and a failing caller transaction's index is the `transactionIndex` of
+the per-transaction results on the error, not `failedTransactionIndex` in `context`.
 The Morpho-specific failure-message requirement also stays; its coverage scope is still the
 contracts reachable through the supported v6 routes, even though `simulate()` no longer rejects
 other routes.

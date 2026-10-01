@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | accepted; calldata decoding, route rejection, request freshness, effect verification, simulation limits, verification output, preview request validation, Migration route restrictions, error catalog apart from the existing classes' rows, descriptor verification and the preview authorization rule, and the Invariants depending on them superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits |
+| **Status** | accepted; calldata decoding, route rejection, request freshness, effect verification, simulation limits, verification output, preview request validation, Migration route restrictions, error catalog apart from the existing classes' rows, the execution-stage error context fields, descriptor verification and the preview authorization rule, and the Invariants depending on them superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits |
 | **Date** | 2026-09-18; revised 2026-09-25 |
 | **Author** | @foulques, @jinmel |
 | **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
