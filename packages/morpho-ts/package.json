@@ -43,7 +43,8 @@
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "fast-check": "catalog:"
   },
   "publishConfig": {
     "exports": {
@@ -75,5 +76,8 @@
         ]
       }
     }
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0"
   }
 }

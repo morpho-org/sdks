@@ -4,6 +4,7 @@ import {
   _try,
   DivisionByZeroError,
   IncompleteChainRegistryError,
+  InvalidAddressError,
   InvalidBitLengthError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
@@ -161,5 +162,17 @@ describe("_try", () => {
         throw new TypeError("nope");
       }, UnknownAddressError),
     ).rejects.toThrow(TypeError);
+  });
+});
+
+describe("InvalidAddressError", () => {
+  test("default", () => {
+    const error = new InvalidAddressError("0x1234");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("InvalidAddressError");
+    expect(error.address).toBe("0x1234");
+    expect(error.message).toContain("0x1234");
+    expect(error.message).toContain("EIP-55");
   });
 });

@@ -1,3 +1,4 @@
+import { getChecksumAddress } from "./address.js";
 import { ChainId } from "./chain.js";
 import {
   IncompleteChainRegistryError,
@@ -1967,6 +1968,19 @@ const cloneRegistryValue = <T>(value: T): T => {
   return next as T;
 };
 
+const canonicalizeRegistryValue = <T>(value: T): T => {
+  if (typeof value === "string") return getChecksumAddress(value) as T;
+
+  if (!isRecord(value)) return value;
+
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    next[key] = canonicalizeRegistryValue(child);
+  }
+
+  return next as T;
+};
+
 const areRegistryValuesEqual = ({
   base,
   patch,
@@ -2078,6 +2092,10 @@ const refreshDeploymentViews = () => {
  *
  * Validation runs over every requested patch before any registry is committed; a thrown error leaves all registries unchanged.
  *
+ * Every string value under `addresses` (and every `unwrappedTokens` key and value) must be a 20-byte
+ * `0x` hex address: it is stored in EIP-55 checksum form and must carry a valid checksum when mixed-case.
+ * Deployment values are not touched.
+ *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
@@ -2088,6 +2106,7 @@ const refreshDeploymentViews = () => {
  *                              Known-chain entries may be partial; custom-chain entries must include the required
  *                              Blue deployments and may add optional periphery deployments.
  *
+ * @throws InvalidAddressError when an address-like value is malformed or carries an invalid EIP-55 checksum.
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.
@@ -2154,7 +2173,7 @@ export function registerCustomAddresses<
     )) {
       const chainId = Number(chainIdString);
       const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = cloneRegistryValue(requestedAddresses);
+      const requestedEntry = canonicalizeRegistryValue(requestedAddresses);
 
       if (registeredEntry == null) {
         assertRequiredBlueRegistry({
@@ -2224,21 +2243,26 @@ export function registerCustomAddresses<
         const aligned: Record<`0x${string}`, `0x${string}`> = {};
 
         for (const [wrapped, unwrapped] of entries(tokens)) {
+          const wrappedChecksum = getChecksumAddress(wrapped);
+          const unwrappedChecksum = getChecksumAddress(unwrapped);
           const key =
             [...registeredKeys, ...keys(aligned)].find((candidate) =>
-              isHexEqual(candidate, wrapped),
-            ) ?? wrapped;
+              isHexEqual(candidate, wrappedChecksum),
+            ) ?? wrappedChecksum;
           const previous = aligned[key] ?? registered[key];
 
-          if (previous !== undefined && !isHexEqual(previous, unwrapped))
+          if (
+            previous !== undefined &&
+            !isHexEqual(previous, unwrappedChecksum)
+          )
             throw new RegistryValueAlreadyRegisteredError({
               label: `unwrappedTokens.${chainIdString}.${key}`,
               registeredValue: previous,
-              requestedValue: unwrapped,
+              requestedValue: unwrappedChecksum,
               type: "unwrapped token",
             });
 
-          aligned[key] = previous ?? unwrapped;
+          aligned[key] = previous ?? unwrappedChecksum;
         }
 
         return [chainIdString, aligned] as const;
