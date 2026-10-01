@@ -452,7 +452,13 @@ export interface MidnightSupplyCollateralTakeBorrowAction
     "midnightSupplyCollateralTakeBorrow",
     {
       readonly market: Hex;
+      /** Sum of every supplied amount; with several collaterals, read `collateralAmounts` instead. */
       readonly collateralAssets: bigint;
+      /** Supplied collateral per index, in encoding order. */
+      readonly collateralAmounts: readonly {
+        readonly collateralIndex: bigint;
+        readonly assets: bigint;
+      }[];
       readonly loanAssets: bigint;
       readonly maxUnits: bigint;
       readonly taker: Address;

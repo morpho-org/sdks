@@ -88,6 +88,10 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(Object.isFrozen(tx)).toBe(true);
     expect(tx.action.args).toMatchObject({
       collateralAssets: 2_300n,
+      collateralAmounts: [
+        { collateralIndex: 1n, assets: 300n },
+        { collateralIndex: 0n, assets: 2_000n },
+      ],
       collateralSupplies: 2,
     });
     expect(decoded.args?.[5]).toEqual([
@@ -167,7 +171,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         ...params,
         collateralSupplies: [{ collateralIndex: -1n, assets: 1n }],
       }),
-    ).toThrow(NegativeInputError);
+    ).toThrow(UnknownCollateralIndexError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({
         ...params,

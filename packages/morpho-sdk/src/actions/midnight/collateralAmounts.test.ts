@@ -1,16 +1,17 @@
 import { UnknownCollateralIndexError } from "@morpho-org/midnight-sdk";
 import { describe, expect, test } from "vitest";
-import { midnightMultiCollateralMarket as market } from "../../test/fixtures/midnight.js";
+import { midnightMultiCollateralMarket as market } from "../../../test/fixtures/midnight.js";
 import {
+  ConflictingMidnightCollateralInputError,
   DuplicateMidnightCollateralIndexError,
   EmptyMidnightCollateralAmountsError,
   NegativeInputError,
   NonPositiveInputError,
-} from "../types/index.js";
+} from "../../types/index.js";
 import {
   resolveMidnightCollateralSupplies,
   resolveMidnightCollateralWithdrawals,
-} from "./resolveMidnightCollateralAmounts.js";
+} from "./collateralAmounts.js";
 
 describe("resolveMidnightCollateralSupplies", () => {
   test("default: keeps caller order", () => {
@@ -60,7 +61,7 @@ describe("resolveMidnightCollateralSupplies", () => {
       resolveMidnightCollateralSupplies(market, {
         collateralSupplies: [{ collateralIndex: -1n, assets: 10n }],
       }),
-    ).toThrow(NegativeInputError);
+    ).toThrow(UnknownCollateralIndexError);
     expect(() =>
       resolveMidnightCollateralSupplies(market, {
         collateralSupplies: [{ collateralIndex: 2n, assets: 10n }],
@@ -74,6 +75,34 @@ describe("resolveMidnightCollateralSupplies", () => {
         ],
       }),
     ).toThrow(DuplicateMidnightCollateralIndexError);
+  });
+});
+
+describe("conflicting forms", () => {
+  test("error: list combined with single-collateral fields", () => {
+    expect(() =>
+      resolveMidnightCollateralSupplies(market, {
+        collateralAssets: 10n,
+        collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
+      }),
+    ).toThrow(ConflictingMidnightCollateralInputError);
+    expect(() =>
+      resolveMidnightCollateralSupplies(market, {
+        collateralIndex: 1n,
+        collateralSupplies: [{ collateralIndex: 0n, assets: 10n }],
+      }),
+    ).toThrow(ConflictingMidnightCollateralInputError);
+    expect(() =>
+      resolveMidnightCollateralWithdrawals(market, {
+        withdrawCollateralAssets: 500n,
+        collateralWithdrawals: [],
+      }),
+    ).toThrow(
+      new ConflictingMidnightCollateralInputError(
+        "collateralWithdrawals",
+        "withdrawCollateralAssets",
+      ).message,
+    );
   });
 });
 

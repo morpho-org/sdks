@@ -49,39 +49,6 @@ export interface MidnightCollateralSupply extends MidnightCollateralAmount {
 }
 
 /**
- * Collateral supplied by a Midnight flow: either one `collateralAssets` amount
- * at `collateralIndex` (default `0n`), or a `collateralSupplies` list.
- */
-export type MidnightCollateralSupplyInput =
-  | {
-      readonly collateralAssets: bigint;
-      readonly collateralIndex?: bigint;
-      readonly collateralSupplies?: never;
-    }
-  | {
-      readonly collateralSupplies: readonly MidnightCollateralAmount[];
-      readonly collateralAssets?: never;
-      readonly collateralIndex?: never;
-    };
-
-/**
- * Collateral withdrawn by a Midnight flow: either one `withdrawCollateralAssets`
- * amount at `collateralIndex` (default `0n`; `0n` withdraws nothing), or a
- * `collateralWithdrawals` list (empty withdraws nothing).
- */
-export type MidnightCollateralWithdrawalInput =
-  | {
-      readonly withdrawCollateralAssets: bigint;
-      readonly collateralIndex?: bigint;
-      readonly collateralWithdrawals?: never;
-    }
-  | {
-      readonly collateralWithdrawals: readonly MidnightCollateralAmount[];
-      readonly withdrawCollateralAssets?: never;
-      readonly collateralIndex?: never;
-    };
-
-/**
  * ABI-ready Midnight takeable offer returned by quote/takeable-offer APIs.
  *
  * Pass these objects unchanged into `takeLend`, `takeBorrow`, or

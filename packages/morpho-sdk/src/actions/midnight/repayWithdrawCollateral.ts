@@ -6,7 +6,6 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { resolveMidnightCollateralWithdrawals } from "../../helpers/resolveMidnightCollateralAmounts.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   type Metadata,
@@ -15,22 +14,36 @@ import {
   NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
-import { type MidnightCollateralWithdrawalInput, PermitKind } from "./types.js";
+import { resolveMidnightCollateralWithdrawals } from "./collateralAmounts.js";
+import { type MidnightCollateralAmount, PermitKind } from "./types.js";
 
-/**
- * Parameters for encoding a Midnight repay and/or collateral withdrawal
- * bundle. Pass either `withdrawCollateralAssets` (and optional
- * `collateralIndex`) or a `collateralWithdrawals` list.
- */
-export type MidnightRepayWithdrawCollateralParams = {
+/** Parameters for encoding a Midnight repay and/or collateral withdrawal bundle. */
+export interface MidnightRepayWithdrawCollateralParams {
   readonly chainId: number;
   readonly market: MarketInput;
   readonly repayAssets: bigint;
+  readonly withdrawCollateralAssets: bigint;
   readonly onBehalf: Address;
+  readonly collateralIndex?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
   readonly metadata?: Metadata;
-} & MidnightCollateralWithdrawalInput;
+}
+
+/**
+ * Parameters for encoding a Midnight repay and/or withdrawal of several
+ * collaterals. Entries are encoded in order; each index may appear once and an
+ * empty list withdraws nothing.
+ */
+export interface MidnightRepayWithdrawCollateralListParams
+  extends Omit<
+    MidnightRepayWithdrawCollateralParams,
+    "withdrawCollateralAssets" | "collateralIndex"
+  > {
+  readonly collateralWithdrawals: readonly MidnightCollateralAmount[];
+  readonly withdrawCollateralAssets?: never;
+  readonly collateralIndex?: never;
+}
 
 /**
  * Encodes a Midnight bundle that repays debt, withdraws collateral, or both.
@@ -51,11 +64,13 @@ export type MidnightRepayWithdrawCollateralParams = {
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundles`.
  * @throws {NegativeInputError} when any amount, collateral index, or deadline is negative.
- * @throws {NonPositiveInputError} when a `collateralWithdrawals` amount is non-positive, or nothing is repaid or withdrawn.
+ * @throws {ConflictingMidnightCollateralInputError} when `collateralWithdrawals` is combined with `withdrawCollateralAssets` or `collateralIndex`.
+ * @throws {NonPositiveInputError} when a `collateralWithdrawals` amount is non-positive.
  * @throws {DuplicateMidnightCollateralIndexError} when `collateralWithdrawals` repeats an index.
+ * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
+ * @throws {NonPositiveInputError} when nothing is repaid or withdrawn.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
- * @throws {UnknownCollateralIndexError} when a withdrawal targets an unconfigured collateral index.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -84,7 +99,9 @@ export type MidnightRepayWithdrawCollateralParams = {
  * ```
  */
 export const midnightRepayWithdrawCollateral = (
-  params: MidnightRepayWithdrawCollateralParams,
+  params:
+    | MidnightRepayWithdrawCollateralParams
+    | MidnightRepayWithdrawCollateralListParams,
 ): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
   if (params.repayAssets < 0n) {
     throw new NegativeInputError("repayAssets", params.repayAssets);
