@@ -531,17 +531,21 @@ describe.sequential("simulate — validation", () => {
 
 describe.sequential("simulate — timeout", () => {
   it("throws ExternalServiceError when simulation exceeds timeoutMs", async () => {
-    mockSimulateV1.mockImplementationOnce(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      throw new ExternalServiceError("timeout");
-    });
-    mockSimulateV1.mockImplementationOnce(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      throw new ExternalServiceError("timeout");
-    });
+    mockSimulateV1.mockImplementationOnce(
+      ({ signal }) =>
+        new Promise((_, reject) => {
+          if (!signal) return;
+          signal.addEventListener(
+            "abort",
+            () => reject(new ExternalServiceError("timeout")),
+            { once: true },
+          );
+        }),
+    );
 
     await expect(
       simulate(makeConfig({ timeoutMs: 1 }), makeParams()),
     ).rejects.toThrow(ExternalServiceError);
-  });
+    expect(mockSimulateV1.mock.calls[0]![0].signal?.aborted).toBe(true);
+  }, 1000);
 });
