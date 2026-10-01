@@ -19,6 +19,7 @@ import {
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { _try, isDefined } from "@morpho-org/morpho-ts";
 import {
+  AbiFunctionSignatureNotFoundError,
   type Address,
   type DecodeFunctionDataReturnType,
   decodeFunctionData,
@@ -37,7 +38,6 @@ import type {
 } from "../authorizations.js";
 import {
   AuthorizationRequestMismatchError,
-  type SimulationErrorContext,
   UnsupportedChainError,
   UnsupportedOperationError,
 } from "../errors.js";
@@ -63,7 +63,7 @@ const failUnlessRegistered = (spec: {
 }) => {
   if (!spec.allowed.some((allowed) => isAddressEqual(allowed, spec.observed))) {
     spec.fail(
-      `${spec.field} expected one of "${spec.allowed.join('", "')}", got "${spec.observed}". Rebuild the requirement against the chain registry`,
+      `${spec.field} expected one of "${spec.allowed.join('", "')}", got "${spec.observed}"`,
     );
   }
 };
@@ -74,20 +74,21 @@ const isMidnight = (ctx: Ctx, address: Address): boolean =>
     .filter(isDefined)
     .some((midnight) => isAddressEqual(midnight, address));
 
-const authorizationContext = (ctx: Ctx): SimulationErrorContext => ({
-  stage: "preparation",
-  chainId: ctx.chainId,
-  mode: ctx.mode,
-  blockNumber: ctx.blockNumber,
-  authorizationIndex: ctx.index,
-});
-
 const mismatch =
   (ctx: Ctx): Fail =>
   (message, options) => {
     throw new AuthorizationRequestMismatchError(
       `${message}. Rebuild the wallet request from getRequirements()`,
-      { context: authorizationContext(ctx), ...options },
+      {
+        context: {
+          stage: "preparation",
+          chainId: ctx.chainId,
+          mode: ctx.mode,
+          blockNumber: ctx.blockNumber,
+          authorizationIndex: ctx.index,
+        },
+        ...options,
+      },
     );
   };
 
@@ -95,7 +96,13 @@ const unsupported =
   (ctx: Ctx): Fail =>
   (message, options) => {
     throw new UnsupportedOperationError(message, {
-      context: authorizationContext(ctx),
+      context: {
+        stage: "preparation",
+        chainId: ctx.chainId,
+        mode: ctx.mode,
+        blockNumber: ctx.blockNumber,
+        authorizationIndex: ctx.index,
+      },
       ...options,
     });
   };
@@ -177,7 +184,7 @@ const validators = (fail: Fail) => ({
       const entry = this.record(value[index], `${field}[${index}]`);
       if (entry.name !== field_.name || entry.type !== field_.type) {
         fail(
-          `Typed data ${field}[${index}] expected "${field_.name} ${field_.type}", got "${describeValue(entry.name)} ${describeValue(entry.type)}"`,
+          `Typed data ${field}[${index}] expected "${field_.name} ${field_.type}", got ${describeValue(entry.name)} ${describeValue(entry.type)}`,
         );
       }
     }
@@ -567,7 +574,13 @@ const toErc20Approval = (
   try {
     decodedApprove = decodeFunctionData({ abi: erc20Abi, data });
   } catch (cause) {
-    return unsupported(ctx)(
+    if (cause instanceof AbiFunctionSignatureNotFoundError) {
+      return unsupported(ctx)(
+        "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
+        { cause },
+      );
+    }
+    return fail(
       "Approval transaction data does not decode as an ERC-20 call. Only approve prerequisites are supported",
       { cause },
     );
@@ -618,7 +631,7 @@ const toBlueAuthorization = (
 
   if (!isAddressEqual(to, ctx.addresses.blue)) {
     fail(
-      `Blue authorization transaction target expected Morpho "${ctx.addresses.blue}", got "${to}". Rebuild the request against the chain registry`,
+      `Blue authorization transaction target expected Morpho "${ctx.addresses.blue}", got "${to}"`,
     );
   }
   if (value !== 0n) {
@@ -631,7 +644,13 @@ const toBlueAuthorization = (
   try {
     decodedSetAuthorization = decodeFunctionData({ abi: blueAbi, data });
   } catch (cause) {
-    return unsupported(ctx)(
+    if (cause instanceof AbiFunctionSignatureNotFoundError) {
+      return unsupported(ctx)(
+        "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
+        { cause },
+      );
+    }
+    return fail(
       "Blue authorization transaction data does not decode as a Morpho call. Only setAuthorization prerequisites are supported",
       { cause },
     );

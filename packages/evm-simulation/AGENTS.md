@@ -24,4 +24,4 @@
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
 
 - `@morpho-org/morpho-sdk` is a direct runtime dependency of this package, used only through its root and `/abis` entry points for the requirements adapter; every morpho-sdk bump requires the root AGENTS.md §7 dependent package bump audit for evm-simulation.
-- `DEFAULT_MIN_LLTV_BUFFER_WAD` mirrors morpho-sdk's `DEFAULT_LLTV_BUFFER` (WAD / 200); the duplication is accepted by layering — a shared blue-sdk constant is deferred to a follow-up.
+- `DEFAULT_MIN_LLTV_BUFFER_WAD` must equal morpho-sdk's `DEFAULT_LLTV_BUFFER`; it stays a local constant so the verifier's floor is pinned independently of the builder — a drift shows up as a failing test in `src/simulate/request/effective-limits.test.ts`, not a silently moved threshold.

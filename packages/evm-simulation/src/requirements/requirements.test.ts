@@ -1506,6 +1506,33 @@ describe("toSimulationAuthorizations", () => {
         },
       }),
     ],
+    [
+      "truncated approve calldata",
+      () => ({
+        ...encodeErc20Approval({
+          token: TOKEN,
+          spender: vaultBundlesV1,
+          amount: 42n,
+          chainId: CHAIN_ID,
+        }),
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [vaultBundlesV1, 42n],
+        }).slice(0, 20) as `0x${string}`,
+      }),
+    ],
+    [
+      "truncated setAuthorization calldata",
+      () =>
+        blueAuthorizationCall({
+          data: encodeFunctionData({
+            abi: blueAbi,
+            functionName: "setAuthorization",
+            args: [blueBundlesV1, true],
+          }).slice(0, 20) as `0x${string}`,
+        }),
+    ],
   ] as [string, () => ActionRequirement][])(
     "error: AuthorizationRequestMismatchError on %s",
     (_name, make) => {
