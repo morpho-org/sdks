@@ -9,10 +9,13 @@ import {
   midnightApiTake,
   midnightChainId,
   midnightMarket,
+  midnightMultiCollateralMarket,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
+  DuplicateMidnightCollateralIndexError,
+  EmptyMidnightCollateralAmountsError,
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
@@ -59,6 +62,118 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(decoded.args?.[3]).toBe(false);
     expect(decoded.args?.[7]).toBe(0n);
     expect(decoded.args?.[9]).toBe(maxUint256);
+  });
+
+  test("behavior: encodes every collateral supply in order", () => {
+    const tx = midnightSupplyCollateralTakeBorrow({
+      chainId: midnightChainId,
+      market: midnightMultiCollateralMarket,
+      collateralSupplies: [
+        { collateralIndex: 1n, assets: 300n },
+        { collateralIndex: 0n, assets: 2_000n },
+      ],
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [
+        midnightApiTake({ buy: true, market: midnightMultiCollateralMarket }),
+      ],
+      deadline: maxUint256,
+    });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesAbi,
+      data: tx.data,
+    });
+
+    expect(Object.isFrozen(tx)).toBe(true);
+    expect(tx.action.args).toMatchObject({
+      collateralAssets: 2_300n,
+      collateralSupplies: 2,
+    });
+    expect(decoded.args?.[5]).toEqual([
+      {
+        collateralIndex: 1n,
+        assets: 300n,
+        permit: { kind: PermitKind.None, data: "0x" },
+      },
+      {
+        collateralIndex: 0n,
+        assets: 2_000n,
+        permit: { kind: PermitKind.None, data: "0x" },
+      },
+    ]);
+  });
+
+  test("behavior: single-collateral input encodes the same calldata as a one-entry list", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMultiCollateralMarket,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [
+        midnightApiTake({ buy: true, market: midnightMultiCollateralMarket }),
+      ],
+      deadline: maxUint256,
+    } as const;
+
+    expect(
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralAssets: 300n,
+        collateralIndex: 1n,
+      }),
+    ).toEqual(
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [{ collateralIndex: 1n, assets: 300n }],
+      }),
+    );
+  });
+
+  test("error: invalid collateralSupplies", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMultiCollateralMarket,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [
+        midnightApiTake({ buy: true, market: midnightMultiCollateralMarket }),
+      ],
+      deadline: maxUint256,
+    } as const;
+
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, collateralSupplies: [] }),
+    ).toThrow(EmptyMidnightCollateralAmountsError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [
+          { collateralIndex: 0n, assets: 1n },
+          { collateralIndex: 0n, assets: 1n },
+        ],
+      }),
+    ).toThrow(DuplicateMidnightCollateralIndexError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [{ collateralIndex: 0n, assets: -1n }],
+      }),
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [{ collateralIndex: -1n, assets: 1n }],
+      }),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralSupplies: [{ collateralIndex: 2n, assets: 1n }],
+      }),
+    ).toThrow(UnknownCollateralIndexError);
   });
 
   test("behavior: appends metadata", () => {

@@ -1569,6 +1569,54 @@ export class EmptyMidnightTakeableOffersError extends Error {
   }
 }
 
+/**
+ * Thrown when a Midnight multi-collateral list that must supply collateral is empty.
+ *
+ * @example
+ * ```ts
+ * import { EmptyMidnightCollateralAmountsError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new EmptyMidnightCollateralAmountsError("collateralSupplies");
+ * console.error(error.field);
+ * ```
+ */
+export class EmptyMidnightCollateralAmountsError extends Error {
+  /** @param field - Public input field holding the empty list. */
+  public constructor(public readonly field: string) {
+    super(
+      `Input "${field}" cannot be empty. Pass at least one collateral entry, or use the flow without collateral.`,
+    );
+    this.name = "EmptyMidnightCollateralAmountsError";
+  }
+}
+
+/**
+ * Thrown when a Midnight multi-collateral list repeats a collateral index.
+ *
+ * @example
+ * ```ts
+ * import { DuplicateMidnightCollateralIndexError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new DuplicateMidnightCollateralIndexError("collateralSupplies", 1n);
+ * console.error(error.field, error.collateralIndex);
+ * ```
+ */
+export class DuplicateMidnightCollateralIndexError extends Error {
+  /**
+   * @param field - Public input field holding the list.
+   * @param collateralIndex - Collateral index that appears more than once.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly collateralIndex: bigint,
+  ) {
+    super(
+      `Input "${field}" lists collateral index "${collateralIndex}" more than once. Merge the entries into one amount per index.`,
+    );
+    this.name = "DuplicateMidnightCollateralIndexError";
+  }
+}
+
 /** Thrown when a Midnight offer has the wrong maker side for the requested flow. */
 export class MidnightOfferSideMismatchError extends Error {
   constructor(params: {

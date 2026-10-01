@@ -1,7 +1,8 @@
-import { MarketUtils, midnightBundlesAbi } from "@morpho-org/midnight-sdk";
+import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { resolveMidnightCollateralSupplies } from "../../helpers/resolveMidnightCollateralAmounts.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
@@ -11,14 +12,19 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
-import { type MidnightCollateralSupply, PermitKind } from "./types.js";
+import {
+  type MidnightCollateralSupply,
+  type MidnightCollateralSupplyInput,
+  PermitKind,
+} from "./types.js";
 
-/** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
-export interface MidnightSupplyCollateralTakeBorrowParams
-  extends MidnightTakeBorrowParams {
-  readonly collateralAssets: bigint;
-  readonly collateralIndex?: bigint;
-}
+/**
+ * Parameters for encoding collateral supplies followed by a Midnight borrow
+ * take. Pass either `collateralAssets` (and optional `collateralIndex`) or a
+ * `collateralSupplies` list.
+ */
+export type MidnightSupplyCollateralTakeBorrowParams =
+  MidnightTakeBorrowParams & MidnightCollateralSupplyInput;
 
 /**
  * Encodes a Midnight bundle that supplies collateral and borrows in one call.
@@ -35,17 +41,20 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  * @param params.taker - Borrower address executing the bundle.
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
- * @param params.collateralAssets - Collateral assets supplied before taking offers.
- * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+ * @param params.collateralAssets - Collateral assets supplied before taking offers (single-collateral form).
+ * @param params.collateralIndex - Optional collateral index for `collateralAssets`; defaults to `0n`.
+ * @param params.collateralSupplies - Collateral supplied before taking offers, one entry per unique index, encoded in order (multi-collateral form).
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when collateral assets, loan assets, or `maxUnits` are non-positive.
- * @throws {NegativeInputError} when `deadline` is negative.
+ * @throws {NonPositiveInputError} when any collateral amount, loan assets, or `maxUnits` is non-positive.
+ * @throws {NegativeInputError} when `deadline` or any collateral index is negative.
+ * @throws {EmptyMidnightCollateralAmountsError} when `collateralSupplies` is empty.
+ * @throws {DuplicateMidnightCollateralIndexError} when `collateralSupplies` repeats an index.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
- * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
+ * @throws {UnknownCollateralIndexError} when any collateral index is not configured on the market.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -61,17 +70,25 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  *   takeableOffers: quote.data.takeableOffers,
  *   deadline: maxUint256,
  * });
+ *
+ * const multiCollateralTx = midnightSupplyCollateralTakeBorrow({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   collateralSupplies: [
+ *     { collateralIndex: 0n, assets: 1_000_000n },
+ *     { collateralIndex: 1n, assets: 50_000n },
+ *   ],
+ *   loanAssets: 1_000_000n,
+ *   maxUnits: 1_100_000n,
+ *   taker: borrower,
+ *   takeableOffers: quote.data.takeableOffers,
+ *   deadline: maxUint256,
+ * });
  * ```
  */
 export const midnightSupplyCollateralTakeBorrow = (
   params: MidnightSupplyCollateralTakeBorrowParams,
 ): Readonly<Transaction<MidnightSupplyCollateralTakeBorrowAction>> => {
-  if (params.collateralAssets <= 0n) {
-    throw new NonPositiveInputError(
-      "collateralAssets",
-      params.collateralAssets,
-    );
-  }
   if (params.loanAssets <= 0n) {
     throw new NonPositiveInputError("loanAssets", params.loanAssets);
   }
@@ -90,16 +107,11 @@ export const midnightSupplyCollateralTakeBorrow = (
   });
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-  const collateralIndex = params.collateralIndex ?? 0n;
-  // Validate that the collateral index is configured before encoding the bundle.
-  MarketUtils.getCollateralByIndex(params.market, collateralIndex);
-  const collateralSupplies: readonly MidnightCollateralSupply[] = [
-    {
-      collateralIndex,
-      assets: params.collateralAssets,
+  const collateralSupplies: readonly MidnightCollateralSupply[] =
+    resolveMidnightCollateralSupplies(params.market, params).map((supply) => ({
+      ...supply,
       permit: { kind: PermitKind.None, data: "0x" },
-    },
-  ];
+    }));
 
   let tx = {
     to: midnightBundles,
@@ -133,7 +145,10 @@ export const midnightSupplyCollateralTakeBorrow = (
       type: "midnightSupplyCollateralTakeBorrow",
       args: {
         market: marketId,
-        collateralAssets: params.collateralAssets,
+        collateralAssets: collateralSupplies.reduce(
+          (total, supply) => total + supply.assets,
+          0n,
+        ),
         loanAssets: params.loanAssets,
         maxUnits: params.maxUnits,
         taker: params.taker,

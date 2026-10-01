@@ -24,12 +24,62 @@ export type MidnightTokenPermit =
       readonly data: Hex;
     };
 
-/** Protocol-shaped collateral supply used by Midnight bundle calls. */
-export interface MidnightCollateralSupply {
+/**
+ * Collateral assets at one index of a Midnight market's collateral list.
+ *
+ * Used as `collateralSupplies` and `collateralWithdrawals` entries in
+ * multi-collateral flows. Indices must be unique within one list.
+ *
+ * @example
+ * ```ts
+ * const collateralSupplies: readonly MidnightCollateralAmount[] = [
+ *   { collateralIndex: 0n, assets: 2_000_000n },
+ *   { collateralIndex: 1n, assets: 50_000n },
+ * ];
+ * ```
+ */
+export interface MidnightCollateralAmount {
   readonly collateralIndex: bigint;
   readonly assets: bigint;
+}
+
+/** Protocol-shaped collateral supply used by Midnight bundle calls. */
+export interface MidnightCollateralSupply extends MidnightCollateralAmount {
   readonly permit: MidnightTokenPermit;
 }
+
+/**
+ * Collateral supplied by a Midnight flow: either one `collateralAssets` amount
+ * at `collateralIndex` (default `0n`), or a `collateralSupplies` list.
+ */
+export type MidnightCollateralSupplyInput =
+  | {
+      readonly collateralAssets: bigint;
+      readonly collateralIndex?: bigint;
+      readonly collateralSupplies?: never;
+    }
+  | {
+      readonly collateralSupplies: readonly MidnightCollateralAmount[];
+      readonly collateralAssets?: never;
+      readonly collateralIndex?: never;
+    };
+
+/**
+ * Collateral withdrawn by a Midnight flow: either one `withdrawCollateralAssets`
+ * amount at `collateralIndex` (default `0n`; `0n` withdraws nothing), or a
+ * `collateralWithdrawals` list (empty withdraws nothing).
+ */
+export type MidnightCollateralWithdrawalInput =
+  | {
+      readonly withdrawCollateralAssets: bigint;
+      readonly collateralIndex?: bigint;
+      readonly collateralWithdrawals?: never;
+    }
+  | {
+      readonly collateralWithdrawals: readonly MidnightCollateralAmount[];
+      readonly withdrawCollateralAssets?: never;
+      readonly collateralIndex?: never;
+    };
 
 /**
  * ABI-ready Midnight takeable offer returned by quote/takeable-offer APIs.
