@@ -77,6 +77,10 @@ be between 0 and 100% inclusive; it has no default. Omit `limits` to skip checks
 Unquoted amounts stay unchecked. The simulator never decodes calldata or fetches
 a quote to infer constraints.
 
+Non-empty `limits.operations` and preview authorizations require a Morpho Blue
+address registered in blue-sdk's `getChainAddresses`; otherwise
+`UnsupportedChainError` is thrown.
+
 Received assets and minted supply shares must be at least
 `ceil(quote * (1 - tolerance))`; paid assets and burned supply shares must be at
 most `floor(quote * (1 + tolerance))`. For debt shares, minting is capped at
@@ -104,9 +108,11 @@ const result = await simulate(config, {
 Measurements cover the named subject over the **whole bundle**. Entries do not
 attribute aggregate state changes to individual transactions. Use separate
 simulations for per-transaction limits. Asset bounds use net wallet balance
-changes (gas excluded); set `assetPaid` or `assetReceived` explicitly for native
-funding or unwrapped receipts. Share bounds use the selected account's vault shares or
-Blue position shares. Borrow/repay entries use debt shares; refinance selects
+changes (gas excluded). For native ETH, set `assetPaid` or `assetReceived` to
+viem's `ethAddress` (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`); other
+sentinels such as `zeroAddress` are read as ERC-20 tokens. Share bounds use the
+selected account's vault shares or Blue position shares. Borrow/repay entries
+use debt shares; refinance selects
 source shares burned and target shares minted; migration selects source vault
 shares burned and target vault shares minted. Combined collateral/borrow actions
 measure collateral paid and loan assets received; repay/collateral-withdraw actions

@@ -111,11 +111,11 @@ export type SimulationVerificationContext = SimulationCheckContext &
 /**
  * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
  * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
- * verification contexts are further keyed by `operation`, which fixes the
+ * operation-keyed verification contexts carry an `operation`, which fixes the
  * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`, `authorized`). Never contains
- * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause` stays
- * on the error).
+ * `sourceVault`/`targetVault`, `authorized`). Verification contexts may instead
+ * carry a `field` string with no `operation`. Never contains signatures, RPC
+ * URLs, credentials, raw calldata or raw causes (`cause` stays on the error).
  */
 export type SimulationErrorContext =
   | SimulationValidationContext
@@ -303,7 +303,8 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
  *   owning that `code`, and an absent or
  *   well-formed `context` (known `stage`, `mode`, numeric `chainId`,
  *   `bigint` `blockNumber`, `authorizationIndex` for `preparation`, and a
- *   known `operation` with its subject fields for `execution`/`verification`).
+ *   known `operation` with its subject fields for `execution`/`verification`,
+ *   or a verification `field` string with no `operation`).
  * @example
  * ```ts
  * import { isSimulationPackageError, simulate } from "@morpho-org/evm-simulation";

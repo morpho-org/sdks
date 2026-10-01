@@ -56,7 +56,8 @@ import { runSimulation } from "./run-simulation.js";
  * @throws {ConsumerLimitViolationError} when a declared `limits` bound is
  *   violated by the observed effects.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
- *   endpoint configured.
+ *   endpoint configured, or limits/preview authorizations require a Morpho
+ *   Blue address absent from blue-sdk's `getChainAddresses`.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
  * @throws {MissingVerificationEvidenceError} when a planned state read fails,
  *   native outgoing traces do not cover value sent, or required metadata is
