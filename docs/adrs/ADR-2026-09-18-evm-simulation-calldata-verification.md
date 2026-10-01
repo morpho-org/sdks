@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | accepted |
+| **Status** | accepted; calldata decoding, effect verification, simulation limits, verification output and error catalog superseded by ADR-2026-10-01-evm-simulation-quoted-slippage-limits |
 | **Date** | 2026-09-18; revised 2026-09-25 |
 | **Author** | @foulques, @jinmel |
 | **Scope** | `evm-simulation` 6.0.0; SDK baseline: `morpho-sdk` 6.0.0 |
