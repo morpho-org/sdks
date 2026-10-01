@@ -44,7 +44,8 @@ The bounds are inclusive and favorable movement passes:
 - Share quotes on `blueSupplyCollateral` and `blueWithdrawCollateral` are rejected at parse time.
 
 Each operation type fixes what each quote field measures. "Supply" and "debt" above refer to the
-share side in the last two columns:
+share side in the last two columns; only Blue debt shares take the debt rule, and vault shares take
+the supply rule:
 
 | `type` | `assetsPaid` | `assetsReceived` | `sharesMinted` | `sharesBurned` |
 | --- | --- | --- | --- | --- |
@@ -54,13 +55,14 @@ share side in the last two columns:
 | `blueSupplyCollateralBorrow` | collateral token | loan token | debt shares | debt shares |
 | `blueRepayWithdrawCollateral` | loan token | collateral token | debt shares | debt shares |
 | `blueRefinance` | source loan token | source loan token | target debt shares | source debt shares |
-| vault deposit, withdraw, redeem, force and in-kind variants | vault asset | vault asset | vault shares | vault shares |
-| `vaultV1MigrateToV2` | source vault asset | source vault asset | target vault shares | source vault shares |
+| vault deposit, withdraw, redeem, force and in-kind variants | vault asset | vault asset | vault shares (supply) | vault shares (supply) |
+| `vaultV1MigrateToV2` | source vault asset | source vault asset | target vault shares (supply) | source vault shares (supply) |
 
 Blue shares are read from `position` (`supplyShares` or `borrowShares`), vault shares through the
 vault's `balanceOf`, and tokens through `balanceOf` unless `assetPaid`/`assetReceived` selects
-another token or native ETH. An in-kind redeem pays out a Blue position, which `assetsReceived`
-does not observe; quote its shares instead.
+another token or native ETH. An in-kind redeem pays out a Blue position, which is not measured:
+bound it by quoting the vault `sharesBurned`, plus `assetsReceived` for any underlying paid out
+directly.
 
 Each quoted amount is measured over the whole bundle for the selected subject: ERC-20 and vault
 share balances through `balanceOf`, Blue shares through `position`, both read before and after
@@ -106,10 +108,9 @@ The Morpho-specific failure-message requirement also stays; its coverage scope i
 contracts reachable through the supported v6 routes, even though `simulate()` no longer rejects
 other routes.
 
-ADR-2026-09-18 calls the next major 6.0.0. It is the same unreleased major, published as
-`evm-simulation` 5.0.0 because the package is on 4.x, so no released API is broken a second time.
-Its deprecation minor is waived by the `AGENTS.md` §7 EVM simulation v5 retirement exception
-(SDK-1291).
+This decision ships in the same unreleased major that ADR-2026-09-18 calls 6.0.0, so no released
+API is broken a second time; the package is on 4.x, so that major publishes as `evm-simulation`
+5.0.0. This record does not change 09-18's Migration section.
 
 ## Invariants
 
