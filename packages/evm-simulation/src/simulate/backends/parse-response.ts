@@ -1,17 +1,18 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address, Hex } from "viem";
+import { BaseError, type Hex, type SimulateBlocksReturnType } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import type { ExecutionPlan } from "../plan/plan-execution.js";
+import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
+import type { StateRead } from "../state/contract.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
  */
-interface ExecutionBlock {
+export interface ExecutionBlock {
   readonly chainId: number;
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
@@ -20,74 +21,43 @@ interface ExecutionBlock {
   readonly blockTimestamp: bigint;
 }
 
-/** A user transaction and its normalized result. Only successful calls are carried.
+/** A planned call and its normalized result. Only successful calls are carried.
  * @internal
  */
-interface ExecutedTransaction {
-  readonly transactionIndex: number;
+export interface ExecutedCall {
+  readonly planned: PlannedCall;
   readonly result: SimulationCall;
 }
 
-/** The output of {@link parseSimulationResponse}: the plan, its block and successful user transactions.
+/** One executed state read with its raw return data. @internal */
+interface ExecutedStateRead {
+  readonly phase: "before" | "after";
+  readonly read: StateRead;
+  readonly returnData: Hex;
+}
+
+/** The output of {@link parseSimulationResponse}: the plan, its block, successful calls and state reads.
  * @internal
  */
 export interface SimulationExecution {
   readonly plan: ExecutionPlan;
   readonly block: ExecutionBlock;
-  /** User transactions in `transactionIndex` order, successful calls only. */
-  readonly transactions: readonly ExecutedTransaction[];
+  readonly calls: readonly ExecutedCall[];
+  /** Successful state reads, in plan order, tagged by phase. */
+  readonly stateReads: readonly ExecutedStateRead[];
 }
 
-// RPC quantities are never the empty "0x" — BigInt("0x") would throw.
-const isQuantity = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value);
-const isObject = (value: unknown): value is object =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const readField = (object: object, key: string): unknown =>
-  Reflect.get(object, key);
+type SimulatedCall = SimulateBlocksReturnType[number]["calls"][number];
 
-interface RawLogEntry {
-  readonly address: Address;
-  readonly topics: readonly Hex[];
-  readonly data?: Hex;
-}
-
-interface RawCallResult {
-  readonly status: "0x0" | "0x1";
-  readonly returnData: Hex;
-  readonly gasUsed: string;
-  readonly logs?: readonly RawLogEntry[];
-  readonly error?: {
-    readonly code?: number;
-    readonly message?: string;
-    readonly data?: unknown;
-  };
-}
-
-interface RawBlockResult {
-  readonly number: string;
-  readonly timestamp: string;
-  readonly hash: Hex;
-  readonly parentHash?: Hex;
-  readonly calls: readonly RawCallResult[];
-}
-
-/** Raw `eth_simulateV1` result: exactly one simulated block. */
-type RawSimulateV1Response = readonly [RawBlockResult];
-
-// Only the block envelope is checked: per-call fields are trusted — the node
-// is the caller's own configured endpoint.
-const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
-  Array.isArray(value) &&
-  value.length === 1 &&
-  isObject(value[0]) &&
-  isQuantity(readField(value[0], "number")) &&
-  isQuantity(readField(value[0], "timestamp")) &&
-  typeof readField(value[0], "hash") === "string" &&
-  Array.isArray(readField(value[0], "calls"));
+/** The revert message viem carried on a failed call, trimmed to `shortMessage`. */
+const callErrorMessage = (call: SimulatedCall): string | undefined =>
+  "error" in call && call.error instanceof BaseError
+    ? call.error.shortMessage
+    : undefined;
 
 /**
- * Parse a raw `eth_simulateV1` response into a {@link SimulationExecution}.
+ * Parse a formatted {@link simulateBlocks} result into a
+ * {@link SimulationExecution}.
  *
  * The response must be exactly one block at the pinned state block or its
  * immediate successor. Block advancement is node-specific: geth-style nodes
@@ -96,26 +66,25 @@ const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
  * and rejects any other height. Consumers must read
  * `block.blockNumber`/`block.blockTimestamp` and never assume +1.
  *
- * @param params - The plan, the raw RPC `result`, and the resolved state block.
- * @returns Deep-frozen execution: one {@link ExecutedTransaction} per
- *   successful user call.
- * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
- *   mismatch, or a simulated block that is neither the pinned state block nor
- *   its immediate successor — including one whose timestamp is earlier than
- *   the pinned state block's.
- * @throws {SimulationRevertedError} When a user-transaction call failed;
- *   `details` carries the frozen `{ transactionIndex, result }[]` of the
- *   user transactions.
+ * @param params - The plan, the formatted `eth_simulateV1` result, and the
+ *   resolved state block.
+ * @returns Deep-frozen execution: tagged calls plus one
+ *   {@link ExecutedStateRead} per planned state read.
+ * @throws {InvalidSimulationResponseError} When the result is not exactly one
+ *   block, on a call-count mismatch, or on a simulated block that is neither
+ *   the pinned state block nor its immediate successor.
+ * @throws {SimulationRevertedError} When a user-transaction call failed; the
+ *   `details` payload carries the tagged user call results only.
  * @internal
  */
 export function parseSimulationResponse(params: {
   readonly plan: ExecutionPlan;
-  readonly response: unknown;
+  readonly blocks: SimulateBlocksReturnType;
   readonly stateBlockNumber: bigint;
   readonly stateBlockHash: Hex;
   readonly stateBlockTimestamp: bigint;
 }): SimulationExecution {
-  const { plan, response } = params;
+  const { plan, blocks } = params;
   const errorContext: SimulationErrorContext = {
     stage: "transport",
     chainId: plan.request.chainId,
@@ -123,16 +92,15 @@ export function parseSimulationResponse(params: {
     blockNumber: params.stateBlockNumber,
   };
 
-  if (!isSimulateV1Response(response)) {
+  const block = blocks[0];
+  if (block === undefined || blocks.length !== 1) {
     throw new InvalidSimulationResponseError(
       "eth_simulateV1 returned an unexpected response shape. Check that the configured endpoint implements eth_simulateV1.",
       { context: errorContext },
     );
   }
 
-  const block = response[0];
-  const blockNumber = BigInt(block.number);
-  const blockTimestamp = BigInt(block.timestamp);
+  const { number: blockNumber, timestamp: blockTimestamp } = block;
   if (
     blockNumber !== params.stateBlockNumber &&
     blockNumber !== params.stateBlockNumber + 1n
@@ -168,42 +136,99 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  // One pass over the raw calls; plan order is call order, so transactions
-  // land in transactionIndex order.
-  const transactions: { transactionIndex: number; result: SimulationCall }[] =
-    [];
-  // Reason of the first failed user transaction, if any.
-  let revertReason: string | undefined;
-
-  for (const [index, call] of block.calls.entries()) {
+  const calls = block.calls.map((call, index) => {
     const planned = plan.calls[index]!;
     const logs: RawLog[] = (call.logs ?? []).map((log) => ({
       address: log.address,
       topics: log.topics,
-      data: log.data ?? "0x",
+      data: log.data,
     }));
     const result: SimulationCall = {
       logs,
-      status: call.status === "0x1",
-      returnData: call.returnData,
-      gasUsed: BigInt(call.gasUsed),
+      status: call.status === "success",
+      returnData: call.data,
+      gasUsed: call.gasUsed,
     };
-
-    transactions.push({
-      transactionIndex: planned.transactionIndex,
-      result,
-    });
-    if (!result.status && revertReason === undefined)
-      revertReason = call.error?.message ?? "Simulation failed";
-  }
+    return { planned, result, call };
+  });
 
   // A user-transaction revert belongs to the bundle, not the boundary.
-  if (revertReason !== undefined) {
+  const failedUserCall = calls.find(
+    ({ planned, result }) => planned.type === "transaction" && !result.status,
+  );
+  if (failedUserCall && failedUserCall.planned.type === "transaction") {
     throw new SimulationRevertedError(
-      revertReason,
-      deepFreeze(transactions),
+      callErrorMessage(failedUserCall.call) ?? "Simulation failed",
+      deepFreeze(
+        calls
+          .filter(
+            (
+              entry,
+            ): entry is typeof entry & {
+              planned: PlannedCall & {
+                type: "transaction";
+                transactionIndex: number;
+              };
+            } => entry.planned.type === "transaction",
+          )
+          .map(({ planned, result }) => ({
+            transactionIndex: planned.transactionIndex,
+            result,
+          })),
+      ),
       "UNKNOWN_REVERT",
     );
+  }
+
+  // A preparation call that reverted did not produce its promised state.
+  const failedPreparation = calls.find(
+    ({ planned, result }) => planned.type === "preparation" && !result.status,
+  );
+  if (failedPreparation) {
+    const message = callErrorMessage(failedPreparation.call);
+    throw new InvalidSimulationResponseError(
+      `Authorization preparation call failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
+      {
+        context: {
+          stage: "preparation",
+          chainId: plan.request.chainId,
+          mode: plan.request.mode,
+          blockNumber: params.stateBlockNumber,
+          authorizationIndex:
+            failedPreparation.planned.type === "preparation"
+              ? failedPreparation.planned.authorizationIndex
+              : -1,
+          ...(failedPreparation.planned.type === "preparation"
+            ? { preparationCallIndex: failedPreparation.planned.callIndex }
+            : {}),
+        },
+      },
+    );
+  }
+
+  const stateReads: ExecutedStateRead[] = [];
+  for (const { planned, result, call } of calls) {
+    if (planned.type !== "stateRead") continue;
+    if (!result.status) {
+      const message = callErrorMessage(call);
+      throw new InvalidSimulationResponseError(
+        `State read "${planned.read.id}" failed during simulation${message !== undefined ? `: ${message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
+        {
+          context: {
+            stage: "verification",
+            chainId: plan.request.chainId,
+            mode: plan.request.mode,
+            blockNumber: params.stateBlockNumber,
+            field: planned.read.id,
+          },
+        },
+      );
+    }
+    stateReads.push({
+      phase: planned.phase,
+      read: planned.read,
+      returnData: call.data,
+    });
   }
 
   return deepFreeze<SimulationExecution>({
@@ -217,6 +242,9 @@ export function parseSimulationResponse(params: {
       blockTimestamp,
     },
     // Every failure was classified above: only successful calls remain.
-    transactions,
+    calls: calls
+      .filter((entry) => entry.result.status)
+      .map(({ planned, result }) => ({ planned, result })),
+    stateReads,
   });
 }

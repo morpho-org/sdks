@@ -16,8 +16,6 @@ export const SIMULATION_ERROR_CODES = [
   "SIMULATION_REVERTED",
   "BLACKLIST_ERROR",
   "UNSUPPORTED_OPERATION",
-  "PROTOCOL_BINDING_MISMATCH",
-  "UNSUPPORTED_VERIFICATION_FEATURE",
   "INVALID_SIMULATION_RESPONSE",
   "MISSING_VERIFICATION_EVIDENCE",
   "AUTHORIZATION_REQUEST_MISMATCH",
@@ -25,8 +23,6 @@ export const SIMULATION_ERROR_CODES = [
   "PERMISSION_CHANGE_MISMATCH",
   "STATE_CHANGE_MISMATCH",
   "MARKET_CONSTRAINT_VIOLATION",
-  "SLIPPAGE_LIMIT_EXCEEDED",
-  "FEE_MISMATCH",
   "CONSUMER_LIMIT_VIOLATION",
   "UNEXPECTED_SIMULATION_ERROR",
 ] as const;
@@ -130,7 +126,13 @@ export type SimulationErrorContext =
   | SimulationTransportContext
   | SimulationPreparationContext
   | SimulationExecutionContext
-  | SimulationVerificationContext;
+  | SimulationVerificationContext
+  // Verification checks not bound to one operation name the checked field.
+  | (SimulationCheckContext & {
+      readonly stage: "verification";
+      readonly field: string;
+      readonly operation?: never;
+    });
 
 /**
  * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.
@@ -245,22 +247,10 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** A decoded transaction maps to no supported operation. */
+/** A transaction maps to no supported operation. */
 export class UnsupportedOperationError extends SimulationPackageError {
   override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";
-}
-
-/** An operation does not match the protocol entity it was bound to. */
-export class ProtocolBindingMismatchError extends SimulationPackageError {
-  override readonly name = "ProtocolBindingMismatchError";
-  readonly code = "PROTOCOL_BINDING_MISMATCH";
-}
-
-/** The request requires a verification feature this version does not support. */
-export class UnsupportedVerificationFeatureError extends SimulationPackageError {
-  override readonly name = "UnsupportedVerificationFeatureError";
-  readonly code = "UNSUPPORTED_VERIFICATION_FEATURE";
 }
 
 /** The simulation backend returned a response that cannot be parsed. */
@@ -305,18 +295,6 @@ export class MarketConstraintViolationError extends SimulationPackageError {
   readonly code = "MARKET_CONSTRAINT_VIOLATION";
 }
 
-/** An asset/share conversion exceeded the allowed slippage. */
-export class SlippageLimitExceededError extends SimulationPackageError {
-  override readonly name = "SlippageLimitExceededError";
-  readonly code = "SLIPPAGE_LIMIT_EXCEEDED";
-}
-
-/** An observed fee differs from the expected amount. */
-export class FeeMismatchError extends SimulationPackageError {
-  override readonly name = "FeeMismatchError";
-  readonly code = "FEE_MISMATCH";
-}
-
 /** A consumer-supplied limit was violated. */
 export class ConsumerLimitViolationError extends SimulationPackageError {
   override readonly name = "ConsumerLimitViolationError";
@@ -337,8 +315,6 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     SIMULATION_REVERTED: "SimulationRevertedError",
     BLACKLIST_ERROR: "BlacklistViolationError",
     UNSUPPORTED_OPERATION: "UnsupportedOperationError",
-    PROTOCOL_BINDING_MISMATCH: "ProtocolBindingMismatchError",
-    UNSUPPORTED_VERIFICATION_FEATURE: "UnsupportedVerificationFeatureError",
     INVALID_SIMULATION_RESPONSE: "InvalidSimulationResponseError",
     MISSING_VERIFICATION_EVIDENCE: "MissingVerificationEvidenceError",
     AUTHORIZATION_REQUEST_MISMATCH: "AuthorizationRequestMismatchError",
@@ -346,8 +322,6 @@ const ERROR_NAME_BY_CODE: Readonly<Record<SimulationErrorCode, string>> =
     PERMISSION_CHANGE_MISMATCH: "PermissionChangeMismatchError",
     STATE_CHANGE_MISMATCH: "StateChangeMismatchError",
     MARKET_CONSTRAINT_VIOLATION: "MarketConstraintViolationError",
-    SLIPPAGE_LIMIT_EXCEEDED: "SlippageLimitExceededError",
-    FEE_MISMATCH: "FeeMismatchError",
     CONSUMER_LIMIT_VIOLATION: "ConsumerLimitViolationError",
     UNEXPECTED_SIMULATION_ERROR: "UnexpectedSimulationError",
   });
