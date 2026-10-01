@@ -3,12 +3,11 @@ import { type Address, type Hex, isAddress, isHex } from "viem";
 import type { SimulationErrorContext } from "../../errors.js";
 import {
   InvalidSimulationResponseError,
-  MissingVerificationEvidenceError,
   SimulationRevertedError,
 } from "../../errors.js";
 import type { RawLog, SimulationCall } from "../../types.js";
-import { decodeNativeBalanceProbe } from "../plan/native-balance-probe.js";
 import type { ExecutionPlan, PlannedCall } from "../plan/plan-execution.js";
+import type { StateRead } from "../state/contract.js";
 
 /** The block coordinates a simulation was pinned to and executed under.
  * @internal
@@ -30,14 +29,11 @@ export interface ExecutedCall {
   readonly result: SimulationCall;
 }
 
-/** One decoded native-balance probe reading.
- * @internal
- */
-export interface NativeBalanceReading {
-  readonly probeId: string;
+/** One executed state read with its raw return data. @internal */
+export interface ExecutedStateRead {
   readonly phase: "before" | "intermediate" | "after";
-  readonly account: Address;
-  readonly assets: bigint;
+  readonly read: StateRead;
+  readonly returnData: Hex;
 }
 
 /** The output of {@link parseSimulationResponse}: the plan, its block, successful calls and probe readings.
@@ -47,7 +43,8 @@ export interface SimulationExecution {
   readonly plan: ExecutionPlan;
   readonly block: ExecutionBlock;
   readonly calls: readonly ExecutedCall[];
-  readonly nativeBalances: readonly NativeBalanceReading[];
+  /** Successful state reads, in plan order, tagged by phase. */
+  readonly stateReads: readonly ExecutedStateRead[];
 }
 
 // RPC quantities are never the empty "0x" — BigInt("0x") would throw.
@@ -160,7 +157,7 @@ const isSimulateV1Response = (
  *
  * @param params - The plan, the raw RPC `result`, and the resolved state block.
  * @returns Deep-frozen execution: tagged calls plus one
- *   {@link NativeBalanceReading} per successful probe.
+ *   {@link ExecutedStateRead} per planned state read.
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
  *   mismatch, or a simulated block that is neither the pinned state block nor
  *   its immediate successor.
@@ -248,13 +245,9 @@ export function parseSimulationResponse(params: {
 
   // A user-transaction revert belongs to the bundle, not the boundary.
   const failedUserCall = calls.find(
-    ({ planned, result }) =>
-      planned.identity.type === "transaction" && !result.status,
+    ({ planned, result }) => planned.type === "transaction" && !result.status,
   );
-  if (
-    failedUserCall &&
-    failedUserCall.planned.identity.type === "transaction"
-  ) {
+  if (failedUserCall && failedUserCall.planned.type === "transaction") {
     throw new SimulationRevertedError(
       failedUserCall.call.error?.message ?? "Simulation failed",
       deepFreeze(
@@ -264,12 +257,13 @@ export function parseSimulationResponse(params: {
               entry,
             ): entry is typeof entry & {
               planned: PlannedCall & {
-                identity: { type: "transaction"; transactionIndex: number };
+                type: "transaction";
+                transactionIndex: number;
               };
-            } => entry.planned.identity.type === "transaction",
+            } => entry.planned.type === "transaction",
           )
           .map(({ planned, result }) => ({
-            transactionIndex: planned.identity.transactionIndex,
+            transactionIndex: planned.transactionIndex,
             result,
           })),
       ),
@@ -277,43 +271,30 @@ export function parseSimulationResponse(params: {
     );
   }
 
-  const probeContext: SimulationErrorContext = {
-    stage: "transport",
-    mode: plan.request.mode,
-    chainId: plan.request.chainId,
-    blockNumber: params.stateBlockNumber,
-  };
+  // A preparation call that reverted did not produce its promised state.
+  const failedPreparation = calls.find(
+    ({ planned, result }) => planned.type === "preparation" && !result.status,
+  );
+  if (failedPreparation) {
+    throw new InvalidSimulationResponseError(
+      `Authorization preparation call failed during simulation${failedPreparation.call.error?.message !== undefined ? `: ${failedPreparation.call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes preparation calls.`,
+      { context: { ...errorContext, stage: "preparation" } },
+    );
+  }
 
-  const nativeBalances: NativeBalanceReading[] = [];
+  const stateReads: ExecutedStateRead[] = [];
   for (const { planned, result, call } of calls) {
-    if (
-      planned.identity.type !== "probe" ||
-      !("read" in planned) ||
-      planned.read.type !== "nativeBalance"
-    )
-      continue;
-    const phase =
-      planned.identity.phase === "prepared"
-        ? "intermediate"
-        : planned.identity.phase;
+    if (planned.type !== "stateRead") continue;
     if (!result.status) {
-      throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.identity.probeId}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint honors stateOverrides code.`,
-        { context: probeContext },
+      throw new InvalidSimulationResponseError(
+        `State read "${planned.read.id}" failed during simulation${call.error?.message !== undefined ? `: ${call.error.message}` : ""}. Re-submit the bundle; if it persists, check that the endpoint executes view calls in the same block.`,
+        { context: { ...errorContext, stage: "verification" } },
       );
     }
-    const assets = decodeNativeBalanceProbe(call.returnData as Hex);
-    if (assets === null) {
-      throw new MissingVerificationEvidenceError(
-        `Native balance probe "${planned.identity.probeId}" returned undecodable data. Check that the endpoint honors the probe code override.`,
-        { context: probeContext },
-      );
-    }
-    nativeBalances.push({
-      probeId: planned.identity.probeId,
-      phase,
-      account: planned.read.account,
-      assets,
+    stateReads.push({
+      phase: planned.phase,
+      read: planned.read,
+      returnData: call.returnData as Hex,
     });
   }
 
@@ -331,6 +312,6 @@ export function parseSimulationResponse(params: {
     calls: calls
       .filter((entry) => entry.result.status)
       .map(({ planned, result }) => ({ planned, result })),
-    nativeBalances,
+    stateReads,
   });
 }

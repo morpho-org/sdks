@@ -1,116 +1,115 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { ProbeIdentity } from "../internal/evidence.js";
-import {
-  brandPlanned,
-  type ExecutionPlan,
-  type PlannedCall,
-  type ProbeRead,
-  type ValidatedAuthorizations,
-} from "../internal/stages.js";
-
-export type { ExecutionPlan, PlannedCall } from "../internal/stages.js";
-
+import type { Address, Hex } from "viem";
+import { zeroAddress } from "viem";
+import type { SimulationRequest, SimulationTransaction } from "../../types.js";
+import type { ReadPhase, StateRead } from "../state/contract.js";
 import {
   NATIVE_BALANCE_PROBE_ADDRESS,
   NATIVE_BALANCE_PROBE_BYTECODE,
 } from "./native-balance-probe.js";
-import { encodeProbeCall, probeId } from "./probes.js";
 
-const NATIVE_READ = (owner: `0x${string}`): ProbeRead => ({
-  type: "nativeBalance",
-  account: owner,
-});
+/** One call planned inside the single `eth_simulateV1` run. @internal */
+export type PlannedCall = {
+  /** What the call carries on the wire. */
+  readonly transaction: SimulationTransaction & { readonly value: bigint };
+} & (
+  | {
+      /** A caller transaction. */
+      readonly type: "transaction";
+      readonly transactionIndex: number;
+    }
+  | {
+      /** A preview-authorization preparation call. */
+      readonly type: "preparation";
+      readonly authorizationIndex: number;
+      readonly callIndex: number;
+    }
+  | {
+      /** A state read-back call at the `before`/`after` phase. */
+      readonly type: "stateRead";
+      readonly phase: ReadPhase;
+      readonly read: StateRead;
+    }
+);
+
+/** The ordered call plan for one simulation. @internal */
+export interface ExecutionPlan {
+  readonly request: SimulationRequest;
+  readonly owner: Address;
+  readonly calls: readonly PlannedCall[];
+  readonly stateOverrides: readonly {
+    readonly address: Address;
+    readonly code: Hex;
+  }[];
+}
 
 /**
- * Plan the execution of a validated request as ordered `eth_simulateV1` calls.
+ * Plan the execution of a request as ordered `eth_simulateV1` calls.
  *
- * Sequence (design §9):
- * `[before probes]` → preparation calls → `[prepared probes]` →
- * for each user tx: `tx` then `[intermediate probes]`, except the last tx is
- * followed by the full `[after probes]`.
+ * Sequence (design §plan order): every `before` state read → preparation
+ * calls → for each user tx: `tx` then the native-balance reads of every
+ * account (intermediate phase) → every `after` state read.
  *
- * - `before`/`after` carry every {@link ProbeRead} in `reads.full` plus the
- *   owner's native-balance probe.
- * - `prepared` (emitted only when preparations exist) and `intermediate`
- *   carry `reads.permissions` plus the owner's native-balance probe.
- * - Preparation calls run `from` the owner; probes run `from` `zeroAddress`.
+ * Preparation calls run `from` the owner; state reads run `from`
+ * `zeroAddress` and never receive a public `txIdx`.
  *
- * Identities are independent of array offsets: user calls keep the caller's
- * `transactionIndex`; preparation calls carry
- * `{ type: "authorization", authorizationIndex, preparationCallIndex }`;
- * probes carry `{ type: "probe", probeId, phase }`.
- *
- * @param validated - Policy-checked request with ordered preparations.
- * @param reads - The planned probe reads, `full` for boundary snapshots and
- *   `permissions` for the read-back phases between state changes.
+ * @param request - The parsed request.
+ * @param owner - The bundle owner; sender of preparation calls.
+ * @param preparations - Ordered authorization preparations to simulate.
+ * @param reads - The full state-read list, replayed at `before` and `after`.
+ * @param intermediateReads - The reads replayed after each non-final
+ *   transaction (native balances of observed accounts).
  * @returns A deep-frozen {@link ExecutionPlan}; pure — equal inputs produce
  *   structurally equal plans.
  * @internal
  */
-export function planExecution(
-  validated: ValidatedAuthorizations,
-  reads: {
-    readonly full: readonly ProbeRead[];
-    readonly permissions: readonly ProbeRead[];
-  },
-): ExecutionPlan {
-  const { inputs, preparations } = validated;
-  const { bundle } = inputs;
-  const request = bundle.request;
-  const owner = bundle.owner;
+export function planExecution(params: {
+  readonly request: SimulationRequest;
+  readonly owner: Address;
+  readonly preparations: readonly {
+    readonly authorizationIndex: number;
+    readonly calls: readonly (SimulationTransaction & {
+      readonly value: bigint;
+    })[];
+  }[];
+  readonly reads: readonly StateRead[];
+  readonly intermediateReads: readonly StateRead[];
+}): ExecutionPlan {
+  const { request, owner, preparations, reads, intermediateReads } = params;
 
-  const seen = new Set<string>();
-  const probe = (
-    read: ProbeRead,
-    phase: ProbeIdentity["phase"],
-  ): PlannedCall => {
-    seen.add(`${phase}:${probeId(read)}`);
-    return {
-      identity: { type: "probe", probeId: probeId(read), phase },
-      transaction: encodeProbeCall(read),
+  const calls: PlannedCall[] = [];
+
+  for (const read of reads) {
+    calls.push({
+      type: "stateRead",
+      phase: "before",
       read,
-    };
-  };
-
-  const probeSet = (
-    list: readonly ProbeRead[],
-    phase: ProbeIdentity["phase"],
-  ): PlannedCall[] => {
-    const calls: PlannedCall[] = [];
-    const native = NATIVE_READ(owner);
-    calls.push(probe(native, phase));
-    for (const read of list) {
-      const id = probeId(read);
-      if (seen.has(`${phase}:${id}`)) continue;
-      calls.push(probe(read, phase));
-    }
-    return calls;
-  };
-
-  const calls: PlannedCall[] = [...probeSet(reads.full, "before")];
-
-  for (const preparation of preparations) {
-    preparation.calls.forEach((transaction, preparationCallIndex) => {
-      calls.push({
-        identity: {
-          type: "authorization",
-          authorizationIndex: preparation.authorizationIndex,
-          preparationCallIndex,
-        },
-        transaction,
-      });
+      transaction: {
+        from: zeroAddress,
+        to: read.to,
+        data: read.data,
+        value: 0n,
+      },
     });
   }
 
-  if (preparations.length > 0) {
-    calls.push(...probeSet(reads.permissions, "prepared"));
+  for (const preparation of preparations) {
+    preparation.calls.forEach((transaction, callIndex) => {
+      calls.push({
+        type: "preparation",
+        authorizationIndex: preparation.authorizationIndex,
+        callIndex,
+        transaction: { ...transaction, from: owner },
+      });
+    });
   }
 
   const last = request.transactions.length - 1;
   for (let i = 0; i <= last; i++) {
     const transaction = request.transactions[i]!;
     calls.push({
-      identity: { type: "transaction", transactionIndex: i },
+      type: "transaction",
+      transactionIndex: i,
       transaction: {
         from: transaction.from,
         to: transaction.to,
@@ -118,25 +117,47 @@ export function planExecution(
         value: transaction.value ?? 0n,
       },
     });
-    calls.push(
-      ...probeSet(
-        i === last ? reads.full : reads.permissions,
-        i === last ? "after" : "intermediate",
-      ),
-    );
+    for (const read of intermediateReads) {
+      calls.push({
+        type: "stateRead",
+        phase: "intermediate",
+        read: {
+          ...read,
+          id: `${read.id}#tx${i}`,
+        },
+        transaction: {
+          from: zeroAddress,
+          to: read.to,
+          data: read.data,
+          value: 0n,
+        },
+      });
+    }
   }
 
-  return brandPlanned(
-    deepFreeze({
-      request,
-      owner,
-      calls,
-      stateOverrides: [
-        {
-          address: NATIVE_BALANCE_PROBE_ADDRESS,
-          code: NATIVE_BALANCE_PROBE_BYTECODE,
-        },
-      ],
-    }),
-  );
+  for (const read of reads) {
+    calls.push({
+      type: "stateRead",
+      phase: "after",
+      read,
+      transaction: {
+        from: zeroAddress,
+        to: read.to,
+        data: read.data,
+        value: 0n,
+      },
+    });
+  }
+
+  return deepFreeze({
+    request,
+    owner,
+    calls,
+    stateOverrides: [
+      {
+        address: NATIVE_BALANCE_PROBE_ADDRESS,
+        code: NATIVE_BALANCE_PROBE_BYTECODE,
+      },
+    ],
+  });
 }
