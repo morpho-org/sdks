@@ -526,6 +526,19 @@ export interface MidnightCancelOfferAction
     }
   > {}
 
+/** Metadata for a guarded Midnight Bundles V2 batch offer-group cancellation. */
+export interface MidnightCancelOffersAction
+  extends BaseAction<
+    "midnightCancelOffers",
+    {
+      readonly cancellations: readonly {
+        readonly group: Hex;
+        readonly maxConsumed: bigint;
+      }[];
+      readonly deadline: bigint;
+    }
+  > {}
+
 /**
  * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
@@ -563,7 +576,8 @@ export type TransactionAction =
   | MempoolSubmitOffersAction
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
-  | MidnightCancelOfferAction;
+  | MidnightCancelOfferAction
+  | MidnightCancelOffersAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:

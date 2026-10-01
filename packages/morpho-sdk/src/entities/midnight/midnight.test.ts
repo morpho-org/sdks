@@ -10,6 +10,7 @@ import {
   Tree,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
+import { registerCustomAddresses } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -21,6 +22,7 @@ import {
   createWalletClient,
   custom,
   erc20Abi,
+  getAddress,
   type Hex,
   maxUint256,
   numberToHex,
@@ -2053,6 +2055,49 @@ describe("MorphoMidnight", () => {
 
       expect(requirements).toEqual([]);
       expect(tx.action.args.group).toBe(data.groups[0]);
+    });
+  });
+
+  describe("cancelOffers", () => {
+    const midnightBundlesV2 = getAddress(
+      "0x00000000000000000000000000000000000b2002",
+    );
+    registerCustomAddresses({
+      addresses: { [midnightChainId]: { midnightBundlesV2 } },
+    });
+
+    test("behavior: authorizes and targets MidnightBundlesV2", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, false);
+      const cancellations = [
+        { group: offersData().groups[0]!, maxConsumed: 0n },
+      ];
+      const output = new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).cancelOffers({
+        accountAddress: midnightAddresses.maker,
+        cancellations,
+        deadline: maxUint256,
+      });
+
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action).toEqual({
+        type: "midnightAuthorization",
+        args: {
+          authorized: midnightBundlesV2,
+          isAuthorized: true,
+          onBehalf: midnightAddresses.maker,
+        },
+      });
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.args).toEqual({ cancellations, deadline: maxUint256 });
     });
   });
 

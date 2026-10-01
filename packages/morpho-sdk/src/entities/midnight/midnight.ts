@@ -21,8 +21,10 @@ import {
   type WalletClient,
 } from "viem";
 import {
+  type MidnightGroupCancellation,
   mempoolSubmitOffers,
   midnightCancelOffer,
+  midnightCancelOffers,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
@@ -47,6 +49,7 @@ import {
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
+  type MidnightCancelOffersAction,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -132,6 +135,7 @@ export type MidnightActions = Pick<
   | "redeem"
   | "repayWithdrawCollateral"
   | "cancelOffer"
+  | "cancelOffers"
 >;
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
@@ -1116,6 +1120,59 @@ export class MorphoMidnight {
           chainId: this.chainId,
           group: params.group,
           onBehalf: params.accountAddress,
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  /**
+   * Prepares guarded cancellation of several maker offer groups through `MidnightBundlesV2`.
+   *
+   * The transaction reverts as a whole when any group's consumption exceeds its
+   * `maxConsumed` ceiling, so fills landing before execution never leave a partial cancel.
+   *
+   * @param params - Maker account, groups with consumption ceilings, and deadline.
+   * @param params.accountAddress - Maker sending the transaction; V2 cancels for `msg.sender`.
+   * @param params.cancellations - Offer groups and the largest consumption accepted for each.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @returns Lazy Midnight authorization requirement for `MidnightBundlesV2` and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+   * @example
+   * ```ts
+   * const output = midnight.cancelOffers({
+   *   accountAddress: maker,
+   *   cancellations: [{ group, maxConsumed: 0n }],
+   *   deadline: maxUint256,
+   * });
+   * ```
+   */
+  cancelOffers(params: {
+    readonly accountAddress: Address;
+    readonly cancellations: readonly MidnightGroupCancellation[];
+    readonly deadline: bigint;
+  }): MidnightActionOutput<MidnightCancelOffersAction> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const midnightBundlesV2 = getChainAddress(
+      this.chainId,
+      "midnightBundlesV2",
+    );
+
+    return {
+      getRequirements: async () => {
+        const authorization = await getMidnightAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          owner: params.accountAddress,
+          authorized: midnightBundlesV2,
+        });
+        return authorization ? [authorization] : [];
+      },
+      buildTx: () =>
+        midnightCancelOffers({
+          chainId: this.chainId,
+          cancellations: params.cancellations,
+          deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
     };

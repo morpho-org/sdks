@@ -44,6 +44,7 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
+| | `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
