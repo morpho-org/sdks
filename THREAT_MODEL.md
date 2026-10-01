@@ -7,7 +7,7 @@ This file states what the Morpho SDKs defend against and what they deliberately 
 The SDKs trust every endpoint the integrator configures:
 
 - the JSON-RPC node behind the viem client or WDK account, including deployless `eth_call` queries, multicall reads, `eth_getCode`, `eth_chainId` and `eth_sendRawTransaction`;
-- the `eth_simulateV1` endpoints configured in `evm-simulation`;
+- the `eth_simulateV1` endpoint configured in `evm-simulation`;
 - the ERC-4337 bundler and paymaster endpoints configured on the WDK account.
 
 A dishonest endpoint can return any state that decodes correctly, and it can keep that state consistent across calls. A second read, a fallback path or a cross-check through the same endpoint therefore adds no evidence. Detecting forgery would need a source the endpoint does not control, such as a light client with storage proofs or several independently operated nodes. The SDKs include neither.
@@ -120,7 +120,7 @@ The sole simulation backend: no fallback, no retry. Backend output is trusted as
 - The state block is pinned once and re-fetched after the response is parsed; a hash change mid-flight fails with `InvalidSimulationResponseError` (transport stage).
 - The reported block must be the pinned block or its immediate successor, and a successor must carry `parentHash === stateBlockHash`; anything else is `InvalidSimulationResponseError`. A simulated block whose timestamp is earlier than the pinned state block's is rejected the same way.
 - A call-count mismatch or an `eth_chainId` mismatch is a non-bypassable `InvalidSimulationResponseError`.
-- Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`; per-call fields are trusted, so a malformed per-call value from a non-compliant node surfaces as an untyped parse error rather than a typed one.
+- Transport failures, timeouts and malformed JSON-RPC envelopes become `ExternalServiceError`; bypassing it is the caller's choice to proceed unsimulated. Only the `eth_simulateV1` block envelope (number, timestamp, hash, `calls` array) is structurally checked and rejected as `InvalidSimulationResponseError`; per-call fields are trusted: a malformed per-call value from a non-compliant node may throw an untyped error, be read as a revert (any `status` other than `"0x1"`), or pass through unchecked.
 - Calls run with `validation: false` (gas is not charged) and `traceTransfers: true` so native-ETH moves appear as transfer logs; no `stateOverrides` are injected.
 - Reordered results shift effects between transactions. Only the endpoint controls the order.
 - Incomplete or forged ERC-20 logs hide retained tokens; a node that ignores `traceTransfers` hides native transfers.

@@ -180,16 +180,19 @@ registerCustomAddresses(options?: {
   - For **known chains**, partial overrides are allowed (e.g., add a missing adapter).
   - For **unknown chains**, a complete `ChainAddresses` object with required addresses must be provided.
   - Throws an error if you attempt to override an existing address.
+  - Throws `InvalidAddressError` for malformed or mis-checksummed mixed-case addresses.
 
 - `unwrappedTokens` *(optional)*  
   A map of `chainId → { wrapped → unwrapped }`.
   - Throws an error if you attempt to override an existing mapping.
+  - Throws `InvalidAddressError` for malformed or mis-checksummed mixed-case addresses.
 
 ---
 
 ##### **Behavior**
 
 - Merges user-provided addresses and unwrapped tokens into the internal registries.
+- Stores every registered address and unwrapped-token key/value in **EIP-55 checksum form**; pass valid EIP-55 or single-case (all-lowercase/all-uppercase) addresses.
 - Uses a deep merge with custom logic to **prevent overwriting existing values**.
 - Updates internal constants: `addressesRegistry`, `addresses`, and `unwrappedTokensMapping`.
 - Applies `Object.freeze()` to ensure immutability.
@@ -201,15 +204,17 @@ registerCustomAddresses(options?: {
 ```ts
 registerCustomAddresses({
   addresses: {
-    8453: { stEth: "0xabc..." }, // provide stEth address on base
+    // 20-byte hex placeholders — use real contract addresses.
+    8453: { stEth: "0x0000000000000000000000000000000000000001" }, // provide stEth address on base
     31337: {
-      blue: "0x123...",
+      blue: "0x0000000000000000000000000000000000000002",
+      adaptiveCurveIrm: "0x0000000000000000000000000000000000000003",
       ...
     }, // registers a new local test chain
   },
   unwrappedTokens: {
     31337: {
-      "0xWrapped": "0xUnwrapped" // e.g., WETH → ETH
+      "0x0000000000000000000000000000000000000004": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" // e.g., WETH → ETH
     }
   }
 });

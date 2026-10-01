@@ -1,6 +1,6 @@
 # morpho-ts Conventions
 
-- Keep this package framework-free and dependency-light; export generic helpers plus cross-protocol SDK primitives that Blue and Midnight both need, including shared math, typed errors, constants, address/hex/call descriptor types, shared ABI literals, and address/deployment registries.
+- Keep this package framework-free and dependency-light (`@noble/hashes`, providing `keccak_256` for EIP-55 checksumming at the same range as blue-sdk, is the one allowed runtime dependency); export generic helpers plus cross-protocol SDK primitives that Blue and Midnight both need, including shared math, typed errors, constants, address/hex/call descriptor types, shared ABI literals, and address/deployment registries.
 - `marketParamsAbi` is canonically defined in the `abis/marketParams` leaf subpath and re-exported from `abis`; protocol packages may re-export it for compatibility but must not redefine it.
 - Preserve nullability through helpers, e.g. `transformValue(value, fn)` returns nullish input unchanged.
 - Helpers should preserve input type shape unless their name explicitly signals formatting or conversion.
@@ -13,7 +13,7 @@
 
 ## Continuous Improvement
 
-- Keep this package dependency-free where possible and unrelated to framework state. Protocol data is allowed only when it is shared source-of-truth data consumed by maintained packages, such as the unified Morpho address/deployment registries or shared ABI literals.
+- Keep this package dependency-free where possible (`@noble/hashes` for EIP-55 checksumming is the sole allowed runtime dependency) and unrelated to framework state. Protocol data is allowed only when it is shared source-of-truth data consumed by maintained packages, such as the unified Morpho address/deployment registries or shared ABI literals.
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
