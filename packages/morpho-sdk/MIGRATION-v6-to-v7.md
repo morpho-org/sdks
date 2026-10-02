@@ -76,6 +76,13 @@ address.
 | `MidnightSupplyCollateralMakeBorrowParams` | `MidnightCancelAndMakeBorrowParams` (optional `collateral`) |
 | `MidnightMakeOffersOutput` | `MidnightCancelAndMakeOutput` |
 
+- `MidnightCancelAndMakeBorrowParams` moves `market`, `collateralIndex` and `collateralAssets` into
+  `collateral: { market, supplies: [{ collateralIndex, assets }] }`. `reservedCollateralAssets` is
+  removed: the collateral approval now covers only the supplied amounts and goes to
+  MidnightBundlesV2 instead of Midnight.
+- `offers` accepts only `MidnightMakerTreeInput` (a PriceRatifierV1 or RateRatifierV1 tree or
+  `Tree.create` request) instead of any `TreeInput`.
+- `MidnightOfferValidationParams` no longer accepts `ratification`; the ratifier comes from the tree.
 - `MidnightOffersData.ratifierType` is `"priceV1" | "rateV1"` instead of `"ecrecover" | "setter"`.
 - `MidnightOffersData.setterPayload` is replaced by `payload`, set for every tree.
 - `UnknownMidnightRatifierError` takes `{ ratifier, priceRatifierV1, rateRatifierV1 }` instead of

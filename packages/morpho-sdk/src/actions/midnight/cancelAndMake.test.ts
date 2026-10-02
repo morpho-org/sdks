@@ -8,6 +8,7 @@ import {
 import {
   getChainAddress,
   registerCustomAddresses,
+  UnknownAddressError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import {
@@ -148,13 +149,22 @@ describe("midnightCancelAndMake", () => {
     expect(decoded.args[4]).toEqual([{ collateralIndex: 0n, assets: 10n }]);
   });
 
-  test("behavior: appends metadata", () => {
+  test("behavior: appends metadata and does not freeze caller input", () => {
+    const groups = [groupA];
+    const cancellations = [{ group: groupB, maxConsumed: 5n }];
+    const supplies = [{ collateralIndex: 0n, assets: 10n }];
     const tx = midnightCancelAndMake({
       ...params,
+      groups,
+      cancellations,
+      collateral: { market, supplies },
       metadata: { origin: "a1b2c3d4" },
     });
 
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+    expect(Object.isFrozen(groups)).toBe(false);
+    expect(Object.isFrozen(cancellations[0])).toBe(false);
+    expect(Object.isFrozen(supplies[0])).toBe(false);
   });
 
   test("error: MidnightMarketAddressMismatchError", () => {
@@ -319,6 +329,52 @@ describe("midnightCancelAndMake without publication", () => {
         deadline: maxUint256,
       }),
     ).toThrow(EmptyMidnightGroupCancellationsError);
+  });
+
+  test("error: cancellation limits", () => {
+    const cancel =
+      (
+        groupCancellations: { group: Hex; maxConsumed: bigint }[],
+        deadline = maxUint256,
+      ) =>
+      () =>
+        midnightCancelAndMake({
+          chainId: midnightChainId,
+          cancellations: groupCancellations,
+          deadline,
+        });
+
+    expect(
+      cancel([
+        { group: groupA, maxConsumed: 0n },
+        {
+          group: groupA.toUpperCase().replace("0X", "0x") as Hex,
+          maxConsumed: 1n,
+        },
+      ]),
+    ).toThrow(DuplicateMidnightGroupCancellationError);
+    expect(cancel([{ group: groupA, maxConsumed: -1n }])).toThrow(
+      NegativeInputError,
+    );
+    expect(cancel([{ group: groupA, maxConsumed: maxUint128 + 1n }])).toThrow(
+      InputExceedsMaxError,
+    );
+    expect(cancel([{ group: groupA, maxConsumed: 0n }], 0n)).toThrow(
+      NonPositiveInputError,
+    );
+    expect(
+      cancel([{ group: groupA, maxConsumed: 0n }], maxUint256 + 1n),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: 1,
+        cancellations: [{ group: groupA, maxConsumed: 0n }],
+        deadline: maxUint256,
+      }),
+    ).toThrow(UnknownAddressError);
   });
 
   test("property: groupsToCancel and deadline round-trip through calldata", () => {

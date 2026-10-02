@@ -192,7 +192,8 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  *
  * @param params - Offer root, payload, cancellations, optional collateral, and deadline.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
- * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+ * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment or, when publishing,
+ *   no PriceRatifierV1/RateRatifierV1 deployment.
  * @throws {EmptyMidnightGroupCancellationsError} when nothing is published and no groups are cancelled.
  * @throws {UnknownMidnightRatifierError} when `ratifier` is not the chain's PriceRatifierV1 or RateRatifierV1.
  * @throws {InvalidTreeError} when `root` is zero, or `payload` or `groups` is empty.
