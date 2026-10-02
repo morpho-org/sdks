@@ -180,13 +180,19 @@ export function parseSimulationResponse(params: {
     let result: SimulationCall;
     try {
       result = {
-        logs: (call.logs ?? []).map(
-          (log): RawLog => ({
+        logs: (call.logs ?? []).map((log): RawLog => {
+          if (
+            !Array.isArray(log.topics) ||
+            typeof log.address !== "string" ||
+            (log.data !== undefined && typeof log.data !== "string")
+          )
+            throw new TypeError("malformed log");
+          return {
             address: log.address,
             topics: log.topics,
             data: log.data ?? "0x",
-          }),
-        ),
+          };
+        }),
         status: call.status === "0x1",
         returnData: call.returnData,
         gasUsed: BigInt(call.gasUsed),

@@ -1021,12 +1021,22 @@ describe("parseRequest", () => {
     },
   );
 
-  test("behavior: zeroAddress from is schema-valid per the domain type", () => {
-    // Address format passes; semantic zero-sender rejection is not a parser rule.
-    const request = parse({
-      chainId: 1,
-      transactions: [tx({ from: zeroAddress })],
-    });
-    expect(request.transactions[0]?.from).toBe(zeroAddress);
+  test("error: SimulationValidationError for a zero-address transaction", () => {
+    for (const [field, txOverrides] of [
+      ["from", { from: zeroAddress }],
+      ["to", { to: zeroAddress }],
+    ] as const) {
+      const error = (() => {
+        try {
+          parse({ chainId: 1, transactions: [tx(txOverrides)] });
+        } catch (caught) {
+          return caught;
+        }
+      })();
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toContainEqual(
+        `transactions[0].${field}: must be a non-zero address`,
+      );
+    }
   });
 });
