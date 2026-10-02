@@ -100,14 +100,16 @@ export function prepareAuthorizations(params: {
         });
         break;
       }
+      default: {
+        const exhaustive: never = auth;
+        void exhaustive;
+      }
     }
 
-    if (calls.length > 0) {
-      preparations.push({
-        authorizationIndex,
-        calls: deepFreeze(calls),
-      });
-    }
+    preparations.push({
+      authorizationIndex,
+      calls: deepFreeze(calls),
+    });
   });
 
   return deepFreeze(preparations);

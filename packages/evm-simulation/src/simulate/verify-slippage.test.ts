@@ -117,6 +117,48 @@ describe("verifySlippage", () => {
       verifySlippage({ ...input, transfers: input.transfers.slice(0, 1) }),
     ).toThrow(ConsumerLimitViolationError);
   });
+  test("behavior: a native assetsReceived quote uses incoming traces", () => {
+    const nativeLimit = {
+      ...limit,
+      quote: { assetsReceived: 10n },
+      slippageTolerance: 0n,
+    };
+    const plan = planStateReads({
+      operations: [{ limit: nativeLimit, assetsReceived: ethAddress }],
+      owner,
+      morpho: zeroAddress,
+    });
+    const input = {
+      ctx,
+      operations: plan.operations,
+      before: new Map(),
+      after: new Map(),
+      requestTransactions: [] as { from: Address; value?: bigint }[],
+    };
+    expect(
+      verifySlippage({
+        ...input,
+        transfers: [
+          {
+            token: ethAddress,
+            from: vault,
+            to: receiver,
+            amount: 10n,
+            txIdx: 0,
+          },
+        ],
+      })[0]?.checkedLimits.quote,
+    ).toEqual({ assetsReceived: 10n });
+    const error = (() => {
+      try {
+        verifySlippage({ ...input, transfers: [] });
+      } catch (caught) {
+        return caught;
+      }
+    })();
+    expect(error).toBeInstanceOf(ConsumerLimitViolationError);
+    expect(error).not.toBeInstanceOf(MissingVerificationEvidenceError);
+  });
   test("behavior: position shares use requested component and direction", () => {
     const operations = [
       {
