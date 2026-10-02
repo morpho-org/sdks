@@ -31,6 +31,7 @@ import {
   maxUint256,
   numberToHex,
   zeroAddress,
+  zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -1434,7 +1435,14 @@ describe("MorphoMidnight", () => {
         },
       });
       expect(tx.to).toBe(midnightBundlesV2);
-      expect(tx.action.args).toEqual({ cancellations, deadline: maxUint256 });
+      expect(tx.action.args).toEqual({
+        ratifier: zeroAddress,
+        root: zeroHash,
+        groups: [],
+        cancellations,
+        collateralSupplies: [],
+        deadline: maxUint256,
+      });
     });
 
     test("behavior: already authorized returns no requirements", async () => {

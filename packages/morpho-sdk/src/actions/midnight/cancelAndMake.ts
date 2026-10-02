@@ -10,26 +10,27 @@ import {
   encodeFunctionData,
   type Hex,
   isAddressEqual,
+  maxUint128,
   zeroAddress,
   zeroHash,
 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
+  DuplicateMidnightGroupCancellationError,
+  EmptyMidnightGroupCancellationsError,
+  InputExceedsMaxError,
   type Metadata,
   type MidnightCancelAndMakeAction,
   type MidnightCollateralTransfer,
   type MidnightGroupCancellation,
   MidnightReplacementGroupCancelledError,
+  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
   UnknownMidnightRatifierError,
 } from "../../types/index.js";
-import {
-  emptyBlueMarket,
-  emptyMidnightMarket,
-  toBundlesV2Cancellations,
-} from "./bundlesV2.js";
 
 /**
  * Delegated root-activation signature passed to the ratifier's `setIsRootRatifiedWithSig`.
@@ -47,10 +48,8 @@ export interface MidnightRootActivationSignature {
   readonly s: Hex;
 }
 
-/** Parameters for encoding an atomic Midnight Bundles V2 offer publication or repost. */
-export interface MidnightCancelAndMakeParams {
-  /** Chain id used to resolve `MidnightBundlesV2` and the V1 ratifiers. */
-  readonly chainId: number;
+/** Offer root activated and published by a Midnight Bundles V2 maker bundle. */
+export interface MidnightOfferPublication {
   /** PriceRatifierV1 or RateRatifierV1 that ratifies `root`. */
   readonly ratifier: Address;
   /** Offer tree root to activate. */
@@ -66,15 +65,80 @@ export interface MidnightCancelAndMakeParams {
     readonly market: MarketParams;
     readonly supplies: readonly MidnightCollateralTransfer[];
   };
-  /** Previous offer groups to cancel, each with its largest accepted consumption. Empty for a new publication. */
+}
+
+/**
+ * Parameters for encoding a Midnight Bundles V2 maker bundle: an offer publication or repost, or,
+ * without publication fields, a cancellation of offer groups only.
+ */
+export type MidnightCancelAndMakeParams = {
+  /** Chain id used to resolve `MidnightBundlesV2` and the V1 ratifiers. */
+  readonly chainId: number;
+  /** Offer groups to cancel, each with its largest accepted consumption. Empty for a new publication. */
   readonly cancellations: readonly MidnightGroupCancellation[];
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
   /** Optional analytics metadata appended to calldata. */
   readonly metadata?: Metadata;
-}
+} & (
+  | MidnightOfferPublication
+  | { readonly [K in keyof MidnightOfferPublication]?: never }
+);
+
+/** Blue market argument for `MidnightBundlesV2` calls that park no loan assets. */
+const emptyBlueMarket = {
+  loanToken: zeroAddress,
+  collateralToken: zeroAddress,
+  oracle: zeroAddress,
+  irm: zeroAddress,
+  lltv: 0n,
+} as const;
+
+/** Midnight market argument for `MidnightBundlesV2` calls that supply no collateral. */
+const emptyMidnightMarket = {
+  chainId: 0n,
+  midnight: zeroAddress,
+  loanToken: zeroAddress,
+  collateralParams: [],
+  maturity: 0n,
+  rcfThreshold: 0n,
+  enterGate: zeroAddress,
+  liquidatorGate: zeroAddress,
+} as const;
+
+/** Validates a bundle deadline and group cancellation limits, returning plain copies. */
+const toBundlesV2Cancellations = (params: {
+  readonly cancellations: readonly MidnightGroupCancellation[];
+  readonly deadline: bigint;
+}): MidnightGroupCancellation[] => {
+  validateDeadline(params.deadline);
+  const groups = new Set<string>();
+  return params.cancellations.map(({ group, maxConsumed }, index) => {
+    const field = `cancellations[${index}].maxConsumed`;
+    if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
+    if (maxConsumed > maxUint128) {
+      throw new InputExceedsMaxError({
+        field,
+        value: maxConsumed,
+        max: maxUint128,
+      });
+    }
+    const key = group.toLowerCase();
+    if (groups.has(key)) {
+      throw new DuplicateMidnightGroupCancellationError({ index, group });
+    }
+    groups.add(key);
+    return { group, maxConsumed };
+  });
+};
 
 const validateParams = (params: MidnightCancelAndMakeParams): void => {
+  if (params.root == null) {
+    if (params.cancellations.length === 0) {
+      throw new EmptyMidnightGroupCancellationsError();
+    }
+    return;
+  }
   const priceRatifierV1 = getChainAddress(params.chainId, "priceRatifierV1");
   const rateRatifierV1 = getChainAddress(params.chainId, "rateRatifierV1");
   if (
@@ -127,6 +191,8 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
 /**
  * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake` for `msg.sender`: cancel previous
  * groups under consumption guards, optionally supply collateral, activate `root`, and publish `payload`.
+ * Without `ratifier`, `root`, `groups` and `payload`, it only cancels groups (`cancelOffers` uses this).
+ * Execution reverts as a whole if any group's consumption exceeds its `maxConsumed` ceiling.
  *
  * The contract does not check that `payload` matches `root`; callers must derive both from the
  * same tree. Prefer `client.morpho.midnight(chainId).cancelAndMakeLend(...)` or
@@ -135,6 +201,7 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * @param params - Offer root, payload, cancellations, optional collateral, and deadline.
  * @returns Deep-frozen transaction targeting `MidnightBundlesV2`.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
+ * @throws {EmptyMidnightGroupCancellationsError} when nothing is published and no groups are cancelled.
  * @throws {UnknownMidnightRatifierError} when `ratifier` is not the chain's PriceRatifierV1 or RateRatifierV1.
  * @throws {InvalidTreeError} when `root` is zero, or `payload` or `groups` is empty.
  * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
@@ -198,8 +265,8 @@ export const midnightCancelAndMake = (
           ? emptyMidnightMarket
           : MarketUtils.toStruct(params.collateral.market),
         supplies,
-        params.ratifier,
-        params.root,
+        params.ratifier ?? zeroAddress,
+        params.root ?? zeroHash,
         signature.height,
         signature.nonce,
         signature.deadline,
@@ -207,7 +274,7 @@ export const midnightCancelAndMake = (
         signature.r,
         signature.s,
         cancellations,
-        params.payload,
+        params.payload ?? "0x",
         params.deadline,
         zeroAddress,
       ],
@@ -222,9 +289,9 @@ export const midnightCancelAndMake = (
     action: {
       type: "midnightCancelAndMake",
       args: {
-        ratifier: params.ratifier,
-        root: params.root,
-        groups: [...params.groups],
+        ratifier: params.ratifier ?? zeroAddress,
+        root: params.root ?? zeroHash,
+        groups: [...(params.groups ?? [])],
         cancellations,
         collateralSupplies: supplies,
         deadline: params.deadline,

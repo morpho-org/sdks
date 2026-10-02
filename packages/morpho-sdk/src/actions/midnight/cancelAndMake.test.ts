@@ -9,6 +9,7 @@ import {
   getChainAddress,
   registerCustomAddresses,
 } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
 import {
   decodeFunctionData,
   getAddress,
@@ -26,6 +27,7 @@ import {
 import {
   ChainIdMismatchError,
   DuplicateMidnightGroupCancellationError,
+  EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   MidnightMarketAddressMismatchError,
   MidnightReplacementGroupCancelledError,
@@ -263,5 +265,89 @@ describe("midnightCancelAndMake", () => {
         collateral: { market, supplies: [{ collateralIndex: 0n, assets: 0n }] },
       }),
     ).toThrow(NonPositiveInputError);
+  });
+});
+
+describe("midnightCancelAndMake without publication", () => {
+  const cancellations = [
+    { group: groupA, maxConsumed: 0n },
+    { group: groupB, maxConsumed: 5n },
+  ];
+
+  test("default", () => {
+    const tx = midnightCancelAndMake({
+      chainId: midnightChainId,
+      cancellations,
+      deadline: maxUint256,
+    });
+    const { args } = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(tx.to).toBe(midnightBundlesV2);
+    expect(args.slice(4)).toEqual([
+      [],
+      zeroAddress,
+      zeroHash,
+      0n,
+      0n,
+      0n,
+      0,
+      zeroHash,
+      zeroHash,
+      cancellations,
+      "0x",
+      maxUint256,
+      zeroAddress,
+    ]);
+    expect(tx.action.args).toEqual({
+      ratifier: zeroAddress,
+      root: zeroHash,
+      groups: [],
+      cancellations,
+      collateralSupplies: [],
+      deadline: maxUint256,
+    });
+  });
+
+  test("error: EmptyMidnightGroupCancellationsError on no groups", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        chainId: midnightChainId,
+        cancellations: [],
+        deadline: maxUint256,
+      }),
+    ).toThrow(EmptyMidnightGroupCancellationsError);
+  });
+
+  test("property: groupsToCancel and deadline round-trip through calldata", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(
+          fc.record({
+            group: fc
+              .uint8Array({ minLength: 32, maxLength: 32 })
+              .map((bytes): Hex => `0x${Buffer.from(bytes).toString("hex")}`),
+            maxConsumed: fc.bigInt({ min: 0n, max: maxUint128 }),
+          }),
+          { minLength: 1, maxLength: 8, selector: ({ group }) => group },
+        ),
+        fc.bigInt({ min: 1n, max: maxUint256 }),
+        (groupCancellations, deadline) => {
+          const { args } = decodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            data: midnightCancelAndMake({
+              chainId: midnightChainId,
+              cancellations: groupCancellations,
+              deadline,
+            }).data,
+          });
+          expect(args[13]).toEqual(groupCancellations);
+          expect(args[15]).toBe(deadline);
+        },
+      ),
+      { seed: 42 },
+    );
   });
 });

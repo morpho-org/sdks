@@ -509,16 +509,6 @@ export interface MidnightGroupCancellation {
   readonly maxConsumed: bigint;
 }
 
-/** Metadata for a guarded Midnight Bundles V2 batch offer-group cancellation. */
-export interface MidnightCancelOffersAction
-  extends BaseAction<
-    "midnightCancelOffers",
-    {
-      readonly cancellations: readonly MidnightGroupCancellation[];
-      readonly deadline: bigint;
-    }
-  > {}
-
 /** Collateral pulled from the maker and supplied to Midnight before offers are published. */
 export interface MidnightCollateralTransfer {
   /** Index of the collateral in the market's `collateralParams`. */
@@ -527,7 +517,7 @@ export interface MidnightCollateralTransfer {
   readonly assets: bigint;
 }
 
-/** Metadata for an atomic Midnight Bundles V2 offer publication or repost. */
+/** Metadata for a Midnight Bundles V2 maker bundle; cancel-only bundles carry a zero `ratifier` and `root`. */
 export interface MidnightCancelAndMakeAction
   extends BaseAction<
     "midnightCancelAndMake",
@@ -577,7 +567,6 @@ export type TransactionAction =
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction
-  | MidnightCancelOffersAction
   | MidnightCancelAndMakeAction;
 
 /**

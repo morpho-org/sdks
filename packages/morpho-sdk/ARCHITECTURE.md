@@ -118,7 +118,7 @@ at the SDK level. The differences are at the protocol layer:
   contract-ratified offers with prices fixed until market maturity.
 - **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
   collateral supply, credit redemption, and single-group `cancelOffer` call Midnight directly; batch
-  `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call.
+  `cancelOffers` encodes one `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call through the shared `midnightCancelAndMake` builder.
 - **Maker routing**: `cancelAndMakeLend` and `cancelAndMakeBorrow` validate a PriceRatifierV1 or
   RateRatifierV1 offer tree, then encode one `midnightBundlesV2CancelAndMake` call that cancels
   replaced groups, optionally supplies collateral, activates the root and publishes the payload.

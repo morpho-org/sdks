@@ -16,7 +16,6 @@ import { type Address, type Hex, isAddressEqual } from "viem";
 import {
   midnightCancelAndMake,
   midnightCancelOffer,
-  midnightCancelOffers,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
@@ -38,8 +37,8 @@ import {
   type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
-  type MidnightCancelOffersAction,
   type MidnightGroupCancellation,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
@@ -1095,9 +1094,9 @@ export class MorphoMidnight {
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
-   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
    * @throws {NonPositiveInputError} when `deadline` is not positive.
-   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
@@ -1121,10 +1120,10 @@ export class MorphoMidnight {
     readonly accountAddress: Address;
     readonly cancellations: readonly MidnightGroupCancellation[];
     readonly deadline: bigint;
-  }): MidnightActionOutput<MidnightCancelOffersAction> {
+  }): MidnightActionOutput<MidnightCancelAndMakeAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
-    const tx = midnightCancelOffers({
+    const tx = midnightCancelAndMake({
       chainId: this.chainId,
       cancellations: params.cancellations,
       deadline: params.deadline,
