@@ -509,6 +509,7 @@ describe("parseRequest", () => {
       },
     ],
     ["unknown transaction field", { transactions: [tx({ gasPrice: 1n })] }],
+    ["unknown input field", { transactions: [tx()], stateOverrides: {} }],
     [
       "unknown authorization field",
       {
