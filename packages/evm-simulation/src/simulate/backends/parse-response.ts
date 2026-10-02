@@ -75,8 +75,9 @@ interface RawBlockResult {
 /** Raw `eth_simulateV1` result: exactly one simulated block. */
 type RawSimulateV1Response = readonly [RawBlockResult];
 
-// Only the block envelope is checked: per-call fields are trusted — the node
-// is the caller's own configured endpoint.
+// Only the block envelope is structurally checked; per-call values that fail
+// normalization are rejected as InvalidSimulationResponseError, other per-call
+// fields are trusted — the node is the caller's own configured endpoint.
 const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
   Array.isArray(value) &&
   value.length === 1 &&
@@ -186,7 +187,10 @@ export function parseSimulationResponse(params: {
             typeof log.address !== "string" ||
             (log.data !== undefined && typeof log.data !== "string")
           )
-            throw new TypeError("malformed log");
+            throw new InvalidSimulationResponseError(
+              `eth_simulateV1 returned a malformed log at call position ${index}.`,
+              { context: errorContext },
+            );
           return {
             address: log.address,
             topics: log.topics,
@@ -198,6 +202,7 @@ export function parseSimulationResponse(params: {
         gasUsed: BigInt(call.gasUsed),
       };
     } catch (cause) {
+      if (cause instanceof InvalidSimulationResponseError) throw cause;
       throw new InvalidSimulationResponseError(
         `eth_simulateV1 returned a malformed call result at position ${index}.`,
         { context: errorContext, cause },
