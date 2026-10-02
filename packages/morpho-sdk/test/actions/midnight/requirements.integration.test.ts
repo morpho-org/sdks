@@ -93,18 +93,13 @@ const prepareTakeableOffer = async (params: {
     address: offerMaker,
     value: parseEther("1"),
   });
-  const authorization = await getMidnightAuthorizationRequirement({
-    viemClient: params.client,
-    chainId: base.id,
-    owner: offerMaker,
-    authorized: setterRatifier,
+  await params.client.writeContract({
+    address: midnight,
+    abi: midnightAbi,
+    functionName: "setIsAuthorized",
+    args: [setterRatifier, true, offerMaker],
+    account: offerMaker,
   });
-  if (authorization) {
-    await params.client.sendTransaction({
-      ...authorization,
-      account: offerMaker,
-    });
-  }
 
   if (params.buy) {
     await params.client.deal({
