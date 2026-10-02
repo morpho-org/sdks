@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "fast-check": "^4.9.0",
+    "fast-check": "catalog:",
     "typescript": "catalog:",
     "viem": "^2.55.10",
     "vitest": "catalog:"
