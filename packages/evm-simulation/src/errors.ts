@@ -109,13 +109,19 @@ export type SimulationVerificationContext = SimulationCheckContext &
   SimulationOperationSubject & { readonly stage: "verification" };
 
 /**
- * Where and why a simulation failed, keyed by `stage` (ADR-2026-09-18 §Errors).
- * Every stage carries `mode`, `chainId` and `blockNumber`; execution and
- * operation-keyed verification contexts carry an `operation`, which fixes the
- * subject fields (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`, `authorized`). Verification contexts may instead
- * carry a `field` string with no `operation`. Never contains signatures, RPC
- * URLs, credentials, raw calldata or raw causes (`cause` stays on the error).
+ * Where and why a simulation failed, keyed by `stage`
+ * (ADR-2026-10-01-evm-simulation-quoted-slippage-limits).
+ * Every stage carries `mode`, `chainId` and `blockNumber`. Preparation
+ * contexts carry `authorizationIndex` and `preparationCallIndex`. Verification
+ * contexts bound to a limit take `operation` and the subject fields
+ * (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
+ * `sourceVault`/`targetVault`, `authorized`) from that `OperationLimit`, not
+ * from decoded calldata; unbound ones carry only a `field` string.
+ * `"execution"` stays in the union, but `SimulationRevertedError` carries no
+ * `context` for caller-transaction or node reverts — the failing
+ * `transactionIndex` is reported on the error's `details`. Never contains
+ * signatures, RPC URLs, credentials, raw calldata or raw causes (`cause`
+ * stays on the error).
  */
 export type SimulationErrorContext =
   | SimulationValidationContext
@@ -243,7 +249,10 @@ export class UnsupportedChainError extends SimulationPackageError {
   }
 }
 
-/** A transaction maps to no supported operation. */
+/**
+ * An SDK requirement passed to `toSimulationAuthorizations` cannot be
+ * converted into a simulation authorization.
+ */
 export class UnsupportedOperationError extends SimulationPackageError {
   override readonly name = "UnsupportedOperationError";
   readonly code = "UNSUPPORTED_OPERATION";

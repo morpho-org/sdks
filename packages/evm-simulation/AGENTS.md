@@ -17,7 +17,7 @@
 - Add chains through caller `SimulationConfig.chains`; every per-chain `ChainSimulationConfig` requires `simulateV1Url`. Confirm blue-sdk `bundles` addresses intentionally.
 - Keep unit tests colocated as `{module}.test.ts`; put shared unit fixtures in `src/test-helpers/`, which must stay out of published builds. Keep fork tests under `test/` as `*.integration.test.ts`.
 
-- The unreleased v5 stack follows the narrow lifecycle exceptions in root `AGENTS.md` §7 — `ADR-2026-10-01` for the SDK-1291 Tenderly backend removal and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` for the SDK-1293 legacy authorization-variant and `"pending"` removals; SDK-1293 replaced the legacy authorization variants, narrowed `SimulateParams.blockNumber` to exclude `"pending"`, and cut the runtime over to the new input/authorization/limit types.
+- The unreleased v5 stack follows the narrow lifecycle exceptions in root `AGENTS.md` §7 — `ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` for the SDK-1291 Tenderly backend removal and `ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation` for the SDK-1293 legacy authorization-variant and `"pending"` removals; SDK-1293 replaced the legacy authorization variants, narrowed `SimulateParams.blockNumber` to exclude `"pending"`, and cut the runtime over to the new input/authorization/limit types.
 
 ## Continuous Improvement
 
