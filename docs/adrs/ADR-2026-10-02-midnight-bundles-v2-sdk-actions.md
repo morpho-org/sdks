@@ -135,7 +135,9 @@ encoding follow from that:
   `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
   `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, next to `midnightBundlesAbi`, and the
   V2 struct types under their raw names from `/midnight/types` and under `Midnight`-qualified
-  aliases from `/types`.
+  aliases from `/types`. `CollateralTransfer` (`MidnightCollateralTransfer`) is the one type for
+  collateral supplies and withdrawals in action inputs; the V1 `MidnightCollateralSupply`, which
+  carried the inline permit, is removed.
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
@@ -144,7 +146,10 @@ encoding follow from that:
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
   replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types
-  `PermitKind` and `MidnightTokenPermit` are removed with them. The four V1 flows also keep their
+  `PermitKind` and `MidnightTokenPermit` are removed with them. `supplyCollateralMakeBorrow`
+  replaces `collateralAssets` and `collateralIndex` with the collateral-supply list, removes
+  `reservedCollateralAssets` because approvals cover only the pulled assets, and no longer accepts
+  `EcrecoverRatifier`- or `SetterRatifier`-ratified offers. The four V1 flows also keep their
   action names. The migration guide lists each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
