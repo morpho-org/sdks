@@ -102,8 +102,10 @@ const isSimulateV1Response = (value: unknown): value is RawSimulateV1Response =>
  *   successful user call.
  * @throws {InvalidSimulationResponseError} On any shape violation, a call-count
  *   mismatch, or a simulated block that is neither the pinned state block nor
- *   its immediate successor — including one whose timestamp is earlier than
- *   the pinned state block's.
+ *   its immediate successor — including a successor whose `parentHash` is not
+ *   the pinned hash or one whose timestamp is earlier than the pinned state
+ *   block's — or a per-call result that fails normalization (non-quantity
+ *   `gasUsed`, non-iterable `logs`, malformed log `topics`/`address`/`data`).
  * @throws {SimulationRevertedError} When a user-transaction call failed;
  *   `details` carries the frozen `{ transactionIndex, result }[]` of the
  *   user transactions.
