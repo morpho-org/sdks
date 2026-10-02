@@ -65,9 +65,10 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   the contract does not read them.
 - **Group cancellations** are `{ group, maxConsumed }` lists: reject negative or above-`uint128`
   ceilings and duplicate groups. Replacement offers must use groups not in the cancellation list.
-- **Root activation** targets `PriceRatifierV1` or `RateRatifierV1` only. An EOA maker's
-  `v, r, s`, `signatureHeight`, `signatureNonce` and `signatureDeadline` reach `buildTx` only
-  through the signature's `args`; a contract-wallet maker encodes `v = r = s = 0`.
+- **Root activation** targets `PriceRatifierV1` or `RateRatifierV1` only. Maker entity methods
+  encode all-zero root-signature fields for every maker and rely on the `MidnightBundlesV2`
+  authorization; only the pure `midnightCancelAndMake` builder accepts an explicit delegated
+  signature.
 - **Native funding** is out of scope: encode `value = 0` and `wrappedNative = zeroAddress`.
 
 ## Shared liquidity / reallocations (canonical statement)

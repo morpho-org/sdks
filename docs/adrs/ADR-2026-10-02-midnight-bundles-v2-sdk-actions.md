@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                             |
 | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Status** | accepted                                                                                                          |
+| **Status** | accepted; maker-route retention and EOA root signatures superseded by ADR-2026-10-02-remove-midnight-mempool-maker-route |
 | **Date**   | 2026-10-02                                                                                                        |
 | **Author** | @jinmel                                                                                                           |
 | **Scope**  | Packages and target versions: `morpho-sdk` 7.0.0, `midnight-sdk` minor, `morpho-ts` minor, `evm-simulation` patch |

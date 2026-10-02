@@ -1083,6 +1083,14 @@ describe("MorphoMidnight", () => {
       expect(tx.to).toBe(midnightBundlesV2);
       expect(decoded.args[5]).toBe(rateRatifierV1);
       expect(decoded.args[6]).toBe(output.root);
+      expect(decoded.args.slice(7, 13)).toEqual([
+        0n,
+        0n,
+        0n,
+        0,
+        zeroHash,
+        zeroHash,
+      ]);
       expect(decoded.args[13]).toEqual([
         { group: previousGroup, maxConsumed: 5n },
       ]);
