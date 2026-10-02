@@ -1,4 +1,10 @@
 import {
+  MarketUtils as BlueMarketUtils,
+  marketParamsAbi,
+} from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import {
+  blueBuyCallbackFactoryAbi,
   MarketParams,
   MarketUtils,
   midnightAbi,
@@ -17,6 +23,7 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
   concatHex,
+  encodeAbiParameters,
   type Hex,
   maxUint128,
   maxUint256,
@@ -34,6 +41,7 @@ import {
   isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
+import { EmptyBlueParkingMarketError } from "../../../src/types/index.js";
 import { midnightBundlesV2Bytecode } from "../../fixtures/midnightBundlesV2.js";
 
 const test = createViemTest(base, {
@@ -101,9 +109,54 @@ const deployMidnightBundlesV2 = async (
   });
 };
 
+const blue = getChainAddress(ChainId.BaseMainnet, "blue");
+const blueBuyCallbackFactory = getChainAddress(
+  ChainId.BaseMainnet,
+  "midnightBlueBuyCallbackFactory",
+);
+const blueMarket = {
+  loanToken: usdc,
+  collateralToken: wNative,
+  oracle,
+  irm: getChainAddress(ChainId.BaseMainnet, "adaptiveCurveIrm"),
+  lltv: 860000000000000000n,
+};
+const callbackSalt = `0x${"cc".repeat(32)}` as Hex;
+
+/** Creates `blueMarket` on the fork, optionally seeded with `seedAssets` of supply. */
+const createBlueMarket = async (
+  client: AnvilTestClient<typeof base>,
+  seedAssets: bigint,
+) => {
+  await client.writeContract({
+    address: blue,
+    abi: blueAbi,
+    functionName: "createMarket",
+    args: [blueMarket],
+  });
+  if (seedAssets === 0n) return;
+  await client.deal({
+    erc20: usdc,
+    account: client.account.address,
+    amount: seedAssets,
+  });
+  await client.approve({ address: usdc, args: [blue, seedAssets] });
+  await client.writeContract({
+    address: blue,
+    abi: blueAbi,
+    functionName: "supply",
+    args: [blueMarket, seedAssets, 0n, client.account.address, "0x"],
+  });
+};
+
 const rateTree = (
   client: AnvilTestClient<typeof base>,
-  params: { readonly buy: boolean; readonly group: Hex },
+  params: {
+    readonly buy: boolean;
+    readonly group: Hex;
+    readonly callback?: Address;
+    readonly callbackData?: Hex;
+  },
 ) =>
   Tree.create({
     type: "rateV1",
@@ -122,6 +175,8 @@ const rateTree = (
             : client.account.address,
           maxUnits: 0n,
           maxAssets: parseUnits("1", 6),
+          callback: params.callback ?? zeroAddress,
+          callbackData: params.callbackData ?? "0x",
         }),
         rate: 1_000_000_000n,
       },
@@ -293,5 +348,93 @@ describe("Midnight cancel-and-make on fork", () => {
         args: [MarketUtils.toId(market), client.account.address, 0n],
       }),
     ).resolves.toBe(collateralAssets);
+  });
+
+  test("parks loan assets on Blue and publishes callback-funded lend offers in one transaction", async ({
+    client,
+  }) => {
+    await deployMidnightBundlesV2(client);
+    await createBlueMarket(client, parseUnits("1", 6));
+    const assetsToPark = parseUnits("2", 6);
+    await client.deal({
+      erc20: usdc,
+      account: client.account.address,
+      amount: assetsToPark,
+    });
+    const { result: callback } = await client.simulateContract({
+      address: blueBuyCallbackFactory,
+      abi: blueBuyCallbackFactoryAbi,
+      functionName: "createBlueBuyCallback",
+      args: [client.account.address, callbackSalt],
+    });
+    const output = await client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id)
+      .supplyBlueMakeLend({
+        accountAddress: client.account.address,
+        offers: rateTree(client, {
+          buy: true,
+          group: groupA,
+          callback,
+          callbackData: encodeAbiParameters([marketParamsAbi], [blueMarket]),
+        }),
+        blueMarket,
+        assetsToPark,
+        callbackSalt,
+        deadline: maxUint256,
+        validation,
+      });
+    await fulfilRequirements(client, output);
+    await client.sendTransaction(output.buildTx());
+
+    await expect(isRootRatified(client, output.root)).resolves.toBe(true);
+    await expect(
+      client.readContract({
+        address: blueBuyCallbackFactory,
+        abi: blueBuyCallbackFactoryAbi,
+        functionName: "callbackOf",
+        args: [client.account.address, callbackSalt],
+      }),
+    ).resolves.toBe(callback);
+    const [supplyShares] = await client.readContract({
+      address: blue,
+      abi: blueAbi,
+      functionName: "position",
+      args: [BlueMarketUtils.getMarketId(blueMarket), callback],
+    });
+    expect(supplyShares).toBeGreaterThan(0n);
+  });
+
+  test("error: rejects parking in a Blue market with no supply", async ({
+    client,
+  }) => {
+    await deployMidnightBundlesV2(client);
+    await createBlueMarket(client, 0n);
+    const { result: callback } = await client.simulateContract({
+      address: blueBuyCallbackFactory,
+      abi: blueBuyCallbackFactoryAbi,
+      functionName: "createBlueBuyCallback",
+      args: [client.account.address, callbackSalt],
+    });
+
+    await expect(
+      client
+        .extend(morphoViemExtension())
+        .morpho.midnight(base.id)
+        .supplyBlueMakeLend({
+          accountAddress: client.account.address,
+          offers: rateTree(client, {
+            buy: true,
+            group: groupA,
+            callback,
+            callbackData: encodeAbiParameters([marketParamsAbi], [blueMarket]),
+          }),
+          blueMarket,
+          assetsToPark: parseUnits("1", 6),
+          callbackSalt,
+          deadline: maxUint256,
+          validation,
+        }),
+    ).rejects.toThrow(EmptyBlueParkingMarketError);
   });
 });

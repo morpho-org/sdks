@@ -122,6 +122,10 @@ at the SDK level. The differences are at the protocol layer:
 - **Maker routing**: `cancelAndMakeLend` and `cancelAndMakeBorrow` validate a PriceRatifierV1 or
   RateRatifierV1 offer tree, then encode one `midnightBundlesV2CancelAndMake` call that cancels
   replaced groups, optionally supplies collateral, activates the root and publishes the payload.
+  `supplyBlueMakeLend` uses the same call to park loan assets in a Morpho Blue market for the
+  maker's `BlueBuyCallback`, which funds the lend offers when they are taken. The entity derives the
+  callback from the factory, requires every offer to use it with `abi.encode(blueMarket)`, and
+  rejects Blue markets with no supply because the contract does not check supply share-price slippage.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
   the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 

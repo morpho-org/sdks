@@ -276,6 +276,51 @@ describe("midnightCancelAndMake", () => {
       }),
     ).toThrow(NonPositiveInputError);
   });
+
+  test("behavior: encodes a Blue supply for the maker's callback", () => {
+    const blueSupply = {
+      market: {
+        loanToken: midnightMarket.loanToken,
+        collateralToken: zeroAddress,
+        oracle: zeroAddress,
+        irm: zeroAddress,
+        lltv: 0n,
+      },
+      assets: 1_000n,
+      callbackSalt: `0x${"ee".repeat(32)}` as Hex,
+    };
+    const tx = midnightCancelAndMake({ ...params, blueSupply });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesV2Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args.slice(0, 3)).toEqual([
+      blueSupply.market,
+      1_000n,
+      blueSupply.callbackSalt,
+    ]);
+    expect(tx.action.args.blueSupply).toEqual(blueSupply);
+  });
+
+  test("error: NonPositiveInputError on a zero Blue supply", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        blueSupply: {
+          market: {
+            loanToken: midnightMarket.loanToken,
+            collateralToken: zeroAddress,
+            oracle: zeroAddress,
+            irm: zeroAddress,
+            lltv: 0n,
+          },
+          assets: 0n,
+          callbackSalt: zeroHash,
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
 });
 
 describe("midnightCancelAndMake without publication", () => {

@@ -1,5 +1,11 @@
 import {
+  MarketUtils as BlueMarketUtils,
+  marketParamsAbi,
+} from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import {
   AccrualPosition,
+  blueBuyCallbackFactoryAbi,
   type IOffer,
   Market,
   MarketParams,
@@ -25,11 +31,14 @@ import {
   type Address,
   type Chain,
   decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionResult,
   erc20Abi,
   getAddress,
   type Hex,
   maxUint256,
   numberToHex,
+  toFunctionSelector,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -47,11 +56,14 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
   ChainIdMismatchError,
+  EmptyBlueParkingMarketError,
   EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   MidnightMarketAddressMismatchError,
+  MidnightOfferCallbackDataMismatchError,
+  MidnightOfferCallbackMismatchError,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -71,6 +83,7 @@ import type {
   CancelAndMakeBorrowParams,
   CancelAndMakeLendParams,
   MidnightMakerTreeInput,
+  SupplyBlueMakeLendParams,
 } from "./types.js";
 
 const client = {
@@ -1157,6 +1170,188 @@ describe("MorphoMidnight", () => {
           cancellations: [{ group: offer.group, maxConsumed: 0n }],
         }),
       ).rejects.toThrow(MidnightReplacementGroupCancelledError);
+    });
+  });
+
+  describe("supplyBlueMakeLend", () => {
+    const blueMarket = {
+      loanToken: midnightAddresses.loanToken,
+      collateralToken: midnightAddresses.collateralToken,
+      oracle: midnightAddresses.oracle,
+      irm: zeroAddress,
+      lltv: 860000000000000000n,
+    };
+    const callback = getAddress("0x000000000000000000000000000000000000cb01");
+    const callbackData = encodeAbiParameters([marketParamsAbi], [blueMarket]);
+    const blueOffer = (overrides: Partial<IOffer> = {}) =>
+      makerOffer({ buy: true, callback, callbackData, ...overrides });
+
+    const mockBlueReads = (
+      handle: MidnightMockHandle,
+      totalSupplyShares = 1_000_000n,
+    ) => {
+      handle.dispatch.set(
+        `${getChainAddress(midnightChainId, "midnightBlueBuyCallbackFactory").toLowerCase()}|${toFunctionSelector("createBlueBuyCallback(address,bytes32)")}`,
+        encodeFunctionResult({
+          abi: blueBuyCallbackFactoryAbi,
+          functionName: "createBlueBuyCallback",
+          result: callback,
+        }),
+      );
+      mockRead(handle, {
+        address: getChainAddress(midnightChainId, "blue"),
+        abi: blueAbi,
+        functionName: "market",
+        result: [1_000n, totalSupplyShares, 0n, 0n, 1n, 0n],
+      });
+    };
+
+    const prepare = (
+      handle: MidnightMockHandle,
+      overrides: Partial<SupplyBlueMakeLendParams> = {},
+    ) =>
+      midnightWithHandle(handle).supplyBlueMakeLend({
+        accountAddress: midnightAddresses.maker,
+        offers: rateTree(blueOffer()),
+        deadline: maxUint256,
+        validation: offerValidation,
+        blueMarket,
+        assetsToPark: 1_000n,
+        ...overrides,
+      });
+
+    test("error: ChainIdMismatchError", async () => {
+      await expect(
+        new MorphoMidnight(client, midnightChainId + 1).supplyBlueMakeLend({
+          accountAddress: midnightAddresses.maker,
+          offers: rateTree(blueOffer()),
+          deadline: maxUint256,
+          validation: offerValidation,
+          blueMarket,
+          assetsToPark: 1_000n,
+        }),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
+
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+      mockAllowance({ handle, token: midnightAddresses.loanToken, result: 0n });
+      mockMidnightAuthorization(handle, false);
+      const offer = blueOffer();
+      const callbackSalt = `0x${"ee".repeat(32)}` as Hex;
+      const output = await prepare(handle, {
+        offers: rateTree(offer),
+        cancellations: [{ group: previousGroup, maxConsumed: 5n }],
+        callbackSalt,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+      const decoded = decodeFunctionData({
+        abi: midnightBundlesV2Abi,
+        data: tx.data,
+      });
+
+      expect(output.groups).toEqual([offer.group]);
+      expect(requirements.map(({ action }) => action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 1_000n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.maker,
+          },
+        },
+      ]);
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(decoded.args.slice(0, 3)).toEqual([
+        blueMarket,
+        1_000n,
+        callbackSalt,
+      ]);
+      expect(decoded.args[5]).toBe(rateRatifierV1);
+      expect(decoded.args[6]).toBe(output.root);
+      expect(decoded.args[13]).toEqual([
+        { group: previousGroup, maxConsumed: 5n },
+      ]);
+      expect(tx.action.args.blueSupply).toEqual({
+        market: blueMarket,
+        assets: 1_000n,
+        callbackSalt,
+      });
+    });
+
+    test("behavior: defaults the callback salt to the zero hash", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+      const tx = (await prepare(handle)).buildTx();
+
+      expect(tx.action.args.blueSupply?.callbackSalt).toBe(zeroHash);
+    });
+
+    test("error: NonPositiveInputError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), { assetsToPark: 0n }),
+      ).rejects.toThrow(NonPositiveInputError);
+    });
+
+    test("error: EmptyBlueParkingMarketError", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle, 0n);
+
+      await expect(prepare(handle)).rejects.toThrow(
+        new EmptyBlueParkingMarketError({
+          marketId: BlueMarketUtils.getMarketId(blueMarket),
+        }),
+      );
+    });
+
+    test("error: MidnightOfferSideMismatchError", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+
+      await expect(
+        prepare(handle, {
+          offers: rateTree(makerOffer({ buy: false, callback, callbackData })),
+        }),
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+
+    test("error: MidnightOfferMarketLoanTokenMismatchError", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+
+      await expect(
+        prepare(handle, {
+          blueMarket: { ...blueMarket, loanToken: midnightAddresses.dai },
+        }),
+      ).rejects.toThrow(MidnightOfferMarketLoanTokenMismatchError);
+    });
+
+    test("error: MidnightOfferCallbackMismatchError", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+
+      await expect(
+        prepare(handle, {
+          offers: rateTree(blueOffer({ callback: zeroAddress })),
+        }),
+      ).rejects.toThrow(MidnightOfferCallbackMismatchError);
+    });
+
+    test("error: MidnightOfferCallbackDataMismatchError", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlueReads(handle);
+
+      await expect(
+        prepare(handle, {
+          offers: rateTree(blueOffer({ callbackData: "0x" })),
+        }),
+      ).rejects.toThrow(MidnightOfferCallbackDataMismatchError);
     });
   });
 

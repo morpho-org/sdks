@@ -6421,3 +6421,144 @@ export const midnightBundlesV2Abi = [
     inputs: [],
   },
 ] as const satisfies Abi;
+
+/**
+ * ABI JSON for the BlueBuyCallback factory that deploys per-owner callbacks funding Midnight buy
+ * offers from Morpho Blue supply.
+ *
+ * Source: `morpho-org/midnight` commit `4603969e80d6f911c33586c6b971e8edd7821bbc`,
+ * `src/periphery/blue-buy-callback/BlueBuyCallbackFactory.sol` (compiled with `forge inspect ... abi`).
+ *
+ * @example
+ * ```ts
+ * import { blueBuyCallbackFactoryAbi } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(blueBuyCallbackFactoryAbi.length);
+ * ```
+ */
+export const blueBuyCallbackFactoryAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "_midnight",
+        type: "address",
+      },
+      {
+        name: "_blue",
+        type: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "BLUE",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "MIDNIGHT",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "callbackOf",
+    inputs: [
+      {
+        name: "owner",
+        type: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "createBlueBuyCallback",
+    inputs: [
+      {
+        name: "owner",
+        type: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isBlueBuyCallback",
+    inputs: [
+      {
+        name: "callback",
+        type: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "CreateBlueBuyCallback",
+    inputs: [
+      {
+        name: "caller",
+        type: "address",
+        indexed: true,
+      },
+      {
+        name: "owner",
+        type: "address",
+        indexed: true,
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        indexed: false,
+      },
+      {
+        name: "callback",
+        type: "address",
+        indexed: false,
+      },
+    ],
+    anonymous: false,
+  },
+] as const satisfies Abi;

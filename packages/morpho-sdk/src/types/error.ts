@@ -1663,6 +1663,41 @@ export class MidnightOfferMarketLoanTokenMismatchError extends Error {
   }
 }
 
+/** Thrown when a Blue-funded Midnight lend offer does not use the maker's derived `BlueBuyCallback`. */
+export class MidnightOfferCallbackMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedCallback: Address;
+    readonly actualCallback: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses callback "${params.actualCallback}", expected the maker's BlueBuyCallback "${params.expectedCallback}". Rebuild the offer with the derived callback.`,
+    );
+  }
+}
+
+/** Thrown when a Blue-funded Midnight lend offer's callback data is not the ABI-encoded Blue market. */
+export class MidnightOfferCallbackDataMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedCallbackData: Hex;
+    readonly actualCallbackData: Hex;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses callback data "${params.actualCallbackData}", expected "${params.expectedCallbackData}". Set the callback data to the ABI-encoded Blue market the assets are parked in.`,
+    );
+  }
+}
+
+/** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
+export class EmptyBlueParkingMarketError extends Error {
+  constructor(params: { readonly marketId: Hex }) {
+    super(
+      `Morpho Blue market "${params.marketId}" has no supply shares. Parking assets in an empty market is exposed to supply-share-price inflation; choose a market with existing supply.`,
+    );
+  }
+}
+
 /** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
 export class MidnightTakeableOfferMarketMismatchError extends Error {
   constructor(params: {

@@ -1,5 +1,11 @@
 import {
+  MarketUtils as BlueMarketUtils,
+  marketParamsAbi,
+} from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import {
   type AccrualPosition,
+  blueBuyCallbackFactoryAbi,
   fetchAccrualPosition,
   fetchMarket,
   type Market,
@@ -12,7 +18,14 @@ import {
   Tree,
 } from "@morpho-org/midnight-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, isAddressEqual } from "viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hex,
+  isAddressEqual,
+  zeroHash,
+} from "viem";
+import { readContract, simulateContract } from "viem/actions";
 import {
   midnightCancelAndMake,
   midnightCancelOffer,
@@ -35,11 +48,14 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
   type ActionRequirement,
+  EmptyBlueParkingMarketError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
   type MidnightGroupCancellation,
+  MidnightOfferCallbackDataMismatchError,
+  MidnightOfferCallbackMismatchError,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -67,6 +83,7 @@ import type {
   OffersData,
   RedeemParams,
   RepayWithdrawCollateralParams,
+  SupplyBlueMakeLendParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
   TakeBorrowParams,
@@ -110,6 +127,7 @@ export type MidnightActions = Pick<
   | "supplyCollateral"
   | "cancelAndMakeLend"
   | "cancelAndMakeBorrow"
+  | "supplyBlueMakeLend"
   | "redeem"
   | "repayWithdrawCollateral"
   | "cancelOffer"
@@ -725,6 +743,161 @@ export class MorphoMidnight {
           owner: data.accountAddress,
           spender: midnight,
           amount: params.loanAssets + (params.reservedLoanAssets ?? 0n),
+        })),
+        ...(await this.getBundlesV2AuthorizationRequirements(
+          data.accountAddress,
+        )),
+      ],
+      buildTx: () => tx,
+    };
+  }
+
+  /**
+   * Prepares an atomic Blue-funded lend-offer publication or repost through `MidnightBundlesV2`.
+   *
+   * One transaction cancels `cancellations` under their consumption ceilings, pulls `assetsToPark`
+   * from the maker and supplies them to `blueMarket` on Morpho Blue for the maker's
+   * `BlueBuyCallback` (created if missing), activates the PriceRatifierV1 or RateRatifierV1 root,
+   * and publishes its payload. When an offer is taken, the callback withdraws the bought assets
+   * from Blue and pays Midnight, so the maker needs no loan-token approval to Midnight.
+   *
+   * Every offer must set `callback` to the maker's derived `BlueBuyCallback` and `callbackData`
+   * to `abi.encode(blueMarket)`. The contract does not check supply share-price slippage, so
+   * `blueMarket` must be protected against supply-share-price inflation; this method rejects
+   * Blue markets with no supply shares. Calls the Midnight mempool validation API while
+   * preparing the tree.
+   *
+   * @param params - Maker, lend-side offers, Blue market, parked assets, cancellations, and deadline.
+   * @param params.accountAddress - Maker expected on every offer; must send the transaction.
+   * @param params.offers - PriceRatifierV1 or RateRatifierV1 tree, or its `Tree.create` request.
+   * @param params.cancellations - Previous groups to cancel with their consumption ceilings.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.validation - Optional Midnight mempool API request controls.
+   * @param params.blueMarket - Morpho Blue market the parked assets are supplied to.
+   * @param params.assetsToPark - Loan assets supplied to `blueMarket` for the maker's callback.
+   * @param params.callbackSalt - Salt selecting the maker's callback; defaults to the zero hash.
+   * @returns Prepared group metadata, lazy approval/authorization requirements, and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2`, `blue`, `midnightBlueBuyCallbackFactory` or V1 ratifier deployment.
+   * @throws {NonPositiveInputError} when `assetsToPark` is non-positive.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128` or `deadline` exceeds `uint256`.
+   * @throws {InvalidTreeError} when the input does not form a non-empty valid tree.
+   * @throws {MidnightOfferMarketChainMismatchError} when an offer targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
+   * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
+   * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
+   * @throws {MidnightOfferSideMismatchError} when an offer is not lend-side.
+   * @throws {MidnightOfferMarketLoanTokenMismatchError} when an offer's loan token differs from `blueMarket`'s.
+   * @throws {MidnightOfferCallbackMismatchError} when an offer does not use the maker's derived callback.
+   * @throws {MidnightOfferCallbackDataMismatchError} when an offer's callback data is not `abi.encode(blueMarket)`.
+   * @throws {EmptyBlueParkingMarketError} when `blueMarket` has no supply shares.
+   * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
+   * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
+   * @example
+   * ```ts
+   * const output = await midnight.supplyBlueMakeLend({
+   *   accountAddress: maker,
+   *   offers: {
+   *     type: "rateV1",
+   *     entries: [{ offer: { ...offer, callback, callbackData }, rate }],
+   *   },
+   *   deadline: maxUint256,
+   *   blueMarket,
+   *   assetsToPark: 1_000_000n,
+   * });
+   * ```
+   */
+  async supplyBlueMakeLend(
+    params: SupplyBlueMakeLendParams,
+  ): Promise<CancelAndMakeOutput> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    assertPositiveAmount("assetsToPark", params.assetsToPark);
+    const callbackSalt = params.callbackSalt ?? zeroHash;
+    const blueMarketId = BlueMarketUtils.getMarketId(params.blueMarket);
+
+    const [data, { result: callback }, [, totalSupplyShares]] =
+      await Promise.all([
+        this.getOffersData(params),
+        simulateContract(this.client.viemClient, {
+          account: params.accountAddress,
+          address: getChainAddress(
+            this.chainId,
+            "midnightBlueBuyCallbackFactory",
+          ),
+          abi: blueBuyCallbackFactoryAbi,
+          functionName: "createBlueBuyCallback",
+          args: [params.accountAddress, callbackSalt],
+        }),
+        readContract(this.client.viemClient, {
+          address: getChainAddress(this.chainId, "blue"),
+          abi: blueAbi,
+          functionName: "market",
+          args: [blueMarketId],
+        }),
+      ]);
+    if (totalSupplyShares === 0n) {
+      throw new EmptyBlueParkingMarketError({ marketId: blueMarketId });
+    }
+    validateOfferSides(data.tree.offers, true);
+    const callbackData = encodeAbiParameters(
+      [marketParamsAbi],
+      [params.blueMarket],
+    );
+    data.tree.offers.forEach((offer, index) => {
+      const market =
+        "params" in offer.market ? offer.market.params : offer.market;
+      if (!isAddressEqual(market.loanToken, params.blueMarket.loanToken)) {
+        throw new MidnightOfferMarketLoanTokenMismatchError({
+          index,
+          expectedLoanToken: params.blueMarket.loanToken,
+          actualLoanToken: market.loanToken,
+        });
+      }
+      if (!isAddressEqual(offer.callback, callback)) {
+        throw new MidnightOfferCallbackMismatchError({
+          index,
+          expectedCallback: callback,
+          actualCallback: offer.callback,
+        });
+      }
+      if (offer.callbackData.toLowerCase() !== callbackData.toLowerCase()) {
+        throw new MidnightOfferCallbackDataMismatchError({
+          index,
+          expectedCallbackData: callbackData,
+          actualCallbackData: offer.callbackData,
+        });
+      }
+    });
+    const tx = midnightCancelAndMake({
+      chainId: this.chainId,
+      ratifier: data.ratifier,
+      root: data.tree.root,
+      groups: data.groups,
+      payload: data.payload,
+      blueSupply: {
+        market: params.blueMarket,
+        assets: params.assetsToPark,
+        callbackSalt,
+      },
+      cancellations: params.cancellations ?? [],
+      deadline: params.deadline,
+      metadata: this.client.options.metadata,
+    });
+
+    return {
+      groups: data.groups,
+      root: data.tree.root,
+      ratifierType: data.ratifierType,
+      getRequirements: async () => [
+        ...(await getMidnightApprovalRequirements({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          token: params.blueMarket.loanToken,
+          owner: data.accountAddress,
+          spender: getChainAddress(this.chainId, "midnightBundlesV2"),
+          amount: params.assetsToPark,
         })),
         ...(await this.getBundlesV2AuthorizationRequirements(
           data.accountAddress,

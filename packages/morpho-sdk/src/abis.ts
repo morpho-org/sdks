@@ -29,6 +29,7 @@ export {
   wstEthAbi,
 } from "@morpho-org/blue-sdk-viem";
 export {
+  blueBuyCallbackFactoryAbi as midnightBlueBuyCallbackFactoryAbi,
   ecrecoverRatifierAbi as midnightEcrecoverRatifierAbi,
   midnightAbi,
   midnightBundlesAbi,
