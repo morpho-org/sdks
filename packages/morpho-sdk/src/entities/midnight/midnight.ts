@@ -22,8 +22,8 @@ import {
 } from "viem";
 import {
   mempoolSubmitOffers,
+  midnightCancelAndMake,
   midnightCancelOffer,
-  midnightCancelOffers,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
@@ -47,8 +47,8 @@ import {
   type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  type MidnightCancelAndMakeAction,
   type MidnightCancelOfferAction,
-  type MidnightCancelOffersAction,
   type MidnightGroupCancellation,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
@@ -1167,14 +1167,14 @@ export class MorphoMidnight {
     readonly accountAddress: Address;
     readonly cancellations: readonly MidnightGroupCancellation[];
     readonly deadline: bigint;
-  }): MidnightActionOutput<MidnightCancelOffersAction> {
+  }): MidnightActionOutput<MidnightCancelAndMakeAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     const midnightBundlesV2 = getChainAddress(
       this.chainId,
       "midnightBundlesV2",
     );
 
-    const tx = midnightCancelOffers({
+    const tx = midnightCancelAndMake({
       chainId: this.chainId,
       cancellations: params.cancellations,
       deadline: params.deadline,

@@ -534,10 +534,10 @@ export interface MidnightGroupCancellation {
   readonly maxConsumed: bigint;
 }
 
-/** Metadata for a guarded Midnight Bundles V2 batch offer-group cancellation. */
-export interface MidnightCancelOffersAction
+/** Metadata for a Midnight Bundles V2 maker bundle: guarded offer-group cancellation. */
+export interface MidnightCancelAndMakeAction
   extends BaseAction<
-    "midnightCancelOffers",
+    "midnightCancelAndMake",
     {
       readonly cancellations: readonly MidnightGroupCancellation[];
       readonly deadline: bigint;
@@ -582,7 +582,7 @@ export type TransactionAction =
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction
-  | MidnightCancelOffersAction;
+  | MidnightCancelAndMakeAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:

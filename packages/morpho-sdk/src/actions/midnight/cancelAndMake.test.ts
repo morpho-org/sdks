@@ -23,7 +23,7 @@ import {
   NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
-import { midnightCancelOffers } from "./cancelOffers.js";
+import { midnightCancelAndMake } from "./cancelAndMake.js";
 
 const midnightBundlesV2 = getAddress(
   "0x00000000000000000000000000000000000b2002",
@@ -35,13 +35,13 @@ registerCustomAddresses({
 const groupA = `0x${"11".repeat(32)}` as Hex;
 const groupB = `0x${"22".repeat(32)}` as Hex;
 
-describe("midnightCancelOffers", () => {
+describe("midnightCancelAndMake", () => {
   test("default", () => {
     const cancellations = [
       { group: groupA, maxConsumed: 0n },
       { group: groupB, maxConsumed: 5n },
     ];
-    const tx = midnightCancelOffers({
+    const tx = midnightCancelAndMake({
       chainId: midnightChainId,
       cancellations,
       deadline: maxUint256,
@@ -89,7 +89,7 @@ describe("midnightCancelOffers", () => {
       zeroAddress,
     ]);
     expect(tx.action).toEqual({
-      type: "midnightCancelOffers",
+      type: "midnightCancelAndMake",
       args: { cancellations, deadline: maxUint256 },
     });
     expect(Object.isFrozen(tx.action.args.cancellations[0])).toBe(true);
@@ -97,7 +97,7 @@ describe("midnightCancelOffers", () => {
 
   test("behavior: appends metadata and does not freeze caller input", () => {
     const cancellations = [{ group: groupA, maxConsumed: maxUint128 }];
-    const tx = midnightCancelOffers({
+    const tx = midnightCancelAndMake({
       chainId: midnightChainId,
       cancellations,
       deadline: 1n,
@@ -110,7 +110,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: EmptyMidnightGroupCancellationsError on no groups", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: midnightChainId,
         cancellations: [],
         deadline: maxUint256,
@@ -120,7 +120,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: DuplicateMidnightGroupCancellationError on repeated group", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: midnightChainId,
         cancellations: [
           { group: groupA, maxConsumed: 0n },
@@ -136,7 +136,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: NegativeInputError on negative ceiling", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: midnightChainId,
         cancellations: [{ group: groupA, maxConsumed: -1n }],
         deadline: maxUint256,
@@ -148,7 +148,7 @@ describe("midnightCancelOffers", () => {
     "error: NonPositiveInputError on deadline %s",
     (deadline) => {
       expect(() =>
-        midnightCancelOffers({
+        midnightCancelAndMake({
           chainId: midnightChainId,
           cancellations: [{ group: groupA, maxConsumed: 0n }],
           deadline,
@@ -159,7 +159,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: InputExceedsMaxError on deadline above uint256", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: midnightChainId,
         cancellations: [{ group: groupA, maxConsumed: 0n }],
         deadline: maxUint256 + 1n,
@@ -169,7 +169,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: InputExceedsMaxError on ceiling above uint128", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: midnightChainId,
         cancellations: [{ group: groupA, maxConsumed: maxUint128 + 1n }],
         deadline: maxUint256,
@@ -179,7 +179,7 @@ describe("midnightCancelOffers", () => {
 
   test("error: UnknownAddressError without a midnightBundlesV2 deployment", () => {
     expect(() =>
-      midnightCancelOffers({
+      midnightCancelAndMake({
         chainId: 1,
         cancellations: [{ group: zeroHash, maxConsumed: 0n }],
         deadline: maxUint256,
@@ -213,7 +213,7 @@ describe("midnightCancelOffers", () => {
         (cancellations, deadline) => {
           const { args } = decodeFunctionData({
             abi: midnightBundlesV2Abi,
-            data: midnightCancelOffers({
+            data: midnightCancelAndMake({
               chainId: midnightChainId,
               cancellations,
               deadline,

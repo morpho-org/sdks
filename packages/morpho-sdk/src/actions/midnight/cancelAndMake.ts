@@ -8,14 +8,14 @@ import {
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   type Metadata,
-  type MidnightCancelOffersAction,
+  type MidnightCancelAndMakeAction,
   type MidnightGroupCancellation,
   NegativeInputError,
   type Transaction,
 } from "../../types/index.js";
 
-/** Parameters for encoding a guarded Midnight Bundles V2 batch offer-group cancellation. */
-export interface MidnightCancelOffersParams {
+/** Parameters for encoding a Midnight Bundles V2 maker bundle. */
+export interface MidnightCancelAndMakeParams {
   /** Chain id used to resolve `MidnightBundlesV2`. */
   readonly chainId: number;
   /** Offer groups and their consumption ceilings, each group at most once. */
@@ -48,7 +48,7 @@ const emptyMidnightMarket = {
 const validateParams = ({
   cancellations,
   deadline,
-}: MidnightCancelOffersParams): void => {
+}: MidnightCancelAndMakeParams): void => {
   if (cancellations.length === 0) {
     throw new EmptyMidnightGroupCancellationsError();
   }
@@ -73,7 +73,8 @@ const validateParams = ({
 };
 
 /**
- * Encodes a `MidnightBundlesV2.midnightBundlesV2CancelAndMake` call that only cancels offer groups.
+ * Encodes `MidnightBundlesV2.midnightBundlesV2CancelAndMake`, the shared builder behind the maker
+ * entity methods. `cancelOffers` uses it to cancel offer groups only.
  *
  * Every group is marked fully consumed for `msg.sender`, so send the transaction from the maker. Execution reverts as a whole if any
  * group's consumption exceeds its `maxConsumed` ceiling, so intervening fills never leave a
@@ -83,7 +84,7 @@ const validateParams = ({
  * @param params.cancellations - Offer groups and their consumption ceilings.
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.metadata - Optional analytics metadata appended to calldata.
- * @returns A deep-frozen `Transaction<MidnightCancelOffersAction>` targeting `MidnightBundlesV2`.
+ * @returns A deep-frozen `Transaction<MidnightCancelAndMakeAction>` targeting `MidnightBundlesV2`.
  * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
  * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
@@ -95,7 +96,7 @@ const validateParams = ({
  * ```ts
  * import { maxUint256, type Hex } from "viem";
  * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
- * import { midnightCancelOffers } from "@morpho-org/morpho-sdk";
+ * import { midnightCancelAndMake } from "@morpho-org/morpho-sdk";
  *
  * // Placeholder until a MidnightBundlesV2 deployment is registered for the chain.
  * registerCustomAddresses({
@@ -103,16 +104,16 @@ const validateParams = ({
  * });
  *
  * declare const group: Hex;
- * const tx = midnightCancelOffers({
+ * const tx = midnightCancelAndMake({
  *   chainId: 8453,
  *   cancellations: [{ group, maxConsumed: 0n }],
  *   deadline: maxUint256,
  * });
  * ```
  */
-export const midnightCancelOffers = (
-  params: MidnightCancelOffersParams,
-): Readonly<Transaction<MidnightCancelOffersAction>> => {
+export const midnightCancelAndMake = (
+  params: MidnightCancelAndMakeParams,
+): Readonly<Transaction<MidnightCancelAndMakeAction>> => {
   validateParams(params);
 
   const cancellations = params.cancellations.map(({ group, maxConsumed }) => ({
@@ -154,7 +155,7 @@ export const midnightCancelOffers = (
   return deepFreeze({
     ...tx,
     action: {
-      type: "midnightCancelOffers",
+      type: "midnightCancelAndMake",
       args: { cancellations, deadline: params.deadline },
     },
   });
