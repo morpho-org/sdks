@@ -103,9 +103,11 @@ each extending `SimulationPackageError`:
 `SlippageLimitExceededError` and `FeeMismatchError` are not introduced. In the typed error context,
 a verification failure bound to a limit takes its `operation` and subject fields from that
 `OperationLimit`, not from decoded calldata, and one not bound to a limit carries only the checked
-`field`. Nothing links a reverted transaction to a limit, so a revert of a caller transaction or
-of the node carries no execution-stage context; a caller-transaction revert reports the
-per-transaction results, including the failing `transactionIndex`, on the error. A reverted
+`field`. Nothing links a reverted transaction to a limit. Although `"execution"` remains in
+`SimulationErrorContext`'s stage union, `SimulationRevertedError.context` is absent for a caller-
+transaction or node revert; even the base `mode`, `chainId` and `blockNumber` fields are not
+attached. A caller-transaction revert reports the per-transaction results, including the failing
+`transactionIndex`, on the error. A reverted
 preview preparation call carries the preparation-stage context with its `authorizationIndex` and
 `preparationCallIndex`.
 
@@ -114,7 +116,8 @@ contract, the rejection of routes outside the supported list, the call-time requ
 check, the `SimulationLimits` defaults (including `maxSignatureLifetimeSeconds`) and wallet bounds,
 the operation limits, the verification output, preview request validation (the Permit2 preview
 checks and checking requests against calldata and state), the error catalog apart from the
-existing classes' rows, and the Invariants that depend on those parts: route reconciliation,
+existing classes' rows, the requirement for execution reverts to carry a typed context, and the
+Invariants that depend on those parts: route reconciliation,
 tighten-only SDK protections, exact-request preview validation, the Permit2 preview checks,
 explicit failure of unsupported routes, and the call-time freshness clock. Determinism holds at the
 pinned block alone. It also replaces the verification of untrusted `SimulationAuthorization`
@@ -124,7 +127,7 @@ checked against the bundle, and a successful preview does not show that the wall
 it. A deadline encoded in the executed transactions surfaces as an execution revert once it has
 expired; preview does not check the deadlines of pending authorizations. The rest of it stays in force, including
 `eth_simulateV1` as the only backend, the `preview`/`final` modes, `SimulationAuthorization` and
-`toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context apart from its execution-stage fields: no context carries a
+`toSimulationAuthorizations`, one pinned block per call, `reasonCode`, and the typed error context for other stages: no context carries a
 decoded `operation`/subject, and a failing caller transaction's index is the `transactionIndex` of
 the per-transaction results on the error, not `failedTransactionIndex` in `context`.
 The Morpho-specific failure-message requirement also stays; its coverage scope is still the
