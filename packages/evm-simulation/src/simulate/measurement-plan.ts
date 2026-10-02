@@ -1,10 +1,6 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
-import type {
-  BlueAuthorizationSubject,
-  OperationLimit,
-  SimulationOperationSubject,
-} from "../limits.js";
+import type { OperationLimit, SimulationOperationSubject } from "../limits.js";
 
 type AssetMeasurementSource =
   | {
@@ -23,10 +19,7 @@ type ShareMeasurementSource =
   | { readonly type: "balance"; readonly token: Address };
 
 interface OperationMeasurementPlan {
-  readonly subject: Exclude<
-    SimulationOperationSubject,
-    BlueAuthorizationSubject
-  >;
+  readonly subject: SimulationOperationSubject;
   readonly assetsPaid: AssetMeasurementSource;
   readonly assetsReceived: AssetMeasurementSource;
   readonly sharesMinted?: ShareMeasurementSource;

@@ -56,8 +56,6 @@ const SUBJECTS: Record<
   Record<string, unknown>
 > = Object.fromEntries(
   OPERATION_TYPES.map((operation) => {
-    if (operation === "blueAuthorization")
-      return [operation, { authorized: A }];
     if (operation === "blueRefinance")
       return [operation, { sourceMarketId: "0xa", targetMarketId: "0xb" }];
     if (operation === "vaultV1MigrateToV2")
@@ -312,9 +310,9 @@ describe("SimulationErrorContext", () => {
       Extract<Verification, { operation: "vaultV1MigrateToV2" }>
     >().not.toHaveProperty("vault");
     expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
-    expectTypeOf<SimulatedOperation["operation"]>().toEqualTypeOf<
-      Exclude<OperationType, "blueAuthorization">
-    >();
+    expectTypeOf<
+      SimulatedOperation["operation"]
+    >().toEqualTypeOf<OperationType>();
     expectTypeOf<{
       transactionIndex: number;
       operation: "blueRefinance";
@@ -347,25 +345,21 @@ describe("SimulationErrorContext", () => {
         operation: "blueAuthorization";
         authorized: `0x${string}`;
       }
-    >().toExtend<SimulationErrorContext>();
+    >().not.toExtend<SimulationErrorContext>();
   });
 
   it("operation groups partition OPERATION_TYPES", () => {
-    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<
-      Exclude<OperationType, "blueAuthorization">
-    >();
+    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<OperationType>();
     expectTypeOf<
       | BlueMarketOperationType
       | VaultOperationType
       | "blueRefinance"
-      | "blueAuthorization"
       | "vaultV1MigrateToV2"
     >().toEqualTypeOf<OperationType>();
     expect(
       [
         ...BLUE_MARKET_OPERATION_TYPES,
         "blueRefinance",
-        "blueAuthorization",
         ...VAULT_OPERATION_TYPES,
         "vaultV1MigrateToV2",
       ].sort(),
@@ -380,7 +374,6 @@ describe("SimulationErrorContext", () => {
       "blueWithdrawCollateral",
       "blueRepayWithdrawCollateral",
       "blueRefinance",
-      "blueAuthorization",
       "vaultV1Deposit",
       "vaultV2Deposit",
       "vaultV1Withdraw",

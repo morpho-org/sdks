@@ -728,7 +728,7 @@ const VAULT_SUBJECT = {
   addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: ["vault"],
 } as const;
-type LimitOperationType = Exclude<OperationType, "blueAuthorization">;
+type LimitOperationType = OperationType;
 const OPERATION_SPECS: Record<
   LimitOperationType,
   {

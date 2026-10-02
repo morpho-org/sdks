@@ -12,7 +12,6 @@ export const OPERATION_TYPES = [
   "blueWithdrawCollateral",
   "blueRepayWithdrawCollateral",
   "blueRefinance",
-  "blueAuthorization",
   "vaultV1Deposit",
   "vaultV2Deposit",
   "vaultV1Withdraw",
@@ -78,13 +77,6 @@ export interface BlueRefinanceSubject {
   readonly targetMarketId: MarketId;
 }
 
-/** Subject of a Morpho authorization change. */
-export interface BlueAuthorizationSubject {
-  readonly operation: "blueAuthorization";
-  /** Operator whose Morpho authorization the operation sets. */
-  readonly authorized: Address;
-}
-
 /** Subject of an operation acting on one vault (V1 or V2). */
 export interface VaultOperationSubject {
   readonly operation: VaultOperationType;
@@ -105,7 +97,6 @@ export interface VaultV1MigrateToV2Subject {
 export type SimulationOperationSubject =
   | BlueMarketOperationSubject
   | BlueRefinanceSubject
-  | BlueAuthorizationSubject
   | VaultOperationSubject
   | VaultV1MigrateToV2Subject;
 

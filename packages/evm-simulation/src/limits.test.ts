@@ -21,14 +21,12 @@ describe("OPERATION_TYPES", () => {
       | BlueMarketOperationType
       | VaultOperationType
       | "blueRefinance"
-      | "blueAuthorization"
       | "vaultV1MigrateToV2"
     >().toEqualTypeOf<OperationType>();
     expect(
       [
         ...BLUE_MARKET_OPERATION_TYPES,
         "blueRefinance",
-        "blueAuthorization",
         ...VAULT_OPERATION_TYPES,
         "vaultV1MigrateToV2",
       ].sort(),
@@ -43,7 +41,6 @@ describe("OPERATION_TYPES", () => {
       "blueWithdrawCollateral",
       "blueRepayWithdrawCollateral",
       "blueRefinance",
-      "blueAuthorization",
       "vaultV1Deposit",
       "vaultV2Deposit",
       "vaultV1Withdraw",

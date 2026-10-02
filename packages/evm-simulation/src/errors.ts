@@ -115,7 +115,7 @@ export type SimulationVerificationContext = SimulationCheckContext &
  * contexts carry `authorizationIndex` and `preparationCallIndex`. Verification
  * contexts bound to a limit take `operation` and the subject fields
  * (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
- * `sourceVault`/`targetVault`, `authorized`) from that `OperationLimit`, not
+ * `sourceVault`/`targetVault`) from that `OperationLimit`, not
  * from decoded calldata; unbound ones carry only a `field` string.
  * `"execution"` stays in the union, but `SimulationRevertedError` carries no
  * `context` for caller-transaction or node reverts — the failing
@@ -386,7 +386,6 @@ export function isSimulationPackageError(
   )
     return false;
   const isString = (key: string) => typeof c[key] === "string";
-  if (operation === "blueAuthorization") return isString("authorized");
   if (operation === "blueRefinance")
     return isString("sourceMarketId") && isString("targetMarketId");
   if (operation === "vaultV1MigrateToV2")

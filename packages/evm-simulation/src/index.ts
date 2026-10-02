@@ -43,7 +43,6 @@ export {
   UnsupportedOperationError,
 } from "./errors.js";
 export type {
-  BlueAuthorizationSubject,
   BlueMarketOperationSubject,
   BlueMarketOperationType,
   BlueRefinanceSubject,

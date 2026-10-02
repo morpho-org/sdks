@@ -1,9 +1,5 @@
 import type { Address } from "viem";
-import type {
-  BlueAuthorizationSubject,
-  OperationLimit,
-  SimulationOperationSubject,
-} from "../limits.js";
+import type { OperationLimit, SimulationOperationSubject } from "../limits.js";
 import type { SimulationMode } from "../params.js";
 import type { ExecutionBlock } from "./backends/parse-response.js";
 import { operationMeasurementPlan } from "./measurement-plan.js";
@@ -20,6 +16,6 @@ export interface CheckContext {
 /** Project the caller-selected subject without interpreting calldata. @internal */
 export function operationSubject(
   op: OperationLimit,
-): Exclude<SimulationOperationSubject, BlueAuthorizationSubject> {
+): SimulationOperationSubject {
   return operationMeasurementPlan(op).subject;
 }
