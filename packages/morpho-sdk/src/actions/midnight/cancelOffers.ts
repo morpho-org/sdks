@@ -89,6 +89,7 @@ const validateParams = ({
  * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
  * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
  * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @example
  * ```ts
