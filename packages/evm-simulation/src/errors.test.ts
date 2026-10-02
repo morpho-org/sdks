@@ -1,41 +1,36 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import { expectTypeOf } from "vitest";
 import {
-  AssetChangeMismatchError,
   AuthorizationRequestMismatchError,
   BlacklistViolationError,
   ConsumerLimitViolationError,
   ExternalServiceError,
-  FeeMismatchError,
   InvalidSimulationResponseError,
   isSimulationPackageError,
-  MarketConstraintViolationError,
   MissingVerificationEvidenceError,
-  PermissionChangeMismatchError,
-  ProtocolBindingMismatchError,
   SIMULATION_ERROR_CODES,
   type SimulationErrorContext,
   type SimulationExecutionContext,
   type SimulationExecutionReason,
   SimulationPackageError,
-  type SimulationPreparationContext,
   SimulationRevertedError,
   SimulationValidationError,
   type SimulationVerificationContext,
-  SlippageLimitExceededError,
-  StateChangeMismatchError,
   UnexpectedSimulationError,
   UnsupportedChainError,
   UnsupportedOperationError,
-  UnsupportedVerificationFeatureError,
 } from "./errors.js";
 import {
+  BLUE_MARKET_OPERATION_TYPES,
   type BlueMarketOperationType,
   OPERATION_TYPES,
+  type OperationLimit,
   type OperationType,
   type SimulationOperationSubject,
+  VAULT_OPERATION_TYPES,
   type VaultOperationType,
 } from "./limits.js";
+import { SIMULATION_MODES } from "./params.js";
 import type { SimulatedOperation } from "./result.js";
 
 const CONTEXT: SimulationErrorContext = {
@@ -61,8 +56,6 @@ const SUBJECTS: Record<
   Record<string, unknown>
 > = Object.fromEntries(
   OPERATION_TYPES.map((operation) => {
-    if (operation === "blueAuthorization")
-      return [operation, { authorized: A }];
     if (operation === "blueRefinance")
       return [operation, { sourceMarketId: "0xa", targetMarketId: "0xb" }];
     if (operation === "vaultV1MigrateToV2")
@@ -133,8 +126,8 @@ describe("SimulationRevertedError", () => {
   });
 
   it("attaches optional details payload", () => {
-    const err = new SimulationRevertedError("x", { raw: "tenderly response" });
-    expect(err.details).toEqual({ raw: "tenderly response" });
+    const err = new SimulationRevertedError("x", { raw: "node response" });
+    expect(err.details).toEqual({ raw: "node response" });
     expect(err.cause).toBeUndefined();
   });
 
@@ -191,7 +184,7 @@ describe("UnsupportedChainError", () => {
 describe("ExternalServiceError", () => {
   it("forwards cause via Error options", () => {
     const cause = new Error("underlying fetch failure");
-    const err = new ExternalServiceError("Tenderly 502", { cause });
+    const err = new ExternalServiceError("RPC 502", { cause });
     expect(err.cause).toBe(cause);
   });
 });
@@ -199,17 +192,9 @@ describe("ExternalServiceError", () => {
 describe("verification error classes", () => {
   const cases = [
     [UnsupportedOperationError, "UNSUPPORTED_OPERATION"],
-    [ProtocolBindingMismatchError, "PROTOCOL_BINDING_MISMATCH"],
-    [UnsupportedVerificationFeatureError, "UNSUPPORTED_VERIFICATION_FEATURE"],
     [InvalidSimulationResponseError, "INVALID_SIMULATION_RESPONSE"],
     [MissingVerificationEvidenceError, "MISSING_VERIFICATION_EVIDENCE"],
     [AuthorizationRequestMismatchError, "AUTHORIZATION_REQUEST_MISMATCH"],
-    [AssetChangeMismatchError, "ASSET_CHANGE_MISMATCH"],
-    [PermissionChangeMismatchError, "PERMISSION_CHANGE_MISMATCH"],
-    [StateChangeMismatchError, "STATE_CHANGE_MISMATCH"],
-    [MarketConstraintViolationError, "MARKET_CONSTRAINT_VIOLATION"],
-    [SlippageLimitExceededError, "SLIPPAGE_LIMIT_EXCEEDED"],
-    [FeeMismatchError, "FEE_MISMATCH"],
     [ConsumerLimitViolationError, "CONSUMER_LIMIT_VIOLATION"],
     [UnexpectedSimulationError, "UNEXPECTED_SIMULATION_ERROR"],
   ] as const;
@@ -310,28 +295,20 @@ describe("SimulationErrorContext", () => {
   });
 
   it("keys execution/verification contexts by operation group", () => {
+    type Verification = SimulationVerificationContext;
+    expectTypeOf<Verification["operation"]>().toEqualTypeOf<OperationType>();
     expectTypeOf<
-      SimulationVerificationContext["operation"]
-    >().toEqualTypeOf<OperationType>();
-    expectTypeOf<SimulationVerificationContext>().toExtend<SimulationErrorContext>();
-    const base = {
-      stage: "verification",
-      mode: "final",
-      chainId: 1,
-      blockNumber: 1n,
-    } as const;
+      Extract<Verification, { marketId: MarketId }>["operation"]
+    >().toEqualTypeOf<BlueMarketOperationType>();
     expectTypeOf<
-      typeof base & { operation: BlueMarketOperationType; marketId: MarketId }
-    >().toExtend<SimulationVerificationContext>();
+      Extract<Verification, { operation: "blueRefinance" }>
+    >().not.toHaveProperty("marketId");
     expectTypeOf<
-      typeof base & { operation: "blueRefinance"; marketId: MarketId }
-    >().not.toExtend<SimulationVerificationContext>();
+      Extract<Verification, { vault: `0x${string}` }>["operation"]
+    >().toEqualTypeOf<VaultOperationType>();
     expectTypeOf<
-      typeof base & { operation: VaultOperationType; vault: `0x${string}` }
-    >().toExtend<SimulationVerificationContext>();
-    expectTypeOf<
-      typeof base & { operation: "vaultV1MigrateToV2"; vault: `0x${string}` }
-    >().not.toExtend<SimulationVerificationContext>();
+      Extract<Verification, { operation: "vaultV1MigrateToV2" }>
+    >().not.toHaveProperty("vault");
     expectTypeOf<SimulatedOperation>().toExtend<SimulationOperationSubject>();
     expectTypeOf<
       SimulatedOperation["operation"]
@@ -341,6 +318,12 @@ describe("SimulationErrorContext", () => {
       operation: "blueRefinance";
       vault: `0x${string}`;
     }>().not.toExtend<SimulatedOperation>();
+    const base = {
+      stage: "verification",
+      mode: "final",
+      chainId: 1,
+      blockNumber: 1n,
+    } as const;
     expectTypeOf<
       typeof base & { operation: "blueSupply" }
     >().not.toExtend<SimulationErrorContext>();
@@ -362,7 +345,48 @@ describe("SimulationErrorContext", () => {
         operation: "blueAuthorization";
         authorized: `0x${string}`;
       }
-    >().toExtend<SimulationErrorContext>();
+    >().not.toExtend<SimulationErrorContext>();
+  });
+
+  it("operation groups partition OPERATION_TYPES", () => {
+    expectTypeOf<OperationLimit["type"]>().toEqualTypeOf<OperationType>();
+    expectTypeOf<
+      | BlueMarketOperationType
+      | VaultOperationType
+      | "blueRefinance"
+      | "vaultV1MigrateToV2"
+    >().toEqualTypeOf<OperationType>();
+    expect(
+      [
+        ...BLUE_MARKET_OPERATION_TYPES,
+        "blueRefinance",
+        ...VAULT_OPERATION_TYPES,
+        "vaultV1MigrateToV2",
+      ].sort(),
+    ).toEqual([...OPERATION_TYPES].sort());
+    expect([...OPERATION_TYPES]).toEqual([
+      "blueSupply",
+      "blueWithdraw",
+      "blueSupplyCollateral",
+      "blueBorrow",
+      "blueSupplyCollateralBorrow",
+      "blueRepay",
+      "blueWithdrawCollateral",
+      "blueRepayWithdrawCollateral",
+      "blueRefinance",
+      "vaultV1Deposit",
+      "vaultV2Deposit",
+      "vaultV1Withdraw",
+      "vaultV2Withdraw",
+      "vaultV1Redeem",
+      "vaultV2Redeem",
+      "vaultV2ForceWithdraw",
+      "vaultV2ForceRedeem",
+      "vaultV1InKindRedeem",
+      "vaultV2InKindRedeem",
+      "vaultV1MigrateToV2",
+    ]);
+    expect([...SIMULATION_MODES]).toEqual(["preview", "final"]);
   });
 
   it("SimulationRevertedError only accepts preparation or execution contexts", () => {
@@ -371,45 +395,6 @@ describe("SimulationErrorContext", () => {
         ConstructorParameters<typeof SimulationRevertedError>[3]
       >["stage"]
     >().toEqualTypeOf<"preparation" | "execution">();
-    expectTypeOf<
-      NonNullable<SimulationRevertedError["context"]>["stage"]
-    >().toEqualTypeOf<"preparation" | "execution">();
-  });
-
-  it("SimulationRevertedError stores a frozen preparation context", () => {
-    const preparation: SimulationPreparationContext = {
-      stage: "preparation",
-      mode: "preview",
-      chainId: 1,
-      blockNumber: 100n,
-      authorizationIndex: 1,
-      preparationCallIndex: 0,
-    };
-    const err = new SimulationRevertedError(
-      "x",
-      undefined,
-      "UNKNOWN_REVERT",
-      preparation,
-    );
-    expect(err.context).toEqual(preparation);
-    expect(Object.isFrozen(err.context)).toBe(true);
-    expect(isSimulationPackageError(err)).toBe(true);
-  });
-});
-
-describe("SimulationPackageError.name", () => {
-  it("falls back to the subclass name for consumer subclasses", () => {
-    class ConsumerError extends SimulationPackageError {
-      readonly code = "FEE_MISMATCH" as const;
-    }
-    expect(new ConsumerError("m").name).toBe("ConsumerError");
-  });
-
-  it("keeps the built-in name on subclasses of a built-in error", () => {
-    class MyValidationError extends SimulationValidationError {}
-    const err = new MyValidationError("m");
-    expect(err.name).toBe("SimulationValidationError");
-    expect(isSimulationPackageError(err)).toBe(true);
   });
 });
 
@@ -432,8 +417,8 @@ describe("context on legacy errors", () => {
   });
 
   it("verification errors extend SimulationPackageError directly", () => {
-    const err = new FeeMismatchError("x", { context: CONTEXT });
-    expect(Object.getPrototypeOf(FeeMismatchError)).toBe(
+    const err = new ConsumerLimitViolationError("x", { context: CONTEXT });
+    expect(Object.getPrototypeOf(ConsumerLimitViolationError)).toBe(
       SimulationPackageError,
     );
     expect(err.context).toEqual(CONTEXT);
@@ -451,17 +436,9 @@ describe("SIMULATION_ERROR_CODES", () => {
     new SimulationValidationError("x"),
     new UnsupportedChainError(1),
     new UnsupportedOperationError("x", { context: CONTEXT }),
-    new ProtocolBindingMismatchError("x", { context: CONTEXT }),
-    new UnsupportedVerificationFeatureError("x", { context: CONTEXT }),
     new InvalidSimulationResponseError("x", { context: CONTEXT }),
     new MissingVerificationEvidenceError("x", { context: CONTEXT }),
     new AuthorizationRequestMismatchError("x", { context: CONTEXT }),
-    new AssetChangeMismatchError("x", { context: CONTEXT }),
-    new PermissionChangeMismatchError("x", { context: CONTEXT }),
-    new StateChangeMismatchError("x", { context: CONTEXT }),
-    new MarketConstraintViolationError("x", { context: CONTEXT }),
-    new SlippageLimitExceededError("x", { context: CONTEXT }),
-    new FeeMismatchError("x", { context: CONTEXT }),
     new ConsumerLimitViolationError("x", { context: CONTEXT }),
     new UnexpectedSimulationError("x", { context: CONTEXT }),
   ];
@@ -503,16 +480,18 @@ describe("isSimulationPackageError", () => {
       true,
     );
     expect(
-      isSimulationPackageError(new FeeMismatchError("x", { context: CONTEXT })),
+      isSimulationPackageError(
+        new ConsumerLimitViolationError("x", { context: CONTEXT }),
+      ),
     ).toBe(true);
   });
 
   it("is true for a plain object with a known code", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "boom",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
         context: {
           stage: "validation",
           mode: "final",
@@ -526,18 +505,18 @@ describe("isSimulationPackageError", () => {
   it("is true for a plain object without context", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "boom",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
       }),
     ).toBe(true);
   });
 
   it("is false for a malformed context", () => {
     const base = {
-      name: "FeeMismatchError",
+      name: "ConsumerLimitViolationError",
       message: "m",
-      code: "FEE_MISMATCH",
+      code: "CONSUMER_LIMIT_VIOLATION",
     };
     expect(isSimulationPackageError({ ...base, context: {} })).toBe(false);
     expect(isSimulationPackageError({ ...base, context: [] })).toBe(false);
@@ -625,22 +604,33 @@ describe("isSimulationPackageError", () => {
   it("is false without a message string", () => {
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
-        code: "FEE_MISMATCH",
+        name: "ConsumerLimitViolationError",
+        code: "CONSUMER_LIMIT_VIOLATION",
       }),
     ).toBe(false);
   });
 
   it("is false without a name string", () => {
     expect(
-      isSimulationPackageError({ message: "m", code: "FEE_MISMATCH" }),
+      isSimulationPackageError({
+        message: "m",
+        code: "CONSUMER_LIMIT_VIOLATION",
+      }),
     ).toBe(false);
     expect(
-      isSimulationPackageError({ name: 1, message: "m", code: "FEE_MISMATCH" }),
+      isSimulationPackageError({
+        name: 1,
+        message: "m",
+        code: "CONSUMER_LIMIT_VIOLATION",
+      }),
     ).toBe(false);
   });
 
-  const base = { name: "FeeMismatchError", message: "m", code: "FEE_MISMATCH" };
+  const base = {
+    name: "ConsumerLimitViolationError",
+    message: "m",
+    code: "CONSUMER_LIMIT_VIOLATION",
+  };
   const ctx = { mode: "final", chainId: 1, blockNumber: 1n };
 
   it("requires a known operation on execution and verification contexts", () => {
@@ -664,6 +654,23 @@ describe("isSimulationPackageError", () => {
     expect(isSimulationPackageError({ ...base, context: EXECUTION })).toBe(
       true,
     );
+  });
+
+  it("accepts a field-only verification context on a plain error object", () => {
+    expect(
+      isSimulationPackageError({
+        name: "MissingVerificationEvidenceError",
+        message: "State read failed",
+        code: "MISSING_VERIFICATION_EVIDENCE",
+        context: {
+          stage: "verification",
+          mode: "final",
+          chainId: 1,
+          blockNumber: 1n,
+          field: "balance:token:account",
+        },
+      }),
+    ).toBe(true);
   });
 
   it.each(OPERATION_TYPES)(
@@ -707,9 +714,9 @@ describe("isSimulationPackageError", () => {
     expect(isSimulationPackageError(new Error("x"))).toBe(false);
     expect(
       isSimulationPackageError({
-        name: "FeeMismatchError",
+        name: "ConsumerLimitViolationError",
         message: "m",
-        code: "FEE_MISMATCH",
+        code: "CONSUMER_LIMIT_VIOLATION",
         context: "nope",
       }),
     ).toBe(false);
