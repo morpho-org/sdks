@@ -34,7 +34,9 @@ encode each intent onto every integrator.
 
 `MidnightBundlesV2` is the only bundle route of the `morpho-sdk` 7.0.0 Midnight surface. It replaces
 `MidnightBundlesV1` in every migrated flow; the 7.0.0 major carries no V1 route, route flag or
-fallback. Products that need V1 stay on the 6.x major, which remains published.
+fallback. The change ships as the `morpho-sdk` 7.0.0 major with no deprecation window: the migrated
+flows change in place, with no deprecated V1 variant and no coexistence minor before them. Products
+that need V1 stay on the 6.x major, which remains published.
 
 ### One action per intent
 
@@ -75,9 +77,9 @@ Rules shared by the taker actions:
   buy actions, because the sell entrypoints do not accept it.
 - Sell actions account for V2 withdrawing the sender's existing credit before taking offers, so a
   borrow by a sender with credit nets that credit first.
-- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list, so it never encodes the
-  same call as `takeBorrow`. `takeRepayWithdrawCollateral` rejects an empty `offerFills` list, so
-  it never encodes the same call as `repayWithdrawCollateral`.
+- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list, so it never encodes the same
+  call as `takeBorrow`. `takeRepayWithdrawCollateral` rejects an empty `offerFills` list, so it
+  never encodes the same call as `repayWithdrawCollateral`.
 - Collateral supplies and withdrawals are lists of `{ collateralIndex, assets }`; `maxUint256`
   `assets` on a withdrawal means the sender's full balance at execution.
 
@@ -143,21 +145,20 @@ encoding follow from that:
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
-- `morpho-sdk` 7.0.0 keeps the established method names of the migrated flows
-  (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
+- `morpho-sdk` 7.0.0 keeps the established method names of the migrated flows (`takeLend`,
+  `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
   replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types
   `PermitKind` and `MidnightTokenPermit` are removed with them. V2 root activation adds its own
-  signature requirement, with its own action `type` and args carrying `v, r, s`,
-  `signatureHeight`, `signatureNonce` and `signatureDeadline`, as an additive member of
-  `SignatureRequirementAction`, `RequirementSignatureArgs` and `RequirementSignature`. The
-  `MidnightOfferRootSignature*` types and `MidnightActionSignatures` stay unchanged for `makeLend`
-  and `makeBorrow`. `supplyCollateralMakeBorrow`
-  replaces `collateralAssets` and `collateralIndex` with the collateral-supply list, removes
-  `reservedCollateralAssets` because approvals cover only the pulled assets, and no longer accepts
-  `EcrecoverRatifier`- or `SetterRatifier`-ratified offers. The four V1 flows also keep their
-  action names. The migration guide lists each.
+  signature requirement, with its own action `type` and args carrying `v, r, s`, `signatureHeight`,
+  `signatureNonce` and `signatureDeadline`, as an additive member of `SignatureRequirementAction`,
+  `RequirementSignatureArgs` and `RequirementSignature`. The `MidnightOfferRootSignature*` types and
+  `MidnightActionSignatures` stay unchanged for `makeLend` and `makeBorrow`.
+  `supplyCollateralMakeBorrow` replaces `collateralAssets` and `collateralIndex` with the
+  collateral-supply list, removes `reservedCollateralAssets` because approvals cover only the pulled
+  assets, and no longer accepts `EcrecoverRatifier`- or `SetterRatifier`-ratified offers. The four
+  V1 flows also keep their action names. The migration guide lists each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
 - `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
@@ -170,9 +171,9 @@ encoding follow from that:
   `makeLend` and `makeBorrow`. It is retyped in place because its V2 successor serves the same
   intent under the same name, and the prior non-atomic flow can leave collateral supplied with no
   live offer when publication fails.
-- The route replacement of the migrated flows invokes a narrow lifecycle exception, added
-  to `AGENTS.md` §7 with this record. It does not waive the major changeset, migration guide or
-  maintained-dependent audit.
+- The route replacement of the migrated flows invokes a narrow lifecycle exception, added to
+  `AGENTS.md` §7 with this record and accepted by the maintainer (@jinmel). It does not waive the
+  major changeset, migration guide or maintained-dependent audit.
 
 This decision does not cover native-token wrapping, the callback model behind `supplyBlueMakeLend`
 beyond the derived-callback check, Blue market safety policy for parked assets, or quote and offer
@@ -196,9 +197,9 @@ selection.
   cancelled, an empty offer set on a publishing action, `assetsToPark = 0` on `supplyBlueMakeLend`,
   an empty collateral-supply list on `supplyCollateralMakeBorrow`, and a `supplyBlueMakeLend` offer
   whose callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
-- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list,
-  `takeRepayWithdrawCollateral` rejects an empty `offerFills` list, and `repayWithdrawCollateral`
-  rejects a zero repay with no non-zero withdrawal → typed-error unit tests.
+- `supplyCollateralTakeBorrow` rejects empty collateral supplies, `takeRepayWithdrawCollateral`
+  rejects an empty `offerFills` list, and `repayWithdrawCollateral` rejects a zero repay with no
+  non-zero withdrawal → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
 - Revisit if `MidnightBundlesV2` gains an entrypoint, an `onBehalf` argument or inline permits, or
