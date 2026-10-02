@@ -56,7 +56,8 @@ Decision record: [`ADR-2026-10-02-midnight-bundles-v2-sdk-actions`](../../../../
   `taker`, `onBehalf` or `maker` distinct from it, and maker offers must have
   `maker === accountAddress`.
 - **Requirements.** Token requirements are plain ERC-20 approvals from `accountAddress` to
-  `midnightBundlesV2` for exactly the pulled assets; V2 takes no inline permit, so never produce
+  `midnightBundlesV2` for exactly the pulled assets, plus, for lend makers, an approval to
+  `midnight` for the loan reserve pulled when offers are taken; V2 takes no inline permit, so never produce
   ERC-2612 or Permit2 requirements. Every V2 action requires Midnight authorization of
   `midnightBundlesV2`, resolved lazily at the entity layer.
 - **Encoding.** Target `getChainAddress(chainId, "midnightBundlesV2")`. Pass every positional

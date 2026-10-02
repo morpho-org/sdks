@@ -1270,6 +1270,65 @@ describe("MorphoMidnight", () => {
       ]);
     });
 
+    test("behavior: requests one MidnightBundlesV2 approval per collateral token", async () => {
+      const secondCollateralToken = getAddress(
+        "0x0000000000000000000000000000000000007100",
+      );
+      const collateralMarket = new MarketParams({
+        ...market,
+        collateralParams: [
+          ...market.collateralParams,
+          {
+            ...market.collateralParams[0]!,
+            token: secondCollateralToken,
+          },
+        ],
+      });
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockAllowance({
+        handle,
+        token: secondCollateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+      const output = await prepare(handle, {
+        offers: rateTree(makerOffer({ buy: false, market: collateralMarket })),
+        collateral: {
+          market: collateralMarket,
+          supplies: [
+            { collateralIndex: 0n, assets: 2_000n },
+            { collateralIndex: 1n, assets: 3_000n },
+          ],
+        },
+      });
+
+      expect(
+        (await output.getRequirements()).map(({ action }) => action),
+      ).toEqual([
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 2_000n },
+        },
+        {
+          type: "erc20Approval",
+          args: { spender: midnightBundlesV2, amount: 3_000n },
+        },
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.maker,
+          },
+        },
+      ]);
+    });
+
     test("error: MarketIdMismatchError", async () => {
       await expect(
         prepare(createMockClient(midnightTestChain), {
