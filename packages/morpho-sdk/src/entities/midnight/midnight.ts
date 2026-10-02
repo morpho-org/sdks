@@ -1141,8 +1141,9 @@ export class MorphoMidnight {
    * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
    * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
-   * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
-   * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+   * @throws {NonPositiveInputError} when `deadline` is not positive.
+   * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+   * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
    * @example
    * ```ts
    * import { morphoViemExtension } from "@morpho-org/morpho-sdk";

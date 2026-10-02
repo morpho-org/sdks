@@ -2,6 +2,7 @@ import { midnightBundlesV2Abi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, maxUint128, zeroAddress, zeroHash } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateDeadline } from "../../helpers/validate.js";
 import {
   DuplicateMidnightGroupCancellationError,
   EmptyMidnightGroupCancellationsError,
@@ -51,9 +52,7 @@ const validateParams = ({
   if (cancellations.length === 0) {
     throw new EmptyMidnightGroupCancellationsError();
   }
-  if (deadline < 0n) {
-    throw new NegativeInputError("deadline", deadline);
-  }
+  validateDeadline(deadline);
   const groups = new Set<string>();
   for (const [index, { group, maxConsumed }] of cancellations.entries()) {
     const field = `cancellations[${index}].maxConsumed`;
@@ -87,14 +86,21 @@ const validateParams = ({
  * @returns A deep-frozen `Transaction<MidnightCancelOffersAction>` targeting `MidnightBundlesV2`.
  * @throws {EmptyMidnightGroupCancellationsError} when no groups are provided.
  * @throws {DuplicateMidnightGroupCancellationError} when a group appears more than once.
- * @throws {NegativeInputError} when `deadline` or a `maxConsumed` ceiling is negative.
- * @throws {InputExceedsMaxError} when a `maxConsumed` ceiling exceeds `uint128`.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {NegativeInputError} when a `maxConsumed` ceiling is negative.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds `uint256` or a `maxConsumed` ceiling exceeds `uint128`.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
  * @example
  * ```ts
  * import { maxUint256, type Hex } from "viem";
+ * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
  * import { midnightCancelOffers } from "@morpho-org/morpho-sdk";
+ *
+ * // Placeholder until a MidnightBundlesV2 deployment is registered for the chain.
+ * registerCustomAddresses({
+ *   addresses: { 8453: { midnightBundlesV2: "0x0000000000000000000000000000000000000001" } },
+ * });
  *
  * declare const group: Hex;
  * const tx = midnightCancelOffers({

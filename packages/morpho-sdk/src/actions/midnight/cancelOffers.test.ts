@@ -3,6 +3,7 @@ import {
   registerCustomAddresses,
   UnknownAddressError,
 } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
 import {
   decodeFunctionData,
   getAddress,
@@ -19,6 +20,7 @@ import {
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
 import { midnightCancelOffers } from "./cancelOffers.js";
@@ -132,7 +134,7 @@ describe("midnightCancelOffers", () => {
     ).toThrow(DuplicateMidnightGroupCancellationError);
   });
 
-  test("error: NegativeInputError on negative ceiling or deadline", () => {
+  test("error: NegativeInputError on negative ceiling", () => {
     expect(() =>
       midnightCancelOffers({
         chainId: midnightChainId,
@@ -140,13 +142,29 @@ describe("midnightCancelOffers", () => {
         deadline: maxUint256,
       }),
     ).toThrow(NegativeInputError);
+  });
+
+  test.each([0n, -1n])(
+    "error: NonPositiveInputError on deadline %s",
+    (deadline) => {
+      expect(() =>
+        midnightCancelOffers({
+          chainId: midnightChainId,
+          cancellations: [{ group: groupA, maxConsumed: 0n }],
+          deadline,
+        }),
+      ).toThrow(NonPositiveInputError);
+    },
+  );
+
+  test("error: InputExceedsMaxError on deadline above uint256", () => {
     expect(() =>
       midnightCancelOffers({
         chainId: midnightChainId,
         cancellations: [{ group: groupA, maxConsumed: 0n }],
-        deadline: -1n,
+        deadline: maxUint256 + 1n,
       }),
-    ).toThrow(NegativeInputError);
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: InputExceedsMaxError on ceiling above uint128", () => {
@@ -177,5 +195,34 @@ describe("midnightCancelOffers", () => {
     });
 
     expect(tx.action.args.authorized).toBe(midnightBundlesV2);
+  });
+
+  test("property: groupsToCancel and deadline round-trip through calldata", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(
+          fc.record({
+            group: fc
+              .uint8Array({ minLength: 32, maxLength: 32 })
+              .map((bytes): Hex => `0x${Buffer.from(bytes).toString("hex")}`),
+            maxConsumed: fc.bigInt({ min: 0n, max: maxUint128 }),
+          }),
+          { minLength: 1, maxLength: 8, selector: ({ group }) => group },
+        ),
+        fc.bigInt({ min: 1n, max: maxUint256 }),
+        (cancellations, deadline) => {
+          const { args } = decodeFunctionData({
+            abi: midnightBundlesV2Abi,
+            data: midnightCancelOffers({
+              chainId: midnightChainId,
+              cancellations,
+              deadline,
+            }).data,
+          });
+          expect(args[13]).toEqual(cancellations);
+          expect(args[15]).toBe(deadline);
+        },
+      ),
+    );
   });
 });
