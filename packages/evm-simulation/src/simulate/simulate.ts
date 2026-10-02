@@ -7,13 +7,14 @@ import { runSimulation } from "./run-simulation.js";
 /**
  * Simulate a bundle of EVM transactions.
  *
- * Parses and normalizes the input → plans the execution as ordered user calls
- * → resolves the chain endpoint → executes once through `eth_simulateV1`
- * under the full timeout budget (chain identity check, single block
- * resolution, pinned simulation) →
- * derives ERC20/WETH9 transfers and net asset changes from the user calls only
- * → asserts no funds are retained by standalone `bundles` periphery contracts →
- * returns the result. The caller reads whichever fields they need:
+ * Parses and normalizes the request → resolves the chain identity → resolves
+ * a single pinned block → resolves quoted-asset metadata → plans state reads
+ * and the execution → executes once through `eth_simulateV1` under the full
+ * timeout budget (simulation with in-block state reads → response parsing →
+ * reorg check) → derives ERC20/WETH9 transfers and net asset changes from the
+ * user calls only → decodes quoted balances/positions → runs slippage checks
+ * → asserts no funds are retained by standalone `bundles` periphery contracts
+ * → returns the result. The caller reads whichever fields they need:
  *
  * - `simulationTxs` → exactly the caller's ordered transactions, normalized
  *   (checksummed addresses, `value` defaulted to `0n`). Internal state reads are
@@ -60,9 +61,9 @@ import { runSimulation } from "./run-simulation.js";
  *   endpoint configured, or limits/preview authorizations require a Morpho
  *   Blue address absent from blue-sdk's `getChainAddresses`.
  * @throws {SimulationRevertedError} when a preparation or user transaction reverts.
- * @throws {MissingVerificationEvidenceError} when a planned state read fails,
- *   native outgoing traces do not cover value sent, or required metadata is
- *   unavailable or empty/invalid after a non-transport read.
+ * @throws {MissingVerificationEvidenceError} when a planned state read fails
+ *   or returns empty/invalid data, native outgoing traces do not cover value
+ *   sent, or required metadata reverts or returns empty/invalid data.
  * @throws {InvalidSimulationResponseError} when the node response cannot be
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched

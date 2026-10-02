@@ -115,8 +115,10 @@ unchecked outcomes are observations, not economic guarantees. See the
 [package README](../../packages/evm-simulation/README.md#optional-limits) for units,
 subject scope, and which measurements require additional evidence.
 
-The unreleased broad state-reporting fields (`verification.before`, `after`,
-`diff`, and `actionDiff`) and their snapshot/diff types are removed. Read planning
+The unreleased state-reporting fields `verification.diff` and
+`verification.fees` and the removed exported types (`SimulationStateChange`,
+`TokenAllowance`, `MorphoAuthorizationChange`, `SignatureNonceChange`,
+`SequentialNonceChange`, `Permit2NonceChange`, `Fee`) are gone. Read planning
 now depends only on quoted amounts: balances for assets/vault shares, positions
 for Blue shares, and existing transfer traces for native assets. Omitted limits
 produce no slippage reads. Use the existing `transfers` and `assetChanges` for

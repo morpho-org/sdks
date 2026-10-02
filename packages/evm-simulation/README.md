@@ -66,7 +66,7 @@ All symbols below are re-exported from the package root.
 - Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`, and the verification errors `UnsupportedOperationError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`.
 - Error helpers: `SIMULATION_ERROR_CODES` / `SimulationErrorCode` (every `error.code`), `SimulationErrorContext` (frozen `error.context`; union of the per-stage `SimulationValidationContext`, `SimulationTransportContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext`), `SimulationStage`, `SimulationExecutionReason` (`SimulationRevertedError.reasonCode`), `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`), `RetainedAsset`.
-- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `BlueAuthorizationSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (operation groups and the operation-keyed subject union that key limit-bound verification `SimulationErrorContext`s).
+- Verification vocabulary: `SIMULATION_MODES` / `SimulationMode`, `OPERATION_TYPES` / `OperationType`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` and its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (operation groups and the operation-keyed subject union that key limit-bound verification `SimulationErrorContext`s).
 ### Optional limits
 
 The caller chooses the action, subject, quote, and percentage tolerance. Each
@@ -129,7 +129,7 @@ Only slippage is checked; there are no separate refund or penalty checks.
 `blueWithdrawCollateral` are invalid and throw `SimulationValidationError`
 during request parsing. `MissingVerificationEvidenceError` reports runtime
 evidence gaps: a failed state read, native outgoing traces that do not cover
-value sent, or a non-transport metadata read that fails or returns empty/invalid
+value sent, or a metadata read that reverts or returns empty/invalid
 data. Excessive slippage throws `ConsumerLimitViolationError`.
 
 Only quoted amounts are observed. ERC-20 assets and vault shares use `balanceOf`;
