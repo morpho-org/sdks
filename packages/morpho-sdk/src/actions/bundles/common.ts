@@ -536,11 +536,7 @@ export const selectBundlesTokenRequirementSignature = (
         signature.action.type !== "permit2SignatureTransfer",
     );
     throw new UnexpectedRequirementSignatureError(
-      unexpected?.action.type === "authorization"
-        ? "authorization"
-        : unexpected?.action.type === "midnightOfferRootSignature"
-          ? "midnightOfferRootSignature"
-          : "permit",
+      unexpected?.action.type === "authorization" ? "authorization" : "permit",
     );
   }
   if (selected.length > 1) {

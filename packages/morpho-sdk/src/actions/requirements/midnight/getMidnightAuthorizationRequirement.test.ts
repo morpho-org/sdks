@@ -78,28 +78,27 @@ describe("getMidnightAuthorizationRequirement", () => {
     expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
   });
 
-  test.each([
-    midnightAddresses.midnightBundles,
-    midnightAddresses.ecrecoverRatifier,
-    midnightAddresses.setterRatifier,
-  ])("behavior: accepts supported target %s", async (authorized) => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.midnight,
-      abi: midnightAbi,
-      functionName: "isAuthorized",
-      result: true,
-    });
+  test.each([midnightAddresses.midnightBundles])(
+    "behavior: accepts supported target %s",
+    async (authorized) => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
 
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: handle.client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized,
-      }),
-    ).resolves.toBeNull();
-  });
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: handle.client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).resolves.toBeNull();
+    },
+  );
 
   test("error: UnsupportedMidnightAuthorizationTargetError", async () => {
     const { client } = createMockClient(midnightTestChain);

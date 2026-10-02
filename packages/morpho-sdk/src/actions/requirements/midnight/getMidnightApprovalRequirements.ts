@@ -38,7 +38,7 @@ export interface GetMidnightApprovalRequirementsParams {
  * @returns Approval transactions required for `spender` to pull `amount`.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
  * @throws {NegativeInputError} when `amount < 0n`.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight or MidnightBundles deployment.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight, MidnightBundles, or MidnightBundlesV2 deployment.
  * @example
  * ```ts
  * import {
@@ -70,7 +70,7 @@ export const getMidnightApprovalRequirements = async (
   validateRequirementSpender({
     chainId: params.chainId,
     spender: params.spender,
-    allowed: ["midnight", "midnightBundles"],
+    allowed: ["midnight", "midnightBundles", "midnightBundlesV2"],
   });
   if (params.amount === 0n) return [];
 

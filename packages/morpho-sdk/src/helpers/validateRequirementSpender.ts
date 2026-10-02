@@ -7,6 +7,7 @@ export type RequirementSpenderKey =
   | "permit2"
   | "midnight"
   | "midnightBundles"
+  | "midnightBundlesV2"
   | "vaultExitBundlesV1"
   | "vaultBundlesV1"
   | "blueBundlesV1";
@@ -38,13 +39,13 @@ export const validateRequirementSpender = (params: {
   readonly spender: Address;
   readonly allowed: readonly RequirementSpenderKey[];
 }): void => {
-  const { permit2, midnight, midnightBundles, bundles } = getChainAddresses(
-    params.chainId,
-  );
+  const { permit2, midnight, midnightBundles, midnightBundlesV2, bundles } =
+    getChainAddresses(params.chainId);
   const addresses = {
     permit2,
     midnight,
     midnightBundles,
+    midnightBundlesV2,
     vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
     vaultBundlesV1: bundles?.vaultBundlesV1,
     blueBundlesV1: bundles?.blueBundlesV1,

@@ -53,6 +53,7 @@ export const encodeErc20Approval = (
       "permit2",
       "midnight",
       "midnightBundles",
+      "midnightBundlesV2",
       "vaultExitBundlesV1",
       "vaultBundlesV1",
       "blueBundlesV1",

@@ -1,16 +1,21 @@
 import {
   AccrualPosition,
-  Group,
-  GroupUtils,
+  type IOffer,
   Market,
+  MarketParams,
   MarketUtils,
   midnightAbi,
+  midnightBundlesV2Abi,
   Offer,
-  setterRatifierAbi,
+  Payload,
+  RateRatifierV1,
   Tree,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { registerCustomAddresses } from "@morpho-org/morpho-ts";
+import {
+  getChainAddress,
+  registerCustomAddresses,
+} from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -19,17 +24,14 @@ import {
 import {
   type Address,
   type Chain,
-  createWalletClient,
-  custom,
+  decodeFunctionData,
   erc20Abi,
   getAddress,
   type Hex,
   maxUint256,
   numberToHex,
-  verifyTypedData,
   zeroAddress,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -40,16 +42,9 @@ import {
   midnightMarketId,
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
-import type {
-  MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
-  Transaction,
-} from "../../types/action.js";
-import { isMidnightOfferRootSignature } from "../../types/action.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
-  AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
   EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
@@ -60,179 +55,22 @@ import {
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
-  MidnightOfferRootMismatchError,
-  MidnightOfferRootOfferCountMismatchError,
-  MidnightOfferRootOwnerMismatchError,
-  MidnightOfferRootRatifierMismatchError,
+  MidnightOfferRatifierMismatchError,
   MidnightOfferSideMismatchError,
   MidnightRedeemExceedsCreditError,
+  MidnightReplacementGroupCancelledError,
   MidnightTakeableOfferMarketMismatchError,
   MissingAccrualPositionError,
-  MissingMidnightOfferRootSignatureError,
   NegativeInputError,
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
-  UnexpectedRequirementSignatureError,
-  UnknownMidnightRatifierError,
-  UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
 import type {
-  MakeOffersOutput,
-  MidnightActionSignatures,
-  OffersData,
+  CancelAndMakeBorrowParams,
+  CancelAndMakeLendParams,
+  MidnightMakerTreeInput,
 } from "./types.js";
-
-type BuildSubmitOffersTx = (params: {
-  readonly offersData: OffersData;
-  readonly signatures?: MidnightActionSignatures;
-  readonly metadata?: { readonly origin: string };
-}) => Readonly<Transaction<MempoolSubmitOffersAction>>;
-
-const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
-  (
-    Object.assign(Object.create(MorphoMidnight.prototype), {
-      chainId: midnightChainId,
-      client: {
-        options: {
-          metadata: params.metadata,
-        },
-      },
-    }) as {
-      buildSubmitOffersTx: (params: {
-        readonly offersData: OffersData;
-        readonly signatures?: MidnightActionSignatures;
-      }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
-    }
-  ).buildSubmitOffersTx(params);
-
-const offersData = (
-  buy = true,
-  maker: Address = midnightAddresses.maker,
-): OffersData => {
-  const offer = Offer.create(
-    midnightBaseOffer({
-      market: { ...midnightMarket, maturity: apiValidMaturity },
-      buy,
-      maker,
-      expiry: apiValidMaturity - 60n,
-      maxAssets: 1_000n,
-      maxUnits: 0n,
-      ratifier: midnightAddresses.ecrecoverRatifier,
-      receiverIfMakerIsSeller: buy ? zeroAddress : maker,
-    }),
-  );
-  const group = Group.create([offer]);
-
-  return {
-    accountAddress: maker,
-    groups: [group.id],
-    tree: Tree.create([group]),
-    ratifierType: "ecrecover",
-    ratifier: midnightAddresses.ecrecoverRatifier,
-  };
-};
-
-const multiGroupOffersData = (): OffersData => {
-  const lendOffer = Offer.create(
-    midnightBaseOffer({
-      market: { ...midnightMarket, maturity: apiValidMaturity },
-      buy: true,
-      expiry: apiValidMaturity - 60n,
-      maxAssets: 1_000n,
-      maxUnits: 0n,
-      ratifier: midnightAddresses.ecrecoverRatifier,
-    }),
-  );
-  const borrowOffer = Offer.create(
-    midnightBaseOffer({
-      market: { ...midnightMarket, maturity: apiValidMaturity },
-      buy: false,
-      tick: 5_004n,
-      expiry: apiValidMaturity - 60n,
-      maxAssets: 1_000n,
-      maxUnits: 0n,
-      ratifier: midnightAddresses.ecrecoverRatifier,
-    }),
-  );
-  const lendGroup = Group.create([lendOffer]);
-  const borrowGroup = Group.create([borrowOffer]);
-
-  return {
-    accountAddress: midnightAddresses.maker,
-    groups: [lendGroup.id, borrowGroup.id],
-    tree: Tree.create([lendGroup, borrowGroup]),
-    ratifierType: "ecrecover",
-    ratifier: midnightAddresses.ecrecoverRatifier,
-  };
-};
-
-const setterOffersData = (buy = true): OffersData => {
-  const offer = Offer.create(
-    midnightBaseOffer({
-      market: { ...midnightMarket, maturity: apiValidMaturity },
-      buy,
-      expiry: apiValidMaturity - 60n,
-      maxAssets: 1_000n,
-      maxUnits: 0n,
-      ratifier: midnightAddresses.setterRatifier,
-    }),
-  );
-  const group = Group.create([offer]);
-
-  return {
-    accountAddress: midnightAddresses.maker,
-    groups: [group.id],
-    tree: Tree.create([group]),
-    ratifierType: "setter",
-    ratifier: midnightAddresses.setterRatifier,
-    setterPayload: "0x1234",
-  };
-};
-
-const offerRootSignature = (
-  data: OffersData,
-  overrides: {
-    readonly owner?: Address;
-    readonly ratifier?: Address;
-    readonly offers?: number;
-    readonly payload?: Hex | undefined;
-  } = {},
-): MidnightOfferRootSignature => ({
-  action: {
-    type: "midnightOfferRootSignature",
-    args: {
-      root: data.tree.root,
-      ratifier: overrides.ratifier ?? data.ratifier,
-      offers: overrides.offers ?? data.tree.offers.length,
-    },
-  },
-  args: {
-    owner: overrides.owner ?? data.accountAddress,
-    root: data.tree.root,
-    signature: "0x1234",
-    payload: "payload" in overrides ? (overrides.payload as Hex) : "0x1234",
-  },
-});
-
-const unexpectedSignature = {
-  action: {
-    type: "authorization",
-    args: {
-      authorized: midnightAddresses.midnightBundles,
-      isAuthorized: true,
-      deadline: 123n,
-    },
-  },
-  args: {
-    owner: midnightAddresses.taker,
-    authorized: midnightAddresses.midnightBundles,
-    isAuthorized: true,
-    nonce: 42n,
-    signature: "0x1234",
-    deadline: 123n,
-  },
-} as unknown as MidnightActionSignatures;
 
 const client = {
   viemClient: { chain: { id: midnightChainId } },
@@ -246,38 +84,6 @@ const midnightTestChain = {
   rpcUrls: { default: { http: ["http://localhost"] } },
 } as const satisfies Chain;
 
-const offerSignerAccount = privateKeyToAccount(
-  "0x0000000000000000000000000000000000000000000000000000000000000001",
-);
-const offerSignerWallet = createWalletClient({
-  account: offerSignerAccount,
-  chain: midnightTestChain,
-  transport: custom({
-    request: async ({ method }) => {
-      throw new Error(`Unexpected RPC request "${method}".`);
-    },
-  }),
-});
-
-const signOfferRootRequirement = async (
-  requirements: Awaited<ReturnType<MakeOffersOutput["getRequirements"]>>,
-): Promise<MidnightOfferRootSignature> => {
-  const requirement = requirements.find(
-    ({ action }) => action.type === "midnightOfferRootSignature",
-  );
-  if (requirement == null || !("sign" in requirement)) {
-    throw new Error("Expected midnightOfferRootSignature requirement");
-  }
-  const signature = await requirement.sign(
-    offerSignerWallet,
-    offerSignerAccount.address,
-  );
-  if (!isMidnightOfferRootSignature(signature)) {
-    throw new Error("Expected midnightOfferRootSignature result");
-  }
-  return signature;
-};
-
 const apiValidMaturity = 1_767_279_600n;
 const offerValidation = {
   apiUrl: "https://api.example/base/",
@@ -287,6 +93,36 @@ const offerValidation = {
       headers: { "Content-Type": "application/json" },
     }),
 };
+
+const midnightBundlesV2 = getAddress(
+  "0x00000000000000000000000000000000000b2002",
+);
+registerCustomAddresses({
+  addresses: { [midnightChainId]: { midnightBundlesV2 } },
+});
+const priceRatifierV1 = getChainAddress(midnightChainId, "priceRatifierV1");
+const rateRatifierV1 = getChainAddress(midnightChainId, "rateRatifierV1");
+const previousGroup = `0x${"11".repeat(32)}` as Hex;
+const makerGroup = `0x${"22".repeat(32)}` as Hex;
+
+const makerOffer = (overrides: Partial<IOffer> & { readonly buy: boolean }) =>
+  Offer.create(
+    midnightBaseOffer({
+      market: { ...midnightMarket, maturity: apiValidMaturity },
+      expiry: apiValidMaturity - 60n,
+      maxAssets: 1_000n,
+      maxUnits: 0n,
+      ratifier: rateRatifierV1,
+      group: makerGroup,
+      ...overrides,
+    }),
+  );
+
+const rateTree = (...offers: readonly Offer[]): MidnightMakerTreeInput =>
+  Tree.create({
+    type: "rateV1",
+    entries: offers.map((offer) => ({ offer, rate: 1_000_000_000n })),
+  });
 
 const marketData = (overrides: { readonly withdrawable?: bigint } = {}) =>
   new Market({
@@ -407,18 +243,6 @@ const mockMidnightAuthorization = (
     address: midnightAddresses.midnight,
     abi: midnightAbi,
     functionName: "isAuthorized",
-    result,
-  });
-};
-
-const mockSetterRootRatification = (
-  handle: MidnightMockHandle,
-  result: boolean,
-) => {
-  mockRead(handle, {
-    address: midnightAddresses.setterRatifier,
-    abi: setterRatifierAbi,
-    functionName: "isRootRatified",
     result,
   });
 };
@@ -1103,430 +927,159 @@ describe("MorphoMidnight", () => {
   });
 
   describe("getOffersData", () => {
-    test("behavior: accepts multiple Tree.create entries", async () => {
-      const lendOffer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, maturity: apiValidMaturity },
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-      const borrowOffer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, maturity: apiValidMaturity },
-          buy: false,
-          tick: 5_004n,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-      const lendGroup = Group.create([lendOffer]);
-      const borrowGroup = Group.create([borrowOffer]);
+    test("behavior: derives groups and payload from a RateRatifierV1 tree", async () => {
+      const lend = makerOffer({ buy: true });
+      const other = makerOffer({ buy: true, maxAssets: 2_000n });
       const data = await midnight().getOffersData({
         accountAddress: midnightAddresses.maker,
-        offers: [lendGroup, borrowGroup],
+        offers: rateTree(lend, other),
         validation: offerValidation,
       });
 
-      expect(data.groups).toEqual([lendGroup.id, borrowGroup.id]);
-      expect(data.tree.offers).toHaveLength(2);
-      expect(data.ratifierType).toBe("ecrecover");
-      expect(data.ratifier).toBe(midnightAddresses.ecrecoverRatifier);
-    });
-
-    test("behavior: de-duplicates groups from grouped offers", async () => {
-      const offers = [
-        Offer.create(
-          midnightBaseOffer({
-            market: { ...midnightMarket, maturity: apiValidMaturity },
-            buy: true,
-            expiry: apiValidMaturity - 60n,
-            maxAssets: 1_000n,
-            maxUnits: 0n,
-            ratifier: midnightAddresses.ecrecoverRatifier,
-          }),
+      expect(data.groups).toEqual([lend.group]);
+      expect(data.ratifierType).toBe("rateV1");
+      expect(data.ratifier).toBe(rateRatifierV1);
+      expect(data.payload).toBe(
+        await Payload.encode(
+          RateRatifierV1.ratify({ tree: data.tree as Tree<"rateV1"> }),
         ),
-        Offer.create(
-          midnightBaseOffer({
-            market: { ...midnightMarket, maturity: apiValidMaturity },
-            buy: true,
-            tick: 5_004n,
-            expiry: apiValidMaturity - 60n,
-            maxAssets: 1_000n,
-            maxUnits: 0n,
-            ratifier: midnightAddresses.ecrecoverRatifier,
-          }),
-        ),
-      ];
-      const group = Group.create(offers);
+      );
+    });
+
+    test("behavior: accepts a PriceRatifierV1 tree", async () => {
+      const offer = makerOffer({ buy: true, ratifier: priceRatifierV1 });
       const data = await midnight().getOffersData({
         accountAddress: midnightAddresses.maker,
-        offers: group,
+        offers: Tree.create({ type: "priceV1", entries: [{ offer }] }),
         validation: offerValidation,
       });
 
-      expect(data.groups).toEqual([group.id]);
-      expect(data.tree.offers).toHaveLength(2);
-    });
-
-    test("behavior: accepts a single offer", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, maturity: apiValidMaturity },
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-      const data = await midnight().getOffersData({
-        accountAddress: midnightAddresses.maker,
-        offers: offer,
-        validation: offerValidation,
-      });
-
-      expect(data.groups).toEqual([GroupUtils.hash([offer])]);
-      expect(data.tree.offers).toHaveLength(1);
-    });
-
-    test("behavior: returns setter payload for setter-ratified offers", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, maturity: apiValidMaturity },
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.setterRatifier,
-        }),
-      );
-      const data = await midnight().getOffersData({
-        accountAddress: midnightAddresses.maker,
-        offers: offer,
-        validation: offerValidation,
-      });
-
-      expect(data.ratifierType).toBe("setter");
-      expect(data.setterPayload).toMatch(/^0x/u);
-    });
-
-    test("error: MidnightOfferMarketChainMismatchError", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, chainId: 1n },
-          buy: true,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-
-      await expect(
-        midnight().getOffersData({
-          accountAddress: midnightAddresses.maker,
-          offers: offer,
-          validation: offerValidation,
-        }),
-      ).rejects.toThrow(MidnightOfferMarketChainMismatchError);
+      expect(data.ratifierType).toBe("priceV1");
+      expect(data.ratifier).toBe(priceRatifierV1);
     });
 
     test("error: MidnightOfferMakerMismatchError", async () => {
-      const offers = [
-        Offer.create(
-          midnightBaseOffer({
-            market: { ...midnightMarket, maturity: apiValidMaturity },
-            buy: true,
-            expiry: apiValidMaturity - 60n,
-            maxAssets: 1_000n,
-            maxUnits: 0n,
-            ratifier: midnightAddresses.ecrecoverRatifier,
-          }),
-        ),
-        Offer.create(
-          midnightBaseOffer({
-            market: { ...midnightMarket, maturity: apiValidMaturity },
-            buy: true,
-            maker: midnightAddresses.taker,
-            tick: 5_004n,
-            expiry: apiValidMaturity - 60n,
-            maxAssets: 1_000n,
-            maxUnits: 0n,
-            ratifier: midnightAddresses.ecrecoverRatifier,
-          }),
-        ),
-      ];
-
       await expect(
         midnight().getOffersData({
-          accountAddress: midnightAddresses.maker,
-          offers,
+          accountAddress: midnightAddresses.taker,
+          offers: rateTree(makerOffer({ buy: true })),
           validation: offerValidation,
         }),
       ).rejects.toThrow(MidnightOfferMakerMismatchError);
     });
 
-    test("error: MidnightOfferMarketAddressMismatchError", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, midnight: zeroAddress },
-          buy: true,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
+    test("error: MidnightOfferMarketChainMismatchError", async () => {
+      const offer = makerOffer({
+        buy: true,
+        market: { ...midnightMarket, maturity: apiValidMaturity, chainId: 1n },
+      });
 
       await expect(
         midnight().getOffersData({
           accountAddress: midnightAddresses.maker,
-          offers: offer,
+          offers: rateTree(offer),
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferMarketChainMismatchError);
+    });
+
+    test("error: MidnightOfferMarketAddressMismatchError", async () => {
+      const offer = makerOffer({
+        buy: true,
+        market: {
+          ...midnightMarket,
+          maturity: apiValidMaturity,
+          midnight: zeroAddress,
+        },
+      });
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers: rateTree(offer),
           validation: offerValidation,
         }),
       ).rejects.toThrow(MidnightOfferMarketAddressMismatchError);
     });
 
-    test("error: UnknownMidnightRatifierError", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightMarket, maturity: apiValidMaturity },
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: zeroAddress,
-        }),
-      );
+    test("error: MidnightOfferRatifierMismatchError", async () => {
+      const offer = makerOffer({ buy: true, ratifier: priceRatifierV1 });
 
       await expect(
         midnight().getOffersData({
           accountAddress: midnightAddresses.maker,
-          offers: offer,
+          offers: rateTree(offer),
           validation: offerValidation,
         }),
-      ).rejects.toThrow(UnknownMidnightRatifierError);
+      ).rejects.toThrow(MidnightOfferRatifierMismatchError);
     });
   });
 
-  describe("makeLend", () => {
+  describe("cancelAndMakeLend", () => {
+    const prepare = (
+      handle: MidnightMockHandle,
+      overrides: Partial<CancelAndMakeLendParams> = {},
+    ) =>
+      midnightWithHandle(handle).cancelAndMakeLend({
+        accountAddress: midnightAddresses.maker,
+        offers: rateTree(makerOffer({ buy: true })),
+        deadline: maxUint256,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+        ...overrides,
+      });
+
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.loanToken,
-        result: maxUint256,
-      });
-      mockMidnightAuthorization(handle, true);
-      const data = offersData(true, offerSignerAccount.address);
-      const output = await midnightWithHandle(handle).makeLend({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
+      mockAllowance({ handle, token: midnightAddresses.loanToken, result: 0n });
+      mockMidnightAuthorization(handle, false);
+      const offer = makerOffer({ buy: true });
+      const output = await prepare(handle, {
+        offers: rateTree(offer),
+        cancellations: [{ group: previousGroup, maxConsumed: 5n }],
+        reservedLoanAssets: 500n,
       });
       const requirements = await output.getRequirements();
-      const signature = await signOfferRootRequirement(requirements);
-      const tx = output.buildTx(signature);
-
-      expect(output.groups).toEqual(data.groups);
-      expect(output.root).toBe(data.tree.root);
-      expect(output.ratifierType).toBe("ecrecover");
-      expect(tx.action.args).toMatchObject({
-        groups: data.groups,
-        root: data.tree.root,
-        maker: offerSignerAccount.address,
-        ratifier: midnightAddresses.ecrecoverRatifier,
-        ratifierType: "ecrecover",
-        offers: data.tree.offers.length,
-      });
-    });
-
-    test.each([
-      {
-        method: "makeLend",
-        prepare: (entity: MorphoMidnight) => {
-          const data = offersData(true, offerSignerAccount.address);
-          return entity.makeLend({
-            accountAddress: data.accountAddress,
-            offers: data.tree,
-            validation: offerValidation,
-            loanToken: midnightAddresses.loanToken,
-            loanAssets: 1_000n,
-          });
-        },
-      },
-      {
-        method: "makeBorrow",
-        prepare: (entity: MorphoMidnight) => {
-          const data = offersData(false, offerSignerAccount.address);
-          return entity.makeBorrow({
-            accountAddress: data.accountAddress,
-            offers: data.tree,
-            validation: offerValidation,
-          });
-        },
-      },
-      {
-        method: "supplyCollateralMakeBorrow",
-        prepare: (entity: MorphoMidnight) => {
-          const data = offersData(false, offerSignerAccount.address);
-          return entity.supplyCollateralMakeBorrow({
-            accountAddress: data.accountAddress,
-            offers: data.tree,
-            validation: offerValidation,
-            market: { ...midnightMarket, maturity: apiValidMaturity },
-            collateralAssets: 1_000n,
-          });
-        },
-      },
-    ])(
-      "behavior: $method signature prepared on one handle finalizes on a fresh handle",
-      async ({ prepare }) => {
-        const mockHandle = (): MidnightMockHandle => {
-          const handle = createMockClient(midnightTestChain);
-          for (const token of [
-            midnightAddresses.loanToken,
-            midnightAddresses.collateralToken,
-          ]) {
-            mockAllowance({ handle, token, result: maxUint256 });
-          }
-          mockMidnightAuthorization(handle, true);
-          return handle;
-        };
-        const outputA = await prepare(midnightWithHandle(mockHandle()));
-        const signature = await signOfferRootRequirement(
-          await outputA.getRequirements(),
-        );
-
-        const outputB = await prepare(midnightWithHandle(mockHandle()));
-        expect(outputB.buildTx(signature)).toEqual(outputA.buildTx(signature));
-        expect(outputB.buildTx(signature).data).toBe(signature.args.payload);
-      },
-    );
-
-    test("behavior: signs reviewable offer tree typed data", async () => {
-      const account = privateKeyToAccount(
-        "0x0000000000000000000000000000000000000000000000000000000000000001",
-      );
-      let capturedOfferTreeTypedData:
-        | {
-            readonly primaryType?: string;
-            readonly types?: {
-              readonly OfferTree?: readonly {
-                readonly name: string;
-                readonly type: string;
-              }[];
-            };
-            readonly message?: {
-              readonly root?: Hex;
-              readonly offerTree?: {
-                readonly maker?: Address;
-                readonly ratifier?: Address;
-                readonly market?: { readonly loanToken?: Address };
-              };
-            };
-          }
-        | undefined;
-      const walletClient = createWalletClient({
-        account: account.address,
-        chain: midnightTestChain,
-        transport: custom({
-          request: async ({ method, params }) => {
-            if (
-              method !== "eth_signTypedData_v4" ||
-              !Array.isArray(params) ||
-              typeof params[1] !== "string"
-            ) {
-              throw new Error("Unexpected RPC request");
-            }
-            const typedData = JSON.parse(params[1]) as NonNullable<
-              typeof capturedOfferTreeTypedData
-            > &
-              Parameters<typeof account.signTypedData>[0];
-            capturedOfferTreeTypedData = typedData;
-
-            return account.signTypedData(typedData);
-          },
-        }),
-      });
-      const handle = createMockClient(midnightTestChain);
-      mockRead(handle, {
-        address: midnightAddresses.loanToken,
-        abi: erc20Abi,
-        functionName: "allowance",
-        result: maxUint256,
-      });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "isAuthorized",
-        result: true,
+      const tx = output.buildTx();
+      const decoded = decodeFunctionData({
+        abi: midnightBundlesV2Abi,
+        data: tx.data,
       });
 
-      const data = offersData(true, account.address);
-      const output = await new MorphoMidnight(
+      expect(output.groups).toEqual([offer.group]);
+      expect(output.ratifierType).toBe("rateV1");
+      expect(requirements.map(({ action }) => action)).toEqual([
         {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      ).makeLend({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-      });
-      const requirements = await output.getRequirements();
-      const requirement = requirements.find(
-        ({ action }) => action.type === "midnightOfferRootSignature",
-      );
-      if (requirement == null || !("sign" in requirement)) {
-        throw new Error("Expected midnightOfferRootSignature requirement");
-      }
-
-      const wrongChainWallet = createWalletClient({
-        account,
-        chain: { ...midnightTestChain, id: midnightChainId + 1 },
-        transport: custom({
-          request: async ({ method }) => {
-            throw new Error(`Unexpected RPC request "${method}".`);
+          type: "erc20Approval",
+          args: {
+            spender: midnightAddresses.midnight,
+            amount: 1_500n,
           },
-        }),
-      });
-      await expect(
-        requirement.sign(wrongChainWallet, account.address),
-      ).rejects.toBeInstanceOf(ChainIdMismatchError);
-
-      const signature = await requirement.sign(walletClient, account.address);
-      if (signature.action.type !== "midnightOfferRootSignature") {
-        throw new Error("Expected midnightOfferRootSignature result");
-      }
-      const message = capturedOfferTreeTypedData?.message;
-
-      expect(signature.action.args.root).toBe(data.tree.root);
-      expect(capturedOfferTreeTypedData?.primaryType).toBe("OfferTree");
-      expect(capturedOfferTreeTypedData?.types?.OfferTree?.[0]).toEqual({
-        name: "offerTree",
-        type: "Offer",
-      });
-      expect(message?.root).toBeUndefined();
-      expect(message?.offerTree).toMatchObject({
-        maker: account.address,
-        ratifier: data.ratifier,
-        market: {
-          loanToken: midnightAddresses.loanToken,
         },
-      });
+        {
+          type: "midnightAuthorization",
+          args: {
+            authorized: midnightBundlesV2,
+            isAuthorized: true,
+            onBehalf: midnightAddresses.maker,
+          },
+        },
+      ]);
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(decoded.args[5]).toBe(rateRatifierV1);
+      expect(decoded.args[6]).toBe(output.root);
+      expect(decoded.args[13]).toEqual([
+        { group: previousGroup, maxConsumed: 5n },
+      ]);
+      expect(decoded.args[14]).toBe(
+        await Payload.encode(
+          RateRatifierV1.ratify({ tree: rateTree(offer) as Tree<"rateV1"> }),
+        ),
+      );
     });
 
-    test("behavior: action.typedData carries the offer-tree payload sign() consumes", async () => {
+    test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
       const handle = createMockClient(midnightTestChain);
       mockAllowance({
         handle,
@@ -1534,413 +1087,154 @@ describe("MorphoMidnight", () => {
         result: maxUint256,
       });
       mockMidnightAuthorization(handle, true);
-      const data = offersData(true, offerSignerAccount.address);
-      const output = await midnightWithHandle(handle).makeLend({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-      });
-      const requirements = await output.getRequirements();
-      const requirement = requirements.find(
-        ({ action }) => action.type === "midnightOfferRootSignature",
-      );
-      if (requirement == null || !("sign" in requirement)) {
-        throw new Error("Expected midnightOfferRootSignature requirement");
-      }
+      const output = await prepare(handle);
 
-      const typedData = requirement.action.typedData;
-      expect(typedData.primaryType).toBe("OfferTree");
-      expect(typedData.message).toMatchObject({
-        offerTree: {
-          maker: offerSignerAccount.address,
-          ratifier: data.ratifier,
-          market: { loanToken: midnightAddresses.loanToken },
-        },
-      });
-
-      // Signing the payload externally recovers the same signer sign() verifies against.
-      const externalSignature =
-        await offerSignerAccount.signTypedData(typedData);
-      expect(
-        await verifyTypedData({
-          ...typedData,
-          address: offerSignerAccount.address,
-          signature: externalSignature,
-        }),
-      ).toBe(true);
+      await expect(output.getRequirements()).resolves.toEqual([]);
+      expect(output.buildTx().action.args.cancellations).toEqual([]);
     });
 
-    test("behavior: approval covers new group and existing loan reserves", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.loanToken,
-        result: 0n,
-      });
-      mockMidnightAuthorization(handle, true);
+    test("behavior: a fresh handle builds the same transaction", async () => {
+      const outputA = await prepare(createMockClient(midnightTestChain));
+      const outputB = await prepare(createMockClient(midnightTestChain));
 
-      const data = offersData(true);
-      const output = await new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      ).makeLend({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-        reservedLoanAssets: 250n,
-      });
-      const requirements = await output.getRequirements();
-
-      expect(
-        requirements.find(
-          (requirement) => requirement.action.type === "erc20Approval",
-        )?.action,
-      ).toMatchObject({
-        args: {
-          spender: midnightAddresses.midnight,
-          amount: 1_250n,
-        },
-      });
-    });
-
-    test("behavior: accepts offers carrying hydrated market data", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: new Market({
-            params: { ...midnightMarket, maturity: apiValidMaturity },
-            totalUnits: 1_000n,
-            lossFactor: 0n,
-            withdrawable: 1_000n,
-            continuousFeeCredit: 0n,
-            settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
-            continuousFee: 0,
-            tickSpacing: 1,
-          }),
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-      const output = await midnight().makeLend({
-        accountAddress: midnightAddresses.maker,
-        offers: offer,
-        validation: offerValidation,
-        loanToken: midnightAddresses.loanToken,
-        loanAssets: 1_000n,
-      });
-
-      expect(output.root).toMatch(/^0x/u);
+      expect(outputB.buildTx()).toEqual(outputA.buildTx());
     });
 
     test("error: amount validation", async () => {
-      const data = offersData(true);
-
+      const handle = createMockClient(midnightTestChain);
+      await expect(prepare(handle, { loanAssets: 0n })).rejects.toThrow(
+        NonPositiveInputError,
+      );
       await expect(
-        midnight().makeLend({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
-          loanToken: midnightAddresses.loanToken,
-          loanAssets: 0n,
-        }),
-      ).rejects.toThrow(NonPositiveInputError);
-      await expect(
-        midnight().makeLend({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
-          loanToken: midnightAddresses.loanToken,
-          loanAssets: 1_000n,
-          reservedLoanAssets: -1n,
-        }),
+        prepare(handle, { reservedLoanAssets: -1n }),
       ).rejects.toThrow(NegativeInputError);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
       await expect(
-        midnight().makeLend({
-          accountAddress: midnightAddresses.maker,
-          offers: offersData(false).tree,
-          validation: offerValidation,
-          loanToken: midnightAddresses.loanToken,
-          loanAssets: 1_000n,
+        prepare(createMockClient(midnightTestChain), {
+          offers: rateTree(makerOffer({ buy: false })),
         }),
       ).rejects.toThrow(MidnightOfferSideMismatchError);
     });
 
     test("error: MidnightOfferMarketLoanTokenMismatchError", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: {
-            ...midnightMarket,
-            loanToken: midnightAddresses.dai,
-            maturity: apiValidMaturity,
-          },
-          buy: true,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-
       await expect(
-        midnight().makeLend({
-          accountAddress: midnightAddresses.maker,
-          offers: offer,
-          validation: offerValidation,
-          loanToken: midnightAddresses.loanToken,
-          loanAssets: 1_000n,
+        prepare(createMockClient(midnightTestChain), {
+          loanToken: midnightAddresses.dai,
         }),
       ).rejects.toThrow(MidnightOfferMarketLoanTokenMismatchError);
     });
-  });
 
-  describe("supplyCollateralMakeBorrow", () => {
-    test("behavior: approval covers new group and existing collateral reserves", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.collateralToken,
-        result: 0n,
-      });
-      mockMidnightAuthorization(handle, true);
-
-      const data = offersData(false, offerSignerAccount.address);
-      const output = await new MorphoMidnight(
-        {
-          viemClient: handle.client,
-          options: {},
-        } as unknown as MorphoClientType,
-        midnightChainId,
-      ).supplyCollateralMakeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        market: { ...midnightMarket, maturity: apiValidMaturity },
-        collateralAssets: 1_000n,
-        reservedCollateralAssets: 250n,
-      });
-      const requirements = await output.getRequirements();
-
-      expect(
-        requirements.find(
-          (requirement) => requirement.action.type === "erc20Approval",
-        )?.action,
-      ).toMatchObject({
-        args: {
-          spender: midnightAddresses.midnight,
-          amount: 1_250n,
-        },
-      });
-      expect(
-        requirements.find(
-          (requirement) =>
-            requirement.action.type === "midnightSupplyCollateral",
-        )?.action,
-      ).toMatchObject({
-        args: {
-          assets: 1_000n,
-        },
-      });
-      const signature = await signOfferRootRequirement(requirements);
-      const tx = output.buildTx(signature);
-
-      expect(tx.action.args.maker).toBe(data.accountAddress);
-    });
-
-    test("behavior: accepts plain market input and defaults reserved collateral to zero", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockAllowance({
-        handle,
-        token: midnightAddresses.collateralToken,
-        result: 0n,
-      });
-      mockMidnightAuthorization(handle, true);
-      const data = offersData(false);
-      const output = await midnightWithHandle(
-        handle,
-      ).supplyCollateralMakeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-        market: MarketUtils.toStruct({
-          ...midnightMarket,
-          maturity: apiValidMaturity,
-        }),
-        collateralAssets: 1_000n,
-      });
-      const requirements = await output.getRequirements();
-      const approval = requirements.find(
-        (requirement) => requirement.action.type === "erc20Approval",
-      );
-      if (approval?.action.type !== "erc20Approval") {
-        throw new Error("expected an ERC20 approval requirement");
-      }
-
-      expect(approval.action.args.amount).toBe(1_000n);
-    });
-
-    test("error: amount validation", async () => {
-      const data = offersData(false);
+    test("error: MidnightReplacementGroupCancelledError", async () => {
+      const offer = makerOffer({ buy: true });
 
       await expect(
-        midnight().supplyCollateralMakeBorrow({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
-          market: midnightMarket,
-          collateralAssets: 0n,
+        prepare(createMockClient(midnightTestChain), {
+          offers: rateTree(offer),
+          cancellations: [{ group: offer.group, maxConsumed: 0n }],
         }),
-      ).rejects.toThrow(NonPositiveInputError);
-      await expect(
-        midnight().supplyCollateralMakeBorrow({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
-          market: midnightMarket,
-          collateralAssets: 1_000n,
-          reservedCollateralAssets: -1n,
-        }),
-      ).rejects.toThrow(NegativeInputError);
-    });
-
-    test("error: ChainIdMismatchError", async () => {
-      const data = offersData(false);
-
-      await expect(
-        midnight().supplyCollateralMakeBorrow({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
-          market: {
-            ...midnightMarket,
-            chainId: BigInt(midnightChainId + 1),
-          },
-          collateralAssets: 1_000n,
-        }),
-      ).rejects.toThrow(ChainIdMismatchError);
-    });
-
-    test("error: MarketIdMismatchError", async () => {
-      const offer = Offer.create(
-        midnightBaseOffer({
-          market: { ...midnightOtherMarket, maturity: apiValidMaturity },
-          buy: false,
-          expiry: apiValidMaturity - 60n,
-          maxAssets: 1_000n,
-          maxUnits: 0n,
-          ratifier: midnightAddresses.ecrecoverRatifier,
-        }),
-      );
-
-      await expect(
-        midnight().supplyCollateralMakeBorrow({
-          accountAddress: midnightAddresses.maker,
-          offers: offer,
-          validation: offerValidation,
-          market: midnightMarket,
-          collateralAssets: 1_000n,
-        }),
-      ).rejects.toThrow(MarketIdMismatchError);
+      ).rejects.toThrow(MidnightReplacementGroupCancelledError);
     });
   });
 
-  describe("makeBorrow", () => {
+  describe("cancelAndMakeBorrow", () => {
+    const market = new MarketParams({
+      ...midnightMarket,
+      maturity: apiValidMaturity,
+    });
+    const prepare = (
+      handle: MidnightMockHandle,
+      overrides: Partial<CancelAndMakeBorrowParams> = {},
+    ) =>
+      midnightWithHandle(handle).cancelAndMakeBorrow({
+        accountAddress: midnightAddresses.maker,
+        offers: rateTree(makerOffer({ buy: false })),
+        deadline: maxUint256,
+        validation: offerValidation,
+        ...overrides,
+      });
+
     test("default", async () => {
       const handle = createMockClient(midnightTestChain);
       mockMidnightAuthorization(handle, true);
-      const data = offersData(false, offerSignerAccount.address);
-      const output = await midnightWithHandle(handle).makeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
+      const output = await prepare(handle, {
+        cancellations: [{ group: previousGroup, maxConsumed: 0n }],
       });
-      const requirements = await output.getRequirements();
-      const signature = await signOfferRootRequirement(requirements);
-      const tx = output.buildTx(signature);
-
-      expect(output.groups).toEqual(data.groups);
-      expect(tx.action.args.maker).toBe(offerSignerAccount.address);
-      expect(tx.action.args.offers).toBe(data.tree.offers.length);
-    });
-
-    test("behavior: ecrecover requirements include ratifier authorization", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, false);
-      const data = offersData(false);
-      const output = await midnightWithHandle(handle).makeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-      });
-      const requirements = await output.getRequirements();
-
-      expect(
-        requirements.map((requirement) => requirement.action.type),
-      ).toEqual(["midnightAuthorization", "midnightOfferRootSignature"]);
-    });
-
-    test("behavior: setter ratifier requirements include root ratification", async () => {
-      const handle = createMockClient(midnightTestChain);
-      mockMidnightAuthorization(handle, true);
-      mockSetterRootRatification(handle, false);
-      const data = setterOffersData(false);
-      const output = await midnightWithHandle(handle).makeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
-      });
-      const requirements = await output.getRequirements();
       const tx = output.buildTx();
 
-      expect(
-        requirements.map((requirement) => requirement.action.type),
-      ).toEqual(["setterRatifierRatifyRoot"]);
-      expect(tx.action.args.ratifierType).toBe("setter");
+      await expect(output.getRequirements()).resolves.toEqual([]);
+      expect(tx.to).toBe(midnightBundlesV2);
+      expect(tx.action.args).toMatchObject({
+        ratifier: rateRatifierV1,
+        root: output.root,
+        groups: output.groups,
+        collateralSupplies: [],
+        cancellations: [{ group: previousGroup, maxConsumed: 0n }],
+      });
     });
 
-    test("behavior: setter ratifier returns no requirements when root is ratified", async () => {
+    test("behavior: collateral supplies require approval to MidnightBundlesV2", async () => {
       const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
       mockMidnightAuthorization(handle, true);
-      mockSetterRootRatification(handle, true);
-      const data = setterOffersData(false);
-      const output = await midnightWithHandle(handle).makeBorrow({
-        accountAddress: data.accountAddress,
-        offers: data.tree,
-        validation: offerValidation,
+      const output = await prepare(handle, {
+        collateral: {
+          market,
+          supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+        },
+      });
+      const requirements = await output.getRequirements();
+      const decoded = decodeFunctionData({
+        abi: midnightBundlesV2Abi,
+        data: output.buildTx().data,
       });
 
-      await expect(output.getRequirements()).resolves.toEqual([]);
+      expect(requirements.map(({ action }) => action)).toEqual([
+        {
+          type: "erc20Approval",
+          args: {
+            spender: midnightBundlesV2,
+            amount: 2_000n,
+          },
+        },
+      ]);
+      expect(decoded.args[3]).toEqual(MarketUtils.toStruct(market));
+      expect(decoded.args[4]).toEqual([
+        { collateralIndex: 0n, assets: 2_000n },
+      ]);
+    });
+
+    test("error: MarketIdMismatchError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: {
+            market: midnightOtherMarket,
+            supplies: [{ collateralIndex: 0n, assets: 2_000n }],
+          },
+        }),
+      ).rejects.toThrow(MarketIdMismatchError);
+    });
+
+    test("error: UnknownCollateralIndexError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: {
+            market,
+            supplies: [{ collateralIndex: 1n, assets: 2_000n }],
+          },
+        }),
+      ).rejects.toThrow(UnknownCollateralIndexError);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
       await expect(
-        midnight().makeBorrow({
-          accountAddress: midnightAddresses.maker,
-          offers: offersData(true).tree,
-          validation: offerValidation,
-        }),
-      ).rejects.toThrow(MidnightOfferSideMismatchError);
-    });
-
-    test("error: MidnightOfferSideMismatchError mixed-side groups", async () => {
-      const data = multiGroupOffersData();
-
-      await expect(
-        midnight().makeBorrow({
-          accountAddress: data.accountAddress,
-          offers: data.tree,
-          validation: offerValidation,
+        prepare(createMockClient(midnightTestChain), {
+          offers: rateTree(makerOffer({ buy: true })),
         }),
       ).rejects.toThrow(MidnightOfferSideMismatchError);
     });
@@ -2046,33 +1340,23 @@ describe("MorphoMidnight", () => {
 
   describe("cancelOffer", () => {
     test("default", async () => {
-      const data = offersData();
       const output = midnight().cancelOffer({
-        group: data.groups[0]!,
+        group: previousGroup,
         accountAddress: midnightAddresses.maker,
       });
       const requirements = await output.getRequirements();
       const tx = output.buildTx();
 
       expect(requirements).toEqual([]);
-      expect(tx.action.args.group).toBe(data.groups[0]);
+      expect(tx.action.args.group).toBe(previousGroup);
     });
   });
 
   describe("cancelOffers", () => {
-    const midnightBundlesV2 = getAddress(
-      "0x00000000000000000000000000000000000b2002",
-    );
-    registerCustomAddresses({
-      addresses: { [midnightChainId]: { midnightBundlesV2 } },
-    });
-
     test("behavior: authorizes and targets MidnightBundlesV2", async () => {
       const handle = createMockClient(midnightTestChain);
       mockMidnightAuthorization(handle, false);
-      const cancellations = [
-        { group: offersData().groups[0]!, maxConsumed: 0n },
-      ];
+      const cancellations = [{ group: previousGroup, maxConsumed: 0n }];
       const output = new MorphoMidnight(
         {
           viemClient: handle.client,
@@ -2112,7 +1396,7 @@ describe("MorphoMidnight", () => {
         midnightChainId,
       ).cancelOffers({
         accountAddress: midnightAddresses.maker,
-        cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+        cancellations: [{ group: previousGroup, maxConsumed: 0n }],
         deadline: maxUint256,
       });
 
@@ -2133,197 +1417,10 @@ describe("MorphoMidnight", () => {
       expect(() =>
         new MorphoMidnight(client, midnightChainId + 1).cancelOffers({
           accountAddress: midnightAddresses.maker,
-          cancellations: [{ group: offersData().groups[0]!, maxConsumed: 0n }],
+          cancellations: [{ group: previousGroup, maxConsumed: 0n }],
           deadline: maxUint256,
         }),
       ).toThrow(ChainIdMismatchError);
-    });
-  });
-
-  describe("buildSubmitOffersTx", () => {
-    test("default", () => {
-      const data = offersData();
-      const tx = buildSubmitOffersTx({
-        offersData: data,
-        signatures: offerRootSignature(data),
-      });
-
-      expect(tx.action.args).toEqual({
-        groups: data.groups,
-        root: data.tree.root,
-        maker: midnightAddresses.maker,
-        ratifier: midnightAddresses.ecrecoverRatifier,
-        ratifierType: "ecrecover",
-        offers: data.tree.offers.length,
-      });
-    });
-
-    test("behavior: appends metadata", () => {
-      const data = offersData();
-      const tx = buildSubmitOffersTx({
-        offersData: data,
-        signatures: offerRootSignature(data),
-        metadata: { origin: "a1b2c3d4" },
-      });
-
-      expect(tx.action.type).toBe("mempoolSubmitOffers");
-      expect(tx.data.includes("a1b2c3d4")).toBe(true);
-    });
-
-    test("behavior: submits the payload carried on the offer-root signature", () => {
-      const data = offersData();
-      const signature = offerRootSignature(data);
-      // buildTx is stateless: it reads the encoded payload straight off the
-      // signature it is handed, so a prepared requirement can be signed on one
-      // instance and submitted from another.
-      const tx = buildSubmitOffersTx({
-        offersData: data,
-        signatures: {
-          ...signature,
-          args: { ...signature.args, payload: "0xdeadbeef" },
-        },
-      });
-
-      expect(tx.data).toBe("0xdeadbeef");
-    });
-
-    test("behavior: setter ratifier uses prepared payload without signatures", () => {
-      const data = setterOffersData();
-      const tx = buildSubmitOffersTx({
-        offersData: data,
-      });
-
-      expect(tx.data).toBe(data.setterPayload);
-      expect(tx.action.args.ratifierType).toBe("setter");
-    });
-
-    test("error: MissingMidnightOfferRootSignatureError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-        }),
-      ).toThrow(MissingMidnightOfferRootSignatureError);
-    });
-
-    test("error: MidnightOfferRootMismatchError", () => {
-      const data = offersData();
-      const signature = offerRootSignature(data);
-      const otherRoot =
-        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0" as Hex;
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: {
-            ...signature,
-            args: {
-              ...signature.args,
-              root: otherRoot,
-            },
-          },
-        }),
-      ).toThrow(MidnightOfferRootMismatchError);
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: {
-            ...signature,
-            action: {
-              ...signature.action,
-              args: {
-                ...signature.action.args,
-                root: otherRoot,
-              },
-            },
-          },
-        }),
-      ).toThrow(MidnightOfferRootMismatchError);
-    });
-
-    test("error: MidnightOfferRootOwnerMismatchError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: offerRootSignature(data, {
-            owner: midnightAddresses.taker,
-          }),
-        }),
-      ).toThrow(MidnightOfferRootOwnerMismatchError);
-    });
-
-    test("error: MidnightOfferRootRatifierMismatchError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: offerRootSignature(data, {
-            ratifier: midnightAddresses.setterRatifier,
-          }),
-        }),
-      ).toThrow(MidnightOfferRootRatifierMismatchError);
-    });
-
-    test("error: MidnightOfferRootOfferCountMismatchError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: offerRootSignature(data, {
-            offers: data.tree.offers.length + 1,
-          }),
-        }),
-      ).toThrow(MidnightOfferRootOfferCountMismatchError);
-    });
-
-    test("error: UnpreparedMidnightOfferRootSignatureError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: offerRootSignature(data, { payload: undefined }),
-        }),
-      ).toThrow(UnpreparedMidnightOfferRootSignatureError);
-    });
-
-    test("error: AmbiguousRequirementSignaturesError", () => {
-      const data = offersData();
-      const signature = offerRootSignature(data);
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: [signature, signature],
-        }),
-      ).toThrow(AmbiguousRequirementSignaturesError);
-    });
-
-    test("error: UnexpectedRequirementSignatureError", () => {
-      const data = offersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: unexpectedSignature,
-        }),
-      ).toThrow(UnexpectedRequirementSignatureError);
-    });
-
-    test("error: UnexpectedRequirementSignatureError for setter ratifier", () => {
-      const data = setterOffersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: data,
-          signatures: [offerRootSignature(data)],
-        }),
-      ).toThrow(UnexpectedRequirementSignatureError);
     });
   });
 });

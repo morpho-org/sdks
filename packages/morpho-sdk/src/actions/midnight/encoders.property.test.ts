@@ -3,7 +3,6 @@ import {
   MarketParams,
   midnightAbi,
   midnightBundlesAbi,
-  setterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
 import fc from "fast-check";
 import { decodeFunctionData } from "viem";
@@ -19,7 +18,6 @@ import { midnightSetIsAuthorized } from "./authorization.js";
 import { midnightCancelOffer } from "./cancelOffer.js";
 import { midnightRedeem } from "./redeem.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
-import { setterRatifierRatifyRoot } from "./setterRatifierRatifyRoot.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
@@ -180,17 +178,6 @@ describe("Midnight calldata encoders", () => {
         expect(repayment.args[1]).toBe(assets);
         expect(repayment.args[4][0]?.assets).toBe(units);
         expect(repayment.args[8]).toBe(optionalAmount);
-
-        const rootRatification = decodeFunctionData({
-          abi: setterRatifierAbi,
-          data: setterRatifierRatifyRoot({
-            chainId: midnightChainId,
-            maker: midnightAddresses.maker,
-            root: group,
-            isRootRatified: flag,
-          }).data,
-        });
-        expect(rootRatification.args[2]).toBe(flag);
 
         const collateralSupply = decodeFunctionData({
           abi: midnightAbi,

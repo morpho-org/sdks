@@ -122,17 +122,18 @@ export type {
 } from "./blue/index.js";
 export { MorphoBlue } from "./blue/index.js";
 export type {
+  CancelAndMakeBorrowParams as MidnightCancelAndMakeBorrowParams,
+  CancelAndMakeLendParams as MidnightCancelAndMakeLendParams,
+  CancelAndMakeOutput as MidnightCancelAndMakeOutput,
+  CancelAndMakeParams as MidnightCancelAndMakeOffersParams,
   GetOffersDataParams as MidnightGetOffersDataParams,
   GetPositionDataParams as MidnightGetPositionDataParams,
-  MakeLendParams as MidnightMakeLendParams,
-  MakeOffersOutput as MidnightMakeOffersOutput,
-  MakeOffersParams as MidnightMakeOffersParams,
   MarketActionParams as MidnightMarketActionParams,
+  MidnightMakerTreeInput,
   OffersData as MidnightOffersData,
   OfferValidationParams as MidnightOfferValidationParams,
   RedeemParams as MidnightRedeemParams,
   RepayWithdrawCollateralParams as MidnightRepayWithdrawCollateralParams,
-  SupplyCollateralMakeBorrowParams as MidnightSupplyCollateralMakeBorrowParams,
   SupplyCollateralParams as MidnightSupplyCollateralParams,
   SupplyCollateralTakeBorrowParams as MidnightSupplyCollateralTakeBorrowParams,
   TakeBorrowParams as MidnightTakeBorrowParams,
@@ -140,7 +141,6 @@ export type {
 } from "./midnight/index.js";
 export {
   type MidnightActionOutput,
-  type MidnightActionSignatures,
   type MidnightActions,
   MorphoMidnight,
 } from "./midnight/index.js";
