@@ -1033,9 +1033,9 @@ const REQUIRED_ADDRESSES = {
 /**
  * Parse and normalize raw `simulate` input into a {@link ParsedRequest}.
  *
- * The public types own the key shape; runtime validation checks values —
- * address and hex formats, uint256 ranges, typed-data field lists — and rejects
- * legacy `{type: "approval"}` / `{type: "signature"}` authorizations and Permit2
+ * The public types own the key shape; runtime validation rejects unknown keys
+ * (`<path>.<key>: unknown field`), checks values — address and hex formats,
+ * uint256 ranges, typed-data field lists — and rejects legacy `{type: "approval"}` / `{type: "signature"}` authorizations and Permit2
  * `PermitSingle` payloads rather than silently reinterpreting them. Cross-field
  * rules then pin a single owner: every transaction `from` and every
  * authorization owner must be the same checksummed address, typed-data domains
@@ -1044,7 +1044,8 @@ const REQUIRED_ADDRESSES = {
  * @param input - Caller input (`SimulateParams`-shaped).
  * @returns A deep-frozen, checksummed request: `mode` explicit (`"final"`
  *   default), `authorizations` always an array, `value` defaulted to `0n`.
- * @throws {SimulationValidationError} On any value or cross-field violation.
+ * @throws {SimulationValidationError} On any unknown key, value or cross-field
+ *   violation.
  * @internal
  */
 export function parseRequest(input: SimulateParams): ParsedRequest {
