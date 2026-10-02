@@ -59,11 +59,11 @@ import { parseRequest } from "./request/index.js";
  * @param params.mode - `"final"` (default) or `"preview"`.
  * @param params.authorizations - Preview-only typed authorization descriptors.
  * @param params.limits - Optional consumer constraints (tightening only).
- * @param params.blockNumber - Optional pinned block number or `BlockTag`.
- *   Defaults to `latest`, resolved exactly once.
+ * @param params.blockNumber - Optional pinned block number or `BlockTag` other
+ *   than `"pending"`. Defaults to `latest`, resolved exactly once.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad
  *   addresses, empty transactions, malformed authorizations, final-mode
- *   authorizations, weakening limits).
+ *   authorizations, weakening limits, a `"pending"` block tag, unknown fields).
  * @throws {UnsupportedVerificationFeatureError} when preview authorizations or
  *   limits are supplied before their verification release.
  * @throws {UnsupportedChainError} when the chain has no `eth_simulateV1`
