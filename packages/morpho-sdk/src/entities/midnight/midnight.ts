@@ -766,6 +766,7 @@ export class MorphoMidnight {
    * @throws {MidnightOfferRatifierMismatchError} when an offer does not use its tree's ratifier.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @throws {MarketIdMismatchError} when an offer targets another market than `collateral.market`.
+   * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
    * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.
    * @throws {DuplicateMidnightGroupCancellationError} when a cancelled group appears more than once.
    * @example

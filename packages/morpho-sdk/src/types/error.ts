@@ -1568,6 +1568,15 @@ export class EmptyMidnightGroupCancellationsError extends Error {
   }
 }
 
+/** Thrown when a Midnight flow passes a collateral market with no collateral supplies. */
+export class EmptyMidnightCollateralSuppliesError extends Error {
+  constructor() {
+    super(
+      "Midnight collateral supplies cannot be empty. Pass at least one collateral supply or omit `collateral`.",
+    );
+  }
+}
+
 /** Thrown when a Midnight batch cancellation lists the same offer group twice. */
 export class DuplicateMidnightGroupCancellationError extends Error {
   constructor(params: { readonly index: number; readonly group: Hex }) {

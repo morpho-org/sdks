@@ -29,7 +29,7 @@ ADR-2026-10-02-midnight-bundles-v2-sdk-actions listed below; the rest of that re
 
 - `makeLend`, `makeBorrow` and `supplyCollateralMakeBorrow` are removed. `cancelAndMakeLend` and
   `cancelAndMakeBorrow` replace them; `cancelAndMakeBorrow` takes optional collateral supplies, so
-  it also covers `supplyCollateralMakeBorrow`.
+  it also covers `supplyCollateralMakeBorrow`; an explicit empty supply list is rejected.
 - The route-specific surface is removed with them: `MakeOffersOutput`, the `mempoolSubmitOffers` and
   `setterRatifierRatifyRoot` builders and requirement, the `MidnightOfferRootSignature*` and
   `MidnightActionSignatures` types, and the offer-root signature errors.

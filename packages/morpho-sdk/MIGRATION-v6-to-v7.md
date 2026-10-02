@@ -18,6 +18,10 @@ collateral, authorizes the ratifier, activates the new root, and publishes the p
 cancelled group was filled beyond its `maxConsumed` before the transaction lands, the whole call
 reverts and nothing is published.
 
+If `collateral` is provided to `cancelAndMakeBorrow`, its `supplies` list must contain at least one
+entry. An explicit empty list throws `EmptyMidnightCollateralSuppliesError`; omit `collateral` when
+no collateral is supplied.
+
 ```ts
 // v6
 const output = await midnight.makeLend({ accountAddress, offers, loanToken, loanAssets });

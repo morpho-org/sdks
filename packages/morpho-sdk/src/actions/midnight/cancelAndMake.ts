@@ -19,6 +19,7 @@ import { validateDeadline } from "../../helpers/validate.js";
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   DuplicateMidnightGroupCancellationError,
+  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   type Metadata,
@@ -161,6 +162,9 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
     }
   }
   if (params.collateral == null) return;
+  if (params.collateral.supplies.length === 0) {
+    throw new EmptyMidnightCollateralSuppliesError();
+  }
   validateMidnightMarket({
     market: params.collateral.market,
     chainId: params.chainId,
@@ -195,6 +199,7 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
  * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment or, when publishing,
  *   no PriceRatifierV1/RateRatifierV1 deployment.
  * @throws {EmptyMidnightGroupCancellationsError} when nothing is published and no groups are cancelled.
+ * @throws {EmptyMidnightCollateralSuppliesError} when a collateral market has no collateral supplies.
  * @throws {UnknownMidnightRatifierError} when `ratifier` is not the chain's PriceRatifierV1 or RateRatifierV1.
  * @throws {InvalidTreeError} when `root` is zero, or `payload` or `groups` is empty.
  * @throws {MidnightReplacementGroupCancelledError} when a published group is also cancelled.

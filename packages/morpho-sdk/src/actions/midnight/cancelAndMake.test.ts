@@ -28,6 +28,7 @@ import {
 import {
   ChainIdMismatchError,
   DuplicateMidnightGroupCancellationError,
+  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   MidnightMarketAddressMismatchError,
@@ -192,6 +193,15 @@ describe("midnightCancelAndMake", () => {
         },
       }),
     ).toThrow(UnknownCollateralIndexError);
+  });
+
+  test("error: EmptyMidnightCollateralSuppliesError", () => {
+    expect(() =>
+      midnightCancelAndMake({
+        ...params,
+        collateral: { market, supplies: [] },
+      }),
+    ).toThrow(EmptyMidnightCollateralSuppliesError);
   });
 
   test("error: UnknownMidnightRatifierError", () => {

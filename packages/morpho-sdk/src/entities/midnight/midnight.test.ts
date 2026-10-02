@@ -47,6 +47,7 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
   ChainIdMismatchError,
+  EmptyMidnightCollateralSuppliesError,
   EmptyMidnightGroupCancellationsError,
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
@@ -1349,6 +1350,14 @@ describe("MorphoMidnight", () => {
           },
         }),
       ).rejects.toThrow(UnknownCollateralIndexError);
+    });
+
+    test("error: EmptyMidnightCollateralSuppliesError", async () => {
+      await expect(
+        prepare(createMockClient(midnightTestChain), {
+          collateral: { market, supplies: [] },
+        }),
+      ).rejects.toThrow(EmptyMidnightCollateralSuppliesError);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
