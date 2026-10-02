@@ -67,6 +67,20 @@ address.
 - Replacement offers need fresh groups. A group cannot be both published and cancelled
   (`MidnightReplacementGroupCancelledError`).
 
+## Renamed and changed types
+
+| v6 | v7 |
+| --- | --- |
+| `MidnightMakeOffersParams` | `MidnightCancelAndMakeOffersParams` |
+| `MidnightMakeLendParams` | `MidnightCancelAndMakeLendParams` |
+| `MidnightSupplyCollateralMakeBorrowParams` | `MidnightCancelAndMakeBorrowParams` (optional `collateral`) |
+| `MidnightMakeOffersOutput` | `MidnightCancelAndMakeOutput` |
+
+- `MidnightOffersData.ratifierType` is `"priceV1" | "rateV1"` instead of `"ecrecover" | "setter"`.
+- `MidnightOffersData.setterPayload` is replaced by `payload`, set for every tree.
+- `UnknownMidnightRatifierError` takes `{ ratifier, priceRatifierV1, rateRatifierV1 }` instead of
+  `{ ratifier, ecrecoverRatifier, setterRatifier }`.
+
 ## Removed exports
 
 - Actions and requirements: `mempoolSubmitOffers`, `setterRatifierRatifyRoot`,

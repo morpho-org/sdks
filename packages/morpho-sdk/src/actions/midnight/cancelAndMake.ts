@@ -106,14 +106,13 @@ const emptyMidnightMarket = {
   liquidatorGate: zeroAddress,
 } as const;
 
-/** Validates a bundle deadline and group cancellation limits, returning plain copies. */
-const toBundlesV2Cancellations = (params: {
-  readonly cancellations: readonly MidnightGroupCancellation[];
-  readonly deadline: bigint;
-}): MidnightGroupCancellation[] => {
+const validateParams = (params: MidnightCancelAndMakeParams): void => {
   validateDeadline(params.deadline);
-  const groups = new Set<string>();
-  return params.cancellations.map(({ group, maxConsumed }, index) => {
+  const cancelledGroups = new Set<string>();
+  for (const [
+    index,
+    { group, maxConsumed },
+  ] of params.cancellations.entries()) {
     const field = `cancellations[${index}].maxConsumed`;
     if (maxConsumed < 0n) throw new NegativeInputError(field, maxConsumed);
     if (maxConsumed > maxUint128) {
@@ -124,15 +123,11 @@ const toBundlesV2Cancellations = (params: {
       });
     }
     const key = group.toLowerCase();
-    if (groups.has(key)) {
+    if (cancelledGroups.has(key)) {
       throw new DuplicateMidnightGroupCancellationError({ index, group });
     }
-    groups.add(key);
-    return { group, maxConsumed };
-  });
-};
-
-const validateParams = (params: MidnightCancelAndMakeParams): void => {
+    cancelledGroups.add(key);
+  }
   if (params.root == null) {
     if (params.cancellations.length === 0) {
       throw new EmptyMidnightGroupCancellationsError();
@@ -160,11 +155,8 @@ const validateParams = (params: MidnightCancelAndMakeParams): void => {
   if (params.groups.length === 0) {
     throw new InvalidTreeError("Offer groups cannot be empty.");
   }
-  const cancelled = new Set(
-    params.cancellations.map(({ group }) => group.toLowerCase()),
-  );
   for (const group of params.groups) {
-    if (cancelled.has(group.toLowerCase())) {
+    if (cancelledGroups.has(group.toLowerCase())) {
       throw new MidnightReplacementGroupCancelledError({ group });
     }
   }
@@ -238,7 +230,10 @@ export const midnightCancelAndMake = (
   params: MidnightCancelAndMakeParams,
 ): Readonly<Transaction<MidnightCancelAndMakeAction>> => {
   validateParams(params);
-  const cancellations = toBundlesV2Cancellations(params);
+  const cancellations = params.cancellations.map(({ group, maxConsumed }) => ({
+    group,
+    maxConsumed,
+  }));
   const supplies = (params.collateral?.supplies ?? []).map(
     ({ collateralIndex, assets }) => ({ collateralIndex, assets }),
   );
