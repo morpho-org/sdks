@@ -9,6 +9,7 @@ import {
   isAddressEqual,
   isHex,
   maxUint256,
+  zeroAddress,
 } from "viem";
 import type {
   Eip712Domain,
@@ -23,7 +24,11 @@ import type {
   SimulationLimits,
   VaultDeallocation,
 } from "../../limits.js";
-import type { SimulateParams, SimulationMode } from "../../params.js";
+import {
+  SIMULATION_MODES,
+  type SimulateParams,
+  type SimulationMode,
+} from "../../params.js";
 
 import { resolveEffectiveLimits } from "./effective-limits.js";
 
@@ -1095,6 +1100,12 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
       });
       const from = check.address(readField(tx, "from"), `${path}.from`);
       const to = check.address(readField(tx, "to"), `${path}.to`);
+      if (from !== undefined && isAddressEqual(from, zeroAddress)) {
+        fieldErrors.push(`${path}.from: must be a non-zero address`);
+      }
+      if (to !== undefined && isAddressEqual(to, zeroAddress)) {
+        fieldErrors.push(`${path}.to: must be a non-zero address`);
+      }
       const data = check.hex(readField(tx, "data"), `${path}.data`);
       const rawValue = readField(tx, "value");
       const value =
@@ -1110,11 +1121,12 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   const rawMode = input.mode;
   let mode: SimulationMode = "final";
   if (rawMode !== undefined) {
-    if (rawMode === "preview" || rawMode === "final") {
-      mode = rawMode;
+    const found = SIMULATION_MODES.find((m) => m === rawMode);
+    if (found !== undefined) {
+      mode = found;
     } else {
       fieldErrors.push(
-        `mode: must be "preview" or "final" (got ${String(rawMode)})`,
+        `mode: must be one of ${SIMULATION_MODES.map((m) => `"${m}"`).join(", ")} (got ${String(rawMode)})`,
       );
     }
   }
