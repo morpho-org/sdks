@@ -935,8 +935,7 @@ export class MaxRepayAssetsBelowRepayAssetsError extends Error {
 export type RequirementSignatureKind =
   | "permit"
   | "permit2SignatureTransfer"
-  | "authorization"
-  | "midnightOfferRootSignature";
+  | "authorization";
 
 /**
  * Thrown when `buildTx` receives more than one requirement signature of the same kind.
@@ -1677,69 +1676,37 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
+/** Thrown when a Midnight offer tree uses a ratifier other than the chain's PriceRatifierV1 or RateRatifierV1. */
 export class UnknownMidnightRatifierError extends Error {
   constructor(params: {
     ratifier: Address;
-    ecrecoverRatifier: Address;
-    setterRatifier: Address;
+    priceRatifierV1: Address;
+    rateRatifierV1: Address;
   }) {
     super(
-      `Midnight offer tree uses ratifier "${params.ratifier}", expected "${params.ecrecoverRatifier}" or "${params.setterRatifier}". Rebuild the tree with a supported ratifier.`,
+      `Midnight offer tree uses ratifier "${params.ratifier}", expected PriceRatifierV1 "${params.priceRatifierV1}" or RateRatifierV1 "${params.rateRatifierV1}". Rebuild the tree with a supported ratifier.`,
     );
   }
 }
 
-/** Thrown when a Midnight Ecrecover maker flow builds the submit transaction before signing. */
-export class MissingMidnightOfferRootSignatureError extends Error {
-  constructor() {
+/** Thrown when a Midnight offer's ratifier does not match its tree's ratifier route. */
+export class MidnightOfferRatifierMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedRatifier: Address;
+    actualRatifier: Address;
+  }) {
     super(
-      "Midnight offer root signature is missing. Sign the offer-root requirement before building the submit transaction.",
+      `Midnight offer "${params.index}" uses ratifier "${params.actualRatifier}", expected "${params.expectedRatifier}" for its tree type. Rebuild the offer with the tree's ratifier.`,
     );
   }
 }
 
-/** Thrown when a Midnight offer-root signature does not match the prepared tree root. */
-export class MidnightOfferRootMismatchError extends Error {
-  constructor(params: { expectedRoot: string; actualRoot: string }) {
+/** Thrown when a Midnight repost cancels a group it also publishes. */
+export class MidnightReplacementGroupCancelledError extends Error {
+  constructor(params: { readonly group: Hex }) {
     super(
-      `Midnight offer root mismatch: expected "${params.expectedRoot}", got "${params.actualRoot}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature was produced by another maker account. */
-export class MidnightOfferRootOwnerMismatchError extends Error {
-  constructor(params: { expectedOwner: Address; actualOwner: Address }) {
-    super(
-      `Midnight offer root owner mismatch: expected "${params.expectedOwner}", got "${params.actualOwner}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature targets another ratifier. */
-export class MidnightOfferRootRatifierMismatchError extends Error {
-  constructor(params: { expectedRatifier: Address; actualRatifier: Address }) {
-    super(
-      `Midnight offer root ratifier mismatch: expected "${params.expectedRatifier}", got "${params.actualRatifier}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature was produced for another offer count. */
-export class MidnightOfferRootOfferCountMismatchError extends Error {
-  constructor(params: { expectedOffers: number; actualOffers: number }) {
-    super(
-      `Midnight offer root offer-count mismatch: expected "${params.expectedOffers}", got "${params.actualOffers}". Rebuild the flow and sign again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight offer-root signature carries no encoded payload. */
-export class UnpreparedMidnightOfferRootSignatureError extends Error {
-  constructor() {
-    super(
-      "Midnight offer root signature carries no encoded payload. Sign the offer-root requirement (its signature already includes the payload) before building the submit transaction.",
+      `Midnight offer group "${params.group}" is both published and cancelled. Give replacement offers a fresh group.`,
     );
   }
 }

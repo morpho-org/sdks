@@ -3,8 +3,9 @@ import type {
   Market,
   MarketInput,
   MidnightFetchParams,
+  PriceRatifierV1TreeCreateRequest,
+  RateRatifierV1TreeCreateRequest,
   Tree,
-  TreeInput,
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
@@ -12,47 +13,59 @@ import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
-  MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
+  MidnightCancelAndMakeAction,
+  MidnightCollateralTransfer,
+  MidnightGroupCancellation,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
-export type OfferValidationParams = Omit<TreeMempoolValidateParams, "chainId">;
+export type OfferValidationParams = Omit<
+  TreeMempoolValidateParams,
+  "chainId" | "ratification"
+>;
+
+/**
+ * Offers accepted by Midnight maker flows: a PriceRatifierV1 or RateRatifierV1 tree, or
+ * the `Tree.create` request that builds one.
+ */
+export type MidnightMakerTreeInput =
+  | PriceRatifierV1TreeCreateRequest
+  | RateRatifierV1TreeCreateRequest
+  | Tree<"priceV1">
+  | Tree<"rateV1">;
 
 /** Parameters for building and validating Midnight offer data. */
 export interface GetOffersDataParams {
   readonly accountAddress: Address;
-  readonly offers: TreeInput;
+  readonly offers: MidnightMakerTreeInput;
   readonly validation?: OfferValidationParams;
 }
 
-interface OffersDataBase {
+/** Prepared Midnight maker-offer data with the payload derived from its tree. */
+export interface OffersData {
   readonly accountAddress: Address;
   readonly groups: readonly Hex[];
-  readonly tree: Tree;
+  readonly tree: Tree<"priceV1"> | Tree<"rateV1">;
+  readonly ratifierType: "priceV1" | "rateV1";
   readonly ratifier: Address;
+  /** Encoded offer payload for `tree.root`. */
+  readonly payload: Hex;
 }
 
-/** Prepared Midnight maker-offer data discriminated by its ratifier execution path. */
-export type OffersData =
-  | (OffersDataBase & {
-      readonly ratifierType: "ecrecover";
-      readonly setterPayload?: never;
-    })
-  | (OffersDataBase & {
-      readonly ratifierType: "setter";
-      readonly setterPayload: Hex;
-    });
-
-/** Parameters shared by Midnight maker-offer flows. */
-export interface MakeOffersParams {
+/** Parameters shared by Midnight cancel-and-make maker flows. */
+export interface CancelAndMakeParams {
+  /** Maker expected on every offer. Must send the transaction: V2 acts on `msg.sender`. */
   readonly accountAddress: Address;
-  readonly offers: TreeInput;
+  readonly offers: MidnightMakerTreeInput;
+  /** Previous offer groups to cancel atomically. Omit or pass `[]` for a new publication. */
+  readonly cancellations?: readonly MidnightGroupCancellation[];
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
   readonly validation?: OfferValidationParams;
 }
 
-/** Parameters for the Midnight make-lend maker flow. */
-export interface MakeLendParams extends MakeOffersParams {
+/** Parameters for the Midnight cancel-and-make-lend maker flow. */
+export interface CancelAndMakeLendParams extends CancelAndMakeParams {
   readonly loanToken: Address;
   /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
   readonly loanAssets: bigint;
@@ -60,20 +73,14 @@ export interface MakeLendParams extends MakeOffersParams {
   readonly reservedLoanAssets?: bigint;
 }
 
-/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
-export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
-  readonly market: MarketInput;
-  /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
-  readonly collateralAssets: bigint;
-  /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
-  readonly reservedCollateralAssets?: bigint;
-  readonly collateralIndex?: bigint;
+/** Parameters for the Midnight cancel-and-make-borrow maker flow. */
+export interface CancelAndMakeBorrowParams extends CancelAndMakeParams {
+  /** Optional collateral supplied before activation; every offer must target `collateral.market`. */
+  readonly collateral?: {
+    readonly market: MarketInput;
+    readonly supplies: readonly MidnightCollateralTransfer[];
+  };
 }
-
-/** Signatures accepted by Midnight action-output transaction builders. */
-export type MidnightActionSignatures =
-  | MidnightOfferRootSignature
-  | readonly MidnightOfferRootSignature[];
 
 /**
  * Lazy Midnight entity result with async requirements and sync transaction building.
@@ -104,40 +111,26 @@ export type MidnightActionOutput<
 > = ActionOutput<TAction, TSignatures, undefined>;
 
 /**
- * Output returned by maker-offer flows after offer-tree preparation.
+ * Output returned by cancel-and-make maker flows after offer-tree preparation.
  *
- * Use `groups` and `root` for review UI, call `getRequirements()` to collect
- * ratifier approval or signature requirements, then call `buildTx(signatures)`
- * to publish the encoded payload to the Midnight mempool.
+ * Use `groups` and `root` for review UI, send the approval and authorization
+ * requirements from `getRequirements()`, then send `buildTx()` from the maker.
  *
  * @example
  * ```ts
- * const output = await midnight.makeLend(params);
+ * const output = await midnight.cancelAndMakeBorrow(params);
  * console.log(output.root, output.groups);
- * const requirements = await output.getRequirements();
- * const signatures = [];
- * for (const requirement of requirements) {
- *   if ("sign" in requirement) {
- *     signatures.push(await requirement.sign(walletClient, maker));
- *   } else {
- *     await walletClient.sendTransaction({
- *       to: requirement.to,
- *       data: requirement.data,
- *       value: requirement.value,
- *     });
- *   }
+ * for (const requirement of await output.getRequirements()) {
+ *   await walletClient.sendTransaction(requirement);
  * }
- * const tx = output.buildTx(signatures);
+ * await walletClient.sendTransaction(output.buildTx());
  * ```
  */
-export interface MakeOffersOutput
-  extends MidnightActionOutput<
-    MempoolSubmitOffersAction,
-    MidnightActionSignatures
-  > {
+export interface CancelAndMakeOutput
+  extends MidnightActionOutput<MidnightCancelAndMakeAction> {
   readonly groups: readonly Hex[];
   readonly root: Hex;
-  readonly ratifierType: "ecrecover" | "setter";
+  readonly ratifierType: "priceV1" | "rateV1";
 }
 
 /** Parameters shared by Midnight market action flows. */

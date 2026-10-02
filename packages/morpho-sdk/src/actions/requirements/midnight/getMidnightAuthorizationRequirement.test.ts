@@ -1,6 +1,10 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
+import {
+  getChainAddress,
+  registerCustomAddresses,
+} from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Chain, zeroAddress } from "viem";
+import { type Chain, getAddress, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -11,6 +15,13 @@ import {
   UnsupportedMidnightAuthorizationTargetError,
 } from "../../../types/index.js";
 import { getMidnightAuthorizationRequirement } from "./getMidnightAuthorizationRequirement.js";
+
+const midnightBundlesV2 = getAddress(
+  "0x00000000000000000000000000000000000b2002",
+);
+registerCustomAddresses({
+  addresses: { [midnightChainId]: { midnightBundlesV2 } },
+});
 
 const midnightTestChain = {
   id: midnightChainId,
@@ -78,39 +89,47 @@ describe("getMidnightAuthorizationRequirement", () => {
     expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
   });
 
+  test.each([midnightAddresses.midnightBundles, midnightBundlesV2])(
+    "behavior: accepts supported target %s",
+    async (authorized) => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
+
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: handle.client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).resolves.toBeNull();
+    },
+  );
+
   test.each([
-    midnightAddresses.midnightBundles,
+    zeroAddress,
     midnightAddresses.ecrecoverRatifier,
     midnightAddresses.setterRatifier,
-  ])("behavior: accepts supported target %s", async (authorized) => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.midnight,
-      abi: midnightAbi,
-      functionName: "isAuthorized",
-      result: true,
-    });
+    getChainAddress(midnightChainId, "priceRatifierV1"),
+    getChainAddress(midnightChainId, "rateRatifierV1"),
+  ])(
+    "error: UnsupportedMidnightAuthorizationTargetError for %s",
+    async (authorized) => {
+      const { client } = createMockClient(midnightTestChain);
 
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: handle.client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized,
-      }),
-    ).resolves.toBeNull();
-  });
-
-  test("error: UnsupportedMidnightAuthorizationTargetError", async () => {
-    const { client } = createMockClient(midnightTestChain);
-
-    await expect(
-      getMidnightAuthorizationRequirement({
-        viemClient: client,
-        chainId: midnightChainId,
-        owner: midnightAddresses.taker,
-        authorized: zeroAddress,
-      }),
-    ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
-  });
+      await expect(
+        getMidnightAuthorizationRequirement({
+          viemClient: client,
+          chainId: midnightChainId,
+          owner: midnightAddresses.taker,
+          authorized,
+        }),
+      ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
+    },
+  );
 });

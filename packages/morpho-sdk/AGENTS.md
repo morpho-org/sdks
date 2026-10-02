@@ -28,7 +28,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
   target BlueBundlesV1 (the ERC-20 prerequisite for Permit2 still targets canonical Permit2). Blue
   write calls accept no share-price bounds or `slippageTolerance` input. Optional write
   reallocations are Vault V2 BluePublicAllocator calls only.
-- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/`cancelOffer`/redeem route through Midnight, guarded batch `cancelOffers` routes through MidnightBundlesV2 (registered with `registerCustomAddresses` until a deployment is pinned), and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
+- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/`cancelOffer`/redeem route through Midnight, and guarded batch `cancelOffers` plus the `cancelAndMakeLend`/`cancelAndMakeBorrow` maker flows route through MidnightBundlesV2 (registered with `registerCustomAddresses` until a deployment is pinned). Maker flows accept PriceRatifierV1 or RateRatifierV1 trees and publish the root and payload in one transaction for `msg.sender`. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
 ## Tests

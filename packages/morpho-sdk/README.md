@@ -24,7 +24,8 @@ General Vault V1 operations remain supported.
 pnpm add @morpho-org/morpho-sdk
 ```
 
-Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
+Upgrading from v6? Read the [v6 → v7 migration guide](./MIGRATION-v6-to-v7.md) before updating Midnight
+maker integrations. Upgrading from v5? Read the [v5 → v6 migration guide](./MIGRATION-v5-to-v6.md) before updating vault
 deposit or Blue write integrations.
 
 ## Actions
@@ -42,9 +43,8 @@ BlueBundlesV1, and the remaining rows identify their destination.
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
-| | `makeLend`, `makeBorrow`, `supplyCollateralMakeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
-| | `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
+| | `cancelAndMakeLend`, `cancelAndMakeBorrow`, `cancelOffers` | MidnightBundlesV2 (custom-registered `midnightBundlesV2` until a verified deployment ships) |
 
 `VaultExitBundlesV1`, `VaultBundlesV1`, and `BlueBundlesV1` are registered on Ethereum, Base,
 Arbitrum, Optimism, Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo,
@@ -61,7 +61,7 @@ live Blue liquidity — before invoking `buildTx()`. Calling `buildTx()` directl
 RPC-backed pre-flight checks. `forceRedeem` remains a direct Vault V2 multicall without
 prerequisites.
 
-- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
@@ -326,7 +326,7 @@ graph LR
         MN1 --> MNM[maker offer submission]
         MN1 --> MNP[position actions]
         MNT --> MNB[MidnightBundles]
-        MNM --> MNMP[Midnight mempool]
+        MNM --> MNB2[MidnightBundlesV2]
         MNP --> MNC[Midnight / MidnightBundles]
     end
 
@@ -338,7 +338,7 @@ graph LR
     MV1 -.->|approval / permit| REQ
     MV2 -.->|approval / permit| REQ
     MM1 -.->|approval / permit / authorization| REQ
-    MN1 -.->|approval / authorization / root signature or ratification| REQ
+    MN1 -.->|approval / authorization| REQ
 
     style VBV1 fill:#e8f5e9,stroke:#4caf50
     style BBV1 fill:#e8f5e9,stroke:#4caf50

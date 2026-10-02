@@ -28,7 +28,6 @@ import { describe, expect } from "vitest";
 import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
-  getSetterRatifierRatifyRootRequirement,
   isRequirementApproval,
   morphoViemExtension,
 } from "../../../src/index.js";
@@ -40,8 +39,6 @@ const test = createViemTest(base, {
   stepsTracing: false,
 });
 
-const root =
-  "0x1111111111111111111111111111111111111111111111111111111111111111";
 const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
 const wNative = getChainAddress(ChainId.BaseMainnet, "wNative");
 const oracle = "0x0000000000000000000000000000000000080000" as Address;
@@ -96,18 +93,13 @@ const prepareTakeableOffer = async (params: {
     address: offerMaker,
     value: parseEther("1"),
   });
-  const authorization = await getMidnightAuthorizationRequirement({
-    viemClient: params.client,
-    chainId: base.id,
-    owner: offerMaker,
-    authorized: setterRatifier,
+  await params.client.writeContract({
+    address: midnight,
+    abi: midnightAbi,
+    functionName: "setIsAuthorized",
+    args: [setterRatifier, true, offerMaker],
+    account: offerMaker,
   });
-  if (authorization) {
-    await params.client.sendTransaction({
-      ...authorization,
-      account: offerMaker,
-    });
-  }
 
   if (params.buy) {
     await params.client.deal({
@@ -170,18 +162,13 @@ const prepareTakeableOffer = async (params: {
       maxUnits: params.units,
     }),
   ]);
-  const ratifyRoot = await getSetterRatifierRatifyRootRequirement({
-    viemClient: params.client,
-    chainId: base.id,
-    maker: offerMaker,
-    root: tree.root,
+  await params.client.writeContract({
+    account: offerMaker,
+    address: setterRatifier,
+    abi: setterRatifierAbi,
+    functionName: "setIsRootRatified",
+    args: [offerMaker, tree.root, true],
   });
-  if (ratifyRoot) {
-    await params.client.sendTransaction({
-      ...ratifyRoot,
-      account: offerMaker,
-    });
-  }
 
   const item = SetterRatifierUtils.ratify({ tree })[0];
   if (!item) throw new Error("expected a ratified offer");
@@ -273,42 +260,6 @@ describe("Midnight requirements on fork", () => {
         chainId: base.id,
         owner,
         authorized,
-      }),
-    ).resolves.toBeNull();
-  });
-
-  test("resolves SetterRatifier root approval from fork contract state", async ({
-    client,
-  }) => {
-    const maker = client.account.address;
-    const requirement = await getSetterRatifierRatifyRootRequirement({
-      viemClient: client,
-      chainId: base.id,
-      maker,
-      root,
-    });
-
-    expect(requirement?.action.type).toBe("setterRatifierRatifyRoot");
-    if (requirement == null) {
-      throw new Error("expected a SetterRatifier root requirement");
-    }
-
-    await client.sendTransaction(requirement);
-
-    await expect(
-      client.readContract({
-        address: getChainAddress(ChainId.BaseMainnet, "setterRatifier"),
-        abi: setterRatifierAbi,
-        functionName: "isRootRatified",
-        args: [maker, root],
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      getSetterRatifierRatifyRootRequirement({
-        viemClient: client,
-        chainId: base.id,
-        maker,
-        root,
       }),
     ).resolves.toBeNull();
   });

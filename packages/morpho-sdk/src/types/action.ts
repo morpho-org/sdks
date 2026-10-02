@@ -405,17 +405,6 @@ export interface MidnightAuthorizationAction
     }
   > {}
 
-/** Metadata for a SetterRatifier ratify-root prerequisite transaction. */
-export interface SetterRatifierRatifyRootAction
-  extends BaseAction<
-    "setterRatifierRatifyRoot",
-    {
-      readonly maker: Address;
-      readonly root: Hex;
-      readonly isRootRatified: boolean;
-    }
-  > {}
-
 /** Metadata for a Midnight bundle that lends into fixed-rate offers. */
 export interface MidnightTakeLendAction
   extends BaseAction<
@@ -475,20 +464,6 @@ export interface MidnightSupplyCollateralAction
     }
   > {}
 
-/** Metadata for a Midnight mempool payload submission. */
-export interface MempoolSubmitOffersAction
-  extends BaseAction<
-    "mempoolSubmitOffers",
-    {
-      readonly groups: readonly Hex[];
-      readonly root: Hex;
-      readonly maker: Address;
-      readonly ratifier: Address;
-      readonly ratifierType: "ecrecover" | "setter";
-      readonly offers: number;
-    }
-  > {}
-
 /** Metadata for a direct Midnight credit redemption transaction. */
 export interface MidnightRedeemAction
   extends BaseAction<
@@ -534,12 +509,24 @@ export interface MidnightGroupCancellation {
   readonly maxConsumed: bigint;
 }
 
-/** Metadata for a Midnight Bundles V2 maker bundle: guarded offer-group cancellation. */
+/** Collateral pulled from the maker and supplied to Midnight before offers are published. */
+export interface MidnightCollateralTransfer {
+  /** Index of the collateral in the market's `collateralParams`. */
+  readonly collateralIndex: bigint;
+  /** Collateral assets pulled from the maker. */
+  readonly assets: bigint;
+}
+
+/** Metadata for a Midnight Bundles V2 maker bundle; cancel-only bundles carry a zero `ratifier` and `root`. */
 export interface MidnightCancelAndMakeAction
   extends BaseAction<
     "midnightCancelAndMake",
     {
+      readonly ratifier: Address;
+      readonly root: Hex;
+      readonly groups: readonly Hex[];
       readonly cancellations: readonly MidnightGroupCancellation[];
+      readonly collateralSupplies: readonly MidnightCollateralTransfer[];
       readonly deadline: bigint;
     }
   > {}
@@ -573,12 +560,10 @@ export type TransactionAction =
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
-  | SetterRatifierRatifyRootAction
   | MidnightTakeLendAction
   | MidnightTakeBorrowAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
-  | MempoolSubmitOffersAction
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction
@@ -651,14 +636,6 @@ export interface AuthorizationSignatureArgs {
   readonly signature: Hex;
 }
 
-/** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
-export interface MidnightOfferRootSignatureArgs {
-  readonly owner: Address;
-  readonly root: Hex;
-  readonly signature: Hex;
-  readonly payload: Hex;
-}
-
 /** EIP-712 payload carried by a signable requirement action. */
 export type RequirementTypedData = TypedDataDefinition<
   Record<string, unknown>,
@@ -713,39 +690,14 @@ export interface AuthorizationAction
   readonly typedData?: RequirementTypedData;
 }
 
-/** Metadata for a Midnight offer-root signature request. */
-export interface MidnightOfferRootSignatureAction
-  extends BaseAction<
-    "midnightOfferRootSignature",
-    {
-      readonly root: Hex;
-      readonly ratifier: Address;
-      readonly offers: number;
-    }
-  > {
-  /**
-   * EIP-712 offer-tree payload `sign()` signs for this Midnight ratification, exposed so it can be
-   * inspected or displayed before signing. See {@link PermitAction.typedData}.
-   *
-   * A bare signature over this payload is not enough to build the submit-offers transaction:
-   * `sign()` also derives the ratification payload (`MidnightOfferRootSignature.args.payload`) that
-   * `buildTx()` submits to the mempool.
-   */
-  readonly typedData?: RequirementTypedData;
-}
-
 /** Action metadata supported by signature requirements. */
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2SignatureTransferAction
-  | AuthorizationAction
-  | MidnightOfferRootSignatureAction;
+  | AuthorizationAction;
 
 /** Argument payloads returned by signature requirements. */
-export type RequirementSignatureArgs =
-  | PermitArgs
-  | AuthorizationSignatureArgs
-  | MidnightOfferRootSignatureArgs;
+export type RequirementSignatureArgs = PermitArgs | AuthorizationSignatureArgs;
 
 /** A signed ERC-2612 permit requirement. */
 export interface Erc2612RequirementSignature {
@@ -768,17 +720,10 @@ export interface AuthorizationRequirementSignature {
   readonly action: AuthorizationAction;
 }
 
-/** A signed Midnight Ecrecover offer-root requirement. */
-export interface MidnightOfferRootSignature {
-  readonly args: MidnightOfferRootSignatureArgs;
-  readonly action: MidnightOfferRootSignatureAction;
-}
-
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
  * `"permit"` carries token-approval args, `"permit2SignatureTransfer"` carries a
- * bundles SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
- * and Midnight adds `"midnightOfferRootSignature"`.
+ * bundles SignatureTransfer, and `"authorization"` carries the signed Morpho authorization.
  */
 export type RequirementSignature<
   TAction extends SignatureRequirementAction | undefined = undefined,
@@ -793,8 +738,7 @@ export type RequirementSignature<
   :
       | PermitRequirementSignature
       | Permit2SignatureTransferRequirementSignature
-      | AuthorizationRequirementSignature
-      | MidnightOfferRootSignature;
+      | AuthorizationRequirementSignature;
 
 type RequirementResult<
   TSignatureOrAction extends RequirementSignature | SignatureRequirementAction,
@@ -847,12 +791,6 @@ export interface Requirement<
 export type BundlesTokenSignatureRequirement =
   Requirement<BundlesTokenRequirementSignature>;
 
-/** Midnight Ecrecover offer-root signature requirement. */
-export type MidnightOfferRootRequirement = Requirement<
-  MidnightOfferRootSignatureAction,
-  MidnightOfferRootSignatureArgs
->;
-
 /** Any token signature requirement supported by an SDK transaction route. */
 export type TokenSignatureRequirement = BundlesTokenSignatureRequirement;
 
@@ -867,13 +805,11 @@ export type TokenRequirementSignature = BundlesTokenRequirementSignature;
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
   | TokenRequirementSignature
-  | AuthorizationRequirementSignature
-  | MidnightOfferRootSignature;
+  | AuthorizationRequirementSignature;
 
 /** Any signature requirement returned by an entity action output. */
 export type SignatureRequirement =
   | TokenSignatureRequirement
-  | MidnightOfferRootRequirement
   | Requirement<AuthorizationRequirementSignature>;
 
 /** Call action metadata that can appear as an action prerequisite. */
@@ -881,7 +817,6 @@ export type CallRequirementAction =
   | ERC20ApprovalAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
-  | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
 /** Onchain call prerequisite returned by action-output `getRequirements()`. */
@@ -1047,18 +982,6 @@ export function isAuthorizationSignature(
   return signature.action.type === "authorization";
 }
 
-/**
- * Narrows a {@link RequirementSignature} to a Midnight offer-root signature.
- *
- * @param signature - The signed requirement to test.
- * @returns `true` when `signature.action.type` is `"midnightOfferRootSignature"`.
- */
-export function isMidnightOfferRootSignature(
-  signature: RequirementSignature,
-): signature is MidnightOfferRootSignature {
-  return signature.action.type === "midnightOfferRootSignature";
-}
-
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single ERC-2612 signature, when present. */
@@ -1067,8 +990,6 @@ export interface SelectedRequirementSignatures {
   readonly permit2SignatureTransfer?: Permit2SignatureTransferRequirementSignature;
   /** The single Morpho authorization signature, when present. */
   readonly authorization?: AuthorizationRequirementSignature;
-  /** The single Midnight offer-root signature, when present. */
-  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
@@ -1085,7 +1006,6 @@ export interface SelectedRequirementSignatures {
  * @param accepts.permit - Whether an ERC-2612 signature is consumed.
  * @param accepts.permit2SignatureTransfer - Whether a Permit2 SignatureTransfer is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
- * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
  * @returns The accepted signature in each typed slot, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
  * @throws {UnsupportedRequirementSignatureError} when a signature has an unsupported action type.
@@ -1106,7 +1026,6 @@ export function selectRequirementSignatures(
     readonly permit?: boolean;
     readonly permit2SignatureTransfer?: boolean;
     readonly authorization?: boolean;
-    readonly midnightOfferRoot?: boolean;
   },
 ): SelectedRequirementSignatures {
   if (signatures == null) return {};
@@ -1116,14 +1035,12 @@ export function selectRequirementSignatures(
     isPermit2SignatureTransferSignature,
   );
   const authorizations = signatures.filter(isAuthorizationSignature);
-  const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   const unsupported = signatures.find(
     (signature): boolean =>
       !isPermitSignature(signature) &&
       !isPermit2SignatureTransferSignature(signature) &&
-      !isAuthorizationSignature(signature) &&
-      !isMidnightOfferRootSignature(signature),
+      !isAuthorizationSignature(signature),
   );
   if (unsupported != null)
     throw new UnsupportedRequirementSignatureError(unsupported.action.type);
@@ -1134,8 +1051,6 @@ export function selectRequirementSignatures(
     throw new UnexpectedRequirementSignatureError("permit2SignatureTransfer");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
-  if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
-    throw new UnexpectedRequirementSignatureError("midnightOfferRootSignature");
   if (permits.length > 1)
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
   if (permit2Transfers.length > 1)
@@ -1148,16 +1063,10 @@ export function selectRequirementSignatures(
       "authorization",
       authorizations.length,
     );
-  if (midnightOfferRoots.length > 1)
-    throw new AmbiguousRequirementSignaturesError(
-      "midnightOfferRootSignature",
-      midnightOfferRoots.length,
-    );
 
   return {
     permit: permits[0],
     permit2SignatureTransfer: permit2Transfers[0],
     authorization: authorizations[0],
-    midnightOfferRoot: midnightOfferRoots[0],
   };
 }

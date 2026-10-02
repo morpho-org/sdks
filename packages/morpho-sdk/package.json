@@ -87,7 +87,8 @@
   ],
   "files": [
     "lib",
-    "MIGRATION-v5-to-v6.md"
+    "MIGRATION-v5-to-v6.md",
+    "MIGRATION-v6-to-v7.md"
   ],
   "scripts": {
     "prepublish": "pnpm build",
