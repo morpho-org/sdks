@@ -170,4 +170,25 @@ describe("parseSimulationResponse", () => {
     blocks[0]!.calls.pop();
     expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
   });
+
+  test("error: InvalidSimulationResponseError for a block beyond the successor", () => {
+    const plan = makePlan();
+    const blocks = buildBlocks(plan);
+    blocks[0]!.number = numberToHex(24_000_002n);
+    expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+  });
+
+  test("error: InvalidSimulationResponseError when the successor reports no parentHash", () => {
+    const plan = makePlan();
+    const blocks = buildBlocks(plan);
+    delete (blocks[0] as { parentHash?: string }).parentHash;
+    expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+  });
+
+  test("error: InvalidSimulationResponseError when the successor parentHash is not the pinned hash", () => {
+    const plan = makePlan();
+    const blocks = buildBlocks(plan);
+    blocks[0]!.parentHash = `0x${"ef".repeat(32)}`;
+    expect(() => parse(plan, blocks)).toThrow(InvalidSimulationResponseError);
+  });
 });

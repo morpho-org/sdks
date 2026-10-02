@@ -276,6 +276,34 @@ describe.sequential("executePlan", () => {
     expect(error).toBeInstanceOf(InvalidSimulationResponseError);
   });
 
+  test("error: response evidence beats a failing reorg-check eth_getBlock", async () => {
+    // A user-call revert is in hand before the reorg re-fetch: a rejecting
+    // re-fetch must not downgrade it to ExternalServiceError.
+    const calls = okCalls(3);
+    calls[1] = {
+      status: "0x0",
+      gasUsed: "0x0",
+      returnData: "0x",
+      error: { code: 3, message: "insufficient funds" },
+    };
+    fetchMock
+      .mockResolvedValueOnce(rpc(simulateResult(calls)))
+      .mockRejectedValueOnce(new Error("gateway down"));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect(error).not.toBeInstanceOf(ExternalServiceError);
+  });
+
+  test("error: ExternalServiceError when the reorg-check eth_getBlock fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(rpc(simulateResult(okCalls(3))))
+      .mockRejectedValueOnce(new Response("Bad Gateway", { status: 502 }));
+    const error = await executePlan(params).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ExternalServiceError);
+    expect((error as Error).message).not.toContain("rpc.example");
+    expect((error as Error).cause).toBeDefined();
+  });
+
   test("error: MissingVerificationEvidenceError when a state read fails", async () => {
     const calls = okCalls(3);
     calls[0] = { status: "0x0", gasUsed: "0x0", returnData: "0x" };

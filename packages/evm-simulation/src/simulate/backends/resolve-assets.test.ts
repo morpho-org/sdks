@@ -121,6 +121,29 @@ describe("resolveAssets", () => {
     ]);
     expect(handle.request).toHaveBeenCalledTimes(1);
   });
+  test("behavior: an idle market resolves the loan token only", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [loan, zeroAddress, zeroAddress, zeroAddress, 0n],
+    });
+    const result = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueSupply",
+          marketId,
+          quote: { assetsPaid: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    });
+    expect(result[0]?.assetsPaid).toBe(loan);
+  });
   test("error: reverted metadata read becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(
@@ -172,6 +195,24 @@ describe("resolveAssets", () => {
     }
     expect(names).toContain("RpcRequestError");
     expect(names).toContain("ContractFunctionRevertedError");
+  });
+  test("error: a message-only -32000 revert becomes missing evidence", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      new RpcRequestError({
+        body: {},
+        url: "https://rpc.example",
+        error: { code: -32000, message: "execution reverted" },
+      }),
+    );
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
   });
   test("error: JSON-RPC error in an HTTP 200 maps to ExternalServiceError", async () => {
     const handle = createMockClient(mainnet);
