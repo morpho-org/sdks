@@ -120,6 +120,7 @@ describe("verifySlippage", () => {
   test("behavior: a native assetsReceived quote uses incoming traces", () => {
     const nativeLimit = {
       ...limit,
+      receiver,
       quote: { assetsReceived: 10n },
       slippageTolerance: 0n,
     };
