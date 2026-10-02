@@ -81,8 +81,12 @@ Rules shared by the maker actions:
   `v = r = s = 0`. The ratifier authorization, root activation and payload publication happen
   inside the bundle call, so they are no longer separate requirements.
 - Maker actions reject offers whose ratifier is not the chain's `priceRatifierV1` or
-  `rateRatifierV1`, and offer sets whose offers do not all share the ratifier the call activates,
-  so a cancellation never lands without a takeable replacement root.
+  `rateRatifierV1`, and offer sets whose offers do not all share the ratifier the call activates.
+- The publishing maker actions (`cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
+  `supplyCollateralMakeBorrow`) reject an empty offer set, so they always activate a non-zero root;
+  `cancelOffers` is the only action that cancels without a replacement.
+- `supplyBlueMakeLend` rejects any offer whose callback is not the `BlueBuyCallback` derived for
+  `accountAddress`, so parked assets always back the published offers.
 - The root and the publication payload are derived deterministically from the offers input, so
   every handle built from the same inputs encodes the same values, with or without a signature.
 - For an EOA maker, the root-activation values `v, r, s`, `signatureHeight`, `signatureNonce` and
@@ -110,8 +114,8 @@ encoding follow from that:
   those tokens from the maker when the offer is taken. Offers funded through the Blue callback do
   not need it.
 - Every V2 action requires `accountAddress` to have authorized `MidnightBundlesV2` on Midnight;
-  `getRequirements()` returns that authorization when it is missing. `MidnightBundlesV2` and the
-  V1 ratifiers are added to the supported Midnight authorization targets.
+  `getRequirements()` returns that authorization when it is missing. `MidnightBundlesV2`,
+  `PriceRatifierV1` and `RateRatifierV1` are added to the supported Midnight authorization targets.
 - Native-token funding is out of scope: actions encode `value = 0`. Native wrapping is a separate
   decision.
 
@@ -120,7 +124,8 @@ encoding follow from that:
 - `midnight-sdk` adds `midnightBundlesV2Abi` and the V2 struct types (minor). `morpho-ts` adds the
   `midnightBundlesV2` address and deployment-block keys per chain (minor). `morpho-sdk` re-exports
   `midnightBundlesV2Abi` from `/midnight/abis` and `/abis`, next to `midnightBundlesAbi`, and the
-  V2 struct types from `/midnight/types` and its root barrel.
+  V2 struct types under their raw names from `/midnight/types` and under `Midnight`-qualified
+  aliases from `/types`.
 - The V1 symbols stay exported and are marked `@deprecated`: `midnightBundlesAbi` in `midnight-sdk`
   and its `morpho-sdk` re-exports, and the `midnightBundles` address and deployment-block keys in
   `morpho-ts`. Their removal is a later decision.
@@ -159,8 +164,9 @@ selection.
   every V2 action requires Midnight authorization of `MidnightBundlesV2`, and no V2 requirement is
   a permit → requirement unit tests and pinned-fork integration tests per method.
 - Maker actions reject offers whose maker differs from `accountAddress`, offers whose ratifier is
-  not the activated `PriceRatifierV1` or `RateRatifierV1`, and replacement groups that are also
-  being cancelled → typed-error unit tests.
+  not the activated `PriceRatifierV1` or `RateRatifierV1`, replacement groups that are also being
+  cancelled, an empty offer set on a publishing action, and a `supplyBlueMakeLend` offer whose
+  callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
 - Revisit if `MidnightBundlesV2` gains an entrypoint, an `onBehalf` argument or inline permits, or
