@@ -1691,7 +1691,7 @@ export class MidnightOfferCallbackDataMismatchError extends Error {
 
 /** Thrown when loan assets would be parked in a Morpho Blue market with no existing supply. */
 export class EmptyBlueParkingMarketError extends Error {
-  constructor(params: { readonly marketId: Hex }) {
+  constructor(params: { readonly marketId: MarketId }) {
     super(
       `Morpho Blue market "${params.marketId}" has no supply shares. Parking assets in an empty market is exposed to supply-share-price inflation; choose a market with existing supply.`,
     );

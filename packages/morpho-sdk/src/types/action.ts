@@ -517,6 +517,16 @@ export interface MidnightCollateralTransfer {
   readonly assets: bigint;
 }
 
+/**
+ * Loan assets supplied to a Morpho Blue market for the maker's `BlueBuyCallback` derived from
+ * `callbackSalt`. Offers funded by it set that callback and `abi.encode(market)` as callback data.
+ */
+export interface MidnightBlueSupply {
+  readonly market: InputMarketParams;
+  readonly assets: bigint;
+  readonly callbackSalt: Hex;
+}
+
 /** Metadata for a Midnight Bundles V2 maker bundle; cancel-only bundles carry a zero `ratifier` and `root`. */
 export interface MidnightCancelAndMakeAction
   extends BaseAction<
@@ -527,12 +537,7 @@ export interface MidnightCancelAndMakeAction
       readonly groups: readonly Hex[];
       readonly cancellations: readonly MidnightGroupCancellation[];
       readonly collateralSupplies: readonly MidnightCollateralTransfer[];
-      /** Loan assets parked on Morpho Blue for the maker's `BlueBuyCallback`, when any. */
-      readonly blueSupply?: {
-        readonly market: InputMarketParams;
-        readonly assets: bigint;
-        readonly callbackSalt: Hex;
-      };
+      readonly blueSupply?: MidnightBlueSupply;
       readonly deadline: bigint;
     }
   > {}

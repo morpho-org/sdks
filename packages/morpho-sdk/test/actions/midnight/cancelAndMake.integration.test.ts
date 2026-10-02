@@ -350,7 +350,7 @@ describe("Midnight cancel-and-make on fork", () => {
     ).resolves.toBe(collateralAssets);
   });
 
-  test("parks loan assets on Blue and publishes callback-funded lend offers in one transaction", async ({
+  test("parks loan assets on Blue, publishes callback-funded lend offers, then reposts them", async ({
     client,
   }) => {
     await deployMidnightBundlesV2(client);
@@ -403,6 +403,50 @@ describe("Midnight cancel-and-make on fork", () => {
       args: [BlueMarketUtils.getMarketId(blueMarket), callback],
     });
     expect(supplyShares).toBeGreaterThan(0n);
+
+    await client.deal({
+      erc20: usdc,
+      account: client.account.address,
+      amount: assetsToPark,
+    });
+    const repost = await client
+      .extend(morphoViemExtension())
+      .morpho.midnight(base.id)
+      .supplyBlueMakeLend({
+        accountAddress: client.account.address,
+        offers: rateTree(client, {
+          buy: true,
+          group: groupB,
+          callback,
+          callbackData: encodeAbiParameters([marketParamsAbi], [blueMarket]),
+        }),
+        blueMarket,
+        assetsToPark,
+        callbackSalt,
+        cancellations: [{ group: groupA, maxConsumed: 0n }],
+        deadline: maxUint256,
+        validation,
+      });
+    await fulfilRequirements(client, repost);
+    await client.sendTransaction(repost.buildTx());
+
+    await expect(isRootRatified(client, repost.root)).resolves.toBe(true);
+    await expect(consumed(client, groupA)).resolves.toBe(maxUint128);
+    await expect(
+      client.readContract({
+        address: blueBuyCallbackFactory,
+        abi: blueBuyCallbackFactoryAbi,
+        functionName: "callbackOf",
+        args: [client.account.address, callbackSalt],
+      }),
+    ).resolves.toBe(callback);
+    const [repostSupplyShares] = await client.readContract({
+      address: blue,
+      abi: blueAbi,
+      functionName: "position",
+      args: [BlueMarketUtils.getMarketId(blueMarket), callback],
+    });
+    expect(repostSupplyShares).toBeGreaterThan(supplyShares);
   });
 
   test("error: rejects parking in a Blue market with no supply", async ({

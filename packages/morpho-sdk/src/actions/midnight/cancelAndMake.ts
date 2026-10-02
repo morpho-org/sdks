@@ -1,4 +1,3 @@
-import type { InputMarketParams as BlueMarketParams } from "@morpho-org/blue-sdk";
 import {
   InvalidTreeError,
   type MarketParams,
@@ -23,6 +22,7 @@ import {
   EmptyMidnightGroupCancellationsError,
   InputExceedsMaxError,
   type Metadata,
+  type MidnightBlueSupply,
   type MidnightCancelAndMakeAction,
   type MidnightCollateralTransfer,
   type MidnightGroupCancellation,
@@ -61,16 +61,8 @@ export interface MidnightOfferPublication {
   readonly payload: Hex;
   /** Optional delegated root-activation signature. */
   readonly rootSignature?: MidnightRootActivationSignature;
-  /**
-   * Optional loan assets pulled from the maker and supplied to `market` on Morpho Blue for the
-   * maker's `BlueBuyCallback` derived from `callbackSalt`. Offers funded by it must set that
-   * callback and `abi.encode(market)` as callback data. Share-price slippage is not checked.
-   */
-  readonly blueSupply?: {
-    readonly market: BlueMarketParams;
-    readonly assets: bigint;
-    readonly callbackSalt: Hex;
-  };
+  /** Optional loan assets parked on Morpho Blue for the maker; share-price slippage is not checked. */
+  readonly blueSupply?: MidnightBlueSupply;
   /** Optional collateral supplied to `market` for the maker before activation. */
   readonly collateral?: {
     readonly market: MarketParams;
