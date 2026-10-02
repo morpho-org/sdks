@@ -1137,15 +1137,18 @@ export function parseRequest(input: SimulateParams): ParsedRequest {
   if (rawBlockNumber !== undefined) {
     if (typeof rawBlockNumber === "bigint" && rawBlockNumber >= 0n) {
       blockNumber = rawBlockNumber;
-    } else if (
-      typeof rawBlockNumber === "string" &&
-      (BLOCK_TAGS as readonly string[]).includes(rawBlockNumber)
-    ) {
-      blockNumber = rawBlockNumber as Exclude<BlockTag, "pending">;
     } else {
-      fieldErrors.push(
-        'blockNumber: must be a non-negative bigint or one of "latest", "earliest", "safe", "finalized"',
-      );
+      const tag =
+        typeof rawBlockNumber === "string"
+          ? BLOCK_TAGS.find((t) => t === rawBlockNumber)
+          : undefined;
+      if (tag !== undefined) {
+        blockNumber = tag;
+      } else {
+        fieldErrors.push(
+          `blockNumber: must be a non-negative bigint or one of ${BLOCK_TAGS.map((t) => `"${t}"`).join(", ")}`,
+        );
+      }
     }
   }
 

@@ -329,6 +329,9 @@ describe.sequential("executePlan", () => {
     simulateResult([
       { ...okCalls(1)[0]!, logs: [{ address: "0xabc", topics: [], data: 5 }] },
     ]),
+    simulateResult([
+      { ...okCalls(1)[0]!, logs: 5 as unknown as readonly unknown[] },
+    ]),
   ])(
     "error: InvalidSimulationResponseError for malformed result %j",
     async (result) => {
