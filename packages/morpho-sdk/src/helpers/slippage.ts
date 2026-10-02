@@ -235,3 +235,29 @@ export const computeVaultMaxShareAllowance = (params: {
     ? MathLib.wDivUp(previewedShares, MathLib.WAD - params.slippageTolerance)
     : previewedShares;
 };
+
+/**
+ * Computes the largest live share allowance a re-prepared asset-mode exit accepts without a reset.
+ *
+ * A Safe approval can execute after the caller re-prepared the exit from a fresher snapshot, whose
+ * cap is slightly lower. Allowances in `[requiredShareAllowance, ceiling]` are kept, so the burn may
+ * exceed the current cap by at most one more slippage tolerance.
+ *
+ * @internal
+ *
+ * @param params.requiredShareAllowance - Cap from {@link computeVaultMaxShareAllowance}.
+ * @param params.slippageTolerance - WAD-scaled slippage used to derive that cap.
+ * @returns `requiredShareAllowance / (1 - slippageTolerance)`, rounded down.
+ * @throws {NegativeInputError} when `slippageTolerance` is negative.
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+ */
+export const computeVaultShareAllowanceCeiling = (params: {
+  readonly requiredShareAllowance: bigint;
+  readonly slippageTolerance: bigint;
+}): bigint => {
+  validateSlippageTolerance(params.slippageTolerance);
+  return MathLib.wDivDown(
+    params.requiredShareAllowance,
+    MathLib.WAD - params.slippageTolerance,
+  );
+};

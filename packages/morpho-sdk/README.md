@@ -128,8 +128,9 @@ const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the exact share
-allowance returned by `getRequirements()`:
+Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the share
+allowance returned by `getRequirements()` (an existing allowance up to one slippage tolerance
+above that cap is kept):
 
 ```typescript
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
