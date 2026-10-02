@@ -279,13 +279,15 @@ const _applyOptions = (
   value = _value;
 
   const firstNonZero = value.match(/[1-9]/);
+  const isSigned = formatOptions.readableNotation === "signed";
   if (
     firstNonZero?.index === undefined &&
-    formatOptions.digits &&
+    formatOptions.digits != null &&
+    (formatOptions.digits > 0 || isSigned) &&
     !isZero &&
     formatOptions.readable
   )
-    return `${formatOptions.readableNotation === "signed" ? "<" : "< "}0${decimalSymbol}${"0".repeat(formatOptions.digits - 1)}1`;
+    return `${isSigned ? "<" : "< "}${formatOptions.digits ? `0${decimalSymbol}${"0".repeat(formatOptions.digits - 1)}1` : "1"}`;
 
   return value;
 };
@@ -577,11 +579,15 @@ export abstract class CommonFormatter extends BaseFormatter {
    * @returns A new formatter instance with the `readable` option set to `true`.
    *
    * @example
-   * const updatedFormatter = formatter.digits(2).readable();
+   * import { format } from "@morpho-org/morpho-ts";
+   *
+   * const updatedFormatter = format.number.digits(2).readable();
    * console.log(updatedFormatter.of(0.0001)); // Output: "< 0.01"
    *
    * @example
-   * const signedFormatter = formatter.digits(2).unit("$").readable("signed");
+   * import { format } from "@morpho-org/morpho-ts";
+   *
+   * const signedFormatter = format.commas.digits(2).unit("$").readable("signed");
    * console.log(signedFormatter.of(0.0001)); // Output: "<$0.01"
    * console.log(signedFormatter.of(-0.0001)); // Output: ">-$0.01"
    */
@@ -602,8 +608,10 @@ export abstract class CommonFormatter extends BaseFormatter {
    * @returns A new formatter instance with the `rounding` option set.
    *
    * @example
-   * console.log(formatter.digits(2).of(1.005)); // Output: "1.00"
-   * console.log(formatter.digits(2).rounding("halfUp").of(1.005)); // Output: "1.01"
+   * import { format } from "@morpho-org/morpho-ts";
+   *
+   * console.log(format.number.digits(2).of(1.005)); // Output: "1.00"
+   * console.log(format.number.digits(2).rounding("halfUp").of(1.005)); // Output: "1.01"
    */
   rounding(mode: RoundingMode) {
     const newOptions = { ...this._options, rounding: mode };
@@ -869,6 +877,8 @@ export class ShortFormatter extends CommonFormatter {
    * @returns A new `ShortFormatter` instance with the `compactThousands` option set to `true`.
    *
    * @example
+   * import { format } from "@morpho-org/morpho-ts";
+   *
    * const formatter = format.short.digits(2).compactThousands();
    * console.log(formatter.of(1234.5)); // Output: "1.23K"
    */

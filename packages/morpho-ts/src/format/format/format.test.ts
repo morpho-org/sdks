@@ -1027,6 +1027,17 @@ describe("format", () => {
       ).toEqual(">-0.01%");
     });
 
+    test("should apply at integer precision", () => {
+      expect(format.number.digits(0).readable("signed").of(0.4)).toEqual("<1");
+      expect(
+        format.commas.digits(0).unit("$").readable("signed").of(-0.4),
+      ).toEqual(">-$1");
+      expect(
+        format.number.digits(0).rounding("halfUp").readable("signed").of(0.4),
+      ).toEqual("<1");
+      expect(format.number.digits(0).readable().of(0.4)).toEqual("0");
+    });
+
     test("should ignore the sign option below display precision", () => {
       expect(
         format.number.digits(2).sign().readable("signed").of(0.001),
