@@ -2,9 +2,12 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
+  BaseError,
   ContractFunctionRevertedError,
+  encodeErrorResult,
   erc4626Abi,
   HttpRequestError,
+  parseAbi,
   RpcRequestError,
   TimeoutError,
   zeroAddress,
@@ -134,6 +137,41 @@ describe("resolveAssets", () => {
         blockNumber: 1n,
       }),
     ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+  });
+  test("error: a revert nested in an rpc error stays missing evidence", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      new RpcRequestError({
+        body: {},
+        url: "https://rpc.example",
+        error: {
+          code: 3,
+          message: "execution reverted",
+          data: encodeErrorResult({
+            abi: parseAbi(["error Error(string reason)"]),
+            errorName: "Error",
+            args: ["execution reverted"],
+          }),
+        },
+      }),
+    );
+    const error = await resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [limit],
+      blockNumber: 1n,
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(MissingVerificationEvidenceError);
+    const chain = (error as MissingVerificationEvidenceError).cause;
+    expect(chain).toBeInstanceOf(BaseError);
+    const names: string[] = [];
+    let node = chain as { constructor: { name: string }; cause?: unknown };
+    while (node) {
+      names.push(node.constructor.name);
+      node = node.cause as typeof node;
+    }
+    expect(names).toContain("RpcRequestError");
+    expect(names).toContain("ContractFunctionRevertedError");
   });
   test("error: JSON-RPC error in an HTTP 200 maps to ExternalServiceError", async () => {
     const handle = createMockClient(mainnet);

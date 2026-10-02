@@ -87,19 +87,16 @@ export async function resolveAssets(params: {
             pair = [asset, asset];
           }
         } catch (cause) {
-          if (
+          const reverted =
             cause instanceof BaseError &&
             cause.walk(
               (error) => error instanceof ContractFunctionRevertedError,
-            ) !== null
-          ) {
-            throw new MissingVerificationEvidenceError(
-              `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
-              { cause },
-            );
-          }
+            ) !== null;
+          // viem nests an RpcRequestError inside revert chains, so a revert
+          // must win over the transport match.
           if (
-            (cause instanceof BaseError &&
+            !reverted &&
+            ((cause instanceof BaseError &&
               cause.walk(
                 (error) =>
                   error instanceof HttpRequestError ||
@@ -108,7 +105,7 @@ export async function resolveAssets(params: {
                   error instanceof RpcError ||
                   (error instanceof Error && error.name === "AbortError"),
               ) !== null) ||
-            (cause instanceof Error && cause.name === "AbortError")
+              (cause instanceof Error && cause.name === "AbortError"))
           ) {
             throw new ExternalServiceError(
               "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
