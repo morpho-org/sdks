@@ -9,10 +9,17 @@ import {
   MarketUtils,
   type MidnightFetchParams,
   Payload,
+  PriceRatifierV1,
+  RateRatifierV1,
   SetterRatifierUtils,
   Tree,
+  type TreeSnapshot,
 } from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import {
+  deepFreeze,
+  getChainAddress,
+  getChainAddresses,
+} from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Hex,
@@ -28,6 +35,7 @@ import {
   midnightRedeem,
   midnightRepayWithdrawCollateral,
   midnightSupplyCollateral,
+  midnightSupplyCollateralMakeBorrow,
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
   midnightTakeLend,
@@ -75,6 +83,7 @@ import {
   selectRequirementSignatures,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
+  UnsupportedMidnightBundlesV2RatifierError,
 } from "../../types/index.js";
 import type {
   GetOffersDataParams,
@@ -87,6 +96,7 @@ import type {
   OffersData,
   RedeemParams,
   RepayWithdrawCollateralParams,
+  SupplyCollateralMakeBorrowOutput,
   SupplyCollateralMakeBorrowParams,
   SupplyCollateralParams,
   SupplyCollateralTakeBorrowParams,
@@ -808,106 +818,168 @@ export class MorphoMidnight {
   }
 
   /**
-   * Prepares collateral supply followed by borrow-side maker-offer submission.
+   * Prepares an atomic Midnight Bundles V2 transaction that supplies collateral and publishes borrow-side offers.
    *
-   * @param params - Maker, market, collateral reserve, raw offers, and validation controls.
-   * @param params.accountAddress - Maker expected on every offer.
-   * @param params.offers - Raw borrow-side offers or groups.
-   * @param params.validation - Optional Midnight mempool API request controls.
+   * The single transaction cancels `cancellations`, supplies every collateral transfer,
+   * authorizes and ratifies the tree root on its PriceRatifierV1 or RateRatifierV1, and logs
+   * the payload, all for `msg.sender`. The tree is validated against the Midnight mempool API.
+   *
+   * @param params - Maker, market, V1 ratifier offer tree, collateral transfers, optional cancellations, and deadline.
+   * @param params.accountAddress - Maker expected on every offer and sending the transaction.
    * @param params.market - Market shared by every submitted offer.
-   * @param params.collateralAssets - Collateral supplied before offer submission.
-   * @param params.reservedCollateralAssets - Existing collateral reserved by other open groups.
-   * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
-   * @returns Prepared group metadata, lazy supply/ratifier requirements, and a synchronous mempool transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @param params.offers - Borrow-side `priceV1` or `rateV1` tree or tree request.
+   * @param params.collateralSupplies - Collateral transfers by market collateral index.
+   * @param params.cancellations - Optional prior groups to cancel with consumption ceilings.
+   * @param params.deadline - Bundle execution deadline timestamp.
+   * @param params.validation - Optional Midnight mempool API request controls.
+   * @returns Prepared group metadata, lazy `MidnightBundlesV2` approval/authorization requirements, and a synchronous transaction builder.
+   * @throws {ChainIdMismatchError} when the client or market targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
-   * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
-   * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
-   * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
+   * @throws {UnsupportedMidnightBundlesV2RatifierError} when the tree is not a `priceV1`/`rateV1` tree using the chain's V1 ratifier.
+   * @throws {MidnightOfferMakerMismatchError} when an offer belongs to another maker.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @throws {MarketIdMismatchError} when an offer targets another market.
+   * @throws {EmptyMidnightCollateralSuppliesError} when no collateral transfer is provided.
+   * @throws {NonPositiveInputError} when a collateral transfer amount is non-positive.
+   * @throws {DuplicateMidnightCollateralSupplyError} when a collateral index appears twice.
+   * @throws {UnknownCollateralIndexError} when a collateral index is not configured on the market.
+   * @throws {UnknownAddressError} when the chain has no `midnightBundlesV2` deployment.
    * @example
    * ```ts
    * const output = await midnight.supplyCollateralMakeBorrow({
    *   accountAddress: maker,
    *   market: marketData.params,
-   *   collateralAssets: 2_000_000n,
-   *   offers: [offer],
+   *   offers: { type: "priceV1", entries: [{ offer }] },
+   *   collateralSupplies: [{ collateralIndex: 0n, assets: 2_000_000n }],
+   *   deadline: maxUint256,
    * });
    * ```
    */
   async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): Promise<MakeOffersOutput> {
+  ): Promise<SupplyCollateralMakeBorrowOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    assertPositiveAmount("collateralAssets", params.collateralAssets);
-    assertNonNegativeAmount(
-      "reservedCollateralAssets",
-      params.reservedCollateralAssets ?? 0n,
-    );
-
     const market =
       params.market instanceof MarketParams
         ? params.market
         : MarketParams.from(params.market);
-    // Reject markets from another chain deployment before preparing requirements.
     validateMidnightMarket({ market, chainId: this.chainId });
-    const collateralIndex = params.collateralIndex ?? 0n;
-    const collateral = MarketUtils.getCollateralByIndex(
-      market,
-      collateralIndex,
+    const midnightBundlesV2 = getChainAddress(
+      this.chainId,
+      "midnightBundlesV2",
     );
-
-    const data = await this.getOffersData({
-      accountAddress: params.accountAddress,
-      offers: params.offers,
-      validation: params.validation,
-    });
-    validateOfferSides(data.tree.offers, false);
+    const tree = Tree.from(params.offers);
+    const { priceRatifierV1, rateRatifierV1 } = getChainAddresses(this.chainId);
+    const ratifier = tree.offers[0]!.ratifier;
+    const expectedRatifier =
+      tree.type === "priceV1"
+        ? priceRatifierV1
+        : tree.type === "rateV1"
+          ? rateRatifierV1
+          : undefined;
+    if (
+      expectedRatifier == null ||
+      !isAddressEqual(ratifier, expectedRatifier)
+    ) {
+      throw new UnsupportedMidnightBundlesV2RatifierError({
+        ratifier,
+        priceRatifierV1,
+        rateRatifierV1,
+      });
+    }
+    validateOfferSides(tree.offers, false);
     const marketId = MarketUtils.toId(market);
-    for (const offer of data.tree.offers) {
+    const groups: Hex[] = [];
+    for (const [index, offer] of tree.offers.entries()) {
+      if (!isAddressEqual(offer.maker, params.accountAddress)) {
+        throw new MidnightOfferMakerMismatchError({
+          index,
+          expectedMaker: params.accountAddress,
+          actualMaker: offer.maker,
+        });
+      }
       const offerMarketId = MarketUtils.toId(offer.market);
       if (offerMarketId.toLowerCase() !== marketId.toLowerCase()) {
         throw new MarketIdMismatchError(offerMarketId, marketId);
       }
+      if (
+        !groups.some(
+          (group) => group.toLowerCase() === offer.group.toLowerCase(),
+        )
+      ) {
+        groups.push(offer.group);
+      }
     }
-    const midnight = getChainAddress(this.chainId, "midnight");
+    // Encode once up front so input errors surface before the mempool API call.
+    const encode = (payloadBytes: Hex) =>
+      midnightSupplyCollateralMakeBorrow({
+        chainId: this.chainId,
+        market,
+        collateralSupplies: params.collateralSupplies,
+        ratifier,
+        root: tree.root,
+        groups,
+        offers: tree.offers.length,
+        payload: payloadBytes,
+        cancellations: params.cancellations,
+        deadline: params.deadline,
+        metadata: this.client.options.metadata,
+      });
+    encode("0x");
+
+    await tree.mempoolValidate({ ...params.validation, chainId: this.chainId });
+    const descriptor = tree.toDescriptor();
+    const payload = await Payload.encode(
+      tree.type === "priceV1"
+        ? PriceRatifierV1.ratify({
+            tree: descriptor as TreeSnapshot<"priceV1">,
+          })
+        : RateRatifierV1.ratify({
+            tree: descriptor as TreeSnapshot<"rateV1">,
+          }),
+    );
+    const approvals = new Map<string, { token: Address; amount: bigint }>();
+    for (const { collateralIndex, assets } of params.collateralSupplies) {
+      const { token } = MarketUtils.getCollateralByIndex(
+        market,
+        collateralIndex,
+      );
+      const entry = approvals.get(token.toLowerCase()) ?? { token, amount: 0n };
+      approvals.set(token.toLowerCase(), {
+        token,
+        amount: entry.amount + assets,
+      });
+    }
 
     return {
-      groups: data.groups,
-      root: data.tree.root,
-      ratifierType: data.ratifierType,
+      groups,
+      root: tree.root,
+      ratifierType: tree.type,
       getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
-          ...(await getMidnightApprovalRequirements({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            token: collateral.token,
-            owner: data.accountAddress,
-            spender: midnight,
-            amount:
-              params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
-          })),
-          midnightSupplyCollateral({
-            chainId: this.chainId,
-            market,
-            collateralIndex,
-            assets: params.collateralAssets,
-            onBehalf: data.accountAddress,
-            metadata: this.client.options.metadata,
-          }),
-          ...(await this.getRatifierRequirements({
-            offersData: data,
-          })),
-        ];
+        const requirements: ActionRequirement[] = [];
+        for (const { token, amount } of approvals.values()) {
+          requirements.push(
+            ...(await getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token,
+              owner: params.accountAddress,
+              spender: midnightBundlesV2,
+              amount,
+            })),
+          );
+        }
+        const authorization = await getMidnightAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          owner: params.accountAddress,
+          authorized: midnightBundlesV2,
+        });
+        if (authorization) requirements.push(authorization);
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
-        this.buildSubmitOffersTx({
-          offersData: data,
-          signatures,
-        }),
+      buildTx: () => encode(payload),
     };
   }
 

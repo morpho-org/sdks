@@ -6,6 +6,7 @@ export * from "./redeem.js";
 export * from "./repayWithdrawCollateral.js";
 export * from "./setterRatifierRatifyRoot.js";
 export * from "./supplyCollateral.js";
+export * from "./supplyCollateralMakeBorrow.js";
 export * from "./supplyCollateralTakeBorrow.js";
 export * from "./takeBorrow.js";
 export * from "./takeLend.js";

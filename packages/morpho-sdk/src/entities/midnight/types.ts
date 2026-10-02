@@ -3,17 +3,24 @@ import type {
   Market,
   MarketInput,
   MidnightFetchParams,
+  PriceRatifierV1TreeCreateRequest,
+  RateRatifierV1TreeCreateRequest,
   Tree,
   TreeInput,
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
+import type {
+  MidnightBundlesV2CollateralSupply,
+  MidnightGroupCancellation,
+} from "../../actions/midnight/index.js";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
   ActionOutput,
   BaseAction,
   MempoolSubmitOffersAction,
   MidnightOfferRootSignature,
+  MidnightSupplyCollateralMakeBorrowAction,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -60,14 +67,24 @@ export interface MakeLendParams extends MakeOffersParams {
   readonly reservedLoanAssets?: bigint;
 }
 
-/** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
-export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
+/** Parameters for the atomic Midnight Bundles V2 supply-collateral-and-make-borrow maker flow. */
+export interface SupplyCollateralMakeBorrowParams {
+  /** Maker sending the transaction; MidnightBundlesV2 acts on `msg.sender`. */
+  readonly accountAddress: Address;
   readonly market: MarketInput;
-  /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
-  readonly collateralAssets: bigint;
-  /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
-  readonly reservedCollateralAssets?: bigint;
-  readonly collateralIndex?: bigint;
+  /** Borrow-side offer tree ratified by the chain's PriceRatifierV1 or RateRatifierV1. */
+  readonly offers:
+    | PriceRatifierV1TreeCreateRequest
+    | RateRatifierV1TreeCreateRequest
+    | Tree<"priceV1">
+    | Tree<"rateV1">;
+  /** Collateral transfers pulled from the maker and supplied in the same transaction. */
+  readonly collateralSupplies: readonly MidnightBundlesV2CollateralSupply[];
+  /** Prior offer groups cancelled first, each guarded by a consumption ceiling. */
+  readonly cancellations?: readonly MidnightGroupCancellation[];
+  /** Bundle execution deadline timestamp. */
+  readonly deadline: bigint;
+  readonly validation?: Omit<OfferValidationParams, "ratification">;
 }
 
 /** Signatures accepted by Midnight action-output transaction builders. */
@@ -202,4 +219,26 @@ export interface GetPositionDataParams {
   readonly accountAddress: Address;
   /** Optional fetch controls. Pass an externally fetched block number to coordinate this snapshot with other reads. */
   readonly parameters?: MidnightFetchParams;
+}
+
+/**
+ * Output returned by the atomic Midnight Bundles V2 supply-collateral-and-make-borrow flow.
+ *
+ * `getRequirements()` returns ERC20 approvals for `MidnightBundlesV2` and its Midnight
+ * authorization; `buildTx()` needs no signatures because V2 ratifies the root directly.
+ *
+ * @example
+ * ```ts
+ * const output = await midnight.supplyCollateralMakeBorrow(params);
+ * for (const requirement of await output.getRequirements()) {
+ *   await walletClient.sendTransaction(requirement);
+ * }
+ * await walletClient.sendTransaction(output.buildTx());
+ * ```
+ */
+export interface SupplyCollateralMakeBorrowOutput
+  extends MidnightActionOutput<MidnightSupplyCollateralMakeBorrowAction> {
+  readonly groups: readonly Hex[];
+  readonly root: Hex;
+  readonly ratifierType: "priceV1" | "rateV1";
 }

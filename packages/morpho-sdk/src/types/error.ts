@@ -1578,6 +1578,40 @@ export class DuplicateMidnightGroupCancellationError extends Error {
   }
 }
 
+/** Thrown when a Midnight Bundles V2 make flow supplies no collateral. */
+export class EmptyMidnightCollateralSuppliesError extends Error {
+  constructor() {
+    super(
+      "Midnight collateral supplies cannot be empty. Pass at least one { collateralIndex, assets } entry.",
+    );
+  }
+}
+
+/** Thrown when a Midnight Bundles V2 make flow lists the same collateral index twice. */
+export class DuplicateMidnightCollateralSupplyError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly collateralIndex: bigint;
+  }) {
+    super(
+      `Midnight collateral supply "${params.index}" repeats collateral index "${params.collateralIndex}". Merge supplies for the same collateral.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight Bundles V2 maker tree is not a Price/Rate V1 tree using the chain's V1 ratifier. */
+export class UnsupportedMidnightBundlesV2RatifierError extends Error {
+  constructor(params: {
+    readonly ratifier: Address;
+    readonly priceRatifierV1?: Address;
+    readonly rateRatifierV1?: Address;
+  }) {
+    super(
+      `MidnightBundlesV2 activates roots on PriceRatifierV1 ("${params.priceRatifierV1 ?? "unregistered"}") or RateRatifierV1 ("${params.rateRatifierV1 ?? "unregistered"}"), got "${params.ratifier}". Build a "priceV1" or "rateV1" tree with the chain's V1 ratifier.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight flow needs at least one takeable offer. */
 export class EmptyMidnightTakeableOffersError extends Error {
   constructor() {

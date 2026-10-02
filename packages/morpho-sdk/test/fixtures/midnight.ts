@@ -19,6 +19,8 @@ export const midnightAddresses = {
   midnightMempool: getChainAddress(midnightChainId, "midnightMempool"),
   ecrecoverRatifier: getChainAddress(midnightChainId, "ecrecoverRatifier"),
   setterRatifier: getChainAddress(midnightChainId, "setterRatifier"),
+  priceRatifierV1: getChainAddress(midnightChainId, "priceRatifierV1"),
+  rateRatifierV1: getChainAddress(midnightChainId, "rateRatifierV1"),
   loanToken: "0x0000000000000000000000000000000000006000" as Address,
   dai: "0x0000000000000000000000000000000000006100" as Address,
   collateralToken: "0x0000000000000000000000000000000000007000" as Address,

@@ -539,6 +539,28 @@ export interface MidnightCancelOffersAction
     }
   > {}
 
+/** Metadata for an atomic Midnight Bundles V2 collateral supply and borrow-offer publication. */
+export interface MidnightSupplyCollateralMakeBorrowAction
+  extends BaseAction<
+    "midnightSupplyCollateralMakeBorrow",
+    {
+      readonly market: Hex;
+      readonly collateralSupplies: readonly {
+        readonly collateralIndex: bigint;
+        readonly assets: bigint;
+      }[];
+      readonly ratifier: Address;
+      readonly root: Hex;
+      readonly groups: readonly Hex[];
+      readonly offers: number;
+      readonly cancellations: readonly {
+        readonly group: Hex;
+        readonly maxConsumed: bigint;
+      }[];
+      readonly deadline: bigint;
+    }
+  > {}
+
 /**
  * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
@@ -577,7 +599,8 @@ export type TransactionAction =
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction
-  | MidnightCancelOffersAction;
+  | MidnightCancelOffersAction
+  | MidnightSupplyCollateralMakeBorrowAction;
 
 /**
  * Describes a single, immutable, deep-frozen transaction to submit on-chain:
