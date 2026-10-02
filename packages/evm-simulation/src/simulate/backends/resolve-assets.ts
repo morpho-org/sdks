@@ -1,12 +1,13 @@
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import {
+  AbiDecodingZeroDataError,
   type Address,
   BaseError,
   type Client,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
   erc4626Abi,
-  HttpRequestError,
   isAddressEqual,
-  TimeoutError,
   zeroAddress,
 } from "viem";
 import { readContract } from "viem/actions";
@@ -40,7 +41,7 @@ export async function resolveAssets(params: {
   readonly blockNumber: bigint;
   readonly signal?: AbortSignal;
 }): Promise<readonly ResolvedSlippageOperation[]> {
-  const { client, morpho, operations, blockNumber, signal } = params;
+  const { client, morpho, operations, blockNumber } = params;
   const tokens = new Map<string, readonly [Address, Address]>();
   const resolved: ResolvedSlippageOperation[] = [];
   for (const limit of operations) {
@@ -86,22 +87,21 @@ export async function resolveAssets(params: {
           }
         } catch (cause) {
           if (
-            (cause instanceof BaseError &&
-              cause.walk(
-                (error) =>
-                  error instanceof HttpRequestError ||
-                  error instanceof TimeoutError,
-              ) !== null) ||
-            signal?.aborted ||
-            (cause instanceof Error && cause.name === "AbortError")
+            cause instanceof BaseError &&
+            cause.walk(
+              (error) =>
+                error instanceof ContractFunctionRevertedError ||
+                error instanceof ContractFunctionZeroDataError ||
+                error instanceof AbiDecodingZeroDataError,
+            ) !== null
           ) {
-            throw new ExternalServiceError(
-              "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
+            throw new MissingVerificationEvidenceError(
+              `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
               { cause },
             );
           }
-          throw new MissingVerificationEvidenceError(
-            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}".`,
+          throw new ExternalServiceError(
+            "Cannot resolve the quoted asset because its metadata request failed. Check the RPC endpoint.",
             { cause },
           );
         }

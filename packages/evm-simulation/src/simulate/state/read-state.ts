@@ -9,7 +9,10 @@ import {
   type Hex,
   isAddressEqual,
 } from "viem";
-import { InvalidSimulationResponseError } from "../../errors.js";
+import {
+  InvalidSimulationResponseError,
+  MissingVerificationEvidenceError,
+} from "../../errors.js";
 import type { OperationLimit, SlippageQuote } from "../../limits.js";
 import type { ResolvedSlippageOperation } from "../backends/resolve-assets.js";
 import { operationMeasurementPlan } from "../measurement-plan.js";
@@ -173,10 +176,16 @@ export function planStateReads(params: {
  * @param read - Planned view call.
  * @param data - Return data from its simulated execution.
  * @returns Raw balance or supply/borrow share counts.
- * @throws {InvalidSimulationResponseError} When return data cannot be decoded.
+ * @throws {MissingVerificationEvidenceError} When the selected subject returned no data.
+ * @throws {InvalidSimulationResponseError} When non-empty return data cannot be decoded.
  * @internal
  */
 export function decodeStateRead(read: StateRead, data: Hex): StateValue {
+  if (data === "0x") {
+    throw new MissingVerificationEvidenceError(
+      `Cannot observe slippage read "${read.id}": the selected subject returned no data (likely not a contract).`,
+    );
+  }
   try {
     if (read.kind === "erc20.balance")
       return decodeFunctionResult({

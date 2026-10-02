@@ -8,7 +8,10 @@ import {
   zeroAddress,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import { InvalidSimulationResponseError } from "../../errors.js";
+import {
+  InvalidSimulationResponseError,
+  MissingVerificationEvidenceError,
+} from "../../errors.js";
 import type { OperationLimit } from "../../limits.js";
 import { decodeStateRead, planStateReads } from "./read-state.js";
 
@@ -191,7 +194,25 @@ describe("decodeStateRead", () => {
         }),
       ),
     ).toBe(123n);
+  });
+  test("error: empty return data means the subject is not a contract", () => {
+    const read = planStateReads({
+      operations: [{ limit: { ...limit, quote: { sharesMinted: 1n } } }],
+      owner,
+      morpho: zeroAddress,
+    }).reads[0]!;
     expect(() => decodeStateRead(read, "0x")).toThrow(
+      MissingVerificationEvidenceError,
+    );
+    expect(() => decodeStateRead(read, "0x")).toThrow(read.id);
+  });
+  test("error: undecodable non-empty return data is an invalid response", () => {
+    const read = planStateReads({
+      operations: [{ limit: { ...limit, quote: { sharesMinted: 1n } } }],
+      owner,
+      morpho: zeroAddress,
+    }).reads[0]!;
+    expect(() => decodeStateRead(read, "0x1234")).toThrow(
       InvalidSimulationResponseError,
     );
   });

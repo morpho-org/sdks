@@ -2,9 +2,10 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/morpho-sdk/abis";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
-  BaseError,
+  ContractFunctionRevertedError,
   erc4626Abi,
   HttpRequestError,
+  RpcRequestError,
   TimeoutError,
   zeroAddress,
 } from "viem";
@@ -117,9 +118,14 @@ describe("resolveAssets", () => {
     ]);
     expect(handle.request).toHaveBeenCalledTimes(1);
   });
-  test("error: non-transport metadata failure becomes missing evidence", async () => {
+  test("error: reverted metadata read becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
-    handle.request.mockRejectedValue(new BaseError("execution reverted"));
+    handle.request.mockRejectedValue(
+      new ContractFunctionRevertedError({
+        abi: erc4626Abi,
+        functionName: "asset",
+      }),
+    );
     await expect(
       resolveAssets({
         client: handle.client,
@@ -128,6 +134,24 @@ describe("resolveAssets", () => {
         blockNumber: 1n,
       }),
     ).rejects.toBeInstanceOf(MissingVerificationEvidenceError);
+  });
+  test("error: JSON-RPC error in an HTTP 200 maps to ExternalServiceError", async () => {
+    const handle = createMockClient(mainnet);
+    handle.request.mockRejectedValue(
+      new RpcRequestError({
+        body: {},
+        url: "https://rpc.example",
+        error: { code: -32005, message: "limit exceeded" },
+      }),
+    );
+    await expect(
+      resolveAssets({
+        client: handle.client,
+        morpho: zeroAddress,
+        operations: [limit],
+        blockNumber: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ExternalServiceError);
   });
   test("error: HttpRequestError remains bypassable", async () => {
     const handle = createMockClient(mainnet);
