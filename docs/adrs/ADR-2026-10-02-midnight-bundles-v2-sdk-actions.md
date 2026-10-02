@@ -52,7 +52,7 @@ whose arguments the entity methods fill.
 | `supplyCollateralMakeBorrow` | `midnightCancelAndMake` | `CancelAndMake` | borrow-side offers, non-empty collateral supplies, `assetsToPark = 0` |
 | `takeLend` | `midnightTakeLend` | `BuyWith{Units,Assets}Target…` | `reduceOnly = false`, `repayEnabled = false`, no collateral withdrawals |
 | `takeRepayWithdrawCollateral` | `midnightTakeRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, non-empty `offerFills`; `repayEnabled` is an input |
-| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; an assets repay encodes `targetBuyerAssets = assets`, a full repay encodes `targetUnits = maxUint256` |
+| `repayWithdrawCollateral` | `midnightRepayWithdrawCollateral` | `BuyWith{Units,Assets}Target…` | `reduceOnly = true`, `repayEnabled = true`, empty `offerFills`; no referral fee; an assets repay encodes `targetBuyerAssets = minUnits = assets`, a full repay encodes `targetUnits = maxUint256` |
 | `takeBorrow` | `midnightTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, no collateral supplies |
 | `supplyCollateralTakeBorrow` | `midnightSupplyCollateralTakeBorrow` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = false`, non-empty collateral supplies |
 | `takeWithdraw` | `midnightTakeWithdraw` | `SupplyCollateralAndSellWith{Units,Assets}Target` | `reduceOnly = true`, no collateral supplies |
@@ -64,12 +64,14 @@ Rules shared by the taker actions:
   (`maxBuyerAssets` or `minUnits` on buys, `minSellerAssets` or `maxUnits` on sells).
   `repayWithdrawCollateral` takes no offers, so its target is instead
   `repay: { type: "assets", assets } | { type: "full", maxBuyerAssets }`. `assets = 0` encodes a
-  withdraw-only call.
+  withdraw-only call. It takes no referral fee, so an assets repay repays exactly `assets`, and
+  `minUnits = assets` because a direct repay counts one unit per asset. It rejects `assets = 0`
+  with no non-zero collateral withdrawal, since that call does nothing.
 - `reduceOnly` and `repayEnabled` are never free inputs of a lending or borrowing action; only
   `takeRepayWithdrawCollateral` exposes `repayEnabled`, as its direct-repayment fallback.
 - Referral fee (`referralFeePct`, `referralFeeRecipient`) is an optional input on every taker action
-  and defaults to no fee. `maxContinuousFee` is an input only on buy actions, because the sell
-  entrypoints do not accept it.
+  except `repayWithdrawCollateral`, and defaults to no fee. `maxContinuousFee` is an input only on
+  buy actions, because the sell entrypoints do not accept it.
 - Sell actions account for V2 withdrawing the sender's existing credit before taking offers, so a
   borrow by a sender with credit nets that credit first.
 - `supplyCollateralTakeBorrow` rejects an empty collateral-supply list, so it never encodes the
@@ -141,9 +143,9 @@ encoding follow from that:
   (`takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral`,
   `supplyCollateralMakeBorrow`) and retypes their inputs, action `args`, requirement spenders and
   authorization targets for V2. Removed inputs: `taker`, inline permits, and single-amount targets
-  replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types `PermitKind` and `MidnightTokenPermit`
-  are removed with them. The four V1 flows also keep their action names. The migration guide lists
-  each.
+  replaced by the target union (`repayAssets` by the `repay` union). The V1-only permit types
+  `PermitKind` and `MidnightTokenPermit` are removed with them. The four V1 flows also keep their
+  action names. The migration guide lists each.
 - `cancelOffers`, `cancelAndMakeLend`, `cancelAndMakeBorrow`, `supplyBlueMakeLend`,
   `takeRepayWithdrawCollateral` and `takeWithdraw` are additions.
 - `cancelOffer` stays as the direct Midnight call for one group; it needs no bundle authorization.
@@ -180,8 +182,9 @@ selection.
   cancelled, an empty offer set on a publishing action, `assetsToPark = 0` on `supplyBlueMakeLend`,
   an empty collateral-supply list on `supplyCollateralMakeBorrow`, and a `supplyBlueMakeLend` offer
   whose callback is not the maker's derived `BlueBuyCallback` → typed-error unit tests.
-- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list and
-  `takeRepayWithdrawCollateral` rejects an empty `offerFills` list → typed-error unit tests.
+- `supplyCollateralTakeBorrow` rejects an empty collateral-supply list,
+  `takeRepayWithdrawCollateral` rejects an empty `offerFills` list, and `repayWithdrawCollateral`
+  rejects a zero repay with no non-zero withdrawal → typed-error unit tests.
 - Two handles built from the same inputs produce the same transaction for the same root signature
   → cross-handle tests on every signature-consuming maker method.
 - Revisit if `MidnightBundlesV2` gains an entrypoint, an `onBehalf` argument or inline permits, or
