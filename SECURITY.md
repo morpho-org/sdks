@@ -121,17 +121,17 @@ The SDKs trust the endpoints the integrator configures (JSON-RPC node, simulatio
 
 These are the guarantees the codebase commits to ([`AGENTS.md`](./AGENTS.md) §5 "Security invariants are tests"). A change that weakens one is a security bug.
 
-| Invariant | What it means | Where it is enforced |
-| --- | --- | --- |
-| Deposit routing | Vault deposits, `withdraw`, `redeem`, `inKindRedeem` and `forceWithdraw` go through the audited periphery (VaultBundlesV1, VaultExitBundlesV1), and Blue writes through BlueBundlesV1. The one exception is Vault V2 `forceRedeem`, a direct `VaultV2.multicall` of caller-supplied `forceDeallocate` calls followed by the redeem. | `morpho-sdk` actions; see [its README](./packages/morpho-sdk/README.md#how-it-works). |
-| Inflation-attack guard | Deposits carry a maximum share price derived from accrued vault state and a bounded slippage tolerance, so a manipulated share price makes the transaction revert. | `computeVaultMaxSharePrice` and `MAX_ABSOLUTE_SHARE_PRICE` in [`packages/morpho-sdk/src/helpers`](./packages/morpho-sdk/src/helpers). |
-| LLTV buffer | Morpho Blue borrows and collateral withdrawals keep the position at least `DEFAULT_LLTV_BUFFER` (0.5%) below the liquidation LTV. The buffer is fixed, not configurable. Midnight borrow and collateral-withdraw flows do not apply it. | `DEFAULT_LLTV_BUFFER`, `validatePositionHealth` and `validatePositionHealthAfterWithdraw`. |
-| Bounded slippage | Slippage tolerance is non-negative and at most `MAX_SLIPPAGE_TOLERANCE` (10%). | `validateSlippageTolerance`. |
-| `chainId` validation | Entities and actions refuse to build for a client on a different chain than expected. | `validateChainId` (`ChainIdMismatchError`), `validateMidnightMarketChainId`. |
-| Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
-| Accounting | Withdrawals and repayments never exceed the position they act on; amounts fit in `uint256`; deadlines are positive. | `validateWithdrawAmount`, `validateWithdrawShares`, `validateRepayAmount`, `validateRepayShares`, `validateUint256Field`, `validateDeadline`. |
+| ID | Invariant | What it means | Where it is enforced |
+| --- | --- | --- | --- |
+| INV-01 | Deposit routing | Vault deposits, `withdraw`, `redeem`, `inKindRedeem` and `forceWithdraw` go through the audited periphery (VaultBundlesV1, VaultExitBundlesV1), and Blue writes through BlueBundlesV1. The one exception is Vault V2 `forceRedeem`, a direct `VaultV2.multicall` of caller-supplied `forceDeallocate` calls followed by the redeem. | `morpho-sdk` actions; see [its README](./packages/morpho-sdk/README.md#how-it-works). |
+| INV-02 | Inflation-attack guard | Deposits carry a maximum share price derived from accrued vault state and a bounded slippage tolerance, so a manipulated share price makes the transaction revert. | `computeVaultMaxSharePrice` and `MAX_ABSOLUTE_SHARE_PRICE` in [`packages/morpho-sdk/src/helpers`](./packages/morpho-sdk/src/helpers). |
+| INV-03 | LLTV buffer | Morpho Blue borrows and collateral withdrawals keep the position at least `DEFAULT_LLTV_BUFFER` (0.5%) below the liquidation LTV. The buffer is fixed, not configurable. Midnight borrow and collateral-withdraw flows do not apply it. | `DEFAULT_LLTV_BUFFER`, `validatePositionHealth` and `validatePositionHealthAfterWithdraw`. |
+| INV-04 | Bounded slippage | Slippage tolerance is non-negative and at most `MAX_SLIPPAGE_TOLERANCE` (10%). | `validateSlippageTolerance`. |
+| INV-05 | `chainId` validation | Entities and actions refuse to build for a client on a different chain than expected. | `validateChainId` (`ChainIdMismatchError`), `validateMidnightMarketChainId`. |
+| INV-06 | Authorization | Approvals, permits and Morpho authorizations are requested only for the expected spender, and signature helpers check the signer is the expected `userAddress`. | `validateRequirementSpender`, the requirement builders under `actions/requirements`, `signAndVerifyTypedData`. |
+| INV-07 | Accounting | Withdrawals and repayments never exceed the position they act on; amounts fit in `uint256`; deadlines are positive. | `validateWithdrawAmount`, `validateWithdrawShares`, `validateRepayAmount`, `validateRepayShares`, `validateUint256Field`, `validateDeadline`. |
 
-Every invariant above has unit or fork tests next to its implementation (`*.test.ts`). Work is under way to give each invariant a named test that fails if the guard is removed, and a CI check that keeps this table and those tests in sync.
+Each invariant has a test tagged with its ID (for example `describe("[INV-01] Deposit routing", …)`) in [`packages/morpho-sdk/src/securityInvariants.test.ts`](./packages/morpho-sdk/src/securityInvariants.test.ts); the tagged test fails if the guard is removed. `pnpm lint` runs [`scripts/lint/security-invariants.ts`](./scripts/lint/security-invariants.ts), which fails when an ID in this table has no tagged test or a test tags an ID missing from this table. To add an invariant, add a row with the next ID and a tagged test in the same PR.
 
 Two architectural rules from [`AGENTS.md`](./AGENTS.md) also carry security weight:
 
