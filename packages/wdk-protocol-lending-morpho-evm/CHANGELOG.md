@@ -1,5 +1,15 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 2.0.1
+
+### Patch Changes
+
+- [#1254](https://github.com/morpho-org/sdks/pull/1254) [`8f6cdad`](https://github.com/morpho-org/sdks/commit/8f6cdad73e43ee680afe5ea6e048195f26a457ce) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Vault V1/V2 `withdraw` and asset-mode Vault V1 `migrateToV2` no longer request a new share approval when the live VaultBundlesV1 allowance is above the computed cap by at most one slippage tolerance (`cap <= allowance <= cap / (1 - slippageTolerance)`). A Safe approval that executes after the app has re-prepared the exit from a fresher vault snapshot previously missed the slightly different cap, so the app kept asking for a new approval. Allowances above that range are still reset to the exact cap, and share-denominated exits (`redeem`, shares-mode `migrateToV2`) still require an exact match.
+
+- Updated dependencies [[`88e3383`](https://github.com/morpho-org/sdks/commit/88e3383fb3a305afa8322a1eda792ca80f29f3ec), [`8f6cdad`](https://github.com/morpho-org/sdks/commit/8f6cdad73e43ee680afe5ea6e048195f26a457ce)]:
+  - @morpho-org/morpho-sdk@6.4.0
+  - @morpho-org/blue-sdk@7.2.0
+
 ## 2.0.0
 
 ### Major Changes
