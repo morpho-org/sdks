@@ -6,6 +6,7 @@ export interface AssetChangeEntry {
   account: Address;
   token: Address;
   diff: bigint;
+  /** Not populated by `eth_simulateV1`; kept for forward compatibility. */
   symbol?: string;
   decimals?: number;
 }
@@ -13,12 +14,13 @@ export interface AssetChangeEntry {
 /**
  * Collapse the native-ETH sentinel to viem's lowercase `ethAddress`, checksumming
  * any real token address. `eth_simulateV1` synthesizes native moves from the
- * sentinel `0xeee…eee`, and Tenderly may echo it — in checksummed or any other
- * case — as an asset change's `contractAddress`. Native ETH is keyed by the exact
- * `ethAddress` constant here and in the bundles-retention guard, so a checksummed
+ * sentinel `0xeee…eee`, possibly in checksummed or any other case. Native ETH
+ * is keyed by the exact `ethAddress` constant here and in the bundles-retention
+ * guard, so a checksummed
  * sentinel would land on a separate map key and silently escape retention checks.
- * This is the single source of truth for token normalization shared by the
- * transfer-log parser and the Tenderly asset-change mapper.
+ * This is the single source of truth for token normalization, applied by the
+ * transfer-log parser; asset-change aggregation and the bundler-retention guard
+ * rely on its `ethAddress` keying.
  *
  * @param address - Token address emitting a transfer or carried by an asset change.
  * @returns `ethAddress` for the native sentinel, else the checksummed address.
