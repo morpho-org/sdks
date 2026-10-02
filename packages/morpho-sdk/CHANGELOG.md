@@ -1,5 +1,21 @@
 # @morpho-org/morpho-sdk
 
+## 6.4.0
+
+### Minor Changes
+
+- [#1186](https://github.com/morpho-org/sdks/pull/1186) [`88e3383`](https://github.com/morpho-org/sdks/commit/88e3383fb3a305afa8322a1eda792ca80f29f3ec) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add EIP-55 helpers `getChecksumAddress`, `isChecksumAddress`, `isAddress` and `InvalidAddressError`, backed by `@noble/hashes` (now a runtime dependency of `@morpho-org/morpho-ts`, at the same `^2.4.0` range as `@morpho-org/blue-sdk`). `registerCustomAddresses` now stores every custom address and unwrapped-token entry in EIP-55 form and throws `InvalidAddressError` for malformed or mis-checksummed inputs, so registry lookups compare canonical strings regardless of caller casing.
+
+  **Behavior change:** `registerCustomAddresses` now throws `InvalidAddressError` for malformed or mis-checksummed mixed-case addresses, and lowercase registrations are returned in EIP-55 casing from registry lookups. Pass valid EIP-55 checksummed or single-case (all-lowercase/all-uppercase) addresses. `InvalidAddressError` is re-exported from `@morpho-org/blue-sdk` and `@morpho-org/morpho-sdk`, and `@morpho-org/blue-sdk` now requires `@morpho-org/morpho-ts@^3.2.0` as a peer dependency.
+
+### Patch Changes
+
+- [#1254](https://github.com/morpho-org/sdks/pull/1254) [`8f6cdad`](https://github.com/morpho-org/sdks/commit/8f6cdad73e43ee680afe5ea6e048195f26a457ce) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Vault V1/V2 `withdraw` and asset-mode Vault V1 `migrateToV2` no longer request a new share approval when the live VaultBundlesV1 allowance is above the computed cap by at most one slippage tolerance (`cap <= allowance <= cap / (1 - slippageTolerance)`). A Safe approval that executes after the app has re-prepared the exit from a fresher vault snapshot previously missed the slightly different cap, so the app kept asking for a new approval. Allowances above that range are still reset to the exact cap, and share-denominated exits (`redeem`, shares-mode `migrateToV2`) still require an exact match.
+
+- Updated dependencies [[`88e3383`](https://github.com/morpho-org/sdks/commit/88e3383fb3a305afa8322a1eda792ca80f29f3ec)]:
+  - @morpho-org/morpho-ts@3.2.0
+  - @morpho-org/blue-sdk@7.2.0
+
 ## 6.3.1
 
 ### Patch Changes

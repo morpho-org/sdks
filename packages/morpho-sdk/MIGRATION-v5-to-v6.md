@@ -166,13 +166,14 @@ prerequisite v5 withdrawals did not have. Await `getRequirements()` and satisfy 
 - Without signature support, it returns one ERC-20 approval transaction to send first.
 - With `supportSignature: true`, it returns one signable ERC-2612 shares permit when the current
   allowance is below the cap; pass the signature to `buildTx([sharesPermit])` and it is folded into
-  the VaultBundlesV1 call. A larger leftover allowance is always reset with an ERC-20 approval
-  transaction instead, because VaultBundlesV1 skips a permit whose nonce was already consumed.
+  the VaultBundlesV1 call. An allowance above the cap divided by `1 - slippageTolerance` is always
+  reset with an ERC-20 approval transaction instead, because VaultBundlesV1 skips a permit whose nonce was already consumed.
 
 The allowance is the only cap on the burn, since asset-mode calldata carries no maximum-shares
 argument. The exact cap is derived at handle creation from the supplied `vaultData`, the deadline,
 and `slippageTolerance` (default 0.03%); `getRequirements()` re-reads the live allowance against
-that fixed cap and returns an approval or permit for exactly that amount whenever it differs.
+that fixed cap and returns an approval or permit for exactly that amount whenever the allowance
+falls outside `[cap, cap / (1 - slippageTolerance)]`.
 
 `getRequirements()` re-validates the deadline on every call, so a prepared withdrawal reused after
 its deadline throws `ExpiredDeadlineError` rather than returning cached prerequisites.
