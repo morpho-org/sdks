@@ -39,6 +39,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   validateDeadline,
   validateNativeVaultAsset,
@@ -436,8 +437,9 @@ export interface VaultV1Actions {
    * @param params.referralFeeRecipient - Optional non-zero recipient required for a positive fee.
    * @param params.deadline - Optional execution and share-permit deadline in Unix seconds; defaults
    *   to two hours from handle creation.
-   * @returns Lazy exact source-share requirements and a synchronous transaction builder.
-   *   `getRequirements()` re-reads the live share allowance on every call, so a requirement
+   * @returns Lazy source-share requirements and a synchronous transaction builder. Shares mode
+   *   needs an exact allowance; assets mode accepts one between the cap and the cap divided by
+   *   `1 - slippageTolerance`, and resets a larger one. `getRequirements()` re-reads the live share allowance on every call, so a requirement
    *   satisfied between calls stops being reported, while the derived source share cap stays
    *   pinned to the supplied snapshot.
    * @throws {UnknownBlueMarketAllocationError} when a source withdraw-queue market has no allocation snapshot.
@@ -682,12 +684,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
       assets: amount,
       slippageTolerance,
     });
-    // A Safe approval can execute after the caller re-prepared the exit from a fresher snapshot, so
-    // accept an allowance up to one slippage tolerance above the cap instead of resetting it.
-    const maxShareAllowance = MathLib.wDivDown(
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
       requiredShareAllowance,
-      MathLib.WAD - slippageTolerance,
-    );
+      slippageTolerance,
+    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();
@@ -1072,7 +1072,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     // In shares mode the calldata pins the burn, so only an exact allowance is accepted there.
     const maxShareAllowance =
       shares ??
-      MathLib.wDivDown(requiredShareAllowance, MathLib.WAD - slippageTolerance);
+      computeVaultShareAllowanceCeiling({
+        requiredShareAllowance,
+        slippageTolerance,
+      });
     const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
     const { userAddress } = params;
     const sourceAsset = params.sourceVault.asset;

@@ -40,6 +40,7 @@ import {
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   validateDeadline,
   validateNativeVaultAsset,
@@ -777,12 +778,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       assets: amount,
       slippageTolerance,
     });
-    // A Safe approval can execute after the caller re-prepared the exit from a fresher snapshot, so
-    // accept an allowance up to one slippage tolerance above the cap instead of resetting it.
-    const maxShareAllowance = MathLib.wDivDown(
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
       requiredShareAllowance,
-      MathLib.WAD - slippageTolerance,
-    );
+      slippageTolerance,
+    });
     return Object.freeze({
       getRequirements: async () => {
         const now = Time.timestamp();

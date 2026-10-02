@@ -1,8 +1,4 @@
-import {
-  type AccrualVaultV2,
-  getChainAddresses,
-  MathLib,
-} from "@morpho-org/blue-sdk";
+import { type AccrualVaultV2, getChainAddresses } from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import {
@@ -25,6 +21,7 @@ import {
 } from "../../../test/helpers/signer.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { DEFAULT_SLIPPAGE_TOLERANCE } from "../../constants.js";
+import { computeVaultShareAllowanceCeiling } from "../../helpers/slippage.js";
 import {
   type BundlesTokenRequirementSignature,
   type Erc2612RequirementSignature,
@@ -700,10 +697,10 @@ describe("MorphoVaultV2 withdraw getRequirements", () => {
     const requiredShareAllowance = approval?.action.args.amount;
     if (requiredShareAllowance == null)
       throw new Error("Share approval requirement not found");
-    const maxShareAllowance = MathLib.wDivDown(
+    const maxShareAllowance = computeVaultShareAllowanceCeiling({
       requiredShareAllowance,
-      MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
-    );
+      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+    });
     expect(maxShareAllowance).toBeGreaterThan(requiredShareAllowance);
 
     // A Safe approval executed for a cap prepared from an older snapshot stays usable.
