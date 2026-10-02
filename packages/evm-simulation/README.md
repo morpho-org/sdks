@@ -76,7 +76,7 @@ See [`CLAUDE.md`](./CLAUDE.md) in this directory for pipeline staging, the previ
 gate, the error hierarchy, retention rules, and the recipe for adding a
 chain via `SimulationConfig.chains` — including how the state block is pinned and the
 simulated block constrained to the pin or its immediate successor, and the
-feature gate that rejects `authorizations` and `limits` until PR5/PR6 land.
+feature gate that rejects `authorizations` and `limits` until the authorization-verification release (SDK-1295/SDK-1296).
 
 ## Development
 

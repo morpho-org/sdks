@@ -126,9 +126,10 @@ const rpc = async <T>(label: RpcLabel, call: () => Promise<T>): Promise<T> => {
  *   malformed JSON-RPC envelopes, or a state block without number/hash.
  * @throws {InvalidSimulationResponseError} For a chain mismatch or a
  *   response that cannot be trusted (bad shape, call-count mismatch, block
- *   other than the pinned state block or its successor, a block timestamp
- *   earlier than the pinned block's, or a state-block hash that changed
- *   mid-flight).
+ *   other than the pinned state block or its successor, a successor whose
+ *   `parentHash` is not the pinned hash, a block timestamp earlier than the
+ *   pinned block's, a per-call result that fails normalization, or a
+ *   state-block hash that changed mid-flight).
  * @throws {SimulationRevertedError} When a user transaction reverts or the
  *   node reports a bundle-level revert (code 3 / insufficient funds).
  * @throws {UnsupportedVerificationFeatureError} When preview `authorizations`
