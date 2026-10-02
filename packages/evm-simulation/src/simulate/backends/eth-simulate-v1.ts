@@ -158,8 +158,10 @@ export async function assertEndpointChain(params: {
  *   other than the pinned state block or its successor, a block timestamp
  *   earlier than the pinned block's, a per-call result that fails normalization,
  *   or a state-block hash that changed or is no longer served mid-flight).
- * @throws {SimulationRevertedError} When a user transaction reverts or the
- *   node reports a bundle-level revert (code 3 / insufficient funds).
+ * @throws {MissingVerificationEvidenceError} When a planned state read fails.
+ * @throws {SimulationRevertedError} When a preparation or user transaction
+ *   reverts or the node reports a bundle-level revert (code 3 / insufficient
+ *   funds).
  * @internal
  */
 export async function executePlan(params: {

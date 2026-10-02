@@ -135,14 +135,14 @@ data. Excessive slippage throws `ConsumerLimitViolationError`.
 Only quoted amounts are observed. ERC-20 assets and vault shares use `balanceOf`;
 Blue shares use `position`. Each distinct call runs before and after the bundle.
 Native amounts use the existing transfer traces. Without limits there are no
-slippage reads. Asset-only quotes resolve `asset()` or market parameters only
+slippage reads. Quotes with an asset amount resolve `asset()` or market parameters only
 when an explicit `assetPaid` or `assetReceived` was not supplied; share-only quotes need no metadata
 reads. No vault factories, full entities, allocations, risk metrics, allowances,
 or nonces are fetched for slippage.
 
-For example, a Vault V2 deposit quoting assets paid and shares minted needs four
-view calls: the sender's asset balance and recipient's share balance, each before
-and after execution. `verification.operations[].checkedLimits` records the quote
+For example, a Vault V2 deposit quoting assets paid and shares minted makes four
+in-bundle view calls — the sender's asset balance and the `account`'s share balance, each before
+and after execution — plus one `asset()` read unless `assetPaid` is supplied. `verification.operations[].checkedLimits` records the quote
 and tolerance checked. The result does not include broad state snapshots or diffs;
 `transfers` and `assetChanges` remain available.
 

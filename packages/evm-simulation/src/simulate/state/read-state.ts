@@ -93,7 +93,6 @@ function planPositionRead(params: {
  * Native deltas use the execution's transfer traces and require no view call.
  * @param params - Resolved caller operations and the transaction sender/Morpho address.
  * @returns Read calls and their mapping to each quoted amount; empty without limits.
- * @throws {MissingVerificationEvidenceError} When the selected subject cannot measure a quote.
  * @internal
  */
 export function planStateReads(params: {

@@ -4,6 +4,7 @@ import {
   BaseError,
   type Client,
   ContractFunctionRevertedError,
+  ExecutionRevertedError,
   erc4626Abi,
   HttpRequestError,
   isAddressEqual,
@@ -90,10 +91,13 @@ export async function resolveAssets(params: {
           const reverted =
             cause instanceof BaseError &&
             cause.walk(
-              (error) => error instanceof ContractFunctionRevertedError,
+              (error) =>
+                error instanceof ContractFunctionRevertedError ||
+                error instanceof ExecutionRevertedError,
             ) !== null;
-          // viem nests an RpcRequestError inside revert chains, so a revert
-          // must win over the transport match.
+          // Revert-shaped chains (code 3, or -32000 "execution reverted")
+          // can nest an RpcRequestError, so a revert must win over the
+          // transport match.
           if (
             !reverted &&
             ((cause instanceof BaseError &&
@@ -117,10 +121,11 @@ export async function resolveAssets(params: {
             { cause },
           );
         }
-        if (
-          isAddressEqual(pair[0], zeroAddress) ||
-          isAddressEqual(pair[1], zeroAddress)
-        ) {
+        const token =
+          source.type === "market"
+            ? pair[source.asset === "loan" ? 0 : 1]
+            : pair[0];
+        if (isAddressEqual(token, zeroAddress)) {
           throw new MissingVerificationEvidenceError(
             `Cannot resolve verification evidence for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
           );
