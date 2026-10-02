@@ -64,7 +64,10 @@ typed as `bigint | Exclude<BlockTag, "pending">` — `"pending"` has no stable h
 rejected at runtime. Instead of the two
 legacy variants, preview mode accepts five typed authorization descriptors:
 `erc20Approval`, `erc2612Permit`, `permit2SignatureTransfer`,
-`blueAuthorization`, and `blueAuthorizationSignature`.
+`blueAuthorization`, and `blueAuthorizationSignature`. `parseRequest` rejects
+unknown keys on `SimulateParams`, transactions, authorizations and limits with
+`SimulationValidationError` (`<path>.<key>: unknown field`); v4 ignored extra
+properties.
 
 ```ts
 // v4
