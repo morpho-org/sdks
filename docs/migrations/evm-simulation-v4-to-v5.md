@@ -88,7 +88,9 @@ describes the target contract.
 
 ## Release exception and audit
 
-Root `AGENTS.md` §7's EVM simulation v5 retirement exception permits
+Root `AGENTS.md` §7's EVM simulation v5 retirement exception
+(`ADR-2026-10-01-evm-simulation-retire-tenderly-without-deprecation` and
+`ADR-2026-10-02-evm-simulation-remove-legacy-authorization-variants-without-deprecation`) permits
 `evm-simulation` 5.0.0 to remove `TenderlyRpcConfig`,
 `ChainSimulationConfig.tenderlyRpc` and Tenderly/provider-fallback behavior
 (SDK-1291), the two legacy authorization variants of
