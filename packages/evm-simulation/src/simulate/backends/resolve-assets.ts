@@ -121,21 +121,18 @@ export async function resolveAssets(params: {
             { cause },
           );
         }
-        const token =
-          source.type === "market"
-            ? pair[source.asset === "loan" ? 0 : 1]
-            : pair[0];
-        if (isAddressEqual(token, zeroAddress)) {
-          throw new MissingVerificationEvidenceError(
-            `Cannot resolve verification evidence for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
-          );
-        }
         tokens.set(key, pair);
       }
-      result[field] =
+      const token =
         source.type === "market"
           ? pair[source.asset === "loan" ? 0 : 1]
           : pair[0];
+      if (isAddressEqual(token, zeroAddress)) {
+        throw new MissingVerificationEvidenceError(
+          `Cannot resolve verification evidence for "${limit.type}" asset source "${key}": the resolved token address is zero.`,
+        );
+      }
+      result[field] = token;
     }
     resolved.push(result);
   }

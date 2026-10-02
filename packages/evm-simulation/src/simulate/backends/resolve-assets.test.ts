@@ -144,6 +144,42 @@ describe("resolveAssets", () => {
     });
     expect(result[0]?.assetsPaid).toBe(loan);
   });
+  test("error: a cached idle-market pair still rejects a zero token", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: zeroAddress,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      result: [loan, zeroAddress, zeroAddress, zeroAddress, 0n],
+    });
+    const request = resolveAssets({
+      client: handle.client,
+      morpho: zeroAddress,
+      operations: [
+        {
+          type: "blueRepayWithdrawCollateral",
+          marketId,
+          quote: { assetsPaid: 1n, assetsReceived: 1n },
+          slippageTolerance: 0n,
+        },
+      ],
+      blockNumber: 1n,
+    });
+    await expect(request).rejects.toThrowError(
+      expect.objectContaining({
+        name: "MissingVerificationEvidenceError",
+        message: expect.stringContaining("the resolved token address is zero"),
+      }),
+    );
+    await expect(request).rejects.toBeInstanceOf(
+      MissingVerificationEvidenceError,
+    );
+    expect(
+      handle.request.mock.calls.filter(
+        (call) => (call[0] as { method: string }).method === "eth_call",
+      ),
+    ).toHaveLength(1);
+  });
   test("error: reverted metadata read becomes missing evidence", async () => {
     const handle = createMockClient(mainnet);
     handle.request.mockRejectedValue(

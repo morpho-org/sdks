@@ -130,7 +130,9 @@ Only slippage is checked; there are no separate refund or penalty checks.
 during request parsing. `MissingVerificationEvidenceError` reports runtime
 evidence gaps: a failed state read, native outgoing traces that do not cover
 value sent, or a metadata read that reverts or returns empty/invalid
-data. Excessive slippage throws `ConsumerLimitViolationError`.
+data. A quoted balance/position read whose non-empty return data cannot be
+decoded throws `InvalidSimulationResponseError`. Excessive slippage throws
+`ConsumerLimitViolationError`.
 
 Only quoted amounts are observed. ERC-20 assets and vault shares use `balanceOf`;
 Blue shares use `position`. Each distinct call runs before and after the bundle.

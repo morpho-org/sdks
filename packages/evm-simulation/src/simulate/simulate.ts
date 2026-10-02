@@ -68,7 +68,8 @@ import { runSimulation } from "./run-simulation.js";
  *   trusted (bad shape, call-count mismatch, block that is neither the pinned
  *   state block nor its immediate successor, a successor with a mismatched
  *   `parentHash`, a block timestamp earlier than the pinned block's, a
- *   malformed per-call result, a state-block hash that changed or a pinned
+ *   malformed per-call result, a quoted balance/position read whose non-empty
+ *   return data cannot be decoded, a state-block hash that changed or a pinned
  *   block that vanished mid-flight, or an
  *   endpoint whose `eth_chainId` differs from `params.chainId`; chain identity
  *   is checked before any block lookup).
