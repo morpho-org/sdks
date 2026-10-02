@@ -1,5 +1,4 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
 import type {
   ParsedRequest,
   ParsedTransaction,
@@ -18,7 +17,6 @@ interface PlannedTransaction {
  */
 export interface ExecutionPlan {
   readonly request: ParsedRequest;
-  readonly owner: Address;
   readonly calls: readonly PlannedTransaction[];
 }
 
@@ -37,11 +35,8 @@ export interface ExecutionPlan {
  * @internal
  */
 export function planExecution(request: ParsedRequest): ExecutionPlan {
-  const owner = request.transactions[0]!.from;
-
   return deepFreeze({
     request,
-    owner,
     calls: request.transactions.map((transaction, i) => ({
       transactionIndex: i,
       transaction,
