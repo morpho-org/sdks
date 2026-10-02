@@ -1,5 +1,25 @@
 # @morpho-org/evm-simulation
 
+## 5.0.0
+
+### Major Changes
+
+- [#1204](https://github.com/morpho-org/sdks/pull/1204) [`9c97230`](https://github.com/morpho-org/sdks/commit/9c9723081adc91831027204cebc58fdea647db08) Thanks [@jinmel](https://github.com/jinmel)! - Retire the Tenderly RPC backend. `eth_simulateV1` is now the sole simulation backend: there is no provider fallback and `timeoutMs` (default 5000) is the abort budget for the `eth_simulateV1` call.
+
+  **Breaking:** `ChainSimulationConfig` now requires `simulateV1Url` for every configured chain and no longer accepts `tenderlyRpc`; the `TenderlyRpcConfig` type is removed. Migrate by replacing `tenderlyRpc: { rpcUrl }` entries with `simulateV1Url` pointing at a JSON-RPC node that supports `eth_simulateV1`. The unused `zod` runtime dependency is dropped.
+
+- [#1168](https://github.com/morpho-org/sdks/pull/1168) [`02bf56d`](https://github.com/morpho-org/sdks/commit/02bf56d60e6fea5eb7bc304935e1a2eefb56a111) Thanks [@jinmel](https://github.com/jinmel)! - Add typed error classes for simulation verification (`UnsupportedOperationError`, `ProtocolBindingMismatchError`, `UnsupportedVerificationFeatureError`, `InvalidSimulationResponseError`, `MissingVerificationEvidenceError`, `AuthorizationRequestMismatchError`, `AssetChangeMismatchError`, `PermissionChangeMismatchError`, `StateChangeMismatchError`, `MarketConstraintViolationError`, `SlippageLimitExceededError`, `FeeMismatchError`, `ConsumerLimitViolationError`, `UnexpectedSimulationError`), each extending `SimulationPackageError` directly and accepting an optional frozen `SimulationErrorContext`, as do the existing errors.
+
+  Export the error contract from ADR-2026-09-18: `SIMULATION_ERROR_CODES` / `SimulationErrorCode`, `SimulationErrorContext` (readonly union of the per-stage `SimulationValidationContext`, `SimulationPreparationContext`, `SimulationExecutionContext`, `SimulationVerificationContext` and `SimulationTransportContext`, every stage carrying `mode`, `chainId` and `blockNumber`; `execution`/`verification` further keyed by `operation`, which fixes the subject fields — `marketId`, `sourceMarketId`/`targetMarketId`, `vault`, `sourceVault`/`targetVault`, `authorized`), `SimulationStage`, `BLUE_MARKET_OPERATION_TYPES` / `BlueMarketOperationType`, `VAULT_OPERATION_TYPES` / `VaultOperationType`, `SimulationOperationSubject` with its members `BlueMarketOperationSubject`, `BlueRefinanceSubject`, `BlueAuthorizationSubject`, `VaultOperationSubject`, `VaultV1MigrateToV2Subject` (the operation-keyed subject union, shared with decoded operations), `SimulationExecutionReason`, `isSimulationPackageError` (structural guard narrowing to `SimulationPackageError`; plain objects must carry the class `name` owning their `code`), `RetainedAsset`, `SIMULATION_MODES` / `SimulationMode` and `OPERATION_TYPES` / `OperationType`.
+
+  `SimulationRevertedError.reasonCode: SimulationExecutionReason` is the machine-readable cause of an execution failure (defaults to `"UNKNOWN_REVERT"`); `reason` stays a human-readable message that consumers must not parse.
+
+  These contracts are declared ahead of the verification pipeline: in this release no code path throws one of the new verification error classes and `reasonCode` is always `"UNKNOWN_REVERT"`. Revert mapping and verification land in the follow-up PRs (SDK-1293/1294).
+
+  **Breaking:** `BlacklistViolationError.assetChanges` entries are `{ address: Address; token: Address; netRetained: bigint }` (previously optional string addresses and a decimal-string amount). `SimulationPackageError.code` is typed as `SimulationErrorCode` and the base class declares `readonly context?: SimulationErrorContext`. Built-in errors now declare a literal `name` class field paired with their `code`, so a subclass of a built-in error (e.g. `class MyError extends SimulationValidationError`) reports the built-in `name` rather than its own (previously `this.constructor.name`). Direct subclasses of `SimulationPackageError` still get `new.target.name`. Only literal name/code pairs are recognized by `isSimulationPackageError` on plain objects. `SimulateParams` is now the v5 input (`chainId`, `transactions`, `mode?: SimulationMode`, `authorizations?: PendingAuthorization[]`, `blockNumber?`, `limits?: SimulationLimits`); the pre-v5 shape is exported as `LegacySimulateParams` (`@deprecated`) and remains the runtime input of `simulate()` until SDK-1293 cuts the pipeline over. `PendingAuthorization`, `SimulationLimits`, `OperationLimit`, `VerifiedSimulationResult`, `SimulationVerification` and their member types are exported from the package root.
+
+  Migrate by typing the current `simulate()` input as `LegacySimulateParams` (and its authorizations as the now-`@deprecated` `SimulationAuthorization`) instead of `SimulateParams` / `PendingAuthorization` until SDK-1293 cuts the pipeline over; use `netRetained.toString()` where a decimal string is still needed and drop `undefined` checks on `assetChanges[].address` / `.token`.
+
 ## 4.2.1
 
 ### Patch Changes
