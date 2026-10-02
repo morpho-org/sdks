@@ -42,6 +42,9 @@ export interface SimulationTransaction {
  * main transactions run. The package decides HOW to simulate each one:
  * - "approval" → prepend tx as-is
  * - "signature" → today: encode approve(spender, amount); future: ecrecover override?
+ *
+ * @deprecated Replaced by `PendingAuthorization` (the `SimulateParams.authorizations`
+ * element) once SDK-1293 cuts `simulate()` over.
  */
 export type SimulationAuthorization =
   | { type: "approval"; transaction: SimulationTransaction }
@@ -135,10 +138,12 @@ export interface SimulationLogger {
 }
 
 /**
- * Input to `simulate`. Pin a `blockNumber` for deterministic / historical
- * simulation; omit to simulate against `latest`.
+ * Input `simulate()` accepts today.
+ *
+ * @deprecated Replaced by `SimulateParams` once the verification pipeline lands
+ * (SDK-1293). Until then, annotate `simulate()` inputs with this type.
  */
-export interface SimulateParams {
+export interface LegacySimulateParams {
   chainId: number;
   transactions: SimulationTransaction[];
   authorizations?: SimulationAuthorization[];

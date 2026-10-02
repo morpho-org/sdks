@@ -15,9 +15,9 @@ import {
 } from "../test-helpers/index.js";
 import type {
   AccountAssetChanges,
+  LegacySimulateParams,
   RawLog,
   RawSimulationResult,
-  SimulateParams,
   SimulationAuthorization,
   SimulationConfig,
 } from "../types.js";
@@ -58,7 +58,9 @@ function makeConfig(
   };
 }
 
-function makeParams(overrides: Partial<SimulateParams> = {}): SimulateParams {
+function makeParams(
+  overrides: Partial<LegacySimulateParams> = {},
+): LegacySimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],

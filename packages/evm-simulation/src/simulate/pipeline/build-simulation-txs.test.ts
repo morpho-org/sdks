@@ -6,7 +6,10 @@ import {
   maxUint256,
 } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams, SimulationAuthorization } from "../../types.js";
+import type {
+  LegacySimulateParams,
+  SimulationAuthorization,
+} from "../../types.js";
 import { buildSimulationTxs } from "./build-simulation-txs.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
@@ -14,7 +17,9 @@ const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
-function makeParams(overrides: Partial<SimulateParams> = {}): SimulateParams {
+function makeParams(
+  overrides: Partial<LegacySimulateParams> = {},
+): LegacySimulateParams {
   return {
     chainId: 1,
     transactions: [{ from: USER, to: VAULT, data: "0x12345678" as Hex }],
