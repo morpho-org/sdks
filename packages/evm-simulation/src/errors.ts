@@ -71,7 +71,11 @@ interface SimulationCheckContext extends SimulationContextBase {
   readonly account?: Address;
   /** Spender or operator granted by the checked permission. */
   readonly spender?: Address;
-  /** Name of the checked field; its suffix gives the unit (e.g. "maxLtvAfterWad"). */
+  /**
+   * Name of the checked field (e.g. `"assetsReceived"`). Unbound verification
+   * contexts instead carry the failed state read's id
+   * (`balance:<token>:<account>` or `position:<marketId>:<account>`).
+   */
   readonly field?: string;
   /** Bound or value `field` was checked against; 32-byte hashes only, never calldata or signatures. */
   readonly expected?: bigint | boolean | Address | Hash;
@@ -116,7 +120,9 @@ export type SimulationVerificationContext = SimulationCheckContext &
  * contexts bound to a limit take `operation` and the subject fields
  * (`marketId`, `sourceMarketId`/`targetMarketId`, `vault`,
  * `sourceVault`/`targetVault`) from that `OperationLimit`, not
- * from decoded calldata; unbound ones carry only a `field` string.
+ * from decoded calldata; unbound ones carry only a `field` string naming the
+ * failed state read (`balance:<token>:<account>` or
+ * `position:<marketId>:<account>`).
  * `"execution"` stays in the union, but `SimulationRevertedError` carries no
  * `context` for caller-transaction or node reverts — the failing
  * `transactionIndex` is reported on the error's `details`. Never contains
@@ -129,7 +135,8 @@ export type SimulationErrorContext =
   | SimulationPreparationContext
   | SimulationExecutionContext
   | SimulationVerificationContext
-  // Verification checks not bound to one operation name the checked field.
+  // Verification checks not bound to one operation name the failed state
+  // read's id (`balance:<token>:<account>` or `position:<marketId>:<account>`).
   | (SimulationCheckContext & {
       readonly stage: "verification";
       readonly field: string;

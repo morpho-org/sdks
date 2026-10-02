@@ -21,6 +21,7 @@ import type {
   OperationLimit,
   OperationType,
   SimulationLimits,
+  SlippageQuote,
 } from "../../limits.js";
 import {
   SIMULATION_MODES,
@@ -712,28 +713,39 @@ const createChecks = (): FieldChecks => {
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
 
+/** Union of every field name carried by any {@link OperationLimit} variant. */
+type LimitKey<L = OperationLimit> = L extends unknown ? keyof L : never;
+
 const QUOTE_FIELDS = [
   "assetsReceived",
   "sharesMinted",
   "assetsPaid",
   "sharesBurned",
-] as const;
+] as const satisfies readonly (keyof SlippageQuote)[];
 const MARKET_SUBJECT = {
   markets: ["marketId"],
   addresses: ["account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: [],
-} as const;
+} as const satisfies {
+  readonly markets: readonly LimitKey[];
+  readonly addresses: readonly LimitKey[];
+  readonly requiredAddresses: readonly LimitKey[];
+};
 const VAULT_SUBJECT = {
   markets: [],
   addresses: ["vault", "account", "receiver", "assetPaid", "assetReceived"],
   requiredAddresses: ["vault"],
-} as const;
+} as const satisfies {
+  readonly markets: readonly LimitKey[];
+  readonly addresses: readonly LimitKey[];
+  readonly requiredAddresses: readonly LimitKey[];
+};
 const OPERATION_SPECS: Record<
   OperationType,
   {
-    readonly markets: readonly string[];
-    readonly addresses: readonly string[];
-    readonly requiredAddresses: readonly string[];
+    readonly markets: readonly LimitKey[];
+    readonly addresses: readonly LimitKey[];
+    readonly requiredAddresses: readonly LimitKey[];
   }
 > = {
   blueSupply: MARKET_SUBJECT,
